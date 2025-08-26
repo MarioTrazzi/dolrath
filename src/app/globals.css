@@ -1,0 +1,118 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --primary: #e94560;
+    --primary-dark: #c73650;
+    --secondary: #1a1a2e;
+    --accent: #16213e;
+    --background: #0f0f23;
+    --surface: #1e1e3f;
+    --text-primary: #ffffff;
+    --text-secondary: #b4b4d1;
+    --success: #2ecc71;
+    --error: #e74c3c;
+    --warning: #f39c12;
+  }
+
+  * {
+    @apply border-gray-600;
+  }
+  
+  body {
+    @apply bg-background text-text-primary font-primary;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-gradient-to-r from-primary to-primary-dark hover:shadow-lg hover:shadow-primary/25 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-200 active:scale-[0.98];
+  }
+  
+  .btn-secondary {
+    @apply bg-surface text-text-primary border border-white/20 hover:bg-white/10 font-semibold py-2 px-4 rounded-lg transition-all duration-200;
+  }
+  
+  .btn-outline {
+    @apply border border-primary text-primary hover:bg-primary hover:text-white font-semibold py-2 px-4 rounded-lg transition-all duration-200;
+  }
+  
+  .btn-danger {
+    @apply bg-error hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200;
+  }
+  
+  .card {
+    @apply bg-surface/50 backdrop-blur-xl border border-white/10 rounded-lg p-6 shadow-2xl;
+  }
+  
+  .glass-card {
+    @apply bg-surface/30 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl;
+  }
+  
+  .input-field {
+    @apply w-full h-12 px-4 bg-background/50 border border-white/20 rounded-lg text-text-primary placeholder:text-text-secondary transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary;
+  }
+  
+  .input-error {
+    @apply border-error focus:ring-error/50 focus:border-error;
+  }
+  
+  .dice-animation {
+    animation: dice-roll 0.5s ease-in-out;
+  }
+  
+  .combat-hit {
+    animation: combat-hit 0.3s ease-in-out;
+  }
+  
+  .level-up {
+    animation: level-up 1s ease-in-out;
+  }
+}
+
+@keyframes dice-roll {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes combat-hit {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+@keyframes level-up {
+  0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-10px); }
+  60% { transform: translateY(-5px); }
+}
+
+/* Scrollbar customizada para o chat de combate */
+.combat-chat-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #d97706 #fef3c7;
+}
+
+.combat-chat-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.combat-chat-scroll::-webkit-scrollbar-track {
+  background: #fef3c7;
+  border-radius: 4px;
+}
+
+.combat-chat-scroll::-webkit-scrollbar-thumb {
+  background: #d97706;
+  border-radius: 4px;
+}
+
+.combat-chat-scroll::-webkit-scrollbar-thumb:hover {
+  background: #b45309;
+}

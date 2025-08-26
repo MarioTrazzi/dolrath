@@ -1,0 +1,241 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ItemType {
+  SWORD
+  AXE
+  DAGGER
+  STAFF
+  BOW
+  LIGHT_ARMOR
+  MEDIUM_ARMOR
+  HEAVY_ARMOR
+  LIGHT_HELMET
+  MEDIUM_HELMET
+  HEAVY_HELMET
+  LIGHT_GLOVES
+  MEDIUM_GLOVES
+  HEAVY_GLOVES
+  LIGHT_BOOTS
+  MEDIUM_BOOTS
+  HEAVY_BOOTS
+  RING
+  NECKLACE
+  SHIELD
+  CONSUMABLE
+}
+
+enum ConsumableSubtype {
+  HEALTH_POTION
+  MANA_POTION
+  STAMINA_POTION
+  ELIXIR
+  STRENGTH_BUFF
+  DEFENSE_BUFF
+  AGILITY_BUFF
+  INTELLIGENCE_BUFF
+  REVIVE_POTION
+  ANTIDOTE
+  CURE_POISON
+  TEMPORARY_BUFF
+}
+
+enum EquipmentSlotType {
+  HELMET
+  NECKLACE
+  RING_1
+  RING_2
+  ARMOR
+  WEAPON
+  SHIELD
+  GLOVES
+  BOOTS
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  goldBalance   Int       @default(1000)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  accounts      Account[]
+  sessions      Session[]
+  characters    Character[]
+  inventory     UserInventory[]
+}
+
+model UserInventory {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  item      Item     @relation(fields: [itemId], references: [id])
+  itemId    String
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, itemId])
+  @@index([userId])
+  @@index([itemId])
+}
+
+model Character {
+  id            String          @id @default(cuid())
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String
+  name          String
+  race          String
+  class         String
+  avatar        String?
+  level         Int             @default(1)
+  experience    Int             @default(0)
+  attributes    Json?           @db.JsonB
+  availablePoints Int           @default(0)
+  gold          Int             @default(0)
+  baseStats     Json?           @db.JsonB
+  inventorySlots Int            @default(10)
+  // Sistema de vida e morte
+  hp            Int             @default(100)
+  maxHp         Int             @default(100)
+  // Sistema de mana
+  mp            Int             @default(50)
+  maxMp         Int             @default(50)
+  isAlive       Boolean         @default(true)
+  deathTimestamp DateTime?
+  // Sistema de stamina
+  stamina       Int             @default(100)
+  maxStamina    Int             @default(100)
+  equipment     CharacterEquipment[]
+  inventory     CharacterInventory[]
+  history       CharacterHistory[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([userId])
+}
+
+model Item {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  type        ItemType
+  subtype     ConsumableSubtype?
+  level       Int       @default(1)
+  goldPrice   Int       @default(100)
+  stats       Json
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  userInventory       UserInventory[]
+  characterInventory  CharacterInventory[]
+  equipment           CharacterEquipment[]
+  history             CharacterHistory[]
+}
+
+model CharacterInventory {
+  id          String    @id @default(cuid())
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  characterId String
+  item        Item      @relation(fields: [itemId], references: [id])
+  itemId      String
+  quantity    Int       @default(1)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([characterId])
+  @@index([itemId])
+}
+
+model CharacterEquipment {
+  id          String           @id @default(cuid())
+  character   Character        @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  characterId String
+  item        Item            @relation(fields: [itemId], references: [id])
+  itemId      String
+  slot        EquipmentSlotType
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@unique([characterId, slot])
+  @@index([characterId])
+  @@index([itemId])
+}
+
+enum ActivityType {
+  ITEM_PURCHASE
+  ITEM_GAINED
+  ITEM_SOLD
+  ITEM_CONSUMED
+  ITEM_EQUIPPED
+  ITEM_UNEQUIPPED
+  XP_GAINED
+  LEVEL_UP
+  GOLD_GAINED
+  GOLD_SPENT
+  DUNGEON_COMPLETED
+  CHARACTER_CREATED
+  ATTRIBUTE_DISTRIBUTED
+  INVENTORY_EXPANDED
+}
+
+model CharacterHistory {
+  id          String       @id @default(cuid())
+  character   Character    @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  characterId String
+  
+  activityType ActivityType
+  description  String
+  details      Json?        // Para armazenar dados específicos da atividade
+  
+  // Campos opcionais para diferentes tipos de atividade
+  itemId       String?
+  item         Item?        @relation(fields: [itemId], references: [id])
+  goldAmount   Int?
+  xpAmount     Int?
+  oldLevel     Int?
+  newLevel     Int?
+  
+  createdAt    DateTime     @default(now())
+
+  @@index([characterId])
+  @@index([createdAt])
+  @@index([activityType])
+}

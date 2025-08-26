@@ -1,0 +1,66 @@
+import { motion } from 'framer-motion';
+import { cn } from '@/lib/utils';
+import { Check } from 'lucide-react';
+import { CharacterClass } from '@/types/game';
+
+interface ClassCardProps {
+  characterClass: CharacterClass;
+  isSelected: boolean;
+  onSelect: (characterClass: CharacterClass) => void;
+  onHover: (characterClass: CharacterClass | null) => void;
+}
+
+export function ClassCard({ characterClass, isSelected, onSelect, onHover }: ClassCardProps) {
+  return (
+    <motion.div
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
+      onMouseEnter={() => onHover(characterClass)}
+      onMouseLeave={() => onHover(null)}
+      onClick={() => onSelect(characterClass)}
+      className={cn(
+        "p-6 rounded-xl border-2 cursor-pointer transition-all duration-300",
+        "bg-surface/50 backdrop-blur-sm",
+        isSelected 
+          ? "border-primary shadow-lg shadow-primary/25" 
+          : "border-white/20 hover:border-white/40"
+      )}
+    >
+      <div className="flex items-start gap-4">
+        <div className="w-16 h-16 bg-gradient-to-br from-primary to-primary-dark rounded-lg flex items-center justify-center text-2xl">
+          {characterClass.id === 'warrior' && '⚔️'}
+          {characterClass.id === 'rogue' && '🏹'}
+          {characterClass.id === 'mage' && '🧙'}
+          {characterClass.id === 'monk' && '✊'}
+        </div>
+        
+        <div className="flex-1">
+          <h3 className="text-xl font-bold text-text-primary mb-1">
+            {characterClass.name}
+          </h3>
+          <p className="text-text-secondary text-sm mb-3">
+            {characterClass.description}
+          </p>
+          
+          <div className="flex flex-wrap gap-2">
+            {characterClass.abilities.map((ability) => (
+              <span key={ability} className="px-3 py-1 bg-primary/20 text-primary text-xs rounded-full">
+                {ability}
+              </span>
+            ))}
+          </div>
+        </div>
+        
+        {isSelected && (
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            className="w-6 h-6 bg-primary rounded-full flex items-center justify-center"
+          >
+            <Check className="w-4 h-4 text-white" />
+          </motion.div>
+        )}
+      </div>
+    </motion.div>
+  );
+}

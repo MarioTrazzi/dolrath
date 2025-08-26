@@ -1,0 +1,401 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { Character, Combat, ActionType, CombatStatus } from '@/types/game'
+import { CombatSystem } from '@/lib/combatSystem'
+import { AIJudge } from '@/lib/aiJudge'
+import { CharacterFactory } from '@/lib/characterFactory'
+import CombatChat from '@/components/CombatChat'
+import CharacterStatus from '@/components/CharacterStatus'
+import { v4 as uuidv4 } from 'uuid'
+import { ArrowLeft, RotateCcw } from 'lucide-react'
+import Link from 'next/link'
+
+interface ChatMessage {
+  id: string
+  type: 'action' | 'system' | 'dice' | 'narrative'
+  content: string
+  timestamp: Date
+  characterName?: string
+  actionType?: ActionType
+}
+
+export default function CombatPage() {
+  const [combat, setCombat] = useState<Combat | null>(null)
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [combatSystem] = useState(new CombatSystem())
+  const [aiJudge] = useState(new AIJudge())
+  const [playerId, setPlayerId] = useState<string>('')
+  const [isLoading, setIsLoading] = useState(false)
+
+  // Criar personagens de teste
+  const createTestCombat = () => {
+    const player = CharacterFactory.createTestCharacter('warrior')
+    const enemy = CharacterFactory.createDragonianWarrior()
+    
+    setPlayerId(player.id)
+    
+    // Inicializar combate
+    const newCombat = combatSystem.initializeCombat([player, enemy])
+    setCombat(newCombat)
+    
+    // Mensagem inicial
+    addMessage({
+      id: uuidv4(),
+      type: 'system',
+      content: `Combate iniciado entre ${player.name} e ${enemy.name}!`,
+      timestamp: new Date()
+    })
+    
+    // Mostrar ordem de iniciativa
+    addMessage({
+      id: uuidv4(),
+      type: 'system',
+      content: `Ordem de turnos: ${newCombat.turnOrder.map(id => 
+        newCombat.participants.find(p => p.id === id)?.name
+      ).join(' → ')}`,
+      timestamp: new Date()
+    })
+  }
+
+  const addMessage = (message: ChatMessage) => {
+    setMessages(prev => [...prev, message])
+  }
+
+  const parseAction = (input: string): { type: ActionType; target?: string } => {
+    const normalizedInput = input.toLowerCase().trim();
+    
+    if (normalizedInput.includes('ataque') || normalizedInput.includes('soco') || normalizedInput.includes('golpe')) {
+      return { type: ActionType.ATTACK };
+    }
+    if (normalizedInput.includes('defender') || normalizedInput.includes('defesa')) {
+      return { type: ActionType.DEFEND };
+    }
+    if (normalizedInput.includes('esquivar') || normalizedInput.includes('esquiva')) {
+      return { type: ActionType.DODGE };
+    }
+    if (normalizedInput.includes('contra-atacar') || normalizedInput.includes('contra-ataque')) {
+      return { type: ActionType.COUNTER_ATTACK };
+    }
+    if (normalizedInput.includes('magia') || normalizedInput.includes('conjurar')) {
+      return { type: ActionType.MAGIC };
+    }
+    if (normalizedInput.includes('item') || normalizedInput.includes('usar item')) {
+      return { type: ActionType.ITEM };
+    }
+    if (normalizedInput.includes('transformar') || normalizedInput.includes('transformação')) {
+      return { type: ActionType.TRANSFORM };
+    }
+    
+    // Default to ATTACK if no specific action is recognized
+    return { type: ActionType.ATTACK };
+  };
+
+  const handlePlayerAction = async (actionInput: string) => {
+    if (!combat || isLoading) return
+    
+    setIsLoading(true)
+    
+    try {
+      const currentPlayer = combatSystem.getCurrentCharacter()
+      if (!currentPlayer || currentPlayer.id !== playerId) {
+        addMessage({
+          id: uuidv4(),
+          type: 'system',
+          content: 'Não é seu turno!',
+          timestamp: new Date()
+        })
+        return
+      }
+
+      // Parsear ação
+      const { type: actionType } = parseAction(actionInput)
+      
+      // Determinar alvo (inimigo para ataques)
+      let targetId: string | undefined
+      if (actionType === ActionType.ATTACK || actionType === ActionType.COUNTER_ATTACK) {
+        const enemies = combat.participants.filter(p => p.id !== playerId && p.hp > 0)
+        targetId = enemies[0]?.id
+      }
+
+      // Adicionar mensagem de ação do jogador
+      addMessage({
+        id: uuidv4(),
+        type: 'action',
+        content: actionInput,
+        timestamp: new Date(),
+        characterName: currentPlayer.name,
+        actionType
+      })
+
+      // Processar ação
+      const action = combatSystem.processAction(currentPlayer.id, actionType, targetId)
+      
+      if (action) {
+        // Obter alvo para narrativa
+        const target = targetId ? combat.participants.find(p => p.id === targetId) : undefined
+        
+        // Gerar narrativa da IA
+        const narrative = aiJudge.generateCombatNarrative(action, currentPlayer, target)
+        
+        addMessage({
+          id: uuidv4(),
+          type: 'narrative',
+          content: narrative,
+          timestamp: new Date()
+        })
+
+        // Mostrar dados se houver
+        if (action.diceRoll) {
+          const diceComment = aiJudge.generateDiceComment({
+            diceType: action.diceRoll.diceType,
+            roll: action.diceRoll.baseRoll,
+            modifier: action.diceRoll.modifier,
+            total: action.diceRoll.total,
+            isCritical: action.diceRoll.isCritical,
+            description: `${action.diceRoll.baseRoll} + ${action.diceRoll.modifier} = ${action.diceRoll.total}`
+          })
+          
+          addMessage({
+            id: uuidv4(),
+            type: 'dice',
+            content: diceComment,
+            timestamp: new Date()
+          })
+        }
+      }
+
+      // Atualizar estado do combate
+      const updatedCombat = combatSystem.getCombatState()
+      if (updatedCombat) {
+        setCombat(updatedCombat)
+        
+        // Verificar se o combate terminou
+        if (updatedCombat.status === CombatStatus.FINISHED) {
+          const winner = updatedCombat.participants.find(p => p.id === updatedCombat.winner)
+          addMessage({
+            id: uuidv4(),
+            type: 'system',
+            content: `🏆 Combate terminado! ${winner?.name} venceu!`,
+            timestamp: new Date()
+          })
+        } else {
+          // Turno da IA se for inimigo
+          const currentChar = combatSystem.getCurrentCharacter()
+          if (currentChar && currentChar.id !== playerId) {
+            setTimeout(() => handleEnemyTurn(), 1500)
+          }
+        }
+      }
+
+    } catch (error) {
+      addMessage({
+        id: uuidv4(),
+        type: 'system',
+        content: `Erro: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
+        timestamp: new Date()
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleEnemyTurn = async () => {
+    if (!combat || isLoading) return
+    
+    setIsLoading(true)
+    
+    try {
+      const currentEnemy = combatSystem.getCurrentCharacter()
+      if (!currentEnemy || currentEnemy.id === playerId) return
+
+      // IA simples para escolher ação
+      const actions = [ActionType.ATTACK, ActionType.DEFEND, ActionType.DODGE, ActionType.COUNTER_ATTACK]
+      const randomAction = actions[Math.floor(Math.random() * actions.length)]
+      
+      // Determinar alvo (jogador)
+      let targetId: string | undefined
+      if (randomAction === ActionType.ATTACK || randomAction === ActionType.COUNTER_ATTACK) {
+        targetId = playerId
+      }
+
+      // Processar ação do inimigo
+      const action = combatSystem.processAction(currentEnemy.id, randomAction, targetId)
+      
+      if (action) {
+        // Obter alvo para narrativa
+        const target = targetId ? combat.participants.find(p => p.id === targetId) : undefined
+        
+        // Gerar narrativa da IA
+        const narrative = aiJudge.generateCombatNarrative(action, currentEnemy, target)
+        
+        addMessage({
+          id: uuidv4(),
+          type: 'narrative',
+          content: narrative,
+          timestamp: new Date()
+        })
+
+        // Mostrar dados se houver
+        if (action.diceRoll) {
+          const diceComment = aiJudge.generateDiceComment({
+            diceType: action.diceRoll.diceType,
+            roll: action.diceRoll.baseRoll,
+            modifier: action.diceRoll.modifier,
+            total: action.diceRoll.total,
+            isCritical: action.diceRoll.isCritical,
+            description: `${action.diceRoll.baseRoll} + ${action.diceRoll.modifier} = ${action.diceRoll.total}`
+          })
+          
+          addMessage({
+            id: uuidv4(),
+            type: 'dice',
+            content: diceComment,
+            timestamp: new Date()
+          })
+        }
+      }
+
+      // Atualizar estado do combate
+      const updatedCombat = combatSystem.getCombatState()
+      if (updatedCombat) {
+        setCombat(updatedCombat)
+        
+        // Verificar se o combate terminou
+        if (updatedCombat.status === CombatStatus.FINISHED) {
+          const winner = updatedCombat.participants.find(p => p.id === updatedCombat.winner)
+          addMessage({
+            id: uuidv4(),
+            type: 'system',
+            content: `🏆 Combate terminado! ${winner?.name} venceu!`,
+            timestamp: new Date()
+          })
+        }
+      }
+
+    } catch (error) {
+      addMessage({
+        id: uuidv4(),
+        type: 'system',
+        content: `Erro no turno do inimigo: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
+        timestamp: new Date()
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const resetCombat = () => {
+    setCombat(null)
+    setMessages([])
+    setPlayerId('')
+  }
+
+  // Inicializar combate automaticamente
+  useEffect(() => {
+    if (!combat) {
+      createTestCombat()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const getCurrentCharacter = () => {
+    return combat ? combatSystem.getCurrentCharacter() : null
+  }
+
+  const isPlayerTurn = () => {
+    const currentChar = getCurrentCharacter()
+    return currentChar?.id === playerId && !isLoading
+  }
+
+  const getPlayerCharacter = () => {
+    return combat?.participants.find(p => p.id === playerId)
+  }
+
+  const getEnemyCharacter = () => {
+    return combat?.participants.find(p => p.id !== playerId)
+  }
+
+  const availableActions = [
+    ActionType.ATTACK,
+    ActionType.DEFEND,
+    ActionType.DODGE,
+    ActionType.COUNTER_ATTACK
+  ]
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-dolrath-dark via-gray-900 to-dolrath-dark">
+      <div className="container mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center space-x-4">
+            <Link href="/" className="btn-secondary">
+              <ArrowLeft className="w-5 h-5" />
+            </Link>
+            <h1 className="text-3xl font-bold text-white">Arena de Combate</h1>
+          </div>
+          <button
+            onClick={resetCombat}
+            className="btn-primary flex items-center space-x-2"
+          >
+            <RotateCcw className="w-5 h-5" />
+            <span>Novo Combate</span>
+          </button>
+        </div>
+
+        {combat ? (
+          <div className="grid lg:grid-cols-3 gap-8">
+            {/* Personagens */}
+            <div className="space-y-6">
+              {getPlayerCharacter() && (
+                <CharacterStatus
+                  character={getPlayerCharacter()!}
+                  isCurrentTurn={isPlayerTurn()}
+                  isPlayer={true}
+                />
+              )}
+              
+              {getEnemyCharacter() && (
+                <CharacterStatus
+                  character={getEnemyCharacter()!}
+                  isCurrentTurn={getCurrentCharacter()?.id === getEnemyCharacter()?.id}
+                  isPlayer={false}
+                />
+              )}
+              
+              {/* Dicas da IA */}
+              {getPlayerCharacter() && getEnemyCharacter() && (
+                <div className="card bg-dolrath-accent bg-opacity-10 border border-dolrath-accent">
+                  <h3 className="font-bold text-dolrath-accent mb-2">💡 Dica Estratégica</h3>
+                  <p className="text-sm text-gray-300">
+                    {aiJudge.analyzeAndAdvise(getPlayerCharacter()!, getEnemyCharacter()!)}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Chat de Combate */}
+            <div className="lg:col-span-2">
+              <div className="h-[600px]">
+                <CombatChat
+                  messages={messages}
+                  onSendAction={handlePlayerAction}
+                  isPlayerTurn={isPlayerTurn()}
+                  currentPlayerName={getCurrentCharacter()?.name || ''}
+                  availableActions={availableActions}
+                />
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-dolrath-primary mx-auto mb-4"></div>
+              <p className="text-gray-400">Preparando arena de combate...</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+} 

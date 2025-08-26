@@ -1,0 +1,13 @@
+// Temporary file to disable problematic pages during build
+export default function CharacterPage() {
+  return (
+    <div className="min-h-screen bg-gray-100 p-4">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-3xl font-bold text-center mb-8">Character Page</h1>
+        <p className="text-center text-gray-600">
+          This page is temporarily disabled during build. Please use the character creation page instead.
+        </p>
+      </div>
+    </div>
+  )
+}

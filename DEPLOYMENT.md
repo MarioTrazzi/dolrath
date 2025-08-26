@@ -1,0 +1,101 @@
+# Dolrath RPG - Deployment Guide
+
+## Configuração do Banco Neon PostgreSQL
+
+### 1. Criar conta na Neon (https://neon.tech)
+1. Acesse https://neon.tech
+2. Clique em "Sign Up" 
+3. Use GitHub ou Google para autenticação rápida
+
+### 2. Criar novo projeto
+1. Clique em "Create Project"
+2. Nome: `dolrath-rpg` 
+3. Região: Escolha a mais próxima (ex: AWS US East 1)
+4. PostgreSQL version: 15 (padrão)
+
+### 3. Obter Connection String
+Após criar o projeto, você verá a connection string:
+```
+postgresql://username:password@ep-xxx.neon.tech/neondb?sslmode=require
+```
+
+### 4. Configurar Variáveis de Ambiente
+
+#### Para desenvolvimento local:
+Crie `.env.local`:
+```bash
+DATABASE_URL="postgresql://username:password@ep-xxx.neon.tech/neondb?sslmode=require"
+NEXTAUTH_URL="http://localhost:3000"
+NEXTAUTH_SECRET="sua_chave_secreta_muito_longa_aqui"
+```
+
+#### Para produção (Vercel):
+No dashboard do Vercel, adicione:
+```
+DATABASE_URL=postgresql://username:password@ep-xxx.neon.tech/neondb?sslmode=require
+NEXTAUTH_URL=https://seu-app.vercel.app
+NEXTAUTH_SECRET=sua_chave_secreta_muito_longa_aqui
+```
+
+### 5. Deploy no Vercel
+
+1. **Conectar ao GitHub:**
+   - Acesse https://vercel.com
+   - Clique em "Import Project"
+   - Conecte ao repositório `MarioTrazzi/dolrath`
+
+2. **Configurar Build:**
+   - Build Command: `npm run vercel-build`
+   - Output Directory: `.next`
+   - Install Command: `npm install`
+
+3. **Adicionar Variáveis de Ambiente:**
+   - Na aba "Environment Variables"
+   - Adicione todas as variáveis acima
+   - Marque para "Production", "Preview" e "Development"
+
+4. **Deploy:**
+   - Clique em "Deploy"
+   - Aguarde o processo (pode levar 2-3 minutos)
+
+### 6. Verificar Deploy
+
+Após o deploy:
+1. Acesse a URL fornecida pelo Vercel
+2. Teste o registro de usuário
+3. Teste a criação de personagem
+4. Verifique se as dungeons funcionam
+
+### Troubleshooting
+
+**Erro de migração:**
+```bash
+npx prisma migrate reset --force
+npx prisma migrate deploy
+```
+
+**Regenerar client:**
+```bash
+npx prisma generate
+```
+
+**Verificar conexão:**
+```bash
+npx prisma db pull
+```
+
+### URLs Importantes
+- Neon Console: https://console.neon.tech
+- Vercel Dashboard: https://vercel.com/dashboard
+- Repositório: https://github.com/MarioTrazzi/dolrath
+
+---
+
+## Scripts Disponíveis
+
+- `npm run dev` - Desenvolvimento local
+- `npm run build` - Build local
+- `npm run vercel-build` - Build para Vercel
+- `npm run prisma:migrate` - Executar migrações
+- `npm run prisma:generate` - Gerar client Prisma
+- `npm run prisma:reset` - Reset completo do banco

@@ -5,8 +5,9 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Dungeon, DungeonInstance, DungeonLoot, DungeonStats } from '@/types/game'
+import { Suspense } from 'react'
 
-export default function DungeonSummaryPage() {
+function SummaryContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [instance, setInstance] = useState<DungeonInstance | null>(null)
@@ -91,5 +92,17 @@ export default function DungeonSummaryPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function DungeonSummaryPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-background via-secondary to-accent flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    }>
+      <SummaryContent />
+    </Suspense>
   )
 }

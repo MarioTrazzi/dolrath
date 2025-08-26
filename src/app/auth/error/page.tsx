@@ -5,8 +5,9 @@ import { motion } from 'framer-motion'
 import { AlertTriangle, ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import Link from 'next/link'
+import { Suspense } from 'react'
 
-export default function AuthErrorPage() {
+function ErrorContent() {
   const searchParams = useSearchParams()
   const error = searchParams.get('error')
 
@@ -66,4 +67,18 @@ export default function AuthErrorPage() {
       </motion.div>
     </div>
   )
-} 
+}
+
+export default function AuthErrorPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-background via-secondary to-accent flex items-center justify-center p-8">
+        <div className="glass-card p-8 max-w-md w-full text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+        </div>
+      </div>
+    }>
+      <ErrorContent />
+    </Suspense>
+  )
+}

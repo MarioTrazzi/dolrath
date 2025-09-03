@@ -9,7 +9,7 @@
     }
   },
   "env": {
-    "NEXT_PUBLIC_SOCKET_URL": "https://your-railway-websocket-url.railway.app"
+    "NEXT_PUBLIC_SOCKET_URL": "https://dolrath-production.up.railway.app"
   },
   "build": {
     "env": {

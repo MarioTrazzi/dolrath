@@ -81,9 +81,9 @@ enum ActionType {
 
 // Função para criar conexão Socket.IO real
 function createSocketConnection(): Socket {
-  // URL do servidor WebSocket baseado no ambiente
+  // URL do servidor WebSocket do Railway em produção
   const socketUrl = process.env.NODE_ENV === 'production' 
-    ? (process.env.NEXT_PUBLIC_SOCKET_URL || 'wss://dolrath-socket-server-production.up.railway.app')
+    ? (process.env.NEXT_PUBLIC_SOCKET_URL || 'wss://dolrath-websocket.railway.app')
     : 'ws://localhost:3001'
     
   console.log('🔗 Conectando ao WebSocket:', socketUrl)

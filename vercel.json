@@ -4,25 +4,16 @@
   "installCommand": "npm install",
   "framework": "nextjs",
   "functions": {
-    "pages/api/**/*.js": {
-      "runtime": "nodejs18.x"
-    },
     "src/app/api/**/*.ts": {
       "runtime": "nodejs18.x"
     }
   },
   "env": {
-    "NEXT_PUBLIC_SOCKET_URL": ""
+    "NEXT_PUBLIC_SOCKET_URL": "https://your-railway-websocket-url.railway.app"
   },
   "build": {
     "env": {
       "SKIP_ENV_VALIDATION": "1"
     }
-  },
-  "rewrites": [
-    {
-      "source": "/socket.io/(.*)",
-      "destination": "/api/socketio"
-    }
-  ]
+  }
 }

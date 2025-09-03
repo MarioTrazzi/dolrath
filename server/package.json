@@ -1,0 +1,19 @@
+{
+  "name": "dolrath-socket-server",
+  "version": "1.0.0",
+  "description": "Servidor WebSocket para combates PvP",
+  "main": "socket-server.js",
+  "scripts": {
+    "start": "node socket-server.js",
+    "dev": "nodemon socket-server.js"
+  },
+  "dependencies": {
+    "socket.io": "^4.7.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "keywords": ["websocket", "socketio", "pvp", "combat", "realtime"],
+  "author": "Mario Trazzi",
+  "license": "MIT"
+}

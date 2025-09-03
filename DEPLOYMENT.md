@@ -99,3 +99,75 @@ npx prisma db pull
 - `npm run prisma:migrate` - Executar migrações
 - `npm run prisma:generate` - Gerar client Prisma
 - `npm run prisma:reset` - Reset completo do banco
+- `npm run socket:dev` - Servidor WebSocket local
+- `npm run dev:full` - Next.js + WebSocket juntos
+
+---
+
+## Deploy do Sistema PvP (WebSocket)
+
+### 1. Deploy do Frontend (Vercel)
+O frontend já está configurado para Vercel e será deployado automaticamente.
+
+### 2. Deploy do Servidor WebSocket (Railway/Heroku)
+
+#### Opção 1: Railway (Recomendado)
+```bash
+# Instalar Railway CLI
+npm install -g @railway/cli
+
+# Login
+railway login
+
+# Deploy do servidor WebSocket
+cd server
+railway up
+```
+
+#### Opção 2: Heroku
+```bash
+# Instalar Heroku CLI
+# brew install heroku/brew/heroku (macOS)
+
+# Login
+heroku login
+
+# Criar app para WebSocket
+heroku create dolrath-socket-server
+
+# Deploy
+git subtree push --prefix server heroku main
+```
+
+### 3. Configurar URLs de Produção
+
+Atualizar em `src/app/combat/page.tsx`:
+```typescript
+const socketUrl = process.env.NODE_ENV === 'production' 
+  ? 'wss://dolrath-socket-server.railway.app' 
+  : 'ws://localhost:3001'
+```
+
+### 4. Teste Multi-Device
+
+1. **Desktop**: Acesse https://dolrath.vercel.app/combat-lobby
+2. **Mobile**: Acesse a mesma URL no celular
+3. **Criar sala**: Um dispositivo cria a sala
+4. **Entrar na sala**: Outro dispositivo entra na mesma sala
+5. **Combate real**: Teste o sistema PvP em tempo real!
+
+### 5. Debugging
+
+#### Logs do WebSocket:
+```bash
+# Railway
+railway logs
+
+# Heroku
+heroku logs --tail --app dolrath-socket-server
+```
+
+#### Verificar conectividade:
+```bash
+curl -I https://dolrath-socket-server.railway.app
+```

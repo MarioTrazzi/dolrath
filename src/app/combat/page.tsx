@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { X, Users, Sword, Shield, Zap, Heart, Sparkles } from 'lucide-react'
 import { io, Socket } from 'socket.io-client'
@@ -96,7 +96,7 @@ function createSocketConnection(): Socket {
   })
 }
 
-export default function CombatPage() {
+function CombatPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const roomId = searchParams.get('room') || 'default'
@@ -581,5 +581,17 @@ export default function CombatPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function CombatPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+        <div className="text-white text-xl">Carregando combate...</div>
+      </div>
+    }>
+      <CombatPageContent />
+    </Suspense>
   )
 }

@@ -1,6 +1,7 @@
 import NextAuth from 'next-auth'
 import GoogleProvider from 'next-auth/providers/google'
 import CredentialsProvider from 'next-auth/providers/credentials'
+import bcrypt from 'bcryptjs'
 
 export const { handlers: { GET, POST }, auth } = NextAuth({
   providers: [
@@ -22,17 +23,42 @@ export const { handlers: { GET, POST }, auth } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null
         
-        // Mock user for testing - remove in production
-        if (credentials.email === 'test@example.com' && credentials.password === 'password123') {
+        try {
+          const { prisma } = await import('@/lib/prisma')
+          
+          // Buscar usuário no banco
+          const user = await prisma.user.findUnique({
+            where: { email: credentials.email as string }
+          })
+          
+          if (!user || !user.password) {
+            console.log('❌ Usuário não encontrado ou sem senha:', credentials.email)
+            return null
+          }
+          
+          // Verificar senha com bcrypt
+          const isValidPassword = await bcrypt.compare(
+            credentials.password as string, 
+            user.password
+          )
+          
+          if (!isValidPassword) {
+            console.log('❌ Senha inválida para:', credentials.email)
+            return null
+          }
+          
+          console.log('✅ Login bem-sucedido:', credentials.email)
+          
           return {
-            id: '1',
-            email: 'test@example.com',
-            name: 'Test User',
+            id: user.id,
+            email: user.email,
+            name: user.name,
             image: null
           }
+        } catch (error) {
+          console.error('❌ Erro na autenticação:', error)
+          return null
         }
-        
-        return null
       }
     })
   ],

@@ -1,25 +1,64 @@
 # 🔐 Credenciais de Teste - Dolrath RPG
 
-## 👤 **Usuário Principal (BANCO DE PRODUÇÃO)**
+## 👤 **Usuário Principal**
 - **Email**: `teste@dolrath.com`
 - **Senha**: `teste123`
 - **Personagem**: Guerreiro Teste (Level 5, Humano Guerreiro)
 - **Gold**: 1000 moedas
-- **Status**: ✅ Ativo no banco Neon (produção)
+- **Status**: ⚠️ Precisa ser criado no banco Neon
+
+## 🔧 **Como Criar o Usuário no Neon:**
+
+### **Opção 1: SQL Editor (Recomendado)**
+1. Acesse o console do Neon
+2. Vá para o SQL Editor
+3. Copie e execute o SQL do arquivo `create-test-user.sql`:
+
+```sql
+-- 1. Criar usuário
+INSERT INTO "User" (id, email, name, password, "createdAt", "updatedAt") 
+VALUES (
+  gen_random_uuid(),
+  'teste@dolrath.com',
+  'Usuário Teste',
+  '$2b$12$jp8XjWtckpL7oGK0cBl6D.nnnEVV3s9m.jm92zE6eWLToexZBLbr6',
+  NOW(),
+  NOW()
+);
+
+-- 2. Criar personagem
+INSERT INTO "Character" (
+  id, "userId", name, race, class, level, hp, "maxHp", mp, "maxMp", 
+  stamina, "maxStamina", gold, "availablePoints", attributes, "baseStats", 
+  "createdAt", "updatedAt"
+) VALUES (
+  gen_random_uuid(),
+  (SELECT id FROM "User" WHERE email = 'teste@dolrath.com'),
+  'Guerreiro Teste', 'Humano', 'Guerreiro', 5, 100, 100, 50, 50, 
+  100, 100, 1000, 0,
+  '{"strength": 15, "agility": 12, "intelligence": 10, "resistance": 13, "critical": 5, "speed": 10}'::jsonb,
+  '{"attack": 25, "defense": 18}'::jsonb,
+  NOW(), NOW()
+);
+```
 
 ## 🎮 **Como Testar:**
 
-### 1. **Login**
+### 1. **Criar Usuário no Banco**
+1. Execute o SQL acima no console Neon
+2. Verifique se foi criado com: `SELECT * FROM "User" WHERE email = 'teste@dolrath.com';`
+
+### 2. **Login**
 1. Acesse: `https://sua-app.vercel.app/auth/login`
 2. Use as credenciais: `teste@dolrath.com` / `teste123`
-3. Faça login (usuário já existe no banco de produção)
+3. Faça login
 
-### 2. **Selecionar Personagem**
+### 3. **Selecionar Personagem**
 1. No Dashboard, você verá: "Guerreiro Teste"
 2. O personagem já está criado e pronto para combate
 3. Level 5, HP: 100/100, MP: 50/50, Gold: 1000
 
-### 3. **Testar PvP Multi-dispositivo**
+### 4. **Testar PvP Multi-dispositivo**
 
 #### **Dispositivo 1 (Desktop):**
 1. Acesse: `https://sua-app.vercel.app/combat`

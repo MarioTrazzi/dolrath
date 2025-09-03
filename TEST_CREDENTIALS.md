@@ -1,20 +1,23 @@
 # 🔐 Credenciais de Teste - Dolrath RPG
 
-## 👤 **Usuário Principal**
+## 👤 **Usuário Principal (BANCO DE PRODUÇÃO)**
 - **Email**: `teste@dolrath.com`
 - **Senha**: `teste123`
-- **Personagem**: Guerreiro Teste (Level 5)
+- **Personagem**: Guerreiro Teste (Level 5, Humano Guerreiro)
+- **Gold**: 1000 moedas
+- **Status**: ✅ Ativo no banco Neon (produção)
 
 ## 🎮 **Como Testar:**
 
 ### 1. **Login**
 1. Acesse: `https://sua-app.vercel.app/auth/login`
-2. Use as credenciais acima
-3. Faça login
+2. Use as credenciais: `teste@dolrath.com` / `teste123`
+3. Faça login (usuário já existe no banco de produção)
 
-### 2. **Criar Personagem (se necessário)**
-1. Vá para Dashboard
-2. Crie um personagem se não existir
+### 2. **Selecionar Personagem**
+1. No Dashboard, você verá: "Guerreiro Teste"
+2. O personagem já está criado e pronto para combate
+3. Level 5, HP: 100/100, MP: 50/50, Gold: 1000
 
 ### 3. **Testar PvP Multi-dispositivo**
 

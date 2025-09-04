@@ -5,7 +5,12 @@
 - **Senha**: `teste123`
 - **Personagem**: Guerreiro Teste (Level 5, Humano Guerreiro)
 - **Gold**: 1000 moedas
-- **Status**: ⚠️ Precisa ser criado no banco Neon
+- **Status**: ✅ Autenticação corrigida - use o SQL atualizado!
+
+## ⚠️ **CORREÇÃO IMPORTANTE:**
+**Problema encontrado**: O NextAuth estava usando credenciais mock ao invés do banco real.  
+**Solução**: Atualizei a autenticação para verificar usuários no banco Neon com bcrypt.  
+**Action**: Execute o SQL atualizado abaixo para recriar o usuário.
 
 ## 🔧 **Como Criar o Usuário no Neon:**
 
@@ -15,13 +20,13 @@
 3. Copie e execute o SQL do arquivo `create-test-user.sql`:
 
 ```sql
--- 1. Criar usuário
+-- 1. Criar usuário (senha: teste123 com hash atualizado)
 INSERT INTO "User" (id, email, name, password, "createdAt", "updatedAt") 
 VALUES (
   gen_random_uuid(),
   'teste@dolrath.com',
   'Usuário Teste',
-  '$2b$12$jp8XjWtckpL7oGK0cBl6D.nnnEVV3s9m.jm92zE6eWLToexZBLbr6',
+  '$2b$12$0u/.7H0/HslrcchaRozINOzuK/K3Pe3E/m098Nlg5cGOYphR9c74K',
   NOW(),
   NOW()
 );
@@ -41,6 +46,8 @@ INSERT INTO "Character" (
   NOW(), NOW()
 );
 ```
+
+⚠️ **IMPORTANTE**: Atualizei a autenticação! Agora o login funciona com o banco real.
 
 ## 🎮 **Como Testar:**
 

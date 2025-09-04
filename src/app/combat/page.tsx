@@ -119,6 +119,26 @@ function CombatPageContent() {
   const isMyTurn = combatRoom?.currentTurn === currentPlayer?.id
   const isWinner = combatRoom?.winner === currentPlayer?.id
 
+  // Auto scroll para o chat quando novas mensagens chegam
+  useEffect(() => {
+    if (chatLogRef.current) {
+      const scrollToBottom = () => {
+        chatLogRef.current!.scrollTop = chatLogRef.current!.scrollHeight
+      }
+      scrollToBottom()
+    }
+  }, [chatMessages])
+
+  // Auto scroll para o log de combate quando há updates
+  useEffect(() => {
+    if (combatLogRef.current && combatRoom?.combatLog) {
+      const scrollToBottom = () => {
+        combatLogRef.current!.scrollTop = combatLogRef.current!.scrollHeight
+      }
+      scrollToBottom()
+    }
+  }, [combatRoom?.combatLog])
+
   useEffect(() => {
     const initializeCombat = async () => {
       let playerData: Player
@@ -137,21 +157,11 @@ function CombatPageContent() {
       socket.on('room_updated', (room: CombatRoom) => {
         console.log('🔄 Sala atualizada:', room)
         setCombatRoom(room)
-        if (combatLogRef.current) {
-          setTimeout(() => {
-            combatLogRef.current!.scrollTop = combatLogRef.current!.scrollHeight
-          }, 100)
-        }
       })
 
       socket.on('chat_message', (msg: {sender: string, message: string, timestamp: Date}) => {
         console.log('💬 Nova mensagem:', msg)
         setChatMessages(prev => [...prev, msg])
-        if (chatLogRef.current) {
-          setTimeout(() => {
-            chatLogRef.current!.scrollTop = chatLogRef.current!.scrollHeight
-          }, 100)
-        }
       })
 
       socket.on('player_joined', (player: Player) => {
@@ -345,82 +355,206 @@ function CombatPageContent() {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-2">
-      <div className="bg-surface/95 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl w-full max-w-6xl h-[95vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-1 sm:p-2">
+      <div className="bg-surface/95 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl w-full h-full sm:h-[95vh] sm:max-w-6xl flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-primary to-primary-dark text-white p-3 rounded-t-2xl flex justify-between items-center flex-shrink-0">
+        <div className="bg-gradient-to-r from-primary to-primary-dark text-white p-2 sm:p-3 rounded-t-2xl flex justify-between items-center flex-shrink-0">
           <div className="flex items-center">
-            <h2 className="text-lg font-bold">⚔️ Combate PvP - Sala {roomId}</h2>
-            <div className={`ml-3 px-2 py-1 rounded-full text-xs font-bold ${
+            <h2 className="text-sm sm:text-lg font-bold">⚔️ Combate PvP - Sala {roomId}</h2>
+            <div className={`ml-2 sm:ml-3 px-1 sm:px-2 py-1 rounded-full text-xs font-bold ${
               connectionStatus === 'connected' 
                 ? 'bg-success/20 text-success border border-success/30' 
                 : connectionStatus === 'connecting'
                 ? 'bg-warning/20 text-warning border border-warning/30'
                 : 'bg-error/20 text-error border border-error/30'
             }`}>
-              {connectionStatus === 'connected' ? '🟢 Conectado' : 
-               connectionStatus === 'connecting' ? '🟡 Conectando...' : '🔴 Desconectado'}
+              <span className="hidden sm:inline">
+                {connectionStatus === 'connected' ? '🟢 Conectado' : 
+                 connectionStatus === 'connecting' ? '🟡 Conectando...' : '🔴 Desconectado'}
+              </span>
+              <span className="sm:hidden">
+                {connectionStatus === 'connected' ? '🟢' : 
+                 connectionStatus === 'connecting' ? '🟡' : '🔴'}
+              </span>
             </div>
           </div>
           <button
             onClick={() => router.push('/combat-lobby')}
             className="text-white/80 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/10"
           >
-            <X size={20} />
+            <X size={16} className="sm:w-5 sm:h-5" />
           </button>
         </div>
 
         <div className="flex-1 flex flex-col min-h-0">
           {/* Status Panels */}
-          <div className="bg-background/30 border-b border-white/10 p-3 flex justify-between flex-shrink-0">
+          <div className="bg-background/30 border-b border-white/10 p-2 sm:p-3 flex flex-col sm:flex-row gap-2 sm:gap-0 flex-shrink-0">
             {/* Current Player Status */}
-            <div className="bg-gradient-to-br from-success/20 to-success/10 border border-success/30 rounded-xl p-3 flex-1 mr-3 backdrop-blur-sm">
-              <h3 className="font-bold text-success mb-2 text-sm">{currentPlayer?.name} (Você)</h3>
-              <div className="grid grid-cols-3 gap-1 text-xs">
+            <div className="bg-gradient-to-br from-success/20 to-success/10 border border-success/30 rounded-xl p-2 sm:p-3 flex-1 sm:mr-3 backdrop-blur-sm">
+              <h3 className="font-bold text-success mb-2 text-xs sm:text-sm">{currentPlayer?.name} (Você)</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 text-xs">
                 <div className="text-text-secondary">HP: <span className="font-bold text-error">{currentPlayer?.hp}/{currentPlayer?.maxHp}</span></div>
                 <div className="text-text-secondary">MP: <span className="font-bold text-blue-400">{currentPlayer?.mp}/{currentPlayer?.maxMp}</span></div>
                 <div className="text-text-secondary">LVL: <span className="font-bold text-primary">{currentPlayer?.level}</span></div>
                 <div className="text-text-secondary">ATK: <span className="font-bold text-text-primary">{currentPlayer?.attack}</span></div>
                 <div className="text-text-secondary">DEF: <span className="font-bold text-text-primary">{currentPlayer?.defense}</span></div>
-                <div className="text-text-secondary">STR: <span className="font-bold text-yellow-400">{currentPlayer?.strength}</span></div>
-                <div className="text-text-secondary">AGI: <span className="font-bold text-cyan-400">{currentPlayer?.agility}</span></div>
-                <div className="text-text-secondary">INT: <span className="font-bold text-purple-400">{currentPlayer?.intelligence}</span></div>
-                <div className="text-text-secondary">RES: <span className="font-bold text-green-400">{currentPlayer?.resistance}</span></div>
-                <div className="text-text-secondary">CRIT: <span className="font-bold text-yellow-300">{currentPlayer?.critical}%</span></div>
-                <div className="text-text-secondary">SPD: <span className="font-bold text-emerald-400">{currentPlayer?.speed}</span></div>
+                <div className="text-text-secondary hidden sm:block">STR: <span className="font-bold text-yellow-400">{currentPlayer?.strength}</span></div>
+                <div className="text-text-secondary hidden sm:block">AGI: <span className="font-bold text-cyan-400">{currentPlayer?.agility}</span></div>
+                <div className="text-text-secondary hidden sm:block">INT: <span className="font-bold text-purple-400">{currentPlayer?.intelligence}</span></div>
+                <div className="text-text-secondary hidden sm:block">RES: <span className="font-bold text-green-400">{currentPlayer?.resistance}</span></div>
+                <div className="text-text-secondary hidden sm:block">CRIT: <span className="font-bold text-yellow-300">{currentPlayer?.critical}%</span></div>
+                <div className="text-text-secondary hidden sm:block">SPD: <span className="font-bold text-emerald-400">{currentPlayer?.speed}</span></div>
               </div>
             </div>
 
             {/* Opponent Status */}
-            <div className="bg-gradient-to-br from-error/20 to-error/10 border border-error/30 rounded-xl p-3 flex-1 ml-3 backdrop-blur-sm">
+            <div className="bg-gradient-to-br from-error/20 to-error/10 border border-error/30 rounded-xl p-2 sm:p-3 flex-1 sm:ml-3 backdrop-blur-sm">
               {opponent ? (
                 <>
-                  <h3 className="font-bold text-error mb-2 text-sm">{opponent.name} (Oponente)</h3>
-                  <div className="grid grid-cols-3 gap-1 text-xs">
+                  <h3 className="font-bold text-error mb-2 text-xs sm:text-sm">{opponent.name} (Oponente)</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 text-xs">
                     <div className="text-text-secondary">HP: <span className="font-bold text-error">{opponent.hp}/{opponent.maxHp}</span></div>
                     <div className="text-text-secondary">MP: <span className="font-bold text-blue-400">{opponent.mp}/{opponent.maxMp}</span></div>
                     <div className="text-text-secondary">LVL: <span className="font-bold text-text-primary">{opponent.level}</span></div>
                     <div className="text-text-secondary">ATK: <span className="font-bold text-text-primary">{opponent.attack}</span></div>
                     <div className="text-text-secondary">DEF: <span className="font-bold text-text-primary">{opponent.defense}</span></div>
-                    <div className="text-text-secondary">STR: <span className="font-bold text-yellow-400">{opponent.strength}</span></div>
-                    <div className="text-text-secondary">AGI: <span className="font-bold text-cyan-400">{opponent.agility}</span></div>
-                    <div className="text-text-secondary">INT: <span className="font-bold text-purple-400">{opponent.intelligence}</span></div>
-                    <div className="text-text-secondary">RES: <span className="font-bold text-green-400">{opponent.resistance}</span></div>
+                    <div className="text-text-secondary hidden sm:block">STR: <span className="font-bold text-yellow-400">{opponent.strength}</span></div>
+                    <div className="text-text-secondary hidden sm:block">AGI: <span className="font-bold text-cyan-400">{opponent.agility}</span></div>
+                    <div className="text-text-secondary hidden sm:block">INT: <span className="font-bold text-purple-400">{opponent.intelligence}</span></div>
+                    <div className="text-text-secondary hidden sm:block">RES: <span className="font-bold text-green-400">{opponent.resistance}</span></div>
                   </div>
                 </>
               ) : (
                 <div className="text-center text-text-secondary">
-                  <div className="text-2xl mb-2">⏳</div>
-                  <div className="text-sm">Aguardando oponente...</div>
+                  <div className="text-xl sm:text-2xl mb-2">⏳</div>
+                  <div className="text-xs sm:text-sm">Aguardando oponente...</div>
                 </div>
               )}
             </div>
           </div>
 
           {/* Combat Area */}
-          <div className="flex-1 flex min-h-0">
-            {/* Combat Log - Lado esquerdo */}
-            <div className="flex-1 bg-background/20 p-4">
+          <div className="flex-1 flex flex-col sm:flex-row min-h-0">
+            {/* Mobile: Stack vertically, Desktop: Side by side */}
+            
+            {/* Chat - Primeira no mobile para ficar visível */}
+            <div className="order-2 sm:order-2 flex-1 sm:w-80 bg-surface/30 p-2 sm:p-4 flex flex-col min-h-0">
+              <h3 className="font-bold text-text-primary mb-2 sm:mb-3 text-xs sm:text-sm text-center">💬 Chat</h3>
+              <div className="flex-1 bg-background/50 backdrop-blur-xl border border-white/10 rounded-xl p-2 sm:p-3 flex flex-col min-h-0">
+                <div 
+                  ref={chatLogRef}
+                  className="flex-1 overflow-y-auto space-y-2 mb-3 min-h-[120px] sm:min-h-[160px]"
+                  style={{ maxHeight: '200px' }}
+                >
+                  {chatMessages.map((msg, index) => (
+                    <div key={index} className="bg-surface/40 rounded-lg p-2">
+                      <div className="text-xs text-text-secondary font-bold">{msg.sender}:</div>
+                      <div className="text-xs sm:text-sm text-text-primary break-words">{msg.message}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex flex-shrink-0">
+                  <input
+                    type="text"
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                    placeholder="Digite sua mensagem..."
+                    className="flex-1 bg-background/50 border border-white/20 rounded-l-lg px-2 sm:px-3 py-2 text-xs sm:text-sm text-text-primary placeholder-text-secondary focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  />
+                  <button
+                    onClick={sendMessage}
+                    className="bg-primary hover:bg-primary-dark text-white px-2 sm:px-3 py-2 rounded-r-lg transition-colors text-xs sm:text-sm"
+                  >
+                    ➤
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions - Sempre visível e responsivo */}
+            <div className="order-1 sm:order-3 w-full sm:w-64 bg-surface/30 p-2 sm:p-4 flex flex-col flex-shrink-0">
+              <h3 className="font-bold text-text-primary mb-2 sm:mb-3 text-xs sm:text-sm text-center">🎯 Ações</h3>
+              
+              {!combatRoom?.isActive ? (
+                <div className="space-y-3">
+                  <div className="text-center">
+                    <div className="text-xl sm:text-2xl mb-2">⏳</div>
+                    <div className="text-xs sm:text-sm text-text-secondary mb-3">
+                      {!opponent ? 'Aguardando oponente...' : 'Preparando para o combate...'}
+                    </div>
+                  </div>
+                  {opponent && (
+                    <button
+                      onClick={toggleReady}
+                      className={`w-full py-3 sm:py-2 px-4 rounded-lg font-bold text-sm sm:text-sm transition-all duration-200 ${
+                        isReady 
+                          ? 'bg-success text-white' 
+                          : 'bg-gradient-to-r from-primary to-primary-dark text-white hover:shadow-lg hover:shadow-primary/25'
+                      }`}
+                    >
+                      {isReady ? '✅ Pronto!' : '🏁 Ficar Pronto'}
+                    </button>
+                  )}
+                </div>
+              ) : combatRoom?.phase === CombatPhase.COMBAT_END ? (
+                <div className="text-center space-y-4">
+                  <div className={`text-xl sm:text-2xl font-bold ${isWinner ? 'text-success' : 'text-error'}`}>
+                    {isWinner ? '🏆 VITÓRIA!' : '💀 DERROTA!'}
+                  </div>
+                  <button
+                    onClick={() => router.push('/combat-lobby')}
+                    className="bg-primary hover:bg-primary-dark text-white px-6 py-2 rounded-lg w-full transition-colors"
+                  >
+                    Voltar ao Lobby
+                  </button>
+                </div>
+              ) : isMyTurn && combatRoom?.phase === CombatPhase.PLAYER_TURN ? (
+                <div className="space-y-2">
+                  <button
+                    onClick={() => handlePlayerAction(ActionType.LIGHT_ATTACK)}
+                    className="w-full bg-gradient-to-r from-warning to-yellow-500 hover:from-yellow-500 hover:to-warning text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
+                  >
+                    👊 Ataque Leve (1⚡)
+                  </button>
+                  <button
+                    onClick={() => handlePlayerAction(ActionType.HEAVY_ATTACK)}
+                    className="w-full bg-gradient-to-r from-error to-red-600 hover:from-red-600 hover:to-error text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
+                  >
+                    ⚔️ Ataque Pesado (2⚡)
+                  </button>
+                  <button
+                    onClick={() => handlePlayerAction(ActionType.SPECIAL_ATTACK)}
+                    disabled={!currentPlayer || currentPlayer.mp < 15}
+                    className="w-full bg-gradient-to-r from-primary to-primary-dark hover:shadow-lg hover:shadow-primary/25 disabled:from-gray-600 disabled:to-gray-700 disabled:opacity-50 text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg disabled:hover:scale-100"
+                  >
+                    ✨ Especial (15🔮 4⚡)
+                  </button>
+                  
+                  <div className="border-t border-white/10 my-3"></div>
+                  
+                  <button
+                    onClick={() => handlePlayerAction(ActionType.DEFEND)}
+                    className="w-full bg-gradient-to-r from-success to-emerald-600 hover:from-emerald-600 hover:to-success text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
+                  >
+                    🧪 Consumíveis
+                  </button>
+                  <button
+                    className="w-full bg-gradient-to-r from-accent to-indigo-800 opacity-50 text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 shadow-lg cursor-not-allowed"
+                    title="Em desenvolvimento"
+                  >
+                    🔮 Transformação
+                  </button>
+                </div>
+              ) : (
+                <div className="text-center text-text-secondary font-bold text-xs flex-1 flex items-center justify-center">
+                  {!isMyTurn ? '⏳ Turno do oponente...' : '⚔️ Executando ação...'}
+                </div>
+              )}
+            </div>
+
+            {/* Combat Log - Ocultado no mobile, visível no desktop */}
+            <div className="order-3 sm:order-1 hidden sm:flex flex-1 bg-background/20 p-4">
               <div className="bg-background/50 backdrop-blur-xl border border-white/10 rounded-xl p-4 h-full">
                 <h3 className="font-bold text-text-primary mb-3 text-center text-sm">⚔️ Log de Combate</h3>
                 <div 
@@ -436,135 +570,20 @@ function CombatPageContent() {
                 </div>
               </div>
             </div>
-
-            {/* Chat - Centro */}
-            <div className="w-80 bg-surface/30 p-4 flex flex-col">
-              <h3 className="font-bold text-text-primary mb-3 text-sm text-center">💬 Chat</h3>
-              <div className="flex-1 bg-background/50 backdrop-blur-xl border border-white/10 rounded-xl p-3">
-                <div 
-                  ref={chatLogRef}
-                  className="h-40 overflow-y-auto space-y-2 mb-3"
-                >
-                  {chatMessages.map((msg, index) => (
-                    <div key={index} className="bg-surface/40 rounded-lg p-2">
-                      <div className="text-xs text-text-secondary font-bold">{msg.sender}:</div>
-                      <div className="text-sm text-text-primary">{msg.message}</div>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex">
-                  <input
-                    type="text"
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-                    placeholder="Digite sua mensagem..."
-                    className="flex-1 bg-background/50 border border-white/20 rounded-l-lg px-3 py-2 text-sm text-text-primary placeholder-text-secondary focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
-                  <button
-                    onClick={sendMessage}
-                    className="bg-primary hover:bg-primary-dark text-white px-3 py-2 rounded-r-lg transition-colors"
-                  >
-                    ➤
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Actions - Lado direito */}
-            <div className="w-64 bg-surface/30 p-4 flex flex-col">
-              <h3 className="font-bold text-text-primary mb-3 text-sm text-center">🎯 Ações</h3>
-              
-              {!combatRoom?.isActive ? (
-                <div className="space-y-3">
-                  <div className="text-center">
-                    <div className="text-2xl mb-2">⏳</div>
-                    <div className="text-sm text-text-secondary mb-3">
-                      {!opponent ? 'Aguardando oponente...' : 'Preparando para o combate...'}
-                    </div>
-                  </div>
-                  {opponent && (
-                    <button
-                      onClick={toggleReady}
-                      className={`w-full py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 ${
-                        isReady 
-                          ? 'bg-success text-white' 
-                          : 'bg-gradient-to-r from-primary to-primary-dark text-white hover:shadow-lg hover:shadow-primary/25'
-                      }`}
-                    >
-                      {isReady ? '✅ Pronto!' : '🏁 Ficar Pronto'}
-                    </button>
-                  )}
-                </div>
-              ) : combatRoom?.phase === CombatPhase.COMBAT_END ? (
-                <div className="text-center space-y-4">
-                  <div className={`text-2xl font-bold ${isWinner ? 'text-success' : 'text-error'}`}>
-                    {isWinner ? '🏆 VITÓRIA!' : '💀 DERROTA!'}
-                  </div>
-                  <button
-                    onClick={() => router.push('/combat-lobby')}
-                    className="bg-primary hover:bg-primary-dark text-white px-6 py-2 rounded-lg w-full transition-colors"
-                  >
-                    Voltar ao Lobby
-                  </button>
-                </div>
-              ) : isMyTurn && combatRoom?.phase === CombatPhase.PLAYER_TURN ? (
-                <div className="space-y-2">
-                  <button
-                    onClick={() => handlePlayerAction(ActionType.LIGHT_ATTACK)}
-                    className="w-full bg-gradient-to-r from-warning to-yellow-500 hover:from-yellow-500 hover:to-warning text-white py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
-                  >
-                    👊 Ataque Leve (1⚡)
-                  </button>
-                  <button
-                    onClick={() => handlePlayerAction(ActionType.HEAVY_ATTACK)}
-                    className="w-full bg-gradient-to-r from-error to-red-600 hover:from-red-600 hover:to-error text-white py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
-                  >
-                    ⚔️ Ataque Pesado (2⚡)
-                  </button>
-                  <button
-                    onClick={() => handlePlayerAction(ActionType.SPECIAL_ATTACK)}
-                    disabled={!currentPlayer || currentPlayer.mp < 15}
-                    className="w-full bg-gradient-to-r from-primary to-primary-dark hover:shadow-lg hover:shadow-primary/25 disabled:from-gray-600 disabled:to-gray-700 disabled:opacity-50 text-white py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg disabled:hover:scale-100"
-                  >
-                    ✨ Especial (15🔮 4⚡)
-                  </button>
-                  
-                  <div className="border-t border-white/10 my-3"></div>
-                  
-                  <button
-                    onClick={() => handlePlayerAction(ActionType.DEFEND)}
-                    className="w-full bg-gradient-to-r from-success to-emerald-600 hover:from-emerald-600 hover:to-success text-white py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
-                  >
-                    🧪 Consumíveis
-                  </button>
-                  <button
-                    className="w-full bg-gradient-to-r from-accent to-indigo-800 opacity-50 text-white py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 shadow-lg cursor-not-allowed"
-                    title="Em desenvolvimento"
-                  >
-                    🔮 Transformação
-                  </button>
-                </div>
-              ) : (
-                <div className="text-center text-text-secondary font-bold text-xs flex-1 flex items-center justify-center">
-                  {!isMyTurn ? '⏳ Turno do oponente...' : '⚔️ Executando ação...'}
-                </div>
-              )}
-            </div>
           </div>
 
           {/* Dice Panel */}
           {combatRoom?.phase === CombatPhase.DICE_ROLL && isMyTurn && (
-            <div className="bg-gradient-to-br from-surface/95 to-background/90 backdrop-blur-md border-t border-white/10 p-3 flex-shrink-0">
-              <h3 className="text-text-primary font-bold text-center mb-2 text-sm">🎲 Role o Dado</h3>
-              <div className="flex justify-center space-x-3">
+            <div className="bg-gradient-to-br from-surface/95 to-background/90 backdrop-blur-md border-t border-white/10 p-2 sm:p-3 flex-shrink-0">
+              <h3 className="text-text-primary font-bold text-center mb-2 text-xs sm:text-sm">🎲 Role o Dado</h3>
+              <div className="flex justify-center space-x-2 sm:space-x-3 flex-wrap">
                 {[4, 6, 8, 10, 12, 20].map((sides) => (
                   <button
                     key={sides}
                     onClick={() => handleRollDice(sides)}
                     disabled={pendingAction?.diceType !== sides}
                     className={`
-                      w-12 h-12 rounded-lg text-white font-bold text-xs
+                      w-10 h-10 sm:w-12 sm:h-12 rounded-lg text-white font-bold text-xs
                       transition-all duration-200 transform
                       ${pendingAction?.diceType === sides 
                         ? 'hover:scale-110 cursor-pointer bg-primary' 

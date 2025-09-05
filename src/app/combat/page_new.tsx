@@ -45,21 +45,23 @@ interface Player {
 
 interface CombatRoom {
   id: string
+  creator?: string
   player1: Player | null
   player2: Player | null
   currentTurn: string | null
   phase: CombatPhase
   combatLog: string[]
   isActive: boolean
+  pendingAction?: any
+  reactionPhase?: boolean
   winner?: string | null
 }
 
 enum CombatPhase {
   WAITING_PLAYERS = 'waiting_players',
-  READY_CHECK = 'ready_check',
+  INITIATIVE_ROLL = 'initiative_roll',
   PLAYER_TURN = 'player_turn',
-  PLAYER_ATTACK = 'player_attack',
-  PLAYER_DEFENSE = 'player_defense',
+  OPPONENT_REACTION = 'opponent_reaction',
   DICE_ROLL = 'dice_roll',
   COMBAT_END = 'combat_end'
 }
@@ -261,6 +263,7 @@ export default function CombatPage() {
   const [chatMessages, setChatMessages] = useState<Array<{sender: string, message: string, timestamp: Date}>>([])
   const [newMessage, setNewMessage] = useState('')
   const [pendingAction, setPendingAction] = useState<{action: ActionType, diceType: number} | null>(null)
+  const [pendingDefense, setPendingDefense] = useState<{reaction: string, diceType: number} | null>(null)
 
   const combatLogRef = useRef<HTMLDivElement>(null)
   const chatLogRef = useRef<HTMLDivElement>(null)
@@ -354,6 +357,7 @@ export default function CombatPage() {
 
       socket.on('dice_rolled', (data: {playerId: string, sides: number, result: any}) => {
         setPendingAction(null)
+        setPendingDefense(null)
       })
 
       // Entrar na sala
@@ -411,8 +415,22 @@ export default function CombatPage() {
   }
 
   const handleRollDice = (sides: number) => {
-    if (!pendingAction || pendingAction.diceType !== sides) return
-    socket.emit('roll_dice', { sides, action: pendingAction.action })
+    if (pendingAction && pendingAction.diceType === sides) {
+      // Atacante rolando dado
+      socket.emit('roll_dice', { sides, action: pendingAction.action })
+      setPendingAction(null)
+    } else if (pendingDefense && pendingDefense.diceType === sides) {
+      // Defensor rolando dado
+      socket.emit('roll_defense', { sides })
+      setPendingDefense(null)
+    }
+  }
+
+  const handleDefenseChoice = (reaction: string) => {
+    if (!combatRoom?.pendingAction) return
+    
+    setPendingDefense({ reaction, diceType: combatRoom.pendingAction.diceType })
+    socket.emit('opponent_reaction', { reaction })
   }
 
   const sendMessage = () => {
@@ -611,36 +629,65 @@ export default function CombatPage() {
                     🔮 Transformação
                   </button>
                 </div>
+              ) : combatRoom?.phase === CombatPhase.OPPONENT_REACTION && !isMyTurn ? (
+                <div className="space-y-2">
+                  <div className="text-center text-warning font-bold text-sm mb-3">
+                    🛡️ Escolha sua defesa:
+                  </div>
+                  <button
+                    onClick={() => handleDefenseChoice('dodge')}
+                    className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-blue-600 hover:to-cyan-600 text-white py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
+                  >
+                    🌪️ Esquivar
+                  </button>
+                  <button
+                    onClick={() => handleDefenseChoice('defend')}
+                    className="w-full bg-gradient-to-r from-emerald-600 to-green-600 hover:from-green-600 hover:to-emerald-600 text-white py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
+                  >
+                    🛡️ Defender
+                  </button>
+                </div>
               ) : (
                 <div className="text-center text-text-secondary font-bold text-xs flex-1 flex items-center justify-center">
-                  {!isMyTurn ? '⏳ Turno do oponente...' : '⚔️ Executando ação...'}
+                  {combatRoom?.phase === CombatPhase.OPPONENT_REACTION ? '⚔️ Oponente escolhendo defesa...' : 
+                   !isMyTurn ? '⏳ Turno do oponente...' : '⚔️ Executando ação...'}
                 </div>
               )}
             </div>
           </div>
 
           {/* Dice Panel */}
-          {combatRoom?.phase === CombatPhase.DICE_ROLL && isMyTurn && (
+          {combatRoom?.phase === CombatPhase.DICE_ROLL && (
+            (isMyTurn && pendingAction) || (!isMyTurn && pendingDefense)
+          ) && (
             <div className="bg-gradient-to-br from-surface/95 to-background/90 backdrop-blur-md border-t border-white/10 p-3 flex-shrink-0">
-              <h3 className="text-text-primary font-bold text-center mb-2 text-sm">🎲 Role o Dado</h3>
+              <h3 className="text-text-primary font-bold text-center mb-2 text-sm">
+                🎲 {isMyTurn ? 'Role seu dado de ataque' : 'Role seu dado de defesa'}
+              </h3>
               <div className="flex justify-center space-x-3">
-                {[4, 6, 8, 10, 12, 20].map((sides) => (
-                  <button
-                    key={sides}
-                    onClick={() => handleRollDice(sides)}
-                    disabled={pendingAction?.diceType !== sides}
-                    className={`
-                      w-12 h-12 rounded-lg text-white font-bold text-xs
-                      transition-all duration-200 transform
-                      ${pendingAction?.diceType === sides 
-                        ? 'hover:scale-110 cursor-pointer bg-primary' 
-                        : 'opacity-50 cursor-not-allowed bg-gray-600'
-                      }
-                    `}
-                  >
-                    d{sides}
-                  </button>
-                ))}
+                {[4, 6, 8, 10, 12, 20].map((sides) => {
+                  const isCorrectDice = isMyTurn 
+                    ? pendingAction?.diceType === sides 
+                    : pendingDefense?.diceType === sides
+                  
+                  return (
+                    <button
+                      key={sides}
+                      onClick={() => handleRollDice(sides)}
+                      disabled={!isCorrectDice}
+                      className={`
+                        w-12 h-12 rounded-lg text-white font-bold text-xs
+                        transition-all duration-200 transform
+                        ${isCorrectDice 
+                          ? 'hover:scale-110 cursor-pointer bg-primary' 
+                          : 'opacity-50 cursor-not-allowed bg-gray-600'
+                        }
+                      `}
+                    >
+                      d{sides}
+                    </button>
+                  )
+                })}
               </div>
             </div>
           )}

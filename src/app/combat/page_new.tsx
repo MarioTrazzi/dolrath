@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { X, Users, Sword, Shield, Zap, Heart, Sparkles } from 'lucide-react'
+import { io, Socket } from 'socket.io-client'
 
 interface Equipment {
   id: string
@@ -22,6 +23,8 @@ interface Player {
   id: string
   name: string
   level: number
+  race: string
+  class: string
   hp: number
   maxHp: number
   mp: number
@@ -34,6 +37,8 @@ interface Player {
   resistance: number
   critical: number
   speed: number
+  stamina: number
+  maxStamina: number
   equipment: {
     weapon?: Equipment
     armor?: Equipment
@@ -41,6 +46,14 @@ interface Player {
   }
   isReady: boolean
   isConnected: boolean
+  isAlive: boolean
+}
+
+interface CombatLogEntry {
+  type: 'system' | 'action' | 'result' | 'damage' | 'victory' | 'chat'
+  player?: string
+  message: string
+  timestamp: Date
 }
 
 interface CombatRoom {
@@ -50,7 +63,7 @@ interface CombatRoom {
   player2: Player | null
   currentTurn: string | null
   phase: CombatPhase
-  combatLog: string[]
+  combatLog: CombatLogEntry[]
   isActive: boolean
   pendingAction?: any
   reactionPhase?: boolean
@@ -75,206 +88,90 @@ enum ActionType {
   USE_ITEM = 'use_item'
 }
 
-// Simulação de WebSocket para desenvolvimento local
-class MockSocket {
-  private handlers: { [event: string]: Function[] } = {}
-  private room: CombatRoom
-  private player: Player | null = null
-
-  constructor() {
-    this.room = {
-      id: 'room_' + Math.random().toString(36).substr(2, 9),
-      player1: null,
-      player2: null,
-      currentTurn: null,
-      phase: CombatPhase.WAITING_PLAYERS,
-      combatLog: ['⚔️ Combate iniciado!'],
-      isActive: false
-    }
-  }
-
-  on(event: string, handler: Function) {
-    if (!this.handlers[event]) {
-      this.handlers[event] = []
-    }
-    this.handlers[event].push(handler)
-  }
-
-  emit(event: string, data?: any) {
-    if (event === 'join_room') {
-      this.handleJoinRoom(data)
-    } else if (event === 'player_action') {
-      this.handlePlayerAction(data)
-    } else if (event === 'roll_dice') {
-      this.handleRollDice(data)
-    } else if (event === 'chat_message') {
-      this.handleChatMessage(data)
-    } else if (event === 'toggle_ready') {
-      this.handleToggleReady()
-    }
-  }
-
-  private triggerEvent(event: string, data: any) {
-    if (this.handlers[event]) {
-      this.handlers[event].forEach(handler => handler(data))
-    }
-  }
-
-  private handleJoinRoom(data: { roomId: string, player: Player, isCreator: boolean }) {
-    this.player = data.player
-
-    if (data.isCreator || !this.room.player1) {
-      this.room.player1 = data.player
-    } else {
-      this.room.player2 = data.player
-      this.room.combatLog.push(`🎮 ${data.player.name} entrou na sala!`)
-    }
-
-    this.triggerEvent('room_updated', this.room)
-    this.triggerEvent('player_joined', data.player)
-  }
-
-  private handleToggleReady() {
-    if (!this.player) return
-
-    if (this.room.player1?.id === this.player.id) {
-      this.room.player1.isReady = !this.room.player1.isReady
-    } else if (this.room.player2?.id === this.player.id) {
-      this.room.player2.isReady = !this.room.player2.isReady
-    }
-
-    if (this.room.player1?.isReady && this.room.player2?.isReady) {
-      this.room.phase = CombatPhase.PLAYER_TURN
-      this.room.currentTurn = this.room.player1.id
-      this.room.isActive = true
-      this.room.combatLog.push('⚡ COMBATE INICIADO!')
-      this.room.combatLog.push(`🎯 Turno de ${this.room.player1.name}`)
-    }
-
-    this.triggerEvent('room_updated', this.room)
-  }
-
-  private handlePlayerAction(data: { action: ActionType, diceType: number }) {
-    const actionNames = {
-      [ActionType.LIGHT_ATTACK]: 'Ataque Leve',
-      [ActionType.HEAVY_ATTACK]: 'Ataque Pesado', 
-      [ActionType.SPECIAL_ATTACK]: 'Especial',
-      [ActionType.DODGE]: 'Esquivar',
-      [ActionType.DEFEND]: 'Defender',
-      [ActionType.USE_ITEM]: 'Item'
-    }
-
-    this.room.phase = CombatPhase.DICE_ROLL
-    this.room.combatLog.push(`🎯 ${actionNames[data.action]} selecionado! Role o d${data.diceType}`)
+// Função para criar conexão Socket.IO real
+function createSocketConnection(): Socket {
+  // URL do servidor WebSocket do Railway em produção
+  const socketUrl = process.env.NODE_ENV === 'production' 
+    ? (process.env.NEXT_PUBLIC_SOCKET_URL || 'https://dolrath-production.up.railway.app')
+    : 'ws://localhost:3001'
     
-    this.triggerEvent('room_updated', this.room)
-  }
-
-  private handleRollDice(data: { sides: number, action: ActionType }) {
-    const roll = Math.floor(Math.random() * data.sides) + 1
-    const result = { roll, modifier: 0, total: roll }
+  console.log('🔗 Conectando ao WebSocket:', socketUrl)
     
-    this.triggerEvent('dice_rolled', {
-      playerId: this.player?.id,
-      sides: data.sides,
-      result
-    })
-
-    setTimeout(() => {
-      this.processActionResult(data.action, roll)
-    }, 1000)
-  }
-
-  private processActionResult(action: ActionType, playerRoll: number) {
-    const currentPlayer = this.room.currentTurn === this.room.player1?.id ? this.room.player1 : this.room.player2
-    const opponent = this.room.currentTurn === this.room.player1?.id ? this.room.player2 : this.room.player1
-
-    if (!currentPlayer || !opponent) return
-
-    const opponentRoll = Math.floor(Math.random() * 12) + 1
-    
-    let damage = 0
-    let actionMessage = ''
-
-    switch (action) {
-      case ActionType.LIGHT_ATTACK:
-        damage = Math.max(0, (currentPlayer.attack + playerRoll) - (opponent.defense + opponentRoll))
-        actionMessage = `👊 ${currentPlayer.name} usou Ataque Leve!`
-        break
-      case ActionType.HEAVY_ATTACK:
-        damage = Math.max(0, (currentPlayer.attack * 1.5 + playerRoll) - (opponent.defense + opponentRoll))
-        actionMessage = `⚔️ ${currentPlayer.name} usou Ataque Pesado!`
-        break
-      case ActionType.SPECIAL_ATTACK:
-        damage = Math.max(0, (currentPlayer.attack * 2 + playerRoll) - (opponent.defense + opponentRoll))
-        actionMessage = `✨ ${currentPlayer.name} usou Ataque Especial!`
-        if (currentPlayer.mp >= 15) {
-          currentPlayer.mp -= 15
-        }
-        break
-      default:
-        actionMessage = `${currentPlayer.name} usou uma ação!`
-        break
-    }
-
-    this.room.combatLog.push(actionMessage)
-    this.room.combatLog.push(`🎲 Dado: ${playerRoll} vs Defesa: ${opponentRoll}`)
-
-    if (damage > 0) {
-      opponent.hp = Math.max(0, opponent.hp - damage)
-      this.room.combatLog.push(`💥 ${opponent.name} recebeu ${damage} de dano!`)
-    } else {
-      this.room.combatLog.push(`🛡️ ${opponent.name} defendeu o ataque!`)
-    }
-
-    if (opponent.hp <= 0) {
-      this.room.phase = CombatPhase.COMBAT_END
-      this.room.winner = currentPlayer.id
-      this.room.combatLog.push(`🏆 ${currentPlayer.name} venceu!`)
-    } else {
-      // Trocar turno
-      this.room.currentTurn = opponent.id
-      this.room.phase = CombatPhase.PLAYER_TURN
-      this.room.combatLog.push(`🔄 Turno de ${opponent.name}`)
-    }
-
-    this.triggerEvent('room_updated', this.room)
-  }
-
-  private handleChatMessage(data: { message: string }) {
-    this.triggerEvent('chat_message', {
-      sender: this.player?.name || 'Anônimo',
-      message: data.message,
-      timestamp: new Date()
-    })
-  }
+  return io(socketUrl, {
+    transports: ['websocket', 'polling'],
+    timeout: 20000,
+    forceNew: true
+  })
 }
 
 export default function CombatPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const roomId = searchParams.get('room') || 'default'
-  const isCreator = searchParams.get('creator') === 'true'
+  const characterId = searchParams.get('character')
+  const isRoomCreator = searchParams.get('creator') === 'true'
 
-  const [socket] = useState(() => new MockSocket())
+  const [socket] = useState(() => createSocketConnection())
   const [combatRoom, setCombatRoom] = useState<CombatRoom | null>(null)
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null)
   const [isReady, setIsReady] = useState(false)
-  const [chatMessages, setChatMessages] = useState<Array<{sender: string, message: string, timestamp: Date}>>([])
   const [newMessage, setNewMessage] = useState('')
   const [pendingAction, setPendingAction] = useState<{action: ActionType, diceType: number} | null>(null)
   const [pendingDefense, setPendingDefense] = useState<{reaction: string, diceType: number} | null>(null)
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting')
+  const [hasRolledInitiative, setHasRolledInitiative] = useState(false)
 
   const combatLogRef = useRef<HTMLDivElement>(null)
-  const chatLogRef = useRef<HTMLDivElement>(null)
 
   const opponent = combatRoom?.player1?.id === currentPlayer?.id ? combatRoom?.player2 : combatRoom?.player1
   const isMyTurn = combatRoom?.currentTurn === currentPlayer?.id
   const isWinner = combatRoom?.winner === currentPlayer?.id
+  const isCreator = combatRoom?.creator === currentPlayer?.id
+
+  // Auto scroll para o chat quando novas mensagens chegam
+  useEffect(() => {
+    if (combatLogRef.current && combatRoom?.combatLog) {
+      const scrollToBottom = () => {
+        combatLogRef.current!.scrollTop = combatLogRef.current!.scrollHeight
+      }
+      scrollToBottom()
+    }
+  }, [combatRoom?.combatLog])
 
   useEffect(() => {
     const initializeCombat = async () => {
       let playerData: Player
+
+      // Configurar event listeners do Socket.IO
+      socket.on('connect', () => {
+        console.log('✅ Conectado ao servidor WebSocket')
+        setConnectionStatus('connected')
+      })
+
+      socket.on('disconnect', () => {
+        console.log('❌ Desconectado do servidor WebSocket')
+        setConnectionStatus('disconnected')
+      })
+
+      socket.on('room_updated', (room: CombatRoom) => {
+        console.log('🏠 Sala atualizada:', room)
+        setCombatRoom(room)
+        // Reset initiative quando uma nova room é criada
+        if (room.phase === CombatPhase.WAITING_PLAYERS || room.phase === CombatPhase.INITIATIVE_ROLL) {
+          setHasRolledInitiative(false)
+        }
+      })
+
+      socket.on('dice_rolled', (data: {playerId: string, sides: number, result: any}) => {
+        console.log('🎲 Dado rolado:', data)
+        setPendingAction(null)
+        setPendingDefense(null)
+      })
+
+      socket.on('action_selected', (data: {action: ActionType, diceType: number}) => {
+        console.log('🎯 Ação selecionada:', data)
+        setPendingAction(data)
+      })
 
       try {
         const response = await fetch('/api/user/profile')
@@ -284,6 +181,8 @@ export default function CombatPage() {
             id: userData.id || 'player_' + Math.random().toString(36).substr(2, 9),
             name: userData.name || 'sgs',
             level: userData.level || 6,
+            race: userData.race || 'Humano',
+            class: userData.class || 'Guerreiro',
             hp: userData.hp || 360,
             maxHp: userData.maxHp || 360,
             mp: userData.mp || 210,
@@ -296,9 +195,12 @@ export default function CombatPage() {
             resistance: userData.resistance || 0,
             critical: userData.critical || 1.0,
             speed: userData.speed || 2.5,
+            stamina: userData.stamina || 100,
+            maxStamina: userData.maxStamina || 100,
             equipment: userData.equipment || {},
             isReady: false,
-            isConnected: true
+            isConnected: true,
+            isAlive: true
           }
         } else {
           throw new Error('API não disponível')
@@ -306,8 +208,10 @@ export default function CombatPage() {
       } catch (apiError) {
         playerData = {
           id: 'player_' + Math.random().toString(36).substr(2, 9),
-          name: isCreator ? 'sgs' : 'Oponente',
+          name: isRoomCreator ? 'sgs' : 'Oponente',
           level: 6,
+          race: 'Humano',
+          class: 'Guerreiro',
           hp: 360,
           maxHp: 360,
           mp: 210,
@@ -320,86 +224,48 @@ export default function CombatPage() {
           resistance: 0,
           critical: 1.0,
           speed: 2.5,
+          stamina: 100,
+          maxStamina: 100,
           equipment: {},
           isReady: false,
-          isConnected: true
+          isConnected: true,
+          isAlive: true
         }
       }
       
       setCurrentPlayer(playerData)
       
-      // Configurar event listeners
-      socket.on('room_updated', (room: CombatRoom) => {
-        setCombatRoom(room)
-        if (combatLogRef.current) {
-          setTimeout(() => {
-            combatLogRef.current!.scrollTop = combatLogRef.current!.scrollHeight
-          }, 100)
-        }
-      })
+      // Entrar na sala com dados corretos
+      socket.emit('join_room', { roomId, player: playerData, isCreator: isRoomCreator })
 
-      socket.on('chat_message', (msg: {sender: string, message: string, timestamp: Date}) => {
-        setChatMessages(prev => [...prev, msg])
-        if (chatLogRef.current) {
-          setTimeout(() => {
-            chatLogRef.current!.scrollTop = chatLogRef.current!.scrollHeight
-          }, 100)
-        }
-      })
-
-      socket.on('player_joined', (player: Player) => {
-        setChatMessages(prev => [...prev, {
-          sender: 'Sistema',
-          message: `${player.name} entrou na sala!`,
-          timestamp: new Date()
-        }])
-      })
-
-      socket.on('dice_rolled', (data: {playerId: string, sides: number, result: any}) => {
-        setPendingAction(null)
-        setPendingDefense(null)
-      })
-
-      // Entrar na sala
-      socket.emit('join_room', { roomId, player: playerData, isCreator })
-
-      // Simular um segundo jogador para teste
-      if (isCreator) {
-        setTimeout(() => {
-          const botPlayer: Player = {
-            id: 'bot_player',
-            name: 'Bot Oponente',
-            level: 5,
-            hp: 300,
-            maxHp: 300,
-            mp: 150,
-            maxMp: 150,
-            attack: 8,
-            defense: 8,
-            strength: 7,
-            agility: 6,
-            intelligence: 4,
-            resistance: 2,
-            critical: 2.0,
-            speed: 3.0,
-            equipment: {},
-            isReady: false,
-            isConnected: true
-          }
-          socket.emit('join_room', { roomId, player: botPlayer, isCreator: false })
-        }, 2000)
+      // Cleanup
+      return () => {
+        socket.off('connect')
+        socket.off('disconnect')
+        socket.off('room_updated')
+        socket.off('dice_rolled')
+        socket.off('action_selected')
       }
     }
 
     initializeCombat()
-  }, [socket, roomId, isCreator])
+  }, [socket, roomId, isRoomCreator])
 
   const toggleReady = () => {
+    if (!currentPlayer) return
     setIsReady(!isReady)
-    socket.emit('toggle_ready')
+    socket.emit('toggle_ready', { playerId: currentPlayer.id, roomId })
+  }
+
+  const rollInitiative = () => {
+    if (!currentPlayer || hasRolledInitiative) return
+    setHasRolledInitiative(true)
+    socket.emit('roll_initiative', { playerId: currentPlayer.id, roomId })
   }
 
   const handlePlayerAction = (action: ActionType) => {
+    if (!currentPlayer) return
+    
     const diceTypes = {
       [ActionType.LIGHT_ATTACK]: 6,
       [ActionType.HEAVY_ATTACK]: 10,
@@ -411,33 +277,46 @@ export default function CombatPage() {
 
     const diceType = diceTypes[action]
     setPendingAction({ action, diceType })
-    socket.emit('player_action', { action, diceType })
+    socket.emit('player_action', { 
+      playerId: currentPlayer.id, 
+      roomId, 
+      action, 
+      diceType 
+    })
   }
 
   const handleRollDice = (sides: number) => {
+    if (!currentPlayer) return
+    
     if (pendingAction && pendingAction.diceType === sides) {
       // Atacante rolando dado
-      socket.emit('roll_dice', { sides, action: pendingAction.action })
+      socket.emit('roll_dice', { 
+        playerId: currentPlayer.id, 
+        roomId, 
+        sides, 
+        action: pendingAction.action 
+      })
       setPendingAction(null)
     } else if (pendingDefense && pendingDefense.diceType === sides) {
       // Defensor rolando dado
-      socket.emit('roll_defense', { sides })
+      socket.emit('roll_defense', { 
+        playerId: currentPlayer.id, 
+        roomId, 
+        sides
+      })
       setPendingDefense(null)
     }
   }
 
   const handleDefenseChoice = (reaction: string) => {
-    if (!combatRoom?.pendingAction) return
+    if (!combatRoom?.pendingAction || !currentPlayer) return
     
     setPendingDefense({ reaction, diceType: combatRoom.pendingAction.diceType })
-    socket.emit('opponent_reaction', { reaction })
-  }
-
-  const sendMessage = () => {
-    if (newMessage.trim()) {
-      socket.emit('chat_message', { message: newMessage })
-      setNewMessage('')
-    }
+    socket.emit('opponent_reaction', { 
+      playerId: currentPlayer.id, 
+      roomId, 
+      reaction 
+    })
   }
 
   return (
@@ -503,54 +382,19 @@ export default function CombatPage() {
 
           {/* Combat Area */}
           <div className="flex-1 flex min-h-0">
-            {/* Combat Log - Lado esquerdo */}
+            {/* Combat Log - Expandido */}
             <div className="flex-1 bg-background/20 p-4">
               <div className="bg-background/50 backdrop-blur-xl border border-white/10 rounded-xl p-4 h-full">
                 <h3 className="font-bold text-text-primary mb-3 text-center text-sm">⚔️ Log de Combate</h3>
                 <div 
                   ref={combatLogRef}
-                  className="h-64 overflow-y-auto combat-chat-scroll p-3 space-y-2 bg-surface/30 rounded-lg border border-white/5"
-                  style={{ maxHeight: '280px' }}
+                  className="h-full overflow-y-auto combat-chat-scroll p-3 space-y-2 bg-surface/30 rounded-lg border border-white/5"
                 >
                   {combatRoom?.combatLog.map((log, index) => (
                     <div key={index} className="text-text-secondary text-xs leading-relaxed">
-                      {log}
+                      {log.message}
                     </div>
                   ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Chat - Centro */}
-            <div className="w-80 bg-surface/30 p-4 flex flex-col">
-              <h3 className="font-bold text-text-primary mb-3 text-sm text-center">💬 Chat</h3>
-              <div className="flex-1 bg-background/50 backdrop-blur-xl border border-white/10 rounded-xl p-3">
-                <div 
-                  ref={chatLogRef}
-                  className="h-40 overflow-y-auto space-y-2 mb-3"
-                >
-                  {chatMessages.map((msg, index) => (
-                    <div key={index} className="bg-surface/40 rounded-lg p-2">
-                      <div className="text-xs text-text-secondary font-bold">{msg.sender}:</div>
-                      <div className="text-sm text-text-primary">{msg.message}</div>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex">
-                  <input
-                    type="text"
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-                    placeholder="Digite sua mensagem..."
-                    className="flex-1 bg-background/50 border border-white/20 rounded-l-lg px-3 py-2 text-sm text-text-primary placeholder-text-secondary focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
-                  <button
-                    onClick={sendMessage}
-                    className="bg-primary hover:bg-primary-dark text-white px-3 py-2 rounded-r-lg transition-colors"
-                  >
-                    ➤
-                  </button>
                 </div>
               </div>
             </div>
@@ -580,6 +424,26 @@ export default function CombatPage() {
                     </button>
                   )}
                 </div>
+              ) : combatRoom?.phase === CombatPhase.INITIATIVE_ROLL ? (
+                <div className="space-y-3">
+                  <div className="text-center">
+                    <div className="text-2xl mb-2">🎲</div>
+                    <div className="text-sm text-text-secondary mb-3">
+                      Role d20 para iniciativa!
+                    </div>
+                  </div>
+                  <button
+                    onClick={rollInitiative}
+                    disabled={hasRolledInitiative}
+                    className={`w-full py-3 px-4 rounded-lg font-bold text-sm transition-all duration-200 ${
+                      hasRolledInitiative 
+                        ? 'bg-gray-600 text-gray-300 cursor-not-allowed' 
+                        : 'bg-gradient-to-r from-pink-500 to-purple-600 text-white hover:shadow-lg hover:shadow-purple/25 transform hover:scale-[1.02]'
+                    }`}
+                  >
+                    {hasRolledInitiative ? '✅ Rolado!' : '🎲 Rolar d20'}
+                  </button>
+                </div>
               ) : combatRoom?.phase === CombatPhase.COMBAT_END ? (
                 <div className="text-center space-y-4">
                   <div className={`text-2xl font-bold ${isWinner ? 'text-success' : 'text-error'}`}>
@@ -598,35 +462,29 @@ export default function CombatPage() {
                     onClick={() => handlePlayerAction(ActionType.LIGHT_ATTACK)}
                     className="w-full bg-gradient-to-r from-warning to-yellow-500 hover:from-yellow-500 hover:to-warning text-white py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
                   >
-                    👊 Ataque Leve (1⚡)
+                    👊 Ataque Leve (d6)
                   </button>
                   <button
                     onClick={() => handlePlayerAction(ActionType.HEAVY_ATTACK)}
                     className="w-full bg-gradient-to-r from-error to-red-600 hover:from-red-600 hover:to-error text-white py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
                   >
-                    ⚔️ Ataque Pesado (2⚡)
+                    ⚔️ Ataque Pesado (d10)
                   </button>
                   <button
                     onClick={() => handlePlayerAction(ActionType.SPECIAL_ATTACK)}
                     disabled={!currentPlayer || currentPlayer.mp < 15}
                     className="w-full bg-gradient-to-r from-primary to-primary-dark hover:shadow-lg hover:shadow-primary/25 disabled:from-gray-600 disabled:to-gray-700 disabled:opacity-50 text-white py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg disabled:hover:scale-100"
                   >
-                    ✨ Especial (15🔮 4⚡)
+                    ✨ Especial (d20, 15🔮)
                   </button>
                   
                   <div className="border-t border-white/10 my-3"></div>
                   
                   <button
-                    onClick={() => handlePlayerAction(ActionType.DEFEND)}
+                    onClick={() => handlePlayerAction(ActionType.USE_ITEM)}
                     className="w-full bg-gradient-to-r from-success to-emerald-600 hover:from-emerald-600 hover:to-success text-white py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
                   >
                     🧪 Consumíveis
-                  </button>
-                  <button
-                    className="w-full bg-gradient-to-r from-accent to-indigo-800 opacity-50 text-white py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 shadow-lg cursor-not-allowed"
-                    title="Em desenvolvimento"
-                  >
-                    🔮 Transformação
                   </button>
                 </div>
               ) : combatRoom?.phase === CombatPhase.OPPONENT_REACTION && !isMyTurn ? (
@@ -656,15 +514,15 @@ export default function CombatPage() {
             </div>
           </div>
 
-          {/* Dice Panel */}
+          {/* Dice Panel - Movido para baixo do chat para mobile */}
           {combatRoom?.phase === CombatPhase.DICE_ROLL && (
             (isMyTurn && pendingAction) || (!isMyTurn && pendingDefense)
           ) && (
-            <div className="bg-gradient-to-br from-surface/95 to-background/90 backdrop-blur-md border-t border-white/10 p-3 flex-shrink-0">
-              <h3 className="text-text-primary font-bold text-center mb-2 text-sm">
+            <div className="bg-gradient-to-br from-surface/95 to-background/90 backdrop-blur-md border-t border-white/10 p-4 flex-shrink-0">
+              <h3 className="text-text-primary font-bold text-center mb-3 text-base">
                 🎲 {isMyTurn ? 'Role seu dado de ataque' : 'Role seu dado de defesa'}
               </h3>
-              <div className="flex justify-center space-x-3">
+              <div className="flex justify-center space-x-4 flex-wrap gap-2">
                 {[4, 6, 8, 10, 12, 20].map((sides) => {
                   const isCorrectDice = isMyTurn 
                     ? pendingAction?.diceType === sides 
@@ -676,10 +534,10 @@ export default function CombatPage() {
                       onClick={() => handleRollDice(sides)}
                       disabled={!isCorrectDice}
                       className={`
-                        w-12 h-12 rounded-lg text-white font-bold text-xs
+                        w-16 h-16 rounded-xl text-white font-bold text-sm
                         transition-all duration-200 transform
                         ${isCorrectDice 
-                          ? 'hover:scale-110 cursor-pointer bg-primary' 
+                          ? 'hover:scale-110 cursor-pointer bg-gradient-to-br from-primary to-primary-dark shadow-lg shadow-primary/25' 
                           : 'opacity-50 cursor-not-allowed bg-gray-600'
                         }
                       `}

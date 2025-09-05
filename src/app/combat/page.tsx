@@ -49,23 +49,32 @@ interface Player {
   isAlive: boolean
 }
 
+interface CombatLogEntry {
+  type: 'system' | 'action' | 'result' | 'damage' | 'victory' | 'chat'
+  player?: string
+  message: string
+  timestamp: Date
+}
+
 interface CombatRoom {
   id: string
+  creator: string
   player1: Player | null
   player2: Player | null
   currentTurn: string | null
   phase: CombatPhase
-  combatLog: string[]
+  combatLog: CombatLogEntry[]
   isActive: boolean
+  pendingAction: any
+  reactionPhase: boolean
   winner?: string | null
 }
 
 enum CombatPhase {
   WAITING_PLAYERS = 'waiting_players',
-  READY_CHECK = 'ready_check',
+  INITIATIVE_ROLL = 'initiative_roll',
   PLAYER_TURN = 'player_turn',
-  PLAYER_ATTACK = 'player_attack',
-  PLAYER_DEFENSE = 'player_defense',
+  OPPONENT_REACTION = 'opponent_reaction',
   DICE_ROLL = 'dice_roll',
   COMBAT_END = 'combat_end'
 }
@@ -101,35 +110,25 @@ function CombatPageContent() {
   const searchParams = useSearchParams()
   const roomId = searchParams.get('room') || 'default'
   const characterId = searchParams.get('character')
-  const isCreator = searchParams.get('creator') === 'true'
+  const isRoomCreator = searchParams.get('creator') === 'true'
 
   const [socket] = useState(() => createSocketConnection())
   const [combatRoom, setCombatRoom] = useState<CombatRoom | null>(null)
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null)
   const [isReady, setIsReady] = useState(false)
-  const [chatMessages, setChatMessages] = useState<Array<{sender: string, message: string, timestamp: Date}>>([])
   const [newMessage, setNewMessage] = useState('')
   const [pendingAction, setPendingAction] = useState<{action: ActionType, diceType: number} | null>(null)
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting')
+  const [showReactionButtons, setShowReactionButtons] = useState(false)
 
   const combatLogRef = useRef<HTMLDivElement>(null)
-  const chatLogRef = useRef<HTMLDivElement>(null)
 
   const opponent = combatRoom?.player1?.id === currentPlayer?.id ? combatRoom?.player2 : combatRoom?.player1
   const isMyTurn = combatRoom?.currentTurn === currentPlayer?.id
   const isWinner = combatRoom?.winner === currentPlayer?.id
+  const isCreator = combatRoom?.creator === currentPlayer?.id
 
   // Auto scroll para o chat quando novas mensagens chegam
-  useEffect(() => {
-    if (chatLogRef.current) {
-      const scrollToBottom = () => {
-        chatLogRef.current!.scrollTop = chatLogRef.current!.scrollHeight
-      }
-      scrollToBottom()
-    }
-  }, [chatMessages])
-
-  // Auto scroll para o log de combate quando há updates
   useEffect(() => {
     if (combatLogRef.current && combatRoom?.combatLog) {
       const scrollToBottom = () => {
@@ -157,20 +156,19 @@ function CombatPageContent() {
       socket.on('room_updated', (room: CombatRoom) => {
         console.log('🔄 Sala atualizada:', room)
         setCombatRoom(room)
+        
+        // Verificar se precisa mostrar botões de reação
+        if (room.phase === CombatPhase.OPPONENT_REACTION && 
+            room.currentTurn !== currentPlayer?.id) {
+          setShowReactionButtons(true)
+        } else {
+          setShowReactionButtons(false)
+        }
       })
 
-      socket.on('chat_message', (msg: {sender: string, message: string, timestamp: Date}) => {
-        console.log('💬 Nova mensagem:', msg)
-        setChatMessages(prev => [...prev, msg])
-      })
-
-      socket.on('player_joined', (player: Player) => {
-        console.log('👤 Jogador entrou:', player.name)
-        setChatMessages(prev => [...prev, {
-          sender: 'Sistema',
-          message: `${player.name} entrou na sala!`,
-          timestamp: new Date()
-        }])
+      socket.on('room_closed', () => {
+        console.log('� Sala fechada pelo criador')
+        router.push('/combat-lobby')
       })
 
       socket.on('dice_rolled', (data: {playerId: string, sides: number, result: any}) => {
@@ -288,7 +286,7 @@ function CombatPageContent() {
       setCurrentPlayer(playerData)
       
       // Entrar na sala via Socket.IO
-      socket.emit('join_room', { roomId, player: playerData, isCreator })
+      socket.emit('join_room', { roomId, player: playerData, isCreator: isRoomCreator })
     }
 
     initializeCombat()
@@ -298,13 +296,12 @@ function CombatPageContent() {
       socket.off('connect')
       socket.off('disconnect')
       socket.off('room_updated')
-      socket.off('chat_message')
-      socket.off('player_joined')
+      socket.off('room_closed')
       socket.off('dice_rolled')
       socket.off('action_selected')
       socket.disconnect()
     }
-  }, [socket, roomId, isCreator, characterId])
+  }, [socket, roomId, isRoomCreator, characterId])
 
   const toggleReady = () => {
     if (!currentPlayer) return
@@ -354,6 +351,24 @@ function CombatPageContent() {
     }
   }
 
+  const handleOpponentReaction = (reaction: 'dodge' | 'block') => {
+    if (!currentPlayer) return
+    socket.emit('opponent_reaction', {
+      playerId: currentPlayer.id,
+      roomId,
+      reaction
+    })
+    setShowReactionButtons(false)
+  }
+
+  const closeRoom = () => {
+    if (!currentPlayer || !isCreator) return
+    socket.emit('close_room', {
+      playerId: currentPlayer.id,
+      roomId
+    })
+  }
+
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-1 sm:p-2">
       <div className="bg-surface/95 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl w-full h-full sm:h-[95vh] sm:max-w-6xl flex flex-col">
@@ -378,12 +393,23 @@ function CombatPageContent() {
               </span>
             </div>
           </div>
-          <button
-            onClick={() => router.push('/combat-lobby')}
-            className="text-white/80 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/10"
-          >
-            <X size={16} className="sm:w-5 sm:h-5" />
-          </button>
+          <div className="flex items-center space-x-2">
+            {isCreator && (
+              <button
+                onClick={closeRoom}
+                className="text-white/80 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/10"
+                title="Fechar sala"
+              >
+                🚪
+              </button>
+            )}
+            <button
+              onClick={() => router.push('/combat-lobby')}
+              className="text-white/80 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/10"
+            >
+              <X size={16} className="sm:w-5 sm:h-5" />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 flex flex-col min-h-0">
@@ -437,19 +463,27 @@ function CombatPageContent() {
           <div className="flex-1 flex flex-col sm:flex-row min-h-0">
             {/* Mobile: Stack vertically, Desktop: Side by side */}
             
-            {/* Chat - Primeira no mobile para ficar visível */}
+            {/* Chat/Log Unificado - Primeira no mobile para ficar visível */}
             <div className="order-2 sm:order-2 flex-1 sm:w-80 bg-surface/30 p-2 sm:p-4 flex flex-col min-h-0">
-              <h3 className="font-bold text-text-primary mb-2 sm:mb-3 text-xs sm:text-sm text-center">💬 Chat</h3>
+              <h3 className="font-bold text-text-primary mb-2 sm:mb-3 text-xs sm:text-sm text-center">💬 Chat & Log</h3>
               <div className="flex-1 bg-background/50 backdrop-blur-xl border border-white/10 rounded-xl p-2 sm:p-3 flex flex-col min-h-0">
                 <div 
-                  ref={chatLogRef}
+                  ref={combatLogRef}
                   className="flex-1 overflow-y-auto space-y-2 mb-3 min-h-[120px] sm:min-h-[160px]"
                   style={{ maxHeight: '200px' }}
                 >
-                  {chatMessages.map((msg, index) => (
-                    <div key={index} className="bg-surface/40 rounded-lg p-2">
-                      <div className="text-xs text-text-secondary font-bold">{msg.sender}:</div>
-                      <div className="text-xs sm:text-sm text-text-primary break-words">{msg.message}</div>
+                  {combatRoom?.combatLog.map((log, index) => (
+                    <div key={index} className={`rounded-lg p-2 ${
+                      log.type === 'chat' ? 'bg-blue-500/20 border border-blue-500/30' :
+                      log.type === 'system' ? 'bg-gray-500/20 border border-gray-500/30' :
+                      log.type === 'action' ? 'bg-yellow-500/20 border border-yellow-500/30' :
+                      log.type === 'result' ? 'bg-purple-500/20 border border-purple-500/30' :
+                      log.type === 'damage' ? 'bg-red-500/20 border border-red-500/30' :
+                      log.type === 'victory' ? 'bg-green-500/20 border border-green-500/30' :
+                      'bg-surface/40'
+                    }`}>
+                      {log.player && <div className="text-xs text-text-secondary font-bold">{log.player}:</div>}
+                      <div className="text-xs sm:text-sm text-text-primary break-words">{log.message}</div>
                     </div>
                   ))}
                 </div>
@@ -476,7 +510,28 @@ function CombatPageContent() {
             <div className="order-1 sm:order-3 w-full sm:w-64 bg-surface/30 p-2 sm:p-4 flex flex-col flex-shrink-0">
               <h3 className="font-bold text-text-primary mb-2 sm:mb-3 text-xs sm:text-sm text-center">🎯 Ações</h3>
               
-              {!combatRoom?.isActive ? (
+              {showReactionButtons ? (
+                <div className="space-y-3">
+                  <div className="text-center">
+                    <div className="text-xl sm:text-2xl mb-2">⚔️</div>
+                    <div className="text-xs sm:text-sm text-text-secondary mb-3">
+                      Como você vai reagir ao ataque?
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleOpponentReaction('dodge')}
+                    className="w-full py-3 sm:py-2 px-4 rounded-lg font-bold text-sm bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-blue-600 hover:to-cyan-500 text-white transition-all duration-200"
+                  >
+                    🏃 Esquivar
+                  </button>
+                  <button
+                    onClick={() => handleOpponentReaction('block')}
+                    className="w-full py-3 sm:py-2 px-4 rounded-lg font-bold text-sm bg-gradient-to-r from-emerald-500 to-green-600 hover:from-green-600 hover:to-emerald-500 text-white transition-all duration-200"
+                  >
+                    🛡️ Defender
+                  </button>
+                </div>
+              ) : !combatRoom?.isActive ? (
                 <div className="space-y-3">
                   <div className="text-center">
                     <div className="text-xl sm:text-2xl mb-2">⏳</div>
@@ -515,35 +570,29 @@ function CombatPageContent() {
                     onClick={() => handlePlayerAction(ActionType.LIGHT_ATTACK)}
                     className="w-full bg-gradient-to-r from-warning to-yellow-500 hover:from-yellow-500 hover:to-warning text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
                   >
-                    👊 Ataque Leve (1⚡)
+                    👊 Ataque Leve (d6)
                   </button>
                   <button
                     onClick={() => handlePlayerAction(ActionType.HEAVY_ATTACK)}
                     className="w-full bg-gradient-to-r from-error to-red-600 hover:from-red-600 hover:to-error text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
                   >
-                    ⚔️ Ataque Pesado (2⚡)
+                    ⚔️ Ataque Pesado (d10)
                   </button>
                   <button
                     onClick={() => handlePlayerAction(ActionType.SPECIAL_ATTACK)}
                     disabled={!currentPlayer || currentPlayer.mp < 15}
                     className="w-full bg-gradient-to-r from-primary to-primary-dark hover:shadow-lg hover:shadow-primary/25 disabled:from-gray-600 disabled:to-gray-700 disabled:opacity-50 text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg disabled:hover:scale-100"
                   >
-                    ✨ Especial (15🔮 4⚡)
+                    ✨ Especial (d20, 15🔮)
                   </button>
                   
                   <div className="border-t border-white/10 my-3"></div>
                   
                   <button
-                    onClick={() => handlePlayerAction(ActionType.DEFEND)}
+                    onClick={() => handlePlayerAction(ActionType.USE_ITEM)}
                     className="w-full bg-gradient-to-r from-success to-emerald-600 hover:from-emerald-600 hover:to-success text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
                   >
                     🧪 Consumíveis
-                  </button>
-                  <button
-                    className="w-full bg-gradient-to-r from-accent to-indigo-800 opacity-50 text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 shadow-lg cursor-not-allowed"
-                    title="Em desenvolvimento"
-                  >
-                    🔮 Transformação
                   </button>
                 </div>
               ) : (
@@ -553,23 +602,7 @@ function CombatPageContent() {
               )}
             </div>
 
-            {/* Combat Log - Ocultado no mobile, visível no desktop */}
-            <div className="order-3 sm:order-1 hidden sm:flex flex-1 bg-background/20 p-4">
-              <div className="bg-background/50 backdrop-blur-xl border border-white/10 rounded-xl p-4 h-full">
-                <h3 className="font-bold text-text-primary mb-3 text-center text-sm">⚔️ Log de Combate</h3>
-                <div 
-                  ref={combatLogRef}
-                  className="h-64 overflow-y-auto combat-chat-scroll p-3 space-y-2 bg-surface/30 rounded-lg border border-white/5"
-                  style={{ maxHeight: '280px' }}
-                >
-                  {combatRoom?.combatLog.map((log, index) => (
-                    <div key={index} className="text-text-secondary text-xs leading-relaxed">
-                      {log}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+            {/* Combat Log removido - agora tudo está unificado no chat */}
           </div>
 
           {/* Dice Panel */}

@@ -108,9 +108,9 @@ function createSocketConnection(): Socket {
 function CombatPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const roomId = searchParams.get('room') || 'default'
-  const characterId = searchParams.get('character')
-  const isRoomCreator = searchParams.get('creator') === 'true'
+  const roomId = searchParams?.get('room') || 'default'
+  const characterId = searchParams?.get('character')
+  const isRoomCreator = searchParams?.get('creator') === 'true'
 
   const [socket] = useState(() => createSocketConnection())
   const [combatRoom, setCombatRoom] = useState<CombatRoom | null>(null)
@@ -170,6 +170,12 @@ function CombatPageContent() {
         // Reset iniciativa quando sala é resetada
         if (room.phase === CombatPhase.WAITING_PLAYERS) {
           setHasRolledInitiative(false)
+        }
+        
+        // Limpar estados pendentes quando mudança de fase
+        if (room.phase === CombatPhase.PLAYER_TURN) {
+          setPendingAction(null)
+          setPendingDefense(null)
         }
       })
 
@@ -362,13 +368,16 @@ function CombatPageContent() {
   }
 
   const handleDefenseChoice = (reaction: string) => {
-    if (!combatRoom?.pendingAction || !currentPlayer) return
+    if (!currentPlayer) return
     
-    setPendingDefense({ reaction, diceType: combatRoom.pendingAction.diceType })
+    // Usar d6 para defesa sempre, independente do ataque
+    const defenseDiceType = 6
+    setPendingDefense({ reaction, diceType: defenseDiceType })
     socket.emit('opponent_reaction', { 
       playerId: currentPlayer.id, 
       roomId, 
-      reaction 
+      reaction,
+      diceType: defenseDiceType
     })
   }
 
@@ -462,7 +471,7 @@ function CombatPageContent() {
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 text-xs">
                 <div className="text-text-secondary">HP: <span className="font-bold text-error">{currentPlayer?.hp}/{currentPlayer?.maxHp}</span></div>
                 <div className="text-text-secondary">MP: <span className="font-bold text-blue-400">{currentPlayer?.mp}/{currentPlayer?.maxMp}</span></div>
-                <div className="text-text-secondary">LVL: <span className="font-bold text-primary">{currentPlayer?.level}</span></div>
+                <div className="text-text-secondary">LV: <span className="font-bold text-primary">{currentPlayer?.level}</span></div>
                 <div className="text-text-secondary">ATK: <span className="font-bold text-text-primary">{currentPlayer?.attack}</span></div>
                 <div className="text-text-secondary">DEF: <span className="font-bold text-text-primary">{currentPlayer?.defense}</span></div>
                 <div className="text-text-secondary hidden sm:block">STR: <span className="font-bold text-yellow-400">{currentPlayer?.strength}</span></div>
@@ -482,7 +491,7 @@ function CombatPageContent() {
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 text-xs">
                     <div className="text-text-secondary">HP: <span className="font-bold text-error">{opponent.hp}/{opponent.maxHp}</span></div>
                     <div className="text-text-secondary">MP: <span className="font-bold text-blue-400">{opponent.mp}/{opponent.maxMp}</span></div>
-                    <div className="text-text-secondary">LVL: <span className="font-bold text-text-primary">{opponent.level}</span></div>
+                    <div className="text-text-secondary">LV: <span className="font-bold text-text-primary">{opponent.level}</span></div>
                     <div className="text-text-secondary">ATK: <span className="font-bold text-text-primary">{opponent.attack}</span></div>
                     <div className="text-text-secondary">DEF: <span className="font-bold text-text-primary">{opponent.defense}</span></div>
                     <div className="text-text-secondary hidden sm:block">STR: <span className="font-bold text-yellow-400">{opponent.strength}</span></div>

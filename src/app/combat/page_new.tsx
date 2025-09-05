@@ -156,9 +156,16 @@ export default function CombatPage() {
       socket.on('room_updated', (room: CombatRoom) => {
         console.log('🏠 Sala atualizada:', room)
         setCombatRoom(room)
+        
         // Reset initiative quando uma nova room é criada
         if (room.phase === CombatPhase.WAITING_PLAYERS || room.phase === CombatPhase.INITIATIVE_ROLL) {
           setHasRolledInitiative(false)
+        }
+        
+        // Limpar estados pendentes quando mudança de fase
+        if (room.phase === CombatPhase.PLAYER_TURN) {
+          setPendingAction(null)
+          setPendingDefense(null)
         }
       })
 
@@ -309,7 +316,7 @@ export default function CombatPage() {
   }
 
   const handleDefenseChoice = (reaction: string) => {
-    if (!combatRoom?.pendingAction || !currentPlayer) return
+    if (!currentPlayer) return
     
     // Usar d6 para defesa sempre, independente do ataque
     const defenseDiceType = 6
@@ -317,7 +324,8 @@ export default function CombatPage() {
     socket.emit('opponent_reaction', { 
       playerId: currentPlayer.id, 
       roomId, 
-      reaction 
+      reaction,
+      diceType: defenseDiceType
     })
   }
 
@@ -489,7 +497,7 @@ export default function CombatPage() {
                     🧪 Consumíveis
                   </button>
                 </div>
-              ) : combatRoom?.phase === CombatPhase.OPPONENT_REACTION && !isMyTurn && !pendingAction ? (
+              ) : combatRoom?.phase === CombatPhase.OPPONENT_REACTION && !isMyTurn ? (
                 <div className="space-y-2">
                   <div className="text-center text-warning font-bold text-sm mb-3">
                     🛡️ Escolha sua defesa:

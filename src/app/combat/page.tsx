@@ -118,6 +118,7 @@ function CombatPageContent() {
   const [isReady, setIsReady] = useState(false)
   const [newMessage, setNewMessage] = useState('')
   const [pendingAction, setPendingAction] = useState<{action: ActionType, diceType: number} | null>(null)
+  const [pendingDefense, setPendingDefense] = useState<{reaction: string, diceType: number} | null>(null)
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting')
   const [showReactionButtons, setShowReactionButtons] = useState(false)
   const [hasRolledInitiative, setHasRolledInitiative] = useState(false)
@@ -180,6 +181,7 @@ function CombatPageContent() {
       socket.on('dice_rolled', (data: {playerId: string, sides: number, result: any}) => {
         console.log('🎲 Dado rolado:', data)
         setPendingAction(null)
+        setPendingDefense(null)
       })
 
       socket.on('action_selected', (data: {action: ActionType, diceType: number}) => {
@@ -337,12 +339,36 @@ function CombatPageContent() {
   }
 
   const handleRollDice = (sides: number) => {
-    if (!pendingAction || pendingAction.diceType !== sides || !currentPlayer) return
-    socket.emit('roll_dice', { 
+    if (!currentPlayer) return
+    
+    if (pendingAction && pendingAction.diceType === sides) {
+      // Atacante rolando dado
+      socket.emit('roll_dice', { 
+        playerId: currentPlayer.id, 
+        roomId, 
+        sides, 
+        action: pendingAction.action 
+      })
+      setPendingAction(null)
+    } else if (pendingDefense && pendingDefense.diceType === sides) {
+      // Defensor rolando dado
+      socket.emit('roll_defense', { 
+        playerId: currentPlayer.id, 
+        roomId, 
+        sides
+      })
+      setPendingDefense(null)
+    }
+  }
+
+  const handleDefenseChoice = (reaction: string) => {
+    if (!combatRoom?.pendingAction || !currentPlayer) return
+    
+    setPendingDefense({ reaction, diceType: combatRoom.pendingAction.diceType })
+    socket.emit('opponent_reaction', { 
       playerId: currentPlayer.id, 
       roomId, 
-      sides, 
-      action: pendingAction.action 
+      reaction 
     })
   }
 
@@ -630,9 +656,28 @@ function CombatPageContent() {
                     🧪 Consumíveis
                   </button>
                 </div>
+              ) : combatRoom?.phase === CombatPhase.OPPONENT_REACTION && !isMyTurn ? (
+                <div className="space-y-2">
+                  <div className="text-center text-warning font-bold text-sm mb-3">
+                    🛡️ Escolha sua defesa:
+                  </div>
+                  <button
+                    onClick={() => handleDefenseChoice('dodge')}
+                    className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-blue-600 hover:to-cyan-600 text-white py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
+                  >
+                    🌪️ Esquivar
+                  </button>
+                  <button
+                    onClick={() => handleDefenseChoice('defend')}
+                    className="w-full bg-gradient-to-r from-emerald-600 to-green-600 hover:from-green-600 hover:to-emerald-600 text-white py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
+                  >
+                    🛡️ Defender
+                  </button>
+                </div>
               ) : (
                 <div className="text-center text-text-secondary font-bold text-xs flex-1 flex items-center justify-center">
-                  {!isMyTurn ? '⏳ Turno do oponente...' : '⚔️ Executando ação...'}
+                  {combatRoom?.phase === CombatPhase.OPPONENT_REACTION ? '⚔️ Oponente escolhendo defesa...' : 
+                   !isMyTurn ? '⏳ Turno do oponente...' : '⚔️ Executando ação...'}
                 </div>
               )}
             </div>
@@ -641,27 +686,37 @@ function CombatPageContent() {
           </div>
 
           {/* Dice Panel */}
-          {combatRoom?.phase === CombatPhase.DICE_ROLL && isMyTurn && (
+          {combatRoom?.phase === CombatPhase.DICE_ROLL && (
+            (isMyTurn && pendingAction) || (!isMyTurn && pendingDefense)
+          ) && (
             <div className="bg-gradient-to-br from-surface/95 to-background/90 backdrop-blur-md border-t border-white/10 p-2 sm:p-3 flex-shrink-0">
-              <h3 className="text-text-primary font-bold text-center mb-2 text-xs sm:text-sm">🎲 Role o Dado</h3>
+              <h3 className="text-text-primary font-bold text-center mb-2 text-xs sm:text-sm">
+                🎲 {isMyTurn ? 'Role seu dado de ataque' : 'Role seu dado de defesa'}
+              </h3>
               <div className="flex justify-center space-x-2 sm:space-x-3 flex-wrap">
-                {[4, 6, 8, 10, 12, 20].map((sides) => (
-                  <button
-                    key={sides}
-                    onClick={() => handleRollDice(sides)}
-                    disabled={pendingAction?.diceType !== sides}
-                    className={`
-                      w-10 h-10 sm:w-12 sm:h-12 rounded-lg text-white font-bold text-xs
-                      transition-all duration-200 transform
-                      ${pendingAction?.diceType === sides 
-                        ? 'hover:scale-110 cursor-pointer bg-primary' 
-                        : 'opacity-50 cursor-not-allowed bg-gray-600'
-                      }
-                    `}
-                  >
-                    d{sides}
-                  </button>
-                ))}
+                {[4, 6, 8, 10, 12, 20].map((sides) => {
+                  const isCorrectDice = isMyTurn 
+                    ? pendingAction?.diceType === sides 
+                    : pendingDefense?.diceType === sides
+                  
+                  return (
+                    <button
+                      key={sides}
+                      onClick={() => handleRollDice(sides)}
+                      disabled={!isCorrectDice}
+                      className={`
+                        w-10 h-10 sm:w-12 sm:h-12 rounded-lg text-white font-bold text-xs
+                        transition-all duration-200 transform
+                        ${isCorrectDice 
+                          ? 'hover:scale-110 cursor-pointer bg-primary' 
+                          : 'opacity-50 cursor-not-allowed bg-gray-600'
+                        }
+                      `}
+                    >
+                      d{sides}
+                    </button>
+                  )
+                })}
               </div>
             </div>
           )}

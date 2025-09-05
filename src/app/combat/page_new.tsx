@@ -311,7 +311,9 @@ export default function CombatPage() {
   const handleDefenseChoice = (reaction: string) => {
     if (!combatRoom?.pendingAction || !currentPlayer) return
     
-    setPendingDefense({ reaction, diceType: combatRoom.pendingAction.diceType })
+    // Usar d6 para defesa sempre, independente do ataque
+    const defenseDiceType = 6
+    setPendingDefense({ reaction, diceType: defenseDiceType })
     socket.emit('opponent_reaction', { 
       playerId: currentPlayer.id, 
       roomId, 
@@ -487,7 +489,7 @@ export default function CombatPage() {
                     🧪 Consumíveis
                   </button>
                 </div>
-              ) : combatRoom?.phase === CombatPhase.OPPONENT_REACTION && !isMyTurn ? (
+              ) : combatRoom?.phase === CombatPhase.OPPONENT_REACTION && !isMyTurn && !pendingAction ? (
                 <div className="space-y-2">
                   <div className="text-center text-warning font-bold text-sm mb-3">
                     🛡️ Escolha sua defesa:
@@ -507,7 +509,8 @@ export default function CombatPage() {
                 </div>
               ) : (
                 <div className="text-center text-text-secondary font-bold text-xs flex-1 flex items-center justify-center">
-                  {combatRoom?.phase === CombatPhase.OPPONENT_REACTION ? '⚔️ Oponente escolhendo defesa...' : 
+                  {combatRoom?.phase === CombatPhase.OPPONENT_REACTION && isMyTurn ? '⏳ Aguardando oponente escolher defesa...' :
+                   combatRoom?.phase === CombatPhase.OPPONENT_REACTION ? '⚔️ Oponente escolhendo defesa...' : 
                    !isMyTurn ? '⏳ Turno do oponente...' : '⚔️ Executando ação...'}
                 </div>
               )}
@@ -516,7 +519,7 @@ export default function CombatPage() {
 
           {/* Dice Panel - Aparece apenas na fase DICE_ROLL, quando ambos já escolheram suas ações */}
           {combatRoom?.phase === CombatPhase.DICE_ROLL && (
-            (pendingAction || pendingDefense)
+            (isMyTurn && pendingAction) || (!isMyTurn && pendingDefense)
           ) && (
             <div className="bg-gradient-to-br from-surface/95 to-background/90 backdrop-blur-md border-t border-white/10 p-4 flex-shrink-0">
               <h3 className="text-text-primary font-bold text-center mb-3 text-base">

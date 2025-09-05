@@ -514,18 +514,18 @@ export default function CombatPage() {
             </div>
           </div>
 
-          {/* Dice Panel - Movido para baixo do chat para mobile */}
+          {/* Dice Panel - Aparece apenas na fase DICE_ROLL, quando ambos já escolheram suas ações */}
           {combatRoom?.phase === CombatPhase.DICE_ROLL && (
-            (isMyTurn && pendingAction) || (!isMyTurn && pendingDefense)
+            (pendingAction || pendingDefense)
           ) && (
             <div className="bg-gradient-to-br from-surface/95 to-background/90 backdrop-blur-md border-t border-white/10 p-4 flex-shrink-0">
               <h3 className="text-text-primary font-bold text-center mb-3 text-base">
-                🎲 {isMyTurn ? 'Role seu dado de ataque' : 'Role seu dado de defesa'}
+                🎲 {pendingAction ? 'Role seu dado de ataque' : 'Role seu dado de defesa'}
               </h3>
               <div className="flex justify-center space-x-4 flex-wrap gap-2">
                 {[4, 6, 8, 10, 12, 20].map((sides) => {
-                  const isCorrectDice = isMyTurn 
-                    ? pendingAction?.diceType === sides 
+                  const isCorrectDice = pendingAction 
+                    ? pendingAction.diceType === sides 
                     : pendingDefense?.diceType === sides
                   
                   return (

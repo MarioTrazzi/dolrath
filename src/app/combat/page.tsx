@@ -172,7 +172,26 @@ function CombatPageContent() {
           setHasRolledInitiative(false)
         }
         
-        // Limpar estados pendentes quando mudança de fase
+        // Quando entrar na fase DICE_ROLL, configurar os pendingStates
+        if (room.phase === CombatPhase.DICE_ROLL && room.pendingAction) {
+          if (room.currentTurn === currentPlayer?.id) {
+            // É o atacante - setar pendingAction
+            setPendingAction({
+              action: room.pendingAction.action,
+              diceType: room.pendingAction.diceType
+            })
+            setPendingDefense(null)
+          } else {
+            // É o defensor - setar pendingDefense
+            setPendingDefense({
+              reaction: 'defend', // padrão
+              diceType: 6 // defesa sempre d6
+            })
+            setPendingAction(null)
+          }
+        }
+        
+        // Limpar estados pendentes quando mudança de fase para PLAYER_TURN
         if (room.phase === CombatPhase.PLAYER_TURN) {
           setPendingAction(null)
           setPendingDefense(null)
@@ -192,7 +211,7 @@ function CombatPageContent() {
 
       socket.on('action_selected', (data: {action: ActionType, diceType: number}) => {
         console.log('🎯 Ação selecionada:', data)
-        setPendingAction(data)
+        // Não setamos pendingAction aqui - será setado apenas na fase DICE_ROLL
       })
 
       // Se temos characterId, carregar dados do personagem específico
@@ -336,6 +355,7 @@ function CombatPageContent() {
     }
 
     const diceType = diceTypes[action]
+    // Não setamos pendingAction aqui - só enviamos a ação
     socket.emit('player_action', { 
       playerId: currentPlayer.id, 
       roomId, 

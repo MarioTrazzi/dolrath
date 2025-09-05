@@ -39,6 +39,16 @@ httpServer.on('request', (req, res) => {
 const rooms = new Map()
 const playerSockets = new Map()
 
+// Enum para fases do combate
+const CombatPhase = {
+  WAITING_PLAYERS: 'waiting_players',
+  INITIATIVE_ROLL: 'initiative_roll',
+  PLAYER_TURN: 'player_turn',
+  OPPONENT_REACTION: 'opponent_reaction',
+  DICE_ROLL: 'dice_roll',
+  COMBAT_END: 'combat_end'
+}
+
 io.on('connection', (socket) => {
   console.log('Cliente conectado:', socket.id)
 
@@ -52,21 +62,31 @@ io.on('connection', (socket) => {
     if (!room) {
       room = {
         id: roomId,
+        creator: null,
         player1: null,
         player2: null,
         currentTurn: null,
-        phase: 'waiting_players',
-        combatLog: ['⚔️ Sala de combate criada!'],
-        isActive: false
+        phase: CombatPhase.WAITING_PLAYERS,
+        combatLog: [],
+        isActive: false,
+        pendingAction: null,
+        reactionPhase: false
       }
       rooms.set(roomId, room)
     }
 
     if (!room.player1 || isCreator) {
       room.player1 = player
+      if (isCreator) {
+        room.creator = player.id
+      }
     } else if (!room.player2) {
       room.player2 = player
-      room.combatLog.push(`🎮 ${player.name} entrou na sala!`)
+      room.combatLog.push({
+        type: 'system',
+        message: `${player.name} entrou na sala!`,
+        timestamp: new Date()
+      })
     }
 
     io.to(roomId).emit('room_updated', room)
@@ -83,12 +103,43 @@ io.on('connection', (socket) => {
       room.player2.isReady = !room.player2.isReady
     }
 
+    // Ambos prontos - iniciar rolagem de iniciativa
     if (room.player1?.isReady && room.player2?.isReady) {
-      room.phase = 'player_turn'
-      room.currentTurn = room.player1.id
+      room.phase = CombatPhase.INITIATIVE_ROLL
+      room.combatLog.push({
+        type: 'system',
+        message: '⚡ Ambos prontos! Rolando d20 para determinar iniciativa...',
+        timestamp: new Date()
+      })
+
+      // Rolar iniciativa para ambos
+      const initiative1 = Math.floor(Math.random() * 20) + 1 + (room.player1.speed || 0)
+      const initiative2 = Math.floor(Math.random() * 20) + 1 + (room.player2.speed || 0)
+
+      room.combatLog.push({
+        type: 'system',
+        message: `🎲 ${room.player1.name}: ${initiative1} | ${room.player2.name}: ${initiative2}`,
+        timestamp: new Date()
+      })
+
+      if (initiative1 >= initiative2) {
+        room.currentTurn = room.player1.id
+        room.combatLog.push({
+          type: 'system',
+          message: `🏃 ${room.player1.name} começa!`,
+          timestamp: new Date()
+        })
+      } else {
+        room.currentTurn = room.player2.id
+        room.combatLog.push({
+          type: 'system',
+          message: `🏃 ${room.player2.name} começa!`,
+          timestamp: new Date()
+        })
+      }
+
+      room.phase = CombatPhase.PLAYER_TURN
       room.isActive = true
-      room.combatLog.push('⚡ COMBATE INICIADO!')
-      room.combatLog.push(`🎯 Turno de ${room.player1.name}`)
     }
 
     io.to(roomId).emit('room_updated', room)
@@ -107,8 +158,16 @@ io.on('connection', (socket) => {
       'use_item': 'Item'
     }
 
-    room.phase = 'dice_roll'
-    room.combatLog.push(`🎯 ${actionNames[action]} selecionado! Role o d${diceType}`)
+    const currentPlayer = room.currentTurn === room.player1?.id ? room.player1 : room.player2
+    
+    room.pendingAction = { action, diceType, playerId }
+    room.phase = CombatPhase.DICE_ROLL
+    room.combatLog.push({
+      type: 'action',
+      player: currentPlayer.name,
+      message: `🎯 ${actionNames[action]} selecionado! Role o d${diceType}`,
+      timestamp: new Date()
+    })
     
     io.to(roomId).emit('room_updated', room)
     socket.emit('action_selected', { action, diceType })
@@ -127,9 +186,26 @@ io.on('connection', (socket) => {
       result
     })
 
-    setTimeout(() => {
-      processActionResult(room, action, roll, roomId)
-    }, 1000)
+    // Se é uma ação de ataque, permitir que o oponente reaja
+    if (['light_attack', 'heavy_attack', 'special_attack'].includes(action)) {
+      room.phase = CombatPhase.OPPONENT_REACTION
+      room.pendingAction.attackRoll = roll
+      
+      const opponent = room.currentTurn === room.player1?.id ? room.player2 : room.player1
+      room.combatLog.push({
+        type: 'action',
+        player: opponent.name,
+        message: `🛡️ ${opponent.name}, escolha: Esquivar ou Defender?`,
+        timestamp: new Date()
+      })
+      
+      io.to(roomId).emit('room_updated', room)
+    } else {
+      // Processar ação direta (defesa/item)
+      setTimeout(() => {
+        processActionResult(room, action, roll, roomId)
+      }, 1000)
+    }
   })
 
   socket.on('chat_message', ({ playerId, roomId, message }) => {
@@ -139,11 +215,64 @@ io.on('connection', (socket) => {
     const player = room.player1?.id === playerId ? room.player1 : room.player2
     if (!player) return
 
-    io.to(roomId).emit('chat_message', {
-      sender: player.name,
-      message,
+    room.combatLog.push({
+      type: 'chat',
+      player: player.name,
+      message: message,
       timestamp: new Date()
     })
+
+    io.to(roomId).emit('room_updated', room)
+  })
+
+  // Novo evento para reação do oponente
+  socket.on('opponent_reaction', ({ playerId, roomId, reaction }) => {
+    const room = rooms.get(roomId)
+    if (!room || !room.pendingAction) return
+
+    const opponent = room.currentTurn === room.player1?.id ? room.player2 : room.player1
+    if (opponent.id !== playerId) return
+
+    // O oponente rola o mesmo dado do atacante
+    const reactionRoll = Math.floor(Math.random() * room.pendingAction.diceType) + 1
+    
+    room.combatLog.push({
+      type: 'action',
+      player: opponent.name,
+      message: `${reaction === 'dodge' ? '🏃' : '🛡️'} ${reaction === 'dodge' ? 'Esquivou' : 'Defendeu'} - d${room.pendingAction.diceType}: ${reactionRoll}`,
+      timestamp: new Date()
+    })
+
+    // Processar combate completo
+    setTimeout(() => {
+      processCompleteAction(room, room.pendingAction.action, room.pendingAction.attackRoll, reaction, reactionRoll, roomId)
+    }, 1000)
+  })
+
+  // Novo evento para fechar sala (apenas criador)
+  socket.on('close_room', ({ playerId, roomId }) => {
+    const room = rooms.get(roomId)
+    if (!room || room.creator !== playerId) return
+
+    room.combatLog.push({
+      type: 'system',
+      message: '🚪 Sala fechada pelo criador.',
+      timestamp: new Date()
+    })
+
+    io.to(roomId).emit('room_closed')
+    rooms.delete(roomId)
+    
+    // Remover todos os sockets desta sala
+    const socketsInRoom = io.sockets.adapter.rooms.get(roomId)
+    if (socketsInRoom) {
+      socketsInRoom.forEach(socketId => {
+        const socket = io.sockets.sockets.get(socketId)
+        if (socket) {
+          socket.leave(roomId)
+        }
+      })
+    }
   })
 
   socket.on('disconnect', () => {
@@ -157,58 +286,136 @@ io.on('connection', (socket) => {
   })
 })
 
+function processCompleteAction(room, attackAction, attackRoll, defenseAction, defenseRoll, roomId) {
+  const attacker = room.currentTurn === room.player1?.id ? room.player1 : room.player2
+  const defender = room.currentTurn === room.player1?.id ? room.player2 : room.player1
+
+  if (!attacker || !defender) return
+
+  let damage = 0
+  let hit = false
+  
+  // Calcular dano base por tipo de ataque
+  let baseDamage = attacker.attack || 10
+  switch (attackAction) {
+    case 'light_attack':
+      baseDamage = Math.floor(baseDamage * 0.8)
+      break
+    case 'heavy_attack':
+      baseDamage = Math.floor(baseDamage * 1.2)
+      break
+    case 'special_attack':
+      baseDamage = Math.floor(baseDamage * 1.8)
+      if (attacker.mp >= 15) {
+        attacker.mp = Math.max(0, attacker.mp - 15)
+      }
+      break
+  }
+
+  // Sistema de combate: Ataque vs Defesa
+  const attackTotal = attackRoll + baseDamage
+  const defenseTotal = defenseRoll + (defender.defense || 5)
+  
+  if (defenseAction === 'dodge') {
+    // Esquiva: sucesso total = sem dano, falha = dano cheio
+    const dodgeThreshold = 10 + (attacker.speed || 0) * 0.3
+    if (defenseRoll >= dodgeThreshold) {
+      room.combatLog.push({
+        type: 'result',
+        message: `🌪️ Esquiva perfeita! ${defender.name} evitou todo o dano!`,
+        timestamp: new Date()
+      })
+    } else {
+      damage = Math.max(1, attackTotal - Math.floor(defenseTotal * 0.5))
+      hit = true
+      room.combatLog.push({
+        type: 'result',
+        message: `❌ Esquiva falhou! ${attackTotal} vs ${defenseTotal}`,
+        timestamp: new Date()
+      })
+    }
+  } else if (defenseAction === 'block') {
+    // Bloqueio: sempre reduz dano
+    const damageReduction = Math.min(0.7, Math.max(0.3, (defender.resistance || 0) / 100))
+    damage = Math.max(1, Math.floor(attackTotal * (1 - damageReduction)))
+    hit = true
+    room.combatLog.push({
+      type: 'result',
+      message: `🛡️ Bloqueio! Dano reduzido em ${Math.floor(damageReduction * 100)}%`,
+      timestamp: new Date()
+    })
+  }
+
+  if (hit && damage > 0) {
+    defender.hp = Math.max(0, defender.hp - damage)
+    room.combatLog.push({
+      type: 'damage',
+      message: `💥 ${defender.name} recebeu ${damage} de dano! (${defender.hp}/${defender.maxHp} HP)`,
+      timestamp: new Date()
+    })
+  }
+
+  // Verificar fim do combate
+  if (defender.hp <= 0) {
+    room.phase = CombatPhase.COMBAT_END
+    room.winner = attacker.id
+    room.combatLog.push({
+      type: 'victory',
+      message: `🏆 ${attacker.name} venceu o combate!`,
+      timestamp: new Date()
+    })
+  } else {
+    // Próximo turno
+    room.currentTurn = defender.id
+    room.phase = CombatPhase.PLAYER_TURN
+    room.combatLog.push({
+      type: 'system',
+      message: `🔄 Turno de ${defender.name}`,
+      timestamp: new Date()
+    })
+  }
+
+  room.pendingAction = null
+  io.to(roomId).emit('room_updated', room)
+}
+
 function processActionResult(room, action, playerRoll, roomId) {
+  // Para ações que não requerem reação do oponente
   const currentPlayer = room.currentTurn === room.player1?.id ? room.player1 : room.player2
   const opponent = room.currentTurn === room.player1?.id ? room.player2 : room.player1
 
   if (!currentPlayer || !opponent) return
 
-  const opponentRoll = Math.floor(Math.random() * 12) + 1
-  
-  let damage = 0
-  let actionMessage = ''
-
+  // Processar ações de suporte/item
   switch (action) {
-    case 'light_attack':
-      damage = Math.max(0, (currentPlayer.attack + playerRoll) - (opponent.defense + opponentRoll))
-      actionMessage = `👊 ${currentPlayer.name} usou Ataque Leve!`
-      break
-    case 'heavy_attack':
-      damage = Math.max(0, (currentPlayer.attack * 1.5 + playerRoll) - (opponent.defense + opponentRoll))
-      actionMessage = `⚔️ ${currentPlayer.name} usou Ataque Pesado!`
-      break
-    case 'special_attack':
-      damage = Math.max(0, (currentPlayer.attack * 2 + playerRoll) - (opponent.defense + opponentRoll))
-      actionMessage = `✨ ${currentPlayer.name} usou Ataque Especial!`
-      if (currentPlayer.mp >= 15) {
-        currentPlayer.mp -= 15
-      }
+    case 'use_item':
+      room.combatLog.push({
+        type: 'action',
+        player: currentPlayer.name,
+        message: `🧪 ${currentPlayer.name} usou um item!`,
+        timestamp: new Date()
+      })
       break
     default:
-      actionMessage = `${currentPlayer.name} usou uma ação!`
+      room.combatLog.push({
+        type: 'action',
+        player: currentPlayer.name,
+        message: `${currentPlayer.name} executou uma ação!`,
+        timestamp: new Date()
+      })
       break
   }
 
-  room.combatLog.push(actionMessage)
-  room.combatLog.push(`🎲 Dado: ${playerRoll} vs Defesa: ${opponentRoll}`)
+  // Próximo turno
+  room.currentTurn = opponent.id
+  room.phase = CombatPhase.PLAYER_TURN
+  room.combatLog.push({
+    type: 'system',
+    message: `🔄 Turno de ${opponent.name}`,
+    timestamp: new Date()
+  })
 
-  if (damage > 0) {
-    opponent.hp = Math.max(0, opponent.hp - damage)
-    room.combatLog.push(`💥 ${opponent.name} recebeu ${damage} de dano!`)
-  } else {
-    room.combatLog.push(`🛡️ ${opponent.name} defendeu o ataque!`)
-  }
-
-  if (opponent.hp <= 0) {
-    room.phase = 'combat_end'
-    room.winner = currentPlayer.id
-    room.combatLog.push(`🏆 ${currentPlayer.name} venceu!`)
-  } else {
-    room.currentTurn = opponent.id
-    room.phase = 'player_turn'
-    room.combatLog.push(`🔄 Turno de ${opponent.name}`)
-  }
-
+  room.pendingAction = null
   io.to(roomId).emit('room_updated', room)
 }
 

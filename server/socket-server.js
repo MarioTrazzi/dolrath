@@ -103,43 +103,71 @@ io.on('connection', (socket) => {
       room.player2.isReady = !room.player2.isReady
     }
 
-    // Ambos prontos - iniciar rolagem de iniciativa
+    // Ambos prontos - preparar para rolagem de iniciativa
     if (room.player1?.isReady && room.player2?.isReady) {
       room.phase = CombatPhase.INITIATIVE_ROLL
       room.combatLog.push({
         type: 'system',
-        message: '⚡ Ambos prontos! Rolando d20 para determinar iniciativa...',
+        message: '⚡ Ambos prontos! Rolem d20 para determinar iniciativa.',
         timestamp: new Date()
       })
+      room.isActive = true
+    }
 
-      // Rolar iniciativa para ambos
-      const initiative1 = Math.floor(Math.random() * 20) + 1 + (room.player1.speed || 0)
-      const initiative2 = Math.floor(Math.random() * 20) + 1 + (room.player2.speed || 0)
+    io.to(roomId).emit('room_updated', room)
+  })
 
-      room.combatLog.push({
-        type: 'system',
-        message: `🎲 ${room.player1.name}: ${initiative1} | ${room.player2.name}: ${initiative2}`,
-        timestamp: new Date()
-      })
+  // Novo evento para rolagem de iniciativa
+  socket.on('roll_initiative', ({ playerId, roomId }) => {
+    const room = rooms.get(roomId)
+    if (!room || room.phase !== CombatPhase.INITIATIVE_ROLL) return
+
+    const player = room.player1?.id === playerId ? room.player1 : room.player2
+    if (!player) return
+
+    // Rolar d20 + modificador de velocidade
+    const roll = Math.floor(Math.random() * 20) + 1
+    const modifier = Math.floor((player.speed || 0) / 4) // Modificador baseado em velocidade
+    const total = roll + modifier
+
+    // Armazenar rolagem de iniciativa
+    if (!room.initiativeRolls) {
+      room.initiativeRolls = {}
+    }
+    room.initiativeRolls[playerId] = { roll, modifier, total }
+
+    room.combatLog.push({
+      type: 'action',
+      player: player.name,
+      message: `🎲 Iniciativa: Rolou d20 = ${roll} + (${modifier}) = ${total}`,
+      timestamp: new Date()
+    })
+
+    // Verificar se ambos rolaram
+    const player1Id = room.player1?.id
+    const player2Id = room.player2?.id
+    
+    if (room.initiativeRolls[player1Id] && room.initiativeRolls[player2Id]) {
+      const initiative1 = room.initiativeRolls[player1Id].total
+      const initiative2 = room.initiativeRolls[player2Id].total
 
       if (initiative1 >= initiative2) {
-        room.currentTurn = room.player1.id
+        room.currentTurn = player1Id
         room.combatLog.push({
           type: 'system',
-          message: `🏃 ${room.player1.name} começa!`,
+          message: `🏃 ${room.player1.name} começa o combate!`,
           timestamp: new Date()
         })
       } else {
-        room.currentTurn = room.player2.id
+        room.currentTurn = player2Id
         room.combatLog.push({
           type: 'system',
-          message: `🏃 ${room.player2.name} começa!`,
+          message: `🏃 ${room.player2.name} começa o combate!`,
           timestamp: new Date()
         })
       }
 
       room.phase = CombatPhase.PLAYER_TURN
-      room.isActive = true
     }
 
     io.to(roomId).emit('room_updated', room)
@@ -177,13 +205,22 @@ io.on('connection', (socket) => {
     const room = rooms.get(roomId)
     if (!room || room.currentTurn !== playerId) return
 
+    const player = room.currentTurn === room.player1?.id ? room.player1 : room.player2
     const roll = Math.floor(Math.random() * sides) + 1
-    const result = { roll, modifier: 0, total: roll }
+    const modifier = 0 // Pode ser expandido para incluir modificadores
+    const total = roll + modifier
+    
+    room.combatLog.push({
+      type: 'action',
+      player: player.name,
+      message: `🎲 Rolou d${sides} = ${roll} + (${modifier}) = ${total}`,
+      timestamp: new Date()
+    })
     
     io.to(roomId).emit('dice_rolled', {
       playerId,
       sides,
-      result
+      result: { roll, modifier, total }
     })
 
     // Se é uma ação de ataque, permitir que o oponente reaja
@@ -193,8 +230,7 @@ io.on('connection', (socket) => {
       
       const opponent = room.currentTurn === room.player1?.id ? room.player2 : room.player1
       room.combatLog.push({
-        type: 'action',
-        player: opponent.name,
+        type: 'system',
         message: `🛡️ ${opponent.name}, escolha: Esquivar ou Defender?`,
         timestamp: new Date()
       })
@@ -235,11 +271,13 @@ io.on('connection', (socket) => {
 
     // O oponente rola o mesmo dado do atacante
     const reactionRoll = Math.floor(Math.random() * room.pendingAction.diceType) + 1
+    const modifier = 0 // Pode ser expandido para modificadores de defesa
+    const total = reactionRoll + modifier
     
     room.combatLog.push({
       type: 'action',
       player: opponent.name,
-      message: `${reaction === 'dodge' ? '🏃' : '🛡️'} ${reaction === 'dodge' ? 'Esquivou' : 'Defendeu'} - d${room.pendingAction.diceType}: ${reactionRoll}`,
+      message: `� ${reaction === 'dodge' ? 'Esquiva' : 'Defesa'}: Rolou d${room.pendingAction.diceType} = ${reactionRoll} + (${modifier}) = ${total}`,
       timestamp: new Date()
     })
 

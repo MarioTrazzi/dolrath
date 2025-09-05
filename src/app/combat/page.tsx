@@ -120,6 +120,7 @@ function CombatPageContent() {
   const [pendingAction, setPendingAction] = useState<{action: ActionType, diceType: number} | null>(null)
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting')
   const [showReactionButtons, setShowReactionButtons] = useState(false)
+  const [hasRolledInitiative, setHasRolledInitiative] = useState(false)
 
   const combatLogRef = useRef<HTMLDivElement>(null)
 
@@ -163,6 +164,11 @@ function CombatPageContent() {
           setShowReactionButtons(true)
         } else {
           setShowReactionButtons(false)
+        }
+
+        // Reset iniciativa quando sala é resetada
+        if (room.phase === CombatPhase.WAITING_PLAYERS) {
+          setHasRolledInitiative(false)
         }
       })
 
@@ -361,6 +367,15 @@ function CombatPageContent() {
     setShowReactionButtons(false)
   }
 
+  const rollInitiative = () => {
+    if (!currentPlayer || hasRolledInitiative) return
+    socket.emit('roll_initiative', {
+      playerId: currentPlayer.id,
+      roomId
+    })
+    setHasRolledInitiative(true)
+  }
+
   const closeRoom = () => {
     if (!currentPlayer || !isCreator) return
     socket.emit('close_room', {
@@ -529,6 +544,26 @@ function CombatPageContent() {
                     className="w-full py-3 sm:py-2 px-4 rounded-lg font-bold text-sm bg-gradient-to-r from-emerald-500 to-green-600 hover:from-green-600 hover:to-emerald-500 text-white transition-all duration-200"
                   >
                     🛡️ Defender
+                  </button>
+                </div>
+              ) : combatRoom?.phase === CombatPhase.INITIATIVE_ROLL ? (
+                <div className="space-y-3">
+                  <div className="text-center">
+                    <div className="text-xl sm:text-2xl mb-2">🎲</div>
+                    <div className="text-xs sm:text-sm text-text-secondary mb-3">
+                      Role d20 para iniciativa!
+                    </div>
+                  </div>
+                  <button
+                    onClick={rollInitiative}
+                    disabled={hasRolledInitiative}
+                    className={`w-full py-3 sm:py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 ${
+                      hasRolledInitiative
+                        ? 'bg-gray-600 text-white cursor-not-allowed opacity-50'
+                        : 'bg-gradient-to-r from-pink-500 to-purple-600 hover:from-purple-600 hover:to-pink-500 text-white hover:shadow-lg'
+                    }`}
+                  >
+                    {hasRolledInitiative ? '✅ Já rolou!' : '🎲 Rolar d20'}
                   </button>
                 </div>
               ) : !combatRoom?.isActive ? (

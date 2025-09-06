@@ -182,10 +182,10 @@ function CombatPageContent() {
             })
             setPendingDefense(null)
           } else {
-            // É o defensor - setar pendingDefense
+            // É o defensor - usar o MESMO dado do ataque, não d6
             setPendingDefense({
               reaction: 'defend', // padrão
-              diceType: 6 // defesa sempre d6
+              diceType: room.pendingAction.diceType // MESMO dado do ataque
             })
             setPendingAction(null)
           }
@@ -390,15 +390,15 @@ function CombatPageContent() {
   const handleDefenseChoice = (reaction: string) => {
     if (!currentPlayer) return
     
-    // Usar d6 para defesa sempre, independente do ataque
-    const defenseDiceType = 6
-    setPendingDefense({ reaction, diceType: defenseDiceType })
+    // Apenas enviar a escolha de defesa, não setar pendingDefense ainda
     socket.emit('opponent_reaction', { 
       playerId: currentPlayer.id, 
       roomId, 
-      reaction,
-      diceType: defenseDiceType
+      reaction
     })
+    
+    // Esconder botões de reação após escolher
+    setShowReactionButtons(false)
   }
 
   const sendMessage = () => {
@@ -410,16 +410,6 @@ function CombatPageContent() {
       })
       setNewMessage('')
     }
-  }
-
-  const handleOpponentReaction = (reaction: 'dodge' | 'block') => {
-    if (!currentPlayer) return
-    socket.emit('opponent_reaction', {
-      playerId: currentPlayer.id,
-      roomId,
-      reaction
-    })
-    setShowReactionButtons(false)
   }
 
   const rollInitiative = () => {
@@ -589,13 +579,13 @@ function CombatPageContent() {
                     </div>
                   </div>
                   <button
-                    onClick={() => handleOpponentReaction('dodge')}
+                    onClick={() => handleDefenseChoice('dodge')}
                     className="w-full py-3 sm:py-2 px-4 rounded-lg font-bold text-sm bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-blue-600 hover:to-cyan-500 text-white transition-all duration-200"
                   >
                     🏃 Esquivar
                   </button>
                   <button
-                    onClick={() => handleOpponentReaction('block')}
+                    onClick={() => handleDefenseChoice('defend')}
                     className="w-full py-3 sm:py-2 px-4 rounded-lg font-bold text-sm bg-gradient-to-r from-emerald-500 to-green-600 hover:from-green-600 hover:to-emerald-500 text-white transition-all duration-200"
                   >
                     🛡️ Defender

@@ -77,7 +77,7 @@ export class CharacterFactory {
       }
     }
     
-    // 🔥 FÓRMULAS BALANCEADAS - DEF mais forte, AGI mais útil
+    // 🔥 FÓRMULAS BALANCEADAS - Sistema de stamina otimizado
     const str = Math.floor(leveledAttributes.strength / 10)
     const def = Math.floor(leveledAttributes.constitution / 10) // DEF = constitution
     const int = Math.floor(leveledAttributes.intelligence / 10)
@@ -89,8 +89,12 @@ export class CharacterFactory {
     // MP: INT forte, AGI contribui pouco
     const maxMp = 60 + (int * 3) + (agi * 1) + (level * 4)
 
-    // Stamina: AGI menos dominante mas ainda importante
-    const maxStamina = 120 + (agi * 3) + (level * 3)
+    // 💰 STAMINA BALANCEADA - Sistema Templo de Stamina
+    // Base: 200 stamina = 6-8 atividades (F2P satisfatório)
+    const baseStamina = 200
+    const levelBonus = level * 10 // +10 por level
+    const agiBonus = agi * 2 // AGI contribui, mas moderadamente
+    const maxStamina = baseStamina + levelBonus + agiBonus
     
     return {
       id: uuidv4(),
@@ -99,18 +103,33 @@ export class CharacterFactory {
       class: characterClass,
       level,
       experience: 0,
+      // Atributos balanceados
       attributes: leveledAttributes,
-      equipment,
-      inventory: [],
-      currency: 100,
+      // Stats base calculadas
+      baseStats: {
+        hp: maxHp,
+        maxHp,
+        mp: maxMp,
+        maxMp,
+        stamina: maxStamina,
+        maxStamina,
+        str,
+        def
+      },
+      // Campos diretos de vida/morte/stamina
       hp: maxHp,
       maxHp,
-      mp: maxMp,
-      maxMp,
       stamina: maxStamina,
       maxStamina,
-      isTransformed: false
-    }
+      isAlive: true,
+      // Sistema de equipamentos e inventário
+      equipment: [], // Equipamentos serão adicionados separadamente
+      inventory: [],
+      gold: 100, // Ouro inicial para F2P
+      inventorySlots: 20,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as Character
   }
   
   // Aplicar bônus de atributos

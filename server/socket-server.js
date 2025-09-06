@@ -1,6 +1,9 @@
 const { createServer } = require('http')
 const { Server } = require('socket.io')
 
+// Importar sistema de stamina
+const { getStaminaCost, checkStaminaLevel, calculateStaminaRegeneration } = require('../src/lib/staminaSystem')
+
 // Configuração de porta - Railway usa PORT, Heroku também
 const PORT = process.env.PORT || 3001
 
@@ -358,13 +361,15 @@ io.on('connection', (socket) => {
       return
     }
 
-    // Verificar custos
-    const requiredMp = transformationType === 'dragon' ? 40 : transformationType === 'bear' ? 30 : 25
-    const requiredStamina = transformationType === 'dragon' ? 50 : transformationType === 'bear' ? 40 : 35
+    // Usar sistema de stamina atualizado
+    const staminaCost = getStaminaCost('transformation', { 
+      playerLevel: player.level || 1,
+      transformationType 
+    })
 
-    if (player.mp < requiredMp || player.stamina < requiredStamina) {
+    if (player.stamina < staminaCost) {
       socket.emit('error', { 
-        message: `Recursos insuficientes! Precisa de ${requiredMp} MP e ${requiredStamina} Stamina` 
+        message: `Stamina insuficiente! Precisa de ${staminaCost} Stamina para transformar` 
       })
       return
     }
@@ -421,8 +426,9 @@ io.on('connection', (socket) => {
     }
 
     // Consumir recursos
+    const requiredMp = transformationType === 'dragon' ? 40 : transformationType === 'bear' ? 30 : 25
     player.mp -= requiredMp
-    player.stamina -= requiredStamina
+    player.stamina -= staminaCost
 
     room.combatLog.push({
       type: 'transformation',
@@ -501,18 +507,28 @@ io.on('connection', (socket) => {
     const currentPlayer = room.currentTurn === room.player1?.id ? room.player1 : room.player2
     const opponent = room.currentTurn === room.player1?.id ? room.player2 : room.player1
     
+    // Usar sistema de stamina atualizado
+    const systemStaminaCost = getStaminaCost('pvp', { 
+      playerLevel: currentPlayer.level || 1,
+      actionType: action 
+    })
+
+    // Verificar stamina necessária
+    if (currentPlayer.stamina < systemStaminaCost) {
+      socket.emit('error', { 
+        message: `Stamina insuficiente! Precisa de ${systemStaminaCost} Stamina` 
+      })
+      return
+    }
+    
     // Aplicar custos de MP e stamina
     if (mpCost > 0) {
       currentPlayer.mp = Math.max(0, currentPlayer.mp - mpCost)
     }
-    if (staminaCost > 0) {
-      currentPlayer.stamina = Math.max(0, currentPlayer.stamina - staminaCost)
-    }
+    currentPlayer.stamina = Math.max(0, currentPlayer.stamina - systemStaminaCost)
     
     // 🔥 ATUALIZAÇÃO IMEDIATA para mostrar consumo de recursos
-    if (mpCost > 0 || staminaCost > 0) {
-      io.to(roomId).emit('room_updated', room)
-    }
+    io.to(roomId).emit('room_updated', room)
     
     // Se é um ataque, ir para OPPONENT_REACTION (não DICE_ROLL)
     if (['light_attack', 'heavy_attack', 'special_attack'].includes(action)) {

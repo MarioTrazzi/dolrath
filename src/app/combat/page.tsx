@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { X, Users, Sword, Shield, Zap, Heart, Sparkles } from 'lucide-react'
 import { io, Socket } from 'socket.io-client'
+import TransformationDialog from '@/components/TransformationDialog'
 
 interface Equipment {
   id: string
@@ -130,6 +131,8 @@ function CombatPageContent() {
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting')
   const [hasRolledInitiative, setHasRolledInitiative] = useState(false)
   const [hasRolledDice, setHasRolledDice] = useState(false) // Novo estado para controlar se já rolou
+  const [showTransformationDialog, setShowTransformationDialog] = useState(false)
+  const [isTransforming, setIsTransforming] = useState(false)
 
   // Sistema de Stamina (custos por ação)
   const STAMINA_COSTS = {
@@ -479,28 +482,82 @@ function CombatPageContent() {
     })
   }
 
-  const handleTransformation = async () => {
+  const handleTransformation = () => {
     if (!currentPlayer || !characterId) return
     
+    // Verificar se a raça pode transformar
+    if (currentPlayer.race !== 'draconiano' && currentPlayer.race !== 'metamorfo') {
+      socket.emit('chat_message', { 
+        playerId: currentPlayer.id, 
+        roomId, 
+        message: `❌ Sua raça (${currentPlayer.race}) não possui transformações disponíveis!` 
+      })
+      return
+    }
+    
+    // Abrir dialog de escolha de transformação
+    setShowTransformationDialog(true)
+  }
+
+  const handleTransformationChoice = async (transformationType: string) => {
+    if (!currentPlayer || !characterId) return
+    
+    setIsTransforming(true)
+    
     try {
-      // Para simplificar, vamos usar a transformação principal da raça
-      let transformationType = 'dragon' // default
+      // Primeiro, verificar e consumir stamina
+      const staminaCost = transformationType === 'dragon' ? 50 : 
+                        transformationType === 'bear' ? 40 :
+                        transformationType === 'wolf' ? 35 : 30 // eagle
       
-      // Determinar transformação baseada na raça
-      if (currentPlayer.race === 'draconiano') {
-        transformationType = 'dragon'
-      } else if (currentPlayer.race === 'metamorfo') {
-        transformationType = 'wolf' // primeira opção para metamorfo
-      } else {
-        // Mostrar mensagem se a raça não tem transformação
+      const mpCost = transformationType === 'dragon' ? 40 : 
+                   transformationType === 'bear' ? 30 :
+                   transformationType === 'wolf' ? 25 : 20 // eagle
+
+      // Verificar recursos antes de tentar transformar
+      if (currentPlayer.stamina < staminaCost) {
         socket.emit('chat_message', { 
           playerId: currentPlayer.id, 
           roomId, 
-          message: `❌ Sua raça (${currentPlayer.race}) não possui transformações disponíveis!` 
+          message: `❌ Stamina insuficiente para transformar! (${staminaCost} stamina necessária)` 
         })
         return
       }
+
+      if (currentPlayer.mp < mpCost) {
+        socket.emit('chat_message', { 
+          playerId: currentPlayer.id, 
+          roomId, 
+          message: `❌ MP insuficiente para transformar! (${mpCost} MP necessário)` 
+        })
+        return
+      }
+
+      // Consumir stamina primeiro
+      const staminaResponse = await fetch(`/api/character/${characterId}/update-stamina`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ staminaCost })
+      })
+
+      if (!staminaResponse.ok) {
+        const staminaError = await staminaResponse.json()
+        socket.emit('chat_message', { 
+          playerId: currentPlayer.id, 
+          roomId, 
+          message: `❌ Erro ao consumir stamina: ${staminaError.error}` 
+        })
+        return
+      }
+
+      // Atualizar stamina localmente
+      setCurrentPlayer(prev => prev ? {
+        ...prev,
+        stamina: prev.stamina - staminaCost,
+        mp: prev.mp - mpCost
+      } : null)
       
+      // Aplicar transformação
       const response = await fetch(`/api/character/${characterId}/transform`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -508,14 +565,39 @@ function CombatPageContent() {
       })
       
       if (response.ok) {
-        const updatedCharacter = await response.json()
-        setCurrentPlayer(updatedCharacter.character)
+        const data = await response.json()
+        const updatedCharacter = data.character
+        
+        // Atualizar dados do player com os novos stats transformados
+        setCurrentPlayer(prev => prev ? {
+          ...prev,
+          ...updatedCharacter,
+          // Preservar dados de combate atualizados
+          stamina: prev.stamina - staminaCost,
+          mp: prev.mp - mpCost,
+          // Aplicar stats transformados do baseStats
+          hp: updatedCharacter.hp,
+          maxHp: updatedCharacter.maxHp,
+          attack: updatedCharacter.baseStats?.attack || prev.attack,
+          defense: updatedCharacter.baseStats?.defense || prev.defense,
+          strength: updatedCharacter.baseStats?.str || prev.strength,
+          agility: updatedCharacter.baseStats?.agi || prev.agility,
+          intelligence: updatedCharacter.baseStats?.int || prev.intelligence,
+          critical: updatedCharacter.baseStats?.critical || prev.critical,
+          isTransformed: true,
+          transformationType: transformationType,
+          transformationData: updatedCharacter.transformationData
+        } : null)
         
         // Notificar sala sobre transformação
+        const transformationName = transformationType === 'dragon' ? 'Dragão 🐉' :
+                                 transformationType === 'wolf' ? 'Lobo 🐺' :
+                                 transformationType === 'bear' ? 'Urso 🐻' : 'Águia 🦅'
+        
         socket.emit('chat_message', { 
           playerId: currentPlayer.id, 
           roomId, 
-          message: `🐉 ${currentPlayer.name} se transformou em ${transformationType}!` 
+          message: `🌟 ${currentPlayer.name} se transformou em ${transformationName}! (+${data.transformation.duration} turnos)` 
         })
         
         // Perder o turno (transformação custa o turno)
@@ -530,6 +612,13 @@ function CombatPageContent() {
       }
     } catch (error) {
       console.error('Erro ao transformar:', error)
+      socket.emit('chat_message', { 
+        playerId: currentPlayer.id, 
+        roomId, 
+        message: `❌ Erro inesperado na transformação` 
+      })
+    } finally {
+      setIsTransforming(false)
     }
   }
 
@@ -803,8 +892,20 @@ function CombatPageContent() {
                   {displayCurrentPlayer && (displayCurrentPlayer.race === 'draconiano' || displayCurrentPlayer.race === 'metamorfo') && (
                     <button
                       onClick={handleTransformation}
-                      disabled={displayCurrentPlayer.isTransformed || (displayCurrentPlayer.transformationData?.cooldownTurns || 0) > 0}
-                      className={`w-full ${displayCurrentPlayer.isTransformed || (displayCurrentPlayer.transformationData?.cooldownTurns || 0) > 0
+                      disabled={
+                        displayCurrentPlayer.isTransformed || 
+                        (displayCurrentPlayer.transformationData?.cooldownTurns || 0) > 0 ||
+                        isTransforming ||
+                        // Verificar recursos mínimos (assumindo dragon como mais caro)
+                        displayCurrentPlayer.stamina < 30 || 
+                        displayCurrentPlayer.mp < 20
+                      }
+                      className={`w-full ${
+                        displayCurrentPlayer.isTransformed || 
+                        (displayCurrentPlayer.transformationData?.cooldownTurns || 0) > 0 ||
+                        isTransforming ||
+                        displayCurrentPlayer.stamina < 30 || 
+                        displayCurrentPlayer.mp < 20
                         ? 'bg-gray-600 opacity-50 cursor-not-allowed' 
                         : 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-blue-600 hover:to-purple-600'
                       } text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
@@ -813,7 +914,12 @@ function CombatPageContent() {
                         '🐉 Já Transformado' :
                         (displayCurrentPlayer.transformationData?.cooldownTurns || 0) > 0 ?
                         `⏰ Cooldown (${displayCurrentPlayer.transformationData?.cooldownTurns || 0})` :
-                        '⚡ Transformar (Perde o turno)'
+                        isTransforming ? '⏳ Transformando...' :
+                        displayCurrentPlayer.stamina < 30 || displayCurrentPlayer.mp < 20 ?
+                        '❌ Recursos insuficientes' :
+                        displayCurrentPlayer.race === 'draconiano' ? 
+                        '🐉 Transformar (50⚡ 40🔮)' :
+                        '🔄 Transformar (30⚡ 20🔮)'
                       }
                     </button>
                   )}
@@ -894,6 +1000,15 @@ function CombatPageContent() {
           )}
         </div>
       </div>
+      
+      {/* Dialog de Transformação */}
+      <TransformationDialog
+        isOpen={showTransformationDialog}
+        onClose={() => setShowTransformationDialog(false)}
+        characterRace={currentPlayer?.race || ''}
+        onTransform={handleTransformationChoice}
+        loading={isTransforming}
+      />
     </div>
   )
 }

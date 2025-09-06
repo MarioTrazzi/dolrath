@@ -122,6 +122,16 @@ function CombatPageContent() {
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting')
   const [hasRolledInitiative, setHasRolledInitiative] = useState(false)
 
+  // Sistema de Stamina (custos por ação)
+  const STAMINA_COSTS = {
+    [ActionType.LIGHT_ATTACK]: 1,
+    [ActionType.HEAVY_ATTACK]: 2,
+    [ActionType.SPECIAL_ATTACK]: 4,
+    [ActionType.DODGE]: 1,
+    [ActionType.DEFEND]: 1,
+    [ActionType.USE_ITEM]: 0
+  }
+
   const combatLogRef = useRef<HTMLDivElement>(null)
 
   const opponent = combatRoom?.player1?.id === currentPlayer?.id ? combatRoom?.player2 : combatRoom?.player1
@@ -332,6 +342,30 @@ function CombatPageContent() {
   const handlePlayerAction = (action: ActionType) => {
     if (!currentPlayer) return
     
+    // Verificar custos antes de enviar ação
+    const mpCost = action === ActionType.SPECIAL_ATTACK ? 15 : 0
+    const staminaCost = STAMINA_COSTS[action]
+    
+    if (mpCost > 0 && currentPlayer.mp < mpCost) {
+      // Adicionar mensagem no chat
+      socket.emit('chat_message', { 
+        playerId: currentPlayer.id, 
+        roomId, 
+        message: `❌ MP insuficiente para ataque especial! (${mpCost} MP necessário)` 
+      })
+      return
+    }
+    
+    if (staminaCost > 0 && currentPlayer.stamina < staminaCost) {
+      // Adicionar mensagem no chat
+      socket.emit('chat_message', { 
+        playerId: currentPlayer.id, 
+        roomId, 
+        message: `❌ Stamina insuficiente para esta ação! (${staminaCost} stamina necessária)` 
+      })
+      return
+    }
+    
     const diceTypes = {
       [ActionType.LIGHT_ATTACK]: 6,
       [ActionType.HEAVY_ATTACK]: 10,
@@ -342,12 +376,14 @@ function CombatPageContent() {
     }
 
     const diceType = diceTypes[action]
-    // Não setamos pendingAction aqui - só enviamos a ação
+    // Enviar ação com custos para o servidor
     socket.emit('player_action', { 
       playerId: currentPlayer.id, 
       roomId, 
       action, 
-      diceType 
+      diceType,
+      mpCost,
+      staminaCost
     })
   }
 
@@ -377,11 +413,26 @@ function CombatPageContent() {
   const handleDefenseChoice = (reaction: string) => {
     if (!currentPlayer) return
     
-    // Apenas enviar a escolha de defesa, não setar pendingDefense ainda
+    // Verificar custo de stamina para defesa
+    const actionType = reaction === 'dodge' ? ActionType.DODGE : ActionType.DEFEND
+    const staminaCost = STAMINA_COSTS[actionType]
+    
+    if (staminaCost > 0 && currentPlayer.stamina < staminaCost) {
+      // Adicionar mensagem no chat
+      socket.emit('chat_message', { 
+        playerId: currentPlayer.id, 
+        roomId, 
+        message: `❌ Stamina insuficiente para ${reaction === 'dodge' ? 'esquivar' : 'defender'}! (${staminaCost} stamina necessária)` 
+      })
+      return
+    }
+    
+    // Enviar escolha de defesa com custo de stamina
     socket.emit('opponent_reaction', { 
       playerId: currentPlayer.id, 
       roomId, 
-      reaction
+      reaction,
+      staminaCost
     })
   }
 
@@ -465,6 +516,7 @@ function CombatPageContent() {
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 text-xs">
                 <div className="text-text-secondary">HP: <span className="font-bold text-error">{currentPlayer?.hp}/{currentPlayer?.maxHp}</span></div>
                 <div className="text-text-secondary">MP: <span className="font-bold text-blue-400">{currentPlayer?.mp}/{currentPlayer?.maxMp}</span></div>
+                <div className="text-text-secondary">⚡: <span className="font-bold text-yellow-400">{currentPlayer?.stamina}/{currentPlayer?.maxStamina}</span></div>
                 <div className="text-text-secondary">LV: <span className="font-bold text-primary">{currentPlayer?.level}</span></div>
                 <div className="text-text-secondary">ATK: <span className="font-bold text-text-primary">{currentPlayer?.attack}</span></div>
                 <div className="text-text-secondary">DEF: <span className="font-bold text-text-primary">{currentPlayer?.defense}</span></div>
@@ -485,6 +537,7 @@ function CombatPageContent() {
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 text-xs">
                     <div className="text-text-secondary">HP: <span className="font-bold text-error">{opponent.hp}/{opponent.maxHp}</span></div>
                     <div className="text-text-secondary">MP: <span className="font-bold text-blue-400">{opponent.mp}/{opponent.maxMp}</span></div>
+                    <div className="text-text-secondary">⚡: <span className="font-bold text-yellow-400">{opponent.stamina}/{opponent.maxStamina}</span></div>
                     <div className="text-text-secondary">LV: <span className="font-bold text-text-primary">{opponent.level}</span></div>
                     <div className="text-text-secondary">ATK: <span className="font-bold text-text-primary">{opponent.attack}</span></div>
                     <div className="text-text-secondary">DEF: <span className="font-bold text-text-primary">{opponent.defense}</span></div>
@@ -611,22 +664,33 @@ function CombatPageContent() {
                 <div className="space-y-2">
                   <button
                     onClick={() => handlePlayerAction(ActionType.LIGHT_ATTACK)}
-                    className="w-full bg-gradient-to-r from-warning to-yellow-500 hover:from-yellow-500 hover:to-warning text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
+                    disabled={!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.LIGHT_ATTACK]}
+                    className={`w-full ${!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.LIGHT_ATTACK] 
+                      ? 'bg-gray-600 opacity-50 cursor-not-allowed' 
+                      : 'bg-gradient-to-r from-warning to-yellow-500 hover:from-yellow-500 hover:to-warning'
+                    } text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                   >
-                    👊 Ataque Leve (d6)
+                    👊 Ataque Leve (d6, {STAMINA_COSTS[ActionType.LIGHT_ATTACK]}⚡)
                   </button>
                   <button
                     onClick={() => handlePlayerAction(ActionType.HEAVY_ATTACK)}
-                    className="w-full bg-gradient-to-r from-error to-red-600 hover:from-red-600 hover:to-error text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
+                    disabled={!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.HEAVY_ATTACK]}
+                    className={`w-full ${!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.HEAVY_ATTACK] 
+                      ? 'bg-gray-600 opacity-50 cursor-not-allowed' 
+                      : 'bg-gradient-to-r from-error to-red-600 hover:from-red-600 hover:to-error'
+                    } text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                   >
-                    ⚔️ Ataque Pesado (d10)
+                    ⚔️ Ataque Pesado (d10, {STAMINA_COSTS[ActionType.HEAVY_ATTACK]}⚡)
                   </button>
                   <button
                     onClick={() => handlePlayerAction(ActionType.SPECIAL_ATTACK)}
-                    disabled={!currentPlayer || currentPlayer.mp < 15}
-                    className="w-full bg-gradient-to-r from-primary to-primary-dark hover:shadow-lg hover:shadow-primary/25 disabled:from-gray-600 disabled:to-gray-700 disabled:opacity-50 text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg disabled:hover:scale-100"
+                    disabled={!currentPlayer || currentPlayer.mp < 15 || currentPlayer.stamina < STAMINA_COSTS[ActionType.SPECIAL_ATTACK]}
+                    className={`w-full ${!currentPlayer || currentPlayer.mp < 15 || currentPlayer.stamina < STAMINA_COSTS[ActionType.SPECIAL_ATTACK]
+                      ? 'bg-gray-600 opacity-50 cursor-not-allowed' 
+                      : 'bg-gradient-to-r from-primary to-primary-dark hover:shadow-lg hover:shadow-primary/25'
+                    } text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                   >
-                    ✨ Especial (d20, 15🔮)
+                    ✨ Especial (d20, 15🔮, {STAMINA_COSTS[ActionType.SPECIAL_ATTACK]}⚡)
                   </button>
                   
                   <div className="border-t border-white/10 my-3"></div>
@@ -645,15 +709,23 @@ function CombatPageContent() {
                   </div>
                   <button
                     onClick={() => handleDefenseChoice('dodge')}
-                    className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-blue-600 hover:to-cyan-600 text-white py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
+                    disabled={!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.DODGE]}
+                    className={`w-full ${!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.DODGE]
+                      ? 'bg-gray-600 opacity-50 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-blue-600 hover:to-cyan-600'
+                    } text-white py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                   >
-                    🌪️ Esquivar
+                    🌪️ Esquivar ({STAMINA_COSTS[ActionType.DODGE]}⚡)
                   </button>
                   <button
                     onClick={() => handleDefenseChoice('defend')}
-                    className="w-full bg-gradient-to-r from-emerald-600 to-green-600 hover:from-green-600 hover:to-emerald-600 text-white py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
+                    disabled={!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.DEFEND]}
+                    className={`w-full ${!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.DEFEND]
+                      ? 'bg-gray-600 opacity-50 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-emerald-600 to-green-600 hover:from-green-600 hover:to-emerald-600'
+                    } text-white py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                   >
-                    🛡️ Defender
+                    🛡️ Defender ({STAMINA_COSTS[ActionType.DEFEND]}⚡)
                   </button>
                 </div>
               ) : (

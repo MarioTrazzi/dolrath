@@ -120,7 +120,6 @@ function CombatPageContent() {
   const [pendingAction, setPendingAction] = useState<{action: ActionType, diceType: number} | null>(null)
   const [pendingDefense, setPendingDefense] = useState<{reaction: string, diceType: number} | null>(null)
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting')
-  const [showReactionButtons, setShowReactionButtons] = useState(false)
   const [hasRolledInitiative, setHasRolledInitiative] = useState(false)
 
   const combatLogRef = useRef<HTMLDivElement>(null)
@@ -157,6 +156,8 @@ function CombatPageContent() {
 
       socket.on('room_updated', (room: CombatRoom) => {
         console.log('🔄 Sala atualizada:', room)
+        console.log('📊 Fase atual:', room.phase)
+        console.log('🎯 Pending Action:', room.pendingAction)
         setCombatRoom(room)
 
         // Reset iniciativa quando sala é resetada
@@ -164,21 +165,22 @@ function CombatPageContent() {
           setHasRolledInitiative(false)
         }
         
-        // Quando entrar na fase DICE_ROLL, ambos precisam ver os dados
+        // APENAS na fase DICE_ROLL, setamos para ambos verem os dados
         if (room.phase === CombatPhase.DICE_ROLL && room.pendingAction) {
-          // Ambos setam o pendingAction e pendingDefense para verem os dados
+          // Ambos setam o mesmo diceType para rolar o mesmo dado
+          const diceType = room.pendingAction.diceType
           setPendingAction({
             action: room.pendingAction.action,
-            diceType: room.pendingAction.diceType
+            diceType: diceType
           })
           setPendingDefense({
-            reaction: 'defending', // Valor padrão para mostrar os dados
-            diceType: room.pendingAction.diceType // MESMO dado do ataque
+            reaction: 'defending',
+            diceType: diceType // MESMO dado do ataque
           })
         }
         
-        // Limpar estados pendentes quando mudança de fase para PLAYER_TURN
-        if (room.phase === CombatPhase.PLAYER_TURN) {
+        // Limpar estados quando NÃO está na fase DICE_ROLL
+        if (room.phase !== CombatPhase.DICE_ROLL) {
           setPendingAction(null)
           setPendingDefense(null)
         }
@@ -191,8 +193,7 @@ function CombatPageContent() {
 
       socket.on('dice_rolled', (data: {playerId: string, sides: number, result: any}) => {
         console.log('🎲 Dado rolado:', data)
-        setPendingAction(null)
-        setPendingDefense(null)
+        // NÃO limpar pendingStates aqui - deixar o servidor controlar as fases
       })
 
       socket.on('action_selected', (data: {action: ActionType, diceType: number}) => {
@@ -666,17 +667,15 @@ function CombatPageContent() {
             {/* Combat Log removido - agora tudo está unificado no chat */}
           </div>
 
-          {/* Dice Panel */}
-          {combatRoom?.phase === CombatPhase.DICE_ROLL && (
-            pendingAction || pendingDefense
-          ) && (
+          {/* Dice Panel - SÓ aparece na fase DICE_ROLL */}
+          {combatRoom?.phase === CombatPhase.DICE_ROLL && combatRoom?.pendingAction && (
             <div className="bg-gradient-to-br from-surface/95 to-background/90 backdrop-blur-md border-t border-white/10 p-2 sm:p-3 flex-shrink-0">
               <h3 className="text-text-primary font-bold text-center mb-2 text-xs sm:text-sm">
-                🎲 Role o dado {pendingAction?.diceType === 6 ? 'leve' : pendingAction?.diceType === 10 ? 'pesado' : 'especial'} (d{pendingAction?.diceType || pendingDefense?.diceType})
+                🎲 Role o dado {combatRoom?.pendingAction?.diceType === 6 ? 'leve' : combatRoom?.pendingAction?.diceType === 10 ? 'pesado' : 'especial'} (d{combatRoom?.pendingAction?.diceType})
               </h3>
               <div className="flex justify-center space-x-2 sm:space-x-3 flex-wrap">
                 {[4, 6, 8, 10, 12, 20].map((sides) => {
-                  const correctDiceType = pendingAction?.diceType || pendingDefense?.diceType
+                  const correctDiceType = combatRoom?.pendingAction?.diceType
                   const isCorrectDice = correctDiceType === sides
                   
                   return (

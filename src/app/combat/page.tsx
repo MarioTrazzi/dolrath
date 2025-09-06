@@ -198,6 +198,18 @@ function CombatPageContent() {
           player2Ready: room.player2?.isReady,
           isActive: room.isActive 
         })
+        
+        // ⚡ DETECTAR MUDANÇA DE FASE CRÍTICA PARA INITIATIVE_ROLL
+        if (room.phase === CombatPhase.INITIATIVE_ROLL && room.isActive) {
+          console.log('🚨🚨🚨 FASE CRÍTICA DETECTADA: INITIATIVE_ROLL - DEVE MOSTRAR D20! 🚨🚨🚨')
+          console.log('🎯 Estado atual do room:', {
+            phase: room.phase,
+            isActive: room.isActive,
+            player1Ready: room.player1?.isReady,
+            player2Ready: room.player2?.isReady
+          })
+        }
+        
         setCombatRoom(room)
 
         // 🔥 SEMPRE atualizar currentPlayer e opponent quando a sala muda

@@ -11,13 +11,48 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  console.log('🔍 DEBUG - Criação de personagem:')
+  console.log('Session user ID:', session.user.id)
+  console.log('Session user email:', session.user.email)
+
   // Verify user exists in the database
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
   });
 
+  console.log('User found in database:', user ? {
+    id: user.id,
+    email: user.email,
+    name: user.name
+  } : 'null')
+
   if (!user) {
-    return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    // Tentar buscar por email como fallback
+    const userByEmail = await prisma.user.findUnique({
+      where: { email: session.user.email || '' },
+    });
+    
+    console.log('User by email fallback:', userByEmail ? {
+      id: userByEmail.id,
+      email: userByEmail.email,
+      name: userByEmail.name
+    } : 'null')
+    
+    if (userByEmail) {
+      console.log('⚠️ AVISO: Usuário encontrado por email mas ID da sessão não confere!')
+      console.log('ID da sessão:', session.user.id)
+      console.log('ID no banco:', userByEmail.id)
+    }
+    
+    return NextResponse.json({ 
+      error: 'User not found',
+      debug: {
+        sessionUserId: session.user.id,
+        sessionUserEmail: session.user.email,
+        userFoundById: !!user,
+        userFoundByEmail: !!userByEmail
+      }
+    }, { status: 404 });
   }
 
 

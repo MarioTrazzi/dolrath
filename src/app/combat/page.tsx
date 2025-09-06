@@ -135,6 +135,10 @@ function CombatPageContent() {
 
   const combatLogRef = useRef<HTMLDivElement>(null)
 
+  // 🔥 CORREÇÃO: Calcular currentPlayer da mesma forma que opponent (sempre atualizado)
+  const currentPlayerFromRoom = combatRoom?.player1?.id === currentPlayer?.id ? combatRoom?.player1 : combatRoom?.player2
+  const displayCurrentPlayer = currentPlayerFromRoom || currentPlayer // Usar dados da sala se disponível, senão o estado local
+  
   const opponent = combatRoom?.player1?.id === currentPlayer?.id ? combatRoom?.player2 : combatRoom?.player1
   const isMyTurn = combatRoom?.currentTurn === currentPlayer?.id
   const isWinner = combatRoom?.winner === currentPlayer?.id
@@ -171,42 +175,7 @@ function CombatPageContent() {
         console.log('🎯 Pending Action:', room.pendingAction)
         setCombatRoom(room)
 
-        // Atualizar currentPlayer com dados da sala quando houver mudanças
-        if (room && currentPlayer?.id) {
-          // 🔥 CORREÇÃO: Simplificar lógica de atualização
-          let updatedPlayerData = null
-          
-          if (room.player1?.id === currentPlayer.id) {
-            updatedPlayerData = room.player1
-          } else if (room.player2?.id === currentPlayer.id) {
-            updatedPlayerData = room.player2
-          }
-          
-          if (updatedPlayerData) {
-            console.log('🔄 Atualizando currentPlayer:', {
-              name: updatedPlayerData.name,
-              hp: `${updatedPlayerData.hp}/${updatedPlayerData.maxHp}`,
-              mp: `${updatedPlayerData.mp}/${updatedPlayerData.maxMp}`,
-              stamina: `${updatedPlayerData.stamina}/${updatedPlayerData.maxStamina}`
-            })
-            
-            setCurrentPlayer(prev => {
-              if (!prev) return updatedPlayerData // Se não tem prev, usar o novo
-              return {
-                ...prev,
-                hp: updatedPlayerData.hp,
-                maxHp: updatedPlayerData.maxHp,
-                mp: updatedPlayerData.mp,
-                maxMp: updatedPlayerData.maxMp,
-                stamina: updatedPlayerData.stamina,
-                maxStamina: updatedPlayerData.maxStamina,
-                // Manter outros dados do personagem que não mudam no combate
-              }
-            })
-          } else {
-            console.log('❌ updatedPlayerData não encontrado para currentPlayer.id:', currentPlayer.id)
-          }
-        }
+        // 🔥 CORREÇÃO: Não mais atualizamos currentPlayer aqui - será calculado como o opponent
 
         // Reset iniciativa quando sala é resetada
         if (room.phase === CombatPhase.WAITING_PLAYERS) {
@@ -378,15 +347,15 @@ function CombatPageContent() {
     }
   }, [socket, roomId, isRoomCreator, characterId])
 
-  // 🔥 FORÇA re-render quando currentPlayer ou opponent mudam
+  // 🔥 FORÇA re-render quando displayCurrentPlayer ou opponent mudam
   useEffect(() => {
-    if (currentPlayer) {
-      console.log('🔄 CurrentPlayer updated:', currentPlayer.name, `${currentPlayer.hp}/${currentPlayer.maxHp} HP`)
+    if (displayCurrentPlayer) {
+      console.log('🔄 DisplayCurrentPlayer updated:', displayCurrentPlayer.name, `${displayCurrentPlayer.hp}/${displayCurrentPlayer.maxHp} HP`)
     }
     if (opponent) {
       console.log('🔄 Opponent updated:', opponent.name, `${opponent.hp}/${opponent.maxHp} HP`)
     }
-  }, [currentPlayer?.hp, currentPlayer?.mp, currentPlayer?.stamina, opponent?.hp, opponent?.mp, opponent?.stamina])
+  }, [displayCurrentPlayer?.hp, displayCurrentPlayer?.mp, displayCurrentPlayer?.stamina, opponent?.hp, opponent?.mp, opponent?.stamina])
 
   const toggleReady = () => {
     if (!currentPlayer) return
@@ -578,20 +547,20 @@ function CombatPageContent() {
           <div className="bg-background/30 border-b border-white/10 p-2 sm:p-3 flex flex-col sm:flex-row gap-2 sm:gap-0 flex-shrink-0">
             {/* Current Player Status */}
             <div className="bg-gradient-to-br from-success/20 to-success/10 border border-success/30 rounded-xl p-2 sm:p-3 flex-1 sm:mr-3 backdrop-blur-sm">
-              <h3 className="font-bold text-success mb-2 text-xs sm:text-sm">{currentPlayer?.name} (Você)</h3>
+              <h3 className="font-bold text-success mb-2 text-xs sm:text-sm">{displayCurrentPlayer?.name} (Você)</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 text-xs">
-                <div className="text-text-secondary">HP: <span className="font-bold text-error">{currentPlayer?.hp}/{currentPlayer?.maxHp}</span></div>
-                <div className="text-text-secondary">MP: <span className="font-bold text-blue-400">{currentPlayer?.mp}/{currentPlayer?.maxMp}</span></div>
-                <div className="text-text-secondary">⚡: <span className="font-bold text-yellow-400">{currentPlayer?.stamina}/{currentPlayer?.maxStamina}</span></div>
-                <div className="text-text-secondary">LV: <span className="font-bold text-primary">{currentPlayer?.level}</span></div>
-                <div className="text-text-secondary">ATK: <span className="font-bold text-text-primary">{currentPlayer?.attack}</span></div>
-                <div className="text-text-secondary">DEF: <span className="font-bold text-text-primary">{currentPlayer?.defense}</span></div>
-                <div className="text-text-secondary hidden sm:block">STR: <span className="font-bold text-yellow-400">{currentPlayer?.strength}</span></div>
-                <div className="text-text-secondary hidden sm:block">AGI: <span className="font-bold text-cyan-400">{currentPlayer?.agility}</span></div>
-                <div className="text-text-secondary hidden sm:block">INT: <span className="font-bold text-purple-400">{currentPlayer?.intelligence}</span></div>
-                <div className="text-text-secondary hidden sm:block">RES: <span className="font-bold text-green-400">{currentPlayer?.resistance}</span></div>
-                <div className="text-text-secondary hidden sm:block">CRIT: <span className="font-bold text-yellow-300">{currentPlayer?.critical}%</span></div>
-                <div className="text-text-secondary hidden sm:block">SPD: <span className="font-bold text-emerald-400">{currentPlayer?.speed}</span></div>
+                <div className="text-text-secondary">HP: <span className="font-bold text-error">{displayCurrentPlayer?.hp}/{displayCurrentPlayer?.maxHp}</span></div>
+                <div className="text-text-secondary">MP: <span className="font-bold text-blue-400">{displayCurrentPlayer?.mp}/{displayCurrentPlayer?.maxMp}</span></div>
+                <div className="text-text-secondary">⚡: <span className="font-bold text-yellow-400">{displayCurrentPlayer?.stamina}/{displayCurrentPlayer?.maxStamina}</span></div>
+                <div className="text-text-secondary">LV: <span className="font-bold text-primary">{displayCurrentPlayer?.level}</span></div>
+                <div className="text-text-secondary">ATK: <span className="font-bold text-text-primary">{displayCurrentPlayer?.attack}</span></div>
+                <div className="text-text-secondary">DEF: <span className="font-bold text-text-primary">{displayCurrentPlayer?.defense}</span></div>
+                <div className="text-text-secondary hidden sm:block">STR: <span className="font-bold text-yellow-400">{displayCurrentPlayer?.strength}</span></div>
+                <div className="text-text-secondary hidden sm:block">AGI: <span className="font-bold text-cyan-400">{displayCurrentPlayer?.agility}</span></div>
+                <div className="text-text-secondary hidden sm:block">INT: <span className="font-bold text-purple-400">{displayCurrentPlayer?.intelligence}</span></div>
+                <div className="text-text-secondary hidden sm:block">RES: <span className="font-bold text-green-400">{displayCurrentPlayer?.resistance}</span></div>
+                <div className="text-text-secondary hidden sm:block">CRIT: <span className="font-bold text-yellow-300">{displayCurrentPlayer?.critical}%</span></div>
+                <div className="text-text-secondary hidden sm:block">SPD: <span className="font-bold text-emerald-400">{displayCurrentPlayer?.speed}</span></div>
               </div>
             </div>
 
@@ -730,8 +699,8 @@ function CombatPageContent() {
                 <div className="space-y-2">
                   <button
                     onClick={() => handlePlayerAction(ActionType.LIGHT_ATTACK)}
-                    disabled={!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.LIGHT_ATTACK]}
-                    className={`w-full ${!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.LIGHT_ATTACK] 
+                    disabled={!displayCurrentPlayer || displayCurrentPlayer.stamina < STAMINA_COSTS[ActionType.LIGHT_ATTACK]}
+                    className={`w-full ${!displayCurrentPlayer || displayCurrentPlayer.stamina < STAMINA_COSTS[ActionType.LIGHT_ATTACK] 
                       ? 'bg-gray-600 opacity-50 cursor-not-allowed' 
                       : 'bg-gradient-to-r from-warning to-yellow-500 hover:from-yellow-500 hover:to-warning'
                     } text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
@@ -740,8 +709,8 @@ function CombatPageContent() {
                   </button>
                   <button
                     onClick={() => handlePlayerAction(ActionType.HEAVY_ATTACK)}
-                    disabled={!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.HEAVY_ATTACK]}
-                    className={`w-full ${!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.HEAVY_ATTACK] 
+                    disabled={!displayCurrentPlayer || displayCurrentPlayer.stamina < STAMINA_COSTS[ActionType.HEAVY_ATTACK]}
+                    className={`w-full ${!displayCurrentPlayer || displayCurrentPlayer.stamina < STAMINA_COSTS[ActionType.HEAVY_ATTACK] 
                       ? 'bg-gray-600 opacity-50 cursor-not-allowed' 
                       : 'bg-gradient-to-r from-error to-red-600 hover:from-red-600 hover:to-error'
                     } text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
@@ -750,8 +719,8 @@ function CombatPageContent() {
                   </button>
                   <button
                     onClick={() => handlePlayerAction(ActionType.SPECIAL_ATTACK)}
-                    disabled={!currentPlayer || currentPlayer.mp < 15 || currentPlayer.stamina < STAMINA_COSTS[ActionType.SPECIAL_ATTACK]}
-                    className={`w-full ${!currentPlayer || currentPlayer.mp < 15 || currentPlayer.stamina < STAMINA_COSTS[ActionType.SPECIAL_ATTACK]
+                    disabled={!displayCurrentPlayer || displayCurrentPlayer.mp < 15 || displayCurrentPlayer.stamina < STAMINA_COSTS[ActionType.SPECIAL_ATTACK]}
+                    className={`w-full ${!displayCurrentPlayer || displayCurrentPlayer.mp < 15 || displayCurrentPlayer.stamina < STAMINA_COSTS[ActionType.SPECIAL_ATTACK]
                       ? 'bg-gray-600 opacity-50 cursor-not-allowed' 
                       : 'bg-gradient-to-r from-primary to-primary-dark hover:shadow-lg hover:shadow-primary/25'
                     } text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
@@ -775,8 +744,8 @@ function CombatPageContent() {
                   </div>
                   <button
                     onClick={() => handleDefenseChoice('dodge')}
-                    disabled={!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.DODGE]}
-                    className={`w-full ${!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.DODGE]
+                    disabled={!displayCurrentPlayer || displayCurrentPlayer.stamina < STAMINA_COSTS[ActionType.DODGE]}
+                    className={`w-full ${!displayCurrentPlayer || displayCurrentPlayer.stamina < STAMINA_COSTS[ActionType.DODGE]
                       ? 'bg-gray-600 opacity-50 cursor-not-allowed'
                       : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-blue-600 hover:to-cyan-600'
                     } text-white py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
@@ -785,8 +754,8 @@ function CombatPageContent() {
                   </button>
                   <button
                     onClick={() => handleDefenseChoice('defend')}
-                    disabled={!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.DEFEND]}
-                    className={`w-full ${!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.DEFEND]
+                    disabled={!displayCurrentPlayer || displayCurrentPlayer.stamina < STAMINA_COSTS[ActionType.DEFEND]}
+                    className={`w-full ${!displayCurrentPlayer || displayCurrentPlayer.stamina < STAMINA_COSTS[ActionType.DEFEND]
                       ? 'bg-gray-600 opacity-50 cursor-not-allowed'
                       : 'bg-gradient-to-r from-emerald-600 to-green-600 hover:from-green-600 hover:to-emerald-600'
                     } text-white py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}

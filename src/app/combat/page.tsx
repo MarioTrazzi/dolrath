@@ -233,9 +233,16 @@ function CombatPageContent() {
             setCurrentPlayer(updatedPlayerData)
             console.log('✅ CurrentPlayer atualizado:', updatedPlayerData.name, `${updatedPlayerData.hp}/${updatedPlayerData.maxHp} HP`)
             
-            // 🔥 SINCRONIZAR estado isReady com dados do servidor
-            setIsReady(updatedPlayerData.isReady || false)
-            console.log('🔄 IsReady sincronizado:', updatedPlayerData.isReady)
+            // 🔥 SINCRONIZAR estado isReady APENAS com o player atual (não com qualquer player)
+            // Só sincronizar se este updatedPlayerData corresponde ao nosso currentPlayer
+            if (currentPlayer?.id && updatedPlayerData.id === currentPlayer.id) {
+              setIsReady(updatedPlayerData.isReady || false)
+              console.log('🔄 IsReady sincronizado para player próprio:', updatedPlayerData.isReady)
+            } else if (!currentPlayer?.id) {
+              // Se ainda não temos currentPlayer definido, aceitar o primeiro
+              setIsReady(updatedPlayerData.isReady || false)
+              console.log('🔄 IsReady inicializado:', updatedPlayerData.isReady)
+            }
           }
           
           // Atualizar opponent se encontrado (pode ser null se só tem 1 player)

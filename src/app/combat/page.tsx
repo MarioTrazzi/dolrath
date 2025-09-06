@@ -172,10 +172,17 @@ function CombatPageContent() {
         setCombatRoom(room)
 
         // Atualizar currentPlayer com dados da sala quando houver mudanças
-        if (room) {
-          // 🔥 CORREÇÃO: Atualizar SEMPRE que há dados do servidor
-          const updatedPlayerData = room.player1?.id === currentPlayer?.id ? room.player1 : room.player2
-          if (updatedPlayerData && currentPlayer?.id === updatedPlayerData.id) {
+        if (room && currentPlayer?.id) {
+          // 🔥 CORREÇÃO: Simplificar lógica de atualização
+          let updatedPlayerData = null
+          
+          if (room.player1?.id === currentPlayer.id) {
+            updatedPlayerData = room.player1
+          } else if (room.player2?.id === currentPlayer.id) {
+            updatedPlayerData = room.player2
+          }
+          
+          if (updatedPlayerData) {
             console.log('🔄 Atualizando currentPlayer:', {
               name: updatedPlayerData.name,
               hp: `${updatedPlayerData.hp}/${updatedPlayerData.maxHp}`,
@@ -196,6 +203,8 @@ function CombatPageContent() {
                 // Manter outros dados do personagem que não mudam no combate
               }
             })
+          } else {
+            console.log('❌ updatedPlayerData não encontrado para currentPlayer.id:', currentPlayer.id)
           }
         }
 

@@ -35,25 +35,25 @@ export interface TransformationConfig {
   vulnerabilities: string[]
 }
 
-// 🔥 CONFIGURAÇÕES DE TRANSFORMAÇÃO
+// 🔥 CONFIGURAÇÕES DE TRANSFORMAÇÃO BALANCEADAS
 export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationConfig> = {
-  // Draconiano - Transformação única e poderosa
+  // Draconiano - Transformação única e poderosa mas balanceada
   dragon: {
     name: '🐉 Dragão',
     description: 'Transformação ancestral dracônica que aumenta drasticamente força e resistência',
     duration: 4,           // 4 turnos de duração
-    cooldown: 8,          // 8 turnos de cooldown
-    cost: { mp: 40, stamina: 50 }, // Custo alto
+    cooldown: 6,          // Era 8 - reduzido para permitir mais uso
+    cost: { mp: 35, stamina: 40 }, // Era 40/50 - ligeiramente reduzido
     
-    // Multiplicadores aplicados aos stats atuais
+    // Multiplicadores balanceados
     statModifiers: {
-      strength: 1.8,        // +80% STR (super dano)
-      defense: 1.6,         // +60% DEF (tanque)
-      hp: 1.5,             // +50% HP atual e máximo
-      agility: 0.7,        // -30% AGI (mais lento)
-      intelligence: 0.8,    // -20% INT (menos magia)
-      attack: 1.8,         // +80% ataque
-      critical: 1.3        // +30% chance crítica
+      strength: 1.6,        // Era 1.8 - reduzido para balancear
+      defense: 1.5,         // Era 1.6 - ligeiramente reduzido
+      hp: 1.4,             // Era 1.5 - reduzido
+      agility: 0.8,        // Era 0.7 - melhorado (menos lento)
+      intelligence: 0.9,    // Era 0.8 - melhorado
+      attack: 1.6,         // Era 1.8 - balanceado
+      critical: 1.3        // Mantido
     },
     
     // Habilidades especiais exclusivas durante transformação
@@ -62,23 +62,23 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
         id: 'dragon_breath',
         name: '🔥 Sopro de Fogo',
         description: 'Ataque devastador que ignora 50% da defesa',
-        damage: 'dado + (STR * 2.0)',
-        cost: { stamina: 15 },
+        damage: 'dado + (STR * 1.8)', // Era 2.0 - balanceado
+        cost: { stamina: 12 }, // Era 15 - reduzido
         effect: 'ignores_50_percent_defense'
       },
       {
         id: 'dragon_roar',
         name: '🦅 Rugido Dracônico', 
         description: 'Intimida o oponente, reduzindo seu ataque por 2 turnos',
-        cost: { stamina: 10 },
+        cost: { stamina: 8 }, // Era 10 - reduzido
         effect: 'reduce_enemy_attack_20_percent_2_turns'
       },
       {
         id: 'dragon_scales',
         name: '🛡️ Escamas Dracônicas',
-        description: 'Reduz todo dano recebido em 5 pontos por 3 turnos',
-        cost: { mp: 15 },
-        effect: 'damage_reduction_5_for_3_turns'
+        description: 'Reduz todo dano recebido em 4 pontos por 3 turnos',
+        cost: { mp: 12 }, // Era 15 - reduzido
+        effect: 'damage_reduction_4_for_3_turns'
       }
     ],
     
@@ -87,17 +87,17 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
     vulnerabilities: ['ice', 'magic_piercing']
   },
 
-  // Metamorfo - Múltiplas formas especializadas
+  // Metamorfo - Múltiplas formas especializadas e balanceadas
   wolf: {
     name: '🐺 Lobo',
     description: 'Forma predatória focada em velocidade e ataques críticos',
-    duration: 5,           // 5 turnos (mais duração que dragão)
-    cooldown: 6,          // Cooldown menor
-    cost: { mp: 25, stamina: 35 },
+    duration: 4,           // Era 5 - reduzido para balancear
+    cooldown: 4,          // Era 6 - balanceado
+    cost: { mp: 20, stamina: 30 }, // Era 25/35 - reduzido
     
     statModifiers: {
-      agility: 2.2,        // +120% AGI (super velocidade)
-      strength: 1.4,       // +40% STR (garras afiadas)
+      agility: 1.8,        // Era 2.2 - reduzido mas ainda alto
+      strength: 1.3,       // Era 1.4 - ligeiramente reduzido
       critical: 2.5,       // +150% chance crítica
       attack: 1.4,         // +40% ataque
       defense: 0.8,        // -20% DEF (mais frágil)

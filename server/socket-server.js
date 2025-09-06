@@ -4,6 +4,126 @@ const { Server } = require('socket.io')
 // Configuração de porta - Railway usa PORT, Heroku também
 const PORT = process.env.PORT || 3001
 
+// 🐉 SISTEMA DE TRANSFORMAÇÃO INTEGRADO
+const TRANSFORMATION_CONFIG = {
+  dragon: {
+    name: '🐉 Dragão',
+    duration: 4,
+    statModifiers: {
+      strength: 1.8,
+      defense: 1.6,
+      hp: 1.5,
+      agility: 0.7,
+      intelligence: 0.8,
+      attack: 1.8,
+      critical: 1.3
+    },
+    specialAbilities: ['dragon_breath', 'dragon_roar', 'dragon_scales']
+  },
+  wolf: {
+    name: '🐺 Lobo',
+    duration: 5,
+    statModifiers: {
+      agility: 2.2,
+      strength: 1.4,
+      critical: 2.5,
+      attack: 1.4,
+      defense: 0.8,
+      hp: 0.9,
+      intelligence: 0.7
+    },
+    specialAbilities: ['pack_hunt', 'howl', 'bite_bleeding']
+  },
+  bear: {
+    name: '🐻 Urso',
+    duration: 6,
+    statModifiers: {
+      strength: 1.7,
+      defense: 2.0,
+      hp: 1.8,
+      agility: 0.5,
+      critical: 0.4,
+      attack: 1.7,
+      intelligence: 0.6
+    },
+    specialAbilities: ['bear_hug', 'intimidating_roar', 'unstoppable_charge']
+  },
+  eagle: {
+    name: '🦅 Águia',
+    duration: 4,
+    statModifiers: {
+      agility: 2.8,
+      intelligence: 1.6,
+      critical: 3.0,
+      attack: 1.2,
+      strength: 0.6,
+      defense: 0.4,
+      hp: 0.7
+    },
+    specialAbilities: ['dive_attack', 'aerial_superiority', 'keen_sight']
+  }
+}
+
+// Função para processar fim de turno das transformações
+function processTransformationTurns(room) {
+  ['player1', 'player2'].forEach(playerKey => {
+    const player = room[playerKey]
+    if (player?.isTransformed && player.transformationData) {
+      player.transformationData.remainingTurns--
+      
+      if (player.transformationData.remainingTurns <= 0) {
+        // Reverter transformação automaticamente
+        revertPlayerTransformation(player)
+        room.combatLog.push({
+          type: 'system',
+          message: `⏰ Transformação de ${player.name} expirou!`,
+          timestamp: new Date()
+        })
+      }
+    }
+    
+    // Reduzir cooldown
+    if (player?.transformationData?.cooldownTurns > 0) {
+      player.transformationData.cooldownTurns--
+    }
+  })
+}
+
+function revertPlayerTransformation(player) {
+  if (!player.isTransformed || !player.transformationData) return
+  
+  const original = player.transformationData.originalStats
+  const config = TRANSFORMATION_CONFIG[player.transformationType]
+  
+  // Restaurar stats originais
+  player.strength = original.strength
+  player.agility = original.agility
+  player.intelligence = original.intelligence
+  player.defense = original.defense
+  player.hp = Math.min(player.hp, original.maxHp)
+  player.maxHp = original.maxHp
+  player.baseStats = {
+    ...player.baseStats,
+    str: original.strength,
+    agi: original.agility,
+    int: original.intelligence,
+    def: original.defense,
+    attack: original.attack,
+    critical: original.critical,
+    hp: Math.min(player.hp, original.maxHp),
+    maxHp: original.maxHp
+  }
+  
+  // Marcar como não transformado e iniciar cooldown
+  player.isTransformed = false
+  player.transformationType = null
+  player.transformationData = {
+    ...player.transformationData,
+    cooldownTurns: config.cooldown,
+    remainingTurns: 0
+  }
+}
+
 const httpServer = createServer()
 const io = new Server(httpServer, {
   cors: {
@@ -173,9 +293,173 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('room_updated', room)
   })
 
+  // 🐉 HANDLER DE TRANSFORMAÇÃO
+  socket.on('transform', ({ playerId, roomId, transformationType }) => {
+    const room = rooms.get(roomId)
+    if (!room) return
+
+    const player = room.player1?.id === playerId ? room.player1 : room.player2
+    if (!player) return
+
+    // Verificar se pode transformar
+    if (player.isTransformed) {
+      socket.emit('error', { message: 'Já está transformado!' })
+      return
+    }
+
+    const config = TRANSFORMATION_CONFIG[transformationType]
+    if (!config) {
+      socket.emit('error', { message: 'Tipo de transformação inválido!' })
+      return
+    }
+
+    // Verificar raça
+    const validRace = (player.race === 'draconiano' && transformationType === 'dragon') ||
+                     (player.race === 'metamorfo' && ['wolf', 'bear', 'eagle'].includes(transformationType))
+    
+    if (!validRace) {
+      socket.emit('error', { message: 'Sua raça não pode usar essa transformação!' })
+      return
+    }
+
+    // Verificar cooldown
+    if (player.transformationData?.cooldownTurns > 0) {
+      socket.emit('error', { 
+        message: `Transformação em cooldown: ${player.transformationData.cooldownTurns} turnos restantes!` 
+      })
+      return
+    }
+
+    // Verificar custos
+    const requiredMp = transformationType === 'dragon' ? 40 : transformationType === 'bear' ? 30 : 25
+    const requiredStamina = transformationType === 'dragon' ? 50 : transformationType === 'bear' ? 40 : 35
+
+    if (player.mp < requiredMp || player.stamina < requiredStamina) {
+      socket.emit('error', { 
+        message: `Recursos insuficientes! Precisa de ${requiredMp} MP e ${requiredStamina} Stamina` 
+      })
+      return
+    }
+
+    // Salvar stats originais
+    const originalStats = {
+      strength: player.baseStats?.str || player.strength || 10,
+      agility: player.baseStats?.agi || player.agility || 10,
+      intelligence: player.baseStats?.int || player.intelligence || 10,
+      defense: player.baseStats?.def || player.defense || 10,
+      hp: player.hp,
+      maxHp: player.maxHp,
+      attack: player.baseStats?.attack || 10,
+      critical: player.baseStats?.critical || 0.05
+    }
+
+    // Aplicar transformação
+    player.isTransformed = true
+    player.transformationType = transformationType
+    player.transformationData = {
+      remainingTurns: config.duration,
+      cooldownTurns: 0,
+      originalStats,
+      specialAbilities: config.specialAbilities
+    }
+
+    // Aplicar multiplicadores
+    const newStr = Math.floor(originalStats.strength * config.statModifiers.strength)
+    const newAgi = Math.floor(originalStats.agility * config.statModifiers.agility)
+    const newInt = Math.floor(originalStats.intelligence * config.statModifiers.intelligence)
+    const newDef = Math.floor(originalStats.defense * config.statModifiers.defense)
+    const newAttack = Math.floor(originalStats.attack * config.statModifiers.attack)
+    const newCritical = originalStats.critical * config.statModifiers.critical
+
+    // Atualizar stats do player
+    player.baseStats = {
+      ...player.baseStats,
+      str: newStr,
+      agi: newAgi,
+      int: newInt,
+      def: newDef,
+      attack: newAttack,
+      critical: newCritical
+    }
+
+    // Aplicar modificador de HP se necessário
+    if (config.statModifiers.hp !== 1.0) {
+      const newMaxHp = Math.floor(originalStats.maxHp * config.statModifiers.hp)
+      const hpDifference = newMaxHp - originalStats.maxHp
+      player.hp = Math.min(player.hp + hpDifference, newMaxHp)
+      player.maxHp = newMaxHp
+      player.baseStats.hp = player.hp
+      player.baseStats.maxHp = newMaxHp
+    }
+
+    // Consumir recursos
+    player.mp -= requiredMp
+    player.stamina -= requiredStamina
+
+    room.combatLog.push({
+      type: 'transformation',
+      player: player.name,
+      message: `⚡ ${player.name} se transforma em ${config.name}! (${config.duration} turnos)`,
+      timestamp: new Date()
+    })
+
+    // Trocar turno após transformação
+    room.currentTurn = room.currentTurn === room.player1?.id ? room.player2?.id : room.player1?.id
+
+    io.to(roomId).emit('room_updated', room)
+    io.to(roomId).emit('transformation_applied', {
+      playerId,
+      transformationType,
+      config,
+      remainingTurns: config.duration
+    })
+  })
+
+  // Handler para usar habilidades especiais de transformação
+  socket.on('use_special_ability', ({ playerId, roomId, abilityId }) => {
+    const room = rooms.get(roomId)
+    if (!room || room.currentTurn !== playerId) return
+
+    const player = room.player1?.id === playerId ? room.player1 : room.player2
+    const opponent = room.player1?.id === playerId ? room.player2 : room.player1
+
+    if (!player?.isTransformed || !player.transformationData) {
+      socket.emit('error', { message: 'Você não está transformado!' })
+      return
+    }
+
+    const abilities = player.transformationData.specialAbilities
+    if (!abilities.includes(abilityId)) {
+      socket.emit('error', { message: 'Habilidade não disponível!' })
+      return
+    }
+
+    // Processar habilidade especial baseada no ID
+    let abilityResult = processSpecialAbility(player, opponent, abilityId)
+    
+    if (abilityResult.success) {
+      room.combatLog.push({
+        type: 'special_ability',
+        player: player.name,
+        message: abilityResult.message,
+        timestamp: new Date()
+      })
+
+      // Trocar turno
+      room.currentTurn = room.currentTurn === room.player1?.id ? room.player2?.id : room.player1?.id
+      
+      io.to(roomId).emit('room_updated', room)
+    } else {
+      socket.emit('error', { message: abilityResult.error })
+    }
+  })
+
   socket.on('player_action', ({ playerId, roomId, action, diceType, mpCost, staminaCost }) => {
     const room = rooms.get(roomId)
     if (!room || room.currentTurn !== playerId) return
+
+    // Processar fim de turno das transformações antes da ação
+    processTransformationTurns(room)
 
     const actionNames = {
       'light_attack': 'Ataque Leve',
@@ -394,62 +678,122 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
   let damage = 0
   let hit = false
   
-  // Calcular dano base por tipo de ataque
-  let baseDamage = attacker.attack || 10
+  // 🔥 SISTEMA DE DANO BALANCEADO
+  // Usar os novos stats balanceados baseados na fórmula STR × 1.2
+  const attackerPower = Math.floor((attacker.strength || attacker.attack || 10) * 1.2)
+  const defenderDefense = Math.floor((defender.defense || 5) * 0.8)
+  
+  // Calcular dano base por tipo de ataque + dado + stat
+  let baseDamage = attackRoll + attackerPower
   switch (attackAction) {
     case 'light_attack':
-      baseDamage = Math.floor(baseDamage * 0.8)
+      baseDamage = attackRoll + Math.floor(attackerPower * 0.8)  // Dado + 80% do STR
       break
     case 'heavy_attack':
-      baseDamage = Math.floor(baseDamage * 1.2)
+      baseDamage = attackRoll + Math.floor(attackerPower * 1.0)  // Dado + 100% do STR
       break
     case 'special_attack':
-      baseDamage = Math.floor(baseDamage * 1.8)
-      // MP já foi consumido no player_action, não aplicar novamente aqui
+      // Para especial, verificar se é físico ou mágico
+      const hasMagicPower = attacker.intelligence > (attacker.strength || 0)
+      if (hasMagicPower) {
+        // Ataque mágico baseado em INT
+        const magicPower = Math.floor((attacker.intelligence || 5) * 1.5)
+        baseDamage = attackRoll + magicPower  // Magia ignora defesa física
+      } else {
+        // Ataque físico especial
+        baseDamage = attackRoll + Math.floor(attackerPower * 1.3)
+      }
       break
   }
 
-  // Sistema de combate: Ataque vs Defesa
-  const attackTotal = attackRoll + baseDamage
-  const defenseTotal = defenseRoll + (defender.defense || 5)
-  
+  // Sistema de combate melhorado
   if (defenseAction === 'dodge') {
-    // Esquiva: sucesso total = sem dano, falha = dano cheio
-    const dodgeThreshold = 10 + (attacker.speed || 0) * 0.3
-    if (defenseRoll >= dodgeThreshold) {
+    // 🔥 ESQUIVA BASEADA EM AGI
+    const dodgeChance = (defender.agility || 5) * 0.3  // AGI × 0.3 = % de esquiva
+    const dodgeRoll = Math.random() * 100
+    
+    if (dodgeRoll < dodgeChance) {
+      // Esquiva bem-sucedida
       room.combatLog.push({
         type: 'result',
-        message: `🌪️ Esquiva perfeita! ${defender.name} evitou todo o dano!`,
+        message: `🌪️ Esquiva perfeita! ${defender.name} evitou todo o dano! (${dodgeChance.toFixed(1)}% chance)`,
         timestamp: new Date()
       })
     } else {
-      damage = Math.max(1, attackTotal - Math.floor(defenseTotal * 0.5))
+      // Esquiva falhou - dano total
+      damage = Math.max(1, baseDamage - Math.floor(defenderDefense * 0.3))
       hit = true
       room.combatLog.push({
         type: 'result',
-        message: `❌ Esquiva falhou! ${attackTotal} vs ${defenseTotal}`,
+        message: `❌ Esquiva falhou! (${dodgeChance.toFixed(1)}% chance)`,
         timestamp: new Date()
       })
     }
   } else if (defenseAction === 'defend') {
-    // Bloqueio: sempre reduz dano
-    const damageReduction = Math.min(0.7, Math.max(0.3, (defender.resistance || 0) / 100))
-    damage = Math.max(1, Math.floor(attackTotal * (1 - damageReduction)))
+    // 🔥 DEFESA BASEADA EM DEF
+    // DEF reduz dano diretamente
+    damage = Math.max(1, baseDamage - defenderDefense)
     hit = true
     room.combatLog.push({
       type: 'result',
-      message: `🛡️ Bloqueio! Dano reduzido em ${Math.floor(damageReduction * 100)}%`,
+      message: `🛡️ Bloqueio! Defesa absorveu ${defenderDefense} de dano`,
       timestamp: new Date()
     })
   }
 
+  // 🔥 SISTEMA DE CRÍTICO BASEADO EM AGI
+  if (hit) {
+    const criticalChance = ((attacker.agility || 5) * 0.8) + 5  // AGI × 0.8 + 5% base
+    const criticalRoll = Math.random() * 100
+    
+    if (criticalRoll < criticalChance) {
+      damage = Math.floor(damage * 1.8)  // +80% de dano
+      room.combatLog.push({
+        type: 'result',
+        message: `⚡ CRÍTICO! Dano aumentado em 80%! (${criticalChance.toFixed(1)}% chance)`,
+        timestamp: new Date()
+      })
+    }
+  }
+
+  // Aplicar dano e verificar resistência mágica
   if (hit && damage > 0) {
+    // 🔥 RESISTÊNCIA MÁGICA PARA ATAQUES ESPECIAIS MÁGICOS
+    if (attackAction === 'special_attack' && attacker.intelligence > (attacker.strength || 0)) {
+      const magicResistance = Math.floor((defender.intelligence || 5) * 0.4)
+      damage = Math.max(1, damage - magicResistance)
+      room.combatLog.push({
+        type: 'result',
+        message: `🔮 Resistência mágica reduziu ${magicResistance} de dano mágico`,
+        timestamp: new Date()
+      })
+    }
+
+    // Aplicar dano ao HP correto (usando .hp ao invés de .currentHp)
     defender.hp = Math.max(0, defender.hp - damage)
+    
+    // Log de dano com detalhes dos stats balanceados
+    const attackType = attackAction === 'light_attack' ? 'Ataque Leve' : 
+                      attackAction === 'heavy_attack' ? 'Ataque Pesado' :
+                      (attacker.intelligence > (attacker.strength || 0) ? 'Magia Especial' : 'Ataque Especial')
+    
     room.combatLog.push({
       type: 'damage',
-      message: `💥 ${defender.name} recebeu ${damage} de dano! (${defender.hp}/${defender.maxHp} HP)`,
+      message: `⚔️ ${attackType}! ${attacker.name} causou ${damage} de dano! (${defender.hp}/${defender.maxHp} HP)`,
       timestamp: new Date()
     })
+
+    // Consumir stamina do atacante baseado no tipo de ataque
+    let staminaCost = 0
+    switch (attackAction) {
+      case 'light_attack': staminaCost = 5; break
+      case 'heavy_attack': staminaCost = 12; break
+      case 'special_attack': staminaCost = 20; break
+    }
+    
+    if (attacker.stamina !== undefined) {
+      attacker.stamina = Math.max(0, attacker.stamina - staminaCost)
+    }
     
     // 🔥 ATUALIZAÇÃO IMEDIATA para ambos verem o dano aplicado
     io.to(roomId).emit('room_updated', room)
@@ -464,13 +808,20 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
       message: `🏆 ${attacker.name} venceu o combate!`,
       timestamp: new Date()
     })
+    
+    // Log de estatísticas finais para análise de balance
+    room.combatLog.push({
+      type: 'stats',
+      message: `📊 Stats do Vencedor: STR:${attacker.strength || 0} AGI:${attacker.agility || 0} INT:${attacker.intelligence || 0} DEF:${attacker.defense || 0}`,
+      timestamp: new Date()
+    })
   } else {
-    // Próximo turno
+    // Próximo turno com log de stats para acompanhar balance
     room.currentTurn = defender.id
     room.phase = CombatPhase.PLAYER_TURN
     room.combatLog.push({
       type: 'system',
-      message: `🔄 Turno de ${defender.name}`,
+      message: `🔄 Turno de ${defender.name} | HP: ${defender.hp}/${defender.maxHp} | Stamina: ${attacker.stamina || '?'}`,
       timestamp: new Date()
     })
   }
@@ -526,3 +877,203 @@ httpServer.listen(PORT, () => {
 })
 
 module.exports = { io }
+
+function processSpecialAbility(player, opponent, abilityId) {
+  const transformationType = player.transformationType
+  
+  // 🐉 HABILIDADES DO DRAGÃO
+  if (transformationType === 'dragon') {
+    switch (abilityId) {
+      case 'dragon_breath':
+        if (player.stamina < 15) return { success: false, error: 'Stamina insuficiente!' }
+        
+        const breathDamage = Math.floor(Math.random() * 20) + 1 + (player.baseStats.str * 2)
+        const actualDamage = Math.max(1, Math.floor(breathDamage * 0.5)) // Ignora 50% da defesa
+        
+        opponent.hp = Math.max(0, opponent.hp - actualDamage)
+        player.stamina -= 15
+        
+        return {
+          success: true,
+          message: `🔥 ${player.name} usa Sopro de Fogo! ${opponent.name} recebeu ${actualDamage} de dano! (${opponent.hp}/${opponent.maxHp} HP)`
+        }
+        
+      case 'dragon_roar':
+        if (player.stamina < 10) return { success: false, error: 'Stamina insuficiente!' }
+        
+        // Aplicar debuff de -20% ataque por 2 turnos
+        if (!opponent.debuffs) opponent.debuffs = {}
+        opponent.debuffs.weakened = { turns: 2, effect: -0.2 }
+        player.stamina -= 10
+        
+        return {
+          success: true,
+          message: `🦅 ${player.name} ruge intimidadoramente! ${opponent.name} está abalado (-20% ataque por 2 turnos)`
+        }
+        
+      case 'dragon_scales':
+        if (player.mp < 15) return { success: false, error: 'MP insuficiente!' }
+        
+        // Aplicar buff de redução de dano
+        if (!player.buffs) player.buffs = {}
+        player.buffs.dragonScales = { turns: 3, damageReduction: 5 }
+        player.mp -= 15
+        
+        return {
+          success: true,
+          message: `🛡️ ${player.name} ativa Escamas Dracônicas! (-5 dano recebido por 3 turnos)`
+        }
+    }
+  }
+  
+  // 🐺 HABILIDADES DO LOBO
+  if (transformationType === 'wolf') {
+    switch (abilityId) {
+      case 'pack_hunt':
+        if (player.stamina < 20) return { success: false, error: 'Stamina insuficiente!' }
+        
+        let totalDamage = 0
+        for (let i = 0; i < 3; i++) {
+          const attackDamage = Math.floor(Math.random() * 12) + 1 + player.baseStats.agi
+          const finalDamage = Math.max(1, attackDamage - Math.floor(opponent.baseStats.def * 0.5))
+          totalDamage += finalDamage
+        }
+        
+        opponent.hp = Math.max(0, opponent.hp - totalDamage)
+        player.stamina -= 20
+        
+        return {
+          success: true,
+          message: `🏃 ${player.name} executa Caçada em Matilha! 3 ataques causaram ${totalDamage} de dano total! (${opponent.hp}/${opponent.maxHp} HP)`
+        }
+        
+      case 'howl':
+        if (player.stamina < 15) return { success: false, error: 'Stamina insuficiente!' }
+        
+        // Boost permanente de agilidade
+        player.baseStats.agi += 2
+        player.stamina -= 15
+        
+        return {
+          success: true,
+          message: `🌙 ${player.name} uiva selvagemente! Agilidade aumentada permanentemente (+2 AGI)`
+        }
+        
+      case 'bite_bleeding':
+        if (player.stamina < 12) return { success: false, error: 'Stamina insuficiente!' }
+        
+        const biteDamage = Math.floor(Math.random() * 16) + 1 + Math.floor(player.baseStats.str * 1.5)
+        const finalDamage = Math.max(1, biteDamage - Math.floor(opponent.baseStats.def * 0.5))
+        
+        // Aplicar sangramento
+        if (!opponent.debuffs) opponent.debuffs = {}
+        opponent.debuffs.bleeding = { turns: 3, damage: 8 }
+        
+        opponent.hp = Math.max(0, opponent.hp - finalDamage)
+        player.stamina -= 12
+        
+        return {
+          success: true,
+          message: `🩸 ${player.name} morde ferozmente! ${finalDamage} de dano + sangramento (8 dano/turno por 3 turnos)! (${opponent.hp}/${opponent.maxHp} HP)`
+        }
+    }
+  }
+  
+  // 🐻 HABILIDADES DO URSO
+  if (transformationType === 'bear') {
+    switch (abilityId) {
+      case 'bear_hug':
+        if (player.stamina < 25) return { success: false, error: 'Stamina insuficiente!' }
+        
+        const hugDamage = Math.floor(Math.random() * 16) + 1 + Math.floor(player.baseStats.str * 1.2)
+        
+        // Imobilizar por 2 turnos + DoT
+        if (!opponent.debuffs) opponent.debuffs = {}
+        opponent.debuffs.immobilized = { turns: 2 }
+        opponent.debuffs.squeezed = { turns: 2, damage: hugDamage }
+        
+        opponent.hp = Math.max(0, opponent.hp - hugDamage)
+        player.stamina -= 25
+        
+        return {
+          success: true,
+          message: `🤗 ${player.name} abraça ${opponent.name}! ${hugDamage} de dano + imobilizado e esmagado por 2 turnos! (${opponent.hp}/${opponent.maxHp} HP)`
+        }
+        
+      case 'intimidating_roar':
+        if (player.stamina < 15) return { success: false, error: 'Stamina insuficiente!' }
+        
+        // Reduzir dano do oponente em 30% por 4 turnos
+        if (!opponent.debuffs) opponent.debuffs = {}
+        opponent.debuffs.intimidated = { turns: 4, damageReduction: 0.3 }
+        player.stamina -= 15
+        
+        return {
+          success: true,
+          message: `😤 ${player.name} ruge intimidadoramente! ${opponent.name} está amedrontado (-30% dano por 4 turnos)`
+        }
+        
+      case 'unstoppable_charge':
+        if (player.stamina < 30) return { success: false, error: 'Stamina insuficiente!' }
+        
+        const chargeDamage = Math.floor(Math.random() * 20) + 1 + Math.floor(player.baseStats.str * 2.5)
+        // Ignora TODA a defesa
+        
+        opponent.hp = Math.max(0, opponent.hp - chargeDamage)
+        player.stamina -= 30
+        
+        return {
+          success: true,
+          message: `💥 ${player.name} executa Investida Imparável! ${chargeDamage} de dano (ignora defesa)! (${opponent.hp}/${opponent.maxHp} HP)`
+        }
+    }
+  }
+  
+  // 🦅 HABILIDADES DA ÁGUIA
+  if (transformationType === 'eagle') {
+    switch (abilityId) {
+      case 'dive_attack':
+        if (player.stamina < 20) return { success: false, error: 'Stamina insuficiente!' }
+        
+        const diveDamage = Math.floor(Math.random() * 20) + 1 + (player.baseStats.agi * 2)
+        const criticalDamage = Math.floor(diveDamage * 2) // Crítico garantido
+        const finalDamage = Math.max(1, criticalDamage - Math.floor(opponent.baseStats.def * 0.5))
+        
+        opponent.hp = Math.max(0, opponent.hp - finalDamage)
+        player.stamina -= 20
+        
+        return {
+          success: true,
+          message: `💨 ${player.name} mergulha do alto! Crítico garantido: ${finalDamage} de dano! (${opponent.hp}/${opponent.maxHp} HP)`
+        }
+        
+      case 'aerial_superiority':
+        if (player.mp < 15) return { success: false, error: 'MP insuficiente!' }
+        
+        // Imune a ataques terrestres por 1 turno
+        if (!player.buffs) player.buffs = {}
+        player.buffs.flying = { turns: 1, groundImmunity: true }
+        player.mp -= 15
+        
+        return {
+          success: true,
+          message: `☁️ ${player.name} voa alto! Imune a ataques terrestres por 1 turno!`
+        }
+        
+      case 'keen_sight':
+        if (player.stamina < 10) return { success: false, error: 'Stamina insuficiente!' }
+        
+        // Próximo ataque ignora esquiva
+        if (!player.buffs) player.buffs = {}
+        player.buffs.keenSight = { turns: 1, ignoreEvasion: true }
+        player.stamina -= 10
+        
+        return {
+          success: true,
+          message: `👁️ ${player.name} foca intensamente! Próximo ataque ignora esquiva!`
+        }
+    }
+  }
+  
+  return { success: false, error: 'Habilidade não reconhecida!' }
+}

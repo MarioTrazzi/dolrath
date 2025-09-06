@@ -197,6 +197,11 @@ io.on('connection', (socket) => {
       currentPlayer.stamina = Math.max(0, currentPlayer.stamina - staminaCost)
     }
     
+    // 🔥 ATUALIZAÇÃO IMEDIATA para mostrar consumo de recursos
+    if (mpCost > 0 || staminaCost > 0) {
+      io.to(roomId).emit('room_updated', room)
+    }
+    
     // Se é um ataque, ir para OPPONENT_REACTION (não DICE_ROLL)
     if (['light_attack', 'heavy_attack', 'special_attack'].includes(action)) {
       room.pendingAction = { 
@@ -318,6 +323,8 @@ io.on('connection', (socket) => {
     // Aplicar custo de stamina para defesa
     if (staminaCost > 0) {
       opponent.stamina = Math.max(0, opponent.stamina - staminaCost)
+      // 🔥 ATUALIZAÇÃO IMEDIATA para mostrar consumo de stamina
+      io.to(roomId).emit('room_updated', room)
     }
 
     // Salvar a reação escolhida e ir para DICE_ROLL onde ambos rolam
@@ -443,6 +450,9 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
       message: `💥 ${defender.name} recebeu ${damage} de dano! (${defender.hp}/${defender.maxHp} HP)`,
       timestamp: new Date()
     })
+    
+    // 🔥 ATUALIZAÇÃO IMEDIATA para ambos verem o dano aplicado
+    io.to(roomId).emit('room_updated', room)
   }
 
   // Verificar fim do combate

@@ -4,63 +4,91 @@ const { Server } = require('socket.io')
 // Configuração de porta - Railway usa PORT, Heroku também
 const PORT = process.env.PORT || 3001
 
-// 🐉 SISTEMA DE TRANSFORMAÇÃO INTEGRADO
-const TRANSFORMATION_CONFIG = {
+// 🐉 CONFIGURAÇÕES DE TRANSFORMAÇÃO BALANCEADAS
+const transformationConfigs = {
+  // DRACONIANOS - Foco STR/DEF mas balanceado
   dragon: {
-    name: '🐉 Dragão',
-    duration: 4,
     statModifiers: {
-      strength: 1.8,
-      defense: 1.6,
-      hp: 1.5,
-      agility: 0.7,
-      intelligence: 0.8,
-      attack: 1.8,
-      critical: 1.3
+      strength: 1.6,    // Era 1.8 - reduzido
+      agility: 1.1,     // Era 1.0 - melhorado  
+      intelligence: 1.1, // Era 1.0 - melhorado
+      defense: 1.4,     // Era 1.0 - novo
+      hp: 1.4,          // Era 1.5 - reduzido
+      attack: 1.5,      // Era 1.8 - balanceado
+      critical: 1.2,    // Era 1.0 - melhorado
+      speed: 1.0
     },
-    specialAbilities: ['dragon_breath', 'dragon_roar', 'dragon_scales']
+    duration: 4,
+    cooldown: 3
   },
+
+  // METAMORFOS - Builds especializadas e balanceadas
   wolf: {
-    name: '🐺 Lobo',
-    duration: 5,
     statModifiers: {
-      agility: 2.2,
-      strength: 1.4,
-      critical: 2.5,
-      attack: 1.4,
-      defense: 0.8,
-      hp: 0.9,
-      intelligence: 0.7
+      strength: 1.3,    // Era 1.4 - ligeiramente reduzido
+      agility: 1.5,     // Era 1.0 - muito melhorado!
+      intelligence: 0.8, // Era 1.0 - reduzido
+      defense: 1.0,     // Neutro
+      hp: 1.1,          // Era 0.9 - melhorado
+      attack: 1.3,      // Era 1.4 - balanceado
+      critical: 1.6,    // Novo - crítico alto!
+      speed: 1.4        // Velocidade alta
     },
-    specialAbilities: ['pack_hunt', 'howl', 'bite_bleeding']
+    duration: 3,
+    cooldown: 2
   },
+
   bear: {
-    name: '🐻 Urso',
-    duration: 6,
     statModifiers: {
-      strength: 1.7,
-      defense: 2.0,
-      hp: 1.8,
-      agility: 0.5,
-      critical: 0.4,
-      attack: 1.7,
-      intelligence: 0.6
+      strength: 1.5,    // Era 1.7 - reduzido
+      agility: 0.7,     // Era 1.0 - tank lento
+      intelligence: 0.8, // Baixo
+      defense: 1.7,     // Era 1.0 - muito melhorado!
+      hp: 1.6,          // Era 1.8 - tank HP alto
+      attack: 1.4,      // Era 1.7 - balanceado  
+      critical: 0.8,    // Baixo crítico
+      speed: 0.6        // Era 1.0 - muito lento
     },
-    specialAbilities: ['bear_hug', 'intimidating_roar', 'unstoppable_charge']
-  },
-  eagle: {
-    name: '🦅 Águia',
     duration: 4,
+    cooldown: 3
+  },
+
+  eagle: {
     statModifiers: {
-      agility: 2.8,
-      intelligence: 1.6,
-      critical: 3.0,
-      attack: 1.2,
-      strength: 0.6,
-      defense: 0.4,
-      hp: 0.7
+      strength: 0.7,    // Era 0.6 - melhorado
+      agility: 1.8,     // Era 1.0 - muito melhorado!
+      intelligence: 1.3, // Era 1.0 - melhorado
+      defense: 0.8,     // Era 1.0 - frágil
+      hp: 0.8,          // Era 0.7 - melhorado
+      attack: 1.1,      // Era 1.2 - reduzido
+      critical: 1.8,    // Era 1.0 - crítico muito alto!
+      speed: 2.0        // Velocidade máxima
     },
-    specialAbilities: ['dive_attack', 'aerial_superiority', 'keen_sight']
+    duration: 3,
+    cooldown: 2
+  },
+  
+  // Outros animais metamorfos balanceados
+  leopard: {
+    statModifiers: {
+      strength: 1.2, agility: 1.6, intelligence: 1.1, defense: 0.9,
+      hp: 1.0, attack: 1.3, critical: 1.5, speed: 1.6
+    },
+    duration: 3, cooldown: 2
+  },
+  snake: {
+    statModifiers: {
+      strength: 0.9, agility: 1.4, intelligence: 1.4, defense: 0.8,
+      hp: 0.9, attack: 1.1, critical: 1.3, speed: 1.2
+    },
+    duration: 3, cooldown: 2
+  },
+  crocodile: {
+    statModifiers: {
+      strength: 1.6, agility: 0.6, intelligence: 0.9, defense: 1.8,
+      hp: 1.7, attack: 1.5, critical: 0.7, speed: 0.5
+    },
+    duration: 4, cooldown: 3
   }
 }
 
@@ -679,78 +707,93 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
   let hit = false
   
   // 🔥 SISTEMA DE DANO BALANCEADO
-  // Usar os novos stats balanceados baseados na fórmula STR × 1.2
-  const attackerPower = Math.floor((attacker.strength || attacker.attack || 10) * 1.2)
-  const defenderDefense = Math.floor((defender.defense || 5) * 0.8)
+  // Calcular stats balanceados baseados nas novas fórmulas
+  const attackerStr = Math.floor((attacker.strength || attacker.baseStats?.str || 10))
+  const attackerInt = Math.floor((attacker.intelligence || attacker.baseStats?.int || 10))
+  const attackerAgi = Math.floor((attacker.agility || attacker.baseStats?.agi || 10))
+  const defenderDef = Math.floor((defender.defense || defender.baseStats?.def || 5))
+  const defenderAgi = Math.floor((defender.agility || defender.baseStats?.agi || 5))
+  
+  // Damage multipliers balanceados
+  const physicalPower = Math.floor(attackerStr * 1.5)  // STR menos dominante
+  const magicPower = Math.floor(attackerInt * 2.0)     // INT mais forte
+  const defenseReduction = Math.floor(defenderDef * 0.8) // DEF reduz dano real
   
   // Calcular dano base por tipo de ataque + dado + stat
-  let baseDamage = attackRoll + attackerPower
+  let baseDamage = attackRoll + physicalPower  // Default físico
   switch (attackAction) {
     case 'light_attack':
-      baseDamage = attackRoll + Math.floor(attackerPower * 0.8)  // Dado + 80% do STR
+      baseDamage = attackRoll + Math.floor(physicalPower * 0.8)  // Dado + 80% do STR balanceado
       break
     case 'heavy_attack':
-      baseDamage = attackRoll + Math.floor(attackerPower * 1.0)  // Dado + 100% do STR
+      baseDamage = attackRoll + Math.floor(physicalPower * 1.0)  // Dado + 100% do STR balanceado
       break
     case 'special_attack':
-      // Para especial, verificar se é físico ou mágico
-      const hasMagicPower = attacker.intelligence > (attacker.strength || 0)
-      if (hasMagicPower) {
-        // Ataque mágico baseado em INT
-        const magicPower = Math.floor((attacker.intelligence || 5) * 1.5)
-        baseDamage = attackRoll + magicPower  // Magia ignora defesa física
+      // 🔥 NOVO: Special sempre usa o stat mais alto (físico vs mágico)
+      if (attackerInt >= attackerStr) {
+        // Ataque mágico - mais forte que físico!
+        baseDamage = attackRoll + magicPower
+        room.combatLog.push({
+          type: 'action',
+          message: `✨ Ataque Mágico! (INT: ${attackerInt} > STR: ${attackerStr})`,
+          timestamp: new Date()
+        })
       } else {
         // Ataque físico especial
-        baseDamage = attackRoll + Math.floor(attackerPower * 1.3)
+        baseDamage = attackRoll + Math.floor(physicalPower * 1.2)
+        room.combatLog.push({
+          type: 'action', 
+          message: `⚔️ Ataque Físico Especial! (STR: ${attackerStr} > INT: ${attackerInt})`,
+          timestamp: new Date()
+        })
       }
       break
   }
 
   // Sistema de combate melhorado
   if (defenseAction === 'dodge') {
-    // 🔥 ESQUIVA BASEADA EM AGI
-    const dodgeChance = (defender.agility || 5) * 0.3  // AGI × 0.3 = % de esquiva
+    // 🔥 ESQUIVA BASEADA EM AGI - Muito mais útil!
+    const dodgeChance = (defenderAgi * 0.5) + 3  // AGI × 0.5 + 3% base
     const dodgeRoll = Math.random() * 100
     
     if (dodgeRoll < dodgeChance) {
       // Esquiva bem-sucedida
       room.combatLog.push({
         type: 'result',
-        message: `🌪️ Esquiva perfeita! ${defender.name} evitou todo o dano! (${dodgeChance.toFixed(1)}% chance)`,
+        message: `🌪️ Esquiva perfeita! ${defender.name} evitou todo o dano! (${dodgeChance.toFixed(1)}% chance, AGI: ${defenderAgi})`,
         timestamp: new Date()
       })
     } else {
-      // Esquiva falhou - dano total
-      damage = Math.max(1, baseDamage - Math.floor(defenderDefense * 0.3))
+      // Esquiva falhou - dano reduzido mas não total
+      damage = Math.max(1, baseDamage - Math.floor(defenseReduction * 0.5))
       hit = true
       room.combatLog.push({
         type: 'result',
-        message: `❌ Esquiva falhou! (${dodgeChance.toFixed(1)}% chance)`,
+        message: `❌ Esquiva falhou! Dano parcial aplicado (${dodgeChance.toFixed(1)}% chance)`,
         timestamp: new Date()
       })
     }
   } else if (defenseAction === 'defend') {
-    // 🔥 DEFESA BASEADA EM DEF
-    // DEF reduz dano diretamente
-    damage = Math.max(1, baseDamage - defenderDefense)
+    // 🔥 DEFESA BASEADA EM DEF - Reduz dano significativamente
+    damage = Math.max(1, baseDamage - defenseReduction)
     hit = true
     room.combatLog.push({
       type: 'result',
-      message: `🛡️ Bloqueio! Defesa absorveu ${defenderDefense} de dano`,
+      message: `🛡️ Bloqueio! Defesa absorveu ${defenseReduction} de dano (DEF: ${Math.floor(defenderDef)})`,
       timestamp: new Date()
     })
   }
 
-  // 🔥 SISTEMA DE CRÍTICO BASEADO EM AGI
+  // 🔥 SISTEMA DE CRÍTICO BASEADO EM AGI - Muito mais útil!
   if (hit) {
-    const criticalChance = ((attacker.agility || 5) * 0.8) + 5  // AGI × 0.8 + 5% base
+    const criticalChance = (attackerAgi * 0.5) + 5  // AGI × 0.5 + 5% base
     const criticalRoll = Math.random() * 100
     
     if (criticalRoll < criticalChance) {
       damage = Math.floor(damage * 1.8)  // +80% de dano
       room.combatLog.push({
         type: 'result',
-        message: `⚡ CRÍTICO! Dano aumentado em 80%! (${criticalChance.toFixed(1)}% chance)`,
+        message: `💥 CRÍTICO! Dano aumentado em 80%! (${criticalChance.toFixed(1)}% chance, AGI: ${attackerAgi})`,
         timestamp: new Date()
       })
     }

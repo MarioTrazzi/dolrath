@@ -189,7 +189,7 @@ function CombatPageContent() {
           })
         }
         
-        // Limpar estados quando NÃO está na fase DICE_ROLL
+        // Limpar estados quando sai da fase DICE_ROLL
         if (room.phase !== CombatPhase.DICE_ROLL) {
           setPendingAction(null)
           setPendingDefense(null)
@@ -376,7 +376,8 @@ function CombatPageContent() {
     }
 
     const diceType = diceTypes[action]
-    // Enviar ação com custos para o servidor
+    
+    // Enviar ação (que irá para OPPONENT_REACTION, não DICE_ROLL diretamente)
     socket.emit('player_action', { 
       playerId: currentPlayer.id, 
       roomId, 
@@ -390,23 +391,22 @@ function CombatPageContent() {
   const handleRollDice = (sides: number) => {
     if (!currentPlayer) return
     
-    if (pendingAction && pendingAction.diceType === sides) {
-      // Atacante rolando dado
+    // Na fase DICE_ROLL, ambos podem rolar o mesmo dado
+    if (combatRoom?.phase === CombatPhase.DICE_ROLL && combatRoom?.pendingAction?.diceType === sides) {
       socket.emit('roll_dice', { 
         playerId: currentPlayer.id, 
         roomId, 
         sides, 
-        action: pendingAction.action 
+        action: combatRoom.pendingAction.action 
       })
-      setPendingAction(null)
-    } else if (pendingDefense && pendingDefense.diceType === sides) {
-      // Defensor rolando dado
-      socket.emit('roll_defense', { 
-        playerId: currentPlayer.id, 
-        roomId, 
-        sides
-      })
-      setPendingDefense(null)
+      
+      // Limpar os pending states após rolar
+      if (pendingAction && pendingAction.diceType === sides) {
+        setPendingAction(null)
+      }
+      if (pendingDefense && pendingDefense.diceType === sides) {
+        setPendingDefense(null)
+      }
     }
   }
 

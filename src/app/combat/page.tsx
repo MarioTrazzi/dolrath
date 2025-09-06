@@ -151,8 +151,32 @@ function CombatPageContent() {
   }, [combatRoom?.combatLog])
 
   useEffect(() => {
-    const initializeCombat = async () => {
-      let playerData: Player
+    const initializeCombat = () => {
+      let playerData: Player = {
+        id: 'player_' + Math.random().toString(36).substr(2, 9),
+        name: isRoomCreator ? 'sgs' : 'Oponente',
+        level: 6,
+        race: 'Humano',
+        class: 'Guerreiro',
+        hp: 360,
+        maxHp: 360,
+        mp: 210,
+        maxMp: 210,
+        stamina: 100,
+        maxStamina: 100,
+        attack: 9,
+        defense: 10,
+        strength: 9,
+        agility: 5,
+        intelligence: 3,
+        resistance: 0,
+        critical: 1.0,
+        speed: 2.5,
+        equipment: {},
+        isReady: false,
+        isConnected: true,
+        isAlive: true
+      }
 
       // Configurar event listeners do Socket.IO
       socket.on('connect', () => {
@@ -164,12 +188,6 @@ function CombatPageContent() {
         console.log('❌ Desconectado do servidor WebSocket')
         setConnectionStatus('disconnected')
       })
-
-      socket.on('room_updated', (room: CombatRoom) => {
-        console.log('🔄 Sala atualizada:', room)
-        console.log('📊 Fase atual:', room.phase)
-        console.log('🎯 Pending Action:', room.pendingAction)
-        setCombatRoom(room)
 
       socket.on('room_updated', (room: CombatRoom) => {
         console.log('🔄 Sala atualizada:', room)
@@ -258,10 +276,15 @@ function CombatPageContent() {
 
       // Se temos characterId, carregar dados do personagem específico
       if (characterId) {
-        try {
-          const response = await fetch(`/api/character/${characterId}`)
-          if (response.ok) {
-            const charDetails = await response.json()
+        fetch(`/api/character/${characterId}`)
+          .then(response => {
+            if (response.ok) {
+              return response.json()
+            } else {
+              throw new Error('Personagem não encontrado')
+            }
+          })
+          .then(charDetails => {
             playerData = {
               id: charDetails.id,
               name: charDetails.name,
@@ -287,20 +310,25 @@ function CombatPageContent() {
               isConnected: true,
               isAlive: charDetails.isAlive
             }
-          } else {
-            throw new Error('Personagem não encontrado')
-          }
-        } catch (error) {
-          console.error('Erro ao carregar personagem:', error)
-          router.push('/combat-lobby')
-          return
-        }
+            setCurrentPlayer(playerData)
+            socket.emit('join_room', { roomId, player: playerData, isCreator: isRoomCreator })
+          })
+          .catch(error => {
+            console.error('Erro ao carregar personagem:', error)
+            router.push('/combat-lobby')
+            return
+          })
       } else {
         // Fallback para dados mock se não tiver characterId
-        try {
-          const response = await fetch('/api/user/profile')
-          if (response.ok) {
-            const userData = await response.json()
+        fetch('/api/user/profile')
+          .then(response => {
+            if (response.ok) {
+              return response.json()
+            } else {
+              throw new Error('API não disponível')
+            }
+          })
+          .then(userData => {
             playerData = {
               id: userData.id || 'player_' + Math.random().toString(36).substr(2, 9),
               name: userData.name || 'sgs',
@@ -326,42 +354,21 @@ function CombatPageContent() {
               isConnected: true,
               isAlive: true
             }
-          } else {
-            throw new Error('API não disponível')
-          }
-        } catch (apiError) {
-          playerData = {
-            id: 'player_' + Math.random().toString(36).substr(2, 9),
-            name: isCreator ? 'sgs' : 'Oponente',
-            level: 6,
-            race: 'Humano',
-            class: 'Guerreiro',
-            hp: 360,
-            maxHp: 360,
-            mp: 210,
-            maxMp: 210,
-            stamina: 100,
-            maxStamina: 100,
-            attack: 9,
-            defense: 10,
-            strength: 9,
-            agility: 5,
-            intelligence: 3,
-            resistance: 0,
-            critical: 1.0,
-            speed: 2.5,
-            equipment: {},
-            isReady: false,
-            isConnected: true,
-            isAlive: true
-          }
-        }
+            setCurrentPlayer(playerData)
+            socket.emit('join_room', { roomId, player: playerData, isCreator: isRoomCreator })
+          })
+          .catch(apiError => {
+            // Usar dados padrão se API falhar
+            setCurrentPlayer(playerData)
+            socket.emit('join_room', { roomId, player: playerData, isCreator: isRoomCreator })
+          })
       }
       
-      setCurrentPlayer(playerData)
-      
-      // Entrar na sala via Socket.IO
-      socket.emit('join_room', { roomId, player: playerData, isCreator: isRoomCreator })
+      // Se não tem characterId, usar dados padrão imediatamente
+      if (!characterId) {
+        setCurrentPlayer(playerData)
+        socket.emit('join_room', { roomId, player: playerData, isCreator: isRoomCreator })
+      }
     }
 
     initializeCombat()

@@ -172,11 +172,19 @@ function CombatPageContent() {
         setCombatRoom(room)
 
         // Atualizar currentPlayer com dados da sala quando houver mudanças
-        if (currentPlayer && room) {
-          const updatedPlayerData = room.player1?.id === currentPlayer.id ? room.player1 : room.player2
-          if (updatedPlayerData) {
+        if (room) {
+          // 🔥 CORREÇÃO: Atualizar SEMPRE que há dados do servidor
+          const updatedPlayerData = room.player1?.id === currentPlayer?.id ? room.player1 : room.player2
+          if (updatedPlayerData && currentPlayer?.id === updatedPlayerData.id) {
+            console.log('🔄 Atualizando currentPlayer:', {
+              name: updatedPlayerData.name,
+              hp: `${updatedPlayerData.hp}/${updatedPlayerData.maxHp}`,
+              mp: `${updatedPlayerData.mp}/${updatedPlayerData.maxMp}`,
+              stamina: `${updatedPlayerData.stamina}/${updatedPlayerData.maxStamina}`
+            })
+            
             setCurrentPlayer(prev => {
-              if (!prev) return prev
+              if (!prev) return updatedPlayerData // Se não tem prev, usar o novo
               return {
                 ...prev,
                 hp: updatedPlayerData.hp,
@@ -360,6 +368,16 @@ function CombatPageContent() {
       socket.disconnect()
     }
   }, [socket, roomId, isRoomCreator, characterId])
+
+  // 🔥 FORÇA re-render quando currentPlayer ou opponent mudam
+  useEffect(() => {
+    if (currentPlayer) {
+      console.log('🔄 CurrentPlayer updated:', currentPlayer.name, `${currentPlayer.hp}/${currentPlayer.maxHp} HP`)
+    }
+    if (opponent) {
+      console.log('🔄 Opponent updated:', opponent.name, `${opponent.hp}/${opponent.maxHp} HP`)
+    }
+  }, [currentPlayer?.hp, currentPlayer?.mp, currentPlayer?.stamina, opponent?.hp, opponent?.mp, opponent?.stamina])
 
   const toggleReady = () => {
     if (!currentPlayer) return

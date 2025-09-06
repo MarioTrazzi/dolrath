@@ -199,8 +199,7 @@ function CombatPageContent() {
         
         // APENAS na fase DICE_ROLL, setamos para ambos verem os dados
         if (room.phase === CombatPhase.DICE_ROLL && room.pendingAction) {
-          // Reset do estado de rolagem quando entra na fase
-          setHasRolledDice(false)
+          // NÃO resetar hasRolledDice aqui - apenas quando sai da fase
           
           // Ambos setam o mesmo diceType para rolar o mesmo dado
           const diceType = room.pendingAction.diceType
@@ -214,11 +213,14 @@ function CombatPageContent() {
           })
         }
         
-        // Limpar estados quando sai da fase DICE_ROLL
+        // Limpar estados quando sai da fase DICE_ROLL 
         if (room.phase !== CombatPhase.DICE_ROLL) {
           setPendingAction(null)
           setPendingDefense(null)
-          setHasRolledDice(false) // Reset também aqui
+          // APENAS resetar hasRolledDice quando volta para PLAYER_TURN (novo turno)
+          if (room.phase === CombatPhase.PLAYER_TURN) {
+            setHasRolledDice(false)
+          }
         }
       })
 
@@ -415,19 +417,27 @@ function CombatPageContent() {
   }
 
   const handleRollDice = (sides: number) => {
-    if (!currentPlayer || hasRolledDice) return // Não rolar se já rolou
+    if (!currentPlayer || !roomId || !combatRoom) return
+    
+    // VERIFICAÇÃO CRÍTICA: Não rolar se já rolou
+    if (hasRolledDice) {
+      console.log('Player já rolou o dado neste turno')
+      return
+    }
     
     // Na fase DICE_ROLL, ambos podem rolar o mesmo dado
     if (combatRoom?.phase === CombatPhase.DICE_ROLL && combatRoom?.pendingAction?.diceType === sides) {
+      console.log('Rolando dado...', { playerId: currentPlayer.id, sides })
+      
+      // MARCAR IMEDIATAMENTE para prevenir cliques duplos
+      setHasRolledDice(true)
+      
       socket.emit('roll_dice', { 
         playerId: currentPlayer.id, 
         roomId, 
         sides, 
         action: combatRoom.pendingAction.action 
       })
-      
-      // Marcar que este jogador já rolou
-      setHasRolledDice(true)
       
       // Limpar os pending states após rolar
       if (pendingAction && pendingAction.diceType === sides) {

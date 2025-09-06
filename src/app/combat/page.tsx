@@ -171,21 +171,40 @@ function CombatPageContent() {
         console.log('🎯 Pending Action:', room.pendingAction)
         setCombatRoom(room)
 
-        // Atualizar currentPlayer e opponent com dados da sala
-        if (currentPlayer && room) {
-          const updatedPlayerData = room.player1?.id === currentPlayer.id ? room.player1 : room.player2
-          const updatedOpponentData = room.player1?.id === currentPlayer.id ? room.player2 : room.player1
+      socket.on('room_updated', (room: CombatRoom) => {
+        console.log('🔄 Sala atualizada:', room)
+        console.log('📊 Fase atual:', room.phase)
+        console.log('🎯 Pending Action:', room.pendingAction)
+        setCombatRoom(room)
+
+        // 🔥 SEMPRE atualizar currentPlayer e opponent quando a sala muda
+        if (room) {
+          // Identificar qual é o current player e qual é o opponent
+          let updatedPlayerData: Player | null = null
+          let updatedOpponentData: Player | null = null
           
-          // 🔥 FORÇA atualização do currentPlayer
-          if (updatedPlayerData) {
-            setCurrentPlayer(updatedPlayerData)
-            console.log('✅ CurrentPlayer atualizado:', updatedPlayerData)
+          if (currentPlayer?.id) {
+            // Se já temos currentPlayer, usar o ID para identificar
+            updatedPlayerData = room.player1?.id === currentPlayer.id ? room.player1 : room.player2
+            updatedOpponentData = room.player1?.id === currentPlayer.id ? room.player2 : room.player1
+          } else if (room.player1 || room.player2) {
+            // Se não temos currentPlayer ainda, pegar o primeiro disponível
+            updatedPlayerData = room.player1 || room.player2
+            updatedOpponentData = room.player1 === updatedPlayerData ? room.player2 : room.player1
           }
           
-          // 🔥 FORÇA atualização do opponent  
+          // Atualizar currentPlayer se encontrado
+          if (updatedPlayerData) {
+            setCurrentPlayer(updatedPlayerData)
+            console.log('✅ CurrentPlayer atualizado:', updatedPlayerData.name, `${updatedPlayerData.hp}/${updatedPlayerData.maxHp} HP`)
+          }
+          
+          // Atualizar opponent se encontrado (pode ser null se só tem 1 player)
+          setOpponent(updatedOpponentData)
           if (updatedOpponentData) {
-            setOpponent(updatedOpponentData)
-            console.log('✅ Opponent atualizado:', updatedOpponentData)
+            console.log('✅ Opponent atualizado:', updatedOpponentData.name, `${updatedOpponentData.hp}/${updatedOpponentData.maxHp} HP`)
+          } else {
+            console.log('⏳ Opponent ainda não entrou na sala')
           }
         }
 
@@ -368,6 +387,15 @@ function CombatPageContent() {
       console.log('🔄 Opponent updated:', opponent.name, `${opponent.hp}/${opponent.maxHp} HP`)
     }
   }, [currentPlayer?.hp, currentPlayer?.mp, currentPlayer?.stamina, opponent?.hp, opponent?.mp, opponent?.stamina])
+
+  // 🔥 Inicializar opponent quando combatRoom muda
+  useEffect(() => {
+    if (combatRoom && currentPlayer) {
+      const opponentData = combatRoom.player1?.id === currentPlayer.id ? combatRoom.player2 : combatRoom.player1
+      setOpponent(opponentData)
+      console.log('🎯 Opponent detectado:', opponentData?.name || 'nenhum')
+    }
+  }, [combatRoom?.player1, combatRoom?.player2, currentPlayer?.id])
 
   const toggleReady = () => {
     if (!currentPlayer) return

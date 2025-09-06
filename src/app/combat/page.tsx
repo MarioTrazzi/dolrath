@@ -158,37 +158,23 @@ function CombatPageContent() {
       socket.on('room_updated', (room: CombatRoom) => {
         console.log('🔄 Sala atualizada:', room)
         setCombatRoom(room)
-        
-        // Verificar se precisa mostrar botões de reação
-        if (room.phase === CombatPhase.OPPONENT_REACTION && 
-            room.currentTurn !== currentPlayer?.id) {
-          setShowReactionButtons(true)
-        } else {
-          setShowReactionButtons(false)
-        }
 
         // Reset iniciativa quando sala é resetada
         if (room.phase === CombatPhase.WAITING_PLAYERS) {
           setHasRolledInitiative(false)
         }
         
-        // Quando entrar na fase DICE_ROLL, configurar os pendingStates
+        // Quando entrar na fase DICE_ROLL, ambos precisam ver os dados
         if (room.phase === CombatPhase.DICE_ROLL && room.pendingAction) {
-          if (room.currentTurn === currentPlayer?.id) {
-            // É o atacante - setar pendingAction
-            setPendingAction({
-              action: room.pendingAction.action,
-              diceType: room.pendingAction.diceType
-            })
-            setPendingDefense(null)
-          } else {
-            // É o defensor - usar o MESMO dado do ataque, não d6
-            setPendingDefense({
-              reaction: 'defend', // padrão
-              diceType: room.pendingAction.diceType // MESMO dado do ataque
-            })
-            setPendingAction(null)
-          }
+          // Ambos setam o pendingAction e pendingDefense para verem os dados
+          setPendingAction({
+            action: room.pendingAction.action,
+            diceType: room.pendingAction.diceType
+          })
+          setPendingDefense({
+            reaction: 'defending', // Valor padrão para mostrar os dados
+            diceType: room.pendingAction.diceType // MESMO dado do ataque
+          })
         }
         
         // Limpar estados pendentes quando mudança de fase para PLAYER_TURN
@@ -396,9 +382,6 @@ function CombatPageContent() {
       roomId, 
       reaction
     })
-    
-    // Esconder botões de reação após escolher
-    setShowReactionButtons(false)
   }
 
   const sendMessage = () => {
@@ -570,28 +553,7 @@ function CombatPageContent() {
             <div className="order-1 sm:order-3 w-full sm:w-64 bg-surface/30 p-2 sm:p-4 flex flex-col flex-shrink-0">
               <h3 className="font-bold text-text-primary mb-2 sm:mb-3 text-xs sm:text-sm text-center">🎯 Ações</h3>
               
-              {showReactionButtons ? (
-                <div className="space-y-3">
-                  <div className="text-center">
-                    <div className="text-xl sm:text-2xl mb-2">⚔️</div>
-                    <div className="text-xs sm:text-sm text-text-secondary mb-3">
-                      Como você vai reagir ao ataque?
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => handleDefenseChoice('dodge')}
-                    className="w-full py-3 sm:py-2 px-4 rounded-lg font-bold text-sm bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-blue-600 hover:to-cyan-500 text-white transition-all duration-200"
-                  >
-                    🏃 Esquivar
-                  </button>
-                  <button
-                    onClick={() => handleDefenseChoice('defend')}
-                    className="w-full py-3 sm:py-2 px-4 rounded-lg font-bold text-sm bg-gradient-to-r from-emerald-500 to-green-600 hover:from-green-600 hover:to-emerald-500 text-white transition-all duration-200"
-                  >
-                    🛡️ Defender
-                  </button>
-                </div>
-              ) : combatRoom?.phase === CombatPhase.INITIATIVE_ROLL ? (
+              {combatRoom?.phase === CombatPhase.INITIATIVE_ROLL ? (
                 <div className="space-y-3">
                   <div className="text-center">
                     <div className="text-xl sm:text-2xl mb-2">🎲</div>
@@ -706,17 +668,16 @@ function CombatPageContent() {
 
           {/* Dice Panel */}
           {combatRoom?.phase === CombatPhase.DICE_ROLL && (
-            (isMyTurn && pendingAction) || (!isMyTurn && pendingDefense)
+            pendingAction || pendingDefense
           ) && (
             <div className="bg-gradient-to-br from-surface/95 to-background/90 backdrop-blur-md border-t border-white/10 p-2 sm:p-3 flex-shrink-0">
               <h3 className="text-text-primary font-bold text-center mb-2 text-xs sm:text-sm">
-                🎲 {isMyTurn ? 'Role seu dado de ataque' : 'Role seu dado de defesa'}
+                🎲 Role o dado {pendingAction?.diceType === 6 ? 'leve' : pendingAction?.diceType === 10 ? 'pesado' : 'especial'} (d{pendingAction?.diceType || pendingDefense?.diceType})
               </h3>
               <div className="flex justify-center space-x-2 sm:space-x-3 flex-wrap">
                 {[4, 6, 8, 10, 12, 20].map((sides) => {
-                  const isCorrectDice = isMyTurn 
-                    ? pendingAction?.diceType === sides 
-                    : pendingDefense?.diceType === sides
+                  const correctDiceType = pendingAction?.diceType || pendingDefense?.diceType
+                  const isCorrectDice = correctDiceType === sides
                   
                   return (
                     <button

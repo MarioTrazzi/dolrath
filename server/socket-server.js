@@ -173,7 +173,7 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('room_updated', room)
   })
 
-  socket.on('player_action', ({ playerId, roomId, action, diceType }) => {
+  socket.on('player_action', ({ playerId, roomId, action, diceType, mpCost, staminaCost }) => {
     const room = rooms.get(roomId)
     if (!room || room.currentTurn !== playerId) return
 
@@ -187,15 +187,24 @@ io.on('connection', (socket) => {
     }
 
     const currentPlayer = room.currentTurn === room.player1?.id ? room.player1 : room.player2
+    const opponent = room.currentTurn === room.player1?.id ? room.player2 : room.player1
     
-    // Se é um ataque, ir direto para rolagem do atacante
+    // Aplicar custos de MP e stamina
+    if (mpCost > 0) {
+      currentPlayer.mp = Math.max(0, currentPlayer.mp - mpCost)
+    }
+    if (staminaCost > 0) {
+      currentPlayer.stamina = Math.max(0, currentPlayer.stamina - staminaCost)
+    }
+    
+    // Se é um ataque, ir para OPPONENT_REACTION (não DICE_ROLL)
     if (['light_attack', 'heavy_attack', 'special_attack'].includes(action)) {
       room.pendingAction = { action, diceType, playerId, type: 'attack' }
-      room.phase = CombatPhase.DICE_ROLL
+      room.phase = CombatPhase.OPPONENT_REACTION // MUDANÇA AQUI!
       room.combatLog.push({
         type: 'action',
         player: currentPlayer.name,
-        message: `🎯 ${actionNames[action]} selecionado! ${currentPlayer.name}, role o d${diceType}`,
+        message: `🎯 ${actionNames[action]} selecionado! ${opponent.name}, escolha sua defesa.`,
         timestamp: new Date()
       })
     } else {
@@ -218,7 +227,7 @@ io.on('connection', (socket) => {
     const room = rooms.get(roomId)
     if (!room) return
 
-    const player = room.currentTurn === room.player1?.id ? room.player1 : room.player2
+    const player = room.player1?.id === playerId ? room.player1 : room.player2
     const roll = Math.floor(Math.random() * sides) + 1
     const modifier = 0 // Pode ser expandido para incluir modificadores
     const total = roll + modifier
@@ -236,19 +245,18 @@ io.on('connection', (socket) => {
       result: { roll, modifier, total }
     })
 
-    // Se é um ataque, agora o oponente deve escolher defesa
-    if (room.pendingAction?.type === 'attack') {
-      room.phase = CombatPhase.OPPONENT_REACTION
-      room.pendingAction.attackRoll = roll
-      
-      const opponent = room.currentTurn === room.player1?.id ? room.player2 : room.player1
-      room.combatLog.push({
-        type: 'system',
-        message: `🛡️ ${opponent.name}, escolha sua defesa: Esquivar ou Defender?`,
-        timestamp: new Date()
-      })
-      
-      io.to(roomId).emit('room_updated', room)
+    // Para ataques na fase DICE_ROLL, salvar o roll do atacante
+    if (room.pendingAction?.type === 'attack' && room.phase === CombatPhase.DICE_ROLL) {
+      if (playerId === room.pendingAction.playerId) {
+        // É o atacante rolando
+        room.pendingAction.attackRoll = total
+      } else {
+        // É o defensor rolando - processar combate completo
+        room.pendingAction.defenseRoll = total
+        setTimeout(() => {
+          processCompleteAction(room, room.pendingAction.action, room.pendingAction.attackRoll, room.pendingAction.defenseAction, room.pendingAction.defenseRoll, roomId)
+        }, 1000)
+      }
     } else {
       // Ações não-ataque processam diretamente
       setTimeout(() => {
@@ -275,14 +283,19 @@ io.on('connection', (socket) => {
   })
 
   // Novo evento para reação do oponente
-  socket.on('opponent_reaction', ({ playerId, roomId, reaction }) => {
+  socket.on('opponent_reaction', ({ playerId, roomId, reaction, staminaCost }) => {
     const room = rooms.get(roomId)
-    if (!room || !room.pendingAction) return
+    if (!room || !room.pendingAction || room.phase !== CombatPhase.OPPONENT_REACTION) return
 
     const opponent = room.currentTurn === room.player1?.id ? room.player2 : room.player1
     if (opponent.id !== playerId) return
 
-    // Salvar a reação escolhida e pedir para rolar dado
+    // Aplicar custo de stamina para defesa
+    if (staminaCost > 0) {
+      opponent.stamina = Math.max(0, opponent.stamina - staminaCost)
+    }
+
+    // Salvar a reação escolhida e ir para DICE_ROLL onde ambos rolam
     room.pendingAction.defenseAction = reaction
     room.phase = CombatPhase.DICE_ROLL
     
@@ -294,37 +307,14 @@ io.on('connection', (socket) => {
     room.combatLog.push({
       type: 'action',
       player: opponent.name,
-      message: `🛡️ ${opponent.name} escolheu: ${reactionNames[reaction]}! Role o d${room.pendingAction.diceType}`,
+      message: `🛡️ ${opponent.name} escolheu: ${reactionNames[reaction]}! Ambos rolem d${room.pendingAction.diceType}`,
       timestamp: new Date()
     })
 
     io.to(roomId).emit('room_updated', room)
   })
 
-  // Novo evento para rolagem de defesa após escolher a defesa
-  socket.on('roll_defense', ({ playerId, roomId, sides }) => {
-    const room = rooms.get(roomId)
-    if (!room || !room.pendingAction || room.phase !== CombatPhase.DICE_ROLL) return
-
-    const opponent = room.currentTurn === room.player1?.id ? room.player2 : room.player1
-    if (opponent.id !== playerId) return
-
-    const reactionRoll = Math.floor(Math.random() * sides) + 1
-    const modifier = 0 // Pode ser expandido para modificadores de defesa
-    const total = reactionRoll + modifier
-    
-    room.combatLog.push({
-      type: 'action',
-      player: opponent.name,
-      message: `🎲 ${opponent.name}: Rolou d${sides} = ${reactionRoll} + (${modifier}) = ${total}`,
-      timestamp: new Date()
-    })
-
-    // Processar combate completo agora que ambos rolaram
-    setTimeout(() => {
-      processCompleteAction(room, room.pendingAction.action, room.pendingAction.attackRoll, room.pendingAction.defenseAction, reactionRoll, roomId)
-    }, 1000)
-  })
+  // Evento roll_defense removido - agora ambos usam roll_dice
 
   // Novo evento para fechar sala (apenas criador)
   socket.on('close_room', ({ playerId, roomId }) => {

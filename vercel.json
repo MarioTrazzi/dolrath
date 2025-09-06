@@ -2,6 +2,7 @@
   "env": {
     "NEXT_PUBLIC_SOCKET_URL": "https://dolrath-production.up.railway.app"
   },
+  "buildCommand": "npm run vercel-build",
   "build": {
     "env": {
       "SKIP_ENV_VALIDATION": "1",

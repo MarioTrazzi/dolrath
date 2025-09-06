@@ -115,6 +115,7 @@ function CombatPageContent() {
   const [socket] = useState(() => createSocketConnection())
   const [combatRoom, setCombatRoom] = useState<CombatRoom | null>(null)
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null)
+  const [opponent, setOpponent] = useState<Player | null>(null)
   const [isReady, setIsReady] = useState(false)
   const [newMessage, setNewMessage] = useState('')
   const [pendingAction, setPendingAction] = useState<{action: ActionType, diceType: number} | null>(null)
@@ -135,7 +136,6 @@ function CombatPageContent() {
 
   const combatLogRef = useRef<HTMLDivElement>(null)
 
-  const opponent = combatRoom?.player1?.id === currentPlayer?.id ? combatRoom?.player2 : combatRoom?.player1
   const isMyTurn = combatRoom?.currentTurn === currentPlayer?.id
   const isWinner = combatRoom?.winner === currentPlayer?.id
   const isCreator = combatRoom?.creator === currentPlayer?.id
@@ -171,23 +171,21 @@ function CombatPageContent() {
         console.log('🎯 Pending Action:', room.pendingAction)
         setCombatRoom(room)
 
-        // Atualizar currentPlayer com dados da sala quando houver mudanças
+        // Atualizar currentPlayer e opponent com dados da sala
         if (currentPlayer && room) {
           const updatedPlayerData = room.player1?.id === currentPlayer.id ? room.player1 : room.player2
+          const updatedOpponentData = room.player1?.id === currentPlayer.id ? room.player2 : room.player1
+          
+          // 🔥 FORÇA atualização do currentPlayer
           if (updatedPlayerData) {
-            setCurrentPlayer(prev => {
-              if (!prev) return prev
-              return {
-                ...prev,
-                hp: updatedPlayerData.hp,
-                maxHp: updatedPlayerData.maxHp,
-                mp: updatedPlayerData.mp,
-                maxMp: updatedPlayerData.maxMp,
-                stamina: updatedPlayerData.stamina,
-                maxStamina: updatedPlayerData.maxStamina,
-                // Manter outros dados do personagem que não mudam no combate
-              }
-            })
+            setCurrentPlayer(updatedPlayerData)
+            console.log('✅ CurrentPlayer atualizado:', updatedPlayerData)
+          }
+          
+          // 🔥 FORÇA atualização do opponent  
+          if (updatedOpponentData) {
+            setOpponent(updatedOpponentData)
+            console.log('✅ Opponent atualizado:', updatedOpponentData)
           }
         }
 

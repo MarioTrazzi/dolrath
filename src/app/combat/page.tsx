@@ -121,6 +121,7 @@ function CombatPageContent() {
   const [pendingDefense, setPendingDefense] = useState<{reaction: string, diceType: number} | null>(null)
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting')
   const [hasRolledInitiative, setHasRolledInitiative] = useState(false)
+  const [hasRolledDice, setHasRolledDice] = useState(false) // Novo estado para controlar se já rolou
 
   // Sistema de Stamina (custos por ação)
   const STAMINA_COSTS = {
@@ -173,10 +174,14 @@ function CombatPageContent() {
         // Reset iniciativa quando sala é resetada
         if (room.phase === CombatPhase.WAITING_PLAYERS) {
           setHasRolledInitiative(false)
+          setHasRolledDice(false) // Reset também o estado do dado
         }
         
         // APENAS na fase DICE_ROLL, setamos para ambos verem os dados
         if (room.phase === CombatPhase.DICE_ROLL && room.pendingAction) {
+          // Reset do estado de rolagem quando entra na fase
+          setHasRolledDice(false)
+          
           // Ambos setam o mesmo diceType para rolar o mesmo dado
           const diceType = room.pendingAction.diceType
           setPendingAction({
@@ -193,6 +198,7 @@ function CombatPageContent() {
         if (room.phase !== CombatPhase.DICE_ROLL) {
           setPendingAction(null)
           setPendingDefense(null)
+          setHasRolledDice(false) // Reset também aqui
         }
       })
 
@@ -389,7 +395,7 @@ function CombatPageContent() {
   }
 
   const handleRollDice = (sides: number) => {
-    if (!currentPlayer) return
+    if (!currentPlayer || hasRolledDice) return // Não rolar se já rolou
     
     // Na fase DICE_ROLL, ambos podem rolar o mesmo dado
     if (combatRoom?.phase === CombatPhase.DICE_ROLL && combatRoom?.pendingAction?.diceType === sides) {
@@ -399,6 +405,9 @@ function CombatPageContent() {
         sides, 
         action: combatRoom.pendingAction.action 
       })
+      
+      // Marcar que este jogador já rolou
+      setHasRolledDice(true)
       
       // Limpar os pending states após rolar
       if (pendingAction && pendingAction.diceType === sides) {
@@ -743,7 +752,10 @@ function CombatPageContent() {
           {combatRoom?.phase === CombatPhase.DICE_ROLL && combatRoom?.pendingAction && (
             <div className="bg-gradient-to-br from-surface/95 to-background/90 backdrop-blur-md border-t border-white/10 p-2 sm:p-3 flex-shrink-0">
               <h3 className="text-text-primary font-bold text-center mb-2 text-xs sm:text-sm">
-                🎲 Role o dado {combatRoom?.pendingAction?.diceType === 6 ? 'leve' : combatRoom?.pendingAction?.diceType === 10 ? 'pesado' : 'especial'} (d{combatRoom?.pendingAction?.diceType})
+                {hasRolledDice 
+                  ? '✅ Você já rolou! Aguardando oponente...' 
+                  : `🎲 Role o dado ${combatRoom?.pendingAction?.diceType === 6 ? 'leve' : combatRoom?.pendingAction?.diceType === 10 ? 'pesado' : 'especial'} (d${combatRoom?.pendingAction?.diceType})`
+                }
               </h3>
               <div className="flex justify-center space-x-2 sm:space-x-3 flex-wrap">
                 {[4, 6, 8, 10, 12, 20].map((sides) => {
@@ -754,17 +766,19 @@ function CombatPageContent() {
                     <button
                       key={sides}
                       onClick={() => handleRollDice(sides)}
-                      disabled={!isCorrectDice}
+                      disabled={!isCorrectDice || hasRolledDice}
                       className={`
                         w-10 h-10 sm:w-12 sm:h-12 rounded-lg text-white font-bold text-xs
                         transition-all duration-200 transform
-                        ${isCorrectDice 
+                        ${hasRolledDice && isCorrectDice
+                          ? 'bg-success opacity-75 cursor-not-allowed scale-95' // Verde se já rolou
+                          : isCorrectDice 
                           ? 'hover:scale-110 cursor-pointer bg-primary' 
                           : 'opacity-50 cursor-not-allowed bg-gray-600'
                         }
                       `}
                     >
-                      d{sides}
+                      {hasRolledDice && isCorrectDice ? '✓' : `d${sides}`}
                     </button>
                   )
                 })}

@@ -262,6 +262,8 @@ io.on('connection', (socket) => {
           message: `⏳ Aguardando ${room.currentTurn === room.player1?.id ? room.player2?.name : room.player1?.name} rolar o dado...`,
           timestamp: new Date()
         })
+        // Atualizar sala imediatamente para mostrar quem já rolou
+        io.to(roomId).emit('room_updated', room)
       } else {
         // É o defensor rolando
         room.pendingAction.defenseRoll = total
@@ -274,6 +276,8 @@ io.on('connection', (socket) => {
           message: `⚔️ Ambos rolaram! Calculando resultado...`,
           timestamp: new Date()
         })
+        // Atualizar sala antes de processar
+        io.to(roomId).emit('room_updated', room)
         setTimeout(() => {
           processCompleteAction(room, room.pendingAction.action, room.pendingAction.attackRoll, room.pendingAction.defenseAction, room.pendingAction.defenseRoll, roomId)
         }, 1000)
@@ -394,9 +398,7 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
       break
     case 'special_attack':
       baseDamage = Math.floor(baseDamage * 1.8)
-      if (attacker.mp >= 15) {
-        attacker.mp = Math.max(0, attacker.mp - 15)
-      }
+      // MP já foi consumido no player_action, não aplicar novamente aqui
       break
   }
 

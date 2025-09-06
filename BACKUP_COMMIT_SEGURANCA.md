@@ -21,8 +21,19 @@
 ✅ RESOLVIDO: Sistema de combate restaurado no commit 531dabb
 ✅ RESOLVIDO: Transformação agora é botão de ação estratégica
 ✅ RESOLVIDO: Criação de login por credencial funcionando
+✅ RESOLVIDO: Build script corrigido - remove reset em produção
+✅ RESOLVIDO: Seed corrigido com tipos corretos do enum
 
-❌ NOVO PROBLEMA: Erro "User not found" ao tentar criar personagem
+❌ PROBLEMA IDENTIFICADO: O reset de produção apagou todos os usuários
+   - Usuários criados antes do deploy foram perdidos
+   - Sistema de autenticação está funcionando corretamente agora
+   - Solução: usuários precisam se registrar novamente
+
+🔧 CORREÇÕES APLICADAS no commit 869771b:
+   - Script de build não faz mais reset em produção
+   - Seed corrigido com ItemType.SWORD, ItemType.STAFF, ItemType.HEAVY_ARMOR
+   - Sistema NextAuth corrigido (só cria usuário automaticamente via Google OAuth)
+   - Adicionados logs detalhados para debugging
 
 ## Solução
 Se não conseguirmos corrigir rapidamente, fazer:

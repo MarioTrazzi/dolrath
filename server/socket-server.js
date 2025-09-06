@@ -199,7 +199,14 @@ io.on('connection', (socket) => {
     
     // Se é um ataque, ir para OPPONENT_REACTION (não DICE_ROLL)
     if (['light_attack', 'heavy_attack', 'special_attack'].includes(action)) {
-      room.pendingAction = { action, diceType, playerId, type: 'attack' }
+      room.pendingAction = { 
+        action, 
+        diceType, 
+        playerId, 
+        type: 'attack',
+        attackRoll: undefined,  // Limpar rolls anteriores
+        defenseRoll: undefined  // Limpar rolls anteriores
+      }
       room.phase = CombatPhase.OPPONENT_REACTION // MUDANÇA AQUI!
       room.combatLog.push({
         type: 'action',
@@ -245,14 +252,28 @@ io.on('connection', (socket) => {
       result: { roll, modifier, total }
     })
 
-    // Para ataques na fase DICE_ROLL, salvar o roll do atacante
+    // Para ataques na fase DICE_ROLL, salvar os rolls de ambos
     if (room.pendingAction?.type === 'attack' && room.phase === CombatPhase.DICE_ROLL) {
       if (playerId === room.pendingAction.playerId) {
         // É o atacante rolando
         room.pendingAction.attackRoll = total
+        room.combatLog.push({
+          type: 'system',
+          message: `⏳ Aguardando ${room.currentTurn === room.player1?.id ? room.player2?.name : room.player1?.name} rolar o dado...`,
+          timestamp: new Date()
+        })
       } else {
-        // É o defensor rolando - processar combate completo
+        // É o defensor rolando
         room.pendingAction.defenseRoll = total
+      }
+      
+      // Só processar quando AMBOS tiverem rolado
+      if (room.pendingAction.attackRoll !== undefined && room.pendingAction.defenseRoll !== undefined) {
+        room.combatLog.push({
+          type: 'system',
+          message: `⚔️ Ambos rolaram! Calculando resultado...`,
+          timestamp: new Date()
+        })
         setTimeout(() => {
           processCompleteAction(room, room.pendingAction.action, room.pendingAction.attackRoll, room.pendingAction.defenseAction, room.pendingAction.defenseRoll, roomId)
         }, 1000)

@@ -681,6 +681,14 @@ io.on('connection', (socket) => {
     const room = rooms.get(roomId)
     if (!room || room.creator !== playerId) return
 
+    // 💚 REGENERAÇÃO AUTOMÁTICA - Restaurar recursos antes de fechar sala
+    if (room.player1) {
+      regeneratePlayerResources(room.player1, 'Room closed')
+    }
+    if (room.player2) {
+      regeneratePlayerResources(room.player2, 'Room closed')
+    }
+
     room.combatLog.push({
       type: 'system',
       message: '🚪 Sala fechada pelo criador.',
@@ -705,13 +713,40 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     console.log('Cliente desconectado:', socket.id)
     
+    // 💚 REGENERAÇÃO AUTOMÁTICA - Se jogador sair de combate
     playerSockets.forEach((socketId, playerId) => {
       if (socketId === socket.id) {
+        // Encontrar a sala do jogador
+        rooms.forEach((room, roomId) => {
+          if (room.player1?.id === playerId || room.player2?.id === playerId) {
+            const player = room.player1?.id === playerId ? room.player1 : room.player2
+            
+            // Regenerar recursos ao sair do combate
+            if (player && room.phase !== CombatPhase.WAITING_PLAYERS) {
+              regeneratePlayerResources(player, 'Disconnect from combat')
+            }
+          }
+        })
+        
         playerSockets.delete(playerId)
       }
     })
   })
 })
+
+// 💚 REGENERAÇÃO AUTOMÁTICA DE RECURSOS
+function regeneratePlayerResources(player, context = 'Activity') {
+  if (!player) return
+  
+  // Restaurar HP completo
+  player.hp = player.maxHp
+  
+  // Restaurar MP completo
+  player.mp = player.maxMp
+  
+  // Stamina NÃO é restaurada - essa é a limitação do sistema
+  console.log(`💚 ${context}: ${player.name} teve HP e MP restaurados (Stamina: ${player.stamina}/${player.maxStamina})`)
+}
 
 function processCompleteAction(room, attackAction, attackRoll, defenseAction, defenseRoll, roomId) {
   const attacker = room.currentTurn === room.player1?.id ? room.player1 : room.player2
@@ -862,9 +897,20 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
   if (defender.hp <= 0) {
     room.phase = CombatPhase.COMBAT_END
     room.winner = attacker.id
+    
+    // 🔥 REGENERAÇÃO AUTOMÁTICA - Restaurar HP e MP após combate
+    regeneratePlayerResources(attacker, 'PvP Victory')
+    regeneratePlayerResources(defender, 'PvP Defeat')
+    
     room.combatLog.push({
       type: 'victory',
       message: `🏆 ${attacker.name} venceu o combate!`,
+      timestamp: new Date()
+    })
+    
+    room.combatLog.push({
+      type: 'system',
+      message: `💚 HP e MP restaurados automaticamente! Apenas Stamina foi consumida.`,
       timestamp: new Date()
     })
     

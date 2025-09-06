@@ -171,6 +171,26 @@ function CombatPageContent() {
         console.log('🎯 Pending Action:', room.pendingAction)
         setCombatRoom(room)
 
+        // Atualizar currentPlayer com dados da sala quando houver mudanças
+        if (currentPlayer && room) {
+          const updatedPlayerData = room.player1?.id === currentPlayer.id ? room.player1 : room.player2
+          if (updatedPlayerData) {
+            setCurrentPlayer(prev => {
+              if (!prev) return prev
+              return {
+                ...prev,
+                hp: updatedPlayerData.hp,
+                maxHp: updatedPlayerData.maxHp,
+                mp: updatedPlayerData.mp,
+                maxMp: updatedPlayerData.maxMp,
+                stamina: updatedPlayerData.stamina,
+                maxStamina: updatedPlayerData.maxStamina,
+                // Manter outros dados do personagem que não mudam no combate
+              }
+            })
+          }
+        }
+
         // Reset iniciativa quando sala é resetada
         if (room.phase === CombatPhase.WAITING_PLAYERS) {
           setHasRolledInitiative(false)

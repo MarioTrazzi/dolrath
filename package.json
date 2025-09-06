@@ -11,7 +11,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
     "prisma:reset": "prisma migrate reset --force",
-    "vercel-build": "prisma generate && prisma migrate deploy && next build",
+    "vercel-build": "prisma generate && next build",
     "postinstall": "prisma generate",
     "socket:dev": "node server/socket-server.js",
     "dev:full": "concurrently \"npm run dev\" \"npm run socket:dev\""

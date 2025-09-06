@@ -193,6 +193,11 @@ function CombatPageContent() {
         console.log('🔄 Sala atualizada:', room)
         console.log('📊 Fase atual:', room.phase)
         console.log('🎯 Pending Action:', room.pendingAction)
+        console.log('👥 Players ready:', { 
+          player1Ready: room.player1?.isReady, 
+          player2Ready: room.player2?.isReady,
+          isActive: room.isActive 
+        })
         setCombatRoom(room)
 
         // 🔥 SEMPRE atualizar currentPlayer e opponent quando a sala muda
@@ -215,6 +220,10 @@ function CombatPageContent() {
           if (updatedPlayerData) {
             setCurrentPlayer(updatedPlayerData)
             console.log('✅ CurrentPlayer atualizado:', updatedPlayerData.name, `${updatedPlayerData.hp}/${updatedPlayerData.maxHp} HP`)
+            
+            // 🔥 SINCRONIZAR estado isReady com dados do servidor
+            setIsReady(updatedPlayerData.isReady || false)
+            console.log('🔄 IsReady sincronizado:', updatedPlayerData.isReady)
           }
           
           // Atualizar opponent se encontrado (pode ser null se só tem 1 player)
@@ -406,8 +415,17 @@ function CombatPageContent() {
 
   const toggleReady = () => {
     if (!currentPlayer) return
+    
+    console.log('🔄 Toggling ready:', { 
+      currentIsReady: isReady, 
+      playerId: currentPlayer.id, 
+      playerName: currentPlayer.name 
+    })
+    
     setIsReady(!isReady)
     socket.emit('toggle_ready', { playerId: currentPlayer.id, roomId })
+    
+    console.log('📤 Emitido toggle_ready para servidor')
   }
 
   const handlePlayerAction = (action: ActionType) => {

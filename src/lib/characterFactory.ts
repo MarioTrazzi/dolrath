@@ -77,14 +77,20 @@ export class CharacterFactory {
       }
     }
     
-    // Calcular HP baseado na constituição
-    const maxHp = Math.floor(leveledAttributes.constitution / 10) + (level * 10)
+    // 🔥 FÓRMULAS BALANCEADAS - DEF mais forte, AGI mais útil
+    const str = Math.floor(leveledAttributes.strength / 10)
+    const def = Math.floor(leveledAttributes.constitution / 10) // DEF = constitution
+    const int = Math.floor(leveledAttributes.intelligence / 10)
+    const agi = Math.floor(leveledAttributes.dexterity / 10) // AGI = dexterity
     
-    // Calcular MP baseado na sabedoria (se aplicável)
-    const maxMp = Math.floor(leveledAttributes.wisdom / 10) + (level * 5)
+    // HP: DEF mais valioso que STR
+    const maxHp = 80 + (str * 2) + (def * 3) + (level * 8)
+    
+    // MP: INT forte, AGI contribui pouco
+    const maxMp = 60 + (int * 3) + (agi * 1) + (level * 4)
 
-    // Calcular Stamina baseado na destreza
-    const maxStamina = Math.floor(leveledAttributes.dexterity / 10) + (level * 5)
+    // Stamina: AGI menos dominante mas ainda importante
+    const maxStamina = 120 + (agi * 3) + (level * 3)
     
     return {
       id: uuidv4(),
@@ -234,16 +240,18 @@ export class CharacterFactory {
   // Calcular poder de combate total
   static calculateCombatPower(character: Character): number {
     const attributes = character.attributes
-    const weaponBonus = character.equipment.weapon?.bonuses.strength || 0
-    const armorBonus = character.equipment.armor?.bonuses.constitution || 0
+    const str = Math.floor(attributes.strength / 10)
+    const def = Math.floor(attributes.constitution / 10)
+    const int = Math.floor(attributes.intelligence / 10)
+    const agi = Math.floor(attributes.dexterity / 10)
     
+    // 🔥 PODER DE COMBATE BALANCEADO
     return Math.floor(
-      (attributes.strength + weaponBonus) * 0.3 +
-      (attributes.dexterity) * 0.2 +
-      (attributes.constitution + armorBonus) * 0.3 +
-      (attributes.intelligence) * 0.1 +
-      (attributes.wisdom) * 0.1 +
-      character.level * 10
+      (str * 1.5) +      // STR menos dominante
+      (int * 2.0) +      // INT mais valioso para magia
+      (agi * 1.2) +      // AGI mais útil
+      (def * 1.0) +      // DEF tem valor
+      character.level * 8
     )
   }
 } 

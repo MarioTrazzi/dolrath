@@ -5,8 +5,9 @@ export const races: CharacterRace[] = [
     id: 'draconiano',
     name: 'Draconiano',
     description: 'Descendentes de dragões com força descomunal',
-    baseStats: { str: 15, agi: 8, int: 10, res: 12, hp: 120, mp: 60, crit: 5, speed: 7 },
-    bonusStats: { str: 3, res: 2, hp: 20 }, // Bônus racial
+    // 🔥 BALANCEADO: STR alto mas não extremo
+    baseStats: { str: 13, agi: 8, int: 9, res: 12, hp: 100, mp: 60, crit: 4, speed: 6 },
+    bonusStats: { str: 2, res: 2, hp: 15 }, // Bônus racial reduzido
     specialAbility: 'Transformação em Dragão',
     transformation: 'Dragão',
     lore: 'Antigas linhagens dracônicas que mantiveram sua humanidade...',
@@ -16,8 +17,9 @@ export const races: CharacterRace[] = [
     id: 'metamorfo',
     name: 'Metamorfo',
     description: 'Shapeshifters com agilidade sobrenatural',
-    baseStats: { str: 10, agi: 15, int: 12, res: 8, hp: 90, mp: 80, crit: 8, speed: 12 },
-    bonusStats: { agi: 3, int: 2, mp: 15 },
+    // 🔥 BALANCEADO: AGI especialista
+    baseStats: { str: 9, agi: 13, int: 11, res: 8, hp: 85, mp: 75, crit: 7, speed: 10 },
+    bonusStats: { agi: 3, int: 1, mp: 10 }, // AGI foco
     specialAbility: 'Transformação Animal',
     transformation: 'Qualquer Animal',
     lore: 'Seres capazes de alterar sua forma física...',
@@ -27,7 +29,8 @@ export const races: CharacterRace[] = [
     id: 'humano',
     name: 'Humano',
     description: 'Versáteis e adaptáveis a qualquer situação',
-    baseStats: { str: 12, agi: 11, int: 11, res: 11, hp: 100, mp: 70, crit: 6, speed: 9 },
+    // 🔥 BALANCEADO: Equilibrado mas viável
+    baseStats: { str: 11, agi: 10, int: 11, res: 10, hp: 90, mp: 65, crit: 5, speed: 8 },
     bonusStats: { str: 1, agi: 1, int: 1, res: 1 }, // Bônus equilibrado
     specialAbility: 'Adaptabilidade',
     lore: 'A raça mais comum, conhecida por sua versatilidade...',

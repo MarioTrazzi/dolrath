@@ -115,7 +115,6 @@ function CombatPageContent() {
   const [socket] = useState(() => createSocketConnection())
   const [combatRoom, setCombatRoom] = useState<CombatRoom | null>(null)
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null)
-  const [opponent, setOpponent] = useState<Player | null>(null)
   const [isReady, setIsReady] = useState(false)
   const [newMessage, setNewMessage] = useState('')
   const [pendingAction, setPendingAction] = useState<{action: ActionType, diceType: number} | null>(null)
@@ -136,6 +135,7 @@ function CombatPageContent() {
 
   const combatLogRef = useRef<HTMLDivElement>(null)
 
+  const opponent = combatRoom?.player1?.id === currentPlayer?.id ? combatRoom?.player2 : combatRoom?.player1
   const isMyTurn = combatRoom?.currentTurn === currentPlayer?.id
   const isWinner = combatRoom?.winner === currentPlayer?.id
   const isCreator = combatRoom?.creator === currentPlayer?.id
@@ -151,32 +151,8 @@ function CombatPageContent() {
   }, [combatRoom?.combatLog])
 
   useEffect(() => {
-    const initializeCombat = () => {
-      let playerData: Player = {
-        id: 'player_' + Math.random().toString(36).substr(2, 9),
-        name: isRoomCreator ? 'sgs' : 'Oponente',
-        level: 6,
-        race: 'Humano',
-        class: 'Guerreiro',
-        hp: 360,
-        maxHp: 360,
-        mp: 210,
-        maxMp: 210,
-        stamina: 100,
-        maxStamina: 100,
-        attack: 9,
-        defense: 10,
-        strength: 9,
-        agility: 5,
-        intelligence: 3,
-        resistance: 0,
-        critical: 1.0,
-        speed: 2.5,
-        equipment: {},
-        isReady: false,
-        isConnected: true,
-        isAlive: true
-      }
+    const initializeCombat = async () => {
+      let playerData: Player
 
       // Configurar event listeners do Socket.IO
       socket.on('connect', () => {
@@ -193,80 +169,25 @@ function CombatPageContent() {
         console.log('🔄 Sala atualizada:', room)
         console.log('📊 Fase atual:', room.phase)
         console.log('🎯 Pending Action:', room.pendingAction)
-        console.log('👥 Players ready:', { 
-          player1Ready: room.player1?.isReady, 
-          player2Ready: room.player2?.isReady,
-          isActive: room.isActive 
-        })
-        
-        // ⚡ DETECTAR MUDANÇA DE FASE CRÍTICA PARA INITIATIVE_ROLL
-        if (room.phase === CombatPhase.INITIATIVE_ROLL && room.isActive) {
-          console.log('🚨🚨🚨 FASE CRÍTICA DETECTADA: INITIATIVE_ROLL - DEVE MOSTRAR D20! 🚨🚨🚨')
-          console.log('🎯 Estado atual do room:', {
-            phase: room.phase,
-            isActive: room.isActive,
-            player1Ready: room.player1?.isReady,
-            player2Ready: room.player2?.isReady
-          })
-        }
-        
         setCombatRoom(room)
 
-        // 🔥 SEMPRE atualizar currentPlayer e opponent quando a sala muda
-        if (room) {
-          // Identificar qual é o current player e qual é o opponent
-          let updatedPlayerData: Player | null = null
-          let updatedOpponentData: Player | null = null
-          
-          if (currentPlayer?.id) {
-            // Se já temos currentPlayer, usar o ID para identificar
-            updatedPlayerData = room.player1?.id === currentPlayer.id ? room.player1 : room.player2
-            updatedOpponentData = room.player1?.id === currentPlayer.id ? room.player2 : room.player1
-          } else if (room.player1 || room.player2) {
-            // Se não temos currentPlayer ainda, pegar o primeiro disponível
-            updatedPlayerData = room.player1 || room.player2
-            updatedOpponentData = room.player1 === updatedPlayerData ? room.player2 : room.player1
-          }
-          
-          // Atualizar currentPlayer se encontrado
+        // Atualizar currentPlayer com dados da sala quando houver mudanças
+        if (currentPlayer && room) {
+          const updatedPlayerData = room.player1?.id === currentPlayer.id ? room.player1 : room.player2
           if (updatedPlayerData) {
-            setCurrentPlayer(updatedPlayerData)
-            console.log('✅ CurrentPlayer atualizado:', updatedPlayerData.name, `${updatedPlayerData.hp}/${updatedPlayerData.maxHp} HP`)
-            
-            // 🔥 SINCRONIZAR estado isReady APENAS com o player atual (não com qualquer player)
-            // Só sincronizar se este updatedPlayerData corresponde ao nosso currentPlayer
-            if (currentPlayer?.id && updatedPlayerData.id === currentPlayer.id) {
-              console.log('🔄 Sincronizando isReady para MEU player:', {
-                playerName: updatedPlayerData.name,
-                playerId: updatedPlayerData.id,
-                myPlayerId: currentPlayer.id,
-                isReadyValue: updatedPlayerData.isReady
-              })
-              setIsReady(updatedPlayerData.isReady || false)
-            } else if (!currentPlayer?.id) {
-              // Se ainda não temos currentPlayer definido, aceitar o primeiro
-              console.log('🔄 Inicializando isReady (primeiro player):', {
-                playerName: updatedPlayerData.name,
-                playerId: updatedPlayerData.id,
-                isReadyValue: updatedPlayerData.isReady
-              })
-              setIsReady(updatedPlayerData.isReady || false)
-            } else {
-              console.log('� NÃO sincronizando isReady - player diferente:', {
-                updatedPlayerName: updatedPlayerData.name,
-                updatedPlayerId: updatedPlayerData.id,
-                myPlayerId: currentPlayer.id,
-                myPlayerName: currentPlayer.name
-              })
-            }
-          }
-          
-          // Atualizar opponent se encontrado (pode ser null se só tem 1 player)
-          setOpponent(updatedOpponentData)
-          if (updatedOpponentData) {
-            console.log('✅ Opponent atualizado:', updatedOpponentData.name, `${updatedOpponentData.hp}/${updatedOpponentData.maxHp} HP`)
-          } else {
-            console.log('⏳ Opponent ainda não entrou na sala')
+            setCurrentPlayer(prev => {
+              if (!prev) return prev
+              return {
+                ...prev,
+                hp: updatedPlayerData.hp,
+                maxHp: updatedPlayerData.maxHp,
+                mp: updatedPlayerData.mp,
+                maxMp: updatedPlayerData.maxMp,
+                stamina: updatedPlayerData.stamina,
+                maxStamina: updatedPlayerData.maxStamina,
+                // Manter outros dados do personagem que não mudam no combate
+              }
+            })
           }
         }
 
@@ -320,15 +241,10 @@ function CombatPageContent() {
 
       // Se temos characterId, carregar dados do personagem específico
       if (characterId) {
-        fetch(`/api/character/${characterId}`)
-          .then(response => {
-            if (response.ok) {
-              return response.json()
-            } else {
-              throw new Error('Personagem não encontrado')
-            }
-          })
-          .then(charDetails => {
+        try {
+          const response = await fetch(`/api/character/${characterId}`)
+          if (response.ok) {
+            const charDetails = await response.json()
             playerData = {
               id: charDetails.id,
               name: charDetails.name,
@@ -354,25 +270,20 @@ function CombatPageContent() {
               isConnected: true,
               isAlive: charDetails.isAlive
             }
-            setCurrentPlayer(playerData)
-            socket.emit('join_room', { roomId, player: playerData, isCreator: isRoomCreator })
-          })
-          .catch(error => {
-            console.error('Erro ao carregar personagem:', error)
-            router.push('/combat-lobby')
-            return
-          })
+          } else {
+            throw new Error('Personagem não encontrado')
+          }
+        } catch (error) {
+          console.error('Erro ao carregar personagem:', error)
+          router.push('/combat-lobby')
+          return
+        }
       } else {
         // Fallback para dados mock se não tiver characterId
-        fetch('/api/user/profile')
-          .then(response => {
-            if (response.ok) {
-              return response.json()
-            } else {
-              throw new Error('API não disponível')
-            }
-          })
-          .then(userData => {
+        try {
+          const response = await fetch('/api/user/profile')
+          if (response.ok) {
+            const userData = await response.json()
             playerData = {
               id: userData.id || 'player_' + Math.random().toString(36).substr(2, 9),
               name: userData.name || 'sgs',
@@ -398,21 +309,42 @@ function CombatPageContent() {
               isConnected: true,
               isAlive: true
             }
-            setCurrentPlayer(playerData)
-            socket.emit('join_room', { roomId, player: playerData, isCreator: isRoomCreator })
-          })
-          .catch(apiError => {
-            // Usar dados padrão se API falhar
-            setCurrentPlayer(playerData)
-            socket.emit('join_room', { roomId, player: playerData, isCreator: isRoomCreator })
-          })
+          } else {
+            throw new Error('API não disponível')
+          }
+        } catch (apiError) {
+          playerData = {
+            id: 'player_' + Math.random().toString(36).substr(2, 9),
+            name: isCreator ? 'sgs' : 'Oponente',
+            level: 6,
+            race: 'Humano',
+            class: 'Guerreiro',
+            hp: 360,
+            maxHp: 360,
+            mp: 210,
+            maxMp: 210,
+            stamina: 100,
+            maxStamina: 100,
+            attack: 9,
+            defense: 10,
+            strength: 9,
+            agility: 5,
+            intelligence: 3,
+            resistance: 0,
+            critical: 1.0,
+            speed: 2.5,
+            equipment: {},
+            isReady: false,
+            isConnected: true,
+            isAlive: true
+          }
+        }
       }
       
-      // Se não tem characterId, usar dados padrão imediatamente
-      if (!characterId) {
-        setCurrentPlayer(playerData)
-        socket.emit('join_room', { roomId, player: playerData, isCreator: isRoomCreator })
-      }
+      setCurrentPlayer(playerData)
+      
+      // Entrar na sala via Socket.IO
+      socket.emit('join_room', { roomId, player: playerData, isCreator: isRoomCreator })
     }
 
     initializeCombat()
@@ -429,40 +361,10 @@ function CombatPageContent() {
     }
   }, [socket, roomId, isRoomCreator, characterId])
 
-  // 🔥 FORÇA re-render quando currentPlayer ou opponent mudam
-  useEffect(() => {
-    if (currentPlayer) {
-      console.log('🔄 CurrentPlayer updated:', currentPlayer.name, `${currentPlayer.hp}/${currentPlayer.maxHp} HP`)
-    }
-    if (opponent) {
-      console.log('🔄 Opponent updated:', opponent.name, `${opponent.hp}/${opponent.maxHp} HP`)
-    }
-  }, [currentPlayer?.hp, currentPlayer?.mp, currentPlayer?.stamina, opponent?.hp, opponent?.mp, opponent?.stamina])
-
-  // 🔥 Inicializar opponent quando combatRoom muda
-  useEffect(() => {
-    if (combatRoom && currentPlayer) {
-      const opponentData = combatRoom.player1?.id === currentPlayer.id ? combatRoom.player2 : combatRoom.player1
-      setOpponent(opponentData)
-      console.log('🎯 Opponent detectado:', opponentData?.name || 'nenhum')
-    }
-  }, [combatRoom?.player1, combatRoom?.player2, currentPlayer?.id])
-
   const toggleReady = () => {
     if (!currentPlayer) return
-    
-    console.log('🔄 Toggling ready:', { 
-      currentIsReady: isReady, 
-      playerId: currentPlayer.id, 
-      playerName: currentPlayer.name 
-    })
-    
-    // ❌ NÃO alterar estado local - deixar o servidor controlar
-    // setIsReady(!isReady) 
-    
+    setIsReady(!isReady)
     socket.emit('toggle_ready', { playerId: currentPlayer.id, roomId })
-    
-    console.log('📤 Emitido toggle_ready para servidor - aguardando resposta')
   }
 
   const handlePlayerAction = (action: ActionType) => {

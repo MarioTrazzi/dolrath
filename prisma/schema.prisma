@@ -144,6 +144,12 @@ model Character {
   // Sistema de stamina
   stamina       Int             @default(100)
   maxStamina    Int             @default(100)
+  
+  // 🐉 SISTEMA DE TRANSFORMAÇÃO
+  isTransformed     Boolean       @default(false)
+  transformationType String?      // 'dragon', 'wolf', 'bear', 'eagle'
+  transformationData Json?        @db.JsonB // { remainingTurns, cooldownTurns, originalStats }
+  
   equipment     CharacterEquipment[]
   inventory     CharacterInventory[]
   history       CharacterHistory[]

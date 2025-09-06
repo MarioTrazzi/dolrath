@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { X, Users, Sword, Shield, Zap, Heart, Sparkles } from 'lucide-react'
 import { io, Socket } from 'socket.io-client'
+import TransformationPanel from '@/components/TransformationPanel'
 
 interface Equipment {
   id: string
@@ -639,8 +640,19 @@ function CombatPageContent() {
             </div>
 
             {/* Actions - Sempre visível e responsivo */}
-            <div className="order-1 sm:order-3 w-full sm:w-64 bg-surface/30 p-2 sm:p-4 flex flex-col flex-shrink-0">
+            <div className="order-1 sm:order-3 w-full sm:w-64 bg-surface/30 p-2 sm:p-4 flex flex-col flex-shrink-0 space-y-4">
               <h3 className="font-bold text-text-primary mb-2 sm:mb-3 text-xs sm:text-sm text-center">🎯 Ações</h3>
+              
+              {/* Painel de Transformação */}
+              {characterId && (
+                <TransformationPanel 
+                  characterId={characterId}
+                  character={displayCurrentPlayer}
+                  onTransformationChange={(updatedCharacter) => {
+                    setCurrentPlayer(updatedCharacter)
+                  }}
+                />
+              )}
               
               {combatRoom?.phase === CombatPhase.INITIATIVE_ROLL ? (
                 <div className="space-y-3">

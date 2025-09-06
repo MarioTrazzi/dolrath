@@ -72,13 +72,15 @@ export const { handlers: { GET, POST }, auth } = NextAuth({
       if (user) {
         const { prisma } = await import('@/lib/prisma')
         const email = user.email ?? '';
+        
         let dbUser = await prisma.user.findUnique({ 
           where: { email },
           select: { id: true, email: true, name: true }
         })
 
-        if (!dbUser && email) {
-          // Create user if it doesn't exist
+        // Only create user automatically for OAuth providers (Google)
+        // For credentials, user must already exist from registration
+        if (!dbUser && account?.provider === 'google' && email) {
           dbUser = await prisma.user.create({
             data: {
               email,
@@ -86,12 +88,19 @@ export const { handlers: { GET, POST }, auth } = NextAuth({
             },
             select: { id: true, email: true, name: true }
           })
+          console.log('✅ Usuário Google criado automaticamente:', email)
         }
 
         if (dbUser) {
           token.userId = dbUser.id
           token.email = dbUser.email
           token.name = dbUser.name
+          console.log('✅ Token JWT configurado para usuário:', {
+            id: dbUser.id,
+            email: dbUser.email
+          })
+        } else {
+          console.log('❌ Usuário não encontrado no banco para token:', email)
         }
       }
       return token
@@ -101,6 +110,16 @@ export const { handlers: { GET, POST }, auth } = NextAuth({
         session.user.id = token.userId as string
         session.user.email = token.email as string
         session.user.name = token.name as string
+        console.log('✅ Sessão configurada:', {
+          userId: session.user.id,
+          email: session.user.email
+        })
+      } else {
+        console.log('❌ Problema na configuração da sessão:', {
+          hasSessionUser: !!session.user,
+          hasTokenUserId: !!token.userId,
+          tokenUserId: token.userId
+        })
       }
       return session
     }

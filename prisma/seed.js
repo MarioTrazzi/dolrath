@@ -6,7 +6,7 @@ const items = [
   {
     name: "Espada do Dragão Carmesim",
     description: "Uma lâmina lendária forjada com escamas de dragão vermelho.",
-    type: ItemType.WEAPON,
+    type: ItemType.SWORD,
     level: 10,
     goldPrice: 1500,
     stats: {
@@ -19,7 +19,7 @@ const items = [
   {
     name: "Cajado do Arcano",
     description: "Um cajado antigo imbuído com poder mágico ancestral.",
-    type: ItemType.WEAPON,
+    type: ItemType.STAFF,
     level: 8,
     goldPrice: 1200,
     stats: {
@@ -32,7 +32,7 @@ const items = [
   {
     name: "Armadura de Placas do Guardião",
     description: "Uma armadura robusta feita para os mais bravos guerreiros.",
-    type: ItemType.ARMOR,
+    type: ItemType.HEAVY_ARMOR,
     level: 10,
     goldPrice: 1400,
     stats: {

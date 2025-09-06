@@ -77,6 +77,8 @@ STAMINA_COSTS = {
 - **Transformations gated** por custos de stamina
 - **PvP battles consume** stamina automaticamente
 - **Error handling** para stamina insuficiente
+- **🆕 HP/MP regeneration**: Restauração automática após combates/dungeons
+- **Resource management**: Apenas stamina permanece consumida entre atividades
 
 ### ✅ **4. Progression System**
 ```typescript
@@ -117,6 +119,7 @@ STAMINA_PROGRESSION = {
 - **Evening Session**: 2 PvP + Exploration = Closure satisfatório
 - **Daily Total**: 8 atividades significativas
 - **Conversion Appeal**: Premium vale a pena para jogadores engajados
+- **🆕 Resource Management**: HP e MP restauram automaticamente, foco na stamina
 
 ### 💎 **Premium Experience - ENHANCED**
 - **Base F2P Activities**: 8 atividades

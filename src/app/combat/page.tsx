@@ -4,7 +4,6 @@ import { useEffect, useState, useRef, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { X, Users, Sword, Shield, Zap, Heart, Sparkles } from 'lucide-react'
 import { io, Socket } from 'socket.io-client'
-import TransformationPanel from '@/components/TransformationPanel'
 
 interface Equipment {
   id: string
@@ -48,6 +47,14 @@ interface Player {
   isReady: boolean
   isConnected: boolean
   isAlive: boolean
+  // Campos de transformação
+  isTransformed?: boolean
+  transformationType?: string | null
+  transformationData?: {
+    remainingTurns?: number
+    cooldownTurns?: number
+    [key: string]: any
+  }
 }
 
 interface CombatLogEntry {
@@ -472,6 +479,60 @@ function CombatPageContent() {
     })
   }
 
+  const handleTransformation = async () => {
+    if (!currentPlayer || !characterId) return
+    
+    try {
+      // Para simplificar, vamos usar a transformação principal da raça
+      let transformationType = 'dragon' // default
+      
+      // Determinar transformação baseada na raça
+      if (currentPlayer.race === 'draconiano') {
+        transformationType = 'dragon'
+      } else if (currentPlayer.race === 'metamorfo') {
+        transformationType = 'wolf' // primeira opção para metamorfo
+      } else {
+        // Mostrar mensagem se a raça não tem transformação
+        socket.emit('chat_message', { 
+          playerId: currentPlayer.id, 
+          roomId, 
+          message: `❌ Sua raça (${currentPlayer.race}) não possui transformações disponíveis!` 
+        })
+        return
+      }
+      
+      const response = await fetch(`/api/character/${characterId}/transform`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transformationType })
+      })
+      
+      if (response.ok) {
+        const updatedCharacter = await response.json()
+        setCurrentPlayer(updatedCharacter.character)
+        
+        // Notificar sala sobre transformação
+        socket.emit('chat_message', { 
+          playerId: currentPlayer.id, 
+          roomId, 
+          message: `🐉 ${currentPlayer.name} se transformou em ${transformationType}!` 
+        })
+        
+        // Perder o turno (transformação custa o turno)
+        socket.emit('end_turn', { playerId: currentPlayer.id, roomId })
+      } else {
+        const error = await response.json()
+        socket.emit('chat_message', { 
+          playerId: currentPlayer.id, 
+          roomId, 
+          message: `❌ Transformação falhou: ${error.error}` 
+        })
+      }
+    } catch (error) {
+      console.error('Erro ao transformar:', error)
+    }
+  }
+
   const sendMessage = () => {
     if (newMessage.trim() && currentPlayer) {
       socket.emit('chat_message', { 
@@ -643,17 +704,6 @@ function CombatPageContent() {
             <div className="order-1 sm:order-3 w-full sm:w-64 bg-surface/30 p-2 sm:p-4 flex flex-col flex-shrink-0 space-y-4">
               <h3 className="font-bold text-text-primary mb-2 sm:mb-3 text-xs sm:text-sm text-center">🎯 Ações</h3>
               
-              {/* Painel de Transformação */}
-              {characterId && (
-                <TransformationPanel 
-                  characterId={characterId}
-                  character={displayCurrentPlayer}
-                  onTransformationChange={(updatedCharacter) => {
-                    setCurrentPlayer(updatedCharacter)
-                  }}
-                />
-              )}
-              
               {combatRoom?.phase === CombatPhase.INITIATIVE_ROLL ? (
                 <div className="space-y-3">
                   <div className="text-center">
@@ -748,6 +798,25 @@ function CombatPageContent() {
                   >
                     🧪 Consumíveis
                   </button>
+                  
+                  {/* Botão de Transformação */}
+                  {displayCurrentPlayer && (displayCurrentPlayer.race === 'draconiano' || displayCurrentPlayer.race === 'metamorfo') && (
+                    <button
+                      onClick={handleTransformation}
+                      disabled={displayCurrentPlayer.isTransformed || (displayCurrentPlayer.transformationData?.cooldownTurns || 0) > 0}
+                      className={`w-full ${displayCurrentPlayer.isTransformed || (displayCurrentPlayer.transformationData?.cooldownTurns || 0) > 0
+                        ? 'bg-gray-600 opacity-50 cursor-not-allowed' 
+                        : 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-blue-600 hover:to-purple-600'
+                      } text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
+                    >
+                      {displayCurrentPlayer.isTransformed ? 
+                        '🐉 Já Transformado' :
+                        (displayCurrentPlayer.transformationData?.cooldownTurns || 0) > 0 ?
+                        `⏰ Cooldown (${displayCurrentPlayer.transformationData?.cooldownTurns || 0})` :
+                        '⚡ Transformar (Perde o turno)'
+                      }
+                    </button>
+                  )}
                 </div>
               ) : combatRoom?.phase === CombatPhase.OPPONENT_REACTION && !isMyTurn ? (
                 <div className="space-y-2">

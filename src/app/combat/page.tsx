@@ -359,6 +359,16 @@ function CombatPageContent() {
     }
   }, [socket, roomId, isRoomCreator, characterId])
 
+  // 🔥 FORÇA re-render quando currentPlayer ou opponent mudam
+  useEffect(() => {
+    if (currentPlayer) {
+      console.log('🔄 CurrentPlayer updated:', currentPlayer.name, `${currentPlayer.hp}/${currentPlayer.maxHp} HP`)
+    }
+    if (opponent) {
+      console.log('🔄 Opponent updated:', opponent.name, `${opponent.hp}/${opponent.maxHp} HP`)
+    }
+  }, [currentPlayer?.hp, currentPlayer?.mp, currentPlayer?.stamina, opponent?.hp, opponent?.mp, opponent?.stamina])
+
   const toggleReady = () => {
     if (!currentPlayer) return
     setIsReady(!isReady)

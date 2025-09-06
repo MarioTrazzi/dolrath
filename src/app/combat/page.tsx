@@ -236,12 +236,28 @@ function CombatPageContent() {
             // 🔥 SINCRONIZAR estado isReady APENAS com o player atual (não com qualquer player)
             // Só sincronizar se este updatedPlayerData corresponde ao nosso currentPlayer
             if (currentPlayer?.id && updatedPlayerData.id === currentPlayer.id) {
+              console.log('🔄 Sincronizando isReady para MEU player:', {
+                playerName: updatedPlayerData.name,
+                playerId: updatedPlayerData.id,
+                myPlayerId: currentPlayer.id,
+                isReadyValue: updatedPlayerData.isReady
+              })
               setIsReady(updatedPlayerData.isReady || false)
-              console.log('🔄 IsReady sincronizado para player próprio:', updatedPlayerData.isReady)
             } else if (!currentPlayer?.id) {
               // Se ainda não temos currentPlayer definido, aceitar o primeiro
+              console.log('🔄 Inicializando isReady (primeiro player):', {
+                playerName: updatedPlayerData.name,
+                playerId: updatedPlayerData.id,
+                isReadyValue: updatedPlayerData.isReady
+              })
               setIsReady(updatedPlayerData.isReady || false)
-              console.log('🔄 IsReady inicializado:', updatedPlayerData.isReady)
+            } else {
+              console.log('� NÃO sincronizando isReady - player diferente:', {
+                updatedPlayerName: updatedPlayerData.name,
+                updatedPlayerId: updatedPlayerData.id,
+                myPlayerId: currentPlayer.id,
+                myPlayerName: currentPlayer.name
+              })
             }
           }
           
@@ -441,10 +457,12 @@ function CombatPageContent() {
       playerName: currentPlayer.name 
     })
     
-    setIsReady(!isReady)
+    // ❌ NÃO alterar estado local - deixar o servidor controlar
+    // setIsReady(!isReady) 
+    
     socket.emit('toggle_ready', { playerId: currentPlayer.id, roomId })
     
-    console.log('📤 Emitido toggle_ready para servidor')
+    console.log('📤 Emitido toggle_ready para servidor - aguardando resposta')
   }
 
   const handlePlayerAction = (action: ActionType) => {

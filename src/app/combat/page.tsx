@@ -186,7 +186,24 @@ function CombatPageContent() {
         console.log('🎯 Pending Action:', room.pendingAction)
         setCombatRoom(room)
 
-        // 🔥 CORREÇÃO: Não mais atualizamos currentPlayer aqui - será calculado como o opponent
+        // 🔥 CORREÇÃO CRÍTICA: Atualizar currentPlayer com dados da sala para sincronizar stamina/MP
+        if (currentPlayer && room.player1?.id === currentPlayer.id) {
+          setCurrentPlayer(prev => prev ? {
+            ...prev,
+            ...room.player1,
+            // Preservar dados locais importantes que não vêm do servidor
+            id: prev.id,
+            name: prev.name
+          } : room.player1)
+        } else if (currentPlayer && room.player2?.id === currentPlayer.id) {
+          setCurrentPlayer(prev => prev ? {
+            ...prev,
+            ...room.player2,
+            // Preservar dados locais importantes que não vêm do servidor
+            id: prev.id,
+            name: prev.name
+          } : room.player2)
+        }
 
         // Reset iniciativa quando sala é resetada
         if (room.phase === CombatPhase.WAITING_PLAYERS) {

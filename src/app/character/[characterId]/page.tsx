@@ -16,6 +16,7 @@ import AttributeDistributionPanel from '@/components/AttributeDistributionPanel'
 import CharacterHistory from '@/components/CharacterHistory';
 import toast from 'react-hot-toast';
 import { useGold } from '@/components/providers/GoldProvider';
+import { useRouter } from 'next/navigation';
 
 import { Item } from '@/types/item';
 
@@ -28,6 +29,7 @@ interface InventoryItem {
 
 export default function CharacterDetailsPage() {
   const params = useParams();
+  const router = useRouter();
   const { goldBalance, updateGoldBalance } = useGold();
   const [character, setCharacter] = useState<Character | null>(null);
   const [loading, setLoading] = useState(true);
@@ -38,6 +40,8 @@ export default function CharacterDetailsPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        if (!params?.characterId) return;
+        
         const [characterResponse, inventoryResponse] = await Promise.all([
           fetch(`/api/character/${params.characterId}`),
           fetch(`/api/store/inventory?characterId=${params.characterId}`)
@@ -68,10 +72,10 @@ export default function CharacterDetailsPage() {
       }
     };
 
-    if (params.characterId) {
+    if (params?.characterId) {
       fetchData();
     }
-  }, [params.characterId]);
+  }, [params?.characterId]);
 
   if (loading) {
     return <div className="flex justify-center items-center min-h-screen">Loading...</div>;
@@ -155,6 +159,8 @@ export default function CharacterDetailsPage() {
 
   const handleEquip = async (itemId: string, slotType: EquipmentSlotType) => {
     try {
+      if (!params?.characterId) return;
+      
       const response = await fetch(`/api/character/${params.characterId}/equip-item`, {
         method: 'POST',
         headers: {
@@ -187,6 +193,8 @@ export default function CharacterDetailsPage() {
 
   const handleUnequip = async (itemId: string) => {
     try {
+      if (!params?.characterId) return;
+      
       const response = await fetch(`/api/character/${params.characterId}/unequip-item`, {
         method: 'POST',
         headers: {
@@ -221,6 +229,8 @@ export default function CharacterDetailsPage() {
 
   const handleConsume = async (itemId: string) => {
     try {
+      if (!params?.characterId) return;
+      
       const response = await fetch('/api/inventory/use-item', {
         method: 'POST',
         headers: {
@@ -273,7 +283,7 @@ export default function CharacterDetailsPage() {
   };
 
   const handleExpandInventory = async () => {
-    if (!character) return;
+    if (!character || !params?.characterId) return;
     
     // Calcular custo para 5 slots adicionais
     const slotsToAdd = 5;
@@ -350,6 +360,7 @@ export default function CharacterDetailsPage() {
                 <button
                   onClick={async () => {
                     try {
+                      if (!params?.characterId) return;
                       const response = await fetch(`/api/character/${params.characterId}/add-xp`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -378,6 +389,7 @@ export default function CharacterDetailsPage() {
                 <button
                   onClick={async () => {
                     try {
+                      if (!params?.characterId) return;
                       const response = await fetch(`/api/character/${params.characterId}/add-xp`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -407,10 +419,28 @@ export default function CharacterDetailsPage() {
             </div>
           </div>
 
+          {/* Action Buttons */}
+          <div className="flex flex-col sm:flex-row gap-4 justify-center mt-6">
+            <button
+              onClick={() => router.push('/combat-lobby')}
+              className="flex-1 sm:flex-none bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:from-red-600 hover:to-red-700 transition-all flex items-center justify-center gap-2"
+            >
+              <Sword className="w-5 h-5" />
+              Entrar em Combate
+            </button>
+            <button
+              onClick={() => router.push('/dungeons')}
+              className="flex-1 sm:flex-none bg-gradient-to-r from-purple-500 to-purple-600 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:from-purple-600 hover:to-purple-700 transition-all flex items-center justify-center gap-2"
+            >
+              <Shield className="w-5 h-5" />
+              Explorar Dungeon
+            </button>
+          </div>
+
         {/* Attribute Distribution Panel */}
         {character.availablePoints && character.availablePoints > 0 && (
           <AttributeDistributionPanel
-            characterId={params.characterId as string}
+            characterId={Array.isArray(params?.characterId) ? params.characterId[0] : params?.characterId || ''}
             availablePoints={character.availablePoints}
             currentAttributes={{
               str: (character.attributes as any)?.str || (character.baseStats as any)?.str || 0,
@@ -430,6 +460,7 @@ export default function CharacterDetailsPage() {
             }}
             onPointsDistributed={async () => {
               // Recarregar dados do personagem
+              if (!params?.characterId) return;
               const response = await fetch(`/api/character/${params.characterId}`);
               if (response.ok) {
                 const characterData = await response.json();
@@ -718,7 +749,7 @@ export default function CharacterDetailsPage() {
                         onEquip={handleEquip}
                         onUnequip={handleUnequip}
                         onConsume={handleConsume}
-                        characterId={params.characterId as string}
+                        characterId={Array.isArray(params?.characterId) ? params.characterId[0] : params?.characterId || ''}
                       />
                     );
                   }
@@ -741,7 +772,7 @@ export default function CharacterDetailsPage() {
           </div>
           
           {/* Character History Panel */}
-          <CharacterHistory characterId={params.characterId as string} />
+          <CharacterHistory characterId={Array.isArray(params?.characterId) ? params.characterId[0] : params?.characterId || ''} />
         </div>
         </div>
       </div>

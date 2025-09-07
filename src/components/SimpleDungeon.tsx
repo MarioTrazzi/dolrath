@@ -11,11 +11,7 @@ interface Monster {
   attack: number
   defense: number
   level: number
-  g      {/* Dialog de Combate Aprimorado */}
-      {showEnhancedCombat && currentMonster && (
-        <EnhancedCombatDialogV2
-          isOpen={showEnhancedCombat}
-          monster={current}ward: number
+  goldReward: number
   xpReward: number
 }
 

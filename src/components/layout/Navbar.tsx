@@ -56,6 +56,13 @@ export function Navbar() {
               Masmorras
             </Link>
             <Link 
+              href="/combat-lobby" 
+              className="text-text-secondary hover:text-primary transition-colors"
+              onClick={(e) => handleProtectedRoute(e, '/combat-lobby')}
+            >
+              Combate
+            </Link>
+            <Link 
               href="/inventory" 
               className="text-text-secondary hover:text-primary transition-colors"
               onClick={(e) => handleProtectedRoute(e, '/inventory')}
@@ -149,6 +156,16 @@ export function Navbar() {
                 }}
               >
                 Masmorras
+              </Link>
+              <Link 
+                href="/combat-lobby" 
+                className="block text-text-secondary hover:text-primary transition-colors py-2"
+                onClick={(e) => {
+                  handleProtectedRoute(e, '/combat-lobby')
+                  setIsMenuOpen(false)
+                }}
+              >
+                Combate
               </Link>
               <Link 
                 href="/inventory" 

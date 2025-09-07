@@ -195,59 +195,13 @@ export default function CombatLobbyPage() {
         const roomsData = await response.json()
         setRooms(roomsData)
       } else {
-        const mockRooms: CombatRoom[] = [
-          {
-            id: 'room_1',
-            name: 'Arena dos Guerreiros',
-            createdBy: 'player_1',
-            createdByName: 'Lorde das Batalhas',
-            playerCount: 1,
-            maxPlayers: 2,
-            isPrivate: false,
-            status: 'waiting',
-            createdAt: new Date(Date.now() - 300000)
-          },
-          {
-            id: 'room_2',
-            name: 'Duelo de Campeões',
-            createdBy: 'player_2',
-            createdByName: 'Mestre da Espada',
-            playerCount: 2,
-            maxPlayers: 2,
-            isPrivate: false,
-            status: 'in_progress',
-            createdAt: new Date(Date.now() - 600000)
-          },
-          {
-            id: 'room_3',
-            name: 'Torneio Privado',
-            createdBy: 'player_3',
-            createdByName: 'Cavaleiro Negro',
-            playerCount: 1,
-            maxPlayers: 2,
-            isPrivate: true,
-            status: 'waiting',
-            createdAt: new Date(Date.now() - 120000)
-          }
-        ]
-        setRooms(mockRooms)
+        // Não carregar salas mock - apenas deixar vazio se a API falhar
+        setRooms([])
       }
     } catch (error) {
       console.error('Erro ao carregar salas:', error)
-      const mockRooms: CombatRoom[] = [
-        {
-          id: 'room_1',
-          name: 'Arena dos Guerreiros',
-          createdBy: 'player_1',
-          createdByName: 'Lorde das Batalhas',
-          playerCount: 1,
-          maxPlayers: 2,
-          isPrivate: false,
-          status: 'waiting',
-          createdAt: new Date(Date.now() - 300000)
-        }
-      ]
-      setRooms(mockRooms)
+      // Não carregar salas mock em caso de erro - apenas deixar vazio
+      setRooms([])
     }
   }
 
@@ -610,11 +564,12 @@ export default function CombatLobbyPage() {
                 Voltar ao Dashboard
               </button>
               <button
-                onClick={() => router.push('/combat')}
-                className="bg-primary/20 hover:bg-primary/30 text-primary px-6 py-2 rounded-lg transition-colors flex items-center border border-primary/30"
+                disabled={true}
+                className="bg-surface/30 text-text-secondary px-6 py-2 rounded-lg cursor-not-allowed flex items-center border border-white/10"
+                title="Modo treino temporariamente desabilitado"
               >
                 <Shield className="mr-2" size={16} />
-                Modo Treino (vs Bot)
+                Modo Treino (Em breve)
               </button>
             </div>
           </div>

@@ -162,6 +162,20 @@ function CombatPageContent() {
   const isSpectator = userRole === 'spectator'
   const isModerator = userRole === 'moderator'
 
+  // 🎯 CÁLCULOS DE BALANCEAMENTO - Mostrar chances calculadas
+  const calculateDisplayStats = (player: Player | null | undefined) => {
+    if (!player) return { critChance: 0, dodgeBonus: 0, specialType: 'físico' }
+    
+    const critChance = Math.min(50, player.agility * 2) // 2% por AGI (máx 50%)
+    const dodgeBonus = Math.floor(player.agility / 10) // +1 dado a cada 10 AGI
+    const specialType = player.intelligence > player.strength ? 'mágico' : 'físico'
+    
+    return { critChance, dodgeBonus, specialType }
+  }
+
+  const playerStats = calculateDisplayStats(currentPlayerDisplay)
+  const opponentStats = calculateDisplayStats(opponent)
+
   // Auto scroll para o chat quando novas mensagens chegam
   useEffect(() => {
     if (combatLogRef.current && combatRoom?.combatLog) {
@@ -833,8 +847,9 @@ function CombatPageContent() {
                 <div className="text-text-secondary hidden sm:block">AGI: <span className="font-bold text-cyan-400">{isSpectator ? combatRoom?.player1?.agility : currentPlayerDisplay?.agility}</span></div>
                 <div className="text-text-secondary hidden sm:block">INT: <span className="font-bold text-purple-400">{isSpectator ? combatRoom?.player1?.intelligence : currentPlayerDisplay?.intelligence}</span></div>
                 <div className="text-text-secondary hidden sm:block">RES: <span className="font-bold text-green-400">{isSpectator ? combatRoom?.player1?.resistance : currentPlayerDisplay?.resistance}</span></div>
-                <div className="text-text-secondary hidden sm:block">CRIT: <span className="font-bold text-yellow-300">{isSpectator ? combatRoom?.player1?.critical : currentPlayerDisplay?.critical}%</span></div>
-                <div className="text-text-secondary hidden sm:block">SPD: <span className="font-bold text-emerald-400">{isSpectator ? combatRoom?.player1?.speed : currentPlayerDisplay?.speed}</span></div>
+                <div className="text-text-secondary hidden sm:block">CRIT: <span className="font-bold text-yellow-300">{playerStats.critChance}%</span></div>
+                <div className="text-text-secondary hidden sm:block">ESQ: <span className="font-bold text-cyan-300">+{playerStats.dodgeBonus}🎲</span></div>
+                <div className="text-text-secondary hidden sm:block">ESP: <span className="font-bold text-purple-300">{playerStats.specialType}</span></div>
               </div>
             </div>
 
@@ -856,7 +871,9 @@ function CombatPageContent() {
                     <div className="text-text-secondary hidden sm:block">STR: <span className="font-bold text-yellow-400">{isSpectator ? combatRoom?.player2?.strength : opponent?.strength}</span></div>
                     <div className="text-text-secondary hidden sm:block">AGI: <span className="font-bold text-cyan-400">{isSpectator ? combatRoom?.player2?.agility : opponent?.agility}</span></div>
                     <div className="text-text-secondary hidden sm:block">INT: <span className="font-bold text-purple-400">{isSpectator ? combatRoom?.player2?.intelligence : opponent?.intelligence}</span></div>
-                    <div className="text-text-secondary hidden sm:block">RES: <span className="font-bold text-green-400">{isSpectator ? combatRoom?.player2?.resistance : opponent?.resistance}</span></div>
+                    <div className="text-text-secondary hidden sm:block">CRIT: <span className="font-bold text-yellow-300">{opponentStats.critChance}%</span></div>
+                    <div className="text-text-secondary hidden sm:block">ESQ: <span className="font-bold text-cyan-300">+{opponentStats.dodgeBonus}🎲</span></div>
+                    <div className="text-text-secondary hidden sm:block">ESP: <span className="font-bold text-purple-300">{opponentStats.specialType}</span></div>
                   </div>
                 </>
               ) : (
@@ -1072,7 +1089,7 @@ function CombatPageContent() {
                       : 'bg-gradient-to-r from-primary to-primary-dark hover:shadow-lg hover:shadow-primary/25'
                     } text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                   >
-                    ✨ Especial (d20, 15🔮, {STAMINA_COSTS[ActionType.SPECIAL_ATTACK]}⚡)
+                    ✨ Especial ({playerStats.specialType}) (d20, 15🔮, {STAMINA_COSTS[ActionType.SPECIAL_ATTACK]}⚡)
                   </button>
                   
                   <div className="border-t border-white/10 my-3"></div>
@@ -1133,7 +1150,7 @@ function CombatPageContent() {
                       : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-blue-600 hover:to-cyan-600'
                     } text-white py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                   >
-                    🌪️ Esquivar ({STAMINA_COSTS[ActionType.DODGE]}⚡)
+                    🌪️ Esquivar (+{playerStats.dodgeBonus}🎲, {STAMINA_COSTS[ActionType.DODGE]}⚡)
                   </button>
                   <button
                     onClick={() => handleDefenseChoice('defend')}

@@ -1129,6 +1129,125 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
   // Limpar ação pendente
   room.pendingAction = null
   io.to(roomId).emit('room_updated', room)
+}
+      hit = true
+      room.combatLog.push({
+        type: 'result',
+        message: `❌ Esquiva falhou! Dano parcial aplicado (${dodgeChance.toFixed(1)}% chance)`,
+        timestamp: new Date()
+      })
+    }
+  } else if (defenseAction === 'defend') {
+    // 🔥 DEFESA BASEADA EM DEF - Reduz dano significativamente
+    damage = Math.max(1, baseDamage - defenseReduction)
+    hit = true
+    room.combatLog.push({
+      type: 'result',
+      message: `🛡️ Bloqueio! Defesa absorveu ${defenseReduction} de dano (DEF: ${Math.floor(defenderDef)})`,
+      timestamp: new Date()
+    })
+  }
+
+  // 🔥 SISTEMA DE CRÍTICO BASEADO EM AGI - Muito mais útil!
+  if (hit) {
+    const criticalChance = (attackerAgi * 0.5) + 5  // AGI × 0.5 + 5% base
+    const criticalRoll = Math.random() * 100
+    
+    if (criticalRoll < criticalChance) {
+      damage = Math.floor(damage * 1.8)  // +80% de dano
+      room.combatLog.push({
+        type: 'result',
+        message: `💥 CRÍTICO! Dano aumentado em 80%! (${criticalChance.toFixed(1)}% chance, AGI: ${attackerAgi})`,
+        timestamp: new Date()
+      })
+    }
+  }
+
+  // Aplicar dano e verificar resistência mágica
+  if (hit && damage > 0) {
+    // 🔥 RESISTÊNCIA MÁGICA PARA ATAQUES ESPECIAIS MÁGICOS
+    if (attackAction === 'special_attack' && attacker.intelligence > (attacker.strength || 0)) {
+      const magicResistance = Math.floor((defender.intelligence || 5) * 0.4)
+      damage = Math.max(1, damage - magicResistance)
+      room.combatLog.push({
+        type: 'result',
+        message: `🔮 Resistência mágica reduziu ${magicResistance} de dano mágico`,
+        timestamp: new Date()
+      })
+    }
+
+    // Aplicar dano ao HP correto (usando .hp ao invés de .currentHp)
+    defender.hp = Math.max(0, defender.hp - damage)
+    
+    // Log de dano com detalhes dos stats balanceados
+    const attackType = attackAction === 'light_attack' ? 'Ataque Leve' : 
+                      attackAction === 'heavy_attack' ? 'Ataque Pesado' :
+                      (attacker.intelligence > (attacker.strength || 0) ? 'Magia Especial' : 'Ataque Especial')
+    
+    room.combatLog.push({
+      type: 'damage',
+      message: `⚔️ ${attackType}! ${attacker.name} causou ${damage} de dano! (${defender.hp}/${defender.maxHp} HP)`,
+      timestamp: new Date()
+    })
+
+    // Consumir stamina do atacante baseado no tipo de ataque
+    let staminaCost = 0
+    switch (attackAction) {
+      case 'light_attack': staminaCost = 5; break
+      case 'heavy_attack': staminaCost = 12; break
+      case 'special_attack': staminaCost = 20; break
+    }
+    
+    if (attacker.stamina !== undefined) {
+      attacker.stamina = Math.max(0, attacker.stamina - staminaCost)
+    }
+    
+    // 🔥 ATUALIZAÇÃO IMEDIATA para ambos verem o dano aplicado
+    io.to(roomId).emit('room_updated', room)
+  }
+
+  // Verificar fim do combate
+  if (defender.hp <= 0) {
+    room.phase = CombatPhase.COMBAT_END
+    room.winner = attacker.id
+    
+    // 🔥 REGENERAÇÃO AUTOMÁTICA - Restaurar HP e MP após combate
+    regeneratePlayerResources(attacker, 'PvP Victory')
+    regeneratePlayerResources(defender, 'PvP Defeat')
+    
+    room.combatLog.push({
+      type: 'victory',
+      message: `🏆 ${attacker.name} venceu o combate!`,
+      timestamp: new Date()
+    })
+    
+    room.combatLog.push({
+      type: 'system',
+      message: `💚 HP e MP restaurados automaticamente! Apenas Stamina foi consumida.`,
+      timestamp: new Date()
+    })
+    
+    // Log de estatísticas finais para análise de balance
+    room.combatLog.push({
+      type: 'stats',
+      message: `📊 Stats do Vencedor: STR:${attacker.strength || 0} AGI:${attacker.agility || 0} INT:${attacker.intelligence || 0} DEF:${attacker.defense || 0}`,
+      timestamp: new Date()
+    })
+  } else {
+    // Próximo turno com log de stats para acompanhar balance
+    room.currentTurn = defender.id
+    room.phase = CombatPhase.PLAYER_TURN
+    room.combatLog.push({
+      type: 'system',
+      message: `🔄 Turno de ${defender.name} | HP: ${defender.hp}/${defender.maxHp} | Stamina: ${attacker.stamina || '?'}`,
+      timestamp: new Date()
+    })
+  }
+
+  room.pendingAction = null
+  io.to(roomId).emit('room_updated', room)
+}
+
 function processActionResult(room, action, playerRoll, roomId) {
   // Para ações que não requerem reação do oponente
   const currentPlayer = room.currentTurn === room.player1?.id ? room.player1 : room.player2
@@ -1375,5 +1494,4 @@ function processSpecialAbility(player, opponent, abilityId) {
   }
   
   return { success: false, error: 'Habilidade não reconhecida!' }
-}
 }

@@ -754,7 +754,7 @@ export default function ClassicRPGCombatDialog({
                 <div className="text-text-secondary">⚡: <span className="font-bold text-warning">{playerStamina}</span></div>
                 <div className="text-text-secondary">ATK: <span className="font-bold text-text-primary">{character.attack}</span></div>
                 <div className="text-text-secondary">DEF: <span className="font-bold text-text-primary">{character.defense}</span></div>
-                <div className="text-text-secondary">LV: <span className="font-bold text-primary">{character.level}</span></div>
+                <div className="text-text-secondary">LVL: <span className="font-bold text-primary">{character.level}</span></div>
                 
                 {/* Novos stats baseados em combate aprimorado */}
                 {(() => {

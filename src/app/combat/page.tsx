@@ -589,12 +589,12 @@ function CombatPageContent() {
         setCurrentPlayer(prev => prev ? {
           ...prev,
           ...updatedCharacter,
-          // Preservar dados de combate atualizados
+          // Preservar dados de combate atualizados (CRÍTICO: manter HP atual do combate)
+          hp: prev.hp, // 🔥 CORREÇÃO: Preservar HP atual do combate, não resetar
           stamina: prev.stamina - staminaCost,
           mp: prev.mp - mpCost,
           // Aplicar stats transformados do baseStats
-          hp: updatedCharacter.hp,
-          maxHp: updatedCharacter.maxHp,
+          maxHp: updatedCharacter.maxHp, // Pode aumentar maxHP mas não resetar HP atual
           attack: updatedCharacter.baseStats?.attack || prev.attack,
           defense: updatedCharacter.baseStats?.defense || prev.defense,
           strength: updatedCharacter.baseStats?.str || prev.strength,

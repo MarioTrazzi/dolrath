@@ -146,10 +146,6 @@ function CombatPageContent() {
 
   const combatLogRef = useRef<HTMLDivElement>(null)
 
-  // 🔥 CORREÇÃO: Calcular currentPlayer da mesma forma que opponent (sempre atualizado)
-  const currentPlayerFromRoom = combatRoom?.player1?.id === currentPlayer?.id ? combatRoom?.player1 : combatRoom?.player2
-  const displayCurrentPlayer = currentPlayerFromRoom || currentPlayer // Usar dados da sala se disponível, senão o estado local
-  
   const opponent = combatRoom?.player1?.id === currentPlayer?.id ? combatRoom?.player2 : combatRoom?.player1
   const isMyTurn = combatRoom?.currentTurn === currentPlayer?.id
   const isWinner = combatRoom?.winner === currentPlayer?.id
@@ -187,22 +183,60 @@ function CombatPageContent() {
         setCombatRoom(room)
 
         // 🔥 CORREÇÃO CRÍTICA: Atualizar currentPlayer com dados da sala para sincronizar stamina/MP
-        if (currentPlayer && room.player1?.id === currentPlayer.id) {
+        if (currentPlayer && room.player1?.id === currentPlayer.id && room.player1) {
+          const p1 = room.player1
           setCurrentPlayer(prev => prev ? {
             ...prev,
-            ...room.player1,
-            // Preservar dados locais importantes que não vêm do servidor
-            id: prev.id,
-            name: prev.name
-          } : room.player1)
-        } else if (currentPlayer && room.player2?.id === currentPlayer.id) {
+            // Atualizar APENAS os stats que vêm do servidor (HP, MP, stamina)
+            hp: p1.hp,
+            maxHp: p1.maxHp,
+            mp: p1.mp,
+            maxMp: p1.maxMp,
+            stamina: p1.stamina,
+            maxStamina: p1.maxStamina,
+            // Atualizar também outros stats que podem mudar (transformações, etc)
+            attack: p1.attack,
+            defense: p1.defense,
+            strength: p1.strength,
+            agility: p1.agility,
+            intelligence: p1.intelligence,
+            resistance: p1.resistance,
+            critical: p1.critical,
+            speed: p1.speed,
+            isTransformed: p1.isTransformed,
+            transformationType: p1.transformationType,
+            transformationData: p1.transformationData,
+            isReady: p1.isReady,
+            isConnected: p1.isConnected,
+            isAlive: p1.isAlive
+          } : p1)
+        } else if (currentPlayer && room.player2?.id === currentPlayer.id && room.player2) {
+          const p2 = room.player2
           setCurrentPlayer(prev => prev ? {
             ...prev,
-            ...room.player2,
-            // Preservar dados locais importantes que não vêm do servidor
-            id: prev.id,
-            name: prev.name
-          } : room.player2)
+            // Atualizar APENAS os stats que vêm do servidor (HP, MP, stamina)
+            hp: p2.hp,
+            maxHp: p2.maxHp,
+            mp: p2.mp,
+            maxMp: p2.maxMp,
+            stamina: p2.stamina,
+            maxStamina: p2.maxStamina,
+            // Atualizar também outros stats que podem mudar (transformações, etc)
+            attack: p2.attack,
+            defense: p2.defense,
+            strength: p2.strength,
+            agility: p2.agility,
+            intelligence: p2.intelligence,
+            resistance: p2.resistance,
+            critical: p2.critical,
+            speed: p2.speed,
+            isTransformed: p2.isTransformed,
+            transformationType: p2.transformationType,
+            transformationData: p2.transformationData,
+            isReady: p2.isReady,
+            isConnected: p2.isConnected,
+            isAlive: p2.isAlive
+          } : p2)
         }
 
         // Reset iniciativa quando sala é resetada
@@ -375,15 +409,15 @@ function CombatPageContent() {
     }
   }, [socket, roomId, isRoomCreator, characterId])
 
-  // 🔥 FORÇA re-render quando displayCurrentPlayer ou opponent mudam
+  // 🔥 FORÇA re-render quando currentPlayer ou opponent mudam
   useEffect(() => {
-    if (displayCurrentPlayer) {
-      console.log('🔄 DisplayCurrentPlayer updated:', displayCurrentPlayer.name, `${displayCurrentPlayer.hp}/${displayCurrentPlayer.maxHp} HP`)
+    if (currentPlayer) {
+      console.log('🔄 CurrentPlayer updated:', currentPlayer.name, `${currentPlayer.hp}/${currentPlayer.maxHp} HP`)
     }
     if (opponent) {
       console.log('🔄 Opponent updated:', opponent.name, `${opponent.hp}/${opponent.maxHp} HP`)
     }
-  }, [displayCurrentPlayer?.hp, displayCurrentPlayer?.mp, displayCurrentPlayer?.stamina, opponent?.hp, opponent?.mp, opponent?.stamina])
+  }, [currentPlayer?.hp, currentPlayer?.mp, currentPlayer?.stamina, opponent?.hp, opponent?.mp, opponent?.stamina])
 
   const toggleReady = () => {
     if (!currentPlayer) return
@@ -948,8 +982,8 @@ function CombatPageContent() {
                   </div>
                   <button
                     onClick={() => handleDefenseChoice('dodge')}
-                    disabled={!displayCurrentPlayer || displayCurrentPlayer.stamina < STAMINA_COSTS[ActionType.DODGE]}
-                    className={`w-full ${!displayCurrentPlayer || displayCurrentPlayer.stamina < STAMINA_COSTS[ActionType.DODGE]
+                    disabled={!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.DODGE]}
+                    className={`w-full ${!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.DODGE]
                       ? 'bg-gray-600 opacity-50 cursor-not-allowed'
                       : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-blue-600 hover:to-cyan-600'
                     } text-white py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
@@ -958,8 +992,8 @@ function CombatPageContent() {
                   </button>
                   <button
                     onClick={() => handleDefenseChoice('defend')}
-                    disabled={!displayCurrentPlayer || displayCurrentPlayer.stamina < STAMINA_COSTS[ActionType.DEFEND]}
-                    className={`w-full ${!displayCurrentPlayer || displayCurrentPlayer.stamina < STAMINA_COSTS[ActionType.DEFEND]
+                    disabled={!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.DEFEND]}
+                    className={`w-full ${!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.DEFEND]
                       ? 'bg-gray-600 opacity-50 cursor-not-allowed'
                       : 'bg-gradient-to-r from-emerald-600 to-green-600 hover:from-green-600 hover:to-emerald-600'
                     } text-white py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}

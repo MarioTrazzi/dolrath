@@ -746,8 +746,18 @@ function regeneratePlayerResources(player, context = 'Activity') {
   
   // 🔥 NOVO: Resetar transformações ao final da batalha
   if (player.isTransformed) {
-    revertTransformation(player)
+    revertPlayerTransformation(player)
     console.log(`🔄 ${context}: ${player.name} teve transformação resetada`)
+    
+    // 🔥 PERSISTIR RESET NO BANCO DE DADOS
+    if (player.id) {
+      fetch(`http://localhost:3000/api/character/${player.id}/detransform`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      }).catch(error => {
+        console.error(`❌ Erro ao persistir reset de transformação para ${player.name}:`, error)
+      })
+    }
   }
   
   // 🔥 NOVO: Limpar cooldowns de transformação

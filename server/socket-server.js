@@ -1,8 +1,8 @@
 const { createServer } = require('http')
 const { Server } = require('socket.io')
 
-// Importar sistema de stamina
-const { getStaminaCost, checkStaminaLevel, calculateStaminaRegeneration } = require('../src/lib/staminaSystem')
+// Importar sistema de stamina (versão local JavaScript)
+const { getStaminaCost, checkStaminaLevel, calculateStaminaRegeneration } = require('./staminaSystem')
 
 // Configuração de porta - Railway usa PORT, Heroku também
 const PORT = process.env.PORT || 3001

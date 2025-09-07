@@ -182,61 +182,75 @@ function CombatPageContent() {
         console.log('🎯 Pending Action:', room.pendingAction)
         setCombatRoom(room)
 
-        // 🔥 CORREÇÃO CRÍTICA: Atualizar currentPlayer com dados da sala para sincronizar stamina/MP
+        // 🔥 CORREÇÃO CRÍTICA: Sincronizar dados da sala SEM sobrescrever mudanças locais imediatas
         if (currentPlayer && room.player1?.id === currentPlayer.id && room.player1) {
           const p1 = room.player1
-          setCurrentPlayer(prev => prev ? {
-            ...prev,
-            // Atualizar APENAS os stats que vêm do servidor (HP, MP, stamina)
-            hp: p1.hp,
-            maxHp: p1.maxHp,
-            mp: p1.mp,
-            maxMp: p1.maxMp,
-            stamina: p1.stamina,
-            maxStamina: p1.maxStamina,
-            // Atualizar também outros stats que podem mudar (transformações, etc)
-            attack: p1.attack,
-            defense: p1.defense,
-            strength: p1.strength,
-            agility: p1.agility,
-            intelligence: p1.intelligence,
-            resistance: p1.resistance,
-            critical: p1.critical,
-            speed: p1.speed,
-            isTransformed: p1.isTransformed,
-            transformationType: p1.transformationType,
-            transformationData: p1.transformationData,
-            isReady: p1.isReady,
-            isConnected: p1.isConnected,
-            isAlive: p1.isAlive
-          } : p1)
+          setCurrentPlayer(prev => {
+            if (!prev) return p1
+            
+            // Manter dados locais mais atualizados para MP/stamina (mudanças imediatas)
+            // Sincronizar HP apenas se vier do servidor (dano confirmado)
+            return {
+              ...prev,
+              // Atualizar HP apenas se vier menor (dano confirmado) ou maior (cura)
+              hp: p1.hp !== prev.hp ? p1.hp : prev.hp,
+              maxHp: p1.maxHp,
+              // Para MP/stamina, manter o menor valor (proteção contra dessincronização)
+              mp: Math.min(prev.mp, p1.mp),
+              maxMp: p1.maxMp,
+              stamina: Math.min(prev.stamina, p1.stamina),
+              maxStamina: p1.maxStamina,
+              // Atualizar outros stats que podem mudar (transformações, etc)
+              attack: p1.attack,
+              defense: p1.defense,
+              strength: p1.strength,
+              agility: p1.agility,
+              intelligence: p1.intelligence,
+              resistance: p1.resistance,
+              critical: p1.critical,
+              speed: p1.speed,
+              isTransformed: p1.isTransformed,
+              transformationType: p1.transformationType,
+              transformationData: p1.transformationData,
+              isReady: p1.isReady,
+              isConnected: p1.isConnected,
+              isAlive: p1.isAlive
+            }
+          })
         } else if (currentPlayer && room.player2?.id === currentPlayer.id && room.player2) {
           const p2 = room.player2
-          setCurrentPlayer(prev => prev ? {
-            ...prev,
-            // Atualizar APENAS os stats que vêm do servidor (HP, MP, stamina)
-            hp: p2.hp,
-            maxHp: p2.maxHp,
-            mp: p2.mp,
-            maxMp: p2.maxMp,
-            stamina: p2.stamina,
-            maxStamina: p2.maxStamina,
-            // Atualizar também outros stats que podem mudar (transformações, etc)
-            attack: p2.attack,
-            defense: p2.defense,
-            strength: p2.strength,
-            agility: p2.agility,
-            intelligence: p2.intelligence,
-            resistance: p2.resistance,
-            critical: p2.critical,
-            speed: p2.speed,
-            isTransformed: p2.isTransformed,
-            transformationType: p2.transformationType,
-            transformationData: p2.transformationData,
-            isReady: p2.isReady,
-            isConnected: p2.isConnected,
-            isAlive: p2.isAlive
-          } : p2)
+          setCurrentPlayer(prev => {
+            if (!prev) return p2
+            
+            // Manter dados locais mais atualizados para MP/stamina (mudanças imediatas)
+            // Sincronizar HP apenas se vier do servidor (dano confirmado)
+            return {
+              ...prev,
+              // Atualizar HP apenas se vier menor (dano confirmado) ou maior (cura)
+              hp: p2.hp !== prev.hp ? p2.hp : prev.hp,
+              maxHp: p2.maxHp,
+              // Para MP/stamina, manter o menor valor (proteção contra dessincronização)
+              mp: Math.min(prev.mp, p2.mp),
+              maxMp: p2.maxMp,
+              stamina: Math.min(prev.stamina, p2.stamina),
+              maxStamina: p2.maxStamina,
+              // Atualizar outros stats que podem mudar (transformações, etc)
+              attack: p2.attack,
+              defense: p2.defense,
+              strength: p2.strength,
+              agility: p2.agility,
+              intelligence: p2.intelligence,
+              resistance: p2.resistance,
+              critical: p2.critical,
+              speed: p2.speed,
+              isTransformed: p2.isTransformed,
+              transformationType: p2.transformationType,
+              transformationData: p2.transformationData,
+              isReady: p2.isReady,
+              isConnected: p2.isConnected,
+              isAlive: p2.isAlive
+            }
+          })
         }
 
         // Reset iniciativa quando sala é resetada
@@ -285,6 +299,17 @@ function CombatPageContent() {
       socket.on('action_selected', (data: {action: ActionType, diceType: number}) => {
         console.log('🎯 Ação selecionada:', data)
         // Não setamos pendingAction aqui - será setado apenas na fase DICE_ROLL
+      })
+
+      socket.on('damage_dealt', (data: {playerId: string, damage: number, newHp: number}) => {
+        console.log('💔 Dano recebido:', data)
+        // Atualizar HP localmente quando receber dano
+        if (currentPlayer && data.playerId === currentPlayer.id) {
+          setCurrentPlayer(prev => prev ? {
+            ...prev,
+            hp: Math.max(0, data.newHp)
+          } : null)
+        }
       })
 
       // Se temos characterId, carregar dados do personagem específico
@@ -405,6 +430,7 @@ function CombatPageContent() {
       socket.off('room_closed')
       socket.off('dice_rolled')
       socket.off('action_selected')
+      socket.off('damage_dealt')
       socket.disconnect()
     }
   }, [socket, roomId, isRoomCreator, characterId])
@@ -450,6 +476,21 @@ function CombatPageContent() {
         message: `❌ Stamina insuficiente para esta ação! (${staminaCost} stamina necessária)` 
       })
       return
+    }
+    
+    // ✅ APLICAR CUSTOS LOCALMENTE IMEDIATAMENTE (como no sistema de dungeon)
+    if (mpCost > 0) {
+      setCurrentPlayer(prev => prev ? {
+        ...prev,
+        mp: Math.max(0, prev.mp - mpCost)
+      } : null)
+    }
+    
+    if (staminaCost > 0) {
+      setCurrentPlayer(prev => prev ? {
+        ...prev,
+        stamina: Math.max(0, prev.stamina - staminaCost)
+      } : null)
     }
     
     const diceTypes = {
@@ -522,6 +563,14 @@ function CombatPageContent() {
         message: `❌ Stamina insuficiente para ${reaction === 'dodge' ? 'esquivar' : 'defender'}! (${staminaCost} stamina necessária)` 
       })
       return
+    }
+    
+    // ✅ APLICAR CUSTO DE STAMINA LOCALMENTE IMEDIATAMENTE (como no sistema de dungeon)
+    if (staminaCost > 0) {
+      setCurrentPlayer(prev => prev ? {
+        ...prev,
+        stamina: Math.max(0, prev.stamina - staminaCost)
+      } : null)
     }
     
     // Enviar escolha de defesa com custo de stamina

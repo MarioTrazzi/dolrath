@@ -25,7 +25,8 @@ export function AppearanceStep() {
     const basePrompts = {
       draconiano: `Fantasy RPG character portrait${namePart}, a powerful draconian warrior with dragon-like features, scales on arms and face, fierce golden eyes, wearing medieval armor, heroic pose, digital art style, detailed, high quality`,
       metamorfo: `Fantasy RPG character portrait${namePart}, a shapeshifter with wolf-like features, sharp eyes, agile build, wearing leather armor, mysterious aura, digital art style, detailed, high quality`,
-      humano: `Fantasy RPG character portrait${namePart}, a skilled human warrior with determined expression, wearing battle gear, confident pose, digital art style, detailed, high quality`
+      humano: `Fantasy RPG character portrait${namePart}, a skilled human warrior with determined expression, wearing battle gear, confident pose, digital art style, detailed, high quality`,
+      elfo: `Fantasy RPG character portrait${namePart}, an elegant elf with pointed ears, ethereal beauty, graceful posture, wearing mystical robes or light armor, magical aura, digital art style, detailed, high quality`
     };
     return basePrompts[selectedRace.id as keyof typeof basePrompts] || basePrompts.humano;
   };

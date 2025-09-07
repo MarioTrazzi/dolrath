@@ -31,6 +31,7 @@ export function RaceCard({ race, isSelected, onSelect, onHover }: RaceCardProps)
           {race.id === 'draconiano' && '🐉'}
           {race.id === 'metamorfo' && '🐺'}
           {race.id === 'humano' && '⚔️'}
+          {race.id === 'elfo' && '🧝'}
         </div>
         
         <div className="flex-1">

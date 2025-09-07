@@ -34,6 +34,7 @@ export function RacePreview({ race, showStats }: RacePreviewProps) {
                 {race.id === 'draconiano' && '🐉'}
                 {race.id === 'metamorfo' && '🐺'}
                 {race.id === 'humano' && '⚔️'}
+                {race.id === 'elfo' && '🧝'}
               </div>
               <div>
                 <h4 className="text-2xl font-bold text-text-primary">{race.name}</h4>

@@ -1,30 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// Mock database for demonstration
-let rooms: any[] = [
-  {
-    id: 'room_1',
-    name: 'Arena dos Guerreiros',
-    createdBy: 'player_1',
-    createdByName: 'Lorde das Batalhas',
-    playerCount: 1,
-    maxPlayers: 2,
-    isPrivate: false,
-    status: 'waiting',
-    createdAt: new Date(Date.now() - 300000)
-  },
-  {
-    id: 'room_2',
-    name: 'Duelo de Campeões',
-    createdBy: 'player_2',
-    createdByName: 'Mestre da Espada',
-    playerCount: 2,
-    maxPlayers: 2,
-    isPrivate: false,
-    status: 'in_progress',
-    createdAt: new Date(Date.now() - 600000)
-  }
-]
+// Database para armazenar salas criadas dinamicamente
+let rooms: any[] = []
 
 export async function GET(request: NextRequest) {
   try {

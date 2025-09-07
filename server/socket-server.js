@@ -744,8 +744,21 @@ function regeneratePlayerResources(player, context = 'Activity') {
   // Restaurar MP completo
   player.mp = player.maxMp
   
+  // 🔥 NOVO: Resetar transformações ao final da batalha
+  if (player.isTransformed) {
+    revertTransformation(player)
+    console.log(`🔄 ${context}: ${player.name} teve transformação resetada`)
+  }
+  
+  // 🔥 NOVO: Limpar cooldowns de transformação
+  if (player.transformationData) {
+    player.transformationData.cooldownTurns = 0
+    player.transformationData.remainingTurns = 0
+    console.log(`⏰ ${context}: ${player.name} teve cooldowns resetados`)
+  }
+  
   // Stamina NÃO é restaurada - essa é a limitação do sistema
-  console.log(`💚 ${context}: ${player.name} teve HP e MP restaurados (Stamina: ${player.stamina}/${player.maxStamina})`)
+  console.log(`💚 ${context}: ${player.name} teve HP e MP restaurados, transformação resetada (Stamina: ${player.stamina}/${player.maxStamina})`)
 }
 
 function processCompleteAction(room, attackAction, attackRoll, defenseAction, defenseRoll, roomId) {

@@ -200,11 +200,25 @@ const CombatPhase = {
   COMBAT_END: 'combat_end'
 }
 
+// Enum para roles na sala
+const RoomRole = {
+  FIGHTER: 'fighter',      // 2 vagas - jogadores que lutam
+  SPECTATOR: 'spectator',  // 8 vagas - observam o combate
+  MODERATOR: 'moderator'   // 2 vagas - podem controlar a sala (desativado por enquanto)
+}
+
+// Limites de cada role
+const ROLE_LIMITS = {
+  [RoomRole.FIGHTER]: 2,
+  [RoomRole.SPECTATOR]: 8,
+  [RoomRole.MODERATOR]: 2
+}
+
 io.on('connection', (socket) => {
   console.log('Cliente conectado:', socket.id)
 
-  socket.on('join_room', ({ roomId, player, isCreator }) => {
-    console.log(`Jogador ${player.name} entrando na sala ${roomId}`)
+  socket.on('join_room', ({ roomId, player, isCreator, role = RoomRole.FIGHTER }) => {
+    console.log(`Jogador ${player.name} entrando na sala ${roomId} como ${role}`)
     
     playerSockets.set(player.id, socket.id)
     socket.join(roomId)
@@ -214,6 +228,13 @@ io.on('connection', (socket) => {
       room = {
         id: roomId,
         creator: null,
+        // Estrutura expandida para múltiplos participantes
+        participants: {
+          fighters: [],      // Array de até 2 lutadores
+          spectators: [],    // Array de até 8 espectadores
+          moderators: []     // Array de até 2 moderadores (desativado)
+        },
+        // Manter compatibilidade com código existente
         player1: null,
         player2: null,
         currentTurn: null,
@@ -226,23 +247,80 @@ io.on('connection', (socket) => {
       rooms.set(roomId, room)
     }
 
-    if (!room.player1 || isCreator) {
-      room.player1 = player
-      if (isCreator) {
-        room.creator = player.id
+    // Verificar se o role solicitado tem vagas disponíveis
+    const currentCount = room.participants[role + 's'] ? room.participants[role + 's'].length : 0
+    const maxCount = ROLE_LIMITS[role]
+    
+    if (currentCount >= maxCount && !isCreator) {
+      socket.emit('join_room_error', { 
+        error: `Role ${role} está cheio (${currentCount}/${maxCount})`,
+        availableRoles: getAvailableRoles(room)
+      })
+      return
+    }
+
+    // Adicionar participante ao role apropriado
+    const participantData = { ...player, role, socketId: socket.id }
+    
+    if (role === RoomRole.FIGHTER) {
+      room.participants.fighters.push(participantData)
+      
+      // Manter compatibilidade: atualizar player1/player2
+      if (!room.player1 || isCreator) {
+        room.player1 = player
+        if (isCreator) {
+          room.creator = player.id
+        }
+      } else if (!room.player2 && room.participants.fighters.length <= 2) {
+        room.player2 = player
+        room.combatLog.push({
+          type: 'system',
+          message: `${player.name} entrou como lutador!`,
+          timestamp: new Date()
+        })
       }
-    } else if (!room.player2) {
-      room.player2 = player
+    } else if (role === RoomRole.SPECTATOR) {
+      room.participants.spectators.push(participantData)
       room.combatLog.push({
         type: 'system',
-        message: `${player.name} entrou na sala!`,
+        message: `${player.name} está assistindo ao combate! 👁️`,
         timestamp: new Date()
       })
+    } else if (role === RoomRole.MODERATOR) {
+      // Moderador desativado por enquanto
+      socket.emit('join_room_error', { 
+        error: 'Role de moderador está temporariamente desativado',
+        availableRoles: getAvailableRoles(room)
+      })
+      return
+    }
+
+    // Definir criador se for o primeiro participante
+    if (isCreator) {
+      room.creator = player.id
     }
 
     io.to(roomId).emit('room_updated', room)
-    io.to(roomId).emit('player_joined', player)
+    io.to(roomId).emit('player_joined', { player: participantData, role })
   })
+
+  // Função auxiliar para verificar roles disponíveis
+  function getAvailableRoles(room) {
+    const available = []
+    
+    if (room.participants.fighters.length < ROLE_LIMITS[RoomRole.FIGHTER]) {
+      available.push(RoomRole.FIGHTER)
+    }
+    if (room.participants.spectators.length < ROLE_LIMITS[RoomRole.SPECTATOR]) {
+      available.push(RoomRole.SPECTATOR)
+    }
+    // Moderador desativado
+    // if (room.participants.moderators.length < ROLE_LIMITS[RoomRole.MODERATOR]) {
+    //   available.push(RoomRole.MODERATOR)
+    // }
+    
+    return available
+  }
 
   socket.on('toggle_ready', ({ playerId, roomId }) => {
     const room = rooms.get(roomId)
@@ -716,15 +794,95 @@ io.on('connection', (socket) => {
     // 💚 REGENERAÇÃO AUTOMÁTICA - Se jogador sair de combate
     playerSockets.forEach((socketId, playerId) => {
       if (socketId === socket.id) {
-        // Encontrar a sala do jogador
+        // Encontrar a sala do jogador e remover das participações
         rooms.forEach((room, roomId) => {
-          if (room.player1?.id === playerId || room.player2?.id === playerId) {
-            const player = room.player1?.id === playerId ? room.player1 : room.player2
+          let playerFound = false
+          let wasLastPlayer = false
+          
+          // Verificar e remover de fighters
+          const fighterIndex = room.participants.fighters.findIndex(p => p.id === playerId)
+          if (fighterIndex !== -1) {
+            const player = room.participants.fighters[fighterIndex]
+            room.participants.fighters.splice(fighterIndex, 1)
+            playerFound = true
             
             // Regenerar recursos ao sair do combate
-            if (player && room.phase !== CombatPhase.WAITING_PLAYERS) {
+            if (room.phase !== CombatPhase.WAITING_PLAYERS) {
               regeneratePlayerResources(player, 'Disconnect from combat')
             }
+            
+            // Atualizar compatibilidade player1/player2
+            if (room.player1?.id === playerId) {
+              room.player1 = room.participants.fighters[0] || null
+            }
+            if (room.player2?.id === playerId) {
+              room.player2 = room.participants.fighters[1] || null
+            }
+            
+            room.combatLog.push({
+              type: 'system',
+              message: `${player.name} saiu do combate! 👋`,
+              timestamp: new Date()
+            })
+          }
+          
+          // Verificar e remover de spectators
+          const spectatorIndex = room.participants.spectators.findIndex(p => p.id === playerId)
+          if (spectatorIndex !== -1) {
+            const player = room.participants.spectators[spectatorIndex]
+            room.participants.spectators.splice(spectatorIndex, 1)
+            playerFound = true
+            
+            room.combatLog.push({
+              type: 'system',
+              message: `${player.name} parou de assistir! 👁️‍🗨️`,
+              timestamp: new Date()
+            })
+          }
+          
+          // Verificar e remover de moderators
+          const moderatorIndex = room.participants.moderators.findIndex(p => p.id === playerId)
+          if (moderatorIndex !== -1) {
+            const player = room.participants.moderators[moderatorIndex]
+            room.participants.moderators.splice(moderatorIndex, 1)
+            playerFound = true
+            
+            room.combatLog.push({
+              type: 'system',
+              message: `Moderador ${player.name} saiu! 🛡️`,
+              timestamp: new Date()
+            })
+          }
+          
+          // 🔥 NOVA LÓGICA: Verificar se sala ficou vazia e finalizar
+          const totalParticipants = room.participants.fighters.length + 
+                                  room.participants.spectators.length + 
+                                  room.participants.moderators.length
+          
+          if (playerFound && totalParticipants === 0) {
+            console.log(`🏁 Sala ${roomId} ficou vazia - finalizando...`)
+            
+            // Remover sala da memória
+            rooms.delete(roomId)
+            
+            // Notificar todos os sockets restantes (caso ainda existam)
+            io.to(roomId).emit('room_closed', { 
+              reason: 'Sala finalizada - todos os participantes saíram',
+              automatic: true 
+            })
+            
+            room.combatLog.push({
+              type: 'system',
+              message: '🏁 Sala finalizada automaticamente - nenhum participante restante',
+              timestamp: new Date()
+            })
+            
+            wasLastPlayer = true
+          }
+          
+          // Se sala ainda existe, notificar atualização
+          if (playerFound && !wasLastPlayer) {
+            io.to(roomId).emit('room_updated', room)
           }
         })
         

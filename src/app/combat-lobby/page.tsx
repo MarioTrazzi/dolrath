@@ -14,6 +14,26 @@ interface CombatRoom {
   isPrivate: boolean
   status: 'waiting' | 'in_progress' | 'finished'
   createdAt: Date
+  // Nova estrutura para participants
+  participants?: {
+    fighters: Array<{id: string, name: string, role: string}>
+    spectators: Array<{id: string, name: string, role: string}>
+    moderators: Array<{id: string, name: string, role: string}>
+  }
+}
+
+// Enum para roles
+enum RoomRole {
+  FIGHTER = 'fighter',
+  SPECTATOR = 'spectator', 
+  MODERATOR = 'moderator'
+}
+
+// Limites por role
+const ROLE_LIMITS = {
+  [RoomRole.FIGHTER]: 2,
+  [RoomRole.SPECTATOR]: 8,
+  [RoomRole.MODERATOR]: 2
 }
 
 interface Player {
@@ -50,6 +70,8 @@ export default function CombatLobbyPage() {
   const [isCreatingRoom, setIsCreatingRoom] = useState(false)
   const [newRoomName, setNewRoomName] = useState('')
   const [isPrivateRoom, setIsPrivateRoom] = useState(false)
+  const [selectedRole, setSelectedRole] = useState<RoomRole>(RoomRole.FIGHTER)
+  const [showRoleSelector, setShowRoleSelector] = useState<string | null>(null)
 
   useEffect(() => {
     checkAuthAndLoadData()
@@ -244,9 +266,66 @@ export default function CombatLobbyPage() {
     }
   }
 
-  const joinRoom = (roomId: string) => {
+  const joinRoom = (roomId: string, role: RoomRole = RoomRole.FIGHTER) => {
     if (!selectedCharacter) return
-    router.push(`/combat?room=${roomId}&character=${selectedCharacter.id}`)
+    router.push(`/combat?room=${roomId}&character=${selectedCharacter.id}&role=${role}`)
+  }
+
+  const getRoleDisplayName = (role: RoomRole) => {
+    switch (role) {
+      case RoomRole.FIGHTER: return '⚔️ Lutador'
+      case RoomRole.SPECTATOR: return '👁️ Espectador'
+      case RoomRole.MODERATOR: return '🛡️ Moderador'
+      default: return role
+    }
+  }
+
+  const getRoleDescription = (role: RoomRole) => {
+    switch (role) {
+      case RoomRole.FIGHTER: return 'Participa do combate (máx. 2)'
+      case RoomRole.SPECTATOR: return 'Assiste ao combate (máx. 8)'
+      case RoomRole.MODERATOR: return 'Controla a sala (máx. 2) - Em breve'
+      default: return ''
+    }
+  }
+
+  const getAvailableRoles = (room: CombatRoom): RoomRole[] => {
+    const available: RoomRole[] = []
+    
+    if (!room.participants) {
+      // Sala antiga sem estrutura de participants - assumir que fighters estão disponíveis se não estiver cheia
+      if (room.playerCount < 2) available.push(RoomRole.FIGHTER)
+      available.push(RoomRole.SPECTATOR) // Sempre permitir espectador em salas antigas
+      return available
+    }
+
+    // Nova estrutura com participants
+    if (room.participants.fighters.length < ROLE_LIMITS[RoomRole.FIGHTER]) {
+      available.push(RoomRole.FIGHTER)
+    }
+    if (room.participants.spectators.length < ROLE_LIMITS[RoomRole.SPECTATOR]) {
+      available.push(RoomRole.SPECTATOR)
+    }
+    // Moderador desabilitado por enquanto
+    // if (room.participants.moderators.length < ROLE_LIMITS[RoomRole.MODERATOR]) {
+    //   available.push(RoomRole.MODERATOR)
+    // }
+    
+    return available
+  }
+
+  const getTotalParticipants = (room: CombatRoom): number => {
+    if (!room.participants) return room.playerCount
+    
+    return room.participants.fighters.length + 
+           room.participants.spectators.length + 
+           room.participants.moderators.length
+  }
+
+  const getMaxParticipants = (): number => {
+    return ROLE_LIMITS[RoomRole.FIGHTER] + 
+           ROLE_LIMITS[RoomRole.SPECTATOR] + 
+           ROLE_LIMITS[RoomRole.MODERATOR]
   }
 
   const getStatusColor = (status: string) => {
@@ -494,11 +573,27 @@ export default function CombatLobbyPage() {
 
                     <div className="space-y-2 mb-4">
                       <div className="flex justify-between text-sm">
-                        <span className="text-text-secondary">Jogadores:</span>
+                        <span className="text-text-secondary">Participantes:</span>
                         <span className="font-bold text-text-primary">
-                          {room.playerCount}/{room.maxPlayers}
+                          {getTotalParticipants(room)}/{getMaxParticipants()}
                         </span>
                       </div>
+                      {room.participants && (
+                        <div className="text-xs space-y-1">
+                          <div className="flex justify-between">
+                            <span className="text-text-secondary">⚔️ Lutadores:</span>
+                            <span className="text-text-primary">{room.participants.fighters.length}/{ROLE_LIMITS[RoomRole.FIGHTER]}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-text-secondary">👁️ Espectadores:</span>
+                            <span className="text-text-primary">{room.participants.spectators.length}/{ROLE_LIMITS[RoomRole.SPECTATOR]}</span>
+                          </div>
+                          {/* <div className="flex justify-between">
+                            <span className="text-text-secondary">🛡️ Moderadores:</span>
+                            <span className="text-text-primary">{room.participants.moderators.length}/{ROLE_LIMITS[RoomRole.MODERATOR]}</span>
+                          </div> */}
+                        </div>
+                      )}
                       <div className="flex justify-between text-sm">
                         <span className="text-text-secondary flex items-center">
                           <Clock className="mr-1" size={12} />
@@ -510,43 +605,90 @@ export default function CombatLobbyPage() {
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => joinRoom(room.id)}
-                      disabled={
-                        room.status !== 'waiting' || 
-                        room.playerCount >= room.maxPlayers || 
-                        !selectedCharacter || 
-                        !selectedCharacter.isAlive
-                      }
-                      className={`w-full py-2 px-4 rounded-lg font-bold transition-colors ${
-                        room.status === 'waiting' && 
-                        room.playerCount < room.maxPlayers && 
-                        selectedCharacter && 
-                        selectedCharacter.isAlive
-                          ? 'bg-primary hover:bg-primary-dark text-white'
-                          : 'bg-surface/30 text-text-secondary cursor-not-allowed'
-                      }`}
-                      title={
-                        !selectedCharacter 
-                          ? 'Selecione um personagem' 
-                          : !selectedCharacter.isAlive 
-                          ? 'Personagem deve estar vivo' 
-                          : ''
-                      }
-                    >
-                      {!selectedCharacter
-                        ? 'Selecione Personagem'
-                        : !selectedCharacter.isAlive
-                        ? 'Personagem Morto'
-                        : room.status === 'waiting' 
-                        ? room.playerCount < room.maxPlayers 
-                          ? 'Entrar na Sala'
-                          : 'Sala Cheia'
-                        : room.status === 'in_progress'
-                        ? 'Em Combate'
-                        : 'Finalizada'
-                      }
-                    </button>
+                    {/* Role Selector */}
+                    {showRoleSelector === room.id ? (
+                      <div className="space-y-2 mb-4 p-3 bg-background/30 rounded-lg border border-primary/30">
+                        <h4 className="text-sm font-bold text-text-primary text-center">Escolha seu role:</h4>
+                        <div className="space-y-2">
+                          {getAvailableRoles(room).map(role => (
+                            <button
+                              key={role}
+                              onClick={() => {
+                                setSelectedRole(role)
+                                setShowRoleSelector(null)
+                                joinRoom(room.id, role)
+                              }}
+                              disabled={role === RoomRole.MODERATOR}
+                              className={`w-full p-2 rounded-lg text-left text-sm transition-colors border ${
+                                role === RoomRole.MODERATOR
+                                  ? 'bg-gray-600/20 border-gray-600/30 text-gray-400 cursor-not-allowed'
+                                  : 'bg-primary/10 border-primary/30 text-text-primary hover:bg-primary/20'
+                              }`}
+                            >
+                              <div className="font-bold">{getRoleDisplayName(role)}</div>
+                              <div className="text-xs text-text-secondary">{getRoleDescription(role)}</div>
+                            </button>
+                          ))}
+                        </div>
+                        <button
+                          onClick={() => setShowRoleSelector(null)}
+                          className="w-full py-1 px-3 text-xs bg-surface/50 hover:bg-surface/70 text-text-secondary rounded transition-colors"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          if (getAvailableRoles(room).length === 0) return
+                          if (getAvailableRoles(room).length === 1) {
+                            // Se só tem um role disponível, entrar diretamente
+                            joinRoom(room.id, getAvailableRoles(room)[0])
+                          } else {
+                            // Se tem múltiplos roles, mostrar seletor
+                            setShowRoleSelector(room.id)
+                          }
+                        }}
+                        disabled={
+                          room.status !== 'waiting' || 
+                          getAvailableRoles(room).length === 0 ||
+                          !selectedCharacter || 
+                          !selectedCharacter.isAlive
+                        }
+                        className={`w-full py-2 px-4 rounded-lg font-bold transition-colors ${
+                          room.status === 'waiting' && 
+                          getAvailableRoles(room).length > 0 &&
+                          selectedCharacter && 
+                          selectedCharacter.isAlive
+                            ? 'bg-primary hover:bg-primary-dark text-white'
+                            : 'bg-surface/30 text-text-secondary cursor-not-allowed'
+                        }`}
+                        title={
+                          !selectedCharacter 
+                            ? 'Selecione um personagem' 
+                            : !selectedCharacter.isAlive 
+                            ? 'Personagem deve estar vivo'
+                            : getAvailableRoles(room).length === 0
+                            ? 'Todos os roles estão cheios'
+                            : ''
+                        }
+                      >
+                        {!selectedCharacter
+                          ? 'Selecione Personagem'
+                          : !selectedCharacter.isAlive
+                          ? 'Personagem Morto'
+                          : room.status === 'waiting' 
+                          ? getAvailableRoles(room).length > 0
+                            ? getAvailableRoles(room).length === 1
+                              ? `Entrar como ${getRoleDisplayName(getAvailableRoles(room)[0])}`
+                              : 'Escolher Role'
+                            : 'Sala Cheia'
+                          : room.status === 'in_progress'
+                          ? 'Em Combate'
+                          : 'Finalizada'
+                        }
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>

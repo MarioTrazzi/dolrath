@@ -77,6 +77,12 @@ interface CombatRoom {
   pendingAction: any
   reactionPhase: boolean
   winner?: string | null
+  // Nova estrutura para participants
+  participants?: {
+    fighters: Array<Player & {role: string, socketId: string}>
+    spectators: Array<Player & {role: string, socketId: string}>
+    moderators: Array<Player & {role: string, socketId: string}>
+  }
 }
 
 enum CombatPhase {
@@ -120,6 +126,7 @@ function CombatPageContent() {
   const roomId = searchParams?.get('room') || 'default'
   const characterId = searchParams?.get('character')
   const isRoomCreator = searchParams?.get('creator') === 'true'
+  const userRole = searchParams?.get('role') || 'fighter' // Novo parâmetro de role
 
   const [socket] = useState(() => createSocketConnection())
   const [combatRoom, setCombatRoom] = useState<CombatRoom | null>(null)
@@ -152,6 +159,8 @@ function CombatPageContent() {
   const isMyTurn = combatRoom?.currentTurn === currentPlayer?.id
   const isWinner = combatRoom?.winner === currentPlayer?.id
   const isCreator = combatRoom?.creator === currentPlayer?.id
+  const isSpectator = userRole === 'spectator'
+  const isModerator = userRole === 'moderator'
 
   // Auto scroll para o chat quando novas mensagens chegam
   useEffect(() => {
@@ -418,8 +427,13 @@ function CombatPageContent() {
       
       setCurrentPlayer(playerData)
       
-      // Entrar na sala via Socket.IO
-      socket.emit('join_room', { roomId, player: playerData, isCreator: isRoomCreator })
+      // Entrar na sala via Socket.IO com role
+      socket.emit('join_room', { 
+        roomId, 
+        player: playerData, 
+        isCreator: isRoomCreator,
+        role: userRole
+      })
     }
 
     initializeCombat()
@@ -758,7 +772,11 @@ function CombatPageContent() {
         {/* Header */}
         <div className="bg-gradient-to-r from-primary to-primary-dark text-white p-2 sm:p-3 rounded-t-2xl flex justify-between items-center flex-shrink-0">
           <div className="flex items-center">
-            <h2 className="text-sm sm:text-lg font-bold">⚔️ Combate PvP - Sala {roomId}</h2>
+            <h2 className="text-sm sm:text-lg font-bold">
+              ⚔️ Combate PvP - Sala {roomId}
+              {isSpectator && <span className="ml-2 text-xs bg-blue-500/30 px-2 py-1 rounded-full">👁️ Espectador</span>}
+              {isModerator && <span className="ml-2 text-xs bg-purple-500/30 px-2 py-1 rounded-full">🛡️ Moderador</span>}
+            </h2>
             <div className={`ml-2 sm:ml-3 px-1 sm:px-2 py-1 rounded-full text-xs font-bold ${
               connectionStatus === 'connected' 
                 ? 'bg-success/20 text-success border border-success/30' 
@@ -800,39 +818,45 @@ function CombatPageContent() {
           <div className="bg-background/30 border-b border-white/10 p-2 sm:p-3 flex flex-col sm:flex-row gap-2 sm:gap-0 flex-shrink-0">
             {/* Current Player Status */}
             <div className="bg-gradient-to-br from-success/20 to-success/10 border border-success/30 rounded-xl p-2 sm:p-3 flex-1 sm:mr-3 backdrop-blur-sm">
-              <h3 className="font-bold text-success mb-2 text-xs sm:text-sm">{currentPlayerDisplay?.name} (Você)</h3>
+              <h3 className="font-bold text-success mb-2 text-xs sm:text-sm">
+                {isSpectator ? combatRoom?.player1?.name || 'Lutador 1' : `${currentPlayerDisplay?.name} (Você)`}
+                {isSpectator && <span className="ml-1 text-xs">⚔️</span>}
+              </h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 text-xs">
-                <div className="text-text-secondary">HP: <span className="font-bold text-error">{currentPlayerDisplay?.hp}/{currentPlayerDisplay?.maxHp}</span></div>
-                <div className="text-text-secondary">MP: <span className="font-bold text-blue-400">{currentPlayerDisplay?.mp}/{currentPlayerDisplay?.maxMp}</span></div>
-                <div className="text-text-secondary">⚡: <span className="font-bold text-yellow-400">{currentPlayerDisplay?.stamina}/{currentPlayerDisplay?.maxStamina}</span></div>
-                <div className="text-text-secondary">LVL: <span className="font-bold text-primary">{currentPlayerDisplay?.level}</span></div>
-                <div className="text-text-secondary">ATK: <span className="font-bold text-text-primary">{currentPlayerDisplay?.attack}</span></div>
-                <div className="text-text-secondary">DEF: <span className="font-bold text-text-primary">{currentPlayerDisplay?.defense}</span></div>
-                <div className="text-text-secondary hidden sm:block">STR: <span className="font-bold text-yellow-400">{currentPlayerDisplay?.strength}</span></div>
-                <div className="text-text-secondary hidden sm:block">AGI: <span className="font-bold text-cyan-400">{currentPlayerDisplay?.agility}</span></div>
-                <div className="text-text-secondary hidden sm:block">INT: <span className="font-bold text-purple-400">{currentPlayerDisplay?.intelligence}</span></div>
-                <div className="text-text-secondary hidden sm:block">RES: <span className="font-bold text-green-400">{currentPlayerDisplay?.resistance}</span></div>
-                <div className="text-text-secondary hidden sm:block">CRIT: <span className="font-bold text-yellow-300">{currentPlayerDisplay?.critical}%</span></div>
-                <div className="text-text-secondary hidden sm:block">SPD: <span className="font-bold text-emerald-400">{currentPlayerDisplay?.speed}</span></div>
+                <div className="text-text-secondary">HP: <span className="font-bold text-error">{isSpectator ? combatRoom?.player1?.hp : currentPlayerDisplay?.hp}/{isSpectator ? combatRoom?.player1?.maxHp : currentPlayerDisplay?.maxHp}</span></div>
+                <div className="text-text-secondary">MP: <span className="font-bold text-blue-400">{isSpectator ? combatRoom?.player1?.mp : currentPlayerDisplay?.mp}/{isSpectator ? combatRoom?.player1?.maxMp : currentPlayerDisplay?.maxMp}</span></div>
+                <div className="text-text-secondary">⚡: <span className="font-bold text-yellow-400">{isSpectator ? combatRoom?.player1?.stamina : currentPlayerDisplay?.stamina}/{isSpectator ? combatRoom?.player1?.maxStamina : currentPlayerDisplay?.maxStamina}</span></div>
+                <div className="text-text-secondary">LVL: <span className="font-bold text-primary">{isSpectator ? combatRoom?.player1?.level : currentPlayerDisplay?.level}</span></div>
+                <div className="text-text-secondary">ATK: <span className="font-bold text-text-primary">{isSpectator ? combatRoom?.player1?.attack : currentPlayerDisplay?.attack}</span></div>
+                <div className="text-text-secondary">DEF: <span className="font-bold text-text-primary">{isSpectator ? combatRoom?.player1?.defense : currentPlayerDisplay?.defense}</span></div>
+                <div className="text-text-secondary hidden sm:block">STR: <span className="font-bold text-yellow-400">{isSpectator ? combatRoom?.player1?.strength : currentPlayerDisplay?.strength}</span></div>
+                <div className="text-text-secondary hidden sm:block">AGI: <span className="font-bold text-cyan-400">{isSpectator ? combatRoom?.player1?.agility : currentPlayerDisplay?.agility}</span></div>
+                <div className="text-text-secondary hidden sm:block">INT: <span className="font-bold text-purple-400">{isSpectator ? combatRoom?.player1?.intelligence : currentPlayerDisplay?.intelligence}</span></div>
+                <div className="text-text-secondary hidden sm:block">RES: <span className="font-bold text-green-400">{isSpectator ? combatRoom?.player1?.resistance : currentPlayerDisplay?.resistance}</span></div>
+                <div className="text-text-secondary hidden sm:block">CRIT: <span className="font-bold text-yellow-300">{isSpectator ? combatRoom?.player1?.critical : currentPlayerDisplay?.critical}%</span></div>
+                <div className="text-text-secondary hidden sm:block">SPD: <span className="font-bold text-emerald-400">{isSpectator ? combatRoom?.player1?.speed : currentPlayerDisplay?.speed}</span></div>
               </div>
             </div>
 
             {/* Opponent Status */}
             <div className="bg-gradient-to-br from-error/20 to-error/10 border border-error/30 rounded-xl p-2 sm:p-3 flex-1 sm:ml-3 backdrop-blur-sm">
-              {opponent ? (
+              {(opponent || combatRoom?.player2) ? (
                 <>
-                  <h3 className="font-bold text-error mb-2 text-xs sm:text-sm">{opponent.name} (Oponente)</h3>
+                  <h3 className="font-bold text-error mb-2 text-xs sm:text-sm">
+                    {isSpectator ? combatRoom?.player2?.name || 'Lutador 2' : `${opponent?.name} (Oponente)`}
+                    {isSpectator && <span className="ml-1 text-xs">⚔️</span>}
+                  </h3>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 text-xs">
-                    <div className="text-text-secondary">HP: <span className="font-bold text-error">{opponent.hp}/{opponent.maxHp}</span></div>
-                    <div className="text-text-secondary">MP: <span className="font-bold text-blue-400">{opponent.mp}/{opponent.maxMp}</span></div>
-                    <div className="text-text-secondary">⚡: <span className="font-bold text-yellow-400">{opponent.stamina}/{opponent.maxStamina}</span></div>
-                    <div className="text-text-secondary">LV: <span className="font-bold text-text-primary">{opponent.level}</span></div>
-                    <div className="text-text-secondary">ATK: <span className="font-bold text-text-primary">{opponent.attack}</span></div>
-                    <div className="text-text-secondary">DEF: <span className="font-bold text-text-primary">{opponent.defense}</span></div>
-                    <div className="text-text-secondary hidden sm:block">STR: <span className="font-bold text-yellow-400">{opponent.strength}</span></div>
-                    <div className="text-text-secondary hidden sm:block">AGI: <span className="font-bold text-cyan-400">{opponent.agility}</span></div>
-                    <div className="text-text-secondary hidden sm:block">INT: <span className="font-bold text-purple-400">{opponent.intelligence}</span></div>
-                    <div className="text-text-secondary hidden sm:block">RES: <span className="font-bold text-green-400">{opponent.resistance}</span></div>
+                    <div className="text-text-secondary">HP: <span className="font-bold text-error">{isSpectator ? combatRoom?.player2?.hp : opponent?.hp}/{isSpectator ? combatRoom?.player2?.maxHp : opponent?.maxHp}</span></div>
+                    <div className="text-text-secondary">MP: <span className="font-bold text-blue-400">{isSpectator ? combatRoom?.player2?.mp : opponent?.mp}/{isSpectator ? combatRoom?.player2?.maxMp : opponent?.maxMp}</span></div>
+                    <div className="text-text-secondary">⚡: <span className="font-bold text-yellow-400">{isSpectator ? combatRoom?.player2?.stamina : opponent?.stamina}/{isSpectator ? combatRoom?.player2?.maxStamina : opponent?.maxStamina}</span></div>
+                    <div className="text-text-secondary">LV: <span className="font-bold text-text-primary">{isSpectator ? combatRoom?.player2?.level : opponent?.level}</span></div>
+                    <div className="text-text-secondary">ATK: <span className="font-bold text-text-primary">{isSpectator ? combatRoom?.player2?.attack : opponent?.attack}</span></div>
+                    <div className="text-text-secondary">DEF: <span className="font-bold text-text-primary">{isSpectator ? combatRoom?.player2?.defense : opponent?.defense}</span></div>
+                    <div className="text-text-secondary hidden sm:block">STR: <span className="font-bold text-yellow-400">{isSpectator ? combatRoom?.player2?.strength : opponent?.strength}</span></div>
+                    <div className="text-text-secondary hidden sm:block">AGI: <span className="font-bold text-cyan-400">{isSpectator ? combatRoom?.player2?.agility : opponent?.agility}</span></div>
+                    <div className="text-text-secondary hidden sm:block">INT: <span className="font-bold text-purple-400">{isSpectator ? combatRoom?.player2?.intelligence : opponent?.intelligence}</span></div>
+                    <div className="text-text-secondary hidden sm:block">RES: <span className="font-bold text-green-400">{isSpectator ? combatRoom?.player2?.resistance : opponent?.resistance}</span></div>
                   </div>
                 </>
               ) : (
@@ -843,6 +867,45 @@ function CombatPageContent() {
               )}
             </div>
           </div>
+
+          {/* Participants Panel - Só para espectadores/moderadores */}
+          {(isSpectator || isModerator) && combatRoom?.participants && (
+            <div className="bg-background/20 border-b border-white/10 p-2 sm:p-3 flex-shrink-0">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                {/* Lutadores */}
+                <div className="bg-surface/30 rounded-lg p-2">
+                  <h4 className="font-bold text-red-400 mb-1">⚔️ Lutadores ({combatRoom.participants.fighters.length}/2)</h4>
+                  {combatRoom.participants.fighters.map((fighter, index) => (
+                    <div key={fighter.id} className="text-text-secondary">
+                      {fighter.name} (Nv.{fighter.level})
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Espectadores */}
+                <div className="bg-surface/30 rounded-lg p-2">
+                  <h4 className="font-bold text-blue-400 mb-1">👁️ Espectadores ({combatRoom.participants.spectators.length}/8)</h4>
+                  <div className="max-h-16 overflow-y-auto">
+                    {combatRoom.participants.spectators.map((spectator, index) => (
+                      <div key={spectator.id} className="text-text-secondary">
+                        {spectator.name}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* Moderadores */}
+                <div className="bg-surface/30 rounded-lg p-2">
+                  <h4 className="font-bold text-purple-400 mb-1">🛡️ Moderadores ({combatRoom.participants.moderators.length}/2)</h4>
+                  {combatRoom.participants.moderators.map((moderator, index) => (
+                    <div key={moderator.id} className="text-text-secondary">
+                      {moderator.name}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Combat Area */}
           <div className="flex-1 flex flex-col sm:flex-row min-h-0">
@@ -893,9 +956,40 @@ function CombatPageContent() {
 
             {/* Actions - Sempre visível e responsivo */}
             <div className="order-1 sm:order-3 w-full sm:w-64 bg-surface/30 p-2 sm:p-4 flex flex-col flex-shrink-0 space-y-4">
-              <h3 className="font-bold text-text-primary mb-2 sm:mb-3 text-xs sm:text-sm text-center">🎯 Ações</h3>
+              <h3 className="font-bold text-text-primary mb-2 sm:mb-3 text-xs sm:text-sm text-center">
+                {isSpectator ? '👁️ Espectando' : isModerator ? '🛡️ Moderando' : '🎯 Ações'}
+              </h3>
               
-              {combatRoom?.phase === CombatPhase.INITIATIVE_ROLL ? (
+              {isSpectator ? (
+                // Interface para espectadores
+                <div className="text-center space-y-3">
+                  <div className="bg-blue-500/20 border border-blue-500/30 rounded-lg p-3">
+                    <div className="text-sm text-blue-300 mb-2">Modo Espectador</div>
+                    <div className="text-xs text-text-secondary">
+                      Você está assistindo ao combate. Use o chat para conversar com outros espectadores!
+                    </div>
+                  </div>
+                  
+                  {combatRoom?.phase === CombatPhase.COMBAT_END && (
+                    <button
+                      onClick={() => router.push('/combat-lobby')}
+                      className="bg-primary hover:bg-primary-dark text-white px-6 py-2 rounded-lg w-full transition-colors"
+                    >
+                      Voltar ao Lobby
+                    </button>
+                  )}
+                </div>
+              ) : isModerator ? (
+                // Interface para moderadores (futura)
+                <div className="text-center space-y-3">
+                  <div className="bg-purple-500/20 border border-purple-500/30 rounded-lg p-3">
+                    <div className="text-sm text-purple-300 mb-2">Modo Moderador</div>
+                    <div className="text-xs text-text-secondary">
+                      Funcionalidades de moderação em desenvolvimento...
+                    </div>
+                  </div>
+                </div>
+              ) : combatRoom?.phase === CombatPhase.INITIATIVE_ROLL ? (
                 <div className="space-y-3">
                   <div className="text-center">
                     <div className="text-xl sm:text-2xl mb-2">🎲</div>

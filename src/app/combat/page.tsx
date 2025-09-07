@@ -134,14 +134,14 @@ function CombatPageContent() {
   const [showTransformationDialog, setShowTransformationDialog] = useState(false)
   const [isTransforming, setIsTransforming] = useState(false)
 
-  // Sistema de Stamina (custos por ação)
+  // Sistema de Stamina (custos por ação) - Balanceado para 10 lutas diárias
   const STAMINA_COSTS = {
-    [ActionType.LIGHT_ATTACK]: 1,
-    [ActionType.HEAVY_ATTACK]: 2,
-    [ActionType.SPECIAL_ATTACK]: 4,
-    [ActionType.DODGE]: 1,
-    [ActionType.DEFEND]: 1,
-    [ActionType.USE_ITEM]: 0
+    [ActionType.LIGHT_ATTACK]: 1,   // Ataque leve: 1 stamina
+    [ActionType.HEAVY_ATTACK]: 2,   // Ataque pesado: 2 stamina
+    [ActionType.SPECIAL_ATTACK]: 4, // Ataque especial: 4 stamina
+    [ActionType.DODGE]: 1,          // Esquivar: 1 stamina
+    [ActionType.DEFEND]: 3,         // Defender: 3 stamina (mais caro para incentivar ação)
+    [ActionType.USE_ITEM]: 0        // Usar item: 0 stamina
   }
 
   const combatLogRef = useRef<HTMLDivElement>(null)

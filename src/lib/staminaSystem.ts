@@ -1,5 +1,18 @@
 /**
- * 💰 SISTEMA DE STAMINA - Templo de Stamina
+ * // � CUSTOS DE STAMINA POR ATIVIDADE
+export const STAMINA_COSTS = {
+  // ⚔️ Combates PvP - custos baixos para permitir 10 lutas diárias
+  pvp: {
+    light_attack: 1,   // Ataque leve
+    heavy_attack: 2,   // Ataque pesado
+    special_attack: 4, // Ataque especial
+    dodge: 1,          // Esquivar
+    defend: 3,         // Defender (mais caro para incentivar ação)
+    use_item: 0,       // Usar item
+    basic: 15,         // Custo base para entrada em combate (1 luta = ~15 stamina total)
+    ranked: 25,        // Lutas ranqueadas
+    tournament: 40     // Torneios especiais
+  },MA DE STAMINA - Templo de Stamina
  * 
  * Sistema balanceado de monetização ética que oferece conveniência
  * sem criar pay-to-win. Base em análise de dados de engagement.
@@ -38,7 +51,7 @@ export const STAMINA_PROGRESSION = {
   beginner: {
     baseStamina: 200,
     dailyRegen: 200,     // Regenera 100% por dia
-    activitiesPerDay: 8, // 8 atividades/dia
+    activitiesPerDay: 10, // 10 lutas PvP/dia (~20 stamina por luta)
     description: "Stamina generosa para aprender o jogo"
   },
 
@@ -46,7 +59,7 @@ export const STAMINA_PROGRESSION = {
   intermediate: {
     baseStamina: 250,
     dailyRegen: 200,     // Regenera 80% por dia  
-    activitiesPerDay: 10,
+    activitiesPerDay: 12,
     description: "Mais stamina conforme evolui"
   },
 
@@ -54,7 +67,7 @@ export const STAMINA_PROGRESSION = {
   veteran: {
     baseStamina: 300,
     dailyRegen: 200,     // Regenera 66% por dia
-    activitiesPerDay: 12,
+    activitiesPerDay: 15,
     description: "Stamina máxima, mas regeneração limitada"
   }
 }
@@ -149,7 +162,20 @@ export function calculateStaminaForLevel(level: number): number {
   return baseStamina + levelBonus + agiBonus
 }
 
-export function getStaminaCost(activity: string, difficulty?: string): number {
+export function getStaminaCost(activity: string, options?: { actionType?: string; difficulty?: string }): number {
+  // Suporte para ações PvP específicas
+  if (activity === 'pvp' && options?.actionType) {
+    const actionCosts: { [key: string]: number } = {
+      'light_attack': 1,
+      'heavy_attack': 2,
+      'special_attack': 4,
+      'dodge': 1,
+      'defend': 3,
+      'use_item': 0
+    }
+    return actionCosts[options.actionType] || 1
+  }
+
   const [category, type] = activity.split('_')
   
   if (STAMINA_COSTS[category as keyof typeof STAMINA_COSTS] && 
@@ -158,7 +184,7 @@ export function getStaminaCost(activity: string, difficulty?: string): number {
   }
   
   // Fallback para atividades não mapeadas
-  return 20
+  return 1 // Reduzido para 1
 }
 
 export function canAffordActivity(currentStamina: number, activity: string): boolean {

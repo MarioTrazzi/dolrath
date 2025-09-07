@@ -7,11 +7,17 @@
 
 // 🎮 CUSTOS DE STAMINA POR ATIVIDADE
 const STAMINA_COSTS = {
-  // ⚔️ Combates PvP
+  // ⚔️ Combates PvP - custos baixos para permitir 10 lutas diárias
   pvp: {
-    basic: 25,     // Lutas PvP básicas (ajustado para 8 atividades)
-    ranked: 35,    // Lutas ranqueadas
-    tournament: 50 // Torneios especiais
+    light_attack: 1,   // Ataque leve
+    heavy_attack: 2,   // Ataque pesado
+    special_attack: 4, // Ataque especial
+    dodge: 1,          // Esquivar
+    defend: 3,         // Defender (mais caro para incentivar ação)
+    use_item: 0,       // Usar item
+    basic: 15,         // Custo base para entrada em combate (1 luta = ~15 stamina total)
+    ranked: 25,        // Lutas ranqueadas
+    tournament: 40     // Torneios especiais
   },
 
   // Dungeons - Conteúdo PvE
@@ -45,7 +51,7 @@ const STAMINA_PROGRESSION = {
   beginner: {
     baseStamina: 200,
     dailyRegen: 200,     // Regenera 100% por dia
-    activitiesPerDay: 8, // 8 atividades/dia
+    activitiesPerDay: 10, // 10 lutas PvP/dia (~20 stamina por luta)
     description: "Stamina generosa para aprender o jogo"
   },
 
@@ -53,7 +59,7 @@ const STAMINA_PROGRESSION = {
   intermediate: {
     baseStamina: 250,
     dailyRegen: 200,     // Regenera 80% por dia  
-    activitiesPerDay: 10,
+    activitiesPerDay: 12,
     description: "Mais stamina conforme evolui"
   },
 
@@ -61,7 +67,7 @@ const STAMINA_PROGRESSION = {
   veteran: {
     baseStamina: 300,
     dailyRegen: 200,     // Regenera 66% por dia
-    activitiesPerDay: 12,
+    activitiesPerDay: 15,
     description: "Stamina máxima, mas regeneração limitada"
   }
 }
@@ -90,9 +96,18 @@ function getStaminaCost(activity, options = {}) {
       return STAMINA_COSTS.transformation[options.transformationType] || 35
     }
     
-    // Chamada: getStaminaCost('pvp', { actionType: 'basic' })
+    // Chamada: getStaminaCost('pvp', { actionType: 'light_attack' })
     if (activity === 'pvp' && options.actionType) {
-      return STAMINA_COSTS.pvp[options.actionType] || 25
+      // Mapear actionType para os custos corretos (valores baixos para permitir 10 lutas)
+      const actionCosts = {
+        'light_attack': 1,
+        'heavy_attack': 2,
+        'special_attack': 4,
+        'dodge': 1,
+        'defend': 3,
+        'use_item': 0
+      }
+      return actionCosts[options.actionType] || STAMINA_COSTS.pvp[options.actionType] || 1
     }
     
     // Tentar parsing padrão
@@ -103,7 +118,7 @@ function getStaminaCost(activity, options = {}) {
   }
   
   // Fallback para atividades não mapeadas
-  return 20
+  return 1 // Reduzido para 1
 }
 
 function canAffordActivity(currentStamina, activity) {

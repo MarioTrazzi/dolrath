@@ -147,6 +147,8 @@ function CombatPageContent() {
   const combatLogRef = useRef<HTMLDivElement>(null)
 
   const opponent = combatRoom?.player1?.id === currentPlayer?.id ? combatRoom?.player2 : combatRoom?.player1
+  // 🔥 CORREÇÃO: Card verde deve usar dados do combatRoom igual ao vermelho
+  const currentPlayerDisplay = combatRoom?.player1?.id === currentPlayer?.id ? combatRoom?.player1 : combatRoom?.player2
   const isMyTurn = combatRoom?.currentTurn === currentPlayer?.id
   const isWinner = combatRoom?.winner === currentPlayer?.id
   const isCreator = combatRoom?.creator === currentPlayer?.id
@@ -437,13 +439,13 @@ function CombatPageContent() {
 
   // 🔥 FORÇA re-render quando currentPlayer ou opponent mudam
   useEffect(() => {
-    if (currentPlayer) {
-      console.log('🔄 CurrentPlayer updated:', currentPlayer.name, `${currentPlayer.hp}/${currentPlayer.maxHp} HP`)
+    if (currentPlayerDisplay) {
+      console.log('🔄 CurrentPlayerDisplay updated:', currentPlayerDisplay.name, `${currentPlayerDisplay.hp}/${currentPlayerDisplay.maxHp} HP, ${currentPlayerDisplay.mp}/${currentPlayerDisplay.maxMp} MP, ${currentPlayerDisplay.stamina}/${currentPlayerDisplay.maxStamina} ⚡`)
     }
     if (opponent) {
-      console.log('🔄 Opponent updated:', opponent.name, `${opponent.hp}/${opponent.maxHp} HP`)
+      console.log('🔄 Opponent updated:', opponent.name, `${opponent.hp}/${opponent.maxHp} HP, ${opponent.mp}/${opponent.maxMp} MP, ${opponent.stamina}/${opponent.maxStamina} ⚡`)
     }
-  }, [currentPlayer?.hp, currentPlayer?.mp, currentPlayer?.stamina, opponent?.hp, opponent?.mp, opponent?.stamina])
+  }, [currentPlayerDisplay?.hp, currentPlayerDisplay?.mp, currentPlayerDisplay?.stamina, opponent?.hp, opponent?.mp, opponent?.stamina])
 
   const toggleReady = () => {
     if (!currentPlayer) return
@@ -798,20 +800,20 @@ function CombatPageContent() {
           <div className="bg-background/30 border-b border-white/10 p-2 sm:p-3 flex flex-col sm:flex-row gap-2 sm:gap-0 flex-shrink-0">
             {/* Current Player Status */}
             <div className="bg-gradient-to-br from-success/20 to-success/10 border border-success/30 rounded-xl p-2 sm:p-3 flex-1 sm:mr-3 backdrop-blur-sm">
-              <h3 className="font-bold text-success mb-2 text-xs sm:text-sm">{currentPlayer?.name} (Você)</h3>
+              <h3 className="font-bold text-success mb-2 text-xs sm:text-sm">{currentPlayerDisplay?.name} (Você)</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 text-xs">
-                <div className="text-text-secondary">HP: <span className="font-bold text-error">{currentPlayer?.hp}/{currentPlayer?.maxHp}</span></div>
-                <div className="text-text-secondary">MP: <span className="font-bold text-blue-400">{currentPlayer?.mp}/{currentPlayer?.maxMp}</span></div>
-                <div className="text-text-secondary">⚡: <span className="font-bold text-yellow-400">{currentPlayer?.stamina}/{currentPlayer?.maxStamina}</span></div>
-                <div className="text-text-secondary">LV: <span className="font-bold text-primary">{currentPlayer?.level}</span></div>
-                <div className="text-text-secondary">ATK: <span className="font-bold text-text-primary">{currentPlayer?.attack}</span></div>
-                <div className="text-text-secondary">DEF: <span className="font-bold text-text-primary">{currentPlayer?.defense}</span></div>
-                <div className="text-text-secondary hidden sm:block">STR: <span className="font-bold text-yellow-400">{currentPlayer?.strength}</span></div>
-                <div className="text-text-secondary hidden sm:block">AGI: <span className="font-bold text-cyan-400">{currentPlayer?.agility}</span></div>
-                <div className="text-text-secondary hidden sm:block">INT: <span className="font-bold text-purple-400">{currentPlayer?.intelligence}</span></div>
-                <div className="text-text-secondary hidden sm:block">RES: <span className="font-bold text-green-400">{currentPlayer?.resistance}</span></div>
-                <div className="text-text-secondary hidden sm:block">CRIT: <span className="font-bold text-yellow-300">{currentPlayer?.critical}%</span></div>
-                <div className="text-text-secondary hidden sm:block">SPD: <span className="font-bold text-emerald-400">{currentPlayer?.speed}</span></div>
+                <div className="text-text-secondary">HP: <span className="font-bold text-error">{currentPlayerDisplay?.hp}/{currentPlayerDisplay?.maxHp}</span></div>
+                <div className="text-text-secondary">MP: <span className="font-bold text-blue-400">{currentPlayerDisplay?.mp}/{currentPlayerDisplay?.maxMp}</span></div>
+                <div className="text-text-secondary">⚡: <span className="font-bold text-yellow-400">{currentPlayerDisplay?.stamina}/{currentPlayerDisplay?.maxStamina}</span></div>
+                <div className="text-text-secondary">LVL: <span className="font-bold text-primary">{currentPlayerDisplay?.level}</span></div>
+                <div className="text-text-secondary">ATK: <span className="font-bold text-text-primary">{currentPlayerDisplay?.attack}</span></div>
+                <div className="text-text-secondary">DEF: <span className="font-bold text-text-primary">{currentPlayerDisplay?.defense}</span></div>
+                <div className="text-text-secondary hidden sm:block">STR: <span className="font-bold text-yellow-400">{currentPlayerDisplay?.strength}</span></div>
+                <div className="text-text-secondary hidden sm:block">AGI: <span className="font-bold text-cyan-400">{currentPlayerDisplay?.agility}</span></div>
+                <div className="text-text-secondary hidden sm:block">INT: <span className="font-bold text-purple-400">{currentPlayerDisplay?.intelligence}</span></div>
+                <div className="text-text-secondary hidden sm:block">RES: <span className="font-bold text-green-400">{currentPlayerDisplay?.resistance}</span></div>
+                <div className="text-text-secondary hidden sm:block">CRIT: <span className="font-bold text-yellow-300">{currentPlayerDisplay?.critical}%</span></div>
+                <div className="text-text-secondary hidden sm:block">SPD: <span className="font-bold text-emerald-400">{currentPlayerDisplay?.speed}</span></div>
               </div>
             </div>
 

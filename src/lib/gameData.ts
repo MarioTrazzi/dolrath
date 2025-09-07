@@ -6,16 +6,16 @@ export const RACES: Race[] = [
   {
     id: 'humano',
     name: 'Humano',
-    description: 'Raça versátil sem bônus específico, mas com grande adaptabilidade',
-    bonuses: {},
-    abilities: ['Adaptabilidade', 'Versatilidade'],
+    description: 'Versáteis com crescimento superior - compensam falta de transformação',
+    bonuses: { strength: 20, dexterity: 20, intelligence: 20, constitution: 20 }, // 🔥 BUFF
+    abilities: ['Adaptabilidade Suprema', 'Crescimento Acelerado', 'Versatilidade Master'],
     transformationAvailable: false
   },
   {
     id: 'draconiano',
     name: 'Draconiano',
     description: 'Descendentes de dragões com capacidade de transformação',
-    bonuses: { constitution: 50, strength: 30 },
+    bonuses: { constitution: 50, strength: 30 }, // Mantido igual
     abilities: ['Transformação Dracônica', 'Resistência ao Fogo', 'Escamas Protetoras'],
     transformationAvailable: true
   },
@@ -23,9 +23,17 @@ export const RACES: Race[] = [
     id: 'metamorfo',
     name: 'Metamorfo',
     description: 'Capazes de se transformar em animais, excelentes em esquiva',
-    bonuses: { dexterity: 50, wisdom: 30 },
+    bonuses: { dexterity: 50, wisdom: 30 }, // Mantido igual
     abilities: ['Transformação Animal', 'Instintos Selvagens', 'Agilidade Aprimorada'],
     transformationAvailable: true
+  },
+  {
+    id: 'elfo',
+    name: 'Elfo',
+    description: 'Maestros mágicos supremos - compensam falta de transformação',
+    bonuses: { intelligence: 40, dexterity: 30, wisdom: 20 }, // 🔥 BUFF
+    abilities: ['Maestria Arcana', 'Tiro Certeiro Élfico', 'Resistência Mágica'],
+    transformationAvailable: false
   }
 ]
 

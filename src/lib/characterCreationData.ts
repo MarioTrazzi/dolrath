@@ -29,12 +29,23 @@ export const races: CharacterRace[] = [
     id: 'humano',
     name: 'Humano',
     description: 'Versáteis e adaptáveis a qualquer situação',
-    // 🔥 BALANCEADO: Equilibrado mas viável
-    baseStats: { str: 11, agi: 10, int: 11, res: 10, hp: 90, mp: 65, crit: 5, speed: 8 },
-    bonusStats: { str: 1, agi: 1, int: 1, res: 1 }, // Bônus equilibrado
-    specialAbility: 'Adaptabilidade',
-    lore: 'A raça mais comum, conhecida por sua versatilidade...',
+    // 🔥 BUFF: Compensação pela falta de transformação
+    baseStats: { str: 12, agi: 11, int: 12, res: 11, hp: 100, mp: 70, crit: 6, speed: 9 },
+    bonusStats: { str: 2, agi: 2, int: 2, res: 2, hp: 10 }, // 🔥 BUFF: Bônus dobrado
+    specialAbility: 'Adaptabilidade Suprema',
+    lore: 'Embora não possuam transformações, os humanos compensam com versatilidade superior e crescimento acelerado...',
     restrictions: []
+  },
+  {
+    id: 'elfo',
+    name: 'Elfo',
+    description: 'Seres mágicos com afinidade natural para arcanos',
+    // 🔥 BUFF: Especialização extrema para compensar falta de transformação
+    baseStats: { str: 8, agi: 14, int: 16, res: 10, hp: 85, mp: 95, crit: 8, speed: 11 },
+    bonusStats: { int: 4, agi: 3, mp: 20, crit: 2 }, // 🔥 BUFF: Bônus maiores
+    specialAbility: 'Maestria Arcana',
+    lore: 'Antigos guardiões da magia, os elfos compensam a falta de transformações físicas com domínio mágico incomparável e reflexos sobrenaturais.',
+    restrictions: ['Não pode usar armaduras pesadas', 'Vulnerável a ferro frio']
   }
 ];
 

@@ -7,67 +7,67 @@ const { getStaminaCost, checkStaminaLevel, calculateStaminaRegeneration } = requ
 // Configuração de porta - Railway usa PORT, Heroku também
 const PORT = process.env.PORT || 3001
 
-// 🐉 CONFIGURAÇÕES DE TRANSFORMAÇÃO BALANCEADAS
+// 🐉 CONFIGURAÇÕES DE TRANSFORMAÇÃO REBALANCEADAS
 const transformationConfigs = {
-  // DRACONIANOS - Foco STR/DEF mas balanceado
+  // DRACONIANOS - Tank supremo com poder devastador
   dragon: {
     statModifiers: {
-      strength: 1.6,    // Era 1.8 - reduzido
-      agility: 1.1,     // Era 1.0 - melhorado  
-      intelligence: 1.1, // Era 1.0 - melhorado
-      defense: 1.4,     // Era 1.0 - novo
-      hp: 1.4,          // Era 1.5 - reduzido
-      attack: 1.5,      // Era 1.8 - balanceado
-      critical: 1.2,    // Era 1.0 - melhorado
+      strength: 2.0,    // 🔥 BUFF: +100% STR (era 1.6)
+      agility: 1.2,     // Melhorado  
+      intelligence: 1.2, // Melhorado
+      defense: 1.8,     // 🔥 BUFF: +80% DEF (era 1.4)
+      hp: 1.6,          // 🔥 BUFF: +60% HP (era 1.4)
+      attack: 1.7,      // 🔥 BUFF: Mais ataque (era 1.5)
+      critical: 1.3,    // Melhorado
       speed: 1.0
     },
-    duration: 4,
+    duration: 5,        // 🔥 BUFF: Mais duração (era 4)
     cooldown: 3
   },
 
-  // METAMORFOS - Builds especializadas e balanceadas
+  // METAMORFOS - Especializações extremas
   wolf: {
     statModifiers: {
-      strength: 1.3,    // Era 1.4 - ligeiramente reduzido
-      agility: 1.5,     // Era 1.0 - muito melhorado!
-      intelligence: 0.8, // Era 1.0 - reduzido
+      strength: 1.4,    // Ligeiramente melhorado
+      agility: 2.0,     // 🔥 BUFF: +100% AGI (era 1.5)
+      intelligence: 0.8, // Mantido
       defense: 1.0,     // Neutro
-      hp: 1.1,          // Era 0.9 - melhorado
-      attack: 1.3,      // Era 1.4 - balanceado
-      critical: 1.6,    // Novo - crítico alto!
-      speed: 1.4        // Velocidade alta
+      hp: 1.2,          // Melhorado
+      attack: 1.4,      // Mantido
+      critical: 2.0,    // 🔥 BUFF: +100% crítico (era 1.6)
+      speed: 1.6        // 🔥 BUFF: Mais velocidade
     },
-    duration: 3,
+    duration: 4,        // 🔥 BUFF: Mais duração (era 3)
     cooldown: 2
   },
 
   bear: {
     statModifiers: {
-      strength: 1.5,    // Era 1.7 - reduzido
-      agility: 0.7,     // Era 1.0 - tank lento
+      strength: 1.8,    // 🔥 BUFF: Mais força (era 1.5)
+      agility: 0.7,     // Tank lento
       intelligence: 0.8, // Baixo
-      defense: 1.7,     // Era 1.0 - muito melhorado!
-      hp: 1.6,          // Era 1.8 - tank HP alto
-      attack: 1.4,      // Era 1.7 - balanceado  
+      defense: 2.0,     // 🔥 BUFF: +100% DEF (era 1.7)
+      hp: 1.8,          // 🔥 BUFF: +80% HP (era 1.6)
+      attack: 1.6,      // 🔥 BUFF: Mais ataque (era 1.4)
       critical: 0.8,    // Baixo crítico
-      speed: 0.6        // Era 1.0 - muito lento
+      speed: 0.6        // Lento
     },
-    duration: 4,
+    duration: 5,        // 🔥 BUFF: Mais duração (era 4)
     cooldown: 3
   },
 
   eagle: {
     statModifiers: {
-      strength: 0.7,    // Era 0.6 - melhorado
-      agility: 1.8,     // Era 1.0 - muito melhorado!
-      intelligence: 1.3, // Era 1.0 - melhorado
-      defense: 0.8,     // Era 1.0 - frágil
-      hp: 0.8,          // Era 0.7 - melhorado
-      attack: 1.1,      // Era 1.2 - reduzido
-      critical: 1.8,    // Era 1.0 - crítico muito alto!
-      speed: 2.0        // Velocidade máxima
+      strength: 0.7,    // Frágil
+      agility: 2.2,     // 🔥 BUFF: +120% AGI (era 1.8)
+      intelligence: 1.5, // 🔥 BUFF: Mais inteligência (era 1.3)
+      defense: 0.8,     // Frágil
+      hp: 0.8,          // Baixo HP
+      attack: 1.2,      // Melhorado
+      critical: 2.2,    // 🔥 BUFF: +120% crítico (era 1.8)
+      speed: 2.5        // 🔥 BUFF: Velocidade máxima (era 2.0)
     },
-    duration: 3,
+    duration: 4,        // 🔥 BUFF: Mais duração (era 3)
     cooldown: 2
   },
   
@@ -439,15 +439,20 @@ io.on('connection', (socket) => {
       return
     }
 
-    // Usar sistema de stamina atualizado
-    const staminaCost = getStaminaCost('transformation', { 
-      playerLevel: player.level || 1,
-      transformationType 
-    })
+    // 🔥 SISTEMA REBALANCEADO: Custos reduzidos drasticamente
+    const reducedStaminaCost = Math.floor(staminaCost * 0.3) // 70% menos stamina
+    const reducedMpCost = transformationType === 'dragon' ? 15 : 10 // MP muito reduzido
 
-    if (player.stamina < staminaCost) {
+    if (player.stamina < reducedStaminaCost) {
       socket.emit('error', { 
-        message: `Stamina insuficiente! Precisa de ${staminaCost} Stamina para transformar` 
+        message: `Stamina insuficiente! Precisa de ${reducedStaminaCost} Stamina para transformar` 
+      })
+      return
+    }
+
+    if (player.mp < reducedMpCost) {
+      socket.emit('error', { 
+        message: `MP insuficiente! Precisa de ${reducedMpCost} MP para transformar` 
       })
       return
     }
@@ -503,20 +508,25 @@ io.on('connection', (socket) => {
       player.baseStats.maxHp = newMaxHp
     }
 
-    // Consumir recursos
-    const requiredMp = transformationType === 'dragon' ? 40 : transformationType === 'bear' ? 30 : 25
-    player.mp -= requiredMp
-    player.stamina -= staminaCost
+    // 🔥 CONSUMIR RECURSOS REDUZIDOS
+    player.mp -= reducedMpCost
+    player.stamina -= reducedStaminaCost
 
     room.combatLog.push({
       type: 'transformation',
       player: player.name,
-      message: `⚡ ${player.name} se transforma em ${config.name}! (${config.duration} turnos)`,
+      message: `⚡ ${player.name} se transforma em ${transformationType}! (${config.duration} turnos, -${reducedMpCost} MP, -${reducedStaminaCost} Stamina)`,
       timestamp: new Date()
     })
 
-    // Trocar turno após transformação
+    // 🔥 NOVA MECÂNICA: Transformação custa 1 turno completo
     room.currentTurn = room.currentTurn === room.player1?.id ? room.player2?.id : room.player1?.id
+    
+    room.combatLog.push({
+      type: 'system',
+      message: `🔄 ${player.name} gastou o turno se transformando! Vez de ${room.currentTurn === room.player1?.id ? room.player1?.name : room.player2?.name}`,
+      timestamp: new Date()
+    })
 
     io.to(roomId).emit('room_updated', room)
     io.to(roomId).emit('transformation_applied', {

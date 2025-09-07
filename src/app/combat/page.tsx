@@ -698,20 +698,20 @@ function CombatPageContent() {
           <div className="bg-background/30 border-b border-white/10 p-2 sm:p-3 flex flex-col sm:flex-row gap-2 sm:gap-0 flex-shrink-0">
             {/* Current Player Status */}
             <div className="bg-gradient-to-br from-success/20 to-success/10 border border-success/30 rounded-xl p-2 sm:p-3 flex-1 sm:mr-3 backdrop-blur-sm">
-              <h3 className="font-bold text-success mb-2 text-xs sm:text-sm">{displayCurrentPlayer?.name} (Você)</h3>
+              <h3 className="font-bold text-success mb-2 text-xs sm:text-sm">{currentPlayer?.name} (Você)</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 text-xs">
-                <div className="text-text-secondary">HP: <span className="font-bold text-error">{displayCurrentPlayer?.hp}/{displayCurrentPlayer?.maxHp}</span></div>
-                <div className="text-text-secondary">MP: <span className="font-bold text-blue-400">{displayCurrentPlayer?.mp}/{displayCurrentPlayer?.maxMp}</span></div>
-                <div className="text-text-secondary">⚡: <span className="font-bold text-yellow-400">{displayCurrentPlayer?.stamina}/{displayCurrentPlayer?.maxStamina}</span></div>
-                <div className="text-text-secondary">LV: <span className="font-bold text-primary">{displayCurrentPlayer?.level}</span></div>
-                <div className="text-text-secondary">ATK: <span className="font-bold text-text-primary">{displayCurrentPlayer?.attack}</span></div>
-                <div className="text-text-secondary">DEF: <span className="font-bold text-text-primary">{displayCurrentPlayer?.defense}</span></div>
-                <div className="text-text-secondary hidden sm:block">STR: <span className="font-bold text-yellow-400">{displayCurrentPlayer?.strength}</span></div>
-                <div className="text-text-secondary hidden sm:block">AGI: <span className="font-bold text-cyan-400">{displayCurrentPlayer?.agility}</span></div>
-                <div className="text-text-secondary hidden sm:block">INT: <span className="font-bold text-purple-400">{displayCurrentPlayer?.intelligence}</span></div>
-                <div className="text-text-secondary hidden sm:block">RES: <span className="font-bold text-green-400">{displayCurrentPlayer?.resistance}</span></div>
-                <div className="text-text-secondary hidden sm:block">CRIT: <span className="font-bold text-yellow-300">{displayCurrentPlayer?.critical}%</span></div>
-                <div className="text-text-secondary hidden sm:block">SPD: <span className="font-bold text-emerald-400">{displayCurrentPlayer?.speed}</span></div>
+                <div className="text-text-secondary">HP: <span className="font-bold text-error">{currentPlayer?.hp}/{currentPlayer?.maxHp}</span></div>
+                <div className="text-text-secondary">MP: <span className="font-bold text-blue-400">{currentPlayer?.mp}/{currentPlayer?.maxMp}</span></div>
+                <div className="text-text-secondary">⚡: <span className="font-bold text-yellow-400">{currentPlayer?.stamina}/{currentPlayer?.maxStamina}</span></div>
+                <div className="text-text-secondary">LV: <span className="font-bold text-primary">{currentPlayer?.level}</span></div>
+                <div className="text-text-secondary">ATK: <span className="font-bold text-text-primary">{currentPlayer?.attack}</span></div>
+                <div className="text-text-secondary">DEF: <span className="font-bold text-text-primary">{currentPlayer?.defense}</span></div>
+                <div className="text-text-secondary hidden sm:block">STR: <span className="font-bold text-yellow-400">{currentPlayer?.strength}</span></div>
+                <div className="text-text-secondary hidden sm:block">AGI: <span className="font-bold text-cyan-400">{currentPlayer?.agility}</span></div>
+                <div className="text-text-secondary hidden sm:block">INT: <span className="font-bold text-purple-400">{currentPlayer?.intelligence}</span></div>
+                <div className="text-text-secondary hidden sm:block">RES: <span className="font-bold text-green-400">{currentPlayer?.resistance}</span></div>
+                <div className="text-text-secondary hidden sm:block">CRIT: <span className="font-bold text-yellow-300">{currentPlayer?.critical}%</span></div>
+                <div className="text-text-secondary hidden sm:block">SPD: <span className="font-bold text-emerald-400">{currentPlayer?.speed}</span></div>
               </div>
             </div>
 
@@ -850,8 +850,8 @@ function CombatPageContent() {
                 <div className="space-y-2">
                   <button
                     onClick={() => handlePlayerAction(ActionType.LIGHT_ATTACK)}
-                    disabled={!displayCurrentPlayer || displayCurrentPlayer.stamina < STAMINA_COSTS[ActionType.LIGHT_ATTACK]}
-                    className={`w-full ${!displayCurrentPlayer || displayCurrentPlayer.stamina < STAMINA_COSTS[ActionType.LIGHT_ATTACK] 
+                    disabled={!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.LIGHT_ATTACK]}
+                    className={`w-full ${!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.LIGHT_ATTACK] 
                       ? 'bg-gray-600 opacity-50 cursor-not-allowed' 
                       : 'bg-gradient-to-r from-warning to-yellow-500 hover:from-yellow-500 hover:to-warning'
                     } text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
@@ -860,8 +860,8 @@ function CombatPageContent() {
                   </button>
                   <button
                     onClick={() => handlePlayerAction(ActionType.HEAVY_ATTACK)}
-                    disabled={!displayCurrentPlayer || displayCurrentPlayer.stamina < STAMINA_COSTS[ActionType.HEAVY_ATTACK]}
-                    className={`w-full ${!displayCurrentPlayer || displayCurrentPlayer.stamina < STAMINA_COSTS[ActionType.HEAVY_ATTACK] 
+                    disabled={!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.HEAVY_ATTACK]}
+                    className={`w-full ${!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.HEAVY_ATTACK] 
                       ? 'bg-gray-600 opacity-50 cursor-not-allowed' 
                       : 'bg-gradient-to-r from-error to-red-600 hover:from-red-600 hover:to-error'
                     } text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
@@ -870,8 +870,8 @@ function CombatPageContent() {
                   </button>
                   <button
                     onClick={() => handlePlayerAction(ActionType.SPECIAL_ATTACK)}
-                    disabled={!displayCurrentPlayer || displayCurrentPlayer.mp < 15 || displayCurrentPlayer.stamina < STAMINA_COSTS[ActionType.SPECIAL_ATTACK]}
-                    className={`w-full ${!displayCurrentPlayer || displayCurrentPlayer.mp < 15 || displayCurrentPlayer.stamina < STAMINA_COSTS[ActionType.SPECIAL_ATTACK]
+                    disabled={!currentPlayer || currentPlayer.mp < 15 || currentPlayer.stamina < STAMINA_COSTS[ActionType.SPECIAL_ATTACK]}
+                    className={`w-full ${!currentPlayer || currentPlayer.mp < 15 || currentPlayer.stamina < STAMINA_COSTS[ActionType.SPECIAL_ATTACK]
                       ? 'bg-gray-600 opacity-50 cursor-not-allowed' 
                       : 'bg-gradient-to-r from-primary to-primary-dark hover:shadow-lg hover:shadow-primary/25'
                     } text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
@@ -889,35 +889,35 @@ function CombatPageContent() {
                   </button>
                   
                   {/* Botão de Transformação */}
-                  {displayCurrentPlayer && (displayCurrentPlayer.race === 'draconiano' || displayCurrentPlayer.race === 'metamorfo') && (
+                  {currentPlayer && (currentPlayer.race === 'draconiano' || currentPlayer.race === 'metamorfo') && (
                     <button
                       onClick={handleTransformation}
                       disabled={
-                        displayCurrentPlayer.isTransformed || 
-                        (displayCurrentPlayer.transformationData?.cooldownTurns || 0) > 0 ||
+                        currentPlayer.isTransformed || 
+                        (currentPlayer.transformationData?.cooldownTurns || 0) > 0 ||
                         isTransforming ||
                         // Verificar recursos mínimos (assumindo dragon como mais caro)
-                        displayCurrentPlayer.stamina < 30 || 
-                        displayCurrentPlayer.mp < 20
+                        currentPlayer.stamina < 30 || 
+                        currentPlayer.mp < 20
                       }
                       className={`w-full ${
-                        displayCurrentPlayer.isTransformed || 
-                        (displayCurrentPlayer.transformationData?.cooldownTurns || 0) > 0 ||
+                        currentPlayer.isTransformed || 
+                        (currentPlayer.transformationData?.cooldownTurns || 0) > 0 ||
                         isTransforming ||
-                        displayCurrentPlayer.stamina < 30 || 
-                        displayCurrentPlayer.mp < 20
+                        currentPlayer.stamina < 30 || 
+                        currentPlayer.mp < 20
                         ? 'bg-gray-600 opacity-50 cursor-not-allowed' 
                         : 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-blue-600 hover:to-purple-600'
                       } text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                     >
-                      {displayCurrentPlayer.isTransformed ? 
+                      {currentPlayer.isTransformed ? 
                         '🐉 Já Transformado' :
-                        (displayCurrentPlayer.transformationData?.cooldownTurns || 0) > 0 ?
-                        `⏰ Cooldown (${displayCurrentPlayer.transformationData?.cooldownTurns || 0})` :
+                        (currentPlayer.transformationData?.cooldownTurns || 0) > 0 ?
+                        `⏰ Cooldown (${currentPlayer.transformationData?.cooldownTurns || 0})` :
                         isTransforming ? '⏳ Transformando...' :
-                        displayCurrentPlayer.stamina < 30 || displayCurrentPlayer.mp < 20 ?
+                        currentPlayer.stamina < 30 || currentPlayer.mp < 20 ?
                         '❌ Recursos insuficientes' :
-                        displayCurrentPlayer.race === 'draconiano' ? 
+                        currentPlayer.race === 'draconiano' ? 
                         '🐉 Transformar (50⚡ 40🔮)' :
                         '🔄 Transformar (30⚡ 20🔮)'
                       }
@@ -975,6 +975,19 @@ function CombatPageContent() {
                   const correctDiceType = combatRoom?.pendingAction?.diceType
                   const isCorrectDice = correctDiceType === sides
                   
+                  // Função para cores dos dados (mesma do sistema de dungeon)
+                  const getDiceColor = (sides: number) => {
+                    switch (sides) {
+                      case 4: return 'bg-red-600'
+                      case 6: return 'bg-blue-600'
+                      case 8: return 'bg-green-600'
+                      case 10: return 'bg-yellow-600'
+                      case 12: return 'bg-purple-600'
+                      case 20: return 'bg-pink-600'
+                      default: return 'bg-gray-600'
+                    }
+                  }
+                  
                   return (
                     <button
                       key={sides}
@@ -986,8 +999,8 @@ function CombatPageContent() {
                         ${hasRolledDice && isCorrectDice
                           ? 'bg-success opacity-75 cursor-not-allowed scale-95' // Verde se já rolou
                           : isCorrectDice 
-                          ? 'hover:scale-110 cursor-pointer bg-primary' 
-                          : 'opacity-50 cursor-not-allowed bg-gray-600'
+                          ? `hover:scale-110 cursor-pointer ${getDiceColor(sides)}` 
+                          : `opacity-50 cursor-not-allowed ${getDiceColor(sides)}`
                         }
                       `}
                     >

@@ -354,21 +354,20 @@ io.on('connection', (socket) => {
     const player = room.player1?.id === playerId ? room.player1 : room.player2
     if (!player) return
 
-    // Rolar d20 + modificador de velocidade
+    // Rolar d20 puro - apenas sorte
     const roll = Math.floor(Math.random() * 20) + 1
-    const modifier = Math.floor((player.speed || 0) / 4) // Modificador baseado em velocidade
-    const total = roll + modifier
+    const total = roll // Sem modificadores
 
     // Armazenar rolagem de iniciativa
     if (!room.initiativeRolls) {
       room.initiativeRolls = {}
     }
-    room.initiativeRolls[playerId] = { roll, modifier, total }
+    room.initiativeRolls[playerId] = { roll, total }
 
     room.combatLog.push({
       type: 'action',
       player: player.name,
-      message: `🎲 Iniciativa: Rolou d20 = ${roll} + (${modifier}) = ${total}`,
+      message: `🎲 ${player.name}: Rolou d20 = ${roll}`,
       timestamp: new Date()
     })
 
@@ -380,25 +379,51 @@ io.on('connection', (socket) => {
       const initiative1 = room.initiativeRolls[player1Id].total
       const initiative2 = room.initiativeRolls[player2Id].total
 
-      // 🏥 SALVAR HP INICIAL PARA DETECTAR VITÓRIAS PERFEITAS
-      room.player1.initialHp = room.player1.hp
-      room.player2.initialHp = room.player2.hp
+      let winner = null
+      let winnerName = ''
 
-      if (initiative1 >= initiative2) {
-        room.currentTurn = player1Id
-        room.combatLog.push({
-          type: 'system',
-          message: `🏃 ${room.player1.name} começa o combate!`,
-          timestamp: new Date()
-        })
+      if (initiative1 > initiative2) {
+        winner = player1Id
+        winnerName = room.player1.name
+      } else if (initiative2 > initiative1) {
+        winner = player2Id  
+        winnerName = room.player2.name
       } else {
-        room.currentTurn = player2Id
+        // Empate! Resolver por XP
+        const player1XP = room.player1.experience || 0
+        const player2XP = room.player2.experience || 0
+        
+        if (player1XP >= player2XP) {
+          winner = player1Id
+          winnerName = room.player1.name
+          room.combatLog.push({
+            type: 'system',
+            message: `⚖️ Empate! ${room.player1.name} começa por ter mais experiência (${player1XP} vs ${player2XP} XP)`,
+            timestamp: new Date()
+          })
+        } else {
+          winner = player2Id
+          winnerName = room.player2.name
+          room.combatLog.push({
+            type: 'system',
+            message: `⚖️ Empate! ${room.player2.name} começa por ter mais experiência (${player2XP} vs ${player1XP} XP)`,
+            timestamp: new Date()
+          })
+        }
+      }
+
+      room.currentTurn = winner
+      if (!room.combatLog.some(log => log.message.includes('⚖️ Empate!'))) {
         room.combatLog.push({
           type: 'system',
-          message: `🏃 ${room.player2.name} começa o combate!`,
+          message: `🏃 ${winnerName} começa o combate!`,
           timestamp: new Date()
         })
       }
+
+      // 🏥 SALVAR HP INICIAL PARA DETECTAR VITÓRIAS PERFEITAS
+      room.player1.initialHp = room.player1.hp
+      room.player2.initialHp = room.player2.hp
 
       room.phase = CombatPhase.PLAYER_TURN
     }
@@ -972,25 +997,38 @@ function calculateCriticalChance(attacker) {
 }
 
 // 🏃 SISTEMA DE ESQUIVA BASEADO EM AGILITY
-function calculateDodgeRoll(defender) {
-  const baseRoll = Math.floor(Math.random() * 6) + 1 // d6 base
-  const agilityBonus = Math.floor(defender.agility / 10) // +1 dado a cada 10 AGI
+function calculateDodgeRoll(defender, attackType = 'physical') {
+  // Ataques mágicos são mais difíceis de esquivar (d20), físicos são mais fáceis (d6)
+  const isPhysical = attackType !== 'special_attack'
+  const diceSize = isPhysical ? 6 : 20
+  
+  const baseRoll = Math.floor(Math.random() * diceSize) + 1
+  const agilityBonus = Math.floor(defender.agility / 10) // +1 por cada 10 AGI
   
   let totalRoll = baseRoll
   let extraRolls = []
   
-  // Rolar dados extras baseados em AGI
-  for (let i = 0; i < agilityBonus; i++) {
-    const extraRoll = Math.floor(Math.random() * 6) + 1
-    extraRolls.push(extraRoll)
-    totalRoll += extraRoll
+  // Para ataques físicos: dados extras de d6
+  // Para ataques mágicos: bônus direto no d20
+  if (isPhysical) {
+    // Rolar dados extras baseados em AGI para ataques físicos
+    for (let i = 0; i < agilityBonus; i++) {
+      const extraRoll = Math.floor(Math.random() * 6) + 1
+      extraRolls.push(extraRoll)
+      totalRoll += extraRoll
+    }
+  } else {
+    // Para ataques mágicos, adicionar bônus direto
+    totalRoll += agilityBonus
   }
   
   return {
     baseRoll,
     extraRolls,
     totalRoll,
-    agilityBonus
+    agilityBonus,
+    diceType: isPhysical ? 'd6' : 'd20',
+    attackType: isPhysical ? 'físico' : 'mágico'
   }
 }
 
@@ -1032,13 +1070,17 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
   
   if (defenseAction === 'dodge') {
     // 🏃 SISTEMA DE ESQUIVA BASEADO EM AGI
-    const dodgeResult = calculateDodgeRoll(defender)
+    const dodgeResult = calculateDodgeRoll(defender, attackAction)
     
     if (dodgeResult.totalRoll >= attackRoll) {
       // 🌪️ Esquiva bem-sucedida
+      const dodgeMessage = dodgeResult.attackType === 'físico' 
+        ? `🌪️ ${defender.name} esquivou ataque ${dodgeResult.attackType}! (${dodgeResult.totalRoll} vs ${attackRoll}) [Base: ${dodgeResult.baseRoll} + ${dodgeResult.agilityBonus} dados extras: ${dodgeResult.extraRolls.join('+')}]`
+        : `🌪️ ${defender.name} esquivou ataque ${dodgeResult.attackType}! (${dodgeResult.totalRoll} vs ${attackRoll}) [${dodgeResult.diceType}: ${dodgeResult.baseRoll} + ${dodgeResult.agilityBonus} AGI = ${dodgeResult.totalRoll}]`
+      
       room.combatLog.push({
         type: 'result',
-        message: `🌪️ ${defender.name} esquivou! (${dodgeResult.totalRoll} vs ${attackRoll}) [Base: ${dodgeResult.baseRoll} + ${dodgeResult.agilityBonus} dados extras: ${dodgeResult.extraRolls.join('+')}]`,
+        message: dodgeMessage,
         timestamp: new Date()
       })
       finalDamage = 0

@@ -146,10 +146,19 @@ function calculateBattleRewards(
 }
 
 export async function POST(request: NextRequest) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Verificar se é uma chamada interna do servidor (sem autenticação)
+  const userAgent = request.headers.get('user-agent');
+  const isInternalCall = userAgent?.includes('node-fetch') || userAgent?.includes('undici');
+  
+  let userId = null;
+  
+  // Se não é chamada interna, verificar autenticação
+  if (!isInternalCall) {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    userId = session.user.id;
   }
 
   try {
@@ -170,8 +179,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Characters not found' }, { status: 404 });
     }
 
-    // Verificar se os personagens pertencem a usuários autenticados
-    if (winner.userId !== session.user.id && loser.userId !== session.user.id) {
+    // Verificar autorização apenas se não é chamada interna
+    if (!isInternalCall && userId && winner.userId !== userId && loser.userId !== userId) {
       return NextResponse.json({ error: 'Unauthorized for these characters' }, { status: 403 });
     }
 

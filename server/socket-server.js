@@ -1293,8 +1293,30 @@ async function processBattleRewards(room, winner, loser, roomId) {
       isFirstWinOfDay: false // TODO: Implementar tracking de primeira vitória do dia
     }
     
-    // Enviar para a API de recompensas (simulado para servidor independente)
-    const rewardData = calculateBattleRewardsLocal(battleResult)
+    // 💾 SALVAR RECOMPENSAS NO BANCO DE DADOS VIA API
+    let rewardData
+    try {
+      const apiResponse = await fetch('http://localhost:3000/api/battle/rewards', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(battleResult)
+      })
+      
+      if (apiResponse.ok) {
+        rewardData = await apiResponse.json()
+        console.log('✅ Recompensas salvas no banco de dados:', rewardData)
+      } else {
+        console.error('❌ Erro na API de recompensas:', apiResponse.status)
+        // Fallback para cálculo local se API falhar
+        rewardData = calculateBattleRewardsLocal(battleResult)
+      }
+    } catch (apiError) {
+      console.error('❌ Erro ao chamar API de recompensas:', apiError)
+      // Fallback para cálculo local se API falhar
+      rewardData = calculateBattleRewardsLocal(battleResult)
+    }
     
     // Adicionar recompensas aos logs de combate
     room.combatLog.push({

@@ -686,13 +686,36 @@ io.on('connection', (socket) => {
 
     const player = room.player1?.id === playerId ? room.player1 : room.player2
     const roll = Math.floor(Math.random() * sides) + 1
-    const modifier = 0 // Pode ser expandido para incluir modificadores
+    
+    // 🎯 CALCULAR MODIFICADORES BASEADO NO CONTEXTO
+    let modifier = 0
+    let modifierDescription = ''
+    
+    // Se é uma ação de esquiva, adicionar bônus de agilidade
+    if (room.pendingAction && room.phase === CombatPhase.DICE_ROLL) {
+      const isDefender = playerId !== room.pendingAction.playerId
+      
+      if (isDefender && room.pendingAction.defenseAction === 'dodge') {
+        // É o defensor rolando para esquiva
+        const attackType = room.pendingAction.action
+        
+        if (attackType === 'special_attack') {
+          // Ataque mágico: bônus direto no d20
+          modifier = Math.floor(player.agility / 10)
+          modifierDescription = `AGI`
+        } else {
+          // Ataque físico: ainda será d6 + dados extras (implementar depois)
+          modifier = 0 // Por enquanto, manter como estava para ataques físicos
+        }
+      }
+    }
+    
     const total = roll + modifier
     
     room.combatLog.push({
       type: 'action',
       player: player.name,
-      message: `🎲 ${player.name}: Rolou d${sides} = ${roll} + (${modifier}) = ${total}`,
+      message: `🎲 ${player.name}: Rolou d${sides} = ${roll}${modifier > 0 ? ` + (${modifier})` : ''} = ${total}`,
       timestamp: new Date()
     })
     
@@ -1069,33 +1092,51 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
   let hit = false
   
   if (defenseAction === 'dodge') {
-    // 🏃 SISTEMA DE ESQUIVA BASEADO EM AGI
-    const dodgeResult = calculateDodgeRoll(defender, attackAction)
-    
-    if (dodgeResult.totalRoll >= attackRoll) {
-      // 🌪️ Esquiva bem-sucedida
-      const dodgeMessage = dodgeResult.attackType === 'físico' 
-        ? `🌪️ ${defender.name} esquivou ataque ${dodgeResult.attackType}! (${dodgeResult.totalRoll} vs ${attackRoll}) [Base: ${dodgeResult.baseRoll} + ${dodgeResult.agilityBonus} dados extras: ${dodgeResult.extraRolls.join('+')}]`
-        : `🌪️ ${defender.name} esquivou ataque ${dodgeResult.attackType}! (${dodgeResult.totalRoll} vs ${attackRoll}) [${dodgeResult.diceType}: ${dodgeResult.baseRoll} + ${dodgeResult.agilityBonus} AGI = ${dodgeResult.totalRoll}]`
-      
-      room.combatLog.push({
-        type: 'result',
-        message: dodgeMessage,
-        timestamp: new Date()
-      })
-      finalDamage = 0
-      hit = false
+    // 🏃 SISTEMA DE ESQUIVA 
+    if (attackAction === 'special_attack') {
+      // Para ataques mágicos, usar o defenseRoll que já inclui modificador AGI
+      if (defenseRoll >= attackRoll) {
+        room.combatLog.push({
+          type: 'result',
+          message: `🌪️ ${defender.name} esquivou ataque mágico! (${defenseRoll} vs ${attackRoll})`,
+          timestamp: new Date()
+        })
+        finalDamage = 0
+        hit = false
+      } else {
+        const defenseResult = calculateDefense(defender, baseDamage, attackAction)
+        finalDamage = defenseResult.finalDamage
+        hit = true
+        
+        room.combatLog.push({
+          type: 'result', 
+          message: `💥 Esquiva falhou! ${attacker.name} acerta por ${finalDamage} dano! (Esquiva: ${defenseRoll} vs Ataque: ${attackRoll})`,
+          timestamp: new Date()
+        })
+      }
     } else {
-      // Esquiva falhou - ataque acerta
-      const defenseResult = calculateDefense(defender, baseDamage, attackAction)
-      finalDamage = defenseResult.finalDamage
-      hit = true
+      // Para ataques físicos, usar o sistema de múltiplos dados
+      const dodgeResult = calculateDodgeRoll(defender, attackAction)
       
-      room.combatLog.push({
-        type: 'result', 
-        message: `💥 Esquiva falhou! ${attacker.name} acerta por ${finalDamage} dano! (Esquiva: ${dodgeResult.totalRoll} vs Ataque: ${attackRoll})`,
-        timestamp: new Date()
-      })
+      if (dodgeResult.totalRoll >= attackRoll) {
+        room.combatLog.push({
+          type: 'result',
+          message: `🌪️ ${defender.name} esquivou ataque físico! (${dodgeResult.totalRoll} vs ${attackRoll}) [Base: ${dodgeResult.baseRoll} + ${dodgeResult.agilityBonus} dados extras: ${dodgeResult.extraRolls.join('+')}]`,
+          timestamp: new Date()
+        })
+        finalDamage = 0
+        hit = false
+      } else {
+        const defenseResult = calculateDefense(defender, baseDamage, attackAction)
+        finalDamage = defenseResult.finalDamage
+        hit = true
+        
+        room.combatLog.push({
+          type: 'result', 
+          message: `💥 Esquiva falhou! ${attacker.name} acerta por ${finalDamage} dano! (Esquiva: ${dodgeResult.totalRoll} vs Ataque: ${attackRoll})`,
+          timestamp: new Date()
+        })
+      }
     }
   } else if (defenseAction === 'defend') {
     // 🛡️ DEFESA - sempre reduz dano

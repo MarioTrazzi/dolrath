@@ -380,6 +380,10 @@ io.on('connection', (socket) => {
       const initiative1 = room.initiativeRolls[player1Id].total
       const initiative2 = room.initiativeRolls[player2Id].total
 
+      // 🏥 SALVAR HP INICIAL PARA DETECTAR VITÓRIAS PERFEITAS
+      room.player1.initialHp = room.player1.hp
+      room.player2.initialHp = room.player2.hp
+
       if (initiative1 >= initiative2) {
         room.currentTurn = player1Id
         room.combatLog.push({
@@ -1118,6 +1122,9 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
       timestamp: new Date()
     })
     
+    // 🏆 PROCESSAR RECOMPENSAS PVP
+    processBattleRewards(room, attacker, defender, roomId)
+    
     // 💚 REGENERAÇÃO AUTOMÁTICA AO FINAL DO COMBATE
     regeneratePlayerResources(room.player1, 'Combat Victory/Defeat')
     regeneratePlayerResources(room.player2, 'Combat Victory/Defeat')
@@ -1139,6 +1146,8 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
   // Limpar ação pendente
   room.pendingAction = null
   io.to(roomId).emit('room_updated', room)
+}
+
 function processActionResult(room, action, playerRoll, roomId) {
   // Para ações que não requerem reação do oponente
   const currentPlayer = room.currentTurn === room.player1?.id ? room.player1 : room.player2
@@ -1177,6 +1186,169 @@ function processActionResult(room, action, playerRoll, roomId) {
 
   room.pendingAction = null
   io.to(roomId).emit('room_updated', room)
+}
+
+// 🏆 SISTEMA DE RECOMPENSAS PVP
+async function processBattleRewards(room, winner, loser, roomId) {
+  try {
+    // Detectar condições especiais da batalha
+    const isFlawlessVictory = winner.initialHp && winner.hp === winner.initialHp
+    const winnerTransformed = winner.transformationType && winner.transformationType !== 'none'
+    const loserTransformed = loser.transformationType && loser.transformationType !== 'none'
+    
+    // Preparar dados da batalha
+    const battleResult = {
+      winnerId: winner.id,
+      loserId: loser.id,
+      winnerLevel: winner.level || 1,
+      loserLevel: loser.level || 1,
+      battleType: 'pvp',
+      isFlawlessVictory,
+      winnerTransformed,
+      loserTransformed,
+      winStreak: winner.winStreak || 1, // TODO: Implementar tracking de win streak
+      isFirstWinOfDay: false // TODO: Implementar tracking de primeira vitória do dia
+    }
+    
+    // Enviar para a API de recompensas (simulado para servidor independente)
+    const rewardData = calculateBattleRewardsLocal(battleResult)
+    
+    // Adicionar recompensas aos logs de combate
+    room.combatLog.push({
+      type: 'rewards',
+      message: `💰 ${winner.name} ganhou ${rewardData.winner.xpGained} XP e ${rewardData.winner.goldGained} gold!`,
+      timestamp: new Date()
+    })
+    
+    room.combatLog.push({
+      type: 'rewards', 
+      message: `💝 ${loser.name} ganhou ${rewardData.loser.xpGained} XP e ${rewardData.loser.goldGained} gold por participar!`,
+      timestamp: new Date()
+    })
+    
+    // Notificar clientes sobre as recompensas
+    io.to(roomId).emit('battle_rewards', {
+      winner: rewardData.winner,
+      loser: rewardData.loser,
+      battleDetails: {
+        isFlawless: isFlawlessVictory,
+        transformationKill: loserTransformed,
+        underdogVictory: battleResult.winnerLevel < battleResult.loserLevel - 2
+      }
+    })
+    
+    console.log(`🏆 Recompensas de batalha processadas: ${winner.name} vs ${loser.name}`)
+    
+  } catch (error) {
+    console.error('Erro ao processar recompensas da batalha:', error)
+  }
+}
+
+// Função local para cálculo de recompensas (replica a API)
+function calculateBattleRewardsLocal(battleResult) {
+  const PVP_REWARDS_CONFIG = {
+    victory: { xpBase: 50, goldBase: 15 },
+    defeat: { xpBase: 25, goldBase: 8 },
+    levelScaling: { xpMultiplier: 1.1, goldMultiplier: 1.08, maxScaling: 5.0 },
+    specialBonuses: {
+      perfectVictory: { xpBonus: 1.3, goldBonus: 1.5 },
+      transformationKill: { xpBonus: 1.2, goldBonus: 1.2 },
+      firstWinOfDay: { xpBonus: 2.0, goldBonus: 1.5 }
+    },
+    levelDifferenceBalancing: {
+      perLevelDifference: 0.15,
+      underdog_bonus: 1.5,
+      bully_penalty: 0.7
+    }
+  }
+  
+  function calculateRewards(playerLevel, isVictory, opponentLevel, specialBonuses = {}) {
+    const config = PVP_REWARDS_CONFIG
+    const baseRewards = isVictory ? config.victory : config.defeat
+    
+    // XP e Gold base
+    let xp = baseRewards.xpBase
+    let gold = baseRewards.goldBase
+    
+    // Scaling por nível
+    const levelMult = Math.min(
+      Math.pow(config.levelScaling.xpMultiplier, playerLevel - 1),
+      config.levelScaling.maxScaling
+    )
+    
+    xp = Math.floor(xp * levelMult)
+    gold = Math.floor(gold * levelMult * config.levelScaling.goldMultiplier)
+    
+    // Bônus/Penalidade por diferença de nível
+    if (isVictory) {
+      const levelDiff = opponentLevel - playerLevel
+      const diffMultiplier = 1 + (levelDiff * config.levelDifferenceBalancing.perLevelDifference)
+      
+      xp = Math.floor(xp * diffMultiplier)
+      gold = Math.floor(gold * diffMultiplier)
+      
+      // Bônus especiais por diferença extrema
+      if (levelDiff >= 5) {
+        xp = Math.floor(xp * config.levelDifferenceBalancing.underdog_bonus)
+        gold = Math.floor(gold * config.levelDifferenceBalancing.underdog_bonus)
+      } else if (levelDiff <= -5) {
+        xp = Math.floor(xp * config.levelDifferenceBalancing.bully_penalty)
+        gold = Math.floor(gold * config.levelDifferenceBalancing.bully_penalty)
+      }
+    }
+
+    // Aplicar bônus especiais
+    if (specialBonuses.isFlawless && isVictory) {
+      xp = Math.floor(xp * config.specialBonuses.perfectVictory.xpBonus)
+      gold = Math.floor(gold * config.specialBonuses.perfectVictory.goldBonus)
+    }
+
+    if (specialBonuses.killTransformed && isVictory) {
+      xp = Math.floor(xp * config.specialBonuses.transformationKill.xpBonus)
+      gold = Math.floor(gold * config.specialBonuses.transformationKill.goldBonus)
+    }
+
+    if (specialBonuses.isFirstWin && isVictory) {
+      xp = Math.floor(xp * config.specialBonuses.firstWinOfDay.xpBonus)
+      gold = Math.floor(gold * config.specialBonuses.firstWinOfDay.goldBonus)
+    }
+
+    return { xpGained: Math.max(5, xp), goldGained: Math.max(1, gold) }
+  }
+  
+  // Calcular recompensas do vencedor
+  const winnerRewards = calculateRewards(
+    battleResult.winnerLevel,
+    true,
+    battleResult.loserLevel,
+    {
+      isFlawless: battleResult.isFlawlessVictory,
+      killTransformed: battleResult.loserTransformed,
+      isFirstWin: battleResult.isFirstWinOfDay
+    }
+  )
+
+  // Calcular recompensas do perdedor
+  const loserRewards = calculateRewards(
+    battleResult.loserLevel,
+    false,
+    battleResult.winnerLevel
+  )
+
+  return {
+    winner: {
+      id: battleResult.winnerId,
+      ...winnerRewards,
+      leveledUp: false, // TODO: Calcular se subiu de nível
+      newLevel: battleResult.winnerLevel
+    },
+    loser: {
+      id: battleResult.loserId,
+      ...loserRewards,
+      leveledUp: false, // TODO: Calcular se subiu de nível  
+      newLevel: battleResult.loserLevel
+    }
+  }
 }
 
 httpServer.listen(PORT, () => {
@@ -1385,5 +1557,4 @@ function processSpecialAbility(player, opponent, abilityId) {
   }
   
   return { success: false, error: 'Habilidade não reconhecida!' }
-}
 }

@@ -11,7 +11,7 @@ import { useRouter } from 'next/navigation';
 
 export function NameConfirmStep() {
   const router = useRouter();
-  const { selectedRace, selectedClass, distributedPoints, selectedImage, characterName, setCharacterName, markStepComplete, resetCreation } = useCharacterCreationStore();
+  const { selectedRace, selectedClass, distributedPoints, selectedImage, characterName, creationPaymentTxHash, setCharacterName, markStepComplete, resetCreation } = useCharacterCreationStore();
   const [isCreating, setIsCreating] = useState(false);
   const [nameError, setNameError] = useState('');
   
@@ -47,6 +47,9 @@ export function NameConfirmStep() {
     
     setIsCreating(true);
     try {
+      if (!creationPaymentTxHash) {
+        throw new Error('Pagamento necessário para criar o personagem');
+      }
       if (!selectedRace?.id) {
         throw new Error('Raça não selecionada');
       }
@@ -69,7 +72,8 @@ export function NameConfirmStep() {
         race: selectedRace.id,
         characterClass: selectedClass.id,
         distributedPoints: statsRecord,
-        avatar: selectedImage
+        avatar: selectedImage,
+        creationTxHash: creationPaymentTxHash,
       };
       
       const character = await createCharacter(characterData);

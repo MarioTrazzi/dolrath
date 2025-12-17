@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { recordCharacterCreated } from '@/lib/characterHistory'
 import { RACES, CLASSES, getRaceById, getClassById } from '@/lib/gameData'
+import { verifyDolTransferTx } from '@/lib/dolPayments'
 
 export async function POST(req: Request) {
   const session = await auth()
@@ -62,14 +63,63 @@ export async function POST(req: Request) {
     )
   }
 
+  const body = (await req.json().catch(() => null)) as any
+  if (!body) {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
 
-  const { name, race, characterClass: class_, distributedPoints, image: avatar } = await req.json()
+  const {
+    name,
+    race,
+    characterClass: class_,
+    distributedPoints,
+    avatar,
+    image,
+    creationTxHash,
+  } = body
+
+  const avatarUrl = (typeof avatar === 'string' && avatar.trim())
+    ? avatar
+    : (typeof image === 'string' && image.trim())
+      ? image
+      : null
+
+  const treasuryAddress = (process.env.DOL_TREASURY_ADDRESS || '').trim()
+  const creationCostDol = (process.env.CHARACTER_CREATION_COST_DOL || '2').trim()
+  const creationTxHashStr = (typeof creationTxHash === 'string' ? creationTxHash : '').trim()
+
+  if (!treasuryAddress) {
+    return NextResponse.json(
+      { error: 'Server missing DOL_TREASURY_ADDRESS' },
+      { status: 500 }
+    )
+  }
+
+  if (!creationTxHashStr) {
+    return NextResponse.json(
+      {
+        error: 'Payment required to create character',
+        requiresPayment: true,
+        amountDol: creationCostDol,
+        treasuryAddress,
+      },
+      { status: 402 }
+    )
+  }
 
   if (!name || !race || !class_) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
   try {
+    // Verify on-chain DOL payment (testnet: fixed amount).
+    await verifyDolTransferTx({
+      txHash: creationTxHashStr,
+      expectedFrom: user.walletAddress,
+      expectedTo: treasuryAddress,
+      minAmountHuman: creationCostDol,
+    })
+
     // 🔥 BUSCAR DADOS DE RAÇA E CLASSE PARA APLICAR BÔNUS
     const raceData = getRaceById(race)
     const classData = getClassById(class_)
@@ -154,7 +204,7 @@ export async function POST(req: Request) {
         name,
         race,
         class: class_,
-        avatar: avatar,
+        avatar: avatarUrl,
         level: 1,
         experience: 0,
         // Stats calculados baseados na distribuição + bônus raciais/classe
@@ -183,6 +233,8 @@ export async function POST(req: Request) {
           defense: finalDef
         },
         gold: 0,
+        creationTxHash: creationTxHashStr,
+        creationPaidAt: new Date(),
         user: {
           connect: {
             id: session.user.id,
@@ -208,6 +260,12 @@ export async function POST(req: Request) {
 
     return NextResponse.json(character)
   } catch (error) {
+    if ((error as any)?.code === 'P2002') {
+      return NextResponse.json(
+        { error: 'Pagamento já utilizado para criar outro personagem' },
+        { status: 409 }
+      )
+    }
     console.error('Error creating character:', error)
     let errorMessage = 'Error creating character'
     if (error instanceof Error) {

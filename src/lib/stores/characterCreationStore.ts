@@ -18,6 +18,7 @@ interface CharacterCreationState {
   distributedPoints: BaseStats;
   characterName: string;
   selectedImage: string | null;
+  creationPaymentTxHash: string | null;
   isSubmitting: boolean;
   
   // Actions
@@ -29,6 +30,7 @@ interface CharacterCreationState {
   setDistributedPoints: (points: BaseStats) => void;
   setCharacterName: (name: string) => void;
   setSelectedImage: (image: string | null) => void;
+  setCreationPaymentTxHash: (txHash: string | null) => void;
   markStepComplete: (stepId: string, isComplete: boolean) => void;
   createCharacter: () => Promise<void>;
   resetCreation: () => void;
@@ -83,6 +85,7 @@ export const useCharacterCreationStore = create<CharacterCreationState>((set, ge
   distributedPoints: { str: 0, agi: 0, int: 0, res: 0, hp: 0, mp: 0, crit: 0, speed: 0 },
   characterName: '',
   selectedImage: null,
+  creationPaymentTxHash: null,
   isSubmitting: false,
 
   nextStep: () => set((state) => {
@@ -145,6 +148,8 @@ export const useCharacterCreationStore = create<CharacterCreationState>((set, ge
     return { selectedImage: image, creationSteps: updatedSteps };
   }),
 
+  setCreationPaymentTxHash: (txHash: string | null) => set({ creationPaymentTxHash: txHash }),
+
   markStepComplete: (stepId: string, isComplete: boolean) => set((state) => ({
     creationSteps: state.creationSteps.map(step => 
       step.id === stepId ? { ...step, isComplete } : step
@@ -188,6 +193,7 @@ export const useCharacterCreationStore = create<CharacterCreationState>((set, ge
     distributedPoints: { str: 0, agi: 0, int: 0, res: 0, hp: 0, mp: 0, crit: 0, speed: 0 },
     characterName: '',
     selectedImage: null,
+    creationPaymentTxHash: null,
     isSubmitting: false,
     creationSteps: state.creationSteps.map((step, index) => ({
       ...step,

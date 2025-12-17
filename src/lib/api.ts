@@ -4,6 +4,7 @@ export async function createCharacter(characterData: {
   characterClass: string;
   distributedPoints?: Record<string, number>;
   avatar?: string;
+  creationTxHash?: string;
 }): Promise<any> {
   const response = await fetch('/api/character', {
     method: 'POST',

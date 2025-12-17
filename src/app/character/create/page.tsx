@@ -15,11 +15,17 @@ import { ethers } from 'ethers';
 
 export default function CharacterCreationPage() {
   const { data: session, status, update } = useSession();
-  const { currentStep, creationSteps, nextStep, prevStep, goToStep, resetCreation } = useCharacterCreationStore();
+  const { currentStep, creationSteps, nextStep, prevStep, goToStep, resetCreation, creationPaymentTxHash, setCreationPaymentTxHash } = useCharacterCreationStore();
   const [isLinkingWallet, setIsLinkingWallet] = useState(false);
   const [walletError, setWalletError] = useState<string>('');
+  const [isPaying, setIsPaying] = useState(false);
+  const [paymentError, setPaymentError] = useState<string>('');
 
   const linkedWallet = session?.user?.walletAddress;
+
+  const tokenAddress = process.env.NEXT_PUBLIC_DOL_TOKEN_ADDRESS || '';
+  const treasuryAddress = process.env.NEXT_PUBLIC_DOL_TREASURY_ADDRESS || '';
+  const creationCostDol = process.env.NEXT_PUBLIC_CHARACTER_CREATION_COST_DOL || '2';
 
   // Reset creation state when component mounts
   useEffect(() => {
@@ -97,6 +103,47 @@ export default function CharacterCreationPage() {
     }
   };
 
+  const handlePayCreationFee = async () => {
+    setPaymentError('');
+    setIsPaying(true);
+    try {
+      const eth = (window as any)?.ethereum;
+      if (!eth) {
+        throw new Error('MetaMask não encontrada. Instale/ative a extensão para continuar.');
+      }
+
+      if (!tokenAddress) {
+        throw new Error('Token address não configurado (NEXT_PUBLIC_DOL_TOKEN_ADDRESS)');
+      }
+
+      if (!treasuryAddress) {
+        throw new Error('Treasury address não configurado (NEXT_PUBLIC_DOL_TREASURY_ADDRESS)');
+      }
+
+      const provider = new ethers.BrowserProvider(eth);
+      await provider.send('eth_requestAccounts', []);
+      const signer = await provider.getSigner();
+
+      const erc20 = new ethers.Contract(
+        tokenAddress,
+        ['function decimals() view returns (uint8)', 'function transfer(address to, uint256 amount) returns (bool)'],
+        signer
+      );
+
+      const decimals: number = Number(await erc20.decimals());
+      const amount = ethers.parseUnits(String(creationCostDol), decimals);
+
+      const tx = await erc20.transfer(treasuryAddress, amount);
+      await tx.wait();
+
+      setCreationPaymentTxHash(tx.hash);
+    } catch (e) {
+      setPaymentError(e instanceof Error ? e.message : 'Erro ao pagar taxa de criação');
+    } finally {
+      setIsPaying(false);
+    }
+  };
+
   if (status === 'loading') {
     return (
       <div className="min-h-screen bg-background text-text-primary p-8">
@@ -155,6 +202,45 @@ export default function CharacterCreationPage() {
               <Wallet className="w-5 h-5" />
               {isLinkingWallet ? 'Vinculando...' : 'Conectar e assinar'}
             </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Payment gate (testnet): require a fixed DOL transfer before proceeding.
+  if (!creationPaymentTxHash) {
+    return (
+      <div className="min-h-screen bg-background text-text-primary p-8 relative">
+        <div className="max-w-3xl mx-auto py-12">
+          <motion.h1
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="text-4xl font-extrabold text-center mb-12 bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary-dark"
+          >
+            Criação de Personagem
+          </motion.h1>
+
+          <div className="bg-surface/30 backdrop-blur-lg rounded-xl p-8 shadow-2xl border border-white/10">
+            <h2 className="text-2xl font-bold text-text-primary mb-2">Taxa de criação</h2>
+            <p className="text-text-secondary mb-6">
+              Para criar um personagem nesta testnet, é necessário pagar {creationCostDol} DOL.
+            </p>
+
+            {paymentError && <p className="text-error mb-4">{paymentError}</p>}
+
+            <button
+              onClick={handlePayCreationFee}
+              disabled={isPaying}
+              className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-primary to-primary-dark text-white rounded-lg font-medium disabled:opacity-50"
+            >
+              {isPaying ? 'Processando pagamento...' : `Pagar ${creationCostDol} DOL`}
+            </button>
+
+            <p className="text-xs text-text-secondary mt-4">
+              Você vai assinar uma transação on-chain e pagar gas.
+            </p>
           </div>
         </div>
       </div>

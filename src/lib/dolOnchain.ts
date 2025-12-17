@@ -6,13 +6,24 @@ const ERC20_ABI = [
   'function symbol() view returns (string)',
 ] as const
 
+function normalizeRpcUrl(url: string): string {
+  const trimmed = url.trim()
+  if (!trimmed) return ''
+
+  // If the user already provided a scheme, keep it.
+  // Otherwise default to https:// (common case on Vercel env vars).
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed)) return trimmed
+  return `https://${trimmed}`
+}
+
 export function getDolRpcUrl(): string {
-  return (
+  const raw =
     process.env.DOL_RPC_URL ||
     process.env.POLYGON_AMOY_RPC_URL ||
     process.env.POLYGON_MAINNET_RPC_URL ||
     ''
-  )
+
+  return normalizeRpcUrl(raw)
 }
 
 export function getDolTokenAddress(): string {

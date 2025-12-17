@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useEffect } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCharacterCreationStore } from '@/lib/stores/characterCreationStore';
 import { RaceSelectionStep } from './components/RaceSelectionStep';
@@ -8,11 +8,18 @@ import { ClassSelectionStep } from './components/ClassSelectionStep';
 import { StatsDistributionStep } from './components/StatsDistributionStep';
 import { AppearanceStep } from './components/AppearanceStep';
 import { NameConfirmStep } from './components/NameConfirmStep';
-import { ArrowLeft, ArrowRight, CheckCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle, Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useSession, signIn } from 'next-auth/react';
+import { ethers } from 'ethers';
 
 export default function CharacterCreationPage() {
+  const { data: session, status, update } = useSession();
   const { currentStep, creationSteps, nextStep, prevStep, goToStep, resetCreation } = useCharacterCreationStore();
+  const [isLinkingWallet, setIsLinkingWallet] = useState(false);
+  const [walletError, setWalletError] = useState<string>('');
+
+  const linkedWallet = session?.user?.walletAddress;
 
   // Reset creation state when component mounts
   useEffect(() => {
@@ -45,6 +52,114 @@ export default function CharacterCreationPage() {
     // Disable next button if current step is not complete
     return !step.isComplete;
   }, [currentStep, creationSteps]);
+
+  const handleLinkWallet = async () => {
+    setWalletError('');
+    setIsLinkingWallet(true);
+    try {
+      const eth = (window as any)?.ethereum;
+      if (!eth) {
+        throw new Error('MetaMask não encontrada. Instale/ative a extensão para continuar.');
+      }
+
+      const provider = new ethers.BrowserProvider(eth);
+      await provider.send('eth_requestAccounts', []);
+      const signer = await provider.getSigner();
+
+      const nonceRes = await fetch('/api/wallet/nonce', { method: 'POST' });
+      const nonceJson = await nonceRes.json();
+      if (!nonceRes.ok) {
+        throw new Error(nonceJson?.error || 'Falha ao obter nonce');
+      }
+
+      const message = nonceJson?.message;
+      if (!message || typeof message !== 'string') {
+        throw new Error('Resposta inválida ao obter nonce');
+      }
+
+      const signature = await signer.signMessage(message);
+
+      const linkRes = await fetch('/api/wallet/link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signature }),
+      });
+      const linkJson = await linkRes.json();
+      if (!linkRes.ok) {
+        throw new Error(linkJson?.error || 'Falha ao vincular carteira');
+      }
+
+      await update?.();
+    } catch (e) {
+      setWalletError(e instanceof Error ? e.message : 'Erro ao vincular carteira');
+    } finally {
+      setIsLinkingWallet(false);
+    }
+  };
+
+  if (status === 'loading') {
+    return (
+      <div className="min-h-screen bg-background text-text-primary p-8">
+        <div className="max-w-3xl mx-auto py-12">Carregando...</div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <div className="min-h-screen bg-background text-text-primary p-8">
+        <div className="max-w-3xl mx-auto py-12">
+          <div className="bg-surface/30 backdrop-blur-lg rounded-xl p-8 shadow-2xl border border-white/10">
+            <h1 className="text-2xl font-bold mb-2">Faça login para criar seu personagem</h1>
+            <p className="text-text-secondary mb-6">Você pode entrar com Google ou credenciais.</p>
+            <button
+              onClick={() => signIn()}
+              className="px-6 py-3 bg-gradient-to-r from-primary to-primary-dark text-white rounded-lg font-medium"
+            >
+              Entrar
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!linkedWallet) {
+    return (
+      <div className="min-h-screen bg-background text-text-primary p-8 relative">
+        <div className="max-w-3xl mx-auto py-12">
+          <motion.h1
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="text-4xl font-extrabold text-center mb-12 bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary-dark"
+          >
+            Criação de Personagem
+          </motion.h1>
+
+          <div className="bg-surface/30 backdrop-blur-lg rounded-xl p-8 shadow-2xl border border-white/10">
+            <h2 className="text-2xl font-bold text-text-primary mb-2">Vincule sua carteira</h2>
+            <p className="text-text-secondary mb-6">
+              Para criar um personagem, precisamos vincular uma carteira EVM (ex: MetaMask) à sua conta.
+            </p>
+
+            {walletError && (
+              <p className="text-error mb-4">{walletError}</p>
+            )}
+
+            <button
+              onClick={handleLinkWallet}
+              disabled={isLinkingWallet}
+              className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-primary to-primary-dark text-white rounded-lg font-medium disabled:opacity-50"
+            >
+              <Wallet className="w-5 h-5" />
+              {isLinkingWallet ? 'Vinculando...' : 'Conectar e assinar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background text-text-primary p-8 relative">

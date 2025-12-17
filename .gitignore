@@ -26,6 +26,12 @@ yarn-error.log*
 .env*.local
 .env
 
+# Web3 local env + build outputs
+web3/.env
+web3/artifacts/
+web3/cache/
+web3/node_modules/
+
 # Database
 prisma/dev.db
 prisma/dev.db-journal

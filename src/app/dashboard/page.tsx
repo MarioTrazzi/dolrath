@@ -22,6 +22,10 @@ export default function DashboardPage() {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [characterDetails, setCharacterDetails] = useState<any[]>([]);
   const [loadingCharacter, setLoadingCharacter] = useState<boolean>(true);
+  const [dolLoading, setDolLoading] = useState<boolean>(false);
+  const [dolBalance, setDolBalance] = useState<string | null>(null);
+  const [dolSymbol, setDolSymbol] = useState<string | null>(null);
+  const [dolError, setDolError] = useState<string | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; character?: any; input: string }>({ open: false, character: null, input: '' });
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -123,14 +127,71 @@ export default function DashboardPage() {
   useEffect(() => {
     if (status === 'authenticated') {
       fetchCharacters();
+
+      if (session?.user?.walletAddress) {
+        setDolLoading(true);
+        setDolError(null);
+        fetch('/api/wallet/dol-balance')
+          .then(async (res) => {
+            const json = await res.json();
+            if (!res.ok) {
+              throw new Error(json?.error || 'Falha ao buscar saldo on-chain');
+            }
+            if (json?.walletLinked && typeof json?.formatted === 'string') {
+              setDolBalance(json.formatted);
+              setDolSymbol(typeof json?.symbol === 'string' ? json.symbol : 'DOL');
+            } else {
+              setDolBalance(null);
+              setDolSymbol(null);
+            }
+          })
+          .catch((e) => {
+            setDolError(e instanceof Error ? e.message : 'Erro ao buscar saldo on-chain');
+          })
+          .finally(() => setDolLoading(false));
+      } else {
+        setDolBalance(null);
+        setDolSymbol(null);
+        setDolError(null);
+      }
     } else if (status === 'unauthenticated') {
       router.push('/auth/login');
     }
-  }, [status, router]);
+  }, [status, router, session?.user?.walletAddress]);
 
   return (
     <div>
       <main>
+        {/* Saldo on-chain (DOL) */}
+        <div className="glass-card p-4 mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div>
+              <div className="text-sm text-text-secondary">Carteira vinculada</div>
+              <div className="text-text-primary font-medium">
+                {session?.user?.walletAddress ? session.user.walletAddress : 'Não vinculada'}
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-sm text-text-secondary">Saldo on-chain</div>
+              <div className="text-text-primary font-bold">
+                {session?.user?.walletAddress ? (
+                  dolLoading ? (
+                    'Carregando...'
+                  ) : dolError ? (
+                    dolError
+                  ) : dolBalance ? (
+                    `${dolBalance} ${dolSymbol || 'DOL'}`
+                  ) : (
+                    `0 ${dolSymbol || 'DOL'}`
+                  )
+                ) : (
+                  '—'
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Botão de Sincronização (temporário para teste) */}
         <div className="mb-4 flex justify-end">
           <Button 

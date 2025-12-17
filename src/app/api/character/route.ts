@@ -55,6 +55,13 @@ export async function POST(req: Request) {
     }, { status: 404 });
   }
 
+  if (!user.walletAddress) {
+    return NextResponse.json(
+      { error: 'Wallet required to create character', requiresWallet: true },
+      { status: 403 }
+    )
+  }
+
 
   const { name, race, characterClass: class_, distributedPoints, image: avatar } = await req.json()
 

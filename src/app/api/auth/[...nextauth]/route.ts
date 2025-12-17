@@ -75,7 +75,7 @@ export const { handlers: { GET, POST }, auth } = NextAuth({
         
         let dbUser = await prisma.user.findUnique({ 
           where: { email },
-          select: { id: true, email: true, name: true }
+          select: { id: true, email: true, name: true, walletAddress: true }
         })
 
         // Only create user automatically for OAuth providers (Google)
@@ -86,7 +86,7 @@ export const { handlers: { GET, POST }, auth } = NextAuth({
               email,
               name: user.name ?? email.split('@')[0],
             },
-            select: { id: true, email: true, name: true }
+            select: { id: true, email: true, name: true, walletAddress: true }
           })
           console.log('✅ Usuário Google criado automaticamente:', email)
         }
@@ -95,6 +95,7 @@ export const { handlers: { GET, POST }, auth } = NextAuth({
           token.userId = dbUser.id
           token.email = dbUser.email
           token.name = dbUser.name
+          token.walletAddress = dbUser.walletAddress
           console.log('✅ Token JWT configurado para usuário:', {
             id: dbUser.id,
             email: dbUser.email
@@ -110,6 +111,19 @@ export const { handlers: { GET, POST }, auth } = NextAuth({
         session.user.id = token.userId as string
         session.user.email = token.email as string
         session.user.name = token.name as string
+
+        // Keep wallet state in sync with DB (e.g. after linking).
+        try {
+          const { prisma } = await import('@/lib/prisma')
+          const dbUser = await prisma.user.findUnique({
+            where: { id: token.userId as string },
+            select: { walletAddress: true },
+          })
+          session.user.walletAddress = dbUser?.walletAddress ?? null
+        } catch {
+          session.user.walletAddress = (token.walletAddress as string | null | undefined) ?? null
+        }
+
         console.log('✅ Sessão configurada:', {
           userId: session.user.id,
           email: session.user.email

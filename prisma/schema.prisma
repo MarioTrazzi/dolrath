@@ -157,6 +157,10 @@ model Character {
   equipment     CharacterEquipment[]
   inventory     CharacterInventory[]
   history       CharacterHistory[]
+
+  // On-chain payment for creation (testnet: fixed DOL fee; mainnet: will be oracle-priced)
+  creationTxHash String?         @unique
+  creationPaidAt DateTime?
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 
 import { useSession, signOut } from 'next-auth/react';
 import { motion } from 'framer-motion';
-import { LogOut, User, Shield, Sword, Heart, Zap, Trash2 } from 'lucide-react';
+import { LogOut, User, Shield, Sword, Heart, Zap, Trash2, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -13,11 +13,12 @@ import CharacterStats from '@/components/CharacterStats';
 // ...existing code...
 import { Character } from '@/types/game';
 import { getRaceById, getClassById } from '@/lib/gameData';
+import { ethers } from 'ethers';
 // ...existing code...
 // ...existing code...
 
 export default function DashboardPage() {
-  const { data: session, status } = useSession();
+  const { data: session, status, update } = useSession();
   const router = useRouter();
   const [characters, setCharacters] = useState<Character[]>([]);
   const [characterDetails, setCharacterDetails] = useState<any[]>([]);
@@ -26,8 +27,54 @@ export default function DashboardPage() {
   const [dolBalance, setDolBalance] = useState<string | null>(null);
   const [dolSymbol, setDolSymbol] = useState<string | null>(null);
   const [dolError, setDolError] = useState<string | null>(null);
+  const [isLinkingWallet, setIsLinkingWallet] = useState<boolean>(false);
+  const [walletLinkError, setWalletLinkError] = useState<string>('');
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; character?: any; input: string }>({ open: false, character: null, input: '' });
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleLinkWallet = async () => {
+    setWalletLinkError('');
+    setIsLinkingWallet(true);
+    try {
+      const eth = (window as any)?.ethereum;
+      if (!eth) {
+        throw new Error('MetaMask não encontrada. Instale/ative a extensão para continuar.');
+      }
+
+      const provider = new ethers.BrowserProvider(eth);
+      await provider.send('eth_requestAccounts', []);
+      const signer = await provider.getSigner();
+
+      const nonceRes = await fetch('/api/wallet/nonce', { method: 'POST' });
+      const nonceJson = await nonceRes.json();
+      if (!nonceRes.ok) {
+        throw new Error(nonceJson?.error || 'Falha ao obter nonce');
+      }
+
+      const message = nonceJson?.message;
+      if (!message || typeof message !== 'string') {
+        throw new Error('Resposta inválida ao obter nonce');
+      }
+
+      const signature = await signer.signMessage(message);
+
+      const linkRes = await fetch('/api/wallet/link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signature }),
+      });
+      const linkJson = await linkRes.json();
+      if (!linkRes.ok) {
+        throw new Error(linkJson?.error || 'Falha ao vincular carteira');
+      }
+
+      await update?.();
+    } catch (e) {
+      setWalletLinkError(e instanceof Error ? e.message : 'Erro ao vincular carteira');
+    } finally {
+      setIsLinkingWallet(false);
+    }
+  };
 
   // Função para adicionar XP (para teste)
   const addXPToCharacter = async (characterId: string, xpAmount: number) => {
@@ -170,6 +217,23 @@ export default function DashboardPage() {
               <div className="text-text-primary font-medium">
                 {session?.user?.walletAddress ? session.user.walletAddress : 'Não vinculada'}
               </div>
+              {!session?.user?.walletAddress && status === 'authenticated' && (
+                <div className="mt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleLinkWallet}
+                    disabled={isLinkingWallet}
+                    className="text-xs inline-flex items-center gap-2"
+                  >
+                    <Wallet className="w-4 h-4" />
+                    {isLinkingWallet ? 'Conectando...' : 'Conectar e assinar'}
+                  </Button>
+                  {walletLinkError && (
+                    <div className="mt-2 text-xs text-error">{walletLinkError}</div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="text-right">
               <div className="text-sm text-text-secondary">Saldo on-chain</div>

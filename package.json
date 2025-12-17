@@ -13,7 +13,14 @@
     "prisma:reset": "prisma migrate reset --force",
     "postinstall": "prisma generate",
     "socket:dev": "node server/socket-server.js",
-    "dev:full": "concurrently \"npm run dev\" \"npm run socket:dev\""
+    "dev:full": "concurrently \"npm run dev\" \"npm run socket:dev\"",
+    "chain:compile": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat compile --config web3/hardhat.config.ts",
+    "chain:test": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat test --config web3/hardhat.config.ts",
+    "chain:node": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat node --config web3/hardhat.config.ts",
+    "chain:deploy:local": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network localhost web3/scripts/deploy-dol.ts",
+    "chain:deploy:amoy": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network polygonAmoy web3/scripts/deploy-dol.ts",
+    "chain:deploy:polygon": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network polygon web3/scripts/deploy-dol.ts",
+    "chain:mint:amoy": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network polygonAmoy web3/scripts/mint-dol.ts"
   },
   "prisma": {
     "seed": "node prisma/seed.js"
@@ -51,10 +58,17 @@
     "zustand": "^4.4.7"
   },
   "devDependencies": {
+    "@nomicfoundation/hardhat-chai-matchers": "^2.1.0",
+    "@nomicfoundation/hardhat-ethers": "^3.0.0",
     "@types/uuid": "^9.0.7",
+    "@openzeppelin/contracts": "^5.4.0",
+    "chai": "^4.5.0",
     "concurrently": "^9.2.1",
+    "dotenv": "^16.6.1",
     "eslint": "^8.0.0",
     "eslint-config-next": "14.0.0",
+    "hardhat": "^2.28.0",
+    "ethers": "^6.15.0",
     "ts-node": "^10.9.2",
     "uuid": "^9.0.1"
   }

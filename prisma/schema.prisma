@@ -94,6 +94,10 @@ model User {
   emailVerified DateTime?
   image         String?
   password      String?
+  walletAddress String?   @unique
+  walletLinkedAt DateTime?
+  walletLinkNonce String?
+  walletLinkNonceExpiresAt DateTime?
   goldBalance   Int       @default(1000)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt

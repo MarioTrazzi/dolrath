@@ -24,6 +24,9 @@ export default function DashboardPage() {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [characterDetails, setCharacterDetails] = useState<any[]>([]);
   const [nftMetaByCharacterId, setNftMetaByCharacterId] = useState<Record<string, any>>({});
+  const [ownedNfts, setOwnedNfts] = useState<any[]>([]);
+  const [nftMetaByTokenId, setNftMetaByTokenId] = useState<Record<string, any>>({});
+  const [ownedNftContext, setOwnedNftContext] = useState<{ chainId?: number; contractAddress?: string } | null>(null);
   const [loadingCharacter, setLoadingCharacter] = useState<boolean>(true);
   const [dolLoading, setDolLoading] = useState<boolean>(false);
   const [dolBalance, setDolBalance] = useState<string | null>(null);
@@ -31,8 +34,11 @@ export default function DashboardPage() {
   const [dolError, setDolError] = useState<string | null>(null);
   const [isLinkingWallet, setIsLinkingWallet] = useState<boolean>(false);
   const [walletLinkError, setWalletLinkError] = useState<string>('');
-  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; character?: any; input: string }>({ open: false, character: null, input: '' });
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; item?: any; input: string }>({ open: false, item: null, input: '' });
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const POLYGON_AMOY_CHAIN_ID_DEC = BigInt(80002);
+  const POLYGON_AMOY_CHAIN_ID_HEX = '0x13882';
 
   const handleLinkWallet = async () => {
     setWalletLinkError('');
@@ -127,83 +133,146 @@ export default function DashboardPage() {
   // Função para buscar personagens
   const fetchCharacters = async () => {
     try {
-      const response = await fetch('/api/character/me');
-      if (response.ok) {
-        const charList = await response.json();
-        setCharacters(charList);
-        setCharacterDetails(
-          charList.map((char: Character) => ({
-            character: char,
-            raceObj: getRaceById(typeof char.race === 'string' ? char.race : char.race.id),
-            classObj: getClassById(typeof char.class === 'string' ? char.class : char.class.id)
-          }))
-        );
-
-        // Load NFT metadata (tokenURI) for display (image/race/class/etc)
-        const loadMetadataFromTokenUri = async (tokenUri: string) => {
-          if (!tokenUri || typeof tokenUri !== 'string') return null;
-          if (tokenUri.startsWith('data:application/json;base64,')) {
-            const b64 = tokenUri.replace('data:application/json;base64,', '');
-            const jsonStr = atob(b64);
-            return JSON.parse(jsonStr);
-          }
-          const res = await fetch(tokenUri);
-          if (!res.ok) return null;
-          return await res.json();
-        };
-
-        const entries = await Promise.all(
-          (charList as any[]).map(async (c) => {
-            const id = String(c?.id);
-            const tokenUri = String(c?.nftTokenUri || '');
-            if (!id || !tokenUri) return [id, null] as const;
-            try {
-              const meta = await loadMetadataFromTokenUri(tokenUri);
-              return [id, meta] as const;
-            } catch {
-              return [id, null] as const;
-            }
-          })
-        );
-
-        const map: Record<string, any> = {};
-        for (const [id, meta] of entries) {
-          if (id && meta) map[id] = meta;
-        }
-        setNftMetaByCharacterId(map);
-      } else {
+      const response = await fetch('/api/nft/character/owned');
+      if (!response.ok) {
+        setOwnedNfts([]);
+        setOwnedNftContext(null);
+        setNftMetaByTokenId({});
         setCharacters([]);
         setCharacterDetails([]);
         setNftMetaByCharacterId({});
+        return;
       }
+
+      const payload = await response.json();
+      const items = Array.isArray(payload?.items) ? payload.items : [];
+
+      setOwnedNfts(items);
+      setOwnedNftContext({
+        chainId: typeof payload?.chainId === 'number' ? payload.chainId : undefined,
+        contractAddress: typeof payload?.contractAddress === 'string' ? payload.contractAddress : undefined,
+      });
+
+      const loadMetadataFromTokenUri = async (tokenUri: string) => {
+        if (!tokenUri || typeof tokenUri !== 'string') return null;
+        if (tokenUri.startsWith('data:application/json;base64,')) {
+          const b64 = tokenUri.replace('data:application/json;base64,', '');
+          const jsonStr = atob(b64);
+          return JSON.parse(jsonStr);
+        }
+        const res = await fetch(tokenUri);
+        if (!res.ok) return null;
+        return await res.json();
+      };
+
+      const entries = await Promise.all(
+        (items as any[]).map(async (it) => {
+          const tokenId = String(it?.tokenId || '');
+          const tokenUri = String(it?.tokenURI || '');
+          if (!tokenId || !tokenUri) return [tokenId, null] as const;
+          try {
+            const meta = await loadMetadataFromTokenUri(tokenUri);
+            return [tokenId, meta] as const;
+          } catch {
+            return [tokenId, null] as const;
+          }
+        })
+      );
+
+      const byToken: Record<string, any> = {};
+      for (const [tokenId, meta] of entries) {
+        if (tokenId && meta) byToken[tokenId] = meta;
+      }
+      setNftMetaByTokenId(byToken);
+
+      const dbChars = (items as any[])
+        .map((it) => it?.character)
+        .filter(Boolean) as Character[];
+
+      setCharacters(dbChars);
+      setCharacterDetails(
+        dbChars.map((char: any) => ({
+          character: char,
+          raceObj: getRaceById(typeof char.race === 'string' ? char.race : char.race.id),
+          classObj: getClassById(typeof char.class === 'string' ? char.class : char.class.id),
+        }))
+      );
+
+      // Map token metadata to character.id when there is a DB character (so existing UI keeps working)
+      const byCharId: Record<string, any> = {};
+      for (const it of items as any[]) {
+        const c = it?.character;
+        const tokenId = String(it?.tokenId || '');
+        if (!c?.id || !tokenId) continue;
+        if (byToken[tokenId]) byCharId[String(c.id)] = byToken[tokenId];
+      }
+      setNftMetaByCharacterId(byCharId);
     } finally {
       setLoadingCharacter(false);
     }
   };
 
-  const openDeleteDialog = (character: any) => {
-    setDeleteDialog({ open: true, character, input: '' });
+  const openDeleteDialog = (item: any) => {
+    setDeleteDialog({ open: true, item, input: '' });
     setTimeout(() => inputRef.current?.focus(), 100);
   };
 
   const closeDeleteDialog = () => {
-    setDeleteDialog({ open: false, character: null, input: '' });
+    setDeleteDialog({ open: false, item: null, input: '' });
   };
 
   const handleDeleteCharacter = async () => {
-    const characterId = deleteDialog.character?.id;
-    if (!characterId) return;
+    const tokenId = String(deleteDialog.item?.tokenId || deleteDialog.item?.character?.nftTokenId || '').trim();
+    if (!tokenId) return;
     try {
-      const response = await fetch(`/api/character/${characterId}`, { method: 'DELETE' });
-      if (response.ok) {
-        setCharacters((chars: Character[]) => chars.filter((c: Character) => c.id !== characterId));
-        setCharacterDetails((details: any[]) => details.filter((d: any) => d.character.id !== characterId));
-        closeDeleteDialog();
-      } else {
-        alert('Erro ao excluir personagem.');
+      const burnAddress = process.env.NEXT_PUBLIC_CHARACTER_NFT_BURN_ADDRESS || '0x000000000000000000000000000000000000dEaD';
+      const contractAddress = ownedNftContext?.contractAddress;
+      if (!contractAddress) throw new Error('Contract address da NFT não disponível.');
+
+      const eth = (window as any)?.ethereum;
+      if (!eth) throw new Error('MetaMask não encontrada.');
+
+      const provider = new ethers.BrowserProvider(eth);
+      await provider.send('eth_requestAccounts', []);
+
+      const network = await provider.getNetwork();
+      if (network.chainId !== POLYGON_AMOY_CHAIN_ID_DEC) {
+        try {
+          await provider.send('wallet_switchEthereumChain', [{ chainId: POLYGON_AMOY_CHAIN_ID_HEX }]);
+        } catch (switchErr: any) {
+          if (switchErr?.code === 4902) {
+            await provider.send('wallet_addEthereumChain', [
+              {
+                chainId: POLYGON_AMOY_CHAIN_ID_HEX,
+                chainName: 'Polygon Amoy',
+                nativeCurrency: { name: 'POL', symbol: 'POL', decimals: 18 },
+                rpcUrls: ['https://rpc-amoy.polygon.technology/'],
+                blockExplorerUrls: ['https://amoy.polygonscan.com/'],
+              },
+            ]);
+          } else {
+            throw new Error('Conecte sua MetaMask à rede Polygon Amoy (chainId 80002) para continuar.');
+          }
+        }
       }
+
+      const providerAfterSwitch = new ethers.BrowserProvider(eth);
+      const signer = await providerAfterSwitch.getSigner();
+      const from = await signer.getAddress();
+
+      const erc721 = new ethers.Contract(
+        contractAddress,
+        ['function transferFrom(address from, address to, uint256 tokenId)'],
+        signer
+      );
+
+      const tx = await erc721.transferFrom(from, burnAddress, BigInt(tokenId));
+      await tx.wait();
+
+      closeDeleteDialog();
+      await fetchCharacters();
     } catch (err) {
-      alert('Erro ao excluir personagem.');
+      alert(err instanceof Error ? err.message : 'Erro ao excluir NFT.');
     }
   };
 
@@ -304,6 +373,84 @@ export default function DashboardPage() {
           </Button>
         </div>
 
+        {/* NFTs owned on-chain (shows even if DB characters were deleted) */}
+        <div className="glass-card p-6 mb-8">
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <div>
+              <div className="text-sm text-text-secondary">Suas NFTs</div>
+              <div className="text-text-primary font-bold">Personagens (on-chain)</div>
+            </div>
+            <Button variant="outline" size="sm" onClick={fetchCharacters}>
+              Atualizar
+            </Button>
+          </div>
+
+          {ownedNfts.length === 0 ? (
+            <div className="text-text-secondary text-sm">Nenhuma NFT encontrada na sua carteira.</div>
+          ) : (
+            <div className="divide-y divide-border/30">
+              {ownedNfts.map((it: any) => {
+                const tokenId = String(it?.tokenId || '');
+                const meta = nftMetaByTokenId[tokenId];
+                const attrs = Array.isArray(meta?.attributes) ? meta.attributes : [];
+                const getTrait = (traitType: string) =>
+                  attrs.find((a: any) => String(a?.trait_type) === traitType)?.value;
+
+                const displayName = String(getTrait('CharacterName') || meta?.name || `NFT #${tokenId}`);
+                const displayRace = String(getTrait('Race') || '');
+                const displayClass = String(getTrait('Class') || '');
+                const displayLevel = String(getTrait('Level') || '');
+                const characterId = it?.character?.id ? String(it.character.id) : '';
+
+                return (
+                  <div key={tokenId} className="py-3 flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-full overflow-hidden border border-border/40 bg-surface/40 flex-shrink-0">
+                      {meta?.image ? (
+                        <Image
+                          src={String(meta.image)}
+                          alt={displayName}
+                          width={96}
+                          height={96}
+                          unoptimized
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full" />
+                      )}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="text-text-primary font-semibold truncate">{displayName}</div>
+                      <div className="text-xs text-text-secondary truncate">
+                        {displayRace}
+                        {displayRace && displayClass ? ' • ' : ''}
+                        {displayClass}
+                        {displayLevel ? ` • Lv ${displayLevel}` : ''}
+                      </div>
+                      <div className="text-[11px] text-text-secondary truncate">Token ID: {tokenId}</div>
+                    </div>
+
+                    {characterId ? (
+                      <Link href={`/character/${characterId}`}>
+                        <Button variant="outline" size="sm">Abrir</Button>
+                      </Link>
+                    ) : null}
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openDeleteDialog({ tokenId, character: it?.character || null })}
+                      className="text-red-500 border-red-500/40 hover:border-red-500"
+                    >
+                      Excluir
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         {characterDetails.length > 0 ? (
           <div className="grid gap-8 mb-12">
             {characterDetails.map(({ character, raceObj, classObj }: any, idx: number) => (
@@ -317,7 +464,7 @@ export default function DashboardPage() {
                 <button
                   className="absolute top-4 right-4 text-red-500 hover:text-red-700 transition-colors"
                   title="Excluir personagem"
-                  onClick={() => openDeleteDialog(character)}
+                  onClick={() => openDeleteDialog({ tokenId: String((character as any)?.nftTokenId || ''), character })}
                 >
                   <Trash2 className="w-6 h-6" />
                 </button>
@@ -538,26 +685,42 @@ export default function DashboardPage() {
               >
                 ×
               </button>
-              <h2 className="text-xl font-bold mb-4 text-text-primary">Excluir Personagem</h2>
+              <h2 className="text-xl font-bold mb-4 text-text-primary">Excluir NFT</h2>
               <p className="mb-2 text-text-secondary">
-                Tem certeza que deseja excluir o personagem <span className="font-bold text-primary">{deleteDialog.character?.name}</span>?<br />
-                Esta ação não pode ser desfeita.<br />
-                Para confirmar, digite o nome do personagem abaixo:
+                Isso vai transferir a NFT para uma carteira BURN (você vai assinar a transação e pagar gas).<br />
+                Esta ação não pode ser desfeita.
               </p>
-              <input
-                ref={inputRef}
-                className="w-full px-3 py-2 border rounded mb-4 text-text-primary bg-background outline-none focus:ring-2 focus:ring-primary"
-                value={deleteDialog.input}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDeleteDialog((d: any) => ({ ...d, input: e.target.value }))}
-                placeholder="Digite o nome do personagem"
-                autoFocus
-              />
+
+              {deleteDialog.item?.character?.name ? (
+                <>
+                  <p className="mb-2 text-text-secondary">
+                    Para confirmar, digite o nome do personagem <span className="font-bold text-primary">{deleteDialog.item.character.name}</span> abaixo:
+                  </p>
+                  <input
+                    ref={inputRef}
+                    className="w-full px-3 py-2 border rounded mb-4 text-text-primary bg-background outline-none focus:ring-2 focus:ring-primary"
+                    value={deleteDialog.input}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      setDeleteDialog((d: any) => ({ ...d, input: e.target.value }))
+                    }
+                    placeholder="Digite o nome do personagem"
+                    autoFocus
+                  />
+                </>
+              ) : (
+                <div className="text-xs text-text-secondary mb-4">
+                  Token ID: {String(deleteDialog.item?.tokenId || '')}
+                </div>
+              )}
               <div className="flex gap-2 justify-end">
                 <Button variant="outline" onClick={closeDeleteDialog}>Cancelar</Button>
                 <Button
                   variant="primary"
                   onClick={handleDeleteCharacter}
-                  disabled={deleteDialog.input !== deleteDialog.character?.name}
+                  disabled={
+                    Boolean(deleteDialog.item?.character?.name) &&
+                    deleteDialog.input !== deleteDialog.item?.character?.name
+                  }
                 >
                   Excluir
                 </Button>

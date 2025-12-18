@@ -7,6 +7,12 @@ import { verifyDolTransferTx } from '@/lib/dolPayments'
 import { getCharacterNftChainId, getCharacterNftContractAddress } from '@/lib/characterNftOnchain'
 import { verifyCharacterNftMintTx } from '@/lib/characterNftVerify'
 
+function serializeBigIntForJson<T>(value: T): T {
+  return JSON.parse(
+    JSON.stringify(value, (_key, v) => (typeof v === 'bigint' ? v.toString() : v))
+  ) as T
+}
+
 export async function POST(req: Request) {
   const session = await auth()
 
@@ -326,7 +332,7 @@ export async function POST(req: Request) {
       // Não falhar a operação por causa do histórico
     }
 
-    return NextResponse.json(character)
+    return NextResponse.json(serializeBigIntForJson(character))
   } catch (error) {
     if ((error as any)?.code === 'P2002') {
       return NextResponse.json(
@@ -356,7 +362,7 @@ export async function GET(req: Request) {
       orderBy: { createdAt: 'desc' }
     })
 
-    return NextResponse.json(characters)
+    return NextResponse.json(serializeBigIntForJson(characters))
   } catch (error) {
     console.error('Error fetching characters:', error)
     return NextResponse.json({ error: 'Error fetching characters' }, { status: 500 })

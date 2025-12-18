@@ -13,6 +13,9 @@ import { cn } from '@/lib/utils';
 import { useSession, signIn } from 'next-auth/react';
 import { ethers } from 'ethers';
 
+const POLYGON_AMOY_CHAIN_ID_DEC = 80002n;
+const POLYGON_AMOY_CHAIN_ID_HEX = '0x13882';
+
 export default function CharacterCreationPage() {
   const { data: session, status, update } = useSession();
   const { currentStep, creationSteps, nextStep, prevStep, goToStep, resetCreation, creationPaymentTxHash, setCreationPaymentTxHash } = useCharacterCreationStore();
@@ -124,10 +127,47 @@ export default function CharacterCreationPage() {
       await provider.send('eth_requestAccounts', []);
       const signer = await provider.getSigner();
 
+      // Ensure the wallet is on Polygon Amoy. If not, try to switch (or add) the chain.
+      const network = await provider.getNetwork();
+      if (network.chainId !== POLYGON_AMOY_CHAIN_ID_DEC) {
+        try {
+          await provider.send('wallet_switchEthereumChain', [{ chainId: POLYGON_AMOY_CHAIN_ID_HEX }]);
+        } catch (switchErr: any) {
+          // 4902: Unrecognized chain.
+          if (switchErr?.code === 4902) {
+            await provider.send('wallet_addEthereumChain', [
+              {
+                chainId: POLYGON_AMOY_CHAIN_ID_HEX,
+                chainName: 'Polygon Amoy',
+                nativeCurrency: { name: 'POL', symbol: 'POL', decimals: 18 },
+                rpcUrls: ['https://rpc-amoy.polygon.technology/'],
+                blockExplorerUrls: ['https://amoy.polygonscan.com/'],
+              },
+            ]);
+          } else {
+            throw new Error(
+              'Conecte sua MetaMask à rede Polygon Amoy (chainId 80002) para pagar a taxa.'
+            );
+          }
+        }
+      }
+
+      // Recreate provider/signer after switching chains (MetaMask may change context).
+      const providerAfterSwitch = new ethers.BrowserProvider(eth);
+      const signerAfterSwitch = await providerAfterSwitch.getSigner();
+
+      // Validate token contract exists on the currently selected chain.
+      const code = await providerAfterSwitch.getCode(tokenAddress);
+      if (!code || code === '0x') {
+        throw new Error(
+          'O token DOL não foi encontrado na rede atual. Verifique se sua MetaMask está na Polygon Amoy e se o NEXT_PUBLIC_DOL_TOKEN_ADDRESS está correto.'
+        );
+      }
+
       const erc20 = new ethers.Contract(
         tokenAddress,
         ['function decimals() view returns (uint8)', 'function transfer(address to, uint256 amount) returns (bool)'],
-        signer
+        signerAfterSwitch
       );
 
       const decimals: number = Number(await erc20.decimals());

@@ -44,6 +44,38 @@ export async function GET() {
   }
 
   const provider = getCharacterNftProvider()
+
+  const [network, code, latest] = await Promise.all([
+    provider.getNetwork(),
+    provider.getCode(contractAddress),
+    provider.getBlockNumber(),
+  ])
+
+  const rpcChainId = Number(network.chainId)
+  const configuredChainId = Number(process.env.CHARACTER_NFT_CHAIN_ID || 80002)
+  if (Number.isFinite(configuredChainId) && configuredChainId > 0 && rpcChainId !== configuredChainId) {
+    return NextResponse.json(
+      {
+        error: 'RPC chainId mismatch',
+        configuredChainId,
+        rpcChainId,
+        contractAddress,
+      },
+      { status: 500 }
+    )
+  }
+
+  if (!code || code === '0x') {
+    return NextResponse.json(
+      {
+        error: 'Contract not deployed on configured RPC network',
+        rpcChainId,
+        contractAddress,
+      },
+      { status: 500 }
+    )
+  }
+
   const contract = new Contract(contractAddress, DOLRATH_CHARACTERS_ABI, provider)
 
   // Optional optimization: start scanning from the deployment block.
@@ -52,9 +84,27 @@ export async function GET() {
   const startBlock = Number.isFinite(deployBlock) && deployBlock >= 0 ? deployBlock : 0
 
   const transferTopic = ethers.id('Transfer(address,address,uint256)')
-  const toTopic = ethers.zeroPadValue(ethers.getAddress(walletAddress), 32)
+  const toTopic = ethers.zeroPadValue(ethers.getBytes(ethers.getAddress(walletAddress)), 32)
 
-  const latest = await provider.getBlockNumber()
+  if (startBlock > latest) {
+    return NextResponse.json(
+      {
+        chainId: configuredChainId,
+        rpcChainId,
+        contractAddress,
+        owner: walletAddress,
+        scanErrors: false,
+        debug: {
+          startBlock,
+          latest,
+          note: 'CHARACTER_NFT_DEPLOY_BLOCK is greater than latest block',
+        },
+        items: [],
+      },
+      { status: 200 }
+    )
+  }
+
   const configuredChunkSize = Number(process.env.CHARACTER_NFT_LOG_CHUNK_SIZE || 10_000)
   let chunkSize = Number.isFinite(configuredChunkSize) && configuredChunkSize > 0 ? configuredChunkSize : 10_000
   chunkSize = Math.max(1000, Math.min(chunkSize, 100_000))
@@ -173,10 +223,16 @@ export async function GET() {
 
   return NextResponse.json(
     {
-      chainId: Number(process.env.CHARACTER_NFT_CHAIN_ID || 80002),
+      chainId: configuredChainId,
+      rpcChainId,
       contractAddress,
       owner: walletAddress,
       scanErrors: logScanHadErrors,
+      debug: {
+        startBlock,
+        latest,
+        initialChunkSize: configuredChunkSize,
+      },
       items: owned.map((o) => ({
         tokenId: o.tokenId,
         tokenURI: o.tokenURI,

@@ -29,7 +29,7 @@ export function NameConfirmStep() {
     metadata: any;
   }>(null);
 
-  const POLYGON_AMOY_CHAIN_ID_DEC = 80002n;
+  const POLYGON_AMOY_CHAIN_ID_DEC = BigInt(80002);
   const POLYGON_AMOY_CHAIN_ID_HEX = '0x13882';
 
   const safeReadJson = async (res: Response) => {
@@ -176,7 +176,7 @@ export function NameConfirmStep() {
       const signature = String(mintIntentJson.signature || '').trim();
       const chainIdNumber = Number(mintIntentJson.chainId);
 
-      if (!contractAddress || !tokenURI || !signature || deadline <= 0n || !Number.isFinite(chainIdNumber)) {
+      if (!contractAddress || !tokenURI || !signature || deadline <= BigInt(0) || !Number.isFinite(chainIdNumber)) {
         throw new Error('Mint intent inválido (server)');
       }
 

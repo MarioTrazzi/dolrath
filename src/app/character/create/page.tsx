@@ -15,7 +15,7 @@ import { ethers } from 'ethers';
 import Link from 'next/link';
 import Image from 'next/image';
 
-const POLYGON_AMOY_CHAIN_ID_DEC = 80002n;
+const POLYGON_AMOY_CHAIN_ID_DEC = BigInt(80002);
 const POLYGON_AMOY_CHAIN_ID_HEX = '0x13882';
 
 export default function CharacterCreationPage() {
@@ -26,9 +26,10 @@ export default function CharacterCreationPage() {
   const [isPaying, setIsPaying] = useState(false);
   const [paymentError, setPaymentError] = useState<string>('');
 
-  const [myCharacters, setMyCharacters] = useState<any[]>([]);
-  const [myCharactersLoading, setMyCharactersLoading] = useState<boolean>(false);
-  const [myNftMetaByCharacterId, setMyNftMetaByCharacterId] = useState<Record<string, any>>({});
+  const [ownedNfts, setOwnedNfts] = useState<any[]>([]);
+  const [ownedNftsLoading, setOwnedNftsLoading] = useState<boolean>(false);
+  const [nftMetaByTokenId, setNftMetaByTokenId] = useState<Record<string, any>>({});
+  const [ownedNftContext, setOwnedNftContext] = useState<{ chainId?: number; contractAddress?: string } | null>(null);
 
   const linkedWallet = session?.user?.walletAddress;
 
@@ -46,60 +47,68 @@ export default function CharacterCreationPage() {
     }
   };
 
-  const refreshMyCharacters = async () => {
-    setMyCharactersLoading(true);
+  const loadMetadataFromTokenUri = async (tokenUri: string) => {
+    if (!tokenUri || typeof tokenUri !== 'string') return null;
+    if (tokenUri.startsWith('data:application/json;base64,')) {
+      const b64 = tokenUri.replace('data:application/json;base64,', '');
+      const jsonStr = atob(b64);
+      return JSON.parse(jsonStr);
+    }
+    const m = await fetch(tokenUri);
+    if (!m.ok) return null;
+    return await m.json();
+  };
+
+  const refreshOwnedNfts = async () => {
+    setOwnedNftsLoading(true);
     try {
-      const res = await fetch('/api/character/me');
+      const res = await fetch('/api/nft/character/owned');
       const json = await safeReadJson(res);
-      if (!res.ok || !Array.isArray(json)) {
-        setMyCharacters([]);
-        setMyNftMetaByCharacterId({});
+      const items = (json as any)?.items;
+
+      if (!res.ok || !Array.isArray(items)) {
+        setOwnedNfts([]);
+        setNftMetaByTokenId({});
+        setOwnedNftContext(null);
         return;
       }
 
-      setMyCharacters(json);
+      setOwnedNftContext({
+        chainId: typeof (json as any)?.chainId === 'number' ? (json as any).chainId : undefined,
+        contractAddress: typeof (json as any)?.contractAddress === 'string' ? (json as any).contractAddress : undefined,
+      });
 
-      const loadMetadataFromTokenUri = async (tokenUri: string) => {
-        if (!tokenUri || typeof tokenUri !== 'string') return null;
-        if (tokenUri.startsWith('data:application/json;base64,')) {
-          const b64 = tokenUri.replace('data:application/json;base64,', '');
-          const jsonStr = atob(b64);
-          return JSON.parse(jsonStr);
-        }
-        const m = await fetch(tokenUri);
-        if (!m.ok) return null;
-        return await m.json();
-      };
+      setOwnedNfts(items);
 
       const entries = await Promise.all(
-        (json as any[]).map(async (c) => {
-          const id = String(c?.id);
-          const tokenUri = String(c?.nftTokenUri || '');
-          if (!id || !tokenUri) return [id, null] as const;
+        (items as any[]).map(async (it) => {
+          const tokenId = String(it?.tokenId || '');
+          const tokenUri = String(it?.tokenURI || '');
+          if (!tokenId || !tokenUri) return [tokenId, null] as const;
           try {
             const meta = await loadMetadataFromTokenUri(tokenUri);
-            return [id, meta] as const;
+            return [tokenId, meta] as const;
           } catch {
-            return [id, null] as const;
+            return [tokenId, null] as const;
           }
         })
       );
 
       const map: Record<string, any> = {};
-      for (const [id, meta] of entries) {
-        if (id && meta) map[id] = meta;
+      for (const [tokenId, meta] of entries) {
+        if (tokenId && meta) map[tokenId] = meta;
       }
-      setMyNftMetaByCharacterId(map);
+      setNftMetaByTokenId(map);
     } finally {
-      setMyCharactersLoading(false);
+      setOwnedNftsLoading(false);
     }
   };
 
   useEffect(() => {
     if (status !== 'authenticated') return;
-    refreshMyCharacters();
+    refreshOwnedNfts();
 
-    const handler = () => refreshMyCharacters();
+    const handler = () => refreshOwnedNfts();
     window.addEventListener('dolrath:character-created', handler as any);
     return () => window.removeEventListener('dolrath:character-created', handler as any);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -253,6 +262,56 @@ export default function CharacterCreationPage() {
     }
   };
 
+  const burnNftToDeadWallet = async (tokenId: string) => {
+    const burnAddress = process.env.NEXT_PUBLIC_CHARACTER_NFT_BURN_ADDRESS || '0x000000000000000000000000000000000000dEaD';
+    const contractAddress = ownedNftContext?.contractAddress;
+    if (!contractAddress) {
+      throw new Error('Contract address da NFT não disponível. Atualize a lista e tente novamente.');
+    }
+
+    const eth = (window as any)?.ethereum;
+    if (!eth) {
+      throw new Error('MetaMask não encontrada. Instale/ative a extensão para continuar.');
+    }
+
+    const provider = new ethers.BrowserProvider(eth);
+    await provider.send('eth_requestAccounts', []);
+
+    const network = await provider.getNetwork();
+    if (network.chainId !== POLYGON_AMOY_CHAIN_ID_DEC) {
+      try {
+        await provider.send('wallet_switchEthereumChain', [{ chainId: POLYGON_AMOY_CHAIN_ID_HEX }]);
+      } catch (switchErr: any) {
+        if (switchErr?.code === 4902) {
+          await provider.send('wallet_addEthereumChain', [
+            {
+              chainId: POLYGON_AMOY_CHAIN_ID_HEX,
+              chainName: 'Polygon Amoy',
+              nativeCurrency: { name: 'POL', symbol: 'POL', decimals: 18 },
+              rpcUrls: ['https://rpc-amoy.polygon.technology/'],
+              blockExplorerUrls: ['https://amoy.polygonscan.com/'],
+            },
+          ]);
+        } else {
+          throw new Error('Conecte sua MetaMask à rede Polygon Amoy (chainId 80002) para continuar.');
+        }
+      }
+    }
+
+    const providerAfterSwitch = new ethers.BrowserProvider(eth);
+    const signer = await providerAfterSwitch.getSigner();
+    const from = await signer.getAddress();
+
+    const erc721 = new ethers.Contract(
+      contractAddress,
+      ['function transferFrom(address from, address to, uint256 tokenId)'],
+      signer
+    );
+
+    const tx = await erc721.transferFrom(from, burnAddress, BigInt(tokenId));
+    await tx.wait();
+  };
+
   if (status === 'loading') {
     return (
       <div className="min-h-screen bg-background text-text-primary p-8">
@@ -351,6 +410,95 @@ export default function CharacterCreationPage() {
               Você vai assinar uma transação on-chain e pagar gas.
             </p>
           </div>
+
+          {/* Owned NFTs (on-chain) - shown ONLY before paying */}
+          <div className="mt-8 bg-surface/20 backdrop-blur-lg rounded-xl p-6 shadow-2xl border border-white/10">
+            <div className="flex items-center justify-between gap-4 mb-4">
+              <h2 className="text-xl font-bold text-text-primary">Suas NFTs</h2>
+              <button
+                type="button"
+                onClick={refreshOwnedNfts}
+                disabled={ownedNftsLoading}
+                className="px-3 py-2 bg-surface border border-white/20 rounded-lg text-text-secondary hover:text-text-primary disabled:opacity-50"
+              >
+                {ownedNftsLoading ? 'Atualizando...' : 'Atualizar'}
+              </button>
+            </div>
+
+            {ownedNftsLoading ? (
+              <div className="text-text-secondary">Carregando...</div>
+            ) : ownedNfts.length === 0 ? (
+              <div className="text-text-secondary">Nenhuma NFT encontrada na sua carteira.</div>
+            ) : (
+              <div className="divide-y divide-white/10">
+                {ownedNfts.map((it) => {
+                  const tokenId = String(it?.tokenId || '');
+                  const meta = nftMetaByTokenId[tokenId];
+                  const attrs = Array.isArray(meta?.attributes) ? meta.attributes : [];
+                  const getTrait = (t: string) => attrs.find((a: any) => String(a?.trait_type) === t)?.value;
+                  const displayName = String(getTrait('CharacterName') || meta?.name || `NFT #${tokenId}`);
+                  const displayRace = String(getTrait('Race') || '');
+                  const displayClass = String(getTrait('Class') || '');
+                  const displayLevel = String(getTrait('Level') || '');
+                  const characterId = it?.character?.id ? String(it.character.id) : '';
+
+                  return (
+                    <div key={tokenId} className="py-3 flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-full overflow-hidden border border-white/10 bg-background/30 flex-shrink-0">
+                        {meta?.image ? (
+                          <Image
+                            src={String(meta.image)}
+                            alt={displayName}
+                            width={96}
+                            height={96}
+                            unoptimized
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full" />
+                        )}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="text-text-primary font-semibold truncate">{displayName}</div>
+                        <div className="text-xs text-text-secondary truncate">
+                          {displayRace}
+                          {displayRace && displayClass ? ' • ' : ''}
+                          {displayClass}
+                          {displayLevel ? ` • Lv ${displayLevel}` : ''}
+                        </div>
+                        <div className="text-[11px] text-text-secondary truncate">Token ID: {tokenId}</div>
+                      </div>
+
+                      {characterId ? (
+                        <Link
+                          href={`/character/${characterId}`}
+                          className="px-3 py-2 bg-surface border border-white/20 rounded-lg text-text-secondary hover:text-text-primary"
+                        >
+                          Abrir
+                        </Link>
+                      ) : null}
+
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await burnNftToDeadWallet(tokenId);
+                            await refreshOwnedNfts();
+                          } catch (e) {
+                            alert(e instanceof Error ? e.message : 'Erro ao excluir NFT');
+                          }
+                        }}
+                        className="px-3 py-2 bg-surface border border-white/20 rounded-lg text-text-secondary hover:text-text-primary"
+                      >
+                        Excluir
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -439,71 +587,6 @@ export default function CharacterCreationPage() {
           </button>
         </div>
 
-        {/* Existing Characters (compact list) */}
-        <div className="mt-10 bg-surface/20 backdrop-blur-lg rounded-xl p-6 shadow-2xl border border-white/10">
-          <div className="flex items-center justify-between gap-4 mb-4">
-            <h2 className="text-xl font-bold text-text-primary">Seus personagens</h2>
-            <button
-              type="button"
-              onClick={refreshMyCharacters}
-              disabled={myCharactersLoading}
-              className="px-3 py-2 bg-surface border border-white/20 rounded-lg text-text-secondary hover:text-text-primary disabled:opacity-50"
-            >
-              {myCharactersLoading ? 'Atualizando...' : 'Atualizar'}
-            </button>
-          </div>
-
-          {myCharactersLoading ? (
-            <div className="text-text-secondary">Carregando...</div>
-          ) : myCharacters.length === 0 ? (
-            <div className="text-text-secondary">Nenhum personagem encontrado.</div>
-          ) : (
-            <div className="divide-y divide-white/10">
-              {myCharacters.map((c) => {
-                const meta = myNftMetaByCharacterId[String(c.id)];
-                const attrs = Array.isArray(meta?.attributes) ? meta.attributes : [];
-                const getTrait = (t: string) => attrs.find((a: any) => String(a?.trait_type) === t)?.value;
-                const displayName = String(getTrait('CharacterName') || c.name || 'Personagem');
-                const displayRace = String(getTrait('Race') || c.race || '');
-                const displayClass = String(getTrait('Class') || c.class || '');
-                const displayLevel = String(getTrait('Level') || c.level || 1);
-
-                return (
-                  <div key={String(c.id)} className="py-3 flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full overflow-hidden border border-white/10 bg-background/30 flex-shrink-0">
-                      {meta?.image ? (
-                        <Image
-                          src={String(meta.image)}
-                          alt={displayName}
-                          width={96}
-                          height={96}
-                          unoptimized
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full" />
-                      )}
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="text-text-primary font-semibold truncate">{displayName}</div>
-                      <div className="text-xs text-text-secondary truncate">
-                        {displayRace}{displayRace && displayClass ? ' • ' : ''}{displayClass} • Lv {displayLevel}
-                      </div>
-                    </div>
-
-                    <Link
-                      href={`/character/${String(c.id)}`}
-                      className="px-3 py-2 bg-surface border border-white/20 rounded-lg text-text-secondary hover:text-text-primary"
-                    >
-                      Abrir
-                    </Link>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );

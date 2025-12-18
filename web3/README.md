@@ -13,6 +13,7 @@ Create an env file:
 - Compile: `npm run chain:compile`
 - Test: `npm run chain:test`
 - Deploy to Amoy: `npm run chain:deploy:amoy`
+- Deploy Characters NFT (Amoy): `npm run chain:deploy:characters:amoy`
 - Mint (Amoy): set `DOL_TOKEN_ADDRESS`, `DOL_MINT_TO`, `DOL_MINT_AMOUNT` then run `npm run chain:mint:amoy`
 
 ## Contract

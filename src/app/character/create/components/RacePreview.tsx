@@ -72,7 +72,7 @@ export function RacePreview({ race, showStats }: RacePreviewProps) {
 
             {showStats && finalStats && (
               <div className="mt-auto pt-4 border-t border-white/10">
-                <h5 className="text-lg font-bold text-text-primary mb-3">Atributos Base:</h5>
+                <h5 className="text-lg font-bold text-text-primary mb-3">Atributos da Raça:</h5>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                   {Object.entries(finalStats).map(([key, value]) => (
                     <div key={key} className="flex justify-between items-center">
@@ -93,7 +93,7 @@ export function RacePreview({ race, showStats }: RacePreviewProps) {
             transition={{ duration: 0.3 }}
             className="flex-1 flex items-center justify-center text-text-secondary/60 text-center"
           >
-            <p>Selecione uma raça para ver os detalhes e atributos base.</p>
+            <p>Selecione uma raça para ver os detalhes e bônus raciais. Os atributos finais do personagem serão rolados automaticamente mais adiante.</p>
           </motion.div>
         )}
       </AnimatePresence>

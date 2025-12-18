@@ -161,6 +161,14 @@ model Character {
   // On-chain payment for creation (testnet: fixed DOL fee; mainnet: will be oracle-priced)
   creationTxHash String?         @unique
   creationPaidAt DateTime?
+
+  // Character NFT (ERC-721)
+  nftChainId     Int?
+  nftContract    String?
+  nftTokenId     BigInt?
+  nftTokenUri    String?
+  nftMintTxHash  String?         @unique
+  nftMintedAt    DateTime?
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 

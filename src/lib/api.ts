@@ -5,6 +5,9 @@ export async function createCharacter(characterData: {
   distributedPoints?: Record<string, number>;
   avatar?: string;
   creationTxHash?: string;
+  nftMintTxHash?: string;
+  nftTokenId?: string;
+  nftTokenUri?: string;
 }): Promise<any> {
   const response = await fetch('/api/character', {
     method: 'POST',
@@ -18,9 +21,23 @@ export async function createCharacter(characterData: {
   });
 
   if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || 'Failed to create character');
+    const raw = await response.text().catch(() => '');
+    let message = 'Failed to create character';
+    try {
+      const parsed = raw ? JSON.parse(raw) : null;
+      message = parsed?.error || message;
+    } catch {
+      // ignore non-JSON bodies
+      if (raw.trim()) message = raw.trim();
+    }
+    throw new Error(message);
   }
 
-  return response.json();
+  const raw = await response.text().catch(() => '');
+  if (!raw.trim()) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return raw;
+  }
 }

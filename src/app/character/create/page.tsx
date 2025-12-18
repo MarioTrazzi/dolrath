@@ -18,7 +18,7 @@ const POLYGON_AMOY_CHAIN_ID_HEX = '0x13882';
 
 export default function CharacterCreationPage() {
   const { data: session, status, update } = useSession();
-  const { currentStep, creationSteps, nextStep, prevStep, goToStep, resetCreation, creationPaymentTxHash, setCreationPaymentTxHash } = useCharacterCreationStore();
+  const { currentStep, creationSteps, nextStep, prevStep, goToStep, creationPaymentTxHash, setCreationPaymentTxHash } = useCharacterCreationStore();
   const [isLinkingWallet, setIsLinkingWallet] = useState(false);
   const [walletError, setWalletError] = useState<string>('');
   const [isPaying, setIsPaying] = useState(false);
@@ -29,11 +29,6 @@ export default function CharacterCreationPage() {
   const tokenAddress = process.env.NEXT_PUBLIC_DOL_TOKEN_ADDRESS || '';
   const treasuryAddress = process.env.NEXT_PUBLIC_DOL_TREASURY_ADDRESS || '';
   const creationCostDol = process.env.NEXT_PUBLIC_CHARACTER_CREATION_COST_DOL || '2';
-
-  // Reset creation state when component mounts
-  useEffect(() => {
-    resetCreation();
-  }, [resetCreation]);
 
   // Dynamically assign components to steps
   useEffect(() => {

@@ -27,6 +27,8 @@ export function NameConfirmStep() {
     contractAddress: string;
     tokenId: string;
     tokenURI: string;
+    mintTxHash?: string;
+    mintedAt?: string;
     metadata: any;
   }>(null);
 
@@ -41,6 +43,23 @@ export function NameConfirmStep() {
     } catch {
       return { _raw: raw };
     }
+  };
+
+  const recoverExistingCharacterId = async (opts: { creationTxHash?: string; nftMintTxHash?: string }) => {
+    const res = await fetch('/api/character', { method: 'GET' });
+    const json = await safeReadJson(res);
+    if (!res.ok || !Array.isArray(json)) return null;
+
+    const creationLc = (opts.creationTxHash || '').toLowerCase();
+    const mintLc = (opts.nftMintTxHash || '').toLowerCase();
+
+    const match = (json as any[]).find((c) => {
+      const cCreation = String(c?.creationTxHash || '').toLowerCase();
+      const cMint = String(c?.nftMintTxHash || '').toLowerCase();
+      return (creationLc && cCreation === creationLc) || (mintLc && cMint === mintLc);
+    });
+
+    return match?.id ? String(match.id) : null;
   };
   
   useEffect(() => {
@@ -75,6 +94,7 @@ export function NameConfirmStep() {
     
     setIsCreating(true);
     try {
+      let mintTxHashForRecovery: string | null = null;
       if (!creationPaymentTxHash) {
         throw new Error('Pagamento necessário para criar o personagem');
       }
@@ -175,7 +195,19 @@ export function NameConfirmStep() {
       );
 
       const mintTx = await nftContract.mintWithSig(to, tokenURI, deadline, signature);
+      mintTxHashForRecovery = String(mintTx.hash);
       const mintReceipt = await mintTx.wait();
+
+      let mintedAtIso: string | undefined;
+      try {
+        const block = await providerAfterSwitch.getBlock(mintReceipt.blockNumber);
+        const ts = (block as any)?.timestamp;
+        if (typeof ts === 'number' && Number.isFinite(ts)) {
+          mintedAtIso = new Date(ts * 1000).toISOString();
+        }
+      } catch {
+        // optional
+      }
 
       const transferTopic = ethers.id('Transfer(address,address,uint256)');
       const contractLc = contractAddress.toLowerCase();
@@ -222,7 +254,26 @@ export function NameConfirmStep() {
         nftTokenUri: onchainTokenUri,
       };
 
-      const character = await createCharacter(characterData);
+      let character: any = null;
+      try {
+        character = await createCharacter(characterData);
+      } catch (e: any) {
+        const msg = String(e?.message || e || '');
+        // If the user already paid/minted, try to recover the existing character instead of getting stuck.
+        if (msg.includes('Pagamento já utilizado')) {
+          const recoveredId = await recoverExistingCharacterId({
+            creationTxHash: creationPaymentTxHash,
+            nftMintTxHash: mintTxHashForRecovery || undefined,
+          });
+          if (recoveredId) {
+            character = { id: recoveredId, alreadyExisted: true };
+          } else {
+            throw e;
+          }
+        } else {
+          throw e;
+        }
+      }
 
       if (!character?.id) {
         throw new Error('Falha ao criar personagem: resposta inválida do servidor');
@@ -248,6 +299,8 @@ export function NameConfirmStep() {
           contractAddress,
           tokenId: mintedTokenId.toString(),
           tokenURI: onchainTokenUri,
+          mintTxHash: String(mintTx.hash),
+          mintedAt: mintedAtIso,
           metadata,
         });
       } finally {
@@ -375,13 +428,29 @@ export function NameConfirmStep() {
                   ) : (
                     <div className="text-text-secondary">Sem imagem na metadata.</div>
                   )}
+
+                  {(nftData.metadata?.name || nftData.metadata?.description) && (
+                    <div className="mt-4">
+                      {nftData.metadata?.name && (
+                        <div className="text-text-primary font-semibold">
+                          {String(nftData.metadata.name)}
+                        </div>
+                      )}
+                      {nftData.metadata?.description && (
+                        <div className="text-sm text-text-secondary mt-1">
+                          {String(nftData.metadata.description)}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="bg-background/40 border border-white/10 rounded-lg p-4">
                   <div className="text-xs text-text-secondary mb-2">Dados on-chain</div>
                   <div className="text-sm text-text-secondary space-y-2">
                     <div>
-                      <span className="text-text-primary font-semibold">Contract:</span> {nftData.contractAddress}
+                      <span className="text-text-primary font-semibold">Contract:</span>{' '}
+                      <span className="break-all">{nftData.contractAddress}</span>
                     </div>
                     <div>
                       <span className="text-text-primary font-semibold">Token ID:</span> {nftData.tokenId}
@@ -389,19 +458,47 @@ export function NameConfirmStep() {
                     <div>
                       <span className="text-text-primary font-semibold">Chain ID:</span> {nftData.chainId}
                     </div>
+                    {nftData.mintTxHash && (
+                      <div>
+                        <span className="text-text-primary font-semibold">Mint Tx:</span>{' '}
+                        <span className="break-all">{nftData.mintTxHash}</span>
+                      </div>
+                    )}
+                    {nftData.mintedAt && (
+                      <div>
+                        <span className="text-text-primary font-semibold">Minted At:</span>{' '}
+                        {new Date(nftData.mintedAt).toLocaleString()}
+                      </div>
+                    )}
                   </div>
 
                   <div className="mt-4">
                     <div className="text-xs text-text-secondary mb-2">Stats (da NFT)</div>
                     <div className="grid grid-cols-2 gap-2">
-                      {(Array.isArray(nftData.metadata?.attributes) ? nftData.metadata.attributes : [])
-                        .filter((a: any) => ['STR', 'AGI', 'INT', 'DEF', 'Level', 'Race', 'Class'].includes(String(a?.trait_type)))
-                        .map((a: any, idx: number) => (
-                          <div key={idx} className="flex items-center justify-between bg-surface/50 border border-white/10 rounded-md px-3 py-2">
-                            <span className="text-text-secondary text-sm">{String(a.trait_type)}</span>
-                            <span className="text-text-primary font-bold">{String(a.value)}</span>
-                          </div>
-                        ))}
+                      {(() => {
+                        const attributes = Array.isArray(nftData.metadata?.attributes)
+                          ? (nftData.metadata.attributes as any[])
+                          : [];
+
+                        const order = ['Race', 'Class', 'Level', 'STR', 'AGI', 'INT', 'DEF'];
+                        const byTrait: Record<string, any> = {};
+                        for (const a of attributes) {
+                          const t = String(a?.trait_type || '');
+                          if (order.includes(t)) byTrait[t] = a;
+                        }
+
+                        return order
+                          .filter((t) => byTrait[t])
+                          .map((t, idx) => {
+                            const a = byTrait[t];
+                            return (
+                              <div key={idx} className="flex items-center justify-between bg-surface/50 border border-white/10 rounded-md px-3 py-2">
+                                <span className="text-text-secondary text-sm">{t}</span>
+                                <span className="text-text-primary font-bold">{String(a.value)}</span>
+                              </div>
+                            );
+                          });
+                      })()}
                     </div>
                   </div>
                 </div>

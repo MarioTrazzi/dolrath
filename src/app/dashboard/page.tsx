@@ -14,6 +14,7 @@ import CharacterStats from '@/components/CharacterStats';
 import { Character } from '@/types/game';
 import { getRaceById, getClassById } from '@/lib/gameData';
 import { ethers } from 'ethers';
+import Image from 'next/image';
 // ...existing code...
 // ...existing code...
 
@@ -22,6 +23,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const [characters, setCharacters] = useState<Character[]>([]);
   const [characterDetails, setCharacterDetails] = useState<any[]>([]);
+  const [nftMetaByCharacterId, setNftMetaByCharacterId] = useState<Record<string, any>>({});
   const [loadingCharacter, setLoadingCharacter] = useState<boolean>(true);
   const [dolLoading, setDolLoading] = useState<boolean>(false);
   const [dolBalance, setDolBalance] = useState<string | null>(null);
@@ -136,9 +138,43 @@ export default function DashboardPage() {
             classObj: getClassById(typeof char.class === 'string' ? char.class : char.class.id)
           }))
         );
+
+        // Load NFT metadata (tokenURI) for display (image/race/class/etc)
+        const loadMetadataFromTokenUri = async (tokenUri: string) => {
+          if (!tokenUri || typeof tokenUri !== 'string') return null;
+          if (tokenUri.startsWith('data:application/json;base64,')) {
+            const b64 = tokenUri.replace('data:application/json;base64,', '');
+            const jsonStr = atob(b64);
+            return JSON.parse(jsonStr);
+          }
+          const res = await fetch(tokenUri);
+          if (!res.ok) return null;
+          return await res.json();
+        };
+
+        const entries = await Promise.all(
+          (charList as any[]).map(async (c) => {
+            const id = String(c?.id);
+            const tokenUri = String(c?.nftTokenUri || '');
+            if (!id || !tokenUri) return [id, null] as const;
+            try {
+              const meta = await loadMetadataFromTokenUri(tokenUri);
+              return [id, meta] as const;
+            } catch {
+              return [id, null] as const;
+            }
+          })
+        );
+
+        const map: Record<string, any> = {};
+        for (const [id, meta] of entries) {
+          if (id && meta) map[id] = meta;
+        }
+        setNftMetaByCharacterId(map);
       } else {
         setCharacters([]);
         setCharacterDetails([]);
+        setNftMetaByCharacterId({});
       }
     } finally {
       setLoadingCharacter(false);
@@ -288,23 +324,95 @@ export default function DashboardPage() {
                 <div className="flex flex-col md:flex-row w-full gap-8">
                   {/* Character Picture */}
                   <div className="flex-shrink-0 flex justify-center md:justify-start items-center">
-                    <div className="w-32 h-32 rounded-full flex items-center justify-center bg-gradient-to-br from-primary to-primary-dark text-5xl text-white border-4 border-primary shadow-lg">
-                      <User className="w-16 h-16" />
-                    </div>
+                    {nftMetaByCharacterId[String(character.id)]?.image ? (
+                      <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-primary shadow-lg bg-surface/40">
+                        <Image
+                          src={String(nftMetaByCharacterId[String(character.id)].image)}
+                          alt={String(nftMetaByCharacterId[String(character.id)]?.name || character.name || 'NFT')}
+                          width={256}
+                          height={256}
+                          unoptimized
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-32 h-32 rounded-full flex items-center justify-center bg-gradient-to-br from-primary to-primary-dark text-5xl text-white border-4 border-primary shadow-lg">
+                        <User className="w-16 h-16" />
+                      </div>
+                    )}
                   </div>
                   {/* Character Info */}
                   <div className="flex-1 text-center md:text-left">
-                    <h3 className="text-3xl font-bold text-text-primary mb-1">
-                      {character.name}
-                    </h3>
-                    <div className="flex flex-col sm:flex-row gap-2 items-center justify-center md:justify-start mb-2">
-                      <span className="text-base font-semibold text-primary bg-surface/70 rounded px-3 py-1">
-                        {raceObj?.name}
-                      </span>
-                      <span className="text-base font-semibold text-primary bg-surface/70 rounded px-3 py-1">
-                        {classObj?.name}
-                      </span>
-                    </div>
+                    {(() => {
+                      const meta = nftMetaByCharacterId[String(character.id)];
+                      const attrs = Array.isArray(meta?.attributes) ? meta.attributes : [];
+                      const getTrait = (traitType: string) =>
+                        attrs.find((a: any) => String(a?.trait_type) === traitType)?.value;
+
+                      const orderedTraits = [
+                        { label: 'Race', value: getTrait('Race') || raceObj?.name },
+                        { label: 'Class', value: getTrait('Class') || classObj?.name },
+                        { label: 'Level', value: getTrait('Level') || character.level },
+                        { label: 'STR', value: getTrait('STR') },
+                        { label: 'AGI', value: getTrait('AGI') },
+                        { label: 'INT', value: getTrait('INT') },
+                        { label: 'DEF', value: getTrait('DEF') },
+                      ].filter((t) => t.value !== undefined && t.value !== null && String(t.value) !== '');
+
+                      return (
+                        <>
+                          <h3 className="text-3xl font-bold text-text-primary mb-1">
+                            {String(getTrait('CharacterName') || character.name)}
+                          </h3>
+
+                          {meta?.name && (
+                            <div className="text-text-secondary text-sm mb-1">{String(meta.name)}</div>
+                          )}
+                          {meta?.description && (
+                            <div className="text-text-secondary text-sm mb-3">{String(meta.description)}</div>
+                          )}
+
+                          <div className="flex flex-col sm:flex-row gap-2 items-center justify-center md:justify-start mb-3">
+                            <span className="text-base font-semibold text-primary bg-surface/70 rounded px-3 py-1">
+                              {String(getTrait('Race') || raceObj?.name || '')}
+                            </span>
+                            <span className="text-base font-semibold text-primary bg-surface/70 rounded px-3 py-1">
+                              {String(getTrait('Class') || classObj?.name || '')}
+                            </span>
+                            <span className="text-base font-semibold text-primary bg-surface/70 rounded px-3 py-1">
+                              Lv {String(getTrait('Level') || character.level || 1)}
+                            </span>
+                          </div>
+
+                          {orderedTraits.length > 0 && (
+                            <div className="mb-4">
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                {orderedTraits.map((t) => (
+                                  <div
+                                    key={t.label}
+                                    className="bg-surface/60 rounded px-3 py-2 border border-border/40"
+                                  >
+                                    <div className="text-xs text-text-secondary">{t.label}</div>
+                                    <div className="text-sm font-semibold text-text-primary truncate">
+                                      {String(t.value)}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {(character.nftTokenUri || meta) && (
+                            <div className="mb-4">
+                              <div className="text-xs text-text-secondary">TokenURI</div>
+                              <div className="text-xs text-text-primary break-all">
+                                {String(character.nftTokenUri || '')}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                     <div className="flex flex-col md:flex-row gap-2 mb-4">
                       <Link href={`/character/${character.id}`} passHref>
                         <Button variant="outline" size="sm">

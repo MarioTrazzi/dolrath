@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
-import { buildCharacterNftTokenUri } from '@/lib/characterNftMetadata'
 import { signMintRequest } from '@/lib/characterNftSigning'
 import { getCharacterNftChainId, getCharacterNftContractAddress } from '@/lib/characterNftOnchain'
 import crypto from 'node:crypto'
@@ -32,8 +31,6 @@ export async function POST(req: Request) {
     const int = Number(body?.distributedPoints?.int ?? 0)
     const def = Number(body?.distributedPoints?.def ?? body?.distributedPoints?.res ?? 0)
 
-    const avatarUrl = typeof body.avatar === 'string' ? body.avatar.trim() : null
-
     if (!name || !raceId || !classId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
@@ -64,14 +61,10 @@ export async function POST(req: Request) {
     // Make tokenURI unique per mint to avoid collisions / retries reverting with AlreadyMinted().
     const mintNonce = crypto.randomUUID()
 
-    const { tokenURI } = buildCharacterNftTokenUri({
-      name,
-      raceId,
-      classId,
-      avatarUrl,
-      stats: { str, agi, int, def },
-      mintNonce,
-    })
+    // Dynamic tokenURI (metadata served by the app). This lets the NFT reflect
+    // future level/stat changes without requiring an on-chain tokenURI update.
+    const origin = new URL(req.url).origin
+    const tokenURI = `${origin}/api/nft/character/metadata?nonce=${mintNonce}`
 
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 10 * 60)
 

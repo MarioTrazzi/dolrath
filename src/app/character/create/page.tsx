@@ -30,6 +30,7 @@ export default function CharacterCreationPage() {
   const [ownedNftsLoading, setOwnedNftsLoading] = useState<boolean>(false);
   const [nftMetaByTokenId, setNftMetaByTokenId] = useState<Record<string, any>>({});
   const [ownedNftContext, setOwnedNftContext] = useState<{ chainId?: number; contractAddress?: string } | null>(null);
+  const [ownedNftsError, setOwnedNftsError] = useState<string>('');
 
   const linkedWallet = session?.user?.walletAddress;
 
@@ -61,12 +62,15 @@ export default function CharacterCreationPage() {
 
   const refreshOwnedNfts = async () => {
     setOwnedNftsLoading(true);
+    setOwnedNftsError('');
     try {
       const res = await fetch('/api/nft/character/owned');
       const json = await safeReadJson(res);
       const items = (json as any)?.items;
 
       if (!res.ok || !Array.isArray(items)) {
+        const msg = typeof (json as any)?.error === 'string' ? (json as any).error : '';
+        if (msg) setOwnedNftsError(msg);
         setOwnedNfts([]);
         setNftMetaByTokenId({});
         setOwnedNftContext(null);
@@ -424,6 +428,10 @@ export default function CharacterCreationPage() {
                 {ownedNftsLoading ? 'Atualizando...' : 'Atualizar'}
               </button>
             </div>
+
+              {ownedNftsError ? (
+                <div className="text-xs text-error mb-3">{ownedNftsError}</div>
+              ) : null}
 
             {ownedNftsLoading ? (
               <div className="text-text-secondary">Carregando...</div>

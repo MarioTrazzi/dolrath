@@ -7,13 +7,11 @@ import { CharacterSummary } from './CharacterSummary';
 import { createCharacter } from '@/lib/api';
 import { useCharacterCreationStore } from '@/lib/stores/characterCreationStore';
 import { cn } from '@/lib/utils';
-import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { ethers } from 'ethers';
 import Image from 'next/image';
 
 export function NameConfirmStep() {
-  const router = useRouter();
   const { data: session } = useSession();
   const { selectedRace, selectedClass, distributedPoints, selectedImage, characterName, creationPaymentTxHash, setCharacterName, markStepComplete, resetCreation } = useCharacterCreationStore();
   const [isCreating, setIsCreating] = useState(false);
@@ -21,7 +19,6 @@ export function NameConfirmStep() {
 
   const [nftDialogOpen, setNftDialogOpen] = useState(false);
   const [nftDialogLoading, setNftDialogLoading] = useState(false);
-  const [mintedCharacterId, setMintedCharacterId] = useState<string | null>(null);
   const [nftData, setNftData] = useState<null | {
     chainId: number;
     contractAddress: string;
@@ -280,7 +277,6 @@ export function NameConfirmStep() {
       }
 
       // 4) Dialog: load from the NFT tokenURI (not from DB)
-      setMintedCharacterId(String(character.id));
       setNftDialogOpen(true);
       setNftDialogLoading(true);
       try {
@@ -307,8 +303,16 @@ export function NameConfirmStep() {
         setNftDialogLoading(false);
       }
 
-      // Reset the creation state, but keep the dialog visible.
-      resetCreation();
+      // Notify parent pages (e.g. creation page list) to refresh.
+      try {
+        window.dispatchEvent(
+          new CustomEvent('dolrath:character-created', {
+            detail: { characterId: String(character.id) },
+          })
+        );
+      } catch {
+        // ignore
+      }
     } catch (error) {
       setNameError(error instanceof Error ? error.message : 'Erro desconhecido ao criar personagem');
     } finally {
@@ -402,11 +406,11 @@ export function NameConfirmStep() {
                 type="button"
                 onClick={() => {
                   setNftDialogOpen(false);
-                  if (mintedCharacterId) router.push(`/character/${mintedCharacterId}`);
+                  resetCreation();
                 }}
                 className="px-4 py-2 bg-surface border border-white/20 rounded-lg text-text-secondary hover:text-text-primary transition-colors"
               >
-                Continuar
+                Fechar
               </button>
             </div>
 

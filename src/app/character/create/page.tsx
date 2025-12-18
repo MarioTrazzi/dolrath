@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useCharacterCreationStore } from '@/lib/stores/characterCreationStore';
 import { RaceSelectionStep } from './components/RaceSelectionStep';
 import { ClassSelectionStep } from './components/ClassSelectionStep';
@@ -12,6 +12,8 @@ import { ArrowLeft, ArrowRight, CheckCircle, Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSession, signIn } from 'next-auth/react';
 import { ethers } from 'ethers';
+import Link from 'next/link';
+import Image from 'next/image';
 
 const POLYGON_AMOY_CHAIN_ID_DEC = 80002n;
 const POLYGON_AMOY_CHAIN_ID_HEX = '0x13882';
@@ -24,11 +26,84 @@ export default function CharacterCreationPage() {
   const [isPaying, setIsPaying] = useState(false);
   const [paymentError, setPaymentError] = useState<string>('');
 
+  const [myCharacters, setMyCharacters] = useState<any[]>([]);
+  const [myCharactersLoading, setMyCharactersLoading] = useState<boolean>(false);
+  const [myNftMetaByCharacterId, setMyNftMetaByCharacterId] = useState<Record<string, any>>({});
+
   const linkedWallet = session?.user?.walletAddress;
 
   const tokenAddress = process.env.NEXT_PUBLIC_DOL_TOKEN_ADDRESS || '';
   const treasuryAddress = process.env.NEXT_PUBLIC_DOL_TREASURY_ADDRESS || '';
   const creationCostDol = process.env.NEXT_PUBLIC_CHARACTER_CREATION_COST_DOL || '2';
+
+  const safeReadJson = async (res: Response) => {
+    const raw = await res.text().catch(() => '');
+    if (!raw.trim()) return null;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  };
+
+  const refreshMyCharacters = async () => {
+    setMyCharactersLoading(true);
+    try {
+      const res = await fetch('/api/character/me');
+      const json = await safeReadJson(res);
+      if (!res.ok || !Array.isArray(json)) {
+        setMyCharacters([]);
+        setMyNftMetaByCharacterId({});
+        return;
+      }
+
+      setMyCharacters(json);
+
+      const loadMetadataFromTokenUri = async (tokenUri: string) => {
+        if (!tokenUri || typeof tokenUri !== 'string') return null;
+        if (tokenUri.startsWith('data:application/json;base64,')) {
+          const b64 = tokenUri.replace('data:application/json;base64,', '');
+          const jsonStr = atob(b64);
+          return JSON.parse(jsonStr);
+        }
+        const m = await fetch(tokenUri);
+        if (!m.ok) return null;
+        return await m.json();
+      };
+
+      const entries = await Promise.all(
+        (json as any[]).map(async (c) => {
+          const id = String(c?.id);
+          const tokenUri = String(c?.nftTokenUri || '');
+          if (!id || !tokenUri) return [id, null] as const;
+          try {
+            const meta = await loadMetadataFromTokenUri(tokenUri);
+            return [id, meta] as const;
+          } catch {
+            return [id, null] as const;
+          }
+        })
+      );
+
+      const map: Record<string, any> = {};
+      for (const [id, meta] of entries) {
+        if (id && meta) map[id] = meta;
+      }
+      setMyNftMetaByCharacterId(map);
+    } finally {
+      setMyCharactersLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    refreshMyCharacters();
+
+    const handler = () => refreshMyCharacters();
+    window.addEventListener('dolrath:character-created', handler as any);
+    return () => window.removeEventListener('dolrath:character-created', handler as any);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
 
   // Dynamically assign components to steps
   useEffect(() => {
@@ -120,7 +195,6 @@ export default function CharacterCreationPage() {
 
       const provider = new ethers.BrowserProvider(eth);
       await provider.send('eth_requestAccounts', []);
-      const signer = await provider.getSigner();
 
       // Ensure the wallet is on Polygon Amoy. If not, try to switch (or add) the chain.
       const network = await provider.getNetwork();
@@ -363,6 +437,72 @@ export default function CharacterCreationPage() {
             Próximo
             <ArrowRight className="w-5 h-5" />
           </button>
+        </div>
+
+        {/* Existing Characters (compact list) */}
+        <div className="mt-10 bg-surface/20 backdrop-blur-lg rounded-xl p-6 shadow-2xl border border-white/10">
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <h2 className="text-xl font-bold text-text-primary">Seus personagens</h2>
+            <button
+              type="button"
+              onClick={refreshMyCharacters}
+              disabled={myCharactersLoading}
+              className="px-3 py-2 bg-surface border border-white/20 rounded-lg text-text-secondary hover:text-text-primary disabled:opacity-50"
+            >
+              {myCharactersLoading ? 'Atualizando...' : 'Atualizar'}
+            </button>
+          </div>
+
+          {myCharactersLoading ? (
+            <div className="text-text-secondary">Carregando...</div>
+          ) : myCharacters.length === 0 ? (
+            <div className="text-text-secondary">Nenhum personagem encontrado.</div>
+          ) : (
+            <div className="divide-y divide-white/10">
+              {myCharacters.map((c) => {
+                const meta = myNftMetaByCharacterId[String(c.id)];
+                const attrs = Array.isArray(meta?.attributes) ? meta.attributes : [];
+                const getTrait = (t: string) => attrs.find((a: any) => String(a?.trait_type) === t)?.value;
+                const displayName = String(getTrait('CharacterName') || c.name || 'Personagem');
+                const displayRace = String(getTrait('Race') || c.race || '');
+                const displayClass = String(getTrait('Class') || c.class || '');
+                const displayLevel = String(getTrait('Level') || c.level || 1);
+
+                return (
+                  <div key={String(c.id)} className="py-3 flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-full overflow-hidden border border-white/10 bg-background/30 flex-shrink-0">
+                      {meta?.image ? (
+                        <Image
+                          src={String(meta.image)}
+                          alt={displayName}
+                          width={96}
+                          height={96}
+                          unoptimized
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full" />
+                      )}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="text-text-primary font-semibold truncate">{displayName}</div>
+                      <div className="text-xs text-text-secondary truncate">
+                        {displayRace}{displayRace && displayClass ? ' • ' : ''}{displayClass} • Lv {displayLevel}
+                      </div>
+                    </div>
+
+                    <Link
+                      href={`/character/${String(c.id)}`}
+                      className="px-3 py-2 bg-surface border border-white/20 rounded-lg text-text-secondary hover:text-text-primary"
+                    >
+                      Abrir
+                    </Link>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>

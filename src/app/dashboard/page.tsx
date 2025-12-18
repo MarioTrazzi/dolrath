@@ -27,6 +27,7 @@ export default function DashboardPage() {
   const [ownedNfts, setOwnedNfts] = useState<any[]>([]);
   const [nftMetaByTokenId, setNftMetaByTokenId] = useState<Record<string, any>>({});
   const [ownedNftContext, setOwnedNftContext] = useState<{ chainId?: number; contractAddress?: string } | null>(null);
+  const [ownedNftsError, setOwnedNftsError] = useState<string>('');
   const [loadingCharacter, setLoadingCharacter] = useState<boolean>(true);
   const [dolLoading, setDolLoading] = useState<boolean>(false);
   const [dolBalance, setDolBalance] = useState<string | null>(null);
@@ -135,6 +136,14 @@ export default function DashboardPage() {
     try {
       const response = await fetch('/api/nft/character/owned');
       if (!response.ok) {
+        let msg = '';
+        try {
+          const j = await response.json();
+          msg = typeof j?.error === 'string' ? j.error : '';
+        } catch {
+          // ignore
+        }
+        setOwnedNftsError(msg || 'Falha ao carregar NFTs.');
         setOwnedNfts([]);
         setOwnedNftContext(null);
         setNftMetaByTokenId({});
@@ -145,6 +154,7 @@ export default function DashboardPage() {
       }
 
       const payload = await response.json();
+      setOwnedNftsError('');
       const items = Array.isArray(payload?.items) ? payload.items : [];
 
       setOwnedNfts(items);
@@ -384,6 +394,10 @@ export default function DashboardPage() {
               Atualizar
             </Button>
           </div>
+
+          {ownedNftsError ? (
+            <div className="text-xs text-error mb-3">{ownedNftsError}</div>
+          ) : null}
 
           {ownedNfts.length === 0 ? (
             <div className="text-text-secondary text-sm">Nenhuma NFT encontrada na sua carteira.</div>

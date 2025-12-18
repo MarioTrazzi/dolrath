@@ -6,6 +6,9 @@ import { getCharacterNftContractAddress, getCharacterNftProvider } from '@/lib/c
 import { DOLRATH_CHARACTERS_ABI } from '@/lib/characterNftSigning'
 import { getLevelInfo } from '@/lib/experienceSystem'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 function serializeBigInt(value: unknown): unknown {
   if (typeof value === 'bigint') return value.toString()
   if (Array.isArray(value)) return value.map(serializeBigInt)
@@ -52,29 +55,49 @@ export async function GET() {
   const toTopic = ethers.zeroPadValue(ethers.getAddress(walletAddress), 32)
 
   const latest = await provider.getBlockNumber()
-  const chunkSize = 50_000
+  const configuredChunkSize = Number(process.env.CHARACTER_NFT_LOG_CHUNK_SIZE || 10_000)
+  let chunkSize = Number.isFinite(configuredChunkSize) && configuredChunkSize > 0 ? configuredChunkSize : 10_000
+  chunkSize = Math.max(1000, Math.min(chunkSize, 100_000))
+
+  let logScanHadErrors = false
 
   const tokenIdSet = new Set<string>()
 
-  for (let fromBlock = startBlock; fromBlock <= latest; fromBlock += chunkSize) {
+  let fromBlock = startBlock
+  while (fromBlock <= latest) {
     const toBlock = Math.min(latest, fromBlock + chunkSize - 1)
 
-    const logs = await provider.getLogs({
-      address: contractAddress,
-      fromBlock,
-      toBlock,
-      topics: [transferTopic, null, toTopic],
-    })
+    try {
+      const logs = await provider.getLogs({
+        address: contractAddress,
+        fromBlock,
+        toBlock,
+        topics: [transferTopic, null, toTopic],
+      })
 
-    for (const log of logs) {
-      if (!log.topics || log.topics.length < 4) continue
-      const tokenIdHex = log.topics[3]
-      try {
-        const tokenId = BigInt(tokenIdHex)
-        tokenIdSet.add(tokenId.toString())
-      } catch {
-        // ignore
+      for (const log of logs) {
+        if (!log.topics || log.topics.length < 4) continue
+        const tokenIdHex = log.topics[3]
+        try {
+          const tokenId = BigInt(tokenIdHex)
+          tokenIdSet.add(tokenId.toString())
+        } catch {
+          // ignore
+        }
       }
+
+      fromBlock = toBlock + 1
+    } catch {
+      logScanHadErrors = true
+
+      // Adaptively reduce chunk size on RPC timeouts/rate limits.
+      if (chunkSize > 2000) {
+        chunkSize = Math.max(2000, Math.floor(chunkSize / 2))
+        continue
+      }
+
+      // Give up scanning further; we'll return whatever we found so far.
+      break
     }
   }
 
@@ -112,14 +135,20 @@ export async function GET() {
     }
   }).filter(Boolean) as bigint[]
 
-  const dbCharacters = tokenIdBigints.length
-    ? await prisma.character.findMany({
+  let dbCharacters: any[] = []
+  if (tokenIdBigints.length) {
+    try {
+      dbCharacters = await prisma.character.findMany({
         where: {
           userId: session.user.id,
           nftTokenId: { in: tokenIdBigints },
         },
       })
-    : []
+    } catch {
+      // DB is optional here; NFTs should still be returned even if Neon/Prisma is down.
+      dbCharacters = []
+    }
+  }
 
   const byTokenId = new Map<string, any>()
   for (const c of dbCharacters) {
@@ -147,6 +176,7 @@ export async function GET() {
       chainId: Number(process.env.CHARACTER_NFT_CHAIN_ID || 80002),
       contractAddress,
       owner: walletAddress,
+      scanErrors: logScanHadErrors,
       items: owned.map((o) => ({
         tokenId: o.tokenId,
         tokenURI: o.tokenURI,

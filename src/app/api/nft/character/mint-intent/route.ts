@@ -3,6 +3,7 @@ import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { buildCharacterNftTokenUri } from '@/lib/characterNftMetadata'
 import { signMintRequest } from '@/lib/characterNftSigning'
 import { getCharacterNftChainId, getCharacterNftContractAddress } from '@/lib/characterNftOnchain'
+import crypto from 'node:crypto'
 
 export async function POST(req: Request) {
   try {
@@ -60,12 +61,16 @@ export async function POST(req: Request) {
 
     const chainId = getCharacterNftChainId()
 
+    // Make tokenURI unique per mint to avoid collisions / retries reverting with AlreadyMinted().
+    const mintNonce = crypto.randomUUID()
+
     const { tokenURI } = buildCharacterNftTokenUri({
       name,
       raceId,
       classId,
       avatarUrl,
       stats: { str, agi, int, def },
+      mintNonce,
     })
 
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 10 * 60)

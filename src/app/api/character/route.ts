@@ -4,6 +4,8 @@ import { NextResponse } from 'next/server'
 import { recordCharacterCreated } from '@/lib/characterHistory'
 import { RACES, CLASSES, getRaceById, getClassById } from '@/lib/gameData'
 import { verifyDolTransferTx } from '@/lib/dolPayments'
+import { getCharacterNftChainId, getCharacterNftContractAddress } from '@/lib/characterNftOnchain'
+import { verifyCharacterNftMintTx } from '@/lib/characterNftVerify'
 
 export async function POST(req: Request) {
   const session = await auth()
@@ -76,6 +78,9 @@ export async function POST(req: Request) {
     avatar,
     image,
     creationTxHash,
+    nftMintTxHash,
+    nftTokenId,
+    nftTokenUri,
   } = body
 
   const avatarUrl = (typeof avatar === 'string' && avatar.trim())
@@ -87,6 +92,14 @@ export async function POST(req: Request) {
   const treasuryAddress = (process.env.DOL_TREASURY_ADDRESS || '').trim()
   const creationCostDol = (process.env.CHARACTER_CREATION_COST_DOL || '2').trim()
   const creationTxHashStr = (typeof creationTxHash === 'string' ? creationTxHash : '').trim()
+  const nftMintTxHashStr = (typeof nftMintTxHash === 'string' ? nftMintTxHash : '').trim()
+  const nftTokenUriStr = (typeof nftTokenUri === 'string' ? nftTokenUri : '').trim()
+  const nftTokenIdBigint =
+    typeof nftTokenId === 'string' || typeof nftTokenId === 'number'
+      ? BigInt(nftTokenId)
+      : typeof nftTokenId === 'bigint'
+        ? nftTokenId
+        : null
 
   if (!treasuryAddress) {
     return NextResponse.json(
@@ -111,6 +124,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
+  // If NFT is configured, require a mint tx as part of creation.
+  const nftContract = getCharacterNftContractAddress()
+  const nftChainId = getCharacterNftChainId()
+  if (nftContract) {
+    if (!nftMintTxHashStr || !nftTokenUriStr || nftTokenIdBigint === null) {
+      return NextResponse.json(
+        { error: 'NFT mint required to create character', requiresNftMint: true },
+        { status: 422 }
+      )
+    }
+  }
+
   try {
     // Verify on-chain DOL payment (testnet: fixed amount).
     await verifyDolTransferTx({
@@ -119,6 +144,21 @@ export async function POST(req: Request) {
       expectedTo: treasuryAddress,
       minAmountHuman: creationCostDol,
     })
+
+    // Verify NFT mint tx (user-paid gas)
+    let nftVerified:
+      | { contractAddress: string; tokenId: bigint; tokenURI: string }
+      | null = null
+
+    if (nftContract) {
+      nftVerified = await verifyCharacterNftMintTx({
+        txHash: nftMintTxHashStr,
+        expectedTo: user.walletAddress,
+        expectedContract: nftContract,
+        expectedTokenId: nftTokenIdBigint || undefined,
+        expectedTokenUri: nftTokenUriStr,
+      })
+    }
 
     // 🔥 BUSCAR DADOS DE RAÇA E CLASSE PARA APLICAR BÔNUS
     const raceData = getRaceById(race)
@@ -133,6 +173,28 @@ export async function POST(req: Request) {
     const distributedAgi = Number(distributedPoints?.agi || 0)
     const distributedInt = Number(distributedPoints?.int || 0)
     const distributedDef = Number(distributedPoints?.def || 0)
+
+    // Basic validation (prevents client tampering and keeps balance constraints)
+    const totalDistributed = distributedStr + distributedAgi + distributedInt + distributedDef
+    const maxPerStat = 10
+    const expectedTotal = 15
+    const allInts = [distributedStr, distributedAgi, distributedInt, distributedDef].every((v) => Number.isFinite(v) && Number.isInteger(v))
+    const inRange = [distributedStr, distributedAgi, distributedInt, distributedDef].every((v) => v >= 0 && v <= maxPerStat)
+
+    if (!allInts || !inRange || totalDistributed !== expectedTotal) {
+      return NextResponse.json(
+        {
+          error: 'Invalid distributedPoints',
+          details: {
+            expectedTotal,
+            maxPerStat,
+            received: { str: distributedStr, agi: distributedAgi, int: distributedInt, def: distributedDef },
+            totalDistributed,
+          },
+        },
+        { status: 400 }
+      )
+    }
 
     // 🔥 APLICAR BÔNUS RACIAIS E DE CLASSE
     // Stats base (conversão do sistema antigo para o novo balanceado)
@@ -235,6 +297,12 @@ export async function POST(req: Request) {
         gold: 0,
         creationTxHash: creationTxHashStr,
         creationPaidAt: new Date(),
+        nftChainId: nftVerified ? nftChainId : null,
+        nftContract: nftVerified ? nftVerified.contractAddress : null,
+        nftTokenId: nftVerified ? nftVerified.tokenId : null,
+        nftTokenUri: nftVerified ? nftVerified.tokenURI : null,
+        nftMintTxHash: nftVerified ? nftMintTxHashStr : null,
+        nftMintedAt: nftVerified ? new Date() : null,
         user: {
           connect: {
             id: session.user.id,

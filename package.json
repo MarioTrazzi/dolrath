@@ -20,6 +20,9 @@
     "chain:deploy:local": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network localhost web3/scripts/deploy-dol.ts",
     "chain:deploy:amoy": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network polygonAmoy web3/scripts/deploy-dol.ts",
     "chain:deploy:polygon": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network polygon web3/scripts/deploy-dol.ts",
+    "chain:deploy:characters:local": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network localhost web3/scripts/deploy-characters.ts",
+    "chain:deploy:characters:amoy": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network polygonAmoy web3/scripts/deploy-characters.ts",
+    "chain:deploy:characters:polygon": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network polygon web3/scripts/deploy-characters.ts",
     "chain:mint:amoy": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network polygonAmoy web3/scripts/mint-dol.ts"
   },
   "prisma": {
@@ -65,8 +68,8 @@
     "chai": "^4.5.0",
     "concurrently": "^9.2.1",
     "dotenv": "^16.6.1",
-    "eslint": "^8.0.0",
-    "eslint-config-next": "14.0.0",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "14.2.35",
     "ethers": "^6.15.0",
     "hardhat": "^2.28.0",
     "ts-node": "^10.9.2",

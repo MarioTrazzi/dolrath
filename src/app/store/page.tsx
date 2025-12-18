@@ -358,7 +358,7 @@ export default function Store() {
               <div className="flex flex-wrap gap-2 mt-2">
                 {searchQuery && (
                   <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded">
-                    Busca: "{searchQuery}"
+                    Busca: &quot;{searchQuery}&quot;
                   </span>
                 )}
                 {selectedType !== 'ALL' && (

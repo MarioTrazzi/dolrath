@@ -32,6 +32,7 @@ export default function CharacterDetailsPage() {
   const router = useRouter();
   const { goldBalance, updateGoldBalance } = useGold();
   const [character, setCharacter] = useState<Character | null>(null);
+  const [effectiveCharacterId, setEffectiveCharacterId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [expandingSlots, setExpandingSlots] = useState(false);
   const [equipment, setEquipment] = useState<any[]>([]);
@@ -40,23 +41,31 @@ export default function CharacterDetailsPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        if (!params?.characterId) return;
-        
-        const [characterResponse, inventoryResponse] = await Promise.all([
-          fetch(`/api/character/${params.characterId}`),
-          fetch(`/api/store/inventory?characterId=${params.characterId}`)
-        ]);
+        const raw = Array.isArray((params as any)?.characterId)
+          ? String((params as any).characterId[0] || '')
+          : String((params as any)?.characterId || '');
 
-        if (characterResponse.ok) {
-          const characterData = await characterResponse.json();
-          console.log('Character data:', characterData);
-          console.log('Equipment:', characterData.equipment);
-          setCharacter(characterData);
+        if (!raw) return;
+
+        // First load the character. The API supports either DB id or numeric NFT tokenId.
+        const characterResponse = await fetch(`/api/character/${raw}`);
+        if (!characterResponse.ok) {
+          setCharacter(null);
+          return;
         }
 
-        if (inventoryResponse.ok) {
-          const inventoryData = await inventoryResponse.json();
-          setInventory(inventoryData);
+        const characterData = await characterResponse.json();
+        const resolvedId = String(characterData?.id || '');
+        setEffectiveCharacterId(resolvedId);
+        setCharacter(characterData);
+
+        // Then load inventory using the resolved DB character id.
+        if (resolvedId) {
+          const inventoryResponse = await fetch(`/api/store/inventory?characterId=${resolvedId}`);
+          if (inventoryResponse.ok) {
+            const inventoryData = await inventoryResponse.json();
+            setInventory(inventoryData);
+          }
         }
 
         // Fetch equipment data when implemented
@@ -159,9 +168,9 @@ export default function CharacterDetailsPage() {
 
   const handleEquip = async (itemId: string, slotType: EquipmentSlotType) => {
     try {
-      if (!params?.characterId) return;
+      if (!effectiveCharacterId) return;
       
-      const response = await fetch(`/api/character/${params.characterId}/equip-item`, {
+      const response = await fetch(`/api/character/${effectiveCharacterId}/equip-item`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -173,8 +182,8 @@ export default function CharacterDetailsPage() {
         // Recarregar os dados do personagem e inventário
         console.log('Item equipped successfully');
         const [updatedCharacter, updatedInventory] = await Promise.all([
-          fetch(`/api/character/${params.characterId}`).then(res => res.json()),
-          fetch(`/api/store/inventory?characterId=${params.characterId}`).then(res => res.json())
+          fetch(`/api/character/${effectiveCharacterId}`).then(res => res.json()),
+          fetch(`/api/store/inventory?characterId=${effectiveCharacterId}`).then(res => res.json())
         ]);
         console.log('Updated character after equip:', updatedCharacter);
         console.log('Updated equipment after equip:', updatedCharacter.equipment);
@@ -193,9 +202,9 @@ export default function CharacterDetailsPage() {
 
   const handleUnequip = async (itemId: string) => {
     try {
-      if (!params?.characterId) return;
+      if (!effectiveCharacterId) return;
       
-      const response = await fetch(`/api/character/${params.characterId}/unequip-item`, {
+      const response = await fetch(`/api/character/${effectiveCharacterId}/unequip-item`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -207,8 +216,8 @@ export default function CharacterDetailsPage() {
         console.log('Item unequipped successfully');
         // Refresh data
         const [characterResponse, inventoryResponse] = await Promise.all([
-          fetch(`/api/character/${params.characterId}`),
-          fetch(`/api/store/inventory?characterId=${params.characterId}`)
+          fetch(`/api/character/${effectiveCharacterId}`),
+          fetch(`/api/store/inventory?characterId=${effectiveCharacterId}`)
         ]);
 
         if (characterResponse.ok) {
@@ -229,7 +238,7 @@ export default function CharacterDetailsPage() {
 
   const handleConsume = async (itemId: string) => {
     try {
-      if (!params?.characterId) return;
+      if (!effectiveCharacterId) return;
       
       const response = await fetch('/api/inventory/use-item', {
         method: 'POST',
@@ -238,7 +247,7 @@ export default function CharacterDetailsPage() {
         },
         body: JSON.stringify({ 
           itemId,
-          characterId: params.characterId 
+          characterId: effectiveCharacterId 
         }),
       });
 
@@ -249,8 +258,8 @@ export default function CharacterDetailsPage() {
         
         // Refresh character data and inventory
         const [characterResponse, inventoryResponse] = await Promise.all([
-          fetch(`/api/character/${params.characterId}`),
-          fetch(`/api/store/inventory?characterId=${params.characterId}`)
+          fetch(`/api/character/${effectiveCharacterId}`),
+          fetch(`/api/store/inventory?characterId=${effectiveCharacterId}`)
         ]);
 
         if (characterResponse.ok) {
@@ -260,7 +269,7 @@ export default function CharacterDetailsPage() {
 
         if (inventoryResponse.ok) {
           const inventoryData = await inventoryResponse.json();
-          setInventory(inventoryData.items || []);
+          setInventory(inventoryData);
         }
       } else {
         toast.error(`❌ ${result.error}`);
@@ -283,7 +292,7 @@ export default function CharacterDetailsPage() {
   };
 
   const handleExpandInventory = async () => {
-    if (!character || !params?.characterId) return;
+    if (!character || !effectiveCharacterId) return;
     
     // Calcular custo para 5 slots adicionais
     const slotsToAdd = 5;
@@ -297,7 +306,7 @@ export default function CharacterDetailsPage() {
 
     setExpandingSlots(true);
     try {
-      const response = await fetch(`/api/character/${params.characterId}/expand-inventory`, {
+      const response = await fetch(`/api/character/${effectiveCharacterId}/expand-inventory`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -360,8 +369,8 @@ export default function CharacterDetailsPage() {
                 <button
                   onClick={async () => {
                     try {
-                      if (!params?.characterId) return;
-                      const response = await fetch(`/api/character/${params.characterId}/add-xp`, {
+                      if (!effectiveCharacterId) return;
+                      const response = await fetch(`/api/character/${effectiveCharacterId}/add-xp`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ xp: 100 }),
@@ -370,7 +379,7 @@ export default function CharacterDetailsPage() {
                       if (result.success) {
                         toast.success(result.message);
                         // Recarregar dados do personagem
-                        const updatedResponse = await fetch(`/api/character/${params.characterId}`);
+                        const updatedResponse = await fetch(`/api/character/${effectiveCharacterId}`);
                         if (updatedResponse.ok) {
                           const characterData = await updatedResponse.json();
                           setCharacter(characterData);
@@ -389,8 +398,8 @@ export default function CharacterDetailsPage() {
                 <button
                   onClick={async () => {
                     try {
-                      if (!params?.characterId) return;
-                      const response = await fetch(`/api/character/${params.characterId}/add-xp`, {
+                      if (!effectiveCharacterId) return;
+                      const response = await fetch(`/api/character/${effectiveCharacterId}/add-xp`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ xp: 1000 }),
@@ -399,7 +408,7 @@ export default function CharacterDetailsPage() {
                       if (result.success) {
                         toast.success(result.message);
                         // Recarregar dados do personagem
-                        const updatedResponse = await fetch(`/api/character/${params.characterId}`);
+                        const updatedResponse = await fetch(`/api/character/${effectiveCharacterId}`);
                         if (updatedResponse.ok) {
                           const characterData = await updatedResponse.json();
                           setCharacter(characterData);
@@ -440,7 +449,7 @@ export default function CharacterDetailsPage() {
         {/* Attribute Distribution Panel */}
         {character.availablePoints && character.availablePoints > 0 && (
           <AttributeDistributionPanel
-            characterId={Array.isArray(params?.characterId) ? params.characterId[0] : params?.characterId || ''}
+            characterId={effectiveCharacterId || ''}
             availablePoints={character.availablePoints}
             currentAttributes={{
               str: (character.attributes as any)?.str || (character.baseStats as any)?.str || 0,
@@ -460,8 +469,8 @@ export default function CharacterDetailsPage() {
             }}
             onPointsDistributed={async () => {
               // Recarregar dados do personagem
-              if (!params?.characterId) return;
-              const response = await fetch(`/api/character/${params.characterId}`);
+              if (!effectiveCharacterId) return;
+              const response = await fetch(`/api/character/${effectiveCharacterId}`);
               if (response.ok) {
                 const characterData = await response.json();
                 setCharacter(characterData);
@@ -749,7 +758,7 @@ export default function CharacterDetailsPage() {
                         onEquip={handleEquip}
                         onUnequip={handleUnequip}
                         onConsume={handleConsume}
-                        characterId={Array.isArray(params?.characterId) ? params.characterId[0] : params?.characterId || ''}
+                        characterId={effectiveCharacterId || ''}
                       />
                     );
                   }
@@ -772,7 +781,7 @@ export default function CharacterDetailsPage() {
           </div>
           
           {/* Character History Panel */}
-          <CharacterHistory characterId={Array.isArray(params?.characterId) ? params.characterId[0] : params?.characterId || ''} />
+          <CharacterHistory characterId={effectiveCharacterId || ''} />
         </div>
         </div>
       </div>

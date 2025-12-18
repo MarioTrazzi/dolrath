@@ -2,7 +2,17 @@ import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { NextResponse } from 'next/server';
 import { getLevelInfo } from '@/lib/experienceSystem';
-import { getRaceById, getClassById } from '@/lib/gameData';
+
+function serializeBigInt(value: unknown): unknown {
+  if (typeof value === 'bigint') return value.toString();
+  if (Array.isArray(value)) return value.map(serializeBigInt);
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) out[k] = serializeBigInt(v);
+    return out;
+  }
+  return value;
+}
 
 export async function GET() {
   const session = await auth();
@@ -18,7 +28,7 @@ export async function GET() {
     });
 
     if (!characters || characters.length === 0) {
-      return NextResponse.json({ error: 'Character not found' }, { status: 404 });
+      return NextResponse.json([]);
     }
 
     // Processar cada personagem para calcular nível correto e usar stats reais do banco
@@ -43,7 +53,7 @@ export async function GET() {
       };
     });
 
-    return NextResponse.json(processedCharacters);
+    return NextResponse.json(serializeBigInt(processedCharacters));
   } catch (error) {
     console.error('Error fetching character:', error);
     return NextResponse.json({ error: 'Error fetching character' }, { status: 500 });

@@ -3,8 +3,23 @@ import { FetchRequest, JsonRpcProvider } from 'ethers'
 function normalizeRpcUrl(url: string): string {
   const trimmed = url.trim()
   if (!trimmed) return ''
-  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed)) return trimmed
-  return `https://${trimmed}`
+
+  const hasScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed)
+  const candidate = hasScheme ? trimmed : `https://${trimmed}`
+
+  try {
+    const u = new URL(candidate)
+    const host = u.hostname.toLowerCase()
+    const isLocalhost = host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '0.0.0.0'
+
+    // Many public RPCs (incl. Polygon) redirect http -> https via 301, which breaks JSON-RPC POST.
+    if (u.protocol === 'http:' && !isLocalhost) {
+      u.protocol = 'https:'
+    }
+    return u.toString()
+  } catch {
+    return candidate
+  }
 }
 
 export function getCharacterNftChainId(): number {

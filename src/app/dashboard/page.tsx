@@ -444,11 +444,9 @@ export default function DashboardPage() {
                       <div className="text-[11px] text-text-secondary truncate">Token ID: {tokenId}</div>
                     </div>
 
-                    {characterId ? (
-                      <Link href={`/character/${characterId}`}>
-                        <Button variant="outline" size="sm">Abrir</Button>
-                      </Link>
-                    ) : null}
+                    <Link href={`/character/${characterId || tokenId}`}>
+                      <Button variant="outline" size="sm">Abrir</Button>
+                    </Link>
 
                     <Button
                       variant="outline"

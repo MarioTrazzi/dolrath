@@ -478,14 +478,12 @@ export default function CharacterCreationPage() {
                         <div className="text-[11px] text-text-secondary truncate">Token ID: {tokenId}</div>
                       </div>
 
-                      {characterId ? (
-                        <Link
-                          href={`/character/${characterId}`}
-                          className="px-3 py-2 bg-surface border border-white/20 rounded-lg text-text-secondary hover:text-text-primary"
-                        >
-                          Abrir
-                        </Link>
-                      ) : null}
+                      <Link
+                        href={`/character/${characterId || tokenId}`}
+                        className="px-3 py-2 bg-surface border border-white/20 rounded-lg text-text-secondary hover:text-text-primary"
+                      >
+                        Abrir
+                      </Link>
 
                       <button
                         type="button"

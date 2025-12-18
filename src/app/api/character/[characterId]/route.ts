@@ -2,6 +2,24 @@ import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { getLevelInfo } from '@/lib/experienceSystem'
+import { Contract } from 'ethers'
+import { getCharacterNftContractAddress, getCharacterNftProvider } from '@/lib/characterNftOnchain'
+import { DOLRATH_CHARACTERS_ABI } from '@/lib/characterNftSigning'
+
+function serializeBigInt(value: unknown): unknown {
+  if (typeof value === 'bigint') return value.toString()
+  if (Array.isArray(value)) return value.map(serializeBigInt)
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) out[k] = serializeBigInt(v)
+    return out
+  }
+  return value
+}
+
+function isNumericTokenId(value: string): boolean {
+  return /^\d+$/.test(value)
+}
 
 export async function GET(
   req: Request,
@@ -13,26 +31,63 @@ export async function GET(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const characterId = params.characterId
+  const characterIdOrTokenId = params.characterId
 
   try {
-    const character = await prisma.character.findUnique({
-      where: { id: characterId },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
+    const include = {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
         },
-        equipment: {
-          include: {
-            item: true
-          }
-        }
       },
-    })
+      equipment: {
+        include: {
+          item: true,
+        },
+      },
+    } as const
+
+    const character = await (async () => {
+      if (isNumericTokenId(characterIdOrTokenId)) {
+        const tokenId = BigInt(characterIdOrTokenId)
+
+        // Security: ensure the session wallet owns this token on-chain.
+        const walletAddress = String((session.user as any)?.walletAddress || '').trim()
+        if (!walletAddress) {
+          return null
+        }
+
+        const contractAddress = getCharacterNftContractAddress()
+        const provider = getCharacterNftProvider()
+        const contract = new Contract(contractAddress, DOLRATH_CHARACTERS_ABI, provider)
+
+        let owner: string
+        try {
+          owner = String(await contract.ownerOf(tokenId))
+        } catch {
+          return null
+        }
+
+        if (owner.toLowerCase() !== walletAddress.toLowerCase()) {
+          return null
+        }
+
+        return prisma.character.findFirst({
+          where: {
+            userId: session.user.id,
+            nftTokenId: tokenId,
+          },
+          include,
+        })
+      }
+
+      return prisma.character.findUnique({
+        where: { id: characterIdOrTokenId },
+        include,
+      })
+    })()
 
     if (!character) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 })
@@ -56,7 +111,7 @@ export async function GET(
       progressPercentage: levelInfo.progressPercentage
     };
     
-    return NextResponse.json(characterWithXPInfo)
+    return NextResponse.json(serializeBigInt(characterWithXPInfo))
   } catch (error) {
     console.error('Error fetching character:', error)
     return NextResponse.json(

@@ -335,10 +335,34 @@ export async function POST(req: Request) {
     return NextResponse.json(serializeBigIntForJson(character))
   } catch (error) {
     if ((error as any)?.code === 'P2002') {
-      return NextResponse.json(
-        { error: 'Pagamento já utilizado para criar outro personagem' },
-        { status: 409 }
-      )
+      // Most common scenario: character was created, but the client failed after (e.g. BigInt JSON serialization).
+      // If the tx hashes belong to the current user, return the existing character so the client can proceed.
+      try {
+        const existing = await prisma.character.findFirst({
+          where: {
+            userId: session.user.id,
+            OR: [
+              creationTxHashStr ? { creationTxHash: creationTxHashStr } : undefined,
+              nftMintTxHashStr ? { nftMintTxHash: nftMintTxHashStr } : undefined,
+            ].filter(Boolean) as any,
+          },
+          orderBy: { createdAt: 'desc' },
+        })
+
+        if (existing) {
+          return NextResponse.json(
+            {
+              ...serializeBigIntForJson(existing),
+              alreadyExisted: true,
+            },
+            { status: 200 }
+          )
+        }
+      } catch {
+        // ignore and fall back to the generic message
+      }
+
+      return NextResponse.json({ error: 'Pagamento já utilizado para criar outro personagem' }, { status: 409 })
     }
     console.error('Error creating character:', error)
     let errorMessage = 'Error creating character'

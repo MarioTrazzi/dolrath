@@ -1,4 +1,3 @@
-import type { CharacterRace } from '@/types/character'
 import { getRaceById, getClassById } from '@/lib/gameData'
 
 function base64EncodeUtf8(input: string): string {
@@ -30,6 +29,32 @@ export function buildCharacterNftTokenUri(params: {
   avatarUrl?: string | null
   stats: { str: number; agi: number; int: number; def: number }
   mintNonce?: string
+  level?: number
+}) {
+  const { metadata } = buildCharacterNftMetadata({
+    name: params.name,
+    raceId: params.raceId,
+    classId: params.classId,
+    avatarUrl: params.avatarUrl,
+    stats: params.stats,
+    level: params.level,
+    mintNonce: params.mintNonce,
+  })
+
+  return {
+    tokenURI: jsonToDataUrl(metadata),
+    metadata,
+  }
+}
+
+export function buildCharacterNftMetadata(params: {
+  name: string
+  raceId: string
+  classId: string
+  avatarUrl?: string | null
+  stats: { str: number; agi: number; int: number; def: number }
+  level?: number
+  mintNonce?: string | null
 }) {
   const race = getRaceById(params.raceId)
   const cls = getClassById(params.classId)
@@ -38,6 +63,7 @@ export function buildCharacterNftTokenUri(params: {
   const displayClass = cls?.name || params.classId
 
   const title = `${params.name} — ${displayClass}`
+  const level = Number.isFinite(params.level) && (params.level as number) > 0 ? (params.level as number) : 1
 
   const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 800 800">
@@ -56,7 +82,7 @@ export function buildCharacterNftTokenUri(params: {
   <rect x="36" y="36" width="728" height="728" rx="28" fill="none" stroke="url(#frame)" stroke-width="6"/>
 
   <text x="64" y="120" fill="#ffffff" font-size="40" font-family="ui-sans-serif, system-ui" font-weight="700">${escapeXml(params.name)}</text>
-  <text x="64" y="168" fill="#cbd5e1" font-size="22" font-family="ui-sans-serif, system-ui">${escapeXml(displayRace)} • ${escapeXml(displayClass)} • Level 1</text>
+  <text x="64" y="168" fill="#cbd5e1" font-size="22" font-family="ui-sans-serif, system-ui">${escapeXml(displayRace)} • ${escapeXml(displayClass)} • Level ${level}</text>
 
   <g transform="translate(64, 220)">
     <rect x="0" y="0" width="672" height="260" rx="18" fill="#0f172a" stroke="#1f2937" stroke-width="2"/>
@@ -93,7 +119,7 @@ export function buildCharacterNftTokenUri(params: {
       { trait_type: 'CharacterName', value: params.name },
       { trait_type: 'Race', value: displayRace },
       { trait_type: 'Class', value: displayClass },
-      { trait_type: 'Level', value: 1 },
+      { trait_type: 'Level', value: level },
       { trait_type: 'STR', value: params.stats.str },
       { trait_type: 'AGI', value: params.stats.agi },
       { trait_type: 'INT', value: params.stats.int },
@@ -108,8 +134,5 @@ export function buildCharacterNftTokenUri(params: {
     },
   }
 
-  return {
-    tokenURI: jsonToDataUrl(metadata),
-    metadata,
-  }
+  return { metadata }
 }

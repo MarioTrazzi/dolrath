@@ -29,6 +29,7 @@ export function buildCharacterNftTokenUri(params: {
   classId: string
   avatarUrl?: string | null
   stats: { str: number; agi: number; int: number; def: number }
+  mintNonce?: string
 }) {
   const race = getRaceById(params.raceId)
   const cls = getClassById(params.classId)
@@ -103,6 +104,7 @@ export function buildCharacterNftTokenUri(params: {
       stats: params.stats,
       raceId: params.raceId,
       classId: params.classId,
+      mintNonce: params.mintNonce || null,
     },
   }
 

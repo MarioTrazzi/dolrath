@@ -32,7 +32,8 @@
     "chain:deploy:market:local": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network localhost web3/scripts/deploy-market.ts",
     "chain:deploy:market:amoy": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network polygonAmoy web3/scripts/deploy-market.ts",
     "chain:deploy:market:polygon": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network polygon web3/scripts/deploy-market.ts",
-    "chain:mint:amoy": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network polygonAmoy web3/scripts/mint-dol.ts"
+    "chain:mint:amoy": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network polygonAmoy web3/scripts/mint-dol.ts",
+    "cloudinary:upload-test-assets": "node scripts/upload-cloudinary-test-assets.js"
   },
   "prisma": {
     "seed": "node prisma/seed.js"
@@ -75,6 +76,7 @@
     "@openzeppelin/contracts": "^5.4.0",
     "@types/uuid": "^9.0.7",
     "chai": "^4.5.0",
+    "cloudinary": "^2.8.0",
     "concurrently": "^9.2.1",
     "dotenv": "^16.6.1",
     "eslint": "^8.57.0",

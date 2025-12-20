@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Moedas Antigas">
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffe066"/>
+      <stop offset="1" stop-color="#fab005"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="64" fill="#0b1020"/>
+  <g fill="none" stroke="#ffffff" stroke-width="18" opacity="0.25">
+    <path d="M112 120h288"/>
+    <path d="M112 392h288"/>
+  </g>
+  <g>
+    <ellipse cx="232" cy="292" rx="120" ry="86" fill="#ffffff" opacity="0.10"/>
+    <ellipse cx="280" cy="252" rx="120" ry="86" fill="#ffffff" opacity="0.10"/>
+
+    <ellipse cx="232" cy="292" rx="110" ry="78" fill="url(#gold)"/>
+    <ellipse cx="280" cy="252" rx="110" ry="78" fill="url(#gold)"/>
+
+    <path d="M168 292c18 18 42 28 64 28s46-10 64-28" fill="none" stroke="#ffffff" stroke-width="16" opacity="0.25"/>
+    <path d="M216 222h128" fill="none" stroke="#ffffff" stroke-width="16" opacity="0.25"/>
+
+    <path d="M280 214c-22 12-34 24-34 38 0 22 24 40 54 40" fill="none" stroke="#ffffff" stroke-width="20" stroke-linecap="round" opacity="0.65"/>
+  </g>
+</svg>

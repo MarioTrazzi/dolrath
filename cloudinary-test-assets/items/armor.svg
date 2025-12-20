@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#ffffff"/>
+  <g fill="none" stroke="#111111" stroke-width="18" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M186 120 L256 92 L326 120"/>
+    <path d="M186 120 L150 184 L170 392 L256 440 L342 392 L362 184 L326 120"/>
+    <path d="M150 184 L86 220 L118 320 L170 300"/>
+    <path d="M362 184 L426 220 L394 320 L342 300"/>
+    <path d="M214 170 L256 152 L298 170"/>
+    <path d="M214 170 L214 258 L256 276 L298 258 L298 170"/>
+  </g>
+  <text x="256" y="478" text-anchor="middle" font-size="40" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" fill="#111111">ARMOR</text>
+</svg>

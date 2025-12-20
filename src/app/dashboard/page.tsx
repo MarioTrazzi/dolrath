@@ -371,17 +371,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Botão de Sincronização (temporário para teste) */}
-        <div className="mb-4 flex justify-end">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={syncCharacterLevels}
-            className="text-xs"
-          >
-            🔄 Sincronizar Níveis
-          </Button>
-        </div>
 
         {/* NFTs owned on-chain (shows even if DB characters were deleted) */}
         <div className="glass-card p-6 mb-8">

@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react';
 import Image from 'next/image';
 import toast from 'react-hot-toast';
 import { Search, Filter, X } from 'lucide-react';
-import { useGold } from '@/components/providers/GoldProvider';
+import { ethers } from 'ethers';
 
 interface StoreItem {
   id: string;
@@ -37,7 +37,6 @@ interface PriceFilter {
 
 export default function Store() {
   const { data: session } = useSession();
-  const { goldBalance, updateGoldBalance } = useGold();
   const [items, setItems] = useState<StoreItem[]>([]);
   const [characters, setCharacters] = useState<Character[]>([]);
   const [selectedCharacter, setSelectedCharacter] = useState<string>('');
@@ -184,34 +183,138 @@ export default function Store() {
   const handlePurchase = async (itemId: string) => {
     setLoading(true);
     try {
-      const response = await fetch('/api/store/purchase', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ itemId }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        // Update gold balance
-        updateGoldBalance(data.remainingGold);
-        // Refresh user inventory
-        fetchUserInventory();
-        toast.success(`🛒 Item comprado! ${data.goldSpent} gold gastos`, {
-          duration: 3000,
-        });
-      } else {
-        const error = await response.json();
-        toast.error(`❌ Erro na compra: ${error.error}`, {
-          duration: 4000,
-        });
+      const eth = (window as any)?.ethereum;
+      if (!eth) {
+        toast.error('MetaMask não encontrada');
+        return;
       }
+
+      const cfgRes = await fetch(`/api/store/purchase-config?itemId=${encodeURIComponent(itemId)}`, {
+        cache: 'no-store',
+      });
+      const cfgJson = await cfgRes.json();
+      if (!cfgRes.ok) {
+        throw new Error(cfgJson?.error || 'Falha ao carregar config da compra');
+      }
+
+      const {
+        chainId,
+        goldContractAddress,
+        treasuryAddress,
+        itemNftContractAddress,
+        item,
+      } = cfgJson as {
+        chainId: number;
+        goldContractAddress: string;
+        treasuryAddress: string;
+        itemNftContractAddress: string;
+        item: { id: string; name: string; goldPrice: number };
+      };
+
+      const provider = new ethers.BrowserProvider(eth);
+      await provider.send('eth_requestAccounts', []);
+      const network = await provider.getNetwork();
+      if (Number(network.chainId) !== Number(chainId)) {
+        toast.error(`Troque a rede para chainId ${chainId} na MetaMask`);
+        return;
+      }
+
+      const signer = await provider.getSigner();
+      const from = await signer.getAddress();
+
+      const erc20Abi = [
+        'function decimals() view returns (uint8)',
+        'function balanceOf(address) view returns (uint256)',
+        'function transfer(address to, uint256 value) returns (bool)',
+      ] as const;
+
+      const gold = new ethers.Contract(goldContractAddress, erc20Abi, signer);
+      const decimals = Number(await gold.decimals());
+      const costWei = ethers.parseUnits(String(item.goldPrice), decimals);
+      const balanceWei = (await gold.balanceOf(from)) as bigint;
+
+      if (balanceWei < costWei) {
+        toast.error(`💰 GOLD insuficiente on-chain! Você precisa de ${item.goldPrice} GOLD.`);
+        return;
+      }
+
+      const payTx = await gold.transfer(treasuryAddress, costWei);
+      toast.success('Pagamento enviado! Aguardando confirmação…');
+      const payReceipt = await payTx.wait();
+      if (!payReceipt || payReceipt.status !== 1) {
+        throw new Error('Pagamento falhou');
+      }
+
+      const intentRes = await fetch('/api/store/purchase-intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemId, paymentTxHash: payTx.hash }),
+      });
+      const intentJson = await intentRes.json();
+      if (!intentRes.ok) {
+        throw new Error(intentJson?.error || 'Falha ao criar intent de mint');
+      }
+
+      const mintArgs = intentJson.mint as {
+        to: string;
+        purchaseId: string;
+        itemKey: string;
+        paidGold: string;
+        tokenURI: string;
+        deadline: string;
+        signature: string;
+      };
+
+      const itemNftAbi = [
+        'function mintWithSig(address to, bytes32 purchaseId, bytes32 itemKey, uint256 paidGold, string tokenURI, uint256 deadline, bytes signature) returns (uint256)',
+      ] as const;
+
+      const itemNft = new ethers.Contract(itemNftContractAddress, itemNftAbi, signer);
+      const mintTx = await itemNft.mintWithSig(
+        mintArgs.to,
+        mintArgs.purchaseId,
+        mintArgs.itemKey,
+        BigInt(mintArgs.paidGold),
+        mintArgs.tokenURI,
+        BigInt(mintArgs.deadline),
+        mintArgs.signature
+      );
+      toast.success('Mint do item enviado! Aguardando confirmação…');
+      const mintReceipt = await mintTx.wait();
+      if (!mintReceipt || mintReceipt.status !== 1) {
+        throw new Error('Mint falhou');
+      }
+
+      // Confirm can fail briefly if RPC/indexing is laggy. Retry a few times.
+      let confirmJson: any = null;
+      let lastConfirmErr: any = null;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const confirmRes = await fetch('/api/store/purchase-confirm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ itemId, paymentTxHash: payTx.hash, mintTxHash: mintTx.hash }),
+        });
+        confirmJson = await confirmRes.json();
+        if (confirmRes.ok) {
+          lastConfirmErr = null;
+          break;
+        }
+
+        lastConfirmErr = new Error(confirmJson?.error || 'Falha ao confirmar compra');
+        const msg = String(confirmJson?.error || '')
+        const shouldRetry = msg.includes('ainda não encontrada') || msg.includes('Aguarde')
+        if (!shouldRetry) break;
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+
+      if (lastConfirmErr) throw lastConfirmErr;
+
+      fetchUserInventory();
+      toast.success(`🛒 Item comprado e NFT mintada! (${item.goldPrice} GOLD)`, { duration: 3000 });
     } catch (error) {
       console.error('Error purchasing item:', error);
-      toast.error('💥 Erro inesperado na compra', {
-        duration: 4000,
-      });
+      const message = error instanceof Error ? error.message : '💥 Erro inesperado na compra'
+      toast.error(message, { duration: 4000 });
     }
     setLoading(false);
   };

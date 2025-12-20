@@ -19,10 +19,11 @@ export function GoldProvider({ children }: { children: ReactNode }) {
     if (!session) return;
     
     try {
-      const response = await fetch('/api/user/gold');
+      const response = await fetch('/api/wallet/gold-balance');
       if (response.ok) {
         const data = await response.json();
-        setGoldBalance(data.goldBalance);
+        const n = Number(data?.balance ?? data?.goldBalance ?? 0);
+        setGoldBalance(Number.isFinite(n) ? n : 0);
       }
     } catch (error) {
       console.error('Error fetching gold balance:', error);

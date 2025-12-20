@@ -15,8 +15,8 @@ import { DraggableItem } from '@/components/DraggableItem';
 import AttributeDistributionPanel from '@/components/AttributeDistributionPanel';
 import CharacterHistory from '@/components/CharacterHistory';
 import toast from 'react-hot-toast';
-import { useGold } from '@/components/providers/GoldProvider';
 import { useRouter } from 'next/navigation';
+import { ethers } from 'ethers';
 
 import { Item } from '@/types/item';
 
@@ -30,13 +30,13 @@ interface InventoryItem {
 export default function CharacterDetailsPage() {
   const params = useParams();
   const router = useRouter();
-  const { goldBalance, updateGoldBalance } = useGold();
   const [character, setCharacter] = useState<Character | null>(null);
   const [effectiveCharacterId, setEffectiveCharacterId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [expandingSlots, setExpandingSlots] = useState(false);
   const [equipment, setEquipment] = useState<any[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [goldOnchainText, setGoldOnchainText] = useState<string>('—');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -66,6 +66,21 @@ export default function CharacterDetailsPage() {
             const inventoryData = await inventoryResponse.json();
             setInventory(inventoryData);
           }
+        }
+
+        // Fetch on-chain GOLD balance for display.
+        try {
+          const goldBalRes = await fetch('/api/wallet/gold-balance', { cache: 'no-store' });
+          const goldBalJson = await goldBalRes.json();
+          if (goldBalRes.ok && goldBalJson?.walletLinked) {
+            const formatted = String(goldBalJson?.formatted || '').trim();
+            const symbol = String(goldBalJson?.symbol || 'GOLD').trim();
+            setGoldOnchainText(formatted ? `${formatted} ${symbol}` : `… ${symbol}`);
+          } else {
+            setGoldOnchainText('—');
+          }
+        } catch {
+          setGoldOnchainText('—');
         }
 
         // Fetch equipment data when implemented
@@ -280,53 +295,120 @@ export default function CharacterDetailsPage() {
     }
   };
 
-  const calculateExpansionCost = (currentSlots: number, slotsToAdd: number) => {
-    const baseCost = 100;
-    let totalCost = 0;
-    for (let i = 0; i < slotsToAdd; i++) {
-      const slotNumber = currentSlots + i;
-      const slotCost = baseCost * Math.floor(slotNumber / 10 + 1);
-      totalCost += slotCost;
-    }
-    return totalCost;
-  };
-
   const handleExpandInventory = async () => {
     if (!character || !effectiveCharacterId) return;
-    
-    // Calcular custo para 5 slots adicionais
-    const slotsToAdd = 5;
-    const currentSlots = character.inventorySlots || 10;
-    const totalCost = calculateExpansionCost(currentSlots, slotsToAdd);
 
-    if (!goldBalance || goldBalance < totalCost) {
-      toast.error(`💰 Gold insuficiente! Você precisa de ${totalCost} gold, mas tem ${goldBalance || 0}.`);
+    const slotsToAdd = 5;
+    const totalCostGold = 1000;
+
+    const eth = (window as any)?.ethereum;
+    if (!eth) {
+      toast.error('MetaMask não encontrada');
       return;
     }
 
     setExpandingSlots(true);
     try {
-      const response = await fetch(`/api/character/${effectiveCharacterId}/expand-inventory`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ slots: slotsToAdd }),
-      });
+      const cfgRes = await fetch('/api/gold/spend-config', { cache: 'no-store' });
+      const cfgJson = await cfgRes.json();
+      if (!cfgRes.ok) {
+        throw new Error(cfgJson?.error || 'Falha ao carregar config do GOLD');
+      }
+
+      const { contractAddress, chainId, treasuryAddress } = cfgJson as {
+        contractAddress: string;
+        chainId: number;
+        treasuryAddress: string;
+      };
+
+      const provider = new ethers.BrowserProvider(eth);
+      await provider.send('eth_requestAccounts', []);
+
+      const network = await provider.getNetwork();
+      if (Number(network.chainId) !== Number(chainId)) {
+        toast.error(`Troque a rede para chainId ${chainId} na MetaMask`);
+        return;
+      }
+
+      const signer = await provider.getSigner();
+      const from = await signer.getAddress();
+
+      const erc20Abi = [
+        'function decimals() view returns (uint8)',
+        'function balanceOf(address) view returns (uint256)',
+        'function transfer(address to, uint256 value) returns (bool)',
+      ] as const;
+
+      const gold = new ethers.Contract(contractAddress, erc20Abi, signer);
+      const decimals = Number(await gold.decimals());
+      const costWei = ethers.parseUnits(String(totalCostGold), decimals);
+      const balanceWei = (await gold.balanceOf(from)) as bigint;
+
+      if (balanceWei < costWei) {
+        toast.error(`💰 GOLD insuficiente on-chain! Você precisa de ${totalCostGold} GOLD.`);
+        return;
+      }
+
+      const payTx = await gold.transfer(treasuryAddress, costWei);
+      toast.success('Pagamento enviado! Aguardando confirmação…');
+      const payReceipt = await payTx.wait();
+      if (!payReceipt || payReceipt.status !== 1) {
+        throw new Error('Pagamento falhou');
+      }
+
+      // RPCs can lag (especially on testnet). Try confirming the purchase a few times.
+      let response: Response | null = null;
+      let lastError: any = null;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        response = await fetch(`/api/character/${effectiveCharacterId}/expand-inventory`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ slots: slotsToAdd, txHash: payTx.hash }),
+        });
+
+        if (response.ok) break;
+
+        try {
+          lastError = await response.json();
+        } catch {
+          lastError = null;
+        }
+
+        const msg = String(lastError?.error || '').toLowerCase();
+        const looksLikePropagation = msg.includes('ainda não encontrada') || msg.includes('not found');
+        if (!looksLikePropagation) break;
+
+        await new Promise((r) => setTimeout(r, 1200));
+      }
+
+      if (!response) {
+        throw new Error('Falha ao confirmar expansão (sem resposta do servidor)')
+      }
 
       if (response.ok) {
         const data = await response.json();
         setCharacter(data.character);
-        // Atualizar o gold no contexto
-        updateGoldBalance((goldBalance || 0) - totalCost);
-        toast.success(`📦 +${slotsToAdd} slots adicionados! (${totalCost} gold gastos)`);
+        toast.success(`📦 +${slotsToAdd} slots adicionados! (${totalCostGold} GOLD gastos)`);
       } else {
-        const error = await response.json();
-        toast.error(`❌ ${error.error}`);
+        const error = lastError || (await response.json().catch(() => null));
+        toast.error(`❌ ${error?.error || 'Falha ao confirmar expansão'}`);
       }
     } catch (error) {
       console.error('Error expanding inventory:', error);
       toast.error('💥 Erro inesperado ao expandir inventário');
+    } finally {
+      // Always re-sync character data so UI reflects server state.
+      try {
+        const refreshed = await fetch(`/api/character/${effectiveCharacterId}`, { cache: 'no-store' });
+        if (refreshed.ok) {
+          const refreshedCharacter = await refreshed.json();
+          setCharacter(refreshedCharacter);
+        }
+      } catch {
+        // ignore
+      }
     }
     setExpandingSlots(false);
   };
@@ -731,16 +813,16 @@ export default function CharacterDetailsPage() {
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2 text-sm text-text-secondary">
                     <Coins className="w-4 h-4 text-yellow-500" />
-                    <span>{goldBalance || 0} Gold</span>
+                    <span>{goldOnchainText}</span>
                   </div>
                   <button
                     onClick={handleExpandInventory}
                     disabled={expandingSlots}
-                    title={`Custo: ${calculateExpansionCost(character.inventorySlots || 10, 5)} gold`}
+                    title="Custo: 1000 GOLD"
                     className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-yellow-500 to-yellow-600 text-white text-sm rounded-lg hover:from-yellow-600 hover:to-yellow-700 disabled:opacity-50 transition-all"
                   >
                     <Plus className="w-4 h-4" />
-                    {expandingSlots ? 'Expandindo...' : `+5 Slots (${calculateExpansionCost(character.inventorySlots || 10, 5)}g)`}
+                    {expandingSlots ? 'Expandindo...' : '+5 Slots (1000 GOLD)'}
                   </button>
                 </div>
               </div>

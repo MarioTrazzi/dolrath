@@ -23,6 +23,15 @@
     "chain:deploy:characters:local": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network localhost web3/scripts/deploy-characters.ts",
     "chain:deploy:characters:amoy": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network polygonAmoy web3/scripts/deploy-characters.ts",
     "chain:deploy:characters:polygon": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network polygon web3/scripts/deploy-characters.ts",
+    "chain:deploy:gold:local": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network localhost web3/scripts/deploy-gold.ts",
+    "chain:deploy:gold:amoy": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network polygonAmoy web3/scripts/deploy-gold.ts",
+    "chain:deploy:gold:polygon": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network polygon web3/scripts/deploy-gold.ts",
+    "chain:deploy:items:local": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network localhost web3/scripts/deploy-items.ts",
+    "chain:deploy:items:amoy": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network polygonAmoy web3/scripts/deploy-items.ts",
+    "chain:deploy:items:polygon": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network polygon web3/scripts/deploy-items.ts",
+    "chain:deploy:market:local": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network localhost web3/scripts/deploy-market.ts",
+    "chain:deploy:market:amoy": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network polygonAmoy web3/scripts/deploy-market.ts",
+    "chain:deploy:market:polygon": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network polygon web3/scripts/deploy-market.ts",
     "chain:mint:amoy": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network polygonAmoy web3/scripts/mint-dol.ts"
   },
   "prisma": {

@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { useSession } from 'next-auth/react';
 import { ethers } from 'ethers';
 import Image from 'next/image';
+import { decodeContractCustomErrorMessage, getWalletTxErrorMessage } from '@/lib/walletErrors';
 
 export function NameConfirmStep() {
   const { data: session } = useSession();
@@ -191,7 +192,21 @@ export function NameConfirmStep() {
         signerAfterSwitch
       );
 
-      const mintTx = await nftContract.mintWithSig(to, tokenURI, deadline, signature);
+      // Preflight (improves user-facing errors vs opaque -32603)
+      let gasLimit: bigint | undefined = undefined;
+      try {
+        const est = (await nftContract.mintWithSig.estimateGas(to, tokenURI, deadline, signature)) as bigint;
+        gasLimit = (est * 12n) / 10n;
+      } catch (preErr: any) {
+        const decoded = decodeContractCustomErrorMessage({
+          contractInterface: nftContract.interface,
+          err: preErr,
+        });
+        if (decoded) throw new Error(decoded);
+        throw new Error(getWalletTxErrorMessage(preErr));
+      }
+
+      const mintTx = await nftContract.mintWithSig(to, tokenURI, deadline, signature, gasLimit ? { gasLimit } : {});
       mintTxHashForRecovery = String(mintTx.hash);
       const mintReceipt = await mintTx.wait();
 
@@ -314,7 +329,9 @@ export function NameConfirmStep() {
         // ignore
       }
     } catch (error) {
-      setNameError(error instanceof Error ? error.message : 'Erro desconhecido ao criar personagem');
+      setNameError(
+        error instanceof Error ? error.message : getWalletTxErrorMessage(error, 'Erro desconhecido ao criar personagem')
+      );
     } finally {
       setIsCreating(false);
     }

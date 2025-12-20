@@ -1,4 +1,5 @@
 import { getRaceById, getClassById } from '@/lib/gameData'
+import { resolveImageUrl } from '@/lib/imageUrl'
 
 function base64EncodeUtf8(input: string): string {
   return Buffer.from(input, 'utf8').toString('base64')
@@ -15,11 +16,11 @@ function jsonToDataUrl(obj: unknown): string {
 
 function escapeXml(s: string): string {
   return s
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&apos;')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
 }
 
 export function buildCharacterNftTokenUri(params: {
@@ -111,10 +112,12 @@ export function buildCharacterNftMetadata(params: {
   </g>
 </svg>`
 
+  const resolvedAvatar = resolveImageUrl(params.avatarUrl)
+
   const metadata = {
     name: title,
     description: 'Dolrath RPG character (NFT).',
-    image: svgToDataUrl(svg),
+    image: resolvedAvatar || svgToDataUrl(svg),
     attributes: [
       { trait_type: 'CharacterName', value: params.name },
       { trait_type: 'Race', value: displayRace },
@@ -127,6 +130,7 @@ export function buildCharacterNftMetadata(params: {
     ],
     properties: {
       avatarUrl: params.avatarUrl || null,
+      resolvedAvatarUrl: resolvedAvatar,
       stats: params.stats,
       raceId: params.raceId,
       classId: params.classId,

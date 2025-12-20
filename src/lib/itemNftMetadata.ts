@@ -1,3 +1,5 @@
+import { resolveImageUrl } from '@/lib/imageUrl'
+
 function base64EncodeUtf8(input: string): string {
   return Buffer.from(input, 'utf8').toString('base64')
 }
@@ -69,6 +71,7 @@ export function buildItemNftMetadata(params: {
     subtype?: string | null
     level?: number | null
     stats?: unknown
+    image?: string | null
   }
   paidGoldWei?: string | null
 }) {
@@ -120,6 +123,8 @@ export function buildItemNftMetadata(params: {
   </g>
 </svg>`
 
+  const resolvedImage = resolveImageUrl((params.item as any).image)
+
   const attributes: Array<{ trait_type: string; value: string | number }> = [
     { trait_type: 'ItemId', value: params.item.id },
     { trait_type: 'Type', value: type || 'UNKNOWN' },
@@ -137,7 +142,7 @@ export function buildItemNftMetadata(params: {
   const metadata = {
     name: displayName,
     description,
-    image: svgToDataUrl(svg),
+    image: resolvedImage || svgToDataUrl(svg),
     attributes,
     properties: {
       itemId: params.item.id,
@@ -145,6 +150,8 @@ export function buildItemNftMetadata(params: {
       subtype: subtype || null,
       level,
       paidGoldWei: params.paidGoldWei || null,
+      image: (params.item as any).image ?? null,
+      resolvedImageUrl: resolvedImage,
       stats: (params.item as any).stats ?? null,
     },
   }
@@ -157,6 +164,7 @@ export function buildItemNftTokenUri(params: {
     id: string
     name: string
     description?: string | null
+    image?: string | null
     type: string
     subtype?: string | null
     level?: number | null

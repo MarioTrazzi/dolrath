@@ -50,6 +50,7 @@ export async function GET(
           id: true,
           name: true,
           description: true,
+          image: true,
           type: true,
           subtype: true,
           level: true,

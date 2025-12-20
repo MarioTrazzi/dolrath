@@ -189,6 +189,7 @@ model Item {
   id          String    @id @default(cuid())
   name        String
   description String?
+  image       String?
   type        ItemType
   subtype     ConsumableSubtype?
   level       Int       @default(1)

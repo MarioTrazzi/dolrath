@@ -20,7 +20,8 @@ export function Navbar() {
   const [dolSymbol, setDolSymbol] = useState<string | null>(null)
 
   const [goldLoading, setGoldLoading] = useState(false)
-  const [goldOffchain, setGoldOffchain] = useState<number | null>(null)
+  const [goldBalance, setGoldBalance] = useState<string | null>(null)
+  const [goldSymbol, setGoldSymbol] = useState<string | null>(null)
 
   const [isLinkingWallet, setIsLinkingWallet] = useState(false)
 
@@ -90,7 +91,8 @@ export function Navbar() {
       setDolSymbol(null)
 
       setGoldLoading(false)
-      setGoldOffchain(null)
+      setGoldBalance(null)
+      setGoldSymbol(null)
       return
     }
 
@@ -100,7 +102,8 @@ export function Navbar() {
       setDolSymbol(null)
 
       setGoldLoading(false)
-      setGoldOffchain(null)
+      setGoldBalance(null)
+      setGoldSymbol(null)
       return
     }
 
@@ -127,26 +130,26 @@ export function Navbar() {
   }, [session, walletAddress])
 
   useEffect(() => {
-    if (!session) {
-      setGoldLoading(false)
-      setGoldOffchain(null)
-      return
-    }
-
     setGoldLoading(true)
-    fetch('/api/gold/status', { cache: 'no-store' })
+    fetch('/api/wallet/gold-balance', { cache: 'no-store' })
       .then(async (res) => {
         const json = await res.json()
-        if (!res.ok) {
-          throw new Error(json?.error || 'Falha ao buscar gold')
-        }
+        if (!res.ok) throw new Error(json?.error || 'Falha ao buscar saldo on-chain')
 
-        const offchain = Number(json?.offchainBalance ?? 0)
-        setGoldOffchain(Number.isFinite(offchain) ? offchain : 0)
+        if (json?.walletLinked && typeof json?.formatted === 'string') {
+          setGoldBalance(json.formatted)
+          setGoldSymbol(typeof json?.symbol === 'string' ? json.symbol : 'GOLD')
+        } else {
+          setGoldBalance(null)
+          setGoldSymbol('GOLD')
+        }
       })
-      .catch(() => setGoldOffchain(null))
+      .catch(() => {
+        setGoldBalance(null)
+        setGoldSymbol('GOLD')
+      })
       .finally(() => setGoldLoading(false))
-  }, [session])
+  }, [session, walletAddress])
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-white/10">
@@ -221,7 +224,7 @@ export function Navbar() {
                   </span>
                 </Link>
 
-                {/* GOLD (off-chain) Display */}
+                {/* GOLD (on-chain) Display */}
                 <Link
                   href="/wallet"
                   className="flex items-center gap-2 px-3 py-2 bg-surface/50 rounded-lg border border-yellow-500/30 hover:border-primary transition-all"
@@ -229,7 +232,17 @@ export function Navbar() {
                 >
                   <Coins className="w-4 h-4 text-yellow-500" />
                   <span className="text-yellow-400 font-semibold">
-                    {goldLoading ? '...' : `${goldOffchain ?? 0} GOLD`}
+                    {walletAddress ? (
+                      goldLoading ? (
+                        '...'
+                      ) : goldBalance ? (
+                        `${goldBalance} ${goldSymbol || 'GOLD'}`
+                      ) : (
+                        `0 ${goldSymbol || 'GOLD'}`
+                      )
+                    ) : (
+                      `— ${goldSymbol || 'GOLD'}`
+                    )}
                   </span>
                 </Link>
 

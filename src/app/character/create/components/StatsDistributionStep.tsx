@@ -1,25 +1,21 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Dice6 } from 'lucide-react';
+import { Minus, Plus } from 'lucide-react';
 import { StatBar } from './StatBar';
 import { StatPreview } from './StatPreview';
 import { useCharacterCreationStore } from '@/lib/stores/characterCreationStore';
 import { pointSystem } from '@/lib/characterCreationData';
-import { BaseStats } from '@/types/character';
 
 export function StatsDistributionStep() {
   const {
     selectedRace,
     selectedClass,
-    selectedSpecialization,
     distributedPoints,
     setDistributedPoints,
     markStepComplete,
   } = useCharacterCreationStore();
-
-  const [isRolling, setIsRolling] = useState(false);
 
   const maxPointsPerStat = pointSystem.creation.maxStatValue;
   const totalPoints = pointSystem.creation.availablePoints;
@@ -32,73 +28,28 @@ export function StatsDistributionStep() {
     (localDistributedPoints?.int || 0) +
     (localDistributedPoints?.res || 0);
 
-  const getClassWeights = (classId: string | undefined) => {
-    switch (classId) {
-      case 'warrior':
-        return { str: 4, agi: 1, int: 1, res: 3 };
-      case 'rogue':
-        return { str: 2, agi: 4, int: 2, res: 1 };
-      case 'mage':
-        return { str: 1, agi: 2, int: 5, res: 1 };
-      case 'monk':
-        return { str: 2, agi: 3, int: 2, res: 2 };
-      default:
-        return { str: 2, agi: 2, int: 2, res: 2 };
-    }
-  };
+  const remainingPoints = Math.max(0, totalPoints - totalDistributed);
 
-  const rollDistributedPoints = (): BaseStats => {
-    const base = getClassWeights(selectedClass?.id);
-    const weights: Record<'str' | 'agi' | 'int' | 'res', number> = { ...base } as any;
+  const adjustPoint = (key: 'str' | 'agi' | 'int' | 'res', delta: number) => {
+    if (!selectedClass) return;
 
-    if (selectedSpecialization) {
-      weights[selectedSpecialization] = (weights[selectedSpecialization] || 0) + 3;
-    }
+    const current = Number((localDistributedPoints as any)?.[key] || 0);
+    const nextValue = Math.max(0, Math.min(maxPointsPerStat, current + delta));
+    if (nextValue === current) return;
 
-    const next: BaseStats = { str: 0, agi: 0, int: 0, res: 0, hp: 0, mp: 0, crit: 0, speed: 0 };
+    // Prevent exceeding available pool.
+    if (delta > 0 && remainingPoints <= 0) return;
 
-    const pick = () => {
-      const entries = Object.entries(weights) as Array<['str' | 'agi' | 'int' | 'res', number]>;
-      const totalW = entries.reduce((sum, [, w]) => sum + w, 0);
-      const r = Math.random() * totalW;
-      let acc = 0;
-      for (const [k, w] of entries) {
-        acc += w;
-        if (r <= acc) return k;
-      }
-      return 'str' as const;
-    };
-
-    for (let i = 0; i < totalPoints; i++) {
-      // Try a few times to avoid exceeding max cap.
-      for (let tries = 0; tries < 20; tries++) {
-        const stat = pick();
-        if (next[stat] < maxPointsPerStat) {
-          next[stat] += 1;
-          break;
-        }
-      }
-    }
-
-    return next;
+    setDistributedPoints({
+      ...localDistributedPoints,
+      [key]: nextValue,
+    });
   };
 
   useEffect(() => {
     const isValid = totalDistributed === totalPoints;
     markStepComplete('stats-distribution', isValid);
   }, [markStepComplete, totalDistributed, totalPoints]);
-
-  useEffect(() => {
-    // Roll only once: if not set yet and prerequisites exist.
-    if (!selectedClass || !selectedSpecialization) return;
-    if (totalDistributed > 0) return;
-
-    setIsRolling(true);
-    const rolled = rollDistributedPoints();
-    setDistributedPoints(rolled);
-    setIsRolling(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedClass, selectedSpecialization]);
   
   const stats = useMemo(() => [
     {
@@ -136,25 +87,22 @@ export function StatsDistributionStep() {
       {/* Stats Distribution */}
       <div className="space-y-6">
         <div>
-          <h2 className="text-2xl font-bold text-text-primary mb-2">Atributos Aleatórios</h2>
+          <h2 className="text-2xl font-bold text-text-primary mb-2">Distribuir Atributos</h2>
           <p className="text-text-secondary">
-            Seus atributos são rolados automaticamente com base na classe e especialização escolhidas.
+            Você tem {totalPoints} pontos para distribuir livremente.
           </p>
         </div>
 
         <div className="bg-gradient-to-r from-primary/20 to-primary-dark/20 border border-primary/30 rounded-lg p-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-text-primary font-medium">
-              <Dice6 className="w-4 h-4" />
-              Rolagem
-            </div>
+            <div className="text-text-primary font-medium">Pontos</div>
             <span className="text-text-secondary text-sm">
-              {isRolling ? 'Gerando...' : totalDistributed === totalPoints ? 'Concluída' : 'Pendente'}
+              Restantes: <span className="text-text-primary font-semibold">{remainingPoints}</span>
             </span>
           </div>
-          <div className="mt-2 text-sm text-text-secondary">
-            Total de pontos: <span className="text-text-primary font-semibold">{totalPoints}</span>
-          </div>
+          {!selectedClass && (
+            <div className="mt-2 text-sm text-text-secondary">Selecione uma classe para distribuir pontos.</div>
+          )}
         </div>
         
         {/* Rolled Stats */}
@@ -180,12 +128,32 @@ export function StatsDistributionStep() {
                     {stat.description}
                   </p>
                 </div>
-                
-                <div className="w-16 text-center">
-                  <div className="text-lg font-bold text-text-primary">
-                    {localDistributedPoints[stat.key]}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => adjustPoint(stat.key, -1)}
+                    disabled={!selectedClass || (localDistributedPoints?.[stat.key] || 0) <= 0}
+                    className="w-8 h-8 rounded-full bg-error/20 text-error hover:bg-error/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                    aria-label={`Diminuir ${stat.name}`}
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+
+                  <div className="w-16 text-center">
+                    <div className="text-lg font-bold text-text-primary">{localDistributedPoints[stat.key]}</div>
+                    <div className="text-xs text-text-secondary">/ {maxPointsPerStat}</div>
                   </div>
-                  <div className="text-xs text-text-secondary">/ {maxPointsPerStat}</div>
+
+                  <button
+                    type="button"
+                    onClick={() => adjustPoint(stat.key, 1)}
+                    disabled={!selectedClass || remainingPoints <= 0 || (localDistributedPoints?.[stat.key] || 0) >= maxPointsPerStat}
+                    className="w-8 h-8 rounded-full bg-success/20 text-success hover:bg-success/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                    aria-label={`Aumentar ${stat.name}`}
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
               

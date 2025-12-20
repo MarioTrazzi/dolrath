@@ -89,6 +89,20 @@ Notas importantes:
 - Para produção, **não use `localhost` em tokenURI**. Neste momento, os itens são mintados com `tokenURI` em formato `data:application/json;base64,...` (funciona em qualquer wallet sem depender de URL pública).
 - Se você quiser também servir metadata via URL (para indexadores), a rota existe em `/api/nft/item/metadata/[tokenId]` e você pode configurar `ITEM_NFT_BASE_URI=https://SEU_APP.vercel.app/api/nft/item/metadata/` no deploy do contrato.
 
+#### Cloudinary (imagens em wallets)
+
+Algumas wallets/marketplaces não renderizam `image` como `data:` URI. Para máxima compatibilidade, use imagens HTTPS (Cloudinary).
+
+```bash
+CLOUDINARY_CLOUD_NAME=seu_cloud_name
+# Opcional (apenas se você precisar no client)
+NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=seu_cloud_name
+```
+
+O backend resolve automaticamente:
+- se `Item.image` / `Character.avatar` for uma URL (`https://...`), usa direto;
+- se for um **publicId** da Cloudinary (`pasta/arquivo`), gera `https://res.cloudinary.com/<cloud>/image/upload/<publicId>`.
+
 ## 🔧 Configuração Passo a Passo
 
 ### Passo 1: Deploy no Railway (WebSocket)

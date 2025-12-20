@@ -90,6 +90,7 @@ export async function POST(req: Request) {
         id: item.id,
         name: item.name,
         description: item.description,
+        image: (item as any).image,
         type: item.type,
         subtype: item.subtype,
         level: item.level,

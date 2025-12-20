@@ -27,6 +27,7 @@ export async function GET() {
       type: item.type,
       level: item.level,
       stats: item.stats,
+      image: (item as any).image,
       price: item.goldPrice, // Mapear goldPrice para price
       goldPrice: item.goldPrice
     }));

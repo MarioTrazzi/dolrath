@@ -38,13 +38,13 @@ function runCapturingOutput(cmd, args, opts = {}) {
     child.stdout.on('data', (buf) => {
       const s = buf.toString('utf8')
       out += s
-      process.stdout.write(s)
+      if (opts.echo) process.stdout.write(s)
     })
 
     child.stderr.on('data', (buf) => {
       const s = buf.toString('utf8')
       err += s
-      process.stderr.write(s)
+      if (opts.echo) process.stderr.write(s)
     })
 
     child.on('error', reject)
@@ -62,9 +62,14 @@ async function migrateWithRetry() {
   const maxAttempts = Number(process.env.PRISMA_MIGRATE_RETRY_ATTEMPTS || 5)
   const delayMs = Number(process.env.PRISMA_MIGRATE_RETRY_DELAY_MS || 5000)
 
+  const isCiLike = Boolean(process.env.CI || process.env.VERCEL || process.env.RAILWAY_ENVIRONMENT)
+  const echo = process.env.PRISMA_MIGRATE_ECHO
+    ? process.env.PRISMA_MIGRATE_ECHO === 'true'
+    : isCiLike
+
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      await runCapturingOutput('npx', ['prisma', 'migrate', 'deploy'])
+      await runCapturingOutput('npx', ['prisma', 'migrate', 'deploy'], { echo })
       return
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -81,11 +86,15 @@ async function migrateWithRetry() {
         /Can't reach database server/i.test(haystack)
 
       if (!isRetryable || attempt === maxAttempts) {
+        // On final failure, print captured output to help debugging.
+        if (!echo && output) {
+          console.error(output)
+        }
         throw err
       }
 
       console.warn(
-        `Prisma migrate deploy timed out (likely advisory lock). Retrying ${attempt}/${maxAttempts} in ${Math.round(
+        `Prisma migrate deploy failed (retryable). Retrying ${attempt}/${maxAttempts} in ${Math.round(
           delayMs / 1000
         )}s...`
       )

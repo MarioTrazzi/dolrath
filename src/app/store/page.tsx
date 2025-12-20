@@ -184,6 +184,29 @@ export default function Store() {
   const handlePurchase = async (itemId: string) => {
     setLoading(true);
     try {
+      const getEthersUserMessage = (err: any): string => {
+        const candidates = [
+          err?.shortMessage,
+          err?.reason,
+          err?.message,
+          err?.info?.error?.message,
+          err?.info?.error?.data?.message,
+          err?.data?.message,
+          err?.error?.message,
+          err?.error?.data?.message,
+        ]
+          .map((v) => (typeof v === 'string' ? v.trim() : ''))
+          .filter(Boolean)
+
+        const msg = candidates[0] || 'Erro ao enviar transação'
+        const lower = msg.toLowerCase()
+
+        if (lower.includes('insufficient funds')) return 'Saldo insuficiente de MATIC para gas'
+        if (lower.includes('user rejected') || lower.includes('rejected')) return 'Transação cancelada na carteira'
+
+        return msg
+      }
+
       const eth = (window as any)?.ethereum;
       if (!eth) {
         toast.error('MetaMask não encontrada');
@@ -271,6 +294,39 @@ export default function Store() {
       ] as const;
 
       const itemNft = new ethers.Contract(itemNftContractAddress, itemNftAbi, signer);
+
+      // Preflight: MetaMask/RPC can return opaque -32603 on send. estimateGas helps surface the real revert.
+      let gasLimit: bigint | undefined = undefined;
+      try {
+        const est = (await itemNft.mintWithSig.estimateGas(
+          mintArgs.to,
+          mintArgs.purchaseId,
+          mintArgs.itemKey,
+          BigInt(mintArgs.paidGold),
+          mintArgs.tokenURI,
+          BigInt(mintArgs.deadline),
+          mintArgs.signature
+        )) as bigint;
+        gasLimit = (est * 12n) / 10n;
+      } catch (preErr: any) {
+        // Try to decode custom errors from the contract.
+        try {
+          const data = preErr?.data || preErr?.info?.error?.data;
+          if (typeof data === 'string') {
+            const parsed = itemNft.interface.parseError(data);
+            const name = parsed?.name;
+            if (name === 'Expired') throw new Error('Assinatura expirada. Recarregue a página e tente novamente.');
+            if (name === 'OnlyRecipient') throw new Error('Carteira conectada não confere com o destinatário do mint.');
+            if (name === 'AlreadyMinted') throw new Error('Essa compra já foi usada para mintar (purchaseId já utilizado).');
+            if (name === 'InvalidSignature') throw new Error('Assinatura inválida. Tente novamente (ou reporte).');
+          }
+        } catch (decodedErr) {
+          if (decodedErr instanceof Error) throw decodedErr;
+        }
+
+        throw new Error(getEthersUserMessage(preErr));
+      }
+
       const mintTx = await itemNft.mintWithSig(
         mintArgs.to,
         mintArgs.purchaseId,
@@ -278,7 +334,8 @@ export default function Store() {
         BigInt(mintArgs.paidGold),
         mintArgs.tokenURI,
         BigInt(mintArgs.deadline),
-        mintArgs.signature
+        mintArgs.signature,
+        gasLimit ? { gasLimit } : {}
       );
       toast.success('Mint do item enviado! Aguardando confirmação…');
       const mintReceipt = await mintTx.wait();

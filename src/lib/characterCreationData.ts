@@ -51,7 +51,7 @@ export const races: CharacterRace[] = [
 
 export const pointSystem = {
   creation: {
-    availablePoints: 15,      // 15 pontos na criação
+    availablePoints: 10,      // 10 pontos livres na criação
     minStatValue: 0,          // Mínimo 0 pontos adicionais
     maxStatValue: 10,         // Máximo 10 pontos por stat
     costProgression: 'linear' // 1 ponto = 1 stat point

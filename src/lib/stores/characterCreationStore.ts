@@ -23,7 +23,6 @@ interface CharacterCreationState {
   creationSteps: CreationStep[];
   selectedRace: CharacterRace | null;
   selectedClass: any | null;
-  selectedSpecialization: 'str' | 'agi' | 'int' | 'res' | null;
   distributedPoints: BaseStats;
   characterName: string;
   selectedImage: string | null;
@@ -36,7 +35,6 @@ interface CharacterCreationState {
   goToStep: (stepIndex: number) => void;
   setSelectedRace: (race: CharacterRace) => void;
   setSelectedClass: (characterClass: any) => void;
-  setSelectedSpecialization: (spec: 'str' | 'agi' | 'int' | 'res' | null) => void;
   setDistributedPoints: (points: BaseStats) => void;
   setCharacterName: (name: string) => void;
   setSelectedImage: (image: string | null) => void;
@@ -94,7 +92,6 @@ export const useCharacterCreationStore = create<CharacterCreationState>()(
       ],
       selectedRace: null,
       selectedClass: null,
-      selectedSpecialization: null,
       distributedPoints: { str: 0, agi: 0, int: 0, res: 0, hp: 0, mp: 0, crit: 0, speed: 0 },
       characterName: '',
       selectedImage: null,
@@ -140,47 +137,31 @@ export const useCharacterCreationStore = create<CharacterCreationState>()(
         set((state) => {
           const updatedSteps = state.creationSteps.map((step) => {
             if (step.id === 'class-selection') {
-              return { ...step, isComplete: state.selectedSpecialization != null };
+              return { ...step, isComplete: characterClass != null };
             }
             if (step.id === 'stats-distribution') {
-              return { ...step, isAccessible: state.selectedSpecialization != null };
+              return { ...step, isAccessible: characterClass != null, isComplete: false };
             }
             return step;
           });
-          return { selectedClass: characterClass, creationSteps: updatedSteps };
-        }),
-
-      setSelectedSpecialization: (spec) =>
-        set((state) => {
-          const updatedSteps = state.creationSteps.map((step) => {
-            if (step.id === 'class-selection') {
-              return { ...step, isComplete: spec != null && state.selectedClass != null };
-            }
-            if (step.id === 'stats-distribution') {
-              return { ...step, isAccessible: spec != null && state.selectedClass != null };
-            }
-            return step;
-          });
-          return { selectedSpecialization: spec, creationSteps: updatedSteps };
+          return {
+            selectedClass: characterClass,
+            distributedPoints: { str: 0, agi: 0, int: 0, res: 0, hp: 0, mp: 0, crit: 0, speed: 0 },
+            creationSteps: updatedSteps,
+          };
         }),
 
       setDistributedPoints: (points: BaseStats) =>
-        set((state) => {
-          const updatedSteps = state.creationSteps.map((step) => {
-            if (step.id === 'stats-distribution') return { ...step, isComplete: true };
-            if (step.id === 'appearance') return { ...step, isAccessible: true };
-            return step;
-          });
-          return { distributedPoints: points, creationSteps: updatedSteps };
-        }),
+        set({ distributedPoints: points }),
 
       setCharacterName: (name: string) => set({ characterName: name }),
 
       setSelectedImage: (image: string | null) =>
         set((state) => {
+          const hasImage = Boolean(image);
           const updatedSteps = state.creationSteps.map((step) => {
-            if (step.id === 'appearance') return { ...step, isComplete: true };
-            if (step.id === 'name-confirm') return { ...step, isAccessible: true };
+            if (step.id === 'appearance') return { ...step, isComplete: hasImage };
+            if (step.id === 'name-confirm') return { ...step, isAccessible: hasImage };
             return step;
           });
           return { selectedImage: image, creationSteps: updatedSteps };
@@ -227,7 +208,6 @@ export const useCharacterCreationStore = create<CharacterCreationState>()(
           currentStep: 0,
           selectedRace: null,
           selectedClass: null,
-          selectedSpecialization: null,
           distributedPoints: { str: 0, agi: 0, int: 0, res: 0, hp: 0, mp: 0, crit: 0, speed: 0 },
           characterName: '',
           selectedImage: null,
@@ -254,7 +234,6 @@ export const useCharacterCreationStore = create<CharacterCreationState>()(
         })),
         selectedRace: state.selectedRace,
         selectedClass: state.selectedClass,
-        selectedSpecialization: state.selectedSpecialization,
         distributedPoints: state.distributedPoints,
         characterName: state.characterName,
         selectedImage: state.selectedImage,
@@ -292,8 +271,16 @@ export const useCharacterCreationStore = create<CharacterCreationState>()(
           creationSteps: mergedSteps,
         };
       },
-      version: 1,
-      migrate: (persistedState) => persistedState as any,
+      version: 2,
+      migrate: (persistedState: any) => {
+        // Drop removed fields from older persisted versions.
+        if (persistedState && typeof persistedState === 'object') {
+          const next = { ...(persistedState as any) }
+          delete (next as any).selectedSpecialization
+          return next
+        }
+        return persistedState as any
+      },
     }
   )
 );

@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { Coins, Wallet } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { ethers } from 'ethers'
+import { decodeContractCustomErrorMessage, getWalletTxErrorMessage } from '@/lib/walletErrors'
 
 type GoldStatus = {
   walletLinked: boolean
@@ -150,7 +151,18 @@ export default function WalletPage() {
       const signer = await provider.getSigner()
       const contract = new ethers.Contract(contractAddress, GOLD_CLAIM_ABI, signer)
 
-      const tx = await contract.claimWithSig(to, amountWei, nonce, deadline, signature)
+      // Preflight to improve user-facing errors
+      let gasLimit: bigint | undefined = undefined
+      try {
+        const est = (await contract.claimWithSig.estimateGas(to, amountWei, nonce, deadline, signature)) as bigint
+        gasLimit = (est * 12n) / 10n
+      } catch (preErr: any) {
+        const decoded = decodeContractCustomErrorMessage({ contractInterface: contract.interface, err: preErr })
+        if (decoded) throw new Error(decoded)
+        throw new Error(getWalletTxErrorMessage(preErr))
+      }
+
+      const tx = await contract.claimWithSig(to, amountWei, nonce, deadline, signature, gasLimit ? { gasLimit } : {})
       toast.success('Transação enviada! Aguardando confirmação…')
 
       const receipt = await tx.wait()
@@ -171,7 +183,7 @@ export default function WalletPage() {
       toast.success('GOLD claimado on-chain!')
       await refresh()
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Erro ao claimar'
+      const msg = e instanceof Error ? e.message : getWalletTxErrorMessage(e)
       toast.error(msg)
     } finally {
       setClaiming(false)

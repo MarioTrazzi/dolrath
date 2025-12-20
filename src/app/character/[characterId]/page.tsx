@@ -17,6 +17,7 @@ import CharacterHistory from '@/components/CharacterHistory';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 import { ethers } from 'ethers';
+import { getWalletTxErrorMessage } from '@/lib/walletErrors';
 
 import { Item } from '@/types/item';
 
@@ -397,7 +398,7 @@ export default function CharacterDetailsPage() {
       }
     } catch (error) {
       console.error('Error expanding inventory:', error);
-      toast.error('💥 Erro inesperado ao expandir inventário');
+      toast.error(getWalletTxErrorMessage(error, '💥 Erro inesperado ao expandir inventário'));
     } finally {
       // Always re-sync character data so UI reflects server state.
       try {

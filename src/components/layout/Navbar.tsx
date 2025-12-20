@@ -7,6 +7,8 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Coins, Wallet } from 'lucide-react'
 import { ethers } from 'ethers'
+import toast from 'react-hot-toast'
+import { getWalletTxErrorMessage } from '@/lib/walletErrors'
 
 export function Navbar() {
   const { data: session, update } = useSession()
@@ -73,6 +75,9 @@ export function Navbar() {
       }
 
       await update?.()
+      toast.success('Carteira vinculada com sucesso!')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : getWalletTxErrorMessage(e))
     } finally {
       setIsLinkingWallet(false)
     }

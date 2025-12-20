@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { Search, Filter, X } from 'lucide-react';
 import { ethers } from 'ethers';
 import { resolveImageUrl } from '@/lib/imageUrl';
+import { decodeContractCustomErrorMessage, getWalletTxErrorMessage } from '@/lib/walletErrors';
 
 interface StoreItem {
   id: string;
@@ -184,29 +185,6 @@ export default function Store() {
   const handlePurchase = async (itemId: string) => {
     setLoading(true);
     try {
-      const getEthersUserMessage = (err: any): string => {
-        const candidates = [
-          err?.shortMessage,
-          err?.reason,
-          err?.message,
-          err?.info?.error?.message,
-          err?.info?.error?.data?.message,
-          err?.data?.message,
-          err?.error?.message,
-          err?.error?.data?.message,
-        ]
-          .map((v) => (typeof v === 'string' ? v.trim() : ''))
-          .filter(Boolean)
-
-        const msg = candidates[0] || 'Erro ao enviar transação'
-        const lower = msg.toLowerCase()
-
-        if (lower.includes('insufficient funds')) return 'Saldo insuficiente de MATIC para gas'
-        if (lower.includes('user rejected') || lower.includes('rejected')) return 'Transação cancelada na carteira'
-
-        return msg
-      }
-
       const eth = (window as any)?.ethereum;
       if (!eth) {
         toast.error('MetaMask não encontrada');
@@ -309,22 +287,17 @@ export default function Store() {
         )) as bigint;
         gasLimit = (est * 12n) / 10n;
       } catch (preErr: any) {
-        // Try to decode custom errors from the contract.
-        try {
-          const data = preErr?.data || preErr?.info?.error?.data;
-          if (typeof data === 'string') {
-            const parsed = itemNft.interface.parseError(data);
-            const name = parsed?.name;
-            if (name === 'Expired') throw new Error('Assinatura expirada. Recarregue a página e tente novamente.');
-            if (name === 'OnlyRecipient') throw new Error('Carteira conectada não confere com o destinatário do mint.');
-            if (name === 'AlreadyMinted') throw new Error('Essa compra já foi usada para mintar (purchaseId já utilizado).');
-            if (name === 'InvalidSignature') throw new Error('Assinatura inválida. Tente novamente (ou reporte).');
-          }
-        } catch (decodedErr) {
-          if (decodedErr instanceof Error) throw decodedErr;
-        }
+        const decoded = decodeContractCustomErrorMessage({
+          contractInterface: itemNft.interface,
+          err: preErr,
+          messagesByName: {
+            OnlyRecipient: 'Carteira conectada não confere com o destinatário do mint.',
+            AlreadyMinted: 'Essa compra já foi usada para mintar (purchaseId já utilizado).',
+          },
+        });
+        if (decoded) throw new Error(decoded);
 
-        throw new Error(getEthersUserMessage(preErr));
+        throw new Error(getWalletTxErrorMessage(preErr));
       }
 
       const mintTx = await itemNft.mintWithSig(
@@ -371,7 +344,7 @@ export default function Store() {
       toast.success(`🛒 Item comprado e NFT mintada! (${item.goldPrice} GOLD)`, { duration: 3000 });
     } catch (error) {
       console.error('Error purchasing item:', error);
-      const message = error instanceof Error ? error.message : '💥 Erro inesperado na compra'
+      const message = error instanceof Error ? error.message : getWalletTxErrorMessage(error, '💥 Erro inesperado na compra')
       toast.error(message, { duration: 4000 });
     }
     setLoading(false);

@@ -12,6 +12,7 @@ import { ArrowLeft, ArrowRight, CheckCircle, Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSession, signIn } from 'next-auth/react';
 import { ethers } from 'ethers';
+import { getWalletTxErrorMessage } from '@/lib/walletErrors';
 import Link from 'next/link';
 import Image from 'next/image';
 
@@ -260,7 +261,7 @@ export default function CharacterCreationPage() {
 
       setCreationPaymentTxHash(tx.hash);
     } catch (e) {
-      setPaymentError(e instanceof Error ? e.message : 'Erro ao pagar taxa de criação');
+      setPaymentError(e instanceof Error ? e.message : getWalletTxErrorMessage(e, 'Erro ao pagar taxa de criação'));
     } finally {
       setIsPaying(false);
     }

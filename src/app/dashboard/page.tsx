@@ -15,6 +15,7 @@ import { Character } from '@/types/game';
 import { getRaceById, getClassById } from '@/lib/gameData';
 import { ethers } from 'ethers';
 import Image from 'next/image';
+import { getWalletTxErrorMessage } from '@/lib/walletErrors';
 // ...existing code...
 // ...existing code...
 
@@ -79,7 +80,7 @@ export default function DashboardPage() {
 
       await update?.();
     } catch (e) {
-      setWalletLinkError(e instanceof Error ? e.message : 'Erro ao vincular carteira');
+      setWalletLinkError(e instanceof Error ? e.message : getWalletTxErrorMessage(e));
     } finally {
       setIsLinkingWallet(false);
     }
@@ -282,7 +283,7 @@ export default function DashboardPage() {
       closeDeleteDialog();
       await fetchCharacters();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Erro ao excluir NFT.');
+      alert(err instanceof Error ? err.message : getWalletTxErrorMessage(err));
     }
   };
 

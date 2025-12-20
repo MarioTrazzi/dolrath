@@ -1,0 +1,176 @@
+function base64EncodeUtf8(input: string): string {
+  return Buffer.from(input, 'utf8').toString('base64')
+}
+
+function svgToDataUrl(svg: string): string {
+  return `data:image/svg+xml;base64,${base64EncodeUtf8(svg)}`
+}
+
+function jsonToDataUrl(obj: unknown): string {
+  const json = JSON.stringify(obj)
+  return `data:application/json;base64,${base64EncodeUtf8(json)}`
+}
+
+function escapeXml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
+}
+
+function safeString(value: unknown): string {
+  return typeof value === 'string' ? value : value == null ? '' : String(value)
+}
+
+function safeNumber(value: unknown, fallback: number): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value))) return Number(value)
+  return fallback
+}
+
+function flattenStatsToAttributes(stats: unknown): Array<{ trait_type: string; value: string | number }> {
+  if (!stats || typeof stats !== 'object') return []
+
+  const out: Array<{ trait_type: string; value: string | number }> = []
+
+  for (const [k, v] of Object.entries(stats as Record<string, unknown>)) {
+    if (v == null) continue
+
+    if (typeof v === 'number' && Number.isFinite(v)) {
+      out.push({ trait_type: k, value: v })
+      continue
+    }
+
+    if (typeof v === 'string') {
+      const trimmed = v.trim()
+      if (!trimmed) continue
+      out.push({ trait_type: k, value: trimmed })
+      continue
+    }
+
+    if (typeof v === 'boolean') {
+      out.push({ trait_type: k, value: v ? 'true' : 'false' })
+      continue
+    }
+  }
+
+  return out
+}
+
+export function buildItemNftMetadata(params: {
+  tokenId?: bigint
+  item: {
+    id: string
+    name: string
+    description?: string | null
+    type: string
+    subtype?: string | null
+    level?: number | null
+    stats?: unknown
+  }
+  paidGoldWei?: string | null
+}) {
+  const displayName = safeString(params.item.name).trim() || 'Item'
+  const level = safeNumber(params.item.level, 1)
+  const type = safeString(params.item.type).trim()
+  const subtype = safeString(params.item.subtype).trim()
+  const descriptionRaw = safeString(params.item.description).trim()
+
+  const lines: string[] = []
+  if (descriptionRaw) lines.push(descriptionRaw)
+  lines.push(`Tipo: ${type || 'UNKNOWN'}`)
+  lines.push(`Lv.${level}`)
+  if (subtype) lines.push(`Subtipo: ${subtype}`)
+
+  const description = lines.join('\n')
+
+  const tokenSuffix = params.tokenId != null ? ` • Token #${params.tokenId.toString()}` : ''
+
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 800 800">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#111827"/>
+      <stop offset="100%" stop-color="#0b1220"/>
+    </linearGradient>
+    <linearGradient id="frame" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#22c55e"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="800" height="800" fill="url(#bg)"/>
+  <rect x="36" y="36" width="728" height="728" rx="28" fill="none" stroke="url(#frame)" stroke-width="6"/>
+
+  <text x="64" y="120" fill="#ffffff" font-size="42" font-family="ui-sans-serif, system-ui" font-weight="800">${escapeXml(displayName)}</text>
+  <text x="64" y="168" fill="#cbd5e1" font-size="22" font-family="ui-sans-serif, system-ui">${escapeXml(type || 'Item')} • Level ${level}${escapeXml(tokenSuffix)}</text>
+
+  <g transform="translate(64, 220)">
+    <rect x="0" y="0" width="672" height="260" rx="18" fill="#0f172a" stroke="#1f2937" stroke-width="2"/>
+    <text x="24" y="56" fill="#e2e8f0" font-size="22" font-family="ui-sans-serif, system-ui" font-weight="700">Descrição</text>
+    <text x="24" y="110" fill="#94a3b8" font-size="18" font-family="ui-sans-serif, system-ui">${escapeXml(descriptionRaw || '—')}</text>
+  </g>
+
+  <g transform="translate(64, 520)">
+    <rect x="0" y="0" width="672" height="220" rx="18" fill="#0b1020" stroke="#1f2937" stroke-width="2"/>
+    <text x="24" y="56" fill="#e2e8f0" font-size="22" font-family="ui-sans-serif, system-ui" font-weight="700">Dolrath RPG</text>
+    <text x="24" y="92" fill="#94a3b8" font-size="18" font-family="ui-sans-serif, system-ui">Item NFT minted on Polygon Amoy</text>
+  </g>
+</svg>`
+
+  const attributes: Array<{ trait_type: string; value: string | number }> = [
+    { trait_type: 'ItemId', value: params.item.id },
+    { trait_type: 'Type', value: type || 'UNKNOWN' },
+    { trait_type: 'Level', value: level },
+  ]
+
+  if (subtype) attributes.push({ trait_type: 'Subtype', value: subtype })
+
+  if (params.paidGoldWei && String(params.paidGoldWei).trim()) {
+    attributes.push({ trait_type: 'PaidGoldWei', value: String(params.paidGoldWei).trim() })
+  }
+
+  attributes.push(...flattenStatsToAttributes((params.item as any).stats))
+
+  const metadata = {
+    name: displayName,
+    description,
+    image: svgToDataUrl(svg),
+    attributes,
+    properties: {
+      itemId: params.item.id,
+      type: type || null,
+      subtype: subtype || null,
+      level,
+      paidGoldWei: params.paidGoldWei || null,
+      stats: (params.item as any).stats ?? null,
+    },
+  }
+
+  return { metadata }
+}
+
+export function buildItemNftTokenUri(params: {
+  item: {
+    id: string
+    name: string
+    description?: string | null
+    type: string
+    subtype?: string | null
+    level?: number | null
+    stats?: unknown
+  }
+  paidGoldWei?: string | null
+}) {
+  const { metadata } = buildItemNftMetadata({
+    item: params.item,
+    paidGoldWei: params.paidGoldWei,
+  })
+
+  return {
+    tokenURI: jsonToDataUrl(metadata),
+    metadata,
+  }
+}

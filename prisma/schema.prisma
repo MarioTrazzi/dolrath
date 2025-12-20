@@ -99,12 +99,22 @@ model User {
   walletLinkNonce String?
   walletLinkNonceExpiresAt DateTime?
   goldBalance   Int       @default(1000)
+
+  // Optional on-chain claim flow (GOLD ERC-20): user accrues off-chain, claims on demand.
+  goldClaimNonce Int       @default(0)
+  goldClaimPendingAmount Int @default(0)
+  goldClaimPendingNonce Int?
+  goldClaimPendingDeadline DateTime?
+  goldClaimPendingCreatedAt DateTime?
+  goldClaimPendingTxHash String?
+
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   accounts      Account[]
   sessions      Session[]
   characters    Character[]
   inventory     UserInventory[]
+  itemNfts      ItemNft[]
 }
 
 model UserInventory {
@@ -190,6 +200,26 @@ model Item {
   characterInventory  CharacterInventory[]
   equipment           CharacterEquipment[]
   history             CharacterHistory[]
+  nfts                ItemNft[]
+}
+
+model ItemNft {
+  id            String   @id @default(cuid())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String
+  item          Item     @relation(fields: [itemId], references: [id])
+  itemId        String
+  chainId       Int
+  contract      String
+  tokenId       BigInt
+  paidGoldWei   String
+  purchaseTxHash String? @unique
+  mintTxHash    String?  @unique
+  mintedAt      DateTime @default(now())
+
+  @@unique([chainId, contract, tokenId])
+  @@index([userId])
+  @@index([itemId])
 }
 
 model CharacterInventory {

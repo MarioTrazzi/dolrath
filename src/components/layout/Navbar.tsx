@@ -17,6 +17,9 @@ export function Navbar() {
   const [dolBalance, setDolBalance] = useState<string | null>(null)
   const [dolSymbol, setDolSymbol] = useState<string | null>(null)
 
+  const [goldLoading, setGoldLoading] = useState(false)
+  const [goldOffchain, setGoldOffchain] = useState<number | null>(null)
+
   const [isLinkingWallet, setIsLinkingWallet] = useState(false)
 
   const walletAddress = session?.user?.walletAddress
@@ -80,6 +83,9 @@ export function Navbar() {
       setDolLoading(false)
       setDolBalance(null)
       setDolSymbol(null)
+
+      setGoldLoading(false)
+      setGoldOffchain(null)
       return
     }
 
@@ -87,6 +93,9 @@ export function Navbar() {
       setDolLoading(false)
       setDolBalance(null)
       setDolSymbol(null)
+
+      setGoldLoading(false)
+      setGoldOffchain(null)
       return
     }
 
@@ -111,6 +120,28 @@ export function Navbar() {
       })
       .finally(() => setDolLoading(false))
   }, [session, walletAddress])
+
+  useEffect(() => {
+    if (!session) {
+      setGoldLoading(false)
+      setGoldOffchain(null)
+      return
+    }
+
+    setGoldLoading(true)
+    fetch('/api/gold/status', { cache: 'no-store' })
+      .then(async (res) => {
+        const json = await res.json()
+        if (!res.ok) {
+          throw new Error(json?.error || 'Falha ao buscar gold')
+        }
+
+        const offchain = Number(json?.offchainBalance ?? 0)
+        setGoldOffchain(Number.isFinite(offchain) ? offchain : 0)
+      })
+      .catch(() => setGoldOffchain(null))
+      .finally(() => setGoldLoading(false))
+  }, [session])
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-white/10">
@@ -164,7 +195,11 @@ export function Navbar() {
             {session ? (
               <div className="flex items-center space-x-4">
                 {/* DOL (on-chain) Display */}
-                <div className="flex items-center gap-2 px-3 py-2 bg-surface/50 rounded-lg border border-yellow-500/30">
+                <Link
+                  href="/wallet"
+                  className="flex items-center gap-2 px-3 py-2 bg-surface/50 rounded-lg border border-yellow-500/30 hover:border-primary transition-all"
+                  title="Abrir Wallet"
+                >
                   <Coins className="w-4 h-4 text-yellow-500" />
                   <span className="text-yellow-400 font-semibold">
                     {walletAddress ? (
@@ -179,7 +214,19 @@ export function Navbar() {
                       `— ${dolSymbol || 'DOL'}`
                     )}
                   </span>
-                </div>
+                </Link>
+
+                {/* GOLD (off-chain) Display */}
+                <Link
+                  href="/wallet"
+                  className="flex items-center gap-2 px-3 py-2 bg-surface/50 rounded-lg border border-yellow-500/30 hover:border-primary transition-all"
+                  title="Abrir Wallet"
+                >
+                  <Coins className="w-4 h-4 text-yellow-500" />
+                  <span className="text-yellow-400 font-semibold">
+                    {goldLoading ? '...' : `${goldOffchain ?? 0} GOLD`}
+                  </span>
+                </Link>
 
                 {!walletAddress && (
                   <motion.button
@@ -297,7 +344,11 @@ export function Navbar() {
               </Link>
               {session ? (
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between gap-3 px-3 py-2 bg-surface/50 rounded-lg border border-yellow-500/30">
+                  <Link
+                    href="/wallet"
+                    onClick={() => setIsMenuOpen(false)}
+                    className="flex items-center justify-between gap-3 px-3 py-2 bg-surface/50 rounded-lg border border-yellow-500/30 hover:border-primary transition-all"
+                  >
                     <div className="flex items-center gap-2">
                       <Coins className="w-4 h-4 text-yellow-500" />
                       <span className="text-yellow-400 font-semibold">
@@ -315,6 +366,11 @@ export function Navbar() {
                       </span>
                     </div>
 
+                    <div className="text-yellow-400 font-semibold">
+                      {goldLoading ? '...' : `${goldOffchain ?? 0} GOLD`}
+                    </div>
+                  </Link>
+
                     {!walletAddress && (
                       <motion.button
                         whileHover={{ scale: 1.05 }}
@@ -330,7 +386,7 @@ export function Navbar() {
                         {isLinkingWallet ? 'Conectando...' : 'Conectar'}
                       </motion.button>
                     )}
-                  </div>
+
                   <Link 
                     href="/dashboard"
                     onClick={() => setIsMenuOpen(false)}

@@ -2,6 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { recordInventoryExpansion } from '@/lib/characterHistory';
+import { verifyGoldTransferTx } from '@/lib/goldPayments';
+
+function isHex32Bytes(txHash: string): boolean {
+  return /^0x[0-9a-fA-F]{64}$/.test(txHash)
+}
+
+function jsonSafe<T>(value: T): any {
+  return JSON.parse(
+    JSON.stringify(value, (_key, v) => (typeof v === 'bigint' ? v.toString() : v))
+  )
+}
 
 export async function POST(
   req: NextRequest,
@@ -14,13 +25,40 @@ export async function POST(
   }
 
   try {
-    const { slots } = await req.json();
+    const { slots, txHash } = await req.json();
 
     if (!slots || slots <= 0) {
       return NextResponse.json(
         { error: 'Invalid number of slots' },
         { status: 400 }
       );
+    }
+
+    // Fixed pricing (on-chain GOLD): +5 slots costs 1000 GOLD
+    const expectedSlots = 5;
+    const goldCostHuman = '1000';
+
+    if (Number(slots) !== expectedSlots) {
+      return NextResponse.json(
+        { error: `Invalid slots amount. Expected ${expectedSlots}.` },
+        { status: 400 }
+      );
+    }
+
+    const txHashStr = (typeof txHash === 'string' ? txHash : '').trim();
+    if (!txHashStr) {
+      return NextResponse.json(
+        {
+          error: 'On-chain payment required',
+          requiresPayment: true,
+          amountGold: goldCostHuman,
+        },
+        { status: 402 }
+      );
+    }
+
+    if (!isHex32Bytes(txHashStr)) {
+      return NextResponse.json({ error: 'Invalid txHash' }, { status: 400 })
     }
 
     // Verificar se o personagem pertence ao usuário
@@ -52,39 +90,43 @@ export async function POST(
       );
     }
 
-    // Calcular custo: 100 gold por slot adicional, aumentando progressivamente
+    const walletAddress = String((user as any).walletAddress || '').trim();
+    if (!walletAddress) {
+      return NextResponse.json(
+        { error: 'Wallet required', requiresWallet: true },
+        { status: 403 }
+      );
+    }
+
+    const treasuryAddress =
+      (process.env.GOLD_TREASURY_ADDRESS || '').trim() ||
+      (process.env.DOL_TREASURY_ADDRESS || '').trim() ||
+      (process.env.NEXT_PUBLIC_DOL_TREASURY_ADDRESS || '').trim();
+
+    if (!treasuryAddress) {
+      return NextResponse.json(
+        { error: 'Server missing GOLD_TREASURY_ADDRESS (or DOL_TREASURY_ADDRESS)' },
+        { status: 500 }
+      );
+    }
+
+    // Verify on-chain GOLD transfer to treasury.
+    try {
+      await verifyGoldTransferTx({
+        txHash: txHashStr,
+        expectedFrom: walletAddress,
+        expectedTo: treasuryAddress,
+        minAmountHuman: goldCostHuman,
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Invalid payment'
+      return NextResponse.json(jsonSafe({ error: message }), { status: 400 })
+    }
+
     const currentSlots = character.inventorySlots;
-    const baseCost = 100;
-    let totalCost = 0;
-
-    // Custo progressivo: cada slot fica mais caro
-    for (let i = 0; i < slots; i++) {
-      const slotNumber = currentSlots + i;
-      const slotCost = baseCost * Math.floor(slotNumber / 10 + 1);
-      totalCost += slotCost;
-    }
-
-    // Verificar se o usuário tem gold suficiente
-    if (user.goldBalance < totalCost) {
-      return NextResponse.json({
-        error: `Gold insuficiente! Você precisa de ${totalCost} gold, mas tem apenas ${user.goldBalance}.`
-      }, { status: 400 });
-    }
 
     // Usar uma transação para garantir atomicidade
     const result = await prisma.$transaction(async (tx) => {
-      // Deduzir gold do usuário
-      await tx.user.update({
-        where: {
-          id: session.user!.id,
-        },
-        data: {
-          goldBalance: {
-            decrement: totalCost,
-          },
-        },
-      });
-
       // Atualizar slots do personagem
       const updatedCharacter = await tx.character.update({
         where: {
@@ -102,22 +144,22 @@ export async function POST(
 
     // Registrar no histórico
     try {
-      await recordInventoryExpansion(params.characterId, currentSlots, result.inventorySlots, totalCost);
+      await recordInventoryExpansion(params.characterId, currentSlots, result.inventorySlots, Number(goldCostHuman));
     } catch (historyError) {
       console.error('Erro ao registrar histórico:', historyError);
       // Não falhar a operação por causa do histórico
     }
 
-    return NextResponse.json({
-      character: result,
-      cost: totalCost,
-      newSlots: result.inventorySlots,
-    });
+    return NextResponse.json(
+      jsonSafe({
+        character: result,
+        cost: Number(goldCostHuman),
+        newSlots: result.inventorySlots,
+      })
+    );
   } catch (error) {
     console.error('Error expanding inventory slots:', error);
-    return NextResponse.json(
-      { error: 'Failed to expand inventory slots' },
-      { status: 500 }
-    );
+    const message = error instanceof Error ? error.message : 'Failed to expand inventory slots'
+    return NextResponse.json(jsonSafe({ error: message }), { status: 500 })
   }
 }

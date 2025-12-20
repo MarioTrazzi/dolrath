@@ -50,6 +50,45 @@ NEXTAUTH_SECRET=seu_secret_atual
 NEXTAUTH_URL=https://sua-url-vercel.vercel.app
 ```
 
+#### Variáveis on-chain (GOLD / NFTs / Marketplace)
+
+Essas variáveis são necessárias para o fluxo de:
+**pagar GOLD on-chain → assinar mint → mintar NFT do item → confirmar e salvar no DB**.
+
+```bash
+# Polygon RPC (fallback)
+POLYGON_AMOY_RPC_URL=https://rpc-amoy.polygon.technology/
+
+# Tesouraria que recebe GOLD (pagamentos da loja)
+GOLD_TREASURY_ADDRESS=0x...
+
+# GOLD (ERC-20)
+GOLD_CONTRACT_ADDRESS=0x...
+GOLD_CHAIN_ID=80002
+
+# Assinador server-side (NUNCA expor no client)
+# Recomendação: usar um signer dedicado para itens e claim.
+GOLD_SIGNER_PRIVATE_KEY=0x...
+# Opcional: se vazio, o backend usa GOLD_SIGNER_PRIVATE_KEY
+ITEM_NFT_SIGNER_PRIVATE_KEY=0x...
+
+# Item NFTs (ERC-721)
+ITEM_NFT_CONTRACT_ADDRESS=0x...
+ITEM_NFT_CHAIN_ID=80002
+
+# Item Marketplace (escrow)
+ITEM_MARKET_CONTRACT_ADDRESS=0x...
+ITEM_MARKET_CHAIN_ID=80002
+
+# DOL (se você usa criação de personagem / market de personagens)
+DOL_TOKEN_ADDRESS=0x...
+DOL_TREASURY_ADDRESS=0x...
+```
+
+Notas importantes:
+- Para produção, **não use `localhost` em tokenURI**. Neste momento, os itens são mintados com `tokenURI` em formato `data:application/json;base64,...` (funciona em qualquer wallet sem depender de URL pública).
+- Se você quiser também servir metadata via URL (para indexadores), a rota existe em `/api/nft/item/metadata/[tokenId]` e você pode configurar `ITEM_NFT_BASE_URI=https://SEU_APP.vercel.app/api/nft/item/metadata/` no deploy do contrato.
+
 ## 🔧 Configuração Passo a Passo
 
 ### Passo 1: Deploy no Railway (WebSocket)

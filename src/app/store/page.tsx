@@ -6,6 +6,7 @@ import Image from 'next/image';
 import toast from 'react-hot-toast';
 import { Search, Filter, X } from 'lucide-react';
 import { ethers } from 'ethers';
+import { resolveImageUrl } from '@/lib/imageUrl';
 
 interface StoreItem {
   id: string;
@@ -666,16 +667,21 @@ export default function Store() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredItems.map((item) => {
               const ownedQuantity = getInventoryQuantity(item.id);
+              const resolvedImageUrl = resolveImageUrl(item.image) ?? item.image;
+              const shouldBypassNextImageOptimization = Boolean(
+                item.image && !/^(https?:\/\/|data:|ipfs:\/\/)/i.test(item.image)
+              );
               
               return (
                 <div key={item.id} className="bg-surface/50 border border-white/20 rounded-lg p-4 shadow-lg hover:shadow-xl transition-all hover:border-primary/50">
-                  {item.image && (
+                  {resolvedImageUrl && (
                     <div className="w-full h-32 relative mb-3">
                       <Image
-                        src={item.image}
+                        src={resolvedImageUrl}
                         alt={item.name}
                         fill
                         className="object-contain"
+                        unoptimized={shouldBypassNextImageOptimization}
                       />
                     </div>
                   )}

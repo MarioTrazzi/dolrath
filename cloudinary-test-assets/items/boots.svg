@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#ffffff"/>
+  <g fill="none" stroke="#111111" stroke-width="18" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M188 140 L312 140 L328 280 C334 326 300 368 252 376 L160 392"/>
+    <path d="M160 392 L118 374 C98 366 88 344 96 324 L124 260 L188 260"/>
+    <path d="M188 220 L320 220"/>
+    <path d="M172 324 L312 324"/>
+  </g>
+  <text x="256" y="478" text-anchor="middle" font-size="40" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" fill="#111111">BOOTS</text>
+</svg>

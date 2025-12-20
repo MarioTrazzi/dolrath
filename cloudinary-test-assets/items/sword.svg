@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#ffffff"/>
+  <g fill="none" stroke="#111111" stroke-width="18" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M140 372 L92 420"/>
+    <path d="M176 336 L128 384"/>
+    <path d="M200 312 L168 344"/>
+    <path d="M224 288 L200 312"/>
+    <path d="M356 156 L236 276"/>
+    <path d="M388 124 L356 156"/>
+    <path d="M420 92 L388 124"/>
+    <path d="M236 276 L200 312"/>
+    <path d="M160 352 L260 452"/>
+    <path d="M120 392 L220 492"/>
+  </g>
+  <text x="256" y="478" text-anchor="middle" font-size="40" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" fill="#111111">SWORD</text>
+</svg>

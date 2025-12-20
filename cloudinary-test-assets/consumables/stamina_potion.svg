@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Stamina Potion">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8ce99a"/>
+      <stop offset="1" stop-color="#2f9e44"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="64" fill="#0b1020"/>
+  <g fill="none" stroke="#ffffff" stroke-width="18" opacity="0.25">
+    <path d="M112 120h288"/>
+    <path d="M112 392h288"/>
+  </g>
+  <g>
+    <path d="M208 96h96v56c0 14 6 27 16 36l10 9c26 22 42 55 42 92v70c0 66-54 120-120 120h-12c-66 0-120-54-120-120v-70c0-37 16-70 42-92l10-9c10-9 16-22 16-36z" fill="#ffffff" opacity="0.10"/>
+    <path d="M216 108h80v44c0 18 8 35 22 47l6 6c23 19 38 48 38 80v74c0 61-49 110-110 110h-12c-61 0-110-49-110-110v-74c0-32 15-61 38-80l6-6c14-12 22-29 22-47z" fill="url(#g)"/>
+    <path d="M198 340l42-56 30 36 44-64" fill="none" stroke="#ffffff" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="214" y="72" width="84" height="44" rx="10" fill="#ffffff" opacity="0.18"/>
+  </g>
+</svg>

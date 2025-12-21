@@ -6,6 +6,7 @@ import { RACES, CLASSES, getRaceById, getClassById } from '@/lib/gameData'
 import { verifyDolTransferTx } from '@/lib/dolPayments'
 import { getCharacterNftChainId, getCharacterNftContractAddress } from '@/lib/characterNftOnchain'
 import { verifyCharacterNftMintTx } from '@/lib/characterNftVerify'
+import { pointSystem } from '@/lib/characterCreationData'
 
 function serializeBigIntForJson<T>(value: T): T {
   return JSON.parse(
@@ -88,6 +89,19 @@ export async function POST(req: Request) {
     nftTokenId,
     nftTokenUri,
   } = body
+
+  const parsedDistributedPoints = (() => {
+    if (!distributedPoints) return null
+    if (typeof distributedPoints === 'string') {
+      try {
+        const parsed = JSON.parse(distributedPoints)
+        return parsed && typeof parsed === 'object' ? parsed : null
+      } catch {
+        return null
+      }
+    }
+    return typeof distributedPoints === 'object' ? distributedPoints : null
+  })()
 
   const avatarUrl = (typeof avatar === 'string' && avatar.trim())
     ? avatar
@@ -175,15 +189,15 @@ export async function POST(req: Request) {
     }
 
     // Validar e extrair os valores dos atributos distribuídos pelo jogador
-    const distributedStr = Number(distributedPoints?.str || 0)
-    const distributedAgi = Number(distributedPoints?.agi || 0)
-    const distributedInt = Number(distributedPoints?.int || 0)
-    const distributedDef = Number(distributedPoints?.def || 0)
+    const distributedStr = Number((parsedDistributedPoints as any)?.str ?? 0)
+    const distributedAgi = Number((parsedDistributedPoints as any)?.agi ?? 0)
+    const distributedInt = Number((parsedDistributedPoints as any)?.int ?? 0)
+    const distributedDef = Number((parsedDistributedPoints as any)?.def ?? (parsedDistributedPoints as any)?.res ?? 0)
 
     // Basic validation (prevents client tampering and keeps balance constraints)
     const totalDistributed = distributedStr + distributedAgi + distributedInt + distributedDef
-    const maxPerStat = 10
-    const expectedTotal = 15
+    const maxPerStat = Number(pointSystem?.creation?.maxStatValue ?? 10)
+    const expectedTotal = Number(pointSystem?.creation?.availablePoints ?? 10)
     const allInts = [distributedStr, distributedAgi, distributedInt, distributedDef].every((v) => Number.isFinite(v) && Number.isInteger(v))
     const inRange = [distributedStr, distributedAgi, distributedInt, distributedDef].every((v) => v >= 0 && v <= maxPerStat)
 
@@ -254,7 +268,7 @@ export async function POST(req: Request) {
       }
     };
 
-    const attributes = distributedPoints ? {
+    const attributes = parsedDistributedPoints ? {
       // Stats distribuídos pelo jogador
       distributedStr, distributedAgi, distributedInt, distributedDef,
       // Stats finais (com bônus)

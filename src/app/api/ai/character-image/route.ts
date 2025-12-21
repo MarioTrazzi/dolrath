@@ -37,6 +37,9 @@ export async function POST(req: Request) {
 
   const numImages = clampInt(body?.numImages, 1, 4, 3);
 
+  const model = (process.env.OPENAI_IMAGE_MODEL || 'dall-e-3').trim();
+  const size = (process.env.OPENAI_IMAGE_SIZE || '1024x1024').trim();
+
   try {
     // Note: OpenAI image endpoints/models can evolve. This uses the standard Images API
     // and requests base64 so we can render directly without extra storage.
@@ -47,11 +50,10 @@ export async function POST(req: Request) {
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1',
+        model,
         prompt,
         n: numImages,
-        size: process.env.OPENAI_IMAGE_SIZE || '1024x1024',
-        response_format: 'b64_json',
+        size,
       }),
     });
 
@@ -68,14 +70,17 @@ export async function POST(req: Request) {
         typeof json?.error?.message === 'string'
           ? json.error.message
           : `Falha ao gerar imagem (HTTP ${res.status})`;
-      return NextResponse.json({ error: msg }, { status: 500 });
+      return NextResponse.json({ error: `${msg} (model=${model})` }, { status: 500 });
     }
 
     const data = Array.isArray(json?.data) ? json.data : [];
     const images: string[] = data
-      .map((d: any) => (typeof d?.b64_json === 'string' ? d.b64_json : null))
-      .filter(Boolean)
-      .map((b64: string) => `data:image/png;base64,${b64}`);
+      .map((d: any) => {
+        if (typeof d?.url === 'string' && d.url) return d.url;
+        if (typeof d?.b64_json === 'string' && d.b64_json) return `data:image/png;base64,${d.b64_json}`;
+        return null;
+      })
+      .filter(Boolean);
 
     if (images.length === 0) {
       return NextResponse.json({ error: 'Resposta da IA vazia (sem imagens)' }, { status: 500 });

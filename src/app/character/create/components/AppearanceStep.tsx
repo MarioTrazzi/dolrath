@@ -73,7 +73,7 @@ export function AppearanceStep() {
     const raceLore = selectedRace?.lore ? String(selectedRace.lore) : '';
 
     const { pts, physical, agility, intellect, defense } = statDescriptors();
-    const statsLine = `Stats focus (creation points): STR ${pts.str}, AGI ${pts.agi}, INT ${pts.int}, RES ${pts.res}.`;
+    const statsLine = `Stats focus (creation points): STR ${pts.str}, AGI ${pts.agi}, INT ${pts.int}, DEF ${pts.res}.`;
 
     const raceFlavorById: Record<string, string> = {
       draconiano:

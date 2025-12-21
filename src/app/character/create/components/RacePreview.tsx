@@ -13,6 +13,8 @@ export function RacePreview({ race, showStats }: RacePreviewProps) {
   const initialStats: BaseStats = { str: 0, agi: 0, int: 0, res: 0, hp: 0, mp: 0, crit: 0, speed: 0 };
   const finalStats = race ? calculateFinalStats(race, initialStats) : null;
 
+  const displayKey = (key: string) => (key === 'res' ? 'DEF' : key);
+
   return (
     <div className="bg-surface/50 backdrop-blur-sm rounded-xl p-6 border border-white/10 h-full flex flex-col">
       <h3 className="text-xl font-bold text-text-primary mb-4">
@@ -76,7 +78,7 @@ export function RacePreview({ race, showStats }: RacePreviewProps) {
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                   {Object.entries(finalStats).map(([key, value]) => (
                     <div key={key} className="flex justify-between items-center">
-                      <span className="text-text-secondary capitalize">{key}:</span>
+                      <span className="text-text-secondary capitalize">{displayKey(key)}:</span>
                       <span className="font-bold text-text-primary">{value.toFixed(1)}</span>
                     </div>
                   ))}

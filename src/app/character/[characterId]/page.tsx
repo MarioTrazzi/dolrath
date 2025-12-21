@@ -484,8 +484,9 @@ export default function CharacterDetailsPage() {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ xp: 100 }),
                       });
-                      const result = await response.json();
-                      if (result.success) {
+                      const raw = await response.text().catch(() => '');
+                      const result = raw ? JSON.parse(raw) : null;
+                      if (response.ok && result?.success) {
                         toast.success(result.message);
                         // Recarregar dados do personagem
                         const updatedResponse = await fetch(`/api/character/${effectiveCharacterId}`);
@@ -494,10 +495,10 @@ export default function CharacterDetailsPage() {
                           setCharacter(characterData);
                         }
                       } else {
-                        toast.error('Erro ao adicionar XP');
+                        toast.error(String(result?.error || `Erro ao adicionar XP (HTTP ${response.status})`));
                       }
                     } catch (error) {
-                      toast.error('Erro ao adicionar XP');
+                      toast.error(getWalletTxErrorMessage(error, 'Erro ao adicionar XP'));
                     }
                   }}
                   className="px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
@@ -513,8 +514,9 @@ export default function CharacterDetailsPage() {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ xp: 1000 }),
                       });
-                      const result = await response.json();
-                      if (result.success) {
+                      const raw = await response.text().catch(() => '');
+                      const result = raw ? JSON.parse(raw) : null;
+                      if (response.ok && result?.success) {
                         toast.success(result.message);
                         // Recarregar dados do personagem
                         const updatedResponse = await fetch(`/api/character/${effectiveCharacterId}`);
@@ -523,10 +525,10 @@ export default function CharacterDetailsPage() {
                           setCharacter(characterData);
                         }
                       } else {
-                        toast.error('Erro ao adicionar XP');
+                        toast.error(String(result?.error || `Erro ao adicionar XP (HTTP ${response.status})`));
                       }
                     } catch (error) {
-                      toast.error('Erro ao adicionar XP');
+                      toast.error(getWalletTxErrorMessage(error, 'Erro ao adicionar XP'));
                     }
                   }}
                   className="px-3 py-1 bg-purple-500 text-white text-xs rounded hover:bg-purple-600"

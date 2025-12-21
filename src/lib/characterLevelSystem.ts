@@ -55,7 +55,7 @@ export async function addExperienceToCharacter(characterId: string, xpToAdd: num
         availablePoints: (character.availablePoints || 0) + pointsToGive,
         // Atualizar também o baseStats para referência
         baseStats: {
-          ...character.baseStats as any,
+          ...(((character.baseStats && typeof character.baseStats === 'object') ? character.baseStats : {}) as any),
           hp: newStats.hp,
           maxHp: newStats.maxHp,
           mp: newStats.mp,

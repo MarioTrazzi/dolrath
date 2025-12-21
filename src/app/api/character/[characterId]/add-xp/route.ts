@@ -49,6 +49,7 @@ export async function POST(request: NextRequest, { params }: { params: { charact
     });
   } catch (error) {
     console.error('Error adding experience:', error);
-    return NextResponse.json({ error: 'Error adding experience' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Error adding experience'
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -7,6 +7,7 @@ import { generateCharacterImage } from '@/lib/openai';
 import { ImageUpload } from './ImageUpload';
 import { useCharacterCreationStore } from '@/lib/stores/characterCreationStore';
 import { cn } from '@/lib/utils';
+import { isCloudinaryUploadConfigured, uploadImageToCloudinary } from '@/lib/cloudinaryUpload';
 
 export function AppearanceStep() {
   const { selectedRace, selectedClass, distributedPoints, characterName, selectedImage, setSelectedImage, markStepComplete } = useCharacterCreationStore();
@@ -88,16 +89,36 @@ export function AppearanceStep() {
 
     // Keep it short but specific; let the generator fill details.
     return [
+      // Base template: always consistent style.
       `Fantasy RPG character portrait in the world of Dolrath${namePart}.`,
       `Race: ${raceName}. Class: ${className}.`,
       raceLore ? `Lore: ${raceLore}` : null,
       raceFlavor ? `Visual identity: ${raceFlavor}.` : null,
       statsLine,
       `Visual cues based on stats: ${physical}; ${agility}; ${intellect}; ${defense}.`,
-      'Style: cinematic, highly detailed, high quality, dramatic lighting, sharp focus, 1 character, portrait, no text, no watermark.',
+      'Style constraints: cinematic fantasy, highly detailed, coherent anatomy, grounded design (not goofy), dramatic lighting, sharp focus, 1 character, portrait, no text, no watermark, no logo.',
     ]
       .filter(Boolean)
       .join('\n');
+  };
+
+  const normalizePlayerPrompt = (value: string) => {
+    const s = String(value || '').replace(/\s+/g, ' ').trim();
+    if (!s) return '';
+    return s.slice(0, 400);
+  };
+
+  const buildFinalPrompt = () => {
+    const base = getDefaultPrompt();
+    const player = normalizePlayerPrompt(customPrompt);
+    if (!player) return base;
+
+    // Player prompt should only add preferences, never override the base lore/style.
+    return [
+      base,
+      'Player preferences (must follow the style constraints above; do not change art style):',
+      `- ${player}`,
+    ].join('\n');
   };
 
   const generateImages = async () => {
@@ -108,12 +129,36 @@ export function AppearanceStep() {
     setSelectedImage(null);
 
     try {
-      const prompt = customPrompt || getDefaultPrompt();
+      const prompt = buildFinalPrompt();
       
       const images = await generateCharacterImage(prompt, 3); // Gerar 3 opções
-      setGeneratedImages(images);
-      if (images.length > 0) {
-        setSelectedImage(images[0]); // Auto-select the first generated image
+
+      // Prefer HTTPS URLs: upload AI results to Cloudinary when configured.
+      let finalImages = images;
+      if (images.length > 0 && isCloudinaryUploadConfigured()) {
+        try {
+          const uploaded = await Promise.all(
+            images.map(async (img) => {
+              // Only upload data URLs returned by the generator.
+              if (!String(img).startsWith('data:image/')) return img;
+              const { secureUrl } = await uploadImageToCloudinary({
+                dataUrl: img,
+                folder: 'dolrath/characters/avatars',
+                tags: ['dolrath', 'character-avatar', 'ai-generated'],
+              });
+              return secureUrl;
+            })
+          );
+          finalImages = uploaded;
+        } catch {
+          // If Cloudinary fails, keep data URLs.
+          finalImages = images;
+        }
+      }
+
+      setGeneratedImages(finalImages);
+      if (finalImages.length > 0) {
+        setSelectedImage(finalImages[0]); // Auto-select the first generated image
       }
     } catch (error) {
       console.error('Erro ao gerar imagens:', error);

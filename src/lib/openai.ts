@@ -1,4 +1,7 @@
-export async function generateCharacterImage(prompt: string, numImages: number): Promise<string[]> {
+export async function generateCharacterImage(
+  prompt: string,
+  numImages: number
+): Promise<{ images: string[]; error?: string }> {
   const makeSvg = (label: string, bg: string) => {
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
   <rect width="512" height="512" fill="${bg}"/>
@@ -23,13 +26,16 @@ export async function generateCharacterImage(prompt: string, numImages: number):
 
     const json = await res.json().catch(() => null);
     if (!res.ok) {
-      throw new Error(typeof json?.error === 'string' ? json.error : 'Falha ao gerar imagem');
+      const msg = typeof json?.error === 'string' ? json.error : 'Falha ao gerar imagem';
+      return { images: placeholderImages.slice(0, numImages), error: msg };
     }
 
     const images = Array.isArray(json?.images) ? (json.images as string[]) : [];
-    if (images.length === 0) return placeholderImages.slice(0, numImages);
-    return images.slice(0, numImages);
+    if (images.length === 0) {
+      return { images: placeholderImages.slice(0, numImages), error: 'Resposta da IA vazia (sem imagens)' };
+    }
+    return { images: images.slice(0, numImages) };
   } catch {
-    return placeholderImages.slice(0, numImages);
+    return { images: placeholderImages.slice(0, numImages), error: 'Erro ao chamar o gerador de imagens' };
   }
 }

@@ -196,7 +196,10 @@ export function NameConfirmStep() {
       let gasLimit: bigint | undefined = undefined;
       try {
         const est = (await nftContract.mintWithSig.estimateGas(to, tokenURI, deadline, signature)) as bigint;
-        gasLimit = (est * 12n) / 10n;
+        // Use a generous buffer to avoid MetaMask masking with -32603 on borderline limits.
+        const buffered = (est * 15n) / 10n + 50_000n;
+        const min = 350_000n;
+        gasLimit = buffered < min ? min : buffered;
       } catch (preErr: any) {
         const decoded = decodeContractCustomErrorMessage({
           contractInterface: nftContract.interface,
@@ -206,7 +209,23 @@ export function NameConfirmStep() {
         throw new Error(getWalletTxErrorMessage(preErr));
       }
 
-      const mintTx = await nftContract.mintWithSig(to, tokenURI, deadline, signature, gasLimit ? { gasLimit } : {});
+      let mintTx: any;
+      try {
+        mintTx = await nftContract.mintWithSig(
+          to,
+          tokenURI,
+          deadline,
+          signature,
+          gasLimit ? { gasLimit } : {}
+        );
+      } catch (sendErr: any) {
+        const decoded = decodeContractCustomErrorMessage({
+          contractInterface: nftContract.interface,
+          err: sendErr,
+        });
+        if (decoded) throw new Error(decoded);
+        throw new Error(getWalletTxErrorMessage(sendErr));
+      }
       mintTxHashForRecovery = String(mintTx.hash);
       const mintReceipt = await mintTx.wait();
 

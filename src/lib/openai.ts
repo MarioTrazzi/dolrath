@@ -1,8 +1,17 @@
 export async function generateCharacterImage(prompt: string, numImages: number): Promise<string[]> {
+  const makeSvg = (label: string, bg: string) => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="${bg}"/>
+  <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="ui-sans-serif, system-ui" font-size="32" fill="#ffffff">${label}</text>
+</svg>`;
+    const b64 = typeof window !== 'undefined' ? btoa(unescape(encodeURIComponent(svg))) : Buffer.from(svg, 'utf8').toString('base64');
+    return `data:image/svg+xml;base64,${b64}`;
+  };
+
   const placeholderImages = [
-    'https://via.placeholder.com/256x256/FF5733/FFFFFF?text=AI+Image+1',
-    'https://via.placeholder.com/256x256/33FF57/FFFFFF?text=AI+Image+2',
-    'https://via.placeholder.com/256x256/3357FF/FFFFFF?text=AI+Image+3',
+    makeSvg('AI Image 1', '#b91c1c'),
+    makeSvg('AI Image 2', '#15803d'),
+    makeSvg('AI Image 3', '#1d4ed8'),
   ];
 
   try {

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { signMintRequest } from '@/lib/characterNftSigning'
 import { getCharacterNftChainId, getCharacterNftContractAddress } from '@/lib/characterNftOnchain'
+import { pointSystem } from '@/lib/characterCreationData'
 import crypto from 'node:crypto'
 
 export async function POST(req: Request) {
@@ -36,13 +37,15 @@ export async function POST(req: Request) {
     }
 
     const allInts = [str, agi, int, def].every((v) => Number.isFinite(v) && Number.isInteger(v))
-    const inRange = [str, agi, int, def].every((v) => v >= 0 && v <= 10)
+    const maxStat = Number(pointSystem?.creation?.maxStatValue ?? 10)
+    const totalAvailable = Number(pointSystem?.creation?.availablePoints ?? 10)
+    const inRange = [str, agi, int, def].every((v) => v >= 0 && v <= maxStat)
     const total = str + agi + int + def
-    if (!allInts || !inRange || total !== 15) {
+    if (!allInts || !inRange || total !== totalAvailable) {
       return NextResponse.json(
         {
           error: 'Invalid distributedPoints',
-          details: { received: { str, agi, int, def }, total },
+          details: { received: { str, agi, int, def }, total, expectedTotal: totalAvailable, maxStat },
         },
         { status: 400 }
       )

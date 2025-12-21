@@ -38,13 +38,25 @@ export async function POST(request: NextRequest, { params }: { params: { charact
     }
 
     // Extrair pontos distribuídos NESTA atualização
-    const addStr = Number(distributedPoints.str || 0);
-    const addAgi = Number(distributedPoints.agi || 0);
-    const addInt = Number(distributedPoints.int || 0);
-    const addDef = Number(distributedPoints.def || 0);
+    // UI historically uses `res` while the backend uses `def`.
+    const addStr = Number((distributedPoints as any).str || 0);
+    const addAgi = Number((distributedPoints as any).agi || 0);
+    const addInt = Number((distributedPoints as any).int || 0);
+    const addDef = Number((distributedPoints as any).def ?? (distributedPoints as any).res ?? 0);
+
+    const values = [addStr, addAgi, addInt, addDef];
+    const allInts = values.every((v) => Number.isFinite(v) && Number.isInteger(v));
+    const allNonNegative = values.every((v) => v >= 0);
+    if (!allInts || !allNonNegative) {
+      return NextResponse.json({ error: 'Invalid points values' }, { status: 400 });
+    }
 
     // Calcular total de pontos a serem gastos
     const totalPointsToSpend = addStr + addAgi + addInt + addDef;
+
+    if (totalPointsToSpend <= 0) {
+      return NextResponse.json({ error: 'Você precisa distribuir pelo menos 1 ponto.' }, { status: 400 });
+    }
     
     // Verificar se o personagem tem pontos suficientes
     const availablePoints = character.availablePoints || 0;

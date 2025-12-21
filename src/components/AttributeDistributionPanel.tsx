@@ -107,14 +107,21 @@ export default function AttributeDistributionPanel({
         body: JSON.stringify({ distributedPoints: pendingPoints }),
       })
 
-      const result = await response.json()
+      const raw = await response.text().catch(() => '')
+      let result: any = null
+      try {
+        result = raw ? JSON.parse(raw) : null
+      } catch {
+        result = { _raw: raw }
+      }
 
-      if (result.success) {
-        toast.success(result.message)
+      if (response.ok && result?.success) {
+        toast.success(result.message || 'Pontos distribuídos com sucesso!')
         setPendingPoints({ str: 0, agi: 0, int: 0, res: 0 })
         onPointsDistributed()
       } else {
-        toast.error(result.error)
+        const msg = String(result?.error || `Erro ao distribuir pontos (HTTP ${response.status})`)
+        toast.error(msg)
       }
     } catch (error) {
       console.error('Error distributing points:', error)

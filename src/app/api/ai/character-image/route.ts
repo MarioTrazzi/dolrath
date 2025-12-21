@@ -56,6 +56,9 @@ export async function POST(req: Request) {
           // DALL·E 3 only supports n=1.
           n: 1,
           size,
+          // Avoid time-limited signed URLs (can cause 403 later). We prefer data URLs,
+          // then upload to Cloudinary for a permanent HTTPS URL.
+          response_format: 'b64_json',
         }),
       });
 
@@ -106,6 +109,8 @@ export async function POST(req: Request) {
           prompt,
           n: numImages,
           size,
+          // Avoid time-limited signed URLs; return base64 data we can persist.
+          response_format: 'b64_json',
         }),
       });
 

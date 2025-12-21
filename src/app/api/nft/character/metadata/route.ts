@@ -71,5 +71,11 @@ export async function GET(req: Request) {
     mintNonce: nonce,
   })
 
-  return NextResponse.json(metadata)
+  // This tokenURI points to a dynamic endpoint; avoid caching so level/stats updates
+  // are reflected as the DB changes.
+  return NextResponse.json(metadata, {
+    headers: {
+      'Cache-Control': 'no-store, max-age=0',
+    },
+  })
 }

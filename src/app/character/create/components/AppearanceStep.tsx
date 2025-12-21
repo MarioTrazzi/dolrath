@@ -9,7 +9,7 @@ import { useCharacterCreationStore } from '@/lib/stores/characterCreationStore';
 import { cn } from '@/lib/utils';
 
 export function AppearanceStep() {
-  const { selectedRace, characterName, selectedImage, setSelectedImage, markStepComplete } = useCharacterCreationStore();
+  const { selectedRace, selectedClass, distributedPoints, characterName, selectedImage, setSelectedImage, markStepComplete } = useCharacterCreationStore();
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const [customPrompt, setCustomPrompt] = useState('');
@@ -19,16 +19,85 @@ export function AppearanceStep() {
     markStepComplete('appearance', !!selectedImage);
   }, [selectedImage, markStepComplete]);
 
-  const getDefaultPrompt = () => {
-    if (!selectedRace) return 'Fantasy RPG character portrait';
-    const namePart = characterName ? ` of ${characterName}` : '';
-    const basePrompts = {
-      draconiano: `Fantasy RPG character portrait${namePart}, a powerful draconian warrior with dragon-like features, scales on arms and face, fierce golden eyes, wearing medieval armor, heroic pose, digital art style, detailed, high quality`,
-      metamorfo: `Fantasy RPG character portrait${namePart}, a shapeshifter with wolf-like features, sharp eyes, agile build, wearing leather armor, mysterious aura, digital art style, detailed, high quality`,
-      humano: `Fantasy RPG character portrait${namePart}, a skilled human warrior with determined expression, wearing battle gear, confident pose, digital art style, detailed, high quality`,
-      elfo: `Fantasy RPG character portrait${namePart}, an elegant elf with pointed ears, ethereal beauty, graceful posture, wearing mystical robes or light armor, magical aura, digital art style, detailed, high quality`
+  const statDescriptors = () => {
+    const pts = {
+      str: Number((distributedPoints as any)?.str || 0),
+      agi: Number((distributedPoints as any)?.agi || 0),
+      int: Number((distributedPoints as any)?.int || 0),
+      res: Number((distributedPoints as any)?.res || 0),
     };
-    return basePrompts[selectedRace.id as keyof typeof basePrompts] || basePrompts.humano;
+
+    const pick = (v: number, low: string, mid: string, high: string) => {
+      if (v >= 7) return high;
+      if (v >= 4) return mid;
+      return low;
+    };
+
+    const physical = pick(
+      pts.str,
+      'lean build, not bulky',
+      'athletic build',
+      'powerful muscular build, imposing presence'
+    );
+
+    const agility = pick(
+      pts.agi,
+      'grounded stance, minimal acrobatics',
+      'quick, ready posture',
+      'nimble, agile stance, dynamic pose'
+    );
+
+    const intellect = pick(
+      pts.int,
+      'subtle magical cues',
+      'arcane symbols and faint magical glow',
+      'strong arcane aura, runes, vivid magical effects'
+    );
+
+    const defense = pick(
+      pts.res,
+      'light protection, minimal armor',
+      'balanced armor and practical gear',
+      'heavy protective gear, durable look'
+    );
+
+    return { pts, physical, agility, intellect, defense };
+  };
+
+  const getDefaultPrompt = () => {
+    const namePart = characterName ? `, name: ${characterName}` : '';
+    const raceName = selectedRace?.name ? selectedRace.name : 'Unknown Race';
+    const className = (selectedClass as any)?.name ? String((selectedClass as any).name) : 'Adventurer';
+    const raceLore = selectedRace?.lore ? String(selectedRace.lore) : '';
+
+    const { pts, physical, agility, intellect, defense } = statDescriptors();
+    const statsLine = `Stats focus (creation points): STR ${pts.str}, AGI ${pts.agi}, INT ${pts.int}, RES ${pts.res}.`;
+
+    const raceFlavorById: Record<string, string> = {
+      draconiano:
+        'draconic lineage, subtle scales on arms/face, fierce eyes, ember glow, hints of transformation power',
+      metamorfo:
+        'shapeshifter vibe, wolf-like hints, predatory eyes, wilderness aura, hints of transformation power',
+      elfo:
+        'elegant elven features, pointed ears, ethereal beauty, arcane elegance',
+      humano:
+        'human adventurer, determined expression, versatile and resilient',
+    };
+
+    const raceFlavor = selectedRace?.id ? raceFlavorById[selectedRace.id] : '';
+
+    // Keep it short but specific; let the generator fill details.
+    return [
+      `Fantasy RPG character portrait in the world of Dolrath${namePart}.`,
+      `Race: ${raceName}. Class: ${className}.`,
+      raceLore ? `Lore: ${raceLore}` : null,
+      raceFlavor ? `Visual identity: ${raceFlavor}.` : null,
+      statsLine,
+      `Visual cues based on stats: ${physical}; ${agility}; ${intellect}; ${defense}.`,
+      'Style: cinematic, highly detailed, high quality, dramatic lighting, sharp focus, 1 character, portrait, no text, no watermark.',
+    ]
+      .filter(Boolean)
+      .join('\n');
   };
 
   const generateImages = async () => {
@@ -81,7 +150,7 @@ export function AppearanceStep() {
               <textarea
                 value={customPrompt}
                 onChange={(e) => setCustomPrompt(e.target.value)}
-                placeholder="Descreva como você quer que seu personagem pareça..."
+                placeholder="Opcional: descreva a imagem que você quer. Se vazio, a IA gera usando a lore + raça/classe + seus atributos."
                 className="w-full h-24 px-3 py-2 bg-background border border-white/20 rounded-lg text-text-primary placeholder:text-text-secondary resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
               />
             </div>

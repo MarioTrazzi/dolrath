@@ -421,27 +421,31 @@ export default function CharacterDetailsPage() {
         <div className="glass-card p-8">
           {/* Character Header */}
           <div className="flex flex-col md:flex-row items-center gap-8 mb-8">
-            <div className="w-32 h-32 rounded-full bg-gradient-to-br from-primary to-primary-dark border-4 border-primary shadow-lg overflow-hidden flex items-center justify-center">
+            <div className="relative w-32 h-32 rounded-full bg-gradient-to-br from-primary to-primary-dark border-4 border-primary shadow-lg overflow-hidden">
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-5xl text-white">
+                  {character.name?.[0]?.toUpperCase() || '?'}
+                </span>
+              </div>
+
               {(() => {
                 const avatarUrl = resolveImageUrl(character.avatar);
-                if (avatarUrl) {
-                  return (
-                    // Use a plain <img> to avoid next/image remotePatterns issues.
-                    <img
-                      src={avatarUrl}
-                      alt={`${character.name} avatar`}
-                      className="w-full h-full object-cover"
-                      loading="eager"
-                      decoding="async"
-                      referrerPolicy="no-referrer"
-                    />
-                  );
-                }
+                if (!avatarUrl) return null;
 
                 return (
-                  <span className="text-5xl text-white">
-                    {character.name?.[0]?.toUpperCase() || '?'}
-                  </span>
+                  // Use a plain <img> to avoid next/image remotePatterns issues.
+                  <img
+                    src={avatarUrl}
+                    alt={`${character.name} avatar`}
+                    className="absolute inset-0 w-full h-full object-cover"
+                    loading="eager"
+                    decoding="async"
+                    referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      // If the URL is invalid/404, keep the fallback initial visible.
+                      (e.currentTarget as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
                 );
               })()}
             </div>

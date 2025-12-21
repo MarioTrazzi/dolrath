@@ -105,8 +105,23 @@ async function migrateWithRetry() {
 
 async function main() {
   // Keep this script deterministic for CI/Vercel.
+  const isCiLike = Boolean(process.env.CI || process.env.VERCEL || process.env.RAILWAY_ENVIRONMENT)
+  const shouldRunMigrations =
+    // Always run in CI-like environments
+    isCiLike ||
+    // Allow forcing locally
+    process.env.RUN_PRISMA_MIGRATE_DEPLOY === 'true'
+
   await run('npx', ['prisma', 'generate'])
-  await migrateWithRetry()
+
+  if (shouldRunMigrations) {
+    await migrateWithRetry()
+  } else {
+    console.warn(
+      'Skipping `prisma migrate deploy` (local build). Set RUN_PRISMA_MIGRATE_DEPLOY=true to enable.'
+    )
+  }
+
   await run('npx', ['next', 'build'])
 }
 

@@ -97,6 +97,10 @@ Algumas wallets/marketplaces não renderizam `image` como `data:` URI. Para máx
 CLOUDINARY_CLOUD_NAME=seu_cloud_name
 # Opcional (apenas se você precisar no client)
 NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=seu_cloud_name
+
+# Upload de avatar/imagens no client (recomendado para personagens)
+# Crie um unsigned upload preset no Cloudinary e configure:
+NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET=seu_unsigned_upload_preset
 ```
 
 O backend resolve automaticamente:

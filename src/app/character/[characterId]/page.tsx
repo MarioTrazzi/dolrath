@@ -18,6 +18,7 @@ import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 import { ethers } from 'ethers';
 import { getWalletTxErrorMessage } from '@/lib/walletErrors';
+import { resolveImageUrl } from '@/lib/imageUrl';
 
 import { Item } from '@/types/item';
 
@@ -420,8 +421,29 @@ export default function CharacterDetailsPage() {
         <div className="glass-card p-8">
           {/* Character Header */}
           <div className="flex flex-col md:flex-row items-center gap-8 mb-8">
-            <div className="w-32 h-32 rounded-full bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-5xl text-white border-4 border-primary shadow-lg">
-              {character.avatar || character.name[0].toUpperCase()}
+            <div className="w-32 h-32 rounded-full bg-gradient-to-br from-primary to-primary-dark border-4 border-primary shadow-lg overflow-hidden flex items-center justify-center">
+              {(() => {
+                const avatarUrl = resolveImageUrl(character.avatar);
+                if (avatarUrl) {
+                  return (
+                    // Use a plain <img> to avoid next/image remotePatterns issues.
+                    <img
+                      src={avatarUrl}
+                      alt={`${character.name} avatar`}
+                      className="w-full h-full object-cover"
+                      loading="eager"
+                      decoding="async"
+                      referrerPolicy="no-referrer"
+                    />
+                  );
+                }
+
+                return (
+                  <span className="text-5xl text-white">
+                    {character.name?.[0]?.toUpperCase() || '?'}
+                  </span>
+                );
+              })()}
             </div>
             <div>
               <h1 className="text-4xl font-bold text-text-primary mb-2">{character.name}</h1>

@@ -11,7 +11,7 @@ interface AttributeDistributionProps {
     str: number
     agi: number
     int: number
-    res: number
+    def: number
   }
   currentStats?: {
     hp: number
@@ -37,7 +37,7 @@ export default function AttributeDistributionPanel({
     str: 0,
     agi: 0,
     int: 0,
-    res: 0
+    def: 0
   })
   const [isDistributing, setIsDistributing] = useState(false)
 
@@ -51,19 +51,19 @@ export default function AttributeDistributionPanel({
     const strBonus = pendingPoints.str * 3 // HP = str * 3
     const agiBonus = pendingPoints.agi * 1 // MP = agi * 1
     const intBonus = pendingPoints.int * 4 // MP = int * 4
-    const resBonus = pendingPoints.res * 2 // HP = res * 2, Stamina = res * 5
+    const defBonus = pendingPoints.def * 2 // HP = def * 2, Stamina = def * 5
 
     // Calcular novos valores de AGI total para CRIT e SPEED
     const currentAgi = currentAttributes.agi
     const newAgi = currentAgi + pendingPoints.agi
 
     return {
-      hp: currentStats.hp + strBonus + resBonus,
-      maxHp: currentStats.maxHp + strBonus + resBonus,
+      hp: currentStats.hp + strBonus + defBonus,
+      maxHp: currentStats.maxHp + strBonus + defBonus,
       mp: currentStats.mp + intBonus + agiBonus,
       maxMp: currentStats.maxMp + intBonus + agiBonus,
-      stamina: currentStats.stamina + (pendingPoints.res * 5),
-      maxStamina: currentStats.maxStamina + (pendingPoints.res * 5),
+      stamina: currentStats.stamina + (pendingPoints.def * 5),
+      maxStamina: currentStats.maxStamina + (pendingPoints.def * 5),
       crit: newAgi * 0.2,
       speed: newAgi * 0.5,
       // Para comparação
@@ -117,7 +117,7 @@ export default function AttributeDistributionPanel({
 
       if (response.ok && result?.success) {
         toast.success(result.message || 'Pontos distribuídos com sucesso!')
-        setPendingPoints({ str: 0, agi: 0, int: 0, res: 0 })
+        setPendingPoints({ str: 0, agi: 0, int: 0, def: 0 })
         onPointsDistributed()
       } else {
         const msg = String(result?.error || `Erro ao distribuir pontos (HTTP ${response.status})`)
@@ -132,7 +132,7 @@ export default function AttributeDistributionPanel({
   }
 
   const resetPoints = () => {
-    setPendingPoints({ str: 0, agi: 0, int: 0, res: 0 })
+    setPendingPoints({ str: 0, agi: 0, int: 0, def: 0 })
   }
 
   if (availablePoints === 0) {
@@ -241,28 +241,28 @@ export default function AttributeDistributionPanel({
           </div>
         </div>
 
-        {/* Resistência */}
+        {/* Defesa */}
         <div className="flex items-center justify-between p-3 bg-surface/30 rounded-lg">
           <div className="flex items-center gap-3">
             <span className="text-2xl">🛡️</span>
             <div>
-              <div className="font-semibold text-text-primary">Resistência</div>
+              <div className="font-semibold text-text-primary">Defesa</div>
               <div className="text-xs text-text-secondary">
-                Atual: {currentAttributes.res} → {currentAttributes.res + pendingPoints.res}
+                Atual: {currentAttributes.def} → {currentAttributes.def + pendingPoints.def}
               </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => adjustPoint('res', -1)}
-              disabled={pendingPoints.res === 0}
+              onClick={() => adjustPoint('def', -1)}
+              disabled={pendingPoints.def === 0}
               className="w-8 h-8 rounded-full bg-error/20 text-error hover:bg-error/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
             >
               <Minus className="w-4 h-4" />
             </button>
-            <span className="min-w-[2rem] text-center font-bold">{pendingPoints.res}</span>
+            <span className="min-w-[2rem] text-center font-bold">{pendingPoints.def}</span>
             <button
-              onClick={() => adjustPoint('res', 1)}
+              onClick={() => adjustPoint('def', 1)}
               disabled={remainingPoints === 0}
               className="w-8 h-8 rounded-full bg-success/20 text-success hover:bg-success/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
             >

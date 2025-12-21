@@ -4,6 +4,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { addExperienceToCharacter } from '@/lib/characterLevelSystem';
 import { recordXpGained } from '@/lib/characterHistory';
 
+function serializeBigIntForJson<T>(value: T): T {
+  return JSON.parse(
+    JSON.stringify(value, (_key, v) => (typeof v === 'bigint' ? v.toString() : v))
+  ) as T
+}
+
 export async function POST(request: NextRequest, { params }: { params: { characterId: string } }) {
   const session = await auth();
 
@@ -42,7 +48,7 @@ export async function POST(request: NextRequest, { params }: { params: { charact
 
     return NextResponse.json({
       success: true,
-      ...result,
+      ...serializeBigIntForJson(result),
       message: result.leveledUp 
         ? `Parabéns! Seu personagem subiu ${result.levelsGained} nível(is)!`
         : `Você ganhou ${xp} XP!`

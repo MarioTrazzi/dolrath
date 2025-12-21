@@ -4,6 +4,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { recordAttributeDistribution } from '@/lib/characterHistory';
 import { getRaceById, getClassById } from '@/lib/gameData';
 
+function serializeBigIntForJson<T>(value: T): T {
+  return JSON.parse(
+    JSON.stringify(value, (_key, v) => (typeof v === 'bigint' ? v.toString() : v))
+  ) as T
+}
+
 export async function POST(request: NextRequest, { params }: { params: { characterId: string } }) {
   const session = await auth();
 
@@ -184,7 +190,7 @@ export async function POST(request: NextRequest, { params }: { params: { charact
 
     return NextResponse.json({
       success: true,
-      character: updatedCharacter,
+      character: serializeBigIntForJson(updatedCharacter),
       message: 'Pontos distribuídos com sucesso!'
     });
   } catch (error) {

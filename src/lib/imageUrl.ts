@@ -2,8 +2,20 @@ function normalizeUrl(url: string): string {
   const trimmed = url.trim()
   if (!trimmed) return ''
 
-  const hasScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed)
-  const candidate = hasScheme ? trimmed : `https://${trimmed}`
+  // Preserve scheme-only URLs that do not use // (e.g. data:, ipfs:).
+  if (/^data:/i.test(trimmed)) return trimmed
+
+  if (/^ipfs:/i.test(trimmed)) {
+    // Convert ipfs://CID/... or ipfs:CID/... into a gateway URL.
+    const withoutScheme = trimmed.replace(/^ipfs:\/\//i, '').replace(/^ipfs:/i, '')
+    const path = withoutScheme.replace(/^\/+/, '')
+    return `https://ipfs.io/ipfs/${path}`
+  }
+
+  const hasHttpLikeScheme = /^https?:\/\//i.test(trimmed)
+  const hasScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)
+  // If the input already has some other scheme, keep it as-is.
+  const candidate = hasHttpLikeScheme ? trimmed : hasScheme ? trimmed : `https://${trimmed}`
 
   try {
     const u = new URL(candidate)

@@ -76,7 +76,7 @@ export function StatsDistributionStep() {
     {
       key: 'res' as const,
       name: 'Defesa',
-      description: 'Aumenta durabilidade e resistência',
+      description: 'Aumenta durabilidade e defesa',
       icon: '🛡️',
       color: 'from-green-500 to-green-600'
     }

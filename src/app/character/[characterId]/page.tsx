@@ -124,7 +124,12 @@ export default function CharacterDetailsPage() {
       stamina: character.stamina,
       maxStamina: character.maxStamina,
       str: (character.baseStats as any)?.str || 10,
-      res: (character.baseStats as any)?.res || 5,
+      def:
+        (character.attributes as any)?.def ??
+        (character.attributes as any)?.defense ??
+        (character.baseStats as any)?.def ??
+        (character.baseStats as any)?.res ??
+        5,
       agi: (character.attributes as any)?.agi || (character.baseStats as any)?.agi || 0,
       int: (character.attributes as any)?.int || (character.baseStats as any)?.int || 0
     };
@@ -140,7 +145,7 @@ export default function CharacterDetailsPage() {
         stamina: total.stamina + (itemStats.stamina || 0),
         maxStamina: total.maxStamina + (itemStats.stamina || 0), // Stamina adicional aumenta o max também
         str: total.str + (itemStats.str || 0),
-        res: total.res + (itemStats.def || 0), // ItemStats usa 'def' em vez de 'res'
+        def: total.def + (itemStats.def || 0),
         agi: total.agi, // AGI não existe em ItemStats, mantenha o valor base
         int: total.int, // INT não existe em ItemStats, mantenha o valor base
         bonusDamage: total.bonusDamage + (itemStats.bonusDamage || 0),
@@ -154,7 +159,7 @@ export default function CharacterDetailsPage() {
       stamina: 0,
       maxStamina: 0,
       str: 0,
-      res: 0,
+      def: 0,
       agi: 0,
       int: 0,
       bonusDamage: 0,
@@ -172,7 +177,7 @@ export default function CharacterDetailsPage() {
         stamina: baseStats.stamina + equipmentStats.stamina,
         maxStamina: baseStats.maxStamina + equipmentStats.maxStamina,
         str: baseStats.str + equipmentStats.str,
-        res: baseStats.res + equipmentStats.res,
+        def: baseStats.def + equipmentStats.def,
         agi: baseStats.agi + equipmentStats.agi,
         int: baseStats.int + equipmentStats.int,
         bonusDamage: equipmentStats.bonusDamage,
@@ -566,7 +571,13 @@ export default function CharacterDetailsPage() {
               str: (character.attributes as any)?.str || (character.baseStats as any)?.str || 0,
               agi: (character.attributes as any)?.agi || 0,
               int: (character.attributes as any)?.int || 0,
-              res: (character.attributes as any)?.res || (character.baseStats as any)?.res || 0,
+              def:
+                (character.attributes as any)?.def ??
+                (character.attributes as any)?.defense ??
+                (character.attributes as any)?.res ??
+                (character.baseStats as any)?.def ??
+                (character.baseStats as any)?.res ??
+                0,
             }}
             currentStats={{
               hp: character.hp,
@@ -672,15 +683,15 @@ export default function CharacterDetailsPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Shield className="w-5 h-5 text-green-500" />
-                  <span className="text-text-secondary">RES:</span>
+                  <span className="text-text-secondary">DEF:</span>
                 </div>
                 <div className="text-right">
                   <div className="font-bold text-lg">
-                    {stats.total.res}
+                    {stats.total.def}
                   </div>
-                  {stats.equipment.res > 0 && (
+                  {stats.equipment.def > 0 && (
                     <div className="text-xs text-green-400">
-                      {stats.base.res} + {stats.equipment.res}
+                      {stats.base.def} + {stats.equipment.def}
                     </div>
                   )}
                 </div>

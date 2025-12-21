@@ -12,6 +12,8 @@ interface StatPreviewProps {
 export function StatPreview({ race, distributedPoints }: StatPreviewProps) {
   const finalStats = race ? calculateFinalStats(race, distributedPoints) : null;
 
+  const displayKey = (key: string) => (key === 'res' ? 'DEF' : key);
+
   return (
     <div className="bg-surface/50 backdrop-blur-sm rounded-xl p-6 border border-white/10 h-full flex flex-col">
       <h3 className="text-xl font-bold text-text-primary mb-4">
@@ -31,7 +33,7 @@ export function StatPreview({ race, distributedPoints }: StatPreviewProps) {
             <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
               {Object.entries(finalStats).map(([key, value]) => (
                 <div key={key} className="flex justify-between items-center py-1 border-b border-white/5 last:border-b-0">
-                  <span className="text-text-secondary capitalize">{key}:</span>
+                  <span className="text-text-secondary capitalize">{displayKey(key)}:</span>
                   <span className="font-bold text-text-primary text-base">{value.toFixed(1)}</span>
                 </div>
               ))}
@@ -43,7 +45,7 @@ export function StatPreview({ race, distributedPoints }: StatPreviewProps) {
                 {Object.entries(race.bonusStats).length > 0 ? (
                   Object.entries(race.bonusStats).map(([key, value]) => (
                     <div key={key} className="flex justify-between items-center">
-                      <span className="text-text-secondary capitalize">{key}:</span>
+                      <span className="text-text-secondary capitalize">{displayKey(key)}:</span>
                       <span className="font-bold text-primary">+{value}</span>
                     </div>
                   ))

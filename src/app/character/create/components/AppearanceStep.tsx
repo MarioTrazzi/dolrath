@@ -8,6 +8,7 @@ import { ImageUpload } from './ImageUpload';
 import { useCharacterCreationStore } from '@/lib/stores/characterCreationStore';
 import { cn } from '@/lib/utils';
 import { isCloudinaryUploadConfigured, uploadImageToCloudinary } from '@/lib/cloudinaryUpload';
+import toast from 'react-hot-toast';
 
 export function AppearanceStep() {
   const { selectedRace, selectedClass, distributedPoints, characterName, selectedImage, setSelectedImage, markStepComplete } = useCharacterCreationStore();
@@ -131,7 +132,12 @@ export function AppearanceStep() {
     try {
       const prompt = buildFinalPrompt();
       
-      const images = await generateCharacterImage(prompt, 3); // Gerar 3 opções
+      const result = await generateCharacterImage(prompt, 3); // Gerar 3 opções
+      const images = result.images;
+
+      if (result.error) {
+        toast.error(result.error);
+      }
 
       // Prefer HTTPS URLs: upload AI results to Cloudinary when configured.
       let finalImages = images;
@@ -162,6 +168,7 @@ export function AppearanceStep() {
       }
     } catch (error) {
       console.error('Erro ao gerar imagens:', error);
+      toast.error(error instanceof Error ? error.message : 'Erro ao gerar imagens');
     } finally {
       setIsGenerating(false);
     }

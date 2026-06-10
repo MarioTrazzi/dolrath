@@ -167,6 +167,8 @@ function CombatPageContent() {
   const characterId = searchParams?.get('character')
   const isRoomCreator = searchParams?.get('creator') === 'true'
   const userRole = searchParams?.get('role') || 'fighter' // Novo parâmetro de role
+  const isTraining = searchParams?.get('training') === 'true' // 🐉 Modo treino vs monstro
+  const trainingMonster = searchParams?.get('monster') || 'goblin'
 
   const [socket] = useState(() => createSocketConnection())
   const [combatRoom, setCombatRoom] = useState<CombatRoom | null>(null)
@@ -553,11 +555,13 @@ function CombatPageContent() {
       setCurrentPlayer(playerData)
       
       // Entrar na sala via Socket.IO com role
-      socket.emit('join_room', { 
-        roomId, 
-        player: playerData, 
+      socket.emit('join_room', {
+        roomId,
+        player: playerData,
         isCreator: isRoomCreator,
-        role: userRole
+        role: userRole,
+        training: isTraining,
+        monster: trainingMonster
       })
     }
 
@@ -990,7 +994,7 @@ function CombatPageContent() {
         <div className="bg-gradient-to-r from-primary to-primary-dark text-white p-2 sm:p-3 rounded-t-2xl flex justify-between items-center flex-shrink-0">
           <div className="flex items-center">
             <h2 className="text-sm sm:text-lg font-bold">
-              ⚔️ Combate PvP - Sala {roomId}
+              {isTraining ? '🏟️ Modo Treino' : `⚔️ Combate PvP - Sala ${roomId}`}
               {isSpectator && <span className="ml-2 text-xs bg-blue-500/30 px-2 py-1 rounded-full">👁️ Espectador</span>}
               {isModerator && <span className="ml-2 text-xs bg-purple-500/30 px-2 py-1 rounded-full">🛡️ Moderador</span>}
             </h2>

@@ -46,4 +46,4 @@ test-*.js
 
 # TypeScript
 *.tsbuildinfo
-next-env.d.ts 
+next-env.d.ts server/node_modules/

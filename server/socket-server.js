@@ -4,6 +4,9 @@ const { Server } = require('socket.io')
 // Importar sistema de stamina (versão local JavaScript)
 const { getStaminaCost, checkStaminaLevel, calculateStaminaRegeneration } = require('./staminaSystem')
 
+// 🐉 Modo treino - bot monstro que joga pelas regras do PvP
+const { spawnTrainingBot, MONSTERS } = require('./training-bot')
+
 // Configuração de porta - Railway usa PORT, Heroku também
 const PORT = process.env.PORT || 3001
 
@@ -217,8 +220,8 @@ const ROLE_LIMITS = {
 io.on('connection', (socket) => {
   console.log('Cliente conectado:', socket.id)
 
-  socket.on('join_room', ({ roomId, player, isCreator, role = RoomRole.FIGHTER }) => {
-    console.log(`Jogador ${player.name} entrando na sala ${roomId} como ${role}`)
+  socket.on('join_room', ({ roomId, player, isCreator, role = RoomRole.FIGHTER, training = false, monster = 'goblin' }) => {
+    console.log(`Jogador ${player.name} entrando na sala ${roomId} como ${role}${training ? ` (treino vs ${monster})` : ''}`)
     
     playerSockets.set(player.id, socket.id)
     socket.join(roomId)
@@ -316,6 +319,28 @@ io.on('connection', (socket) => {
     // Definir criador se for o primeiro participante
     if (isCreator) {
       room.creator = player.id
+    }
+
+    // 🐉 MODO TREINO: spawnar o monstro como oponente (bot interno)
+    if (training && isCreator && role === RoomRole.FIGHTER && !room.botSpawned) {
+      room.isTraining = true
+      room.botSpawned = true
+      const monsterKey = MONSTERS[monster] ? monster : 'goblin'
+
+      room.combatLog.push({
+        type: 'system',
+        message: `🏟️ Modo Treino! Um ${MONSTERS[monsterKey].name} se aproxima... (sem recompensas PvP)`,
+        timestamp: new Date()
+      })
+
+      setTimeout(() => {
+        spawnTrainingBot({
+          roomId,
+          port: PORT,
+          playerLevel: player.level || 1,
+          monsterKey
+        })
+      }, 1000)
     }
 
     io.to(roomId).emit('room_updated', room)
@@ -1286,8 +1311,16 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
       timestamp: new Date()
     })
     
-    // 🏆 PROCESSAR RECOMPENSAS PVP
-    processBattleRewards(room, attacker, defender, roomId)
+    // 🏆 PROCESSAR RECOMPENSAS PVP (modo treino não dá recompensas)
+    if (room.isTraining) {
+      room.combatLog.push({
+        type: 'system',
+        message: '🏟️ Treino concluído! Nenhuma recompensa ou penalidade aplicada.',
+        timestamp: new Date()
+      })
+    } else {
+      processBattleRewards(room, attacker, defender, roomId)
+    }
     
     // 💚 REGENERAÇÃO AUTOMÁTICA AO FINAL DO COMBATE
     regeneratePlayerResources(room.player1, 'Combat Victory/Defeat')

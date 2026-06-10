@@ -414,61 +414,80 @@ io.on('connection', (socket) => {
       timestamp: new Date()
     })
 
+    // 🎲 Notificar a rolagem para o dado animado revelar o resultado na face
+    io.to(roomId).emit('dice_rolled', {
+      playerId,
+      sides: 20,
+      result: { roll, modifier: 0, total }
+    })
+
     // Verificar se ambos rolaram
     const player1Id = room.player1?.id
     const player2Id = room.player2?.id
-    
+
     if (room.initiativeRolls[player1Id] && room.initiativeRolls[player2Id]) {
-      const initiative1 = room.initiativeRolls[player1Id].total
-      const initiative2 = room.initiativeRolls[player2Id].total
+      // Mostrar a segunda rolagem primeiro; resolver após a animação do dado
+      io.to(roomId).emit('room_updated', room)
 
-      let winner = null
-      let winnerName = ''
+      setTimeout(() => {
+        const r = rooms.get(roomId)
+        if (!r || r.phase !== CombatPhase.INITIATIVE_ROLL) return
+        if (!r.initiativeRolls?.[player1Id] || !r.initiativeRolls?.[player2Id]) return
 
-      if (initiative1 > initiative2) {
-        winner = player1Id
-        winnerName = room.player1.name
-      } else if (initiative2 > initiative1) {
-        winner = player2Id  
-        winnerName = room.player2.name
-      } else {
-        // Empate! Resolver por XP
-        const player1XP = room.player1.experience || 0
-        const player2XP = room.player2.experience || 0
-        
-        if (player1XP >= player2XP) {
+        const initiative1 = r.initiativeRolls[player1Id].total
+        const initiative2 = r.initiativeRolls[player2Id].total
+
+        let winner = null
+        let winnerName = ''
+
+        if (initiative1 > initiative2) {
           winner = player1Id
-          winnerName = room.player1.name
-          room.combatLog.push({
-            type: 'system',
-            message: `⚖️ Empate! ${room.player1.name} começa por ter mais experiência (${player1XP} vs ${player2XP} XP)`,
-            timestamp: new Date()
-          })
-        } else {
+          winnerName = r.player1.name
+        } else if (initiative2 > initiative1) {
           winner = player2Id
-          winnerName = room.player2.name
-          room.combatLog.push({
+          winnerName = r.player2.name
+        } else {
+          // Empate! Resolver por XP
+          const player1XP = r.player1.experience || 0
+          const player2XP = r.player2.experience || 0
+
+          if (player1XP >= player2XP) {
+            winner = player1Id
+            winnerName = r.player1.name
+            r.combatLog.push({
+              type: 'system',
+              message: `⚖️ Empate! ${r.player1.name} começa por ter mais experiência (${player1XP} vs ${player2XP} XP)`,
+              timestamp: new Date()
+            })
+          } else {
+            winner = player2Id
+            winnerName = r.player2.name
+            r.combatLog.push({
+              type: 'system',
+              message: `⚖️ Empate! ${r.player2.name} começa por ter mais experiência (${player2XP} vs ${player1XP} XP)`,
+              timestamp: new Date()
+            })
+          }
+        }
+
+        r.currentTurn = winner
+        if (!r.combatLog.some(log => log.message.includes('⚖️ Empate!'))) {
+          r.combatLog.push({
             type: 'system',
-            message: `⚖️ Empate! ${room.player2.name} começa por ter mais experiência (${player2XP} vs ${player1XP} XP)`,
+            message: `🏃 ${winnerName} começa o combate!`,
             timestamp: new Date()
           })
         }
-      }
 
-      room.currentTurn = winner
-      if (!room.combatLog.some(log => log.message.includes('⚖️ Empate!'))) {
-        room.combatLog.push({
-          type: 'system',
-          message: `🏃 ${winnerName} começa o combate!`,
-          timestamp: new Date()
-        })
-      }
+        // 🏥 SALVAR HP INICIAL PARA DETECTAR VITÓRIAS PERFEITAS
+        r.player1.initialHp = r.player1.hp
+        r.player2.initialHp = r.player2.hp
 
-      // 🏥 SALVAR HP INICIAL PARA DETECTAR VITÓRIAS PERFEITAS
-      room.player1.initialHp = room.player1.hp
-      room.player2.initialHp = room.player2.hp
+        r.phase = CombatPhase.PLAYER_TURN
+        io.to(roomId).emit('room_updated', r)
+      }, 1600)
 
-      room.phase = CombatPhase.PLAYER_TURN
+      return
     }
 
     io.to(roomId).emit('room_updated', room)

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { X, Users, Sword, Shield, Zap, Heart, Sparkles } from 'lucide-react'
 import { io, Socket } from 'socket.io-client'
 import TransformationDialog from '@/components/TransformationDialog'
+import BattleScene, { BattleEvent, DiceResult, EquipmentMap } from '@/components/battle/BattleScene'
 
 interface Equipment {
   id: string
@@ -45,6 +46,8 @@ interface Player {
     armor?: Equipment
     shield?: Equipment
   }
+  avatar?: string | null
+  equipmentMap?: EquipmentMap
   isReady: boolean
   isConnected: boolean
   isAlive: boolean
@@ -120,6 +123,43 @@ function createSocketConnection(): Socket {
   })
 }
 
+// Mapeia o array de CharacterEquipment (Prisma) para um mapa por slot com imagem/stats
+function mapEquipment(equipArray: any[]): EquipmentMap {
+  const map: EquipmentMap = {}
+  for (const eq of equipArray || []) {
+    if (eq?.slot && eq?.item) {
+      map[eq.slot] = {
+        id: eq.item.id,
+        name: eq.item.name,
+        image: eq.item.image,
+        type: eq.item.type,
+        stats: eq.item.stats || {},
+      }
+    }
+  }
+  return map
+}
+
+interface HotbarItem {
+  itemId: string
+  name: string
+  image?: string | null
+  icon: string
+  quantity: number
+  hpRestore: number
+  mpRestore: number
+  staminaRestore: number
+}
+
+function consumableIcon(name: string, stats: any): string {
+  const n = (name || '').toLowerCase()
+  if (stats?.healAmount || stats?.hp_restore || n.includes('vida') || n.includes('health')) return '❤️'
+  if (stats?.manaAmount || stats?.mp_restore || n.includes('mana')) return '🔮'
+  if (stats?.staminaAmount || stats?.stamina_restore || n.includes('stamina')) return '⚡'
+  if (n.includes('elixir')) return '💖'
+  return '🧪'
+}
+
 function CombatPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -140,6 +180,17 @@ function CombatPageContent() {
   const [hasRolledDice, setHasRolledDice] = useState(false) // Novo estado para controlar se já rolou
   const [showTransformationDialog, setShowTransformationDialog] = useState(false)
   const [isTransforming, setIsTransforming] = useState(false)
+
+  // 🎬 Estados da cena de batalha visual (estilo Adventure Quest)
+  const [battleEvent, setBattleEvent] = useState<BattleEvent | null>(null)
+  const battleEventCounter = useRef(0)
+  const [diceResults, setDiceResults] = useState<Record<string, DiceResult | undefined>>({})
+  const [consumables, setConsumables] = useState<HotbarItem[]>([])
+
+  const pushBattleEvent = (data: Omit<BattleEvent, 'id'>) => {
+    battleEventCounter.current += 1
+    setBattleEvent({ ...data, id: battleEventCounter.current })
+  }
 
   // Sistema de Stamina (custos por ação) - Balanceado para 10 lutas diárias
   const STAMINA_COSTS = {
@@ -189,6 +240,11 @@ function CombatPageContent() {
   useEffect(() => {
     const initializeCombat = async () => {
       let playerData: Player
+
+      // Reconectar caso o cleanup anterior tenha desconectado (StrictMode em dev)
+      if (!socket.connected) {
+        socket.connect()
+      }
 
       // Configurar event listeners do Socket.IO
       socket.on('connect', () => {
@@ -307,6 +363,8 @@ function CombatPageContent() {
           // APENAS resetar hasRolledDice quando volta para PLAYER_TURN (novo turno)
           if (room.phase === CombatPhase.PLAYER_TURN) {
             setHasRolledDice(false)
+            // Limpar chips de dados rolados ao iniciar novo turno
+            setDiceResults({})
           }
         }
       })
@@ -318,7 +376,58 @@ function CombatPageContent() {
 
       socket.on('dice_rolled', (data: {playerId: string, sides: number, result: any}) => {
         console.log('🎲 Dado rolado:', data)
-        // NÃO limpar pendingStates aqui - deixar o servidor controlar as fases
+        // Mostrar o resultado do dado na cena de batalha
+        setDiceResults(prev => ({
+          ...prev,
+          [data.playerId]: {
+            sides: data.sides,
+            roll: data.result?.roll ?? data.result,
+            modifier: data.result?.modifier ?? 0,
+            total: data.result?.total ?? data.result?.roll ?? data.result
+          }
+        }))
+      })
+
+      // 🎬 Resultado completo da ação - dispara animações na arena
+      socket.on('action_resolved', (data: {
+        attackerId: string, defenderId: string, action: string,
+        defenseAction: string, hit: boolean, damage: number, isCritical: boolean
+      }) => {
+        console.log('🎬 Ação resolvida:', data)
+        pushBattleEvent({
+          kind: 'resolve',
+          attackerId: data.attackerId,
+          defenderId: data.defenderId,
+          action: data.action,
+          defenseAction: data.defenseAction,
+          hit: data.hit,
+          damage: data.damage,
+          isCritical: data.isCritical
+        })
+      })
+
+      // 🧪 Consumível usado - animação de cura + sincronizar recursos locais
+      socket.on('consumable_used', (data: {
+        playerId: string, itemName: string,
+        hpRestored: number, mpRestored: number, staminaRestored: number,
+        newHp: number, newMp: number, newStamina: number
+      }) => {
+        console.log('🧪 Consumível usado:', data)
+        pushBattleEvent({
+          kind: 'item',
+          actorId: data.playerId,
+          itemName: data.itemName,
+          hpRestored: data.hpRestored,
+          mpRestored: data.mpRestored,
+          staminaRestored: data.staminaRestored
+        })
+        // Sincronizar recursos locais (o handler de room_updated usa Math.min para MP/stamina)
+        setCurrentPlayer(prev => prev && prev.id === data.playerId ? {
+          ...prev,
+          hp: data.newHp,
+          mp: data.newMp,
+          stamina: data.newStamina
+        } : prev)
       })
 
       socket.on('action_selected', (data: {action: ActionType, diceType: number}) => {
@@ -364,6 +473,8 @@ function CombatPageContent() {
               critical: charDetails.baseStats?.crit || 1.0,
               speed: charDetails.baseStats?.speed || 2.5,
               equipment: charDetails.equipment || {},
+              avatar: charDetails.avatar || null,
+              equipmentMap: mapEquipment(charDetails.equipment),
               isReady: false,
               isConnected: true,
               isAlive: charDetails.isAlive
@@ -461,6 +572,8 @@ function CombatPageContent() {
       socket.off('dice_rolled')
       socket.off('action_selected')
       socket.off('damage_dealt')
+      socket.off('action_resolved')
+      socket.off('consumable_used')
       socket.disconnect()
     }
   }, [socket, roomId, isRoomCreator, characterId])
@@ -479,6 +592,96 @@ function CombatPageContent() {
     if (!currentPlayer) return
     setIsReady(!isReady)
     socket.emit('toggle_ready', { playerId: currentPlayer.id, roomId })
+  }
+
+  // 🧪 Carregar consumíveis de batalha para a hotbar
+  useEffect(() => {
+    if (!characterId || userRole !== 'fighter') return
+    const loadConsumables = async () => {
+      try {
+        const response = await fetch(`/api/store/inventory?characterId=${characterId}`)
+        if (!response.ok) return
+        const inventoryData = await response.json()
+        const items: HotbarItem[] = (Array.isArray(inventoryData) ? inventoryData : [])
+          .filter((entry: any) => {
+            const type = String(entry?.item?.type || '').toUpperCase()
+            return type === 'CONSUMABLE' && entry.quantity > 0
+          })
+          .map((entry: any) => {
+            const stats = entry.item.stats || {}
+            return {
+              itemId: entry.item.id,
+              name: entry.item.name,
+              image: entry.item.image,
+              icon: consumableIcon(entry.item.name, stats),
+              quantity: entry.quantity,
+              hpRestore: Number(stats.healAmount || stats.hp_restore || 0),
+              mpRestore: Number(stats.manaAmount || stats.mp_restore || 0),
+              staminaRestore: Number(stats.staminaAmount || stats.stamina_restore || 0)
+            }
+          })
+          .filter((item: HotbarItem) => item.hpRestore > 0 || item.mpRestore > 0 || item.staminaRestore > 0)
+        setConsumables(items)
+      } catch (error) {
+        console.error('Erro ao carregar consumíveis:', error)
+      }
+    }
+    loadConsumables()
+  }, [characterId, userRole])
+
+  // 🧪 Usar consumível direto da hotbar (consome o turno, como na regra atual)
+  const handleUseConsumable = async (item: HotbarItem) => {
+    if (!currentPlayer || !isMyTurn || combatRoom?.phase !== CombatPhase.PLAYER_TURN) return
+    if (item.quantity <= 0) return
+
+    // Evitar desperdício: checar se o efeito tem utilidade
+    const hpFull = currentPlayer.hp >= currentPlayer.maxHp
+    const mpFull = currentPlayer.mp >= currentPlayer.maxMp
+    const staminaFull = currentPlayer.stamina >= currentPlayer.maxStamina
+    const useless =
+      (item.hpRestore > 0 || item.mpRestore > 0 || item.staminaRestore > 0) &&
+      (item.hpRestore === 0 || hpFull) &&
+      (item.mpRestore === 0 || mpFull) &&
+      (item.staminaRestore === 0 || staminaFull)
+    if (useless) {
+      socket.emit('chat_message', {
+        playerId: currentPlayer.id,
+        roomId,
+        message: `❌ ${item.name} não teria efeito agora!`
+      })
+      return
+    }
+
+    // Atualizar hotbar localmente
+    setConsumables(prev =>
+      prev
+        .map(c => c.itemId === item.itemId ? { ...c, quantity: c.quantity - 1 } : c)
+        .filter(c => c.quantity > 0)
+    )
+
+    // Servidor aplica o efeito, registra no log e passa o turno
+    socket.emit('use_consumable', {
+      playerId: currentPlayer.id,
+      roomId,
+      item: {
+        itemId: item.itemId,
+        name: item.name,
+        hpRestore: item.hpRestore,
+        mpRestore: item.mpRestore,
+        staminaRestore: item.staminaRestore
+      }
+    })
+
+    // Consumir do inventário persistente
+    try {
+      await fetch('/api/inventory/use-item', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemId: item.itemId, characterId })
+      })
+    } catch (error) {
+      console.error('Erro ao consumir item do inventário:', error)
+    }
   }
 
   const handlePlayerAction = (action: ActionType) => {
@@ -828,62 +1031,41 @@ function CombatPageContent() {
         </div>
 
         <div className="flex-1 flex flex-col min-h-0">
-          {/* Status Panels */}
-          <div className="bg-background/30 border-b border-white/10 p-2 sm:p-3 flex flex-col sm:flex-row gap-2 sm:gap-0 flex-shrink-0">
-            {/* Current Player Status */}
-            <div className="bg-gradient-to-br from-success/20 to-success/10 border border-success/30 rounded-xl p-2 sm:p-3 flex-1 sm:mr-3 backdrop-blur-sm">
-              <h3 className="font-bold text-success mb-2 text-xs sm:text-sm">
-                {isSpectator ? combatRoom?.player1?.name || 'Lutador 1' : `${currentPlayerDisplay?.name} (Você)`}
-                {isSpectator && <span className="ml-1 text-xs">⚔️</span>}
-              </h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 text-xs">
-                <div className="text-text-secondary">HP: <span className="font-bold text-error">{isSpectator ? combatRoom?.player1?.hp : currentPlayerDisplay?.hp}/{isSpectator ? combatRoom?.player1?.maxHp : currentPlayerDisplay?.maxHp}</span></div>
-                <div className="text-text-secondary">MP: <span className="font-bold text-blue-400">{isSpectator ? combatRoom?.player1?.mp : currentPlayerDisplay?.mp}/{isSpectator ? combatRoom?.player1?.maxMp : currentPlayerDisplay?.maxMp}</span></div>
-                <div className="text-text-secondary">⚡: <span className="font-bold text-yellow-400">{isSpectator ? combatRoom?.player1?.stamina : currentPlayerDisplay?.stamina}/{isSpectator ? combatRoom?.player1?.maxStamina : currentPlayerDisplay?.maxStamina}</span></div>
-                <div className="text-text-secondary">LVL: <span className="font-bold text-primary">{isSpectator ? combatRoom?.player1?.level : currentPlayerDisplay?.level}</span></div>
-                <div className="text-text-secondary">ATK: <span className="font-bold text-text-primary">{isSpectator ? combatRoom?.player1?.attack : currentPlayerDisplay?.attack}</span></div>
-                <div className="text-text-secondary">DEF: <span className="font-bold text-text-primary">{isSpectator ? combatRoom?.player1?.defense : currentPlayerDisplay?.defense}</span></div>
-                <div className="text-text-secondary hidden sm:block">STR: <span className="font-bold text-yellow-400">{isSpectator ? combatRoom?.player1?.strength : currentPlayerDisplay?.strength}</span></div>
-                <div className="text-text-secondary hidden sm:block">AGI: <span className="font-bold text-cyan-400">{isSpectator ? combatRoom?.player1?.agility : currentPlayerDisplay?.agility}</span></div>
-                <div className="text-text-secondary hidden sm:block">INT: <span className="font-bold text-purple-400">{isSpectator ? combatRoom?.player1?.intelligence : currentPlayerDisplay?.intelligence}</span></div>
-                <div className="text-text-secondary hidden sm:block">RES: <span className="font-bold text-green-400">{isSpectator ? combatRoom?.player1?.resistance : currentPlayerDisplay?.resistance}</span></div>
-                <div className="text-text-secondary hidden sm:block">CRIT: <span className="font-bold text-yellow-300">{playerStats.critChance}%</span></div>
-                <div className="text-text-secondary hidden sm:block">ESQ: <span className="font-bold text-cyan-300">+{playerStats.dodgeBonus}🎲</span></div>
-                <div className="text-text-secondary hidden sm:block">ESP: <span className="font-bold text-purple-300">{playerStats.specialType}</span></div>
-              </div>
-            </div>
+          {/* 🎬 Arena de Batalha - estilo Adventure Quest */}
+          <BattleScene
+            className="flex-1 min-h-[260px]"
+            left={(isSpectator || isModerator ? combatRoom?.player1 : (currentPlayerDisplay || currentPlayer)) || null}
+            right={(isSpectator || isModerator ? combatRoom?.player2 : opponent) || null}
+            currentTurnId={combatRoom?.currentTurn}
+            winnerId={combatRoom?.winner || null}
+            combatEnded={combatRoom?.phase === CombatPhase.COMBAT_END}
+            event={battleEvent}
+            diceResults={diceResults}
+            dicePanel={
+              !isSpectator && !isModerator &&
+              combatRoom?.phase === CombatPhase.DICE_ROLL && combatRoom?.pendingAction
+                ? {
+                    visible: true,
+                    diceType: combatRoom.pendingAction.diceType,
+                    hasRolled: hasRolledDice,
+                    label: `🎲 Role o dado d${combatRoom.pendingAction.diceType}!`,
+                    onRoll: () => handleRollDice(combatRoom.pendingAction.diceType)
+                  }
+                : null
+            }
+          />
 
-            {/* Opponent Status */}
-            <div className="bg-gradient-to-br from-error/20 to-error/10 border border-error/30 rounded-xl p-2 sm:p-3 flex-1 sm:ml-3 backdrop-blur-sm">
-              {(opponent || combatRoom?.player2) ? (
-                <>
-                  <h3 className="font-bold text-error mb-2 text-xs sm:text-sm">
-                    {isSpectator ? combatRoom?.player2?.name || 'Lutador 2' : `${opponent?.name} (Oponente)`}
-                    {isSpectator && <span className="ml-1 text-xs">⚔️</span>}
-                  </h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 text-xs">
-                    <div className="text-text-secondary">HP: <span className="font-bold text-error">{isSpectator ? combatRoom?.player2?.hp : opponent?.hp}/{isSpectator ? combatRoom?.player2?.maxHp : opponent?.maxHp}</span></div>
-                    <div className="text-text-secondary">MP: <span className="font-bold text-blue-400">{isSpectator ? combatRoom?.player2?.mp : opponent?.mp}/{isSpectator ? combatRoom?.player2?.maxMp : opponent?.maxMp}</span></div>
-                    <div className="text-text-secondary">⚡: <span className="font-bold text-yellow-400">{isSpectator ? combatRoom?.player2?.stamina : opponent?.stamina}/{isSpectator ? combatRoom?.player2?.maxStamina : opponent?.maxStamina}</span></div>
-                    <div className="text-text-secondary">LV: <span className="font-bold text-text-primary">{isSpectator ? combatRoom?.player2?.level : opponent?.level}</span></div>
-                    <div className="text-text-secondary">ATK: <span className="font-bold text-text-primary">{isSpectator ? combatRoom?.player2?.attack : opponent?.attack}</span></div>
-                    <div className="text-text-secondary">DEF: <span className="font-bold text-text-primary">{isSpectator ? combatRoom?.player2?.defense : opponent?.defense}</span></div>
-                    <div className="text-text-secondary hidden sm:block">STR: <span className="font-bold text-yellow-400">{isSpectator ? combatRoom?.player2?.strength : opponent?.strength}</span></div>
-                    <div className="text-text-secondary hidden sm:block">AGI: <span className="font-bold text-cyan-400">{isSpectator ? combatRoom?.player2?.agility : opponent?.agility}</span></div>
-                    <div className="text-text-secondary hidden sm:block">INT: <span className="font-bold text-purple-400">{isSpectator ? combatRoom?.player2?.intelligence : opponent?.intelligence}</span></div>
-                    <div className="text-text-secondary hidden sm:block">CRIT: <span className="font-bold text-yellow-300">{opponentStats.critChance}%</span></div>
-                    <div className="text-text-secondary hidden sm:block">ESQ: <span className="font-bold text-cyan-300">+{opponentStats.dodgeBonus}🎲</span></div>
-                    <div className="text-text-secondary hidden sm:block">ESP: <span className="font-bold text-purple-300">{opponentStats.specialType}</span></div>
-                  </div>
-                </>
-              ) : (
-                <div className="text-center text-text-secondary">
-                  <div className="text-xl sm:text-2xl mb-2">⏳</div>
-                  <div className="text-xs sm:text-sm">Aguardando oponente...</div>
-                </div>
-              )}
+          {/* Resumo compacto de atributos (CRIT/ESQ/ESP) */}
+          {!isSpectator && !isModerator && currentPlayerDisplay && (
+            <div className="bg-background/40 border-y border-white/10 px-2 py-1 flex items-center justify-center gap-3 text-[10px] text-text-secondary flex-shrink-0">
+              <span>CRIT: <span className="font-bold text-yellow-300">{playerStats.critChance}%</span></span>
+              <span>ESQ: <span className="font-bold text-cyan-300">+{playerStats.dodgeBonus}🎲</span></span>
+              <span>ESP: <span className="font-bold text-purple-300">{playerStats.specialType}</span></span>
+              <span className="text-white/20">|</span>
+              <span>Oponente → CRIT: <span className="font-bold text-yellow-300/80">{opponentStats.critChance}%</span></span>
+              <span>ESQ: <span className="font-bold text-cyan-300/80">+{opponentStats.dodgeBonus}🎲</span></span>
             </div>
-          </div>
+          )}
 
           {/* Participants Panel - Só para espectadores/moderadores */}
           {(isSpectator || isModerator) && combatRoom?.participants && (
@@ -924,8 +1106,8 @@ function CombatPageContent() {
             </div>
           )}
 
-          {/* Combat Area */}
-          <div className="flex-1 flex flex-col sm:flex-row min-h-0">
+          {/* Ações + Chat (abaixo da arena) */}
+          <div className="flex-shrink-0 flex flex-col sm:flex-row min-h-0 max-h-[45vh] sm:max-h-[36vh]">
             {/* Mobile: Stack vertically, Desktop: Side by side */}
             
             {/* Chat/Log Unificado - Primeira no mobile para ficar visível */}
@@ -972,7 +1154,7 @@ function CombatPageContent() {
             </div>
 
             {/* Actions - Sempre visível e responsivo */}
-            <div className="order-1 sm:order-3 w-full sm:w-64 bg-surface/30 p-2 sm:p-4 flex flex-col flex-shrink-0 space-y-4">
+            <div className="order-1 sm:order-3 w-full sm:w-64 bg-surface/30 p-2 sm:p-4 flex flex-col flex-shrink-0 space-y-4 overflow-y-auto">
               <h3 className="font-bold text-text-primary mb-2 sm:mb-3 text-xs sm:text-sm text-center">
                 {isSpectator ? '👁️ Espectando' : isModerator ? '🛡️ Moderando' : '🎯 Ações'}
               </h3>
@@ -1094,12 +1276,35 @@ function CombatPageContent() {
                   
                   <div className="border-t border-white/10 my-3"></div>
                   
-                  <button
-                    onClick={() => handlePlayerAction(ActionType.USE_ITEM)}
-                    className="w-full bg-gradient-to-r from-success to-emerald-600 hover:from-emerald-600 hover:to-success text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
-                  >
-                    🧪 Consumíveis
-                  </button>
+                  {consumables.length > 0 ? (
+                    <div>
+                      <div className="text-[10px] text-text-secondary font-bold mb-1.5">🧪 Consumíveis (usa o turno)</div>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {consumables.map(item => (
+                          <button
+                            key={item.itemId}
+                            onClick={() => handleUseConsumable(item)}
+                            title={`${item.name}${item.hpRestore ? ` • +${item.hpRestore} HP` : ''}${item.mpRestore ? ` • +${item.mpRestore} MP` : ''}${item.staminaRestore ? ` • +${item.staminaRestore} ⚡` : ''}`}
+                            className="relative w-10 h-10 rounded-lg bg-emerald-900/40 border border-emerald-500/40 hover:border-emerald-400 hover:scale-110 transition-all flex items-center justify-center overflow-hidden shadow-lg"
+                          >
+                            {item.image ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <span className="text-lg">{item.icon}</span>
+                            )}
+                            <span className="absolute bottom-0 right-0 bg-black/80 text-white text-[9px] font-bold px-1 rounded-tl">
+                              {item.quantity}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-[10px] text-text-secondary text-center">
+                      🧪 Sem consumíveis de batalha
+                    </div>
+                  )}
                   
                   {/* Botão de Transformação */}
                   {currentPlayer && (currentPlayer.race === 'draconiano' || currentPlayer.race === 'metamorfo') && (
@@ -1174,56 +1379,6 @@ function CombatPageContent() {
             {/* Combat Log removido - agora tudo está unificado no chat */}
           </div>
 
-          {/* Dice Panel - SÓ aparece na fase DICE_ROLL */}
-          {combatRoom?.phase === CombatPhase.DICE_ROLL && combatRoom?.pendingAction && (
-            <div className="bg-gradient-to-br from-surface/95 to-background/90 backdrop-blur-md border-t border-white/10 p-2 sm:p-3 flex-shrink-0">
-              <h3 className="text-text-primary font-bold text-center mb-2 text-xs sm:text-sm">
-                {hasRolledDice 
-                  ? '✅ Você já rolou! Aguardando oponente...' 
-                  : `🎲 Role o dado ${combatRoom?.pendingAction?.diceType === 6 ? 'leve' : combatRoom?.pendingAction?.diceType === 10 ? 'pesado' : 'especial'} (d${combatRoom?.pendingAction?.diceType})`
-                }
-              </h3>
-              <div className="flex justify-center space-x-2 sm:space-x-3 flex-wrap">
-                {[4, 6, 8, 10, 12, 20].map((sides) => {
-                  const correctDiceType = combatRoom?.pendingAction?.diceType
-                  const isCorrectDice = correctDiceType === sides
-                  
-                  // Função para cores dos dados (mesma do sistema de dungeon)
-                  const getDiceColor = (sides: number) => {
-                    switch (sides) {
-                      case 4: return 'bg-red-600'
-                      case 6: return 'bg-blue-600'
-                      case 8: return 'bg-green-600'
-                      case 10: return 'bg-yellow-600'
-                      case 12: return 'bg-purple-600'
-                      case 20: return 'bg-pink-600'
-                      default: return 'bg-gray-600'
-                    }
-                  }
-                  
-                  return (
-                    <button
-                      key={sides}
-                      onClick={() => handleRollDice(sides)}
-                      disabled={!isCorrectDice || hasRolledDice}
-                      className={`
-                        w-10 h-10 sm:w-12 sm:h-12 rounded-lg text-white font-bold text-xs
-                        transition-all duration-200 transform
-                        ${hasRolledDice && isCorrectDice
-                          ? 'bg-success opacity-75 cursor-not-allowed scale-95' // Verde se já rolou
-                          : isCorrectDice 
-                          ? `hover:scale-110 cursor-pointer ${getDiceColor(sides)}` 
-                          : `opacity-50 cursor-not-allowed ${getDiceColor(sides)}`
-                        }
-                      `}
-                    >
-                      {hasRolledDice && isCorrectDice ? '✓' : `d${sides}`}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          )}
         </div>
       </div>
       

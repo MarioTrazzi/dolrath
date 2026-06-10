@@ -110,7 +110,7 @@ enum ActionType {
 function createSocketConnection(): Socket {
   // URL do servidor WebSocket do Railway em produção
   const socketUrl = process.env.NODE_ENV === 'production' 
-    ? (process.env.NEXT_PUBLIC_SOCKET_URL || 'https://dolrath-production.up.railway.app')
+    ? (process.env.NEXT_PUBLIC_SOCKET_URL || 'https://terrific-prosperity-production-0402.up.railway.app')
     : 'ws://localhost:3001'
     
   console.log('🔗 Conectando ao WebSocket:', socketUrl)

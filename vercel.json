@@ -6,7 +6,8 @@
   "build": {
     "env": {
       "SKIP_ENV_VALIDATION": "1",
-      "PRISMA_GENERATE_SKIP_AUTOINSTALL": "true"
+      "PRISMA_GENERATE_SKIP_AUTOINSTALL": "true",
+      "NEXT_PUBLIC_SOCKET_URL": "https://terrific-prosperity-production-0402.up.railway.app"
     }
   },
   "functions": {

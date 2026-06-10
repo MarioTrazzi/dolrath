@@ -72,6 +72,7 @@ export default function CombatLobbyPage() {
   const [isPrivateRoom, setIsPrivateRoom] = useState(false)
   const [selectedRole, setSelectedRole] = useState<RoomRole>(RoomRole.FIGHTER)
   const [showRoleSelector, setShowRoleSelector] = useState<string | null>(null)
+  const [showTrainingPicker, setShowTrainingPicker] = useState(false)
 
   useEffect(() => {
     checkAuthAndLoadData()
@@ -269,6 +270,21 @@ export default function CombatLobbyPage() {
   const joinRoom = (roomId: string, role: RoomRole = RoomRole.FIGHTER) => {
     if (!selectedCharacter) return
     router.push(`/combat?room=${roomId}&character=${selectedCharacter.id}&role=${role}`)
+  }
+
+  // 🐉 Monstros disponíveis no modo treino (espelha server/training-bot.js)
+  const TRAINING_MONSTERS = [
+    { key: 'goblin', name: 'Goblin Salteador', emoji: '🧌', difficulty: 'Fácil', description: 'Ágil mas fraco. Ideal para aprender o combate.' },
+    { key: 'wolf', name: 'Lobo das Sombras', emoji: '🐺', difficulty: 'Médio', description: 'Rápido e esquivo. Difícil de acertar.' },
+    { key: 'orc', name: 'Orc Berserker', emoji: '👹', difficulty: 'Médio', description: 'Golpes pesados e muita vida.' },
+    { key: 'golem', name: 'Golem de Pedra', emoji: '🗿', difficulty: 'Difícil', description: 'Defesa altíssima. Lento, mas implacável.' },
+    { key: 'dragon', name: 'Dragão Ancião', emoji: '🐉', difficulty: 'Chefe', description: 'Usa ataques mágicos devastadores.' },
+  ]
+
+  const startTraining = (monsterKey: string) => {
+    if (!selectedCharacter) return
+    const roomId = 'treino_' + Math.random().toString(36).substr(2, 9)
+    router.push(`/combat?room=${roomId}&creator=true&character=${selectedCharacter.id}&training=true&monster=${monsterKey}`)
   }
 
   const getRoleDisplayName = (role: RoomRole) => {
@@ -695,6 +711,55 @@ export default function CombatLobbyPage() {
             )}
           </div>
 
+          {/* 🐉 Modo Treino */}
+          <div className="bg-surface/30 border-t border-white/10 p-6">
+            <div className="flex justify-between items-center mb-2">
+              <h2 className="text-xl font-bold text-text-primary flex items-center">
+                <Shield className="mr-2" size={24} />
+                🏟️ Modo Treino
+              </h2>
+              <button
+                onClick={() => setShowTrainingPicker(!showTrainingPicker)}
+                disabled={!selectedCharacter || !selectedCharacter.isAlive}
+                className={`px-6 py-2 rounded-lg font-bold transition-colors flex items-center ${
+                  selectedCharacter && selectedCharacter.isAlive
+                    ? 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-indigo-600 hover:to-purple-600 text-white'
+                    : 'bg-surface/30 text-text-secondary cursor-not-allowed border border-white/10'
+                }`}
+                title={!selectedCharacter ? 'Selecione um personagem' : !selectedCharacter.isAlive ? 'Personagem deve estar vivo' : ''}
+              >
+                {showTrainingPicker ? 'Fechar' : '🐉 Escolher Monstro'}
+              </button>
+            </div>
+            <p className="text-sm text-text-secondary mb-4">
+              Lute contra monstros para testar suas habilidades. O monstro escala com seu nível. Sem recompensas nem penalidades.
+            </p>
+
+            {showTrainingPicker && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                {TRAINING_MONSTERS.map(m => (
+                  <button
+                    key={m.key}
+                    onClick={() => startTraining(m.key)}
+                    className="bg-surface/50 border border-purple-500/30 hover:border-purple-400 hover:bg-purple-500/10 rounded-xl p-4 text-center transition-all hover:scale-[1.03] group"
+                  >
+                    <div className="text-4xl mb-2 group-hover:scale-110 transition-transform">{m.emoji}</div>
+                    <div className="font-bold text-text-primary text-sm mb-1">{m.name}</div>
+                    <div className={`text-xs font-bold mb-2 ${
+                      m.difficulty === 'Fácil' ? 'text-green-400'
+                      : m.difficulty === 'Médio' ? 'text-yellow-400'
+                      : m.difficulty === 'Difícil' ? 'text-orange-400'
+                      : 'text-red-400'
+                    }`}>
+                      {m.difficulty}
+                    </div>
+                    <div className="text-[11px] text-text-secondary leading-tight">{m.description}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Quick Actions */}
           <div className="bg-surface/30 border-t border-white/10 p-6">
             <div className="flex justify-center space-x-4">
@@ -704,14 +769,6 @@ export default function CombatLobbyPage() {
               >
                 <X className="mr-2" size={16} />
                 Voltar ao Dashboard
-              </button>
-              <button
-                disabled={true}
-                className="bg-surface/30 text-text-secondary px-6 py-2 rounded-lg cursor-not-allowed flex items-center border border-white/10"
-                title="Modo treino temporariamente desabilitado"
-              >
-                <Shield className="mr-2" size={16} />
-                Modo Treino (Em breve)
               </button>
             </div>
           </div>

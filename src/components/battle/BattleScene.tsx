@@ -36,6 +36,8 @@ export interface FighterView {
   transformationType?: string | null
   equipmentMap?: EquipmentMap
   isAlive?: boolean
+  /** Emoji usado como sprite quando não há avatar (ex.: monstros do modo treino) */
+  avatarEmoji?: string | null
 }
 
 export interface BattleEvent {
@@ -334,7 +336,7 @@ function FighterFigure({
             ) : (
               <div className={`w-full h-full bg-gradient-to-b from-slate-700 to-slate-900 flex flex-col items-center justify-center gap-2 ${side === 'right' ? 'scale-x-[-1]' : ''}`}>
                 <span className="text-5xl sm:text-6xl">
-                  {transformEmoji || CLASS_EMOJI[fighter.class?.toLowerCase()] || '🧝'}
+                  {transformEmoji || fighter.avatarEmoji || CLASS_EMOJI[fighter.class?.toLowerCase()] || '🧝'}
                 </span>
               </div>
             )}

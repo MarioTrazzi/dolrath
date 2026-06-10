@@ -1,20 +1,43 @@
-# Dockerfile para Railway - Apenas o servidor WebSocket
-FROM node:18-alpine
+# Build stage
+FROM node:18-alpine AS builder
 
-# Diretório de trabalho
 WORKDIR /app
 
-# Copiar apenas os arquivos do servidor
-COPY server/package*.json ./
+# Copiar package.json
+COPY package*.json ./
 
 # Instalar dependências
-RUN npm ci --only=production
+RUN npm ci
 
-# Copiar código do servidor
-COPY server/ ./
+# Copiar source
+COPY . .
 
-# Expor porta
-EXPOSE 3001
+# Build Next.js
+RUN npm run build
 
-# Comando de start
-CMD ["npm", "start"]
+# Production stage
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copiar package.json
+COPY package*.json ./
+
+# Instalar dependências de produção
+RUN npm ci --omit=dev
+
+# Copiar .next do builder
+COPY --from=builder /app/.next ./.next
+
+# Copiar public e server
+COPY public ./public
+COPY server ./server
+COPY next.config.js ./
+COPY tailwind.config.js ./
+COPY postcss.config.js ./
+
+# Expor portas (3000 para Next, 3001 para WebSocket)
+EXPOSE 3000 3001
+
+# Start with both servers
+CMD ["sh", "-c", "npm start & node server/socket-server.js & wait"]

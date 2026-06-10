@@ -365,8 +365,8 @@ function CombatPageContent() {
           // APENAS resetar hasRolledDice quando volta para PLAYER_TURN (novo turno)
           if (room.phase === CombatPhase.PLAYER_TURN) {
             setHasRolledDice(false)
-            // Limpar chips de dados rolados ao iniciar novo turno
-            setDiceResults({})
+            // Limpar mini-dados com um pequeno atraso para a revelação terminar
+            setTimeout(() => setDiceResults({}), 1300)
           }
         }
       })
@@ -1046,14 +1046,26 @@ function CombatPageContent() {
             event={battleEvent}
             diceResults={diceResults}
             dicePanel={
-              !isSpectator && !isModerator &&
-              combatRoom?.phase === CombatPhase.DICE_ROLL && combatRoom?.pendingAction
+              isSpectator || isModerator ? null
+              : combatRoom?.phase === CombatPhase.INITIATIVE_ROLL
+                ? {
+                    visible: true,
+                    diceType: 20,
+                    hasRolled: hasRolledInitiative,
+                    label: '⚡ Iniciativa! Quem tirar mais no d20 começa',
+                    onRoll: rollInitiative,
+                    myResult: currentPlayer ? diceResults[currentPlayer.id] : null,
+                    waitingForOpponent: opponent ? !diceResults[opponent.id] : false
+                  }
+              : combatRoom?.phase === CombatPhase.DICE_ROLL && combatRoom?.pendingAction
                 ? {
                     visible: true,
                     diceType: combatRoom.pendingAction.diceType,
                     hasRolled: hasRolledDice,
-                    label: `🎲 Role o dado d${combatRoom.pendingAction.diceType}!`,
-                    onRoll: () => handleRollDice(combatRoom.pendingAction.diceType)
+                    label: `🎲 Role o d${combatRoom.pendingAction.diceType}!`,
+                    onRoll: () => handleRollDice(combatRoom.pendingAction.diceType),
+                    myResult: currentPlayer ? diceResults[currentPlayer.id] : null,
+                    waitingForOpponent: opponent ? !diceResults[opponent.id] : false
                   }
                 : null
             }
@@ -1193,24 +1205,11 @@ function CombatPageContent() {
                   </div>
                 </div>
               ) : combatRoom?.phase === CombatPhase.INITIATIVE_ROLL ? (
-                <div className="space-y-3">
-                  <div className="text-center">
-                    <div className="text-xl sm:text-2xl mb-2">🎲</div>
-                    <div className="text-xs sm:text-sm text-text-secondary mb-3">
-                      Role d20 para iniciativa!
-                    </div>
+                <div className="text-center space-y-2 flex-1 flex flex-col items-center justify-center">
+                  <div className="text-2xl animate-bounce">🎲</div>
+                  <div className="text-xs sm:text-sm text-text-secondary">
+                    {hasRolledInitiative ? 'Você já rolou! Aguardando oponente...' : 'Clique no dado na arena para rolar a iniciativa!'}
                   </div>
-                  <button
-                    onClick={rollInitiative}
-                    disabled={hasRolledInitiative}
-                    className={`w-full py-3 sm:py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 ${
-                      hasRolledInitiative
-                        ? 'bg-gray-600 text-white cursor-not-allowed opacity-50'
-                        : 'bg-gradient-to-r from-pink-500 to-purple-600 hover:from-purple-600 hover:to-pink-500 text-white hover:shadow-lg'
-                    }`}
-                  >
-                    {hasRolledInitiative ? '✅ Já rolou!' : '🎲 Rolar d20'}
-                  </button>
                 </div>
               ) : !combatRoom?.isActive ? (
                 <div className="space-y-3">

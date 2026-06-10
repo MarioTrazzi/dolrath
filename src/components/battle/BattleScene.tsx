@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import ItemIcon from '@/components/ItemIcon'
+import { AnimatedDie, MiniDie } from '@/components/battle/AnimatedDice'
 
 // ============================================================
 // Tipos
@@ -71,6 +72,10 @@ export interface DicePanelInfo {
   hasRolled: boolean
   label: string
   onRoll: () => void
+  /** Resultado do servidor para a minha rolagem (o dado gira até ele chegar) */
+  myResult?: DiceResult | null
+  /** Mostrar "aguardando oponente" depois de revelar meu resultado */
+  waitingForOpponent?: boolean
 }
 
 interface BattleSceneProps {
@@ -125,18 +130,6 @@ const CLASS_EMOJI: Record<string, string> = {
   ladino: '🗡️',
   paladino: '🛡️',
   clerigo: '✨',
-}
-
-function diceColor(sides: number): string {
-  switch (sides) {
-    case 4: return 'bg-red-600'
-    case 6: return 'bg-blue-600'
-    case 8: return 'bg-green-600'
-    case 10: return 'bg-yellow-600'
-    case 12: return 'bg-purple-600'
-    case 20: return 'bg-pink-600'
-    default: return 'bg-gray-600'
-  }
 }
 
 function hpBarColor(pct: number): string {
@@ -263,21 +256,11 @@ function FighterFigure({
           </div>
         </div>
 
-        {/* Resultado do dado */}
-        <div className="h-6 flex items-center">
+        {/* Resultado do dado (mini-dado girando) */}
+        <div className="h-11 flex items-center">
           <AnimatePresence>
             {diceResult && (
-              <motion.div
-                initial={{ scale: 0, rotate: -180 }}
-                animate={{ scale: 1, rotate: 0 }}
-                exit={{ scale: 0, opacity: 0 }}
-                className={`${diceColor(diceResult.sides)} text-white text-[11px] font-bold px-2 py-0.5 rounded-md shadow-lg flex items-center gap-1`}
-              >
-                🎲 d{diceResult.sides}: {diceResult.total}
-                {diceResult.modifier > 0 && (
-                  <span className="text-[9px] opacity-80">({diceResult.roll}+{diceResult.modifier})</span>
-                )}
-              </motion.div>
+              <MiniDie sides={diceResult.sides} result={diceResult} />
             )}
           </AnimatePresence>
         </div>
@@ -458,6 +441,13 @@ export default function BattleScene({
   // Limpar timeouts ao desmontar
   useEffect(() => () => { timeouts.current.forEach(clearTimeout) }, [])
 
+  // Enquanto o dado grande do centro gira para o jogador local (lado esquerdo),
+  // esconder o mini-dado dele para não revelar o resultado antes da hora
+  const miniDieFor = (fighter: FighterView, side: 'left' | 'right') => {
+    if (side === 'left' && dicePanel?.visible) return undefined
+    return diceResults?.[fighter.id]
+  }
+
   const renderFighter = (fighter: FighterView | null, side: 'left' | 'right') => {
     if (!fighter) {
       return (
@@ -481,7 +471,7 @@ export default function BattleScene({
           shaking={shakingSide === side}
           dodging={dodgingSide === side}
           defending={defendingSide === side}
-          diceResult={diceResults?.[fighter.id]}
+          diceResult={miniDieFor(fighter, side)}
         />
 
         {/* Efeito de corte */}
@@ -554,20 +544,27 @@ export default function BattleScene({
             <motion.div
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
-              className="text-center bg-black/70 border border-white/20 rounded-2xl px-4 py-3 backdrop-blur-sm"
+              className="text-center bg-black/70 border border-white/20 rounded-2xl px-4 py-2.5 backdrop-blur-sm"
             >
-              <div className="text-[11px] sm:text-xs text-white/80 mb-2 font-bold">{dicePanel.label}</div>
-              {dicePanel.hasRolled ? (
-                <div className="text-green-400 text-xs font-bold">✅ Aguardando oponente...</div>
-              ) : (
-                <motion.button
+              <div className="text-[11px] sm:text-xs text-white/80 mb-1 font-bold">{dicePanel.label}</div>
+              <div className="flex justify-center">
+                <AnimatedDie
+                  sides={dicePanel.diceType}
+                  size={88}
+                  mode={dicePanel.hasRolled ? 'rolling' : 'idle'}
+                  result={dicePanel.myResult || null}
                   onClick={dicePanel.onRoll}
-                  animate={{ rotate: [0, -8, 8, -8, 0], scale: [1, 1.08, 1] }}
-                  transition={{ repeat: Infinity, duration: 1.4 }}
-                  className={`${diceColor(dicePanel.diceType)} w-14 h-14 sm:w-16 sm:h-16 rounded-xl text-white font-black text-base shadow-2xl hover:brightness-125 transition-all border-2 border-white/30`}
+                />
+              </div>
+              {dicePanel.hasRolled && dicePanel.myResult && dicePanel.waitingForOpponent && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 1.2 }}
+                  className="text-green-400 text-[10px] font-bold"
                 >
-                  d{dicePanel.diceType}
-                </motion.button>
+                  ⏳ Aguardando oponente rolar...
+                </motion.div>
               )}
             </motion.div>
           ) : (

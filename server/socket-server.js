@@ -247,6 +247,20 @@ io.on('connection', (socket) => {
       rooms.set(roomId, room)
     }
 
+    // Reconexão: se o jogador já está na sala como lutador, apenas atualizar o socket
+    // (evita duplicar o mesmo jogador como player2 após refresh da página)
+    const existingFighterIdx = room.participants.fighters.findIndex(f => f.id === player.id)
+    if (existingFighterIdx !== -1) {
+      room.participants.fighters[existingFighterIdx] = { ...room.participants.fighters[existingFighterIdx], socketId: socket.id }
+      if (room.player1?.id === player.id) {
+        room.player1.isConnected = true
+      } else if (room.player2?.id === player.id) {
+        room.player2.isConnected = true
+      }
+      io.to(roomId).emit('room_updated', room)
+      return
+    }
+
     // Verificar se o role solicitado tem vagas disponíveis
     const currentCount = room.participants[role + 's'] ? room.participants[role + 's'].length : 0
     const maxCount = ROLE_LIMITS[role]
@@ -263,8 +277,12 @@ io.on('connection', (socket) => {
     const participantData = { ...player, role, socketId: socket.id }
     
     if (role === RoomRole.FIGHTER) {
+      // Criador retornando (refresh/remontagem): remover a entrada antiga para não ocupar a vaga do oponente
+      if (isCreator && room.player1 && room.player1.id !== player.id) {
+        room.participants.fighters = room.participants.fighters.filter(f => f.id !== room.player1.id)
+      }
       room.participants.fighters.push(participantData)
-      
+
       // Manter compatibilidade: atualizar player1/player2
       if (!room.player1 || isCreator) {
         room.player1 = player
@@ -763,6 +781,58 @@ io.on('connection', (socket) => {
     }
   })
 
+  // 🧪 Usar consumível da hotbar: aplica efeito, registra no log e consome o turno (regra atual)
+  socket.on('use_consumable', ({ playerId, roomId, item }) => {
+    const room = rooms.get(roomId)
+    if (!room || !room.isActive || room.phase !== CombatPhase.PLAYER_TURN) return
+    if (room.currentTurn !== playerId) return
+
+    const player = room.player1?.id === playerId ? room.player1 : room.player2
+    const opponent = room.player1?.id === playerId ? room.player2 : room.player1
+    if (!player || !opponent) return
+
+    const hpRestored = Math.max(0, Math.min(Number(item?.hpRestore) || 0, player.maxHp - player.hp))
+    const mpRestored = Math.max(0, Math.min(Number(item?.mpRestore) || 0, player.maxMp - player.mp))
+    const staminaRestored = Math.max(0, Math.min(Number(item?.staminaRestore) || 0, player.maxStamina - player.stamina))
+
+    player.hp += hpRestored
+    player.mp += mpRestored
+    player.stamina += staminaRestored
+
+    const effects = []
+    if (hpRestored > 0) effects.push(`+${hpRestored} HP`)
+    if (mpRestored > 0) effects.push(`+${mpRestored} MP`)
+    if (staminaRestored > 0) effects.push(`+${staminaRestored} stamina`)
+
+    room.combatLog.push({
+      type: 'action',
+      player: player.name,
+      message: `🧪 ${player.name} usou ${item?.name || 'um item'}!${effects.length ? ` (${effects.join(', ')})` : ''}`,
+      timestamp: new Date()
+    })
+
+    io.to(roomId).emit('consumable_used', {
+      playerId,
+      itemName: item?.name || 'Item',
+      hpRestored,
+      mpRestored,
+      staminaRestored,
+      newHp: player.hp,
+      newMp: player.mp,
+      newStamina: player.stamina
+    })
+
+    // Usar item consome o turno
+    room.currentTurn = opponent.id
+    room.combatLog.push({
+      type: 'system',
+      message: `🔄 Turno de ${opponent.name}`,
+      timestamp: new Date()
+    })
+
+    io.to(roomId).emit('room_updated', room)
+  })
+
   socket.on('chat_message', ({ playerId, roomId, message }) => {
     const room = rooms.get(roomId)
     if (!room) return
@@ -1192,6 +1262,17 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
       newHp: defender.hp
     })
   }
+
+  // 🎬 Evento estruturado para as animações da arena no cliente
+  io.to(roomId).emit('action_resolved', {
+    attackerId: attacker.id,
+    defenderId: defender.id,
+    action: attackAction,
+    defenseAction,
+    hit,
+    damage: finalDamage,
+    isCritical: isCritical && hit && finalDamage > 0
+  })
 
   // Verificar se o combate acabou
   if (defender.hp <= 0) {

@@ -1,0 +1,580 @@
+'use client'
+
+import React, { useEffect, useRef, useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import ItemIcon from '@/components/ItemIcon'
+
+// ============================================================
+// Tipos
+// ============================================================
+
+export interface EquippedItem {
+  id: string
+  name: string
+  image?: string | null
+  type?: string
+  stats?: Record<string, number | undefined>
+}
+
+// Chaves: WEAPON, SHIELD, HELMET, ARMOR, GLOVES, BOOTS, NECKLACE, RING_1, RING_2
+export type EquipmentMap = Partial<Record<string, EquippedItem>>
+
+export interface FighterView {
+  id: string
+  name: string
+  level: number
+  race: string
+  class: string
+  avatar?: string | null
+  hp: number
+  maxHp: number
+  mp: number
+  maxMp: number
+  stamina: number
+  maxStamina: number
+  isTransformed?: boolean
+  transformationType?: string | null
+  equipmentMap?: EquipmentMap
+  isAlive?: boolean
+}
+
+export interface BattleEvent {
+  id: number
+  kind: 'resolve' | 'item' | 'transform'
+  attackerId?: string
+  defenderId?: string
+  action?: string
+  defenseAction?: string
+  hit?: boolean
+  damage?: number
+  isCritical?: boolean
+  // Para kind === 'item'
+  actorId?: string
+  itemName?: string
+  hpRestored?: number
+  mpRestored?: number
+  staminaRestored?: number
+}
+
+export interface DiceResult {
+  sides: number
+  roll: number
+  modifier: number
+  total: number
+}
+
+export interface DicePanelInfo {
+  visible: boolean
+  diceType: number
+  hasRolled: boolean
+  label: string
+  onRoll: () => void
+}
+
+interface BattleSceneProps {
+  left: FighterView | null
+  right: FighterView | null
+  currentTurnId?: string | null
+  winnerId?: string | null
+  combatEnded?: boolean
+  event?: BattleEvent | null
+  diceResults?: Record<string, DiceResult | undefined>
+  dicePanel?: DicePanelInfo | null
+  className?: string
+}
+
+interface FloatingText {
+  key: number
+  side: 'left' | 'right'
+  text: string
+  color: string
+  big?: boolean
+}
+
+// ============================================================
+// Helpers visuais
+// ============================================================
+
+const SLOT_ORDER = ['WEAPON', 'SHIELD', 'HELMET', 'ARMOR', 'GLOVES', 'BOOTS', 'NECKLACE', 'RING_1', 'RING_2']
+
+const SLOT_EMOJI: Record<string, string> = {
+  WEAPON: '⚔️',
+  SHIELD: '🛡️',
+  HELMET: '🪖',
+  ARMOR: '🥋',
+  GLOVES: '🧤',
+  BOOTS: '🥾',
+  NECKLACE: '📿',
+  RING_1: '💍',
+  RING_2: '💍',
+}
+
+const TRANSFORM_EMOJI: Record<string, string> = {
+  dragon: '🐉',
+  wolf: '🐺',
+  bear: '🐻',
+  eagle: '🦅',
+}
+
+const CLASS_EMOJI: Record<string, string> = {
+  guerreiro: '🗡️',
+  mago: '🧙',
+  arqueiro: '🏹',
+  ladino: '🗡️',
+  paladino: '🛡️',
+  clerigo: '✨',
+}
+
+function diceColor(sides: number): string {
+  switch (sides) {
+    case 4: return 'bg-red-600'
+    case 6: return 'bg-blue-600'
+    case 8: return 'bg-green-600'
+    case 10: return 'bg-yellow-600'
+    case 12: return 'bg-purple-600'
+    case 20: return 'bg-pink-600'
+    default: return 'bg-gray-600'
+  }
+}
+
+function hpBarColor(pct: number): string {
+  if (pct > 50) return 'from-green-500 to-emerald-400'
+  if (pct > 25) return 'from-yellow-500 to-amber-400'
+  return 'from-red-600 to-red-400'
+}
+
+function equipStatsSummary(item: EquippedItem): string {
+  const s = item.stats || {}
+  const parts: string[] = []
+  if (s.attack) parts.push(`ATK +${s.attack}`)
+  if (s.defense) parts.push(`DEF +${s.defense}`)
+  if (s.hp) parts.push(`HP +${s.hp}`)
+  if (s.mp) parts.push(`MP +${s.mp}`)
+  if (s.bonusDamage) parts.push(`DANO +${s.bonusDamage}`)
+  return parts.length ? ` (${parts.join(', ')})` : ''
+}
+
+// ============================================================
+// Sub-componentes
+// ============================================================
+
+function StatBar({ value, max, gradient, icon }: { value: number; max: number; gradient: string; icon: string }) {
+  const pct = Math.max(0, Math.min(100, max > 0 ? (value / max) * 100 : 0))
+  return (
+    <div className="flex items-center gap-1 w-full">
+      <span className="text-[10px] w-4 text-center flex-shrink-0">{icon}</span>
+      <div className="flex-1 h-2.5 bg-black/50 rounded-full overflow-hidden border border-white/10">
+        <motion.div
+          className={`h-full rounded-full bg-gradient-to-r ${gradient}`}
+          initial={false}
+          animate={{ width: `${pct}%` }}
+          transition={{ type: 'spring', stiffness: 120, damping: 20 }}
+        />
+      </div>
+      <span className="text-[9px] text-white/80 w-12 text-right flex-shrink-0 font-mono">
+        {value}/{max}
+      </span>
+    </div>
+  )
+}
+
+function EquipmentColumn({ equipment, side }: { equipment?: EquipmentMap; side: 'left' | 'right' }) {
+  return (
+    <div className={`flex flex-col gap-1 ${side === 'left' ? 'items-start' : 'items-end'}`}>
+      {SLOT_ORDER.map(slot => {
+        const item = equipment?.[slot]
+        if (!item) return null
+        return (
+          <div
+            key={slot}
+            title={`${item.name}${equipStatsSummary(item)}`}
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-black/40 border border-amber-500/40 flex items-center justify-center overflow-hidden hover:border-amber-400 hover:scale-110 transition-all cursor-help shadow-lg shadow-black/50"
+          >
+            {item.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+            ) : item.type ? (
+              <ItemIcon type={item.type as any} size={18} className="text-amber-300" />
+            ) : (
+              <span className="text-sm">{SLOT_EMOJI[slot] || '❔'}</span>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function FighterFigure({
+  fighter,
+  side,
+  isTurn,
+  isWinner,
+  isDefeated,
+  lunging,
+  shaking,
+  dodging,
+  defending,
+  diceResult,
+}: {
+  fighter: FighterView
+  side: 'left' | 'right'
+  isTurn: boolean
+  isWinner: boolean
+  isDefeated: boolean
+  lunging: boolean
+  shaking: boolean
+  dodging: boolean
+  defending: boolean
+  diceResult?: DiceResult
+}) {
+  const hpPct = fighter.maxHp > 0 ? (fighter.hp / fighter.maxHp) * 100 : 0
+  const transformEmoji = fighter.isTransformed && fighter.transformationType
+    ? TRANSFORM_EMOJI[fighter.transformationType] || '🌟'
+    : null
+
+  // Direção da investida: esquerda avança para a direita e vice-versa
+  const lungeX = side === 'left' ? 90 : -90
+  const dodgeX = side === 'left' ? -45 : 45
+
+  return (
+    <div className={`flex items-end gap-1 sm:gap-2 ${side === 'right' ? 'flex-row-reverse' : ''}`}>
+      {/* Equipamentos ao lado externo do lutador */}
+      <EquipmentColumn equipment={fighter.equipmentMap} side={side} />
+
+      <div className="flex flex-col items-center gap-1 w-32 sm:w-44">
+        {/* Placa de nome + barras */}
+        <div className={`w-full bg-black/60 backdrop-blur-sm rounded-xl px-2 py-1.5 border ${
+          isTurn ? 'border-amber-400 shadow-lg shadow-amber-500/30' : 'border-white/15'
+        }`}>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[11px] sm:text-xs font-bold text-white truncate">
+              {transformEmoji && <span className="mr-1">{transformEmoji}</span>}
+              {fighter.name}
+            </span>
+            <span className="text-[9px] text-amber-300 font-bold flex-shrink-0 ml-1">Nv.{fighter.level}</span>
+          </div>
+          <div className="space-y-0.5">
+            <StatBar value={fighter.hp} max={fighter.maxHp} gradient={hpBarColor(hpPct)} icon="❤️" />
+            <StatBar value={fighter.mp} max={fighter.maxMp} gradient="from-blue-600 to-cyan-400" icon="🔮" />
+            <StatBar value={fighter.stamina} max={fighter.maxStamina} gradient="from-yellow-600 to-amber-300" icon="⚡" />
+          </div>
+        </div>
+
+        {/* Resultado do dado */}
+        <div className="h-6 flex items-center">
+          <AnimatePresence>
+            {diceResult && (
+              <motion.div
+                initial={{ scale: 0, rotate: -180 }}
+                animate={{ scale: 1, rotate: 0 }}
+                exit={{ scale: 0, opacity: 0 }}
+                className={`${diceColor(diceResult.sides)} text-white text-[11px] font-bold px-2 py-0.5 rounded-md shadow-lg flex items-center gap-1`}
+              >
+                🎲 d{diceResult.sides}: {diceResult.total}
+                {diceResult.modifier > 0 && (
+                  <span className="text-[9px] opacity-80">({diceResult.roll}+{diceResult.modifier})</span>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Sprite do personagem */}
+        <motion.div
+          className="relative"
+          animate={
+            lunging ? { x: [0, lungeX, 0], scale: [1, 1.06, 1] }
+            : dodging ? { x: [0, dodgeX, 0], opacity: [1, 0.45, 1] }
+            : shaking ? { x: [0, -8, 8, -6, 6, 0] }
+            : { x: 0 }
+          }
+          transition={
+            lunging ? { duration: 0.5, times: [0, 0.5, 1], ease: 'easeInOut' }
+            : dodging ? { duration: 0.45 }
+            : shaking ? { duration: 0.4 }
+            : { duration: 0.2 }
+          }
+        >
+          {/* Aura de turno / transformação */}
+          {(isTurn || fighter.isTransformed) && !isDefeated && (
+            <div className={`absolute -inset-2 rounded-2xl blur-md ${
+              fighter.isTransformed ? 'bg-purple-500/30' : 'bg-amber-400/20'
+            } animate-pulse pointer-events-none`} />
+          )}
+
+          {/* Bolha de defesa */}
+          <AnimatePresence>
+            {defending && (
+              <motion.div
+                initial={{ scale: 0.6, opacity: 0 }}
+                animate={{ scale: 1.15, opacity: 1 }}
+                exit={{ scale: 1.4, opacity: 0 }}
+                className="absolute -inset-1 rounded-2xl border-4 border-cyan-400/70 bg-cyan-400/10 z-10 pointer-events-none"
+              />
+            )}
+          </AnimatePresence>
+
+          <motion.div
+            animate={isDefeated ? { rotate: side === 'left' ? -90 : 90, y: 30, opacity: 0.5 } : { rotate: 0, y: 0, opacity: 1 }}
+            transition={{ duration: 0.8, ease: 'easeIn' }}
+            className={`relative w-28 h-36 sm:w-40 sm:h-52 rounded-2xl overflow-hidden border-2 shadow-2xl ${
+              isWinner ? 'border-yellow-400 shadow-yellow-500/40'
+              : isTurn ? 'border-amber-400/70'
+              : 'border-white/20'
+            } ${isDefeated ? 'grayscale' : ''}`}
+          >
+            {fighter.avatar ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={fighter.avatar}
+                alt={fighter.name}
+                className={`w-full h-full object-cover ${side === 'right' ? 'scale-x-[-1]' : ''}`}
+              />
+            ) : (
+              <div className={`w-full h-full bg-gradient-to-b from-slate-700 to-slate-900 flex flex-col items-center justify-center gap-2 ${side === 'right' ? 'scale-x-[-1]' : ''}`}>
+                <span className="text-5xl sm:text-6xl">
+                  {transformEmoji || CLASS_EMOJI[fighter.class?.toLowerCase()] || '🧝'}
+                </span>
+              </div>
+            )}
+            {/* Faixa raça/classe */}
+            <div className="absolute bottom-0 inset-x-0 bg-black/70 text-center py-0.5">
+              <span className="text-[9px] text-white/80">{fighter.race} • {fighter.class}</span>
+            </div>
+          </motion.div>
+
+          {/* Sombra no chão */}
+          <div className="mx-auto mt-1 w-24 sm:w-32 h-3 bg-black/50 rounded-[100%] blur-sm" />
+        </motion.div>
+      </div>
+    </div>
+  )
+}
+
+// ============================================================
+// Componente principal
+// ============================================================
+
+export default function BattleScene({
+  left,
+  right,
+  currentTurnId,
+  winnerId,
+  combatEnded,
+  event,
+  diceResults,
+  dicePanel,
+  className = '',
+}: BattleSceneProps) {
+  const [floatingTexts, setFloatingTexts] = useState<FloatingText[]>([])
+  const [lungingSide, setLungingSide] = useState<'left' | 'right' | null>(null)
+  const [shakingSide, setShakingSide] = useState<'left' | 'right' | null>(null)
+  const [dodgingSide, setDodgingSide] = useState<'left' | 'right' | null>(null)
+  const [defendingSide, setDefendingSide] = useState<'left' | 'right' | null>(null)
+  const [slashSide, setSlashSide] = useState<'left' | 'right' | null>(null)
+  const textKey = useRef(0)
+  const lastEventId = useRef(0)
+  const timeouts = useRef<ReturnType<typeof setTimeout>[]>([])
+
+  const sideOf = (id?: string | null): 'left' | 'right' | null => {
+    if (!id) return null
+    if (left?.id === id) return 'left'
+    if (right?.id === id) return 'right'
+    return null
+  }
+
+  const pushText = (side: 'left' | 'right', text: string, color: string, big = false) => {
+    textKey.current += 1
+    const key = textKey.current
+    setFloatingTexts(prev => [...prev, { key, side, text, color, big }])
+    const t = setTimeout(() => {
+      setFloatingTexts(prev => prev.filter(ft => ft.key !== key))
+    }, 1500)
+    timeouts.current.push(t)
+  }
+
+  const later = (fn: () => void, ms: number) => {
+    const t = setTimeout(fn, ms)
+    timeouts.current.push(t)
+  }
+
+  // Coreografia dos eventos de batalha
+  useEffect(() => {
+    if (!event || event.id === lastEventId.current) return
+    lastEventId.current = event.id
+
+    if (event.kind === 'resolve') {
+      const atkSide = sideOf(event.attackerId)
+      const defSide = sideOf(event.defenderId)
+      if (!atkSide || !defSide) return
+
+      // 1. Investida do atacante
+      setLungingSide(atkSide)
+      later(() => setLungingSide(null), 550)
+
+      // 2. Impacto (no meio da investida)
+      later(() => {
+        if (event.hit) {
+          setSlashSide(defSide)
+          later(() => setSlashSide(null), 350)
+          setShakingSide(defSide)
+          later(() => setShakingSide(null), 450)
+
+          if (event.defenseAction === 'defend') {
+            setDefendingSide(defSide)
+            later(() => setDefendingSide(null), 700)
+          }
+
+          if (event.isCritical) {
+            pushText(defSide, 'CRÍTICO!', 'text-yellow-300', true)
+            later(() => pushText(defSide, `-${event.damage}`, 'text-yellow-300', true), 150)
+          } else {
+            pushText(defSide, `-${event.damage}`, 'text-red-400', (event.damage || 0) > 30)
+          }
+        } else {
+          // Esquiva bem-sucedida
+          setDodgingSide(defSide)
+          later(() => setDodgingSide(null), 500)
+          pushText(defSide, 'ESQUIVOU!', 'text-cyan-300', true)
+        }
+      }, 280)
+    } else if (event.kind === 'item') {
+      const side = sideOf(event.actorId)
+      if (!side) return
+      if (event.hpRestored) pushText(side, `+${event.hpRestored} HP`, 'text-green-400', true)
+      if (event.mpRestored) later(() => pushText(side, `+${event.mpRestored} MP`, 'text-blue-400'), 200)
+      if (event.staminaRestored) later(() => pushText(side, `+${event.staminaRestored} ⚡`, 'text-yellow-300'), 400)
+    } else if (event.kind === 'transform') {
+      const side = sideOf(event.actorId)
+      if (!side) return
+      pushText(side, 'TRANSFORMAÇÃO!', 'text-purple-300', true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [event?.id])
+
+  // Limpar timeouts ao desmontar
+  useEffect(() => () => { timeouts.current.forEach(clearTimeout) }, [])
+
+  const renderFighter = (fighter: FighterView | null, side: 'left' | 'right') => {
+    if (!fighter) {
+      return (
+        <div className="flex flex-col items-center justify-end w-32 sm:w-44 gap-2 opacity-60">
+          <div className="w-28 h-36 sm:w-40 sm:h-52 rounded-2xl border-2 border-dashed border-white/20 flex flex-col items-center justify-center gap-2">
+            <span className="text-3xl animate-pulse">⏳</span>
+            <span className="text-[10px] text-white/50 text-center px-2">Aguardando oponente...</span>
+          </div>
+        </div>
+      )
+    }
+    return (
+      <div className="relative">
+        <FighterFigure
+          fighter={fighter}
+          side={side}
+          isTurn={currentTurnId === fighter.id && !combatEnded}
+          isWinner={!!combatEnded && winnerId === fighter.id}
+          isDefeated={(!!combatEnded && !!winnerId && winnerId !== fighter.id) || fighter.hp <= 0}
+          lunging={lungingSide === side}
+          shaking={shakingSide === side}
+          dodging={dodgingSide === side}
+          defending={defendingSide === side}
+          diceResult={diceResults?.[fighter.id]}
+        />
+
+        {/* Efeito de corte */}
+        <AnimatePresence>
+          {slashSide === side && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.4, rotate: -25 }}
+              animate={{ opacity: 1, scale: 1.3, rotate: 15 }}
+              exit={{ opacity: 0, scale: 1.6 }}
+              transition={{ duration: 0.3 }}
+              className="absolute inset-0 flex items-center justify-center pointer-events-none z-20"
+            >
+              <span className="text-6xl drop-shadow-[0_0_12px_rgba(255,200,0,0.9)]">💥</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Textos flutuantes (dano, cura, esquiva) */}
+        <div className="absolute inset-x-0 top-10 flex flex-col items-center pointer-events-none z-30">
+          <AnimatePresence>
+            {floatingTexts.filter(ft => ft.side === side).map(ft => (
+              <motion.span
+                key={ft.key}
+                initial={{ y: 20, opacity: 0, scale: 0.6 }}
+                animate={{ y: -50, opacity: 1, scale: ft.big ? 1.35 : 1 }}
+                exit={{ y: -80, opacity: 0 }}
+                transition={{ duration: 1.2, ease: 'easeOut' }}
+                className={`font-black drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] ${ft.color} ${ft.big ? 'text-2xl sm:text-3xl' : 'text-lg sm:text-xl'}`}
+                style={{ position: 'absolute' }}
+              >
+                {ft.text}
+              </motion.span>
+            ))}
+          </AnimatePresence>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className={`relative overflow-hidden ${className}`}>
+      {/* Cenário de fundo */}
+      <div className="absolute inset-0 bg-gradient-to-b from-indigo-950 via-purple-950/80 to-slate-900" />
+      <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-emerald-950/90 to-transparent" />
+      {/* Lua / estrelas decorativas */}
+      <div className="absolute top-4 right-8 w-10 h-10 rounded-full bg-amber-100/80 blur-[2px] shadow-[0_0_30px_rgba(255,240,200,0.5)]" />
+      <div className="absolute top-8 left-12 text-white/30 text-xs">✦</div>
+      <div className="absolute top-16 left-1/3 text-white/20 text-[10px]">✦</div>
+      <div className="absolute top-6 right-1/3 text-white/25 text-xs">✦</div>
+
+      {/* Lutadores */}
+      <div className="relative h-full flex items-end justify-between px-2 sm:px-8 pb-6 pt-2 gap-2">
+        {renderFighter(left, 'left')}
+
+        {/* Centro: VS / banner de vitória / prompt de dado */}
+        <div className="flex-1 flex flex-col items-center justify-center self-center gap-3 min-w-0">
+          {combatEnded && winnerId ? (
+            <motion.div
+              initial={{ scale: 0, rotate: -10 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ type: 'spring', stiffness: 200, damping: 12 }}
+              className="text-center bg-black/70 border-2 border-yellow-400 rounded-2xl px-4 py-3 shadow-2xl shadow-yellow-500/30"
+            >
+              <div className="text-3xl mb-1">🏆</div>
+              <div className="text-yellow-300 font-black text-sm sm:text-lg">
+                {sideOf(winnerId) === 'left' ? left?.name : right?.name} venceu!
+              </div>
+            </motion.div>
+          ) : dicePanel?.visible ? (
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              className="text-center bg-black/70 border border-white/20 rounded-2xl px-4 py-3 backdrop-blur-sm"
+            >
+              <div className="text-[11px] sm:text-xs text-white/80 mb-2 font-bold">{dicePanel.label}</div>
+              {dicePanel.hasRolled ? (
+                <div className="text-green-400 text-xs font-bold">✅ Aguardando oponente...</div>
+              ) : (
+                <motion.button
+                  onClick={dicePanel.onRoll}
+                  animate={{ rotate: [0, -8, 8, -8, 0], scale: [1, 1.08, 1] }}
+                  transition={{ repeat: Infinity, duration: 1.4 }}
+                  className={`${diceColor(dicePanel.diceType)} w-14 h-14 sm:w-16 sm:h-16 rounded-xl text-white font-black text-base shadow-2xl hover:brightness-125 transition-all border-2 border-white/30`}
+                >
+                  d{dicePanel.diceType}
+                </motion.button>
+              )}
+            </motion.div>
+          ) : (
+            <div className="text-2xl sm:text-4xl font-black text-white/20 select-none">VS</div>
+          )}
+        </div>
+
+        {renderFighter(right, 'right')}
+      </div>
+    </div>
+  )
+}

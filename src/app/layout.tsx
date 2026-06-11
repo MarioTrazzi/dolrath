@@ -3,7 +3,7 @@ import type { Metadata } from 'next'
 import { AuthProvider } from '@/components/providers/AuthProvider'
 import { DragAndDropProvider } from '@/components/providers/DragAndDropProvider'
 import { GoldProvider } from '@/components/providers/GoldProvider'
-import { Navbar } from '@/components/layout/Navbar'
+import { AppShell } from '@/components/layout/AppShell'
 import { Toaster } from 'react-hot-toast'
 
 export const metadata: Metadata = {
@@ -22,12 +22,7 @@ export default function RootLayout({
         <AuthProvider>
           <GoldProvider>
             <DragAndDropProvider>
-              <div className="min-h-screen bg-gradient-to-br from-background via-secondary to-accent">
-              <Navbar />
-              <main className="pt-16">
-                {children}
-              </main>
-            </div>
+              <AppShell>{children}</AppShell>
             </DragAndDropProvider>
           </GoldProvider>
         </AuthProvider>

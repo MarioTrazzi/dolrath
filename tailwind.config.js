@@ -17,6 +17,7 @@ module.exports = {
         surface: '#1e1e3f',
         'text-primary': '#ffffff',
         'text-secondary': '#b4b4d1',
+        textsec: '#b4b4d1', // alias curto usado na landing (text-textsec)
         success: '#2ecc71',
         error: '#e74c3c',
         warning: '#f39c12',

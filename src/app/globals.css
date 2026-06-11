@@ -116,3 +116,52 @@
 .combat-chat-scroll::-webkit-scrollbar-thumb:hover {
   background: #b45309;
 }
+
+/* ============================================================
+   LANDING / DESIGN SYSTEM (handoff Claude Design)
+   Tokens visuais reutilizáveis: fantasia sombria, mesa de RPG noturna.
+   ============================================================ */
+
+/* Números de combate / ficha — sempre em mono */
+.font-combat {
+  font-family: 'Courier New', monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+/* Card denso (mais opaco que o glass-card) */
+.ds-card {
+  background: rgba(30, 30, 63, 0.5);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+}
+
+/* Céu da arena — reutilizado no hero e no CTA final */
+.arena-sky {
+  background: linear-gradient(to bottom, #1e1b4b 0%, #3b0764 55%, #0f172a 100%);
+}
+
+::selection { background: rgba(233, 69, 96, 0.4); color: #fff; }
+
+@keyframes star-twinkle {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 0.9; }
+}
+
+@keyframes float-damage {
+  0%   { opacity: 0; transform: translateY(8px) scale(0.8); }
+  15%  { opacity: 1; transform: translateY(-4px) scale(1.15); }
+  70%  { opacity: 1; transform: translateY(-28px) scale(1); }
+  100% { opacity: 0; transform: translateY(-44px) scale(0.95); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arena-sky span,
+  [style*="float-damage"] {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

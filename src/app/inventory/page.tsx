@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import toast from 'react-hot-toast';
+import EnhancementDialog from '@/components/EnhancementDialog';
+import { getGearCategory, getDisplayName } from '@/lib/enhancementSystem';
 
 interface Item {
   id: string;
@@ -21,6 +23,9 @@ interface UserInventoryItem {
 interface CharacterInventoryItem {
   id: string;
   quantity: number;
+  enhancementLevel?: number;
+  durability?: number;
+  maxDurability?: number;
   item: Item;
 }
 
@@ -44,6 +49,7 @@ export default function InventoryPage() {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [selectedCharacter, setSelectedCharacter] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [enhanceTarget, setEnhanceTarget] = useState<CharacterInventoryItem | null>(null);
 
   useEffect(() => {
     fetchUserInventory();
@@ -476,11 +482,15 @@ export default function InventoryPage() {
               <div className="space-y-3">
                 {characterInventory.map((inventoryItem) => {
                   const isEquipped = isItemEquipped(inventoryItem.item.id);
+                  const enhancementLevel = inventoryItem.enhancementLevel || 0;
+                  const isEnhanceable = !!getGearCategory(inventoryItem.item.type);
                   return (
                     <div key={inventoryItem.id} className="bg-surface/70 border border-white/10 p-4 rounded-lg flex items-center justify-between hover:border-primary/50 transition-colors">
                       <div>
                         <h3 className="font-medium text-text-primary flex items-center gap-2">
-                          {inventoryItem.item.name}
+                          <span className={enhancementLevel >= 16 ? 'text-orange-400' : enhancementLevel > 0 ? 'text-cyan-300' : ''}>
+                            {getDisplayName(inventoryItem.item.name, enhancementLevel)}
+                          </span>
                           {isEquipped && (
                             <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded-full border border-green-500/30">
                               ✓ Equipado
@@ -489,6 +499,11 @@ export default function InventoryPage() {
                         </h3>
                         <p className="text-sm text-text-secondary">
                           Tipo: <span className="text-primary">{inventoryItem.item.type}</span> | Quantidade: <span className="text-yellow-400">{inventoryItem.quantity}</span>
+                          {isEnhanceable && inventoryItem.durability !== undefined && (
+                            <> | Durabilidade: <span className={inventoryItem.durability > 50 ? 'text-green-400' : inventoryItem.durability > 20 ? 'text-yellow-400' : 'text-red-400'}>
+                              {inventoryItem.durability}/{inventoryItem.maxDurability ?? 100}
+                            </span></>
+                          )}
                         </p>
                         {inventoryItem.item.description && (
                           <p className="text-xs text-text-secondary mt-1">{inventoryItem.item.description}</p>
@@ -516,6 +531,15 @@ export default function InventoryPage() {
                             {isEquipped ? '🔓 Desequipar' : '⚡ Equipar'}
                           </button>
                         )}
+                        {isEnhanceable && (
+                          <button
+                            onClick={() => setEnhanceTarget(inventoryItem)}
+                            disabled={loading}
+                            className="bg-gradient-to-r from-amber-500 to-amber-600 text-white px-4 py-2 rounded-lg text-sm hover:from-amber-600 hover:to-amber-700 disabled:opacity-50 transition-all shadow-lg font-semibold"
+                          >
+                            ⚒️ Aprimorar
+                          </button>
+                        )}
                         {!isEquipped && inventoryItem.item.type !== 'CONSUMABLE' && (
                           <button
                             onClick={() => handleTransferToGlobal(inventoryItem.item.id)}
@@ -533,6 +557,21 @@ export default function InventoryPage() {
             )}
           </div>
         </div>
+
+        {/* Diálogo de aprimoramento ⚒️ */}
+        {enhanceTarget && selectedCharacter && (
+          <EnhancementDialog
+            open={!!enhanceTarget}
+            onClose={() => setEnhanceTarget(null)}
+            characterId={selectedCharacter}
+            inventoryId={enhanceTarget.id}
+            itemName={enhanceTarget.item.name}
+            onChanged={() => {
+              fetchCharacterInventory(selectedCharacter);
+              fetchEquippedItems(selectedCharacter);
+            }}
+          />
+        )}
       </div>
     </div>
   );

@@ -568,6 +568,135 @@ export const DUNGEONS: Dungeon[] = [
       { id: 'goblin_leather', dungeonId: 'goblin_caves', itemType: RewardType.MATERIAL, itemName: 'leather', rarity: Rarity.COMMON, dropRate: 0.7, minFloor: 1, maxFloor: 3, quantity: 1 },
       { id: 'goblin_xp', dungeonId: 'goblin_caves', itemType: RewardType.EXPERIENCE, itemName: 'xp', rarity: Rarity.COMMON, dropRate: 1.0, minFloor: 1, maxFloor: 3, quantity: 25 }
     ]
+  },
+
+  // === DUNGEONS TEMÁTICAS (equipamentos vêm do itemCatalog) ===
+  {
+    id: 'whispering_woods',
+    name: 'Bosque Sussurrante',
+    type: DungeonType.MIXED,
+    rank: DungeonRank.D,
+    minLevel: 4,
+    maxLevel: 9,
+    description: 'Uma floresta antiga onde os elfos outrora caminhavam. As árvores guardam armas leves e segredos arcanos.',
+    biome: BiomeType.FOREST,
+    floors: 4,
+    cooldown: 0,
+    isActive: true,
+    imageUrl: '/dungeons/whispering_woods.png',
+    rewards: [
+      { id: 'ww_herb', dungeonId: 'whispering_woods', itemType: RewardType.MATERIAL, itemName: 'herb', rarity: Rarity.COMMON, dropRate: 0.7, minFloor: 1, maxFloor: 4, quantity: 2 },
+      { id: 'ww_magic_herb', dungeonId: 'whispering_woods', itemType: RewardType.MATERIAL, itemName: 'magic_herb', rarity: Rarity.UNCOMMON, dropRate: 0.4, minFloor: 2, maxFloor: 4, quantity: 1 }
+    ]
+  },
+  {
+    id: 'sunken_crypt',
+    name: 'Cripta Submersa',
+    type: DungeonType.COMBAT,
+    rank: DungeonRank.D,
+    minLevel: 5,
+    maxLevel: 10,
+    description: 'Ruínas inundadas habitadas por mortos-vivos. Tesouros de heróis caídos repousam em seus corredores.',
+    biome: BiomeType.RUINS,
+    floors: 4,
+    cooldown: 0,
+    isActive: true,
+    imageUrl: '/dungeons/sunken_crypt.png',
+    rewards: [
+      { id: 'sc_leather', dungeonId: 'sunken_crypt', itemType: RewardType.MATERIAL, itemName: 'leather', rarity: Rarity.COMMON, dropRate: 0.6, minFloor: 1, maxFloor: 4, quantity: 1 },
+      { id: 'sc_silver', dungeonId: 'sunken_crypt', itemType: RewardType.MATERIAL, itemName: 'silver_ore', rarity: Rarity.UNCOMMON, dropRate: 0.35, minFloor: 2, maxFloor: 4, quantity: 1 }
+    ]
+  },
+  {
+    id: 'scorching_dunes',
+    name: 'Dunas Escaldantes',
+    type: DungeonType.MIXED,
+    rank: DungeonRank.C,
+    minLevel: 9,
+    maxLevel: 15,
+    description: 'Um deserto implacável onde caravanas desapareceram. Forja equipamentos resistentes ao calor extremo.',
+    biome: BiomeType.DESERT,
+    floors: 5,
+    cooldown: 0,
+    isActive: true,
+    imageUrl: '/dungeons/scorching_dunes.png',
+    rewards: [
+      { id: 'sd_gold_ore', dungeonId: 'scorching_dunes', itemType: RewardType.MATERIAL, itemName: 'gold_ore', rarity: Rarity.UNCOMMON, dropRate: 0.4, minFloor: 1, maxFloor: 5, quantity: 1 },
+      { id: 'sd_silver', dungeonId: 'scorching_dunes', itemType: RewardType.MATERIAL, itemName: 'silver_ore', rarity: Rarity.UNCOMMON, dropRate: 0.5, minFloor: 1, maxFloor: 5, quantity: 1 }
+    ]
+  },
+  {
+    id: 'frostfang_caverns',
+    name: 'Cavernas Presa-Gélida',
+    type: DungeonType.COMBAT,
+    rank: DungeonRank.C,
+    minLevel: 11,
+    maxLevel: 17,
+    description: 'Cavernas geladas habitadas por feras primordiais. Os metamorfos sentem aqui um chamado ancestral.',
+    biome: BiomeType.ICE,
+    floors: 5,
+    cooldown: 0,
+    isActive: true,
+    imageUrl: '/dungeons/frostfang_caverns.png',
+    rewards: [
+      { id: 'ff_leather', dungeonId: 'frostfang_caverns', itemType: RewardType.MATERIAL, itemName: 'leather', rarity: Rarity.COMMON, dropRate: 0.6, minFloor: 1, maxFloor: 5, quantity: 2 },
+      { id: 'ff_crystal', dungeonId: 'frostfang_caverns', itemType: RewardType.MATERIAL, itemName: 'blue_crystal', rarity: Rarity.RARE, dropRate: 0.25, minFloor: 3, maxFloor: 5, quantity: 1 }
+    ]
+  },
+  {
+    id: 'molten_depths',
+    name: 'Profundezas Incandescentes',
+    type: DungeonType.MIXED,
+    rank: DungeonRank.B,
+    minLevel: 16,
+    maxLevel: 24,
+    description: 'Túneis vulcânicos pulsando com lava. As escamas de dragões antigos forjam armaduras lendárias de fogo.',
+    biome: BiomeType.VOLCANO,
+    floors: 6,
+    cooldown: 0,
+    isActive: true,
+    imageUrl: '/dungeons/molten_depths.png',
+    rewards: [
+      { id: 'md_mithril', dungeonId: 'molten_depths', itemType: RewardType.MATERIAL, itemName: 'mithril_ore', rarity: Rarity.RARE, dropRate: 0.3, minFloor: 1, maxFloor: 6, quantity: 1 },
+      { id: 'md_scale', dungeonId: 'molten_depths', itemType: RewardType.MATERIAL, itemName: 'dragon_scale', rarity: Rarity.EPIC, dropRate: 0.15, minFloor: 3, maxFloor: 6, quantity: 1 }
+    ]
+  },
+  {
+    id: 'arcane_sanctum',
+    name: 'Santuário Arcano',
+    type: DungeonType.MIXED,
+    rank: DungeonRank.A,
+    minLevel: 22,
+    maxLevel: 30,
+    description: 'Uma torre cristalina saturada de magia bruta. Cada sala testa a mente antes de ceder seus tesouros arcanos.',
+    biome: BiomeType.CRYSTAL,
+    floors: 7,
+    cooldown: 0,
+    isActive: true,
+    imageUrl: '/dungeons/arcane_sanctum.png',
+    rewards: [
+      { id: 'as_arcane', dungeonId: 'arcane_sanctum', itemType: RewardType.MATERIAL, itemName: 'arcane_crystal', rarity: Rarity.EPIC, dropRate: 0.3, minFloor: 1, maxFloor: 7, quantity: 1 },
+      { id: 'as_mithril', dungeonId: 'arcane_sanctum', itemType: RewardType.MATERIAL, itemName: 'mithril_ore', rarity: Rarity.RARE, dropRate: 0.35, minFloor: 1, maxFloor: 7, quantity: 1 }
+    ]
+  },
+  {
+    id: 'dragons_roost',
+    name: 'Covil do Dragão',
+    type: DungeonType.COMBAT,
+    rank: DungeonRank.S,
+    minLevel: 30,
+    maxLevel: 45,
+    description: 'O lar de um dragão ancião. Apenas os mais poderosos retornam — e os que retornam carregam relíquias lendárias.',
+    biome: BiomeType.VOLCANO,
+    floors: 8,
+    cooldown: 0,
+    isActive: true,
+    imageUrl: '/dungeons/dragons_roost.png',
+    rewards: [
+      { id: 'dr_heart', dungeonId: 'dragons_roost', itemType: RewardType.MATERIAL, itemName: 'dragon_heart', rarity: Rarity.LEGENDARY, dropRate: 0.1, minFloor: 5, maxFloor: 8, quantity: 1 },
+      { id: 'dr_adamantite', dungeonId: 'dragons_roost', itemType: RewardType.MATERIAL, itemName: 'adamantite_ore', rarity: Rarity.EPIC, dropRate: 0.2, minFloor: 3, maxFloor: 8, quantity: 1 },
+      { id: 'dr_divine', dungeonId: 'dragons_roost', itemType: RewardType.MATERIAL, itemName: 'divine_essence', rarity: Rarity.LEGENDARY, dropRate: 0.08, minFloor: 6, maxFloor: 8, quantity: 1 }
+    ]
   }
 ]
 

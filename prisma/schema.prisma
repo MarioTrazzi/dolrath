@@ -158,6 +158,9 @@ model Character {
   // Sistema de stamina
   stamina       Int             @default(100)
   maxStamina    Int             @default(100)
+
+  // ⚒️ SISTEMA DE APRIMORAMENTO (estilo BDO)
+  failstacks    Int             @default(0)
   
   // 🐉 SISTEMA DE TRANSFORMAÇÃO
   isTransformed     Boolean       @default(false)
@@ -230,6 +233,10 @@ model CharacterInventory {
   item        Item      @relation(fields: [itemId], references: [id])
   itemId      String
   quantity    Int       @default(1)
+  // ⚒️ Estado de aprimoramento por instância (linhas com enhancementLevel > 0 têm quantity 1)
+  enhancementLevel Int  @default(0)
+  durability       Int  @default(100)
+  maxDurability    Int  @default(100)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -244,6 +251,7 @@ model CharacterEquipment {
   item        Item            @relation(fields: [itemId], references: [id])
   itemId      String
   slot        EquipmentSlotType
+  enhancementLevel Int        @default(0)
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
@@ -267,6 +275,10 @@ enum ActivityType {
   CHARACTER_CREATED
   ATTRIBUTE_DISTRIBUTED
   INVENTORY_EXPANDED
+  ITEM_ENHANCED
+  ENHANCEMENT_FAILED
+  ITEM_DESTROYED
+  ITEM_REPAIRED
 }
 
 model CharacterHistory {

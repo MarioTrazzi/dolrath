@@ -106,35 +106,38 @@ export default function DungeonsPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
+      <div className="min-h-[60vh] flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Carregando...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-textsec">Carregando...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-4">
+    <div className="p-4 sm:p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg">
-            <div className="flex items-center justify-between">
+          <div className="glass-card p-6">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-                  🏰 Sistema de Dungeons - NOVO
+                <span className="text-xs font-semibold tracking-[0.2em] uppercase text-primary">
+                  Masmorras
+                </span>
+                <h1 className="text-3xl font-bold text-white mt-2">
+                  🏰 Sistema de Masmorras
                 </h1>
-                <p className="text-gray-600 dark:text-gray-400">
-                  Sistema reconstruído do zero - simples e funcional!
+                <p className="text-textsec mt-1">
+                  Desça às profundezas e enfrente o que aguarda no escuro.
                 </p>
               </div>
-              <div className="text-right">
+              <div className="lg:text-right">
                 {/* Seletor de Personagem */}
                 {characters.length > 0 && (
                   <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    <label className="block text-sm font-medium text-textsec mb-2">
                       Escolha seu personagem:
                     </label>
                     <select
@@ -143,10 +146,10 @@ export default function DungeonsPage() {
                         const character = characters.find(c => c.id === e.target.value)
                         setSelectedCharacter(character || null)
                       }}
-                      className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-purple-500 focus:border-purple-500"
+                      className="block w-full px-3 py-2 rounded-lg bg-background/50 border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
                     >
                       {characters.map((char) => (
-                        <option key={char.id} value={char.id}>
+                        <option key={char.id} value={char.id} className="bg-secondary text-white">
                           {char.name} (Level {char.level}) - {char.race} {char.class}
                         </option>
                       ))}
@@ -154,14 +157,14 @@ export default function DungeonsPage() {
                   </div>
                 )}
                 {selectedCharacter && (
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                  <div className="text-sm text-textsec font-combat">
                     {selectedCharacter.name} • Level {selectedCharacter.level}
                     <br />
                     ❤️ {selectedCharacter.hp}/{selectedCharacter.maxHp} HP
                     <br />
                     ⚡ {selectedCharacter.stamina}/{selectedCharacter.maxStamina} Stamina
                     {!selectedCharacter.isAlive && (
-                      <span className="text-red-500 ml-2">💀 MORTO</span>
+                      <span className="text-error ml-2">💀 MORTO</span>
                     )}
                   </div>
                 )}
@@ -172,9 +175,9 @@ export default function DungeonsPage() {
 
         {/* Erro */}
         {error && (
-          <div className="bg-red-100 dark:bg-red-900 border border-red-400 text-red-700 dark:text-red-300 px-4 py-3 rounded mb-6">
+          <div className="bg-error/15 border border-error/30 text-error px-4 py-3 rounded-lg mb-6">
             <div className="flex items-center">
-              <span className="text-red-500 mr-2">❌</span>
+              <span className="mr-2">❌</span>
               {error}
             </div>
           </div>
@@ -182,20 +185,20 @@ export default function DungeonsPage() {
 
         {/* Aviso se personagem está morto */}
         {selectedCharacter && !selectedCharacter.isAlive && (
-          <div className="bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-700 rounded-lg p-4 mb-6">
-            <p className="text-red-800 dark:text-red-300 font-bold">
+          <div className="glass-card border-l-4 border-l-error p-4 mb-6">
+            <p className="text-error font-bold">
               💀 Personagem Morto
             </p>
-            <p className="text-red-600 dark:text-red-400 text-sm">
-              Use uma Poção de Reviver antes de entrar em dungeons.
+            <p className="text-textsec text-sm">
+              Use uma Poção de Reviver antes de entrar em masmorras.
             </p>
           </div>
         )}
 
         {/* Dungeon Component */}
         {selectedCharacter && selectedCharacter.isAlive && (
-          <SimpleDungeonNew 
-            characterId={selectedCharacter.id} 
+          <SimpleDungeonNew
+            characterId={selectedCharacter.id}
             character={selectedCharacter}
             onCharacterUpdate={handleCharacterUpdate}
           />
@@ -203,12 +206,12 @@ export default function DungeonsPage() {
 
         {/* Sem personagens */}
         {characters.length === 0 && (
-          <div className="bg-yellow-50 dark:bg-yellow-900 border border-yellow-200 dark:border-yellow-700 rounded-lg p-6 text-center">
-            <p className="text-yellow-800 dark:text-yellow-300 font-bold mb-2">
+          <div className="glass-card border-l-4 border-l-warning p-6 text-center">
+            <p className="text-warning font-bold mb-2">
               Nenhum personagem encontrado
             </p>
-            <p className="text-yellow-600 dark:text-yellow-400 text-sm">
-              Crie um personagem primeiro para poder acessar as dungeons.
+            <p className="text-textsec text-sm">
+              Crie um personagem primeiro para poder acessar as masmorras.
             </p>
           </div>
         )}

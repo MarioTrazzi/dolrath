@@ -427,12 +427,12 @@ export default function SimpleDungeon({ characterId, character, onCharacterUpdat
     <div className="space-y-6">
       {/* Status da Dungeon */}
       {instance && (
-        <div className="bg-blue-50 dark:bg-blue-900 p-4 rounded-lg">
-          <h3 className="font-bold text-blue-800 dark:text-blue-200">
-            🏰 Dungeon Ativa - Andar {currentFloor}/3
+        <div className="glass-card p-4 border-l-4 border-l-primary">
+          <h3 className="font-bold text-white">
+            🏰 Dungeon Ativa — Andar {currentFloor}/3
           </h3>
-          <p className="text-blue-600 dark:text-blue-300 text-sm">
-            HP: {dungeonHp || character.hp}/{character.maxHp} | 
+          <p className="text-textsec text-sm font-combat mt-1">
+            HP: {dungeonHp || character.hp}/{character.maxHp} |
             MP: {dungeonMp || character.mp}/{character.maxMp}
           </p>
         </div>
@@ -440,22 +440,22 @@ export default function SimpleDungeon({ characterId, character, onCharacterUpdat
 
       {/* Erro de Stamina */}
       {staminaError && (
-        <div className="bg-red-100 dark:bg-red-900 border border-red-400 text-red-700 dark:text-red-300 px-4 py-3 rounded">
+        <div className="bg-error/15 border border-error/30 text-error px-4 py-3 rounded-lg">
           {staminaError}
         </div>
       )}
 
       {/* Entrada da Dungeon */}
       {!instance && (
-        <div className="text-center space-y-4">
-          <h3 className="text-xl font-bold">🗡️ Cavernas dos Goblins (3 Andares)</h3>
-          <p className="text-gray-600 dark:text-gray-400">
+        <div className="glass-card p-8 text-center space-y-4">
+          <h3 className="text-2xl font-bold text-white">🗡️ Cavernas dos Goblins <span className="text-textsec text-base font-normal">(3 Andares)</span></h3>
+          <p className="text-textsec max-w-xl mx-auto">
             Uma dungeon com 3 andares progressivamente mais difíceis. No último andar, há 30% de chance de enfrentar um boss ao sair!
           </p>
           <button
             onClick={enterDungeon}
             disabled={isLoading}
-            className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 font-bold"
+            className="inline-flex items-center justify-center px-8 py-4 text-base font-semibold rounded-lg bg-gradient-to-r from-primary to-primary-dark text-white hover:shadow-lg hover:shadow-primary/25 active:scale-[0.98] transition-all disabled:opacity-50"
           >
             {isLoading ? 'Entrando...' : '🚪 Entrar na Dungeon'}
           </button>
@@ -467,61 +467,53 @@ export default function SimpleDungeon({ characterId, character, onCharacterUpdat
         <div className="grid grid-cols-2 gap-4">
           <button
             onClick={explore}
-            className="p-4 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+            className="glass-card p-4 text-center transition-all hover:border-success/40 hover:-translate-y-0.5 disabled:opacity-50"
             disabled={isLoading}
           >
-            <div className="text-center">
-              <div className="text-2xl mb-2">🔍</div>
-              <div className="font-bold">Explorar</div>
-              <div className="text-sm opacity-80">Abrir menu de exploração</div>
-            </div>
+            <div className="text-2xl mb-2">🔍</div>
+            <div className="font-bold text-white">Explorar</div>
+            <div className="text-sm text-textsec">Abrir menu de exploração</div>
           </button>
 
           <button
             onClick={attack}
-            className="p-4 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+            className="glass-card p-4 text-center transition-all hover:border-error/40 hover:-translate-y-0.5 disabled:opacity-50"
             disabled={isLoading}
           >
-            <div className="text-center">
-              <div className="text-2xl mb-2">⚔️</div>
-              <div className="font-bold">Combate Clássico RPG</div>
-              <div className="text-sm opacity-80">Stamina por ação dentro do combate</div>
-            </div>
+            <div className="text-2xl mb-2">⚔️</div>
+            <div className="font-bold text-white">Combate Clássico RPG</div>
+            <div className="text-sm text-textsec">Stamina por ação dentro do combate</div>
           </button>
 
           <button
             onClick={nextFloor}
-            className="p-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            className="glass-card p-4 text-center transition-all hover:border-primary/40 hover:-translate-y-0.5 disabled:opacity-50"
             disabled={isLoading || currentFloor >= 3}
           >
-            <div className="text-center">
-              <div className="text-2xl mb-2">🏰</div>
-              <div className="font-bold">Próximo Andar</div>
-              <div className="text-sm opacity-80">⚡ {STAMINA_COSTS.NEXT_FLOOR} stamina</div>
-            </div>
+            <div className="text-2xl mb-2">🏰</div>
+            <div className="font-bold text-white">Próximo Andar</div>
+            <div className="text-sm text-textsec font-combat">⚡ {STAMINA_COSTS.NEXT_FLOOR} stamina</div>
           </button>
 
           <button
             onClick={finishDungeon}
-            className="p-4 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50"
+            className="glass-card p-4 text-center transition-all hover:border-white/20 hover:-translate-y-0.5 disabled:opacity-50"
             disabled={isLoading}
           >
-            <div className="text-center">
-              <div className="text-2xl mb-2">🚪</div>
-              <div className="font-bold">Finalizar</div>
-              <div className="text-sm opacity-80">
-                {currentFloor === 3 ? '👑 30% chance de boss!' : 'Gratuito'}
-              </div>
+            <div className="text-2xl mb-2">🚪</div>
+            <div className="font-bold text-white">Finalizar</div>
+            <div className="text-sm text-textsec">
+              {currentFloor === 3 ? '👑 30% chance de boss!' : 'Gratuito'}
             </div>
           </button>
         </div>
       )}
 
       {/* Log de Combate */}
-      <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg max-h-64 overflow-y-auto">
-        <h4 className="font-bold mb-2">📜 Log de Eventos</h4>
+      <div className="glass-card p-4 max-h-64 overflow-y-auto">
+        <h4 className="font-bold mb-2 text-white">📜 Log de Eventos</h4>
         {combatLog.map((log, index) => (
-          <div key={index} className="text-sm py-1">
+          <div key={index} className="text-sm py-1 text-textsec">
             {log}
           </div>
         ))}

@@ -40,20 +40,25 @@ function SummaryContent() {
   }
 
   if (!instance || !dungeon) {
-    return <div>Carregando...</div>
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center text-textsec">Carregando...</div>
+    )
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-8">
+    <div className="p-4 sm:p-8">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-4xl font-bold text-center mb-8">Resumo da Dungeon</h1>
-        
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-8">
-          <h2 className="text-2xl font-bold mb-4">Última Incursão: {dungeon.name}</h2>
-          <div className="grid grid-cols-2 gap-4">
+        <div className="text-center mb-8">
+          <span className="text-xs font-semibold tracking-[0.2em] uppercase text-primary">Masmorras</span>
+          <h1 className="text-4xl font-bold text-white mt-2">Resumo da Incursão</h1>
+        </div>
+
+        <div className="glass-card p-6 mb-8">
+          <h2 className="text-2xl font-bold mb-4 text-white">Última Incursão: {dungeon.name}</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div>
-              <h3 className="font-bold">Estatísticas</h3>
-              <ul>
+              <h3 className="font-bold text-white mb-2">Estatísticas</h3>
+              <ul className="space-y-1 text-textsec font-combat text-sm">
                 <li>Andares explorados: {instance.stats.floorstransversal}</li>
                 <li>Monstros derrotados: {instance.stats.monstersKilled}</li>
                 <li>Materiais coletados: {instance.stats.materialsCollected}</li>
@@ -61,33 +66,33 @@ function SummaryContent() {
               </ul>
             </div>
             <div>
-              <h3 className="font-bold">Itens Adquiridos</h3>
-              <ul>
+              <h3 className="font-bold text-white mb-2">Itens Adquiridos</h3>
+              <ul className="space-y-1 text-textsec text-sm">
                 {instance.inventory.map((item: DungeonLoot) => (
-                  <li key={item.id}>{item.quantity}x {item.name}</li>
+                  <li key={item.id}><span className="font-combat">{item.quantity}x</span> {item.name}</li>
                 ))}
               </ul>
             </div>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-          <h2 className="text-2xl font-bold mb-4">Histórico de Incursões</h2>
-          <ul>
+        <div className="glass-card p-6">
+          <h2 className="text-2xl font-bold mb-4 text-white">Histórico de Incursões</h2>
+          <ul className="divide-y divide-white/10">
             {history.map((run: DungeonInstance) => (
-              <li key={run.id} className="border-b py-2">
-                <span className="font-bold">{run.dungeonId}</span> - {new Date(run.startTime).toLocaleString()} - {run.status}
+              <li key={run.id} className="py-2 text-textsec text-sm">
+                <span className="font-bold text-white">{run.dungeonId}</span> · {new Date(run.startTime).toLocaleString()} · {run.status}
               </li>
             ))}
           </ul>
         </div>
 
         <div className="text-center mt-8">
-          <button 
+          <button
             onClick={() => router.push('/dungeons')}
-            className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded"
+            className="inline-flex items-center justify-center px-6 py-3 text-sm font-semibold rounded-lg bg-gradient-to-r from-primary to-primary-dark text-white hover:shadow-lg hover:shadow-primary/25 active:scale-[0.98] transition-all"
           >
-            Voltar para as Dungeons
+            Voltar para as Masmorras
           </button>
         </div>
       </div>
@@ -98,7 +103,7 @@ function SummaryContent() {
 export default function DungeonSummaryPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-background via-secondary to-accent flex items-center justify-center">
+      <div className="min-h-[60vh] flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     }>

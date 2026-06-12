@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
 import { EquipmentSlotType } from '@prisma/client'
 import { recordEquipmentChange } from '@/lib/characterHistory'
+import { canRaceEquip, ItemTypeStr, RaceId } from '@/lib/itemCatalog'
 
 export async function POST(
   request: NextRequest,
@@ -48,6 +49,7 @@ export async function POST(
     }
 
     // Verificar se o personagem possui o item no inventário
+    // (se houver instâncias aprimoradas, equipa a de maior nível)
     const characterInventoryItem = await prisma.characterInventory.findFirst({
       where: {
         characterId: params.characterId,
@@ -55,6 +57,9 @@ export async function POST(
       },
       include: {
         item: true,
+      },
+      orderBy: {
+        enhancementLevel: 'desc',
       },
     });
 
@@ -65,9 +70,20 @@ export async function POST(
 
     // Verificar se o personagem tem nível suficiente para equipar o item
     if (character.level < characterInventoryItem.item.level) {
-      return NextResponse.json({ 
-        error: `Level insuficiente. Você precisa ser nível ${characterInventoryItem.item.level} para equipar este item.` 
+      return NextResponse.json({
+        error: `Level insuficiente. Você precisa ser nível ${characterInventoryItem.item.level} para equipar este item.`
       }, { status: 400 });
+    }
+
+    // Verificar restrição de raça (item exclusivo + peso de armadura) 🧬
+    const itemStats = (characterInventoryItem.item.stats as Record<string, any>) || {};
+    const raceCheck = canRaceEquip(
+      character.race,
+      characterInventoryItem.item.type as ItemTypeStr,
+      (itemStats.raceRestriction as RaceId | null) || undefined
+    );
+    if (!raceCheck.ok) {
+      return NextResponse.json({ error: `🧬 ${raceCheck.reason}` }, { status: 400 });
     }
 
     // Para anéis, verificar qual slot está disponível
@@ -130,6 +146,7 @@ export async function POST(
         characterId: params.characterId,
         itemId: itemId,
         slot: finalSlotType,
+        enhancementLevel: characterInventoryItem.enhancementLevel,
       },
     });
 

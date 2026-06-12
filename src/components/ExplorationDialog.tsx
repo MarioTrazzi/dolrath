@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { rollDungeonDrop } from '@/lib/itemCatalog'
 
 interface ExplorationResult {
   type: 'monster' | 'item' | 'gold' | 'nothing'
@@ -11,6 +12,17 @@ interface ExplorationResult {
   narrative: string
 }
 
+const rarityLabel = (rarity: string): string => {
+  switch (rarity) {
+    case 'COMMON': return 'Um item comum!'
+    case 'UNCOMMON': return 'Um item incomum!'
+    case 'RARE': return '✨ Um item raro!'
+    case 'EPIC': return '🌟 Um item ÉPICO!'
+    case 'LEGENDARY': return '⭐ Um item LENDÁRIO!'
+    default: return 'Um item!'
+  }
+}
+
 interface ExplorationDialogProps {
   isOpen: boolean
   onClose: () => void
@@ -18,17 +30,23 @@ interface ExplorationDialogProps {
   characterLevel: number
   currentFloor?: number
   characterId: string
+  /** Masmorra atual: define quais itens do catálogo podem cair. */
+  dungeonId?: string
+  /** Raça do personagem: filtra itens exclusivos de raça. */
+  characterRace?: string
   onStaminaUpdate?: (stamina: number) => void
 }
 
-export default function ExplorationDialog({ 
-  isOpen, 
-  onClose, 
-  onResult, 
+export default function ExplorationDialog({
+  isOpen,
+  onClose,
+  onResult,
   characterLevel,
   currentFloor = 1,
   characterId,
-  onStaminaUpdate 
+  dungeonId,
+  characterRace,
+  onStaminaUpdate
 }: ExplorationDialogProps) {
   const [isExploring, setIsExploring] = useState(false)
   const [currentNarrative, setCurrentNarrative] = useState('')
@@ -96,6 +114,22 @@ export default function ExplorationDialog({
         type: 'gold',
         gold: goldAmount,
         narrative: `${narratives.foundGold[Math.floor(Math.random() * narratives.foundGold.length)]} Você encontrou ${goldAmount} moedas de ouro!`
+      }
+    }
+
+    // 🎯 Drop de equipamento do catálogo da masmorra atual.
+    // Metade dos achados de item vêm do catálogo específico da dungeon
+    // (respeitando raridade, nível e raça); o restante usa o pool genérico
+    // (poções, pedras de aprimoramento) abaixo.
+    if (dungeonId && Math.random() < 0.5) {
+      const drop = rollDungeonDrop(dungeonId, characterLevel, characterRace)
+      if (drop) {
+        return {
+          type: 'item',
+          rarity: drop.rarity,
+          item: { name: drop.name, description: drop.description },
+          narrative: `${narratives.foundItem[Math.floor(Math.random() * narratives.foundItem.length)]} ${rarityLabel(drop.rarity)} (Andar ${currentFloor})`
+        }
       }
     }
 
@@ -187,7 +221,9 @@ export default function ExplorationDialog({
       UNCOMMON: [
         { name: "Poção de Vida", description: "Restaura 50 HP" },
         { name: "Poção de Mana", description: "Restaura 30 MP" },
-        { name: "Cristal Azul", description: "Um cristal com energia mágica" }
+        { name: "Cristal Azul", description: "Um cristal com energia mágica" },
+        { name: "Pedra Negra (Arma)", description: "Pedra imbuída de energia sombria. Usada para aprimorar armas e escudos de +1 a +15." },
+        { name: "Pedra Negra (Armadura)", description: "Pedra imbuída de energia sombria. Usada para aprimorar armaduras, elmos, luvas e botas de +1 a +15." }
       ],
       RARE: [
         { name: "Poção de Stamina", description: "Restaura 50 Stamina" },
@@ -197,7 +233,9 @@ export default function ExplorationDialog({
       EPIC: [
         { name: "Elixir Épico", description: "Restaura completamente HP/MP/Stamina" },
         { name: "Cristal do Poder", description: "Aumenta temporariamente os atributos" },
-        { name: "Relíquia Antiga", description: "Um artefato de poder místico" }
+        { name: "Relíquia Antiga", description: "Um artefato de poder místico" },
+        { name: "Pedra Negra Mágica Concentrada (Arma)", description: "Pedra negra condensada com poder mágico imenso. Necessária para aprimorar armas aos níveis I a V." },
+        { name: "Pedra Negra Mágica Concentrada (Armadura)", description: "Pedra negra condensada com poder mágico imenso. Necessária para aprimorar armaduras aos níveis I a V." }
       ],
       LEGENDARY: [
         { name: "Ambrosia dos Deuses", description: "Poção lendária de restauração total" },

@@ -1,6 +1,8 @@
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { ItemType } from '@prisma/client'
+import { getCatalogItemByName } from '@/lib/itemCatalog'
 
 export async function POST(req: Request) {
   const session = await auth()
@@ -60,22 +62,44 @@ export async function POST(req: Request) {
           }
         })
 
-        // Se não existir, criar o item
+        // Se não existir, criar o item.
+        // Itens do catálogo são criados com o tipo/stats reais (equipamento);
+        // os demais caem no fallback genérico (CONSUMABLE).
         if (!existingItem) {
-          existingItem = await tx.item.create({
-            data: {
-              name: itemName,
-              description: itemDescription || 'Item encontrado durante exploração',
-              type: 'CONSUMABLE',
-              level: 1,
-              goldPrice: getRarityValue(rarity || 'COMMON'),
-              stats: {
-                rarity: rarity || 'COMMON',
-                value: getRarityValue(rarity || 'COMMON'),
-                sellPrice: Math.floor(getRarityValue(rarity || 'COMMON') * 0.6)
+          const catalogItem = getCatalogItemByName(itemName)
+          if (catalogItem) {
+            existingItem = await tx.item.create({
+              data: {
+                name: catalogItem.name,
+                description: catalogItem.description,
+                type: catalogItem.type as ItemType,
+                level: catalogItem.level,
+                goldPrice: catalogItem.goldPrice,
+                stats: {
+                  ...catalogItem.stats,
+                  rarity: catalogItem.rarity,
+                  raceRestriction: catalogItem.raceRestriction ?? null,
+                  dungeons: catalogItem.dungeons,
+                  sellPrice: Math.floor(catalogItem.goldPrice * 0.6),
+                }
               }
-            }
-          })
+            })
+          } else {
+            existingItem = await tx.item.create({
+              data: {
+                name: itemName,
+                description: itemDescription || 'Item encontrado durante exploração',
+                type: 'CONSUMABLE',
+                level: 1,
+                goldPrice: getRarityValue(rarity || 'COMMON'),
+                stats: {
+                  rarity: rarity || 'COMMON',
+                  value: getRarityValue(rarity || 'COMMON'),
+                  sellPrice: Math.floor(getRarityValue(rarity || 'COMMON') * 0.6)
+                }
+              }
+            })
+          }
         }
 
         // Adicionar ao inventário do personagem

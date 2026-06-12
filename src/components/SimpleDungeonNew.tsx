@@ -28,6 +28,7 @@ interface DungeonRoom {
 interface CharacterData {
   id: string
   name: string
+  race?: string
   level: number
   hp: number
   maxHp: number
@@ -556,6 +557,8 @@ export default function SimpleDungeon({ characterId, character, onCharacterUpdat
           characterLevel={character.level}
           currentFloor={currentFloor}
           characterId={characterId}
+          dungeonId={instance?.dungeonId}
+          characterRace={character.race}
           onStaminaUpdate={(newStamina) => {
             character.stamina = newStamina
             if (onCharacterUpdate) {

@@ -516,6 +516,9 @@ export default function SimpleDungeon({ characterId, character, onCharacterUpdat
           onResult={handleExplorationResult}
           characterLevel={character.level}
           currentFloor={currentFloor}
+          characterId={characterId}
+          dungeonId={instance?.dungeonId}
+          characterRace={(character as any).race}
         />
       )}
     </div>

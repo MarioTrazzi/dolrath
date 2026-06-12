@@ -1,6 +1,8 @@
 // Sistema de combate aprimorado com mecânicas de CRIT e SPEED
 // Implementa dano crítico e modificadores de velocidade/resistência
 
+import { applyEnhancementToStats, getStatMultiplier } from './enhancementSystem';
+
 export interface CombatStats {
   str: number;
   agi: number;
@@ -36,10 +38,10 @@ export function calculateCombatStats(character: any): CombatStats {
   const baseInt = (character.attributes?.int || character.baseStats?.int || 0);
   const baseRes = (character.attributes?.res || character.baseStats?.res || 0);
 
-  // Somar bônus de equipamentos se existirem
+  // Somar bônus de equipamentos se existirem (escalados pelo aprimoramento ⚒️)
   const equipmentArray = Array.isArray(character.equipment) ? character.equipment : [];
   const equipmentBonus = equipmentArray.reduce((total: any, equipment: any) => {
-    const stats = equipment.item?.stats || {};
+    const stats = applyEnhancementToStats(equipment.item?.stats, equipment.enhancementLevel || 0);
     return {
       agi: total.agi + (stats.agi || 0),
       str: total.str + (stats.str || 0),
@@ -172,10 +174,11 @@ export function processCombatRound(
   };
   const baseDamage = baseDamageMap[attackAction];
 
-  // Calcular bônus de arma
+  // Calcular bônus de arma (escalado pelo aprimoramento ⚒️)
   const equipmentArray = Array.isArray(attacker.equipment) ? attacker.equipment : [];
   const weapon = equipmentArray.find((e: any) => e.slot === 'WEAPON');
-  const weaponBonus = weapon?.item?.stats?.bonusDamage || weapon?.item?.stats?.str || 0;
+  const baseWeaponBonus = weapon?.item?.stats?.bonusDamage || weapon?.item?.stats?.str || 0;
+  const weaponBonus = Math.round(baseWeaponBonus * getStatMultiplier(weapon?.enhancementLevel || 0));
 
   // Calcular dano com possibilidade de crítico
   const { damage, isCritical, criticalMultiplier } = calculateAttackDamage(
@@ -203,7 +206,8 @@ export function processCombatRound(
   } else if (defenseAction === 'block') {
     const defenderEquipmentArray = Array.isArray(defender.equipment) ? defender.equipment : [];
     const shield = defenderEquipmentArray.find((e: any) => e.slot === 'SHIELD');
-    const shieldBonus = shield?.item?.stats?.res || shield?.item?.stats?.defense || 0;
+    const baseShieldBonus = shield?.item?.stats?.res || shield?.item?.stats?.defense || 0;
+    const shieldBonus = Math.round(baseShieldBonus * getStatMultiplier(shield?.enhancementLevel || 0));
     
     const blockResult = calculateBlockAttempt(defenderStats, defenseDiceRoll, shieldBonus);
     blockSuccess = blockResult.success;

@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import { Coins, Wallet } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { SectionHeading, Badge } from '@/components/landing/ui'
 import { ethers } from 'ethers'
 import { decodeContractCustomErrorMessage, getWalletTxErrorMessage } from '@/lib/walletErrors'
 
@@ -192,21 +193,21 @@ export default function WalletPage() {
 
   if (status === 'loading') {
     return (
-      <div className="max-w-3xl mx-auto px-4 pt-24">
-        <div className="text-text-secondary">Carregando…</div>
+      <div className="max-w-3xl mx-auto px-4 sm:px-6">
+        <div className="text-textsec">Carregando…</div>
       </div>
     )
   }
 
   if (!session) {
     return (
-      <div className="max-w-3xl mx-auto px-4 pt-24">
-        <div className="bg-surface/50 border border-white/10 rounded-xl p-6">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6">
+        <div className="glass-card p-6">
           <h1 className="text-2xl font-bold text-text-primary">Wallet</h1>
-          <p className="text-text-secondary mt-2">Você precisa estar logado.</p>
+          <p className="text-textsec mt-2">Você precisa estar logado.</p>
           <Link
             href="/auth/login"
-            className="inline-flex mt-4 bg-gradient-to-r from-primary to-primary-dark text-white px-4 py-2 rounded-lg font-semibold"
+            className="inline-flex mt-4 bg-gradient-to-r from-primary to-primary-dark text-white px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-primary/25 active:scale-[0.98] transition-all"
           >
             Entrar
           </Link>
@@ -216,25 +217,27 @@ export default function WalletPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-4 pt-24 pb-16">
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 pb-16">
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary">Wallet</h1>
-          <p className="text-text-secondary mt-1">
-            Veja seu saldo on-chain e faça claim do GOLD acumulado.
-          </p>
+        <div className="flex flex-col gap-3">
+          <Badge tone="primary" icon={<Wallet size={14} />}>Carteira</Badge>
+          <SectionHeading
+            align="left"
+            title="Sua wallet"
+            sub="Veja seu saldo on-chain e faça claim do GOLD acumulado."
+          />
         </div>
         <button
           onClick={refresh}
           disabled={loading}
-          className="bg-surface/50 border border-white/20 text-text-primary px-4 py-2 rounded-lg font-semibold hover:border-primary hover:text-primary transition-all"
+          className="shrink-0 bg-surface/60 border border-white/10 text-text-primary px-4 py-2 rounded-lg font-semibold hover:border-white/20 hover:bg-surface/80 active:scale-[0.98] transition-all"
         >
           {loading ? 'Atualizando…' : 'Atualizar'}
         </button>
       </div>
 
       <div className="mt-6 space-y-4">
-        <div className="bg-surface/50 border border-white/10 rounded-xl p-5">
+        <div className="glass-card p-5">
           <div className="flex items-center gap-2 text-text-primary font-semibold">
             <Coins className="w-4 h-4 text-yellow-500" />
             DOL (on-chain)
@@ -254,7 +257,7 @@ export default function WalletPage() {
           )}
         </div>
 
-        <div className="bg-surface/50 border border-white/10 rounded-xl p-5">
+        <div className="glass-card p-5">
           <div className="flex items-center gap-2 text-text-primary font-semibold">
             <Coins className="w-4 h-4 text-yellow-500" />
             GOLD

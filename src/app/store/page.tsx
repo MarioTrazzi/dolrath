@@ -4,8 +4,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
 import Image from 'next/image';
 import toast from 'react-hot-toast';
-import { Search, Filter, X } from 'lucide-react';
+import { Search, Filter, X, Store as StoreIcon } from 'lucide-react';
 import { ethers } from 'ethers';
+import { SectionHeading, Badge } from '@/components/landing/ui';
 import { resolveImageUrl } from '@/lib/imageUrl';
 import { decodeContractCustomErrorMessage, getWalletTxErrorMessage } from '@/lib/walletErrors';
 
@@ -437,25 +438,27 @@ export default function Store() {
 
   if (!session) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="flex items-center justify-center py-32">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-text-primary mb-4">Acesso Restrito</h1>
-          <p className="text-text-secondary">Você precisa estar logado para acessar a loja.</p>
+          <p className="text-textsec">Você precisa estar logado para acessar a loja.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background text-text-primary">
-      <div className="container mx-auto p-4 pt-20">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary-dark mb-2">
-            🏪 Loja do Aventureiro
-          </h1>
-          <p className="text-text-secondary">Encontre os melhores equipamentos para sua aventura!</p>
+    <div className="text-text-primary">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 pb-16">
+        <div className="mb-8 flex flex-col gap-3">
+          <Badge tone="primary" icon={<StoreIcon size={14} />}>Marketplace</Badge>
+          <SectionHeading
+            align="left"
+            title="Loja do Aventureiro"
+            sub="Encontre os melhores equipamentos, armas e relíquias para sua aventura."
+          />
         </div>
-        
+
         {/* Barra de Busca */}
         <div className="mb-6">
           <div className="relative">

@@ -28,37 +28,35 @@ export default function CharacterPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-secondary to-accent flex items-center justify-center">
+      <div className="flex items-center justify-center py-32">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-secondary to-accent p-8">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold text-text-primary mb-8">Meus Personagens</h1>
-        
-        <div className="glass-card p-6">
-          <p className="text-text-secondary mb-4">
-            Sistema de personagens em manutenção para deployment.
-          </p>
-          
-          <div className="space-y-4">
-            <button
-              onClick={() => router.push('/dashboard')}
-              className="w-full bg-primary text-white py-2 px-4 rounded-lg hover:bg-primary/80 transition-colors"
-            >
-              Voltar ao Dashboard
-            </button>
-            
-            <button
-              onClick={() => router.push('/character/create')}
-              className="w-full bg-secondary text-white py-2 px-4 rounded-lg hover:bg-secondary/80 transition-colors"
-            >
-              Criar Novo Personagem
-            </button>
-          </div>
+    <div className="mx-auto max-w-4xl px-4 sm:px-6 pb-16">
+      <h1 className="text-3xl font-bold text-text-primary mb-8">Meus Personagens</h1>
+
+      <div className="glass-card p-6">
+        <p className="text-textsec mb-6">
+          Sistema de personagens em manutenção para deployment.
+        </p>
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button
+            onClick={() => router.push('/dashboard')}
+            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-sm font-semibold bg-gradient-to-r from-primary to-primary-dark text-white hover:shadow-lg hover:shadow-primary/25 active:scale-[0.98] transition-all"
+          >
+            Voltar ao Dashboard
+          </button>
+
+          <button
+            onClick={() => router.push('/character/create')}
+            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-sm font-semibold bg-surface/60 border border-white/10 text-white hover:border-white/20 hover:bg-surface/80 active:scale-[0.98] transition-all"
+          >
+            Criar Novo Personagem
+          </button>
         </div>
       </div>
     </div>

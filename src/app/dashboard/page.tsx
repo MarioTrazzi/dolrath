@@ -12,6 +12,7 @@ import XPProgressBar from '@/components/XPProgressBar';
 import CharacterStats from '@/components/CharacterStats';
 // ...existing code...
 import { Character } from '@/types/game';
+import { SectionHeading, Badge } from '@/components/landing/ui';
 import { getRaceById, getClassById } from '@/lib/gameData';
 import { ethers } from 'ethers';
 import Image from 'next/image';
@@ -323,8 +324,17 @@ export default function DashboardPage() {
   }, [status, router, session?.user?.walletAddress]);
 
   return (
-    <div>
+    <div className="mx-auto max-w-5xl px-4 sm:px-6 pb-16">
       <main>
+        <div className="mb-8 flex flex-col gap-3">
+          <Badge tone="primary" icon={<User size={14} />}>Painel</Badge>
+          <SectionHeading
+            align="left"
+            title="Seu painel"
+            sub="Seus personagens NFT, saldo on-chain e atalhos para a aventura."
+          />
+        </div>
+
         {/* Saldo on-chain (DOL) */}
         <div className="glass-card p-4 mb-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">

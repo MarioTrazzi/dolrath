@@ -3,7 +3,10 @@
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { Castle, Skull, AlertTriangle, User } from 'lucide-react'
 import SimpleDungeonNew from '@/components/SimpleDungeonNew'
+import { SectionHeading, Badge, GlassCard, StatBar } from '@/components/landing/ui'
 
 interface Character {
   id: string
@@ -106,113 +109,120 @@ export default function DungeonsPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
+      <div className="flex items-center justify-center py-32">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Carregando...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-textsec">Carregando...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-4">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-                  🏰 Sistema de Dungeons - NOVO
-                </h1>
-                <p className="text-gray-600 dark:text-gray-400">
-                  Sistema reconstruído do zero - simples e funcional!
-                </p>
-              </div>
-              <div className="text-right">
-                {/* Seletor de Personagem */}
-                {characters.length > 0 && (
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Escolha seu personagem:
-                    </label>
-                    <select
-                      value={selectedCharacter?.id || ''}
-                      onChange={(e) => {
-                        const character = characters.find(c => c.id === e.target.value)
-                        setSelectedCharacter(character || null)
-                      }}
-                      className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-purple-500 focus:border-purple-500"
-                    >
-                      {characters.map((char) => (
-                        <option key={char.id} value={char.id}>
-                          {char.name} (Level {char.level}) - {char.race} {char.class}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                {selectedCharacter && (
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                    {selectedCharacter.name} • Level {selectedCharacter.level}
-                    <br />
-                    ❤️ {selectedCharacter.hp}/{selectedCharacter.maxHp} HP
-                    <br />
-                    ⚡ {selectedCharacter.stamina}/{selectedCharacter.maxStamina} Stamina
-                    {!selectedCharacter.isAlive && (
-                      <span className="text-red-500 ml-2">💀 MORTO</span>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
+    <div className="mx-auto max-w-7xl px-4 sm:px-6 pb-16">
+      {/* Header */}
+      <GlassCard className="p-6 mb-8">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+          <div className="flex flex-col gap-3">
+            <Badge tone="primary" icon={<Castle size={14} />}>Masmorras</Badge>
+            <SectionHeading
+              align="left"
+              title="Desça às masmorras de Dolrath"
+              sub="Explore masmorras com recompensas crescentes ou treine sua build contra monstros, sem risco."
+            />
           </div>
+
+          {/* Seletor de Personagem */}
+          {characters.length > 0 && (
+            <div className="w-full lg:w-80 shrink-0 flex flex-col gap-3">
+              <label className="text-xs font-semibold tracking-wide uppercase text-textsec">
+                Escolha seu personagem
+              </label>
+              <select
+                value={selectedCharacter?.id || ''}
+                onChange={(e) => {
+                  const character = characters.find(c => c.id === e.target.value)
+                  setSelectedCharacter(character || null)
+                }}
+                className="w-full px-3 py-2.5 rounded-lg bg-background/60 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+              >
+                {characters.map((char) => (
+                  <option key={char.id} value={char.id} className="bg-secondary text-white">
+                    {char.name} (Nv. {char.level}) — {char.race} {char.class}
+                  </option>
+                ))}
+              </select>
+
+              {selectedCharacter && (
+                <div className="flex flex-col gap-2 rounded-lg border border-white/10 bg-white/5 p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-white">{selectedCharacter.name}</span>
+                    <span className="font-combat text-xs text-textsec">Nv. {selectedCharacter.level}</span>
+                  </div>
+                  <StatBar kind="hp" value={selectedCharacter.hp} max={selectedCharacter.maxHp} />
+                  <StatBar kind="stamina" value={selectedCharacter.stamina} max={selectedCharacter.maxStamina} />
+                  {!selectedCharacter.isAlive && (
+                    <Badge tone="error" icon={<Skull size={13} />}>Personagem morto</Badge>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
+      </GlassCard>
 
-        {/* Erro */}
-        {error && (
-          <div className="bg-red-100 dark:bg-red-900 border border-red-400 text-red-700 dark:text-red-300 px-4 py-3 rounded mb-6">
-            <div className="flex items-center">
-              <span className="text-red-500 mr-2">❌</span>
-              {error}
+      {/* Erro */}
+      {error && (
+        <GlassCard className="p-4 mb-6">
+          <div className="flex items-center gap-2 text-error">
+            <AlertTriangle size={18} />
+            <span className="text-sm">{error}</span>
+          </div>
+        </GlassCard>
+      )}
+
+      {/* Aviso se personagem está morto */}
+      {selectedCharacter && !selectedCharacter.isAlive && (
+        <GlassCard className="p-5 mb-6">
+          <div className="flex items-start gap-3">
+            <span className="text-error mt-0.5"><Skull size={20} /></span>
+            <div>
+              <p className="font-bold text-white">Personagem morto</p>
+              <p className="text-sm text-textsec">Use uma Poção de Reviver antes de entrar nas masmorras.</p>
             </div>
           </div>
-        )}
+        </GlassCard>
+      )}
 
-        {/* Aviso se personagem está morto */}
-        {selectedCharacter && !selectedCharacter.isAlive && (
-          <div className="bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-700 rounded-lg p-4 mb-6">
-            <p className="text-red-800 dark:text-red-300 font-bold">
-              💀 Personagem Morto
-            </p>
-            <p className="text-red-600 dark:text-red-400 text-sm">
-              Use uma Poção de Reviver antes de entrar em dungeons.
-            </p>
+      {/* Dungeon Component */}
+      {selectedCharacter && selectedCharacter.isAlive && (
+        <SimpleDungeonNew
+          characterId={selectedCharacter.id}
+          character={selectedCharacter}
+          onCharacterUpdate={handleCharacterUpdate}
+        />
+      )}
+
+      {/* Sem personagens */}
+      {characters.length === 0 && (
+        <GlassCard className="p-8 text-center">
+          <div className="flex flex-col items-center gap-4">
+            <span className="w-14 h-14 rounded-2xl bg-primary/15 border border-primary/30 flex items-center justify-center text-primary">
+              <User size={26} />
+            </span>
+            <div>
+              <p className="font-bold text-white text-lg mb-1">Nenhum personagem encontrado</p>
+              <p className="text-sm text-textsec">Crie um personagem primeiro para acessar as masmorras.</p>
+            </div>
+            <Link
+              href="/character/create"
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-sm font-semibold bg-gradient-to-r from-primary to-primary-dark text-white hover:shadow-lg hover:shadow-primary/25 active:scale-[0.98] transition-all"
+            >
+              Criar personagem
+            </Link>
           </div>
-        )}
-
-        {/* Dungeon Component */}
-        {selectedCharacter && selectedCharacter.isAlive && (
-          <SimpleDungeonNew 
-            characterId={selectedCharacter.id} 
-            character={selectedCharacter}
-            onCharacterUpdate={handleCharacterUpdate}
-          />
-        )}
-
-        {/* Sem personagens */}
-        {characters.length === 0 && (
-          <div className="bg-yellow-50 dark:bg-yellow-900 border border-yellow-200 dark:border-yellow-700 rounded-lg p-6 text-center">
-            <p className="text-yellow-800 dark:text-yellow-300 font-bold mb-2">
-              Nenhum personagem encontrado
-            </p>
-            <p className="text-yellow-600 dark:text-yellow-400 text-sm">
-              Crie um personagem primeiro para poder acessar as dungeons.
-            </p>
-          </div>
-        )}
-      </div>
+        </GlassCard>
+      )}
     </div>
   )
 }

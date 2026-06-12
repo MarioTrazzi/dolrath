@@ -385,15 +385,15 @@ export default function CombatLobbyPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-secondary to-accent flex items-center justify-center">
+      <div className="flex items-center justify-center py-32">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-background text-text-primary">
-      <div className="max-w-6xl mx-auto p-4">
+    <div className="text-text-primary">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-16">
         {/* Header - Estilo do CombatDialog */}
         <div className="bg-gradient-to-r from-primary to-primary-dark text-white p-6 rounded-t-2xl shadow-2xl">
           <div className="flex justify-between items-center">

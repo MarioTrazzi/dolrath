@@ -5,10 +5,30 @@ import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Coins, Wallet } from 'lucide-react'
+import { Coins, Wallet, LogOut, Menu, X } from 'lucide-react'
 import { ethers } from 'ethers'
 import toast from 'react-hot-toast'
 import { getWalletTxErrorMessage } from '@/lib/walletErrors'
+
+// Estilos de botão alinhados ao design system da landing (src/components/landing/ui.tsx)
+const BTN_PRIMARY =
+  'inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r from-primary to-primary-dark text-white hover:shadow-lg hover:shadow-primary/25 active:scale-[0.98] transition-all'
+const BTN_SECONDARY =
+  'inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-surface/60 border border-white/10 text-white hover:border-white/20 hover:bg-surface/80 active:scale-[0.98] transition-all'
+const NAV_LINK =
+  'px-4 py-2 rounded-lg text-sm font-medium text-textsec hover:text-white hover:bg-white/5 transition-colors'
+const NAV_LINK_MOBILE =
+  'block px-4 py-3 rounded-lg text-sm font-medium text-textsec hover:text-white hover:bg-white/5 transition-colors'
+const WALLET_CHIP =
+  'inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:border-primary/40 transition-all'
+
+const NAV_ITEMS = [
+  { label: 'Criar Personagem', href: '/character/create' },
+  { label: 'Masmorras', href: '/dungeons' },
+  { label: 'Combate', href: '/combat-lobby' },
+  { label: 'Inventário', href: '/inventory' },
+  { label: 'Loja', href: '/store' },
+]
 
 export function Navbar() {
   const { data: session, update } = useSession()
@@ -151,299 +171,185 @@ export function Navbar() {
       .finally(() => setGoldLoading(false))
   }, [session, walletAddress])
 
+  // Texto formatado dos saldos on-chain (DOL/GOLD), reutilizado em desktop e mobile
+  const dolText = walletAddress
+    ? dolLoading
+      ? '...'
+      : `${dolBalance ?? '0'} ${dolSymbol || 'DOL'}`
+    : `— ${dolSymbol || 'DOL'}`
+
+  const goldText = walletAddress
+    ? goldLoading
+      ? '...'
+      : `${goldBalance ?? '0'} ${goldSymbol || 'GOLD'}`
+    : `— ${goldSymbol || 'GOLD'}`
+
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-white/10">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+    <header className="fixed top-0 inset-x-0 z-50">
+      <nav className="mx-auto max-w-7xl px-4 sm:px-6" aria-label="Navegação principal">
+        <div className="mt-3 flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-secondary/70 backdrop-blur-xl px-4 sm:px-6 py-3 shadow-2xl shadow-black/20">
           {/* Logo */}
-          <Link href="/" className="flex items-center space-x-2">
-            <span className="text-2xl">⚔️</span>
-            <span className="font-bold text-xl bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary-dark">
+          <Link href="/" className="flex items-center gap-2 shrink-0">
+            <span className="text-2xl" aria-hidden="true">⚔️</span>
+            <span className="font-bold text-xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-primary to-purple-400">
               Dolrath
             </span>
           </Link>
 
           {/* Navigation Links - Desktop */}
-          <div className="hidden md:flex items-center space-x-8">
-            <Link 
-              href="/character/create" 
-              className="text-text-secondary hover:text-primary transition-colors"
-              onClick={(e) => handleProtectedRoute(e, '/character/create')}
-            >
-              Criar Personagem
-            </Link>
-            <Link 
-              href="/dungeons" 
-              className="text-text-secondary hover:text-primary transition-colors"
-              onClick={(e) => handleProtectedRoute(e, '/dungeons')}
-            >
-              Masmorras
-            </Link>
-            <Link 
-              href="/combat-lobby" 
-              className="text-text-secondary hover:text-primary transition-colors"
-              onClick={(e) => handleProtectedRoute(e, '/combat-lobby')}
-            >
-              Combate
-            </Link>
-            <Link 
-              href="/inventory" 
-              className="text-text-secondary hover:text-primary transition-colors"
-              onClick={(e) => handleProtectedRoute(e, '/inventory')}
-            >
-              Inventário
-            </Link>
-            <Link 
-              href="/store" 
-              className="text-text-secondary hover:text-primary transition-colors"
-              onClick={(e) => handleProtectedRoute(e, '/store')}
-            >
-              Loja
-            </Link>
+          <div className="hidden lg:flex items-center gap-1">
+            {NAV_ITEMS.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={NAV_LINK}
+                onClick={(e) => handleProtectedRoute(e, item.href)}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </div>
+
+          {/* Right cluster */}
+          <div className="hidden md:flex items-center gap-3">
             {session ? (
-              <div className="flex items-center space-x-4">
-                {/* DOL (on-chain) Display */}
-                <Link
-                  href="/wallet"
-                  className="flex items-center gap-2 px-3 py-2 bg-surface/50 rounded-lg border border-yellow-500/30 hover:border-primary transition-all"
-                  title="Abrir Wallet"
-                >
-                  <Coins className="w-4 h-4 text-yellow-500" />
-                  <span className="text-yellow-400 font-semibold">
-                    {walletAddress ? (
-                      dolLoading ? (
-                        '...'
-                      ) : dolBalance ? (
-                        `${dolBalance} ${dolSymbol || 'DOL'}`
-                      ) : (
-                        `0 ${dolSymbol || 'DOL'}`
-                      )
-                    ) : (
-                      `— ${dolSymbol || 'DOL'}`
-                    )}
-                  </span>
+              <>
+                {/* DOL (on-chain) */}
+                <Link href="/wallet" className={WALLET_CHIP} title="Abrir Wallet">
+                  <Coins className="w-4 h-4 text-warning" />
+                  <span className="font-combat text-sm text-warning">{dolText}</span>
                 </Link>
 
-                {/* GOLD (on-chain) Display */}
-                <Link
-                  href="/wallet"
-                  className="flex items-center gap-2 px-3 py-2 bg-surface/50 rounded-lg border border-yellow-500/30 hover:border-primary transition-all"
-                  title="Abrir Wallet"
-                >
-                  <Coins className="w-4 h-4 text-yellow-500" />
-                  <span className="text-yellow-400 font-semibold">
-                    {walletAddress ? (
-                      goldLoading ? (
-                        '...'
-                      ) : goldBalance ? (
-                        `${goldBalance} ${goldSymbol || 'GOLD'}`
-                      ) : (
-                        `0 ${goldSymbol || 'GOLD'}`
-                      )
-                    ) : (
-                      `— ${goldSymbol || 'GOLD'}`
-                    )}
-                  </span>
+                {/* GOLD (on-chain) */}
+                <Link href="/wallet" className={WALLET_CHIP} title="Abrir Wallet">
+                  <Coins className="w-4 h-4 text-warning" />
+                  <span className="font-combat text-sm text-warning">{goldText}</span>
                 </Link>
 
                 {!walletAddress && (
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
+                  <button
                     onClick={handleLinkWallet}
                     disabled={isLinkingWallet}
-                    className="bg-surface/50 border border-white/20 text-text-primary px-4 py-2 rounded-lg font-semibold shadow-lg hover:border-primary hover:text-primary transition-all inline-flex items-center gap-2"
+                    className={`${BTN_SECONDARY} disabled:opacity-60`}
                   >
                     <Wallet className="w-4 h-4" />
                     {isLinkingWallet ? 'Conectando...' : 'Conectar wallet'}
-                  </motion.button>
+                  </button>
                 )}
-                <Link href="/dashboard">
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="bg-gradient-to-r from-primary to-primary-dark text-white px-4 py-2 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all"
-                  >
-                    Dashboard
-                  </motion.button>
+
+                <Link href="/dashboard" className={BTN_PRIMARY}>
+                  Dashboard
                 </Link>
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={handleSignOut}
-                  className="bg-surface/50 border border-white/20 text-text-primary px-4 py-2 rounded-lg font-semibold shadow-lg hover:border-red-500 hover:text-red-500 transition-all"
-                >
-                  Sair
-                </motion.button>
-              </div>
+
+                <button onClick={handleSignOut} className={BTN_SECONDARY} title="Sair">
+                  <LogOut className="w-4 h-4" />
+                  <span className="sr-only sm:not-sr-only">Sair</span>
+                </button>
+              </>
             ) : (
-              <Link href="/auth/login">
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  className="bg-surface/50 border border-white/20 text-text-primary px-4 py-2 rounded-lg font-semibold shadow-lg hover:border-primary hover:text-primary transition-all"
-                >
-                  Entrar
-                </motion.button>
+              <Link href="/auth/login" className={BTN_PRIMARY}>
+                <Wallet className="w-4 h-4" />
+                Entrar
               </Link>
             )}
           </div>
 
           {/* Mobile Menu Button */}
-          <motion.button
-            whileTap={{ scale: 0.95 }}
+          <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="md:hidden text-text-primary hover:text-primary transition-colors"
+            aria-expanded={isMenuOpen}
+            aria-label={isMenuOpen ? 'Fechar menu' : 'Abrir menu'}
+            className="lg:hidden p-2 rounded-lg text-white hover:bg-white/5 transition-colors"
           >
-            <span className="text-2xl">{isMenuOpen ? '✕' : '☰'}</span>
-          </motion.button>
+            {isMenuOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
         </div>
-      </div>
 
-      {/* Mobile Menu */}
-      <AnimatePresence>
-        {isMenuOpen && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="md:hidden bg-background/95 backdrop-blur-md border-b border-white/10"
-          >
-            <div className="px-4 py-4 space-y-4">
-              <Link 
-                href="/character/create" 
-                className="block text-text-secondary hover:text-primary transition-colors py-2"
-                onClick={(e) => {
-                  handleProtectedRoute(e, '/character/create')
-                  setIsMenuOpen(false)
-                }}
-              >
-                Criar Personagem
-              </Link>
-              <Link 
-                href="/dungeons" 
-                className="block text-text-secondary hover:text-primary transition-colors py-2"
-                onClick={(e) => {
-                  handleProtectedRoute(e, '/dungeons')
-                  setIsMenuOpen(false)
-                }}
-              >
-                Masmorras
-              </Link>
-              <Link 
-                href="/combat-lobby" 
-                className="block text-text-secondary hover:text-primary transition-colors py-2"
-                onClick={(e) => {
-                  handleProtectedRoute(e, '/combat-lobby')
-                  setIsMenuOpen(false)
-                }}
-              >
-                Combate
-              </Link>
-              <Link 
-                href="/inventory" 
-                className="block text-text-secondary hover:text-primary transition-colors py-2"
-                onClick={(e) => {
-                  handleProtectedRoute(e, '/inventory')
-                  setIsMenuOpen(false)
-                }}
-              >
-                Inventário
-              </Link>
-              <Link 
-                href="/store" 
-                className="block text-text-secondary hover:text-primary transition-colors py-2"
-                onClick={(e) => {
-                  handleProtectedRoute(e, '/store')
-                  setIsMenuOpen(false)
-                }}
-              >
-                Loja
-              </Link>
-              {session ? (
-                <div className="space-y-4">
+        {/* Mobile Menu */}
+        <AnimatePresence>
+          {isMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              className="lg:hidden mt-2 rounded-2xl border border-white/10 bg-secondary/90 backdrop-blur-xl p-3 shadow-2xl"
+            >
+              <div className="flex flex-col gap-1">
+                {NAV_ITEMS.map((item) => (
                   <Link
-                    href="/wallet"
-                    onClick={() => setIsMenuOpen(false)}
-                    className="flex items-center justify-between gap-3 px-3 py-2 bg-surface/50 rounded-lg border border-yellow-500/30 hover:border-primary transition-all"
+                    key={item.href}
+                    href={item.href}
+                    className={NAV_LINK_MOBILE}
+                    onClick={(e) => {
+                      handleProtectedRoute(e, item.href)
+                      setIsMenuOpen(false)
+                    }}
                   >
-                    <div className="flex items-center gap-2">
-                      <Coins className="w-4 h-4 text-yellow-500" />
-                      <span className="text-yellow-400 font-semibold">
-                        {walletAddress ? (
-                          dolLoading ? (
-                            '...'
-                          ) : dolBalance ? (
-                            `${dolBalance} ${dolSymbol || 'DOL'}`
-                          ) : (
-                            `0 ${dolSymbol || 'DOL'}`
-                          )
-                        ) : (
-                          `— ${dolSymbol || 'DOL'}`
-                        )}
-                      </span>
-                    </div>
-
-                    <div className="text-yellow-400 font-semibold">
-                      {goldLoading ? '...' : `${goldOffchain ?? 0} GOLD`}
-                    </div>
+                    {item.label}
                   </Link>
+                ))}
+
+                <div className="my-2 h-px bg-white/10" />
+
+                {session ? (
+                  <div className="flex flex-col gap-2">
+                    <Link
+                      href="/wallet"
+                      onClick={() => setIsMenuOpen(false)}
+                      className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg border border-white/10 bg-white/5"
+                    >
+                      <span className="inline-flex items-center gap-2">
+                        <Coins className="w-4 h-4 text-warning" />
+                        <span className="font-combat text-sm text-warning">{dolText}</span>
+                      </span>
+                      <span className="font-combat text-sm text-warning">{goldText}</span>
+                    </Link>
 
                     {!walletAddress && (
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
+                      <button
                         onClick={async () => {
                           await handleLinkWallet()
                           setIsMenuOpen(false)
                         }}
                         disabled={isLinkingWallet}
-                        className="bg-surface/50 border border-white/20 text-text-primary px-3 py-2 rounded-lg font-semibold shadow-lg hover:border-primary hover:text-primary transition-all inline-flex items-center gap-2"
+                        className={`${BTN_SECONDARY} w-full disabled:opacity-60`}
                       >
                         <Wallet className="w-4 h-4" />
-                        {isLinkingWallet ? 'Conectando...' : 'Conectar'}
-                      </motion.button>
+                        {isLinkingWallet ? 'Conectando...' : 'Conectar wallet'}
+                      </button>
                     )}
 
-                  <Link 
-                    href="/dashboard"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="w-full bg-gradient-to-r from-primary to-primary-dark text-white px-4 py-2 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all"
+                    <Link
+                      href="/dashboard"
+                      onClick={() => setIsMenuOpen(false)}
+                      className={`${BTN_PRIMARY} w-full`}
                     >
                       Dashboard
-                    </motion.button>
-                  </Link>
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={handleSignOut}
-                    className="w-full bg-surface/50 border border-white/20 text-text-primary px-4 py-2 rounded-lg font-semibold shadow-lg hover:border-red-500 hover:text-red-500 transition-all"
+                    </Link>
+
+                    <button
+                      onClick={handleSignOut}
+                      className={`${BTN_SECONDARY} w-full`}
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Sair
+                    </button>
+                  </div>
+                ) : (
+                  <Link
+                    href="/auth/login"
+                    onClick={() => setIsMenuOpen(false)}
+                    className={`${BTN_PRIMARY} w-full`}
                   >
-                    Sair
-                  </motion.button>
-                </div>
-              ) : (
-                <Link 
-                  href="/auth/login"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="w-full bg-surface/50 border border-white/20 text-text-primary px-4 py-2 rounded-lg font-semibold shadow-lg hover:border-primary hover:text-primary transition-all"
-                  >
+                    <Wallet className="w-4 h-4" />
                     Entrar
-                  </motion.button>
-                </Link>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </nav>
+                  </Link>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </nav>
+    </header>
   )
 }

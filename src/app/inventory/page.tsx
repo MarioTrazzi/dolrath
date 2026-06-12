@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import toast from 'react-hot-toast';
+import { Package } from 'lucide-react';
+import { SectionHeading, Badge } from '@/components/landing/ui';
 
 interface Item {
   id: string;
@@ -370,29 +372,31 @@ export default function InventoryPage() {
 
   if (!session) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="flex items-center justify-center py-32">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-text-primary mb-4">Acesso Restrito</h1>
-          <p className="text-text-secondary">Por favor, faça login para ver seu inventário</p>
+          <p className="text-textsec">Por favor, faça login para ver seu inventário</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background text-text-primary">
-      <div className="container mx-auto p-4 pt-20">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary-dark mb-2">
-            📦 Inventário
-          </h1>
-          <p className="text-text-secondary">Gerencie seus itens e equipamentos</p>
+    <div className="text-text-primary">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 pb-16">
+        <div className="mb-8 flex flex-col gap-3">
+          <Badge tone="primary" icon={<Package size={14} />}>Inventário</Badge>
+          <SectionHeading
+            align="left"
+            title="Seus itens e equipamentos"
+            sub="Gerencie o inventário global e o do personagem — transfira e equipe seus itens."
+          />
         </div>
 
         {/* Character Selection */}
         {characters.length > 0 && (
           <div className="mb-6">
-            <label className="block text-sm font-medium mb-2 text-text-secondary">
+            <label className="block text-sm font-medium mb-2 text-textsec">
               Selecionar Personagem:
             </label>
             <select
@@ -411,7 +415,7 @@ export default function InventoryPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* User Global Inventory */}
-          <div className="bg-surface/50 border border-white/20 rounded-lg p-6 shadow-lg">
+          <div className="glass-card p-6">
             <h2 className="text-xl font-semibold mb-4 text-text-primary flex items-center gap-2">
               🌐 Inventário Global do Usuário
             </h2>
@@ -451,7 +455,7 @@ export default function InventoryPage() {
           </div>
 
           {/* Character Inventory */}
-          <div className="bg-surface/50 border border-white/20 rounded-lg p-6 shadow-lg">
+          <div className="glass-card p-6">
             <h2 className="text-xl font-semibold mb-4 text-text-primary flex items-center gap-2">
               ⚔️ Inventário do Personagem
               {selectedCharacter && characters.find(c => c.id === selectedCharacter) && 

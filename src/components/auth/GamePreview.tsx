@@ -2,15 +2,22 @@
 
 import { motion } from 'framer-motion'
 import { Sword, Shield, Zap, Star } from 'lucide-react'
+import { D20 } from '@/components/landing/ui'
 
 export function GamePreview() {
   return (
     <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
-      {/* Background Animation */}
-      <div className="absolute inset-0 bg-gradient-to-br from-secondary via-accent to-background">
-        <div className="absolute inset-0 opacity-50" style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
-        }} />
+      {/* Céu da arena (mesmo do hero da landing) */}
+      <div className="absolute inset-0 arena-sky">
+        {/* lua */}
+        <div
+          className="absolute top-[14%] right-[14%] w-24 h-24 rounded-full"
+          style={{
+            background: 'radial-gradient(circle at 38% 35%, #fef3c7, #fde68a 55%, #f5d57a)',
+            boxShadow: '0 0 60px 18px rgba(253,230,138,0.35), 0 0 140px 60px rgba(253,230,138,0.12)',
+          }}
+        />
+        <div className="absolute bottom-0 inset-x-0 h-40 bg-gradient-to-t from-background to-transparent" />
       </div>
 
       {/* Floating Elements */}
@@ -69,8 +76,8 @@ export function GamePreview() {
           transition={{ duration: 1, delay: 0.5 }}
           className="mb-8"
         >
-          <div className="w-32 h-32 mx-auto mb-6 bg-gradient-to-br from-primary to-primary-dark rounded-full flex items-center justify-center shadow-2xl shadow-primary/25">
-            <span className="text-6xl">⚔️</span>
+          <div className="mx-auto mb-6 flex items-center justify-center">
+            <D20 size={128} value={20} />
           </div>
           <h1 className="text-5xl font-bold text-text-primary mb-4 font-game">
             DOLRATH

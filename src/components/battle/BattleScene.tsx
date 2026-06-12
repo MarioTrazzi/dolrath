@@ -88,6 +88,8 @@ interface BattleSceneProps {
   diceResults?: Record<string, DiceResult | undefined>
   dicePanel?: DicePanelInfo | null
   className?: string
+  /** Cenário customizado (ex.: fundo temático de masmorra). Substitui o céu noturno padrão. */
+  backdrop?: React.ReactNode
 }
 
 interface FloatingText {
@@ -351,6 +353,7 @@ export default function BattleScene({
   diceResults,
   dicePanel,
   className = '',
+  backdrop,
 }: BattleSceneProps) {
   const [floatingTexts, setFloatingTexts] = useState<FloatingText[]>([])
   const [lungingSide, setLungingSide] = useState<'left' | 'right' | null>(null)
@@ -513,14 +516,18 @@ export default function BattleScene({
 
   return (
     <div className={`relative overflow-hidden ${className}`}>
-      {/* Cenário de fundo */}
-      <div className="absolute inset-0 bg-gradient-to-b from-indigo-950 via-purple-950/80 to-slate-900" />
-      <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-emerald-950/90 to-transparent" />
-      {/* Lua / estrelas decorativas */}
-      <div className="absolute top-4 right-8 w-10 h-10 rounded-full bg-amber-100/80 blur-[2px] shadow-[0_0_30px_rgba(255,240,200,0.5)]" />
-      <div className="absolute top-8 left-12 text-white/30 text-xs">✦</div>
-      <div className="absolute top-16 left-1/3 text-white/20 text-[10px]">✦</div>
-      <div className="absolute top-6 right-1/3 text-white/25 text-xs">✦</div>
+      {/* Cenário de fundo (customizável via backdrop) */}
+      {backdrop ?? (
+        <>
+          <div className="absolute inset-0 bg-gradient-to-b from-indigo-950 via-purple-950/80 to-slate-900" />
+          <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-emerald-950/90 to-transparent" />
+          {/* Lua / estrelas decorativas */}
+          <div className="absolute top-4 right-8 w-10 h-10 rounded-full bg-amber-100/80 blur-[2px] shadow-[0_0_30px_rgba(255,240,200,0.5)]" />
+          <div className="absolute top-8 left-12 text-white/30 text-xs">✦</div>
+          <div className="absolute top-16 left-1/3 text-white/20 text-[10px]">✦</div>
+          <div className="absolute top-6 right-1/3 text-white/25 text-xs">✦</div>
+        </>
+      )}
 
       {/* Lutadores */}
       <div className="relative h-full flex items-end justify-between px-2 sm:px-8 pb-6 pt-2 gap-2">

@@ -319,7 +319,7 @@ export default function CharacterCreationPage() {
 
   if (status === 'loading') {
     return (
-      <div className="min-h-screen bg-background text-text-primary p-8">
+      <div className="min-h-screen text-white p-8">
         <div className="max-w-3xl mx-auto py-12">Carregando...</div>
       </div>
     );
@@ -327,7 +327,7 @@ export default function CharacterCreationPage() {
 
   if (!session) {
     return (
-      <div className="min-h-screen bg-background text-text-primary p-8">
+      <div className="min-h-screen text-white p-8">
         <div className="max-w-3xl mx-auto py-12">
           <div className="bg-surface/30 backdrop-blur-lg rounded-xl p-8 shadow-2xl border border-white/10">
             <h1 className="text-2xl font-bold mb-2">Faça login para criar seu personagem</h1>
@@ -346,7 +346,7 @@ export default function CharacterCreationPage() {
 
   if (!linkedWallet) {
     return (
-      <div className="min-h-screen bg-background text-text-primary p-8 relative">
+      <div className="min-h-screen text-white p-8 relative">
         <div className="max-w-3xl mx-auto py-12">
           <motion.h1
             initial={{ opacity: 0, y: -20 }}
@@ -384,7 +384,7 @@ export default function CharacterCreationPage() {
   // Payment gate (testnet): require a fixed DOL transfer before proceeding.
   if (!creationPaymentTxHash) {
     return (
-      <div className="min-h-screen bg-background text-text-primary p-8 relative">
+      <div className="min-h-screen text-white p-8 relative">
         <div className="max-w-3xl mx-auto py-12">
           <motion.h1
             initial={{ opacity: 0, y: -20 }}
@@ -512,7 +512,7 @@ export default function CharacterCreationPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-text-primary p-8 relative">
+    <div className="min-h-screen text-white p-8 relative">
       <div className="max-w-6xl mx-auto py-12">
         <motion.h1
           initial={{ opacity: 0, y: -20 }}

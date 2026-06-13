@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import toast from 'react-hot-toast';
 import EnhancementDialog from '@/components/EnhancementDialog';
+import VaultBackdrop from '@/components/inventory/VaultBackdrop';
 import { getGearCategory, getDisplayName } from '@/lib/enhancementSystem';
 
 interface Item {
@@ -386,28 +387,33 @@ export default function InventoryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-text-primary">
-      <div className="container mx-auto p-4 pt-20">
+    <div className="relative min-h-screen text-white overflow-hidden">
+      {/* Cenário animado da câmara do tesouro (igual às masmorras) */}
+      <div className="fixed inset-0 z-0">
+        <VaultBackdrop />
+      </div>
+
+      <div className="relative z-10 container mx-auto p-4 pt-20">
         <div className="mb-8">
-          <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary-dark mb-2">
+          <h1 className="text-4xl font-black text-white mb-2 drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]">
             📦 Inventário
           </h1>
-          <p className="text-text-secondary">Gerencie seus itens e equipamentos</p>
+          <p className="text-white/60 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">Gerencie seus itens e equipamentos</p>
         </div>
 
         {/* Character Selection */}
         {characters.length > 0 && (
           <div className="mb-6">
-            <label className="block text-sm font-medium mb-2 text-text-secondary">
+            <label className="block text-sm font-medium mb-2 text-white/60">
               Selecionar Personagem:
             </label>
             <select
               value={selectedCharacter}
               onChange={(e) => setSelectedCharacter(e.target.value)}
-              className="px-4 py-2 bg-surface/50 border border-white/20 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+              className="px-4 py-2.5 bg-black/60 border border-white/20 rounded-xl text-white text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-500/50"
             >
               {characters.map((character) => (
-                <option key={character.id} value={character.id}>
+                <option key={character.id} value={character.id} className="bg-stone-900 text-white">
                   {character.name} ({character.class})
                 </option>
               ))}
@@ -417,8 +423,8 @@ export default function InventoryPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* User Global Inventory */}
-          <div className="bg-surface/50 border border-white/20 rounded-lg p-6 shadow-lg">
-            <h2 className="text-xl font-semibold mb-4 text-text-primary flex items-center gap-2">
+          <div className="bg-black/30 backdrop-blur-md border-2 border-amber-500/40 rounded-3xl p-6 shadow-2xl">
+            <h2 className="text-xl font-bold mb-4 text-white flex items-center gap-2 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
               🌐 Inventário Global do Usuário
             </h2>
             <p className="text-sm text-text-secondary mb-4">
@@ -433,7 +439,7 @@ export default function InventoryPage() {
             ) : (
               <div className="space-y-3">
                 {userInventory.map((inventoryItem) => (
-                  <div key={inventoryItem.id} className="bg-surface/70 border border-white/10 p-4 rounded-lg flex items-center justify-between hover:border-primary/50 transition-colors">
+                  <div key={inventoryItem.id} className="bg-black/40 backdrop-blur-sm border border-white/10 p-4 rounded-2xl flex items-center justify-between hover:border-amber-500/50 transition-colors">
                     <div>
                       <h3 className="font-medium text-text-primary">{inventoryItem.item.name}</h3>
                       <p className="text-sm text-text-secondary">
@@ -457,8 +463,8 @@ export default function InventoryPage() {
           </div>
 
           {/* Character Inventory */}
-          <div className="bg-surface/50 border border-white/20 rounded-lg p-6 shadow-lg">
-            <h2 className="text-xl font-semibold mb-4 text-text-primary flex items-center gap-2">
+          <div className="bg-black/30 backdrop-blur-md border-2 border-amber-500/40 rounded-3xl p-6 shadow-2xl">
+            <h2 className="text-xl font-bold mb-4 text-white flex items-center gap-2 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
               ⚔️ Inventário do Personagem
               {selectedCharacter && characters.find(c => c.id === selectedCharacter) && 
                 <span className="text-primary">- {characters.find(c => c.id === selectedCharacter)?.name}</span>
@@ -485,7 +491,7 @@ export default function InventoryPage() {
                   const enhancementLevel = inventoryItem.enhancementLevel || 0;
                   const isEnhanceable = !!getGearCategory(inventoryItem.item.type);
                   return (
-                    <div key={inventoryItem.id} className="bg-surface/70 border border-white/10 p-4 rounded-lg flex items-center justify-between hover:border-primary/50 transition-colors">
+                    <div key={inventoryItem.id} className="bg-black/40 backdrop-blur-sm border border-white/10 p-4 rounded-2xl flex items-center justify-between hover:border-amber-500/50 transition-colors">
                       <div>
                         <h3 className="font-medium text-text-primary flex items-center gap-2">
                           <span className={enhancementLevel >= 16 ? 'text-orange-400' : enhancementLevel > 0 ? 'text-cyan-300' : ''}>

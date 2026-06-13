@@ -8,6 +8,7 @@ import { Search, Filter, X } from 'lucide-react';
 import { ethers } from 'ethers';
 import { resolveImageUrl } from '@/lib/imageUrl';
 import { decodeContractCustomErrorMessage, getWalletTxErrorMessage } from '@/lib/walletErrors';
+import BazaarBackdrop from '@/components/store/BazaarBackdrop';
 
 interface StoreItem {
   id: string;
@@ -447,13 +448,18 @@ export default function Store() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-text-primary">
-      <div className="container mx-auto p-4 pt-20">
+    <div className="relative min-h-screen text-white overflow-hidden">
+      {/* Cenário animado do bazar (igual às masmorras) */}
+      <div className="fixed inset-0 z-0">
+        <BazaarBackdrop />
+      </div>
+
+      <div className="relative z-10 container mx-auto p-4 pt-20">
         <div className="mb-8">
-          <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary-dark mb-2">
+          <h1 className="text-4xl font-black text-white mb-2 drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]">
             🏪 Loja do Aventureiro
           </h1>
-          <p className="text-text-secondary">Encontre os melhores equipamentos para sua aventura!</p>
+          <p className="text-white/60 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">Encontre os melhores equipamentos para sua aventura!</p>
         </div>
         
         {/* Barra de Busca */}
@@ -465,7 +471,7 @@ export default function Store() {
               placeholder="Buscar itens..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-surface/50 border border-white/20 rounded-lg text-text-primary placeholder-text-secondary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              className="w-full pl-10 pr-4 py-3 bg-black/40 border border-white/20 rounded-lg text-text-primary placeholder-text-secondary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
             />
           </div>
         </div>
@@ -517,7 +523,7 @@ export default function Store() {
           <div className="flex flex-wrap gap-4 items-center justify-between">
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center gap-2 px-4 py-2 bg-surface/50 border border-white/20 rounded-lg text-text-primary hover:bg-surface/70 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-black/40 border border-white/20 rounded-lg text-text-primary hover:bg-black/50 transition-colors"
             >
               <Filter className="w-4 h-4" />
               Filtros
@@ -528,7 +534,7 @@ export default function Store() {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
-                className="px-3 py-2 bg-surface/50 border border-white/20 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+                className="px-3 py-2 bg-black/40 border border-white/20 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="name">Nome</option>
                 <option value="price">Preço</option>
@@ -538,7 +544,7 @@ export default function Store() {
               
               <button
                 onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-                className="px-3 py-2 bg-surface/50 border border-white/20 rounded-lg text-text-primary hover:bg-surface/70 transition-colors"
+                className="px-3 py-2 bg-black/40 border border-white/20 rounded-lg text-text-primary hover:bg-black/50 transition-colors"
               >
                 {sortOrder === 'asc' ? '↑' : '↓'}
               </button>
@@ -551,7 +557,7 @@ export default function Store() {
 
           {/* Painel de Filtros Expansível */}
           {showFilters && (
-            <div className="mt-4 p-4 bg-surface/30 border border-white/10 rounded-lg space-y-4">
+            <div className="mt-4 p-4 bg-black/30 backdrop-blur-md border border-white/10 rounded-lg space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Filtro de Tipo */}
                 <div>
@@ -559,7 +565,7 @@ export default function Store() {
                   <select
                     value={selectedType}
                     onChange={(e) => setSelectedType(e.target.value)}
-                    className="w-full px-3 py-2 bg-surface/50 border border-white/20 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="w-full px-3 py-2 bg-black/40 border border-white/20 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
                   >
                     <option value="ALL">Todos os tipos</option>
                     {itemTypes.map(type => (
@@ -646,7 +652,7 @@ export default function Store() {
             <select
               value={selectedCharacter}
               onChange={(e) => setSelectedCharacter(e.target.value)}
-              className="px-4 py-2 bg-surface/50 border border-white/20 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+              className="px-4 py-2 bg-black/40 border border-white/20 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
             >
               <option value="">Selecione um personagem</option>
               {characters.map((character) => (
@@ -660,11 +666,11 @@ export default function Store() {
 
         {/* User Inventory Summary */}
         {userInventory.length > 0 && (
-          <div className="mb-6 p-4 bg-surface/30 border border-white/10 rounded-lg">
+          <div className="mb-6 p-4 bg-black/30 backdrop-blur-md border border-white/10 rounded-lg">
             <h2 className="text-lg font-semibold mb-3 text-text-primary">📦 Seu Inventário Global</h2>
             <div className="flex flex-wrap gap-2">
               {userInventory.map((inventoryItem) => (
-                <div key={inventoryItem.id} className="flex items-center gap-2 bg-surface/50 border border-white/20 px-3 py-2 rounded">
+                <div key={inventoryItem.id} className="flex items-center gap-2 bg-black/40 border border-white/20 px-3 py-2 rounded">
                   <span className="text-text-primary">{inventoryItem.item.name}</span>
                   <span className="text-sm text-text-secondary">x{inventoryItem.quantity}</span>
                   <button
@@ -684,12 +690,12 @@ export default function Store() {
         {itemsLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {[...Array(8)].map((_, index) => (
-              <div key={index} className="bg-surface/50 border border-white/20 rounded-lg p-4 shadow-lg animate-pulse">
-                <div className="w-full h-32 bg-surface/70 rounded mb-3"></div>
-                <div className="h-6 bg-surface/70 rounded mb-2"></div>
-                <div className="h-4 bg-surface/70 rounded w-3/4 mb-2"></div>
-                <div className="h-4 bg-surface/70 rounded w-1/2 mb-3"></div>
-                <div className="h-8 bg-surface/70 rounded"></div>
+              <div key={index} className="bg-black/40 border border-white/20 rounded-lg p-4 shadow-lg animate-pulse">
+                <div className="w-full h-32 bg-black/50 rounded mb-3"></div>
+                <div className="h-6 bg-black/50 rounded mb-2"></div>
+                <div className="h-4 bg-black/50 rounded w-3/4 mb-2"></div>
+                <div className="h-4 bg-black/50 rounded w-1/2 mb-3"></div>
+                <div className="h-8 bg-black/50 rounded"></div>
               </div>
             ))}
           </div>
@@ -703,7 +709,7 @@ export default function Store() {
               );
               
               return (
-                <div key={item.id} className="bg-surface/50 border border-white/20 rounded-lg p-4 shadow-lg hover:shadow-xl transition-all hover:border-primary/50">
+                <div key={item.id} className="bg-black/40 backdrop-blur-md border border-amber-500/30 rounded-2xl p-4 shadow-2xl hover:shadow-xl transition-all hover:border-primary/50">
                   {resolvedImageUrl && (
                     <div className="w-full h-32 relative mb-3">
                       <Image

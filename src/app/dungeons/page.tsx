@@ -92,10 +92,10 @@ export default function DungeonsPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-950 via-stone-950 to-black flex items-center justify-center">
+      <div className="min-h-[60vh] flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500 mx-auto mb-4"></div>
-          <p className="text-white/60">Abrindo o mapa das masmorras...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-textsec">Abrindo o mapa das masmorras...</p>
         </div>
       </div>
     )
@@ -115,7 +115,7 @@ export default function DungeonsPage() {
   const canEnter = !!selectedCharacter && (selectedCharacter as any).isAlive !== false
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-stone-950 to-black p-4 sm:p-6">
+    <div className="min-h-screen p-4 sm:p-6">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-6 sm:mb-8 text-center">

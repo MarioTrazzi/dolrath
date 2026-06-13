@@ -16,9 +16,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-secondary to-accent">
+    <div className="relative min-h-screen bg-background text-white overflow-x-hidden">
+      {/* Ambiência da landing: glows sutis de cena (primary + roxo) */}
+      <div className="pointer-events-none fixed inset-0 -z-10" aria-hidden="true">
+        <div
+          className="absolute -top-40 left-1/2 -translate-x-1/2 w-[80rem] h-[26rem] rounded-full blur-3xl"
+          style={{ background: 'rgba(233,69,96,0.10)' }}
+        />
+        <div
+          className="absolute top-1/3 -left-40 w-[34rem] h-[34rem] rounded-full blur-3xl"
+          style={{ background: 'rgba(147,51,234,0.12)' }}
+        />
+      </div>
       <Navbar />
-      <main className="pt-16">{children}</main>
+      <main className="pt-24">{children}</main>
     </div>
   )
 }

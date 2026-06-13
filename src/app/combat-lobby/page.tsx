@@ -346,10 +346,10 @@ export default function CombatLobbyPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'waiting': return 'text-green-600 bg-green-100'
-      case 'in_progress': return 'text-orange-600 bg-orange-100'
-      case 'finished': return 'text-gray-600 bg-gray-100'
-      default: return 'text-gray-600 bg-gray-100'
+      case 'waiting': return 'text-success bg-success/15 border border-success/30'
+      case 'in_progress': return 'text-warning bg-warning/15 border border-warning/30'
+      case 'finished': return 'text-textsec bg-white/5 border border-white/10'
+      default: return 'text-textsec bg-white/5 border border-white/10'
     }
   }
 
@@ -385,7 +385,7 @@ export default function CombatLobbyPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-secondary to-accent flex items-center justify-center">
+      <div className="min-h-[60vh] flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     )

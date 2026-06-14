@@ -1,6 +1,5 @@
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
-import { CharacterRace, BaseStats, FinalStats } from '../types/character';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -65,27 +64,8 @@ export function validatePasswordStrength(password: string): {
   return { score, feedback }
 }
 
-export function calculateFinalStats(race: CharacterRace, distributedPoints: BaseStats): FinalStats {
-  const base = race.baseStats;
-  const racial = race.bonusStats;
-  const distributed = distributedPoints;
-  
-  const final: FinalStats = {
-    str: base.str + (racial.str || 0) + distributed.str,
-    agi: base.agi + (racial.agi || 0) + distributed.agi,
-    int: base.int + (racial.int || 0) + distributed.int,
-    res: base.res + (racial.res || 0) + distributed.res,
-    hp: 0, // Will be calculated
-    mp: 0, // Will be calculated
-    crit: 0, // Will be calculated
-    speed: 0, // Will be calculated
-  };
-  
-  // Calcular atributos derivados
-  final.hp = base.hp + (racial.hp || 0) + (final.str * 3) + (final.res * 2);
-  final.mp = base.mp + (racial.mp || 0) + (final.int * 4) + (final.agi * 1);
-  final.crit = base.crit + (final.agi * 0.2);
-  final.speed = base.speed + (final.agi * 0.5);
-  
-  return final;
-}
+// NOTE: O cálculo de atributos da criação vive em `@/lib/characterStats`
+// (computeCreationStats), que espelha exatamente a lógica do servidor
+// em src/app/api/character/route.ts. A antiga calculateFinalStats usava
+// uma base de dados/fórmulas divergentes (characterCreationData) e foi
+// removida para evitar mostrar números que não condizem com a realidade.

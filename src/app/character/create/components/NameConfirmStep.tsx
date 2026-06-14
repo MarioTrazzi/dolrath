@@ -424,6 +424,7 @@ export function NameConfirmStep() {
       <div className="lg:sticky lg:top-8">
         <CharacterSummary
           race={selectedRace}
+          characterClass={selectedClass}
           distributedPoints={distributedPoints}
           characterName={characterName}
           imageUrl={selectedImage}

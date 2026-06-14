@@ -6,7 +6,19 @@
  */
 
 // Tipos para o sistema de transformação
-export type TransformationType = 'dragon' | 'wolf' | 'bear' | 'eagle'
+export type TransformationType = 'dragon' | 'wolf' | 'bear' | 'eagle' | 'seventh_sense' | 'celestial'
+
+// Transformações disponíveis por raça (fonte única usada por API/UI/combate)
+export const RACE_TRANSFORMATIONS: Record<string, TransformationType[]> = {
+  draconiano: ['dragon'],
+  metamorfo: ['wolf', 'bear', 'eagle'],
+  humano: ['seventh_sense'],
+  elfo: ['celestial'],
+}
+
+export function getRaceTransformations(race?: string | null): TransformationType[] {
+  return RACE_TRANSFORMATIONS[(race || '').toLowerCase()] || []
+}
 
 export interface TransformationConfig {
   name: string
@@ -226,24 +238,114 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
     
     resistances: ['ground_attacks_while_flying'],
     vulnerabilities: ['area_magic', 'wind_attacks', 'ranged_attacks']
+  },
+
+  // Humano - Despertar do 7º Sentido: forma coringa equilibrada com percepção sobre-humana
+  seventh_sense: {
+    name: '✨ Despertar do 7º Sentido',
+    description: 'O humano desperta o cosmo interior: reflexos, força e mente elevados em harmonia. Forma versátil, sem fraquezas marcantes.',
+    duration: 4,
+    cooldown: 6,
+    cost: { mp: 30, stamina: 35 },
+
+    statModifiers: {
+      strength: 1.35,
+      defense: 1.30,
+      hp: 1.25,
+      agility: 1.50,
+      intelligence: 1.35,
+      attack: 1.40,
+      critical: 2.0,        // percepção aguçada = muito crítico
+    },
+
+    specialAbilities: [
+      {
+        id: 'cosmo_burst',
+        name: '🌌 Explosão de Cosmo',
+        description: 'Concentra o cosmo num golpe que cresce com todos os atributos',
+        damage: 'dado + ((STR+AGI+INT) * 0.6)',
+        cost: { stamina: 15, mp: 10 },
+        effect: 'scaling_all_stats_strike'
+      },
+      {
+        id: 'precognitive_counter',
+        name: '👁️ Contra-ataque Precognitivo',
+        description: 'Prevê o próximo ataque: esquiva garantida e devolve metade do dano',
+        cost: { stamina: 12 },
+        effect: 'guaranteed_dodge_and_counter_next'
+      },
+      {
+        id: 'cosmo_focus',
+        name: '🧘 Foco do Cosmo',
+        description: 'Serenidade absoluta: +2 em todos os atributos por 3 turnos',
+        cost: { mp: 12 },
+        effect: 'all_stats_plus_2_for_3_turns'
+      }
+    ],
+
+    resistances: ['surprise_attacks', 'status_effects'],
+    vulnerabilities: ['sustained_pressure']
+  },
+
+  // Elfo - Forma Celestial: avatar arcano que amplifica magia e reflexos
+  celestial: {
+    name: '🌟 Forma Celestial',
+    description: 'O elfo ascende a uma forma de luz astral, amplificando drasticamente o poder mágico e os reflexos — mas com corpo etéreo e frágil.',
+    duration: 4,
+    cooldown: 6,
+    cost: { mp: 25, stamina: 30 },
+
+    statModifiers: {
+      intelligence: 1.90,   // amplificação mágica suprema
+      agility: 1.50,
+      critical: 1.80,
+      attack: 1.30,
+      strength: 0.90,
+      defense: 1.0,
+      hp: 1.10,
+    },
+
+    specialAbilities: [
+      {
+        id: 'holy_nova',
+        name: '💥 Nova Sagrada',
+        description: 'Explosão de luz arcana que ignora resistência mágica',
+        damage: 'dado + (INT * 1.8)',
+        cost: { mp: 18 },
+        effect: 'magic_burst_ignores_resistance'
+      },
+      {
+        id: 'restoring_blessing',
+        name: '🕊️ Bênção Restauradora',
+        description: 'A luz celestial cura uma parcela do HP máximo',
+        cost: { mp: 20 },
+        effect: 'heal_25_percent_max_hp'
+      },
+      {
+        id: 'arcane_torrent',
+        name: '🔷 Torrente Arcana',
+        description: 'O próximo feitiço causa o dobro de dano mágico',
+        cost: { stamina: 10 },
+        effect: 'double_magic_damage_next'
+      }
+    ],
+
+    resistances: ['magic_attacks', 'curses'],
+    vulnerabilities: ['physical_critical', 'silence']
   }
 }
 
 // 🎯 VALIDAÇÃO DE TRANSFORMAÇÃO
 export function canTransform(character: any, transformationType: TransformationType): { canTransform: boolean, reason?: string } {
-  // Verificar se a raça pode se transformar
-  if (character.race === 'draconiano' && transformationType !== 'dragon') {
-    return { canTransform: false, reason: 'Draconianos só podem se transformar em dragão' }
+  // Verificar se a raça pode se transformar nesta forma específica
+  const allowed = getRaceTransformations(character.race)
+  if (allowed.length === 0) {
+    return { canTransform: false, reason: 'Sua raça não possui habilidade de transformação' }
   }
-  
-  if (character.race === 'metamorfo' && !['wolf', 'bear', 'eagle'].includes(transformationType)) {
-    return { canTransform: false, reason: 'Metamorfos podem se transformar em lobo, urso ou águia' }
+  if (!allowed.includes(transformationType)) {
+    return { canTransform: false, reason: 'Sua raça não pode assumir essa forma' }
   }
-  
-  if (character.race === 'humano') {
-    return { canTransform: false, reason: 'Humanos não possuem habilidade de transformação' }
-  }
-  
+
   // Verificar se já está transformado
   if (character.isTransformed) {
     return { canTransform: false, reason: 'Já está transformado' }

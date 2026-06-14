@@ -174,6 +174,7 @@ export function StatsDistributionStep() {
       <div className="lg:sticky lg:top-8">
         <StatPreview
           race={selectedRace}
+          characterClass={selectedClass}
           distributedPoints={localDistributedPoints}
         />
       </div>

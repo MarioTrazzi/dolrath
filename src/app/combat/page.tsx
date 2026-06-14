@@ -6,6 +6,7 @@ import { X, Users, Sword, Shield, Zap, Heart, Sparkles } from 'lucide-react'
 import { io, Socket } from 'socket.io-client'
 import TransformationDialog from '@/components/TransformationDialog'
 import BattleScene, { BattleEvent, DiceResult, EquipmentMap } from '@/components/battle/BattleScene'
+import { TRANSFORMATION_CONFIG, getRaceTransformations, type TransformationType } from '@/lib/transformationSystem'
 
 interface Equipment {
   id: string
@@ -823,11 +824,11 @@ function CombatPageContent() {
     if (!currentPlayer || !characterId) return
     
     // Verificar se a raça pode transformar
-    if (currentPlayer.race !== 'draconiano' && currentPlayer.race !== 'metamorfo') {
-      socket.emit('chat_message', { 
-        playerId: currentPlayer.id, 
-        roomId, 
-        message: `❌ Sua raça (${currentPlayer.race}) não possui transformações disponíveis!` 
+    if (getRaceTransformations(currentPlayer.race).length === 0) {
+      socket.emit('chat_message', {
+        playerId: currentPlayer.id,
+        roomId,
+        message: `❌ Sua raça (${currentPlayer.race}) não possui transformações disponíveis!`
       })
       return
     }
@@ -842,14 +843,10 @@ function CombatPageContent() {
     setIsTransforming(true)
     
     try {
-      // Primeiro, verificar e consumir stamina
-      const staminaCost = transformationType === 'dragon' ? 50 : 
-                        transformationType === 'bear' ? 40 :
-                        transformationType === 'wolf' ? 35 : 30 // eagle
-      
-      const mpCost = transformationType === 'dragon' ? 40 : 
-                   transformationType === 'bear' ? 30 :
-                   transformationType === 'wolf' ? 25 : 20 // eagle
+      // Primeiro, verificar e consumir stamina (custos vêm da config — fonte única)
+      const cfg = TRANSFORMATION_CONFIG[transformationType as TransformationType]
+      const staminaCost = cfg?.cost.stamina ?? 30
+      const mpCost = cfg?.cost.mp ?? 20
 
       // Verificar recursos antes de tentar transformar
       if (currentPlayer.stamina < staminaCost) {

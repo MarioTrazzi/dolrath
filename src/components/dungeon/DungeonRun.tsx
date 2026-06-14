@@ -13,6 +13,11 @@ import {
   pickMonster,
   scaleMonster,
 } from '@/lib/dungeonAdventures'
+import {
+  TRANSFORMATION_CONFIG,
+  getRaceTransformations,
+  type TransformationType,
+} from '@/lib/transformationSystem'
 
 // ============================================================
 // DungeonRun — experiência completa de uma masmorra:
@@ -185,6 +190,17 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const [winnerId, setWinnerId] = useState<string | null>(null)
   const battleEventCounter = useRef(0)
 
+  // ---------- Transformação (local, por combate) ----------
+  const transformForms = useMemo(() => getRaceTransformations(character.race), [character.race])
+  const [transform, setTransform] = useState<{ type: TransformationType; turns: number } | null>(null)
+  const [transformCd, setTransformCd] = useState(0)
+  const [showFormPicker, setShowFormPicker] = useState(false)
+  const transformRef = useRef(transform)
+  transformRef.current = transform
+  const transformCdRef = useRef(transformCd)
+  transformCdRef.current = transformCd
+  const activeTransformCfg = transform ? TRANSFORMATION_CONFIG[transform.type] : null
+
   // ---------- Banners centrais ----------
   const [banner, setBanner] = useState<Banner | null>(null)
   const bannerKey = useRef(0)
@@ -260,8 +276,12 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   // ---------- Modificadores de dados ----------
   const equipAtk = useMemo(() => equipmentBonus(character.equipment, 'attack'), [character.equipment])
   const equipDef = useMemo(() => equipmentBonus(character.equipment, 'defense'), [character.equipment])
-  const playerAtkMod = Math.floor(character.attack + equipAtk + character.level / 2)
-  const playerDefMod = Math.floor((character.defense + equipDef) / 2)
+  // Multiplicadores ativos da transformação (1 quando não transformado)
+  const atkMult = activeTransformCfg ? activeTransformCfg.statModifiers.attack : 1
+  const defMult = activeTransformCfg ? activeTransformCfg.statModifiers.defense : 1
+  const playerAtkMod = Math.floor((character.attack + equipAtk + character.level / 2) * atkMult)
+  const playerDefMod = Math.floor(((character.defense + equipDef) / 2) * defMult)
+  const playerDefenseForDamage = Math.floor((character.defense + equipDef) * defMult)
 
   // ---------- Lutadores para a arena ----------
   const playerFighter: FighterView = useMemo(() => ({
@@ -279,7 +299,9 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     maxStamina: character.maxStamina,
     equipmentMap: mapEquipment(character.equipment),
     isAlive: hp > 0,
-  }), [character, hp, mp, stamina])
+    isTransformed: !!transform,
+    transformationType: transform?.type ?? null,
+  }), [character, hp, mp, stamina, transform])
 
   const monsterFighter: FighterView | null = useMemo(() => monster ? {
     id: MONSTER_ID,
@@ -451,10 +473,54 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     setMonsterPlan(null)
     setDefenseChoice(null)
     setCurrentTurnId(null)
+    // Transformação reinicia a cada combate
+    setTransform(null)
+    setTransformCd(0)
+    setShowFormPicker(false)
     setPhase('combat')
     setStage('initiative')
     pushLog(`⚔️ Combate contra ${m.emoji} ${m.name} começou!`)
   }
+
+  // ---------- Transformação ----------
+  const activateTransform = (type: TransformationType) => {
+    const cfg = TRANSFORMATION_CONFIG[type]
+    if (!cfg || transform || transformCd > 0) return
+    if (mp < cfg.cost.mp) {
+      showBanner('🔮', `MP insuficiente para transformar! (${cfg.cost.mp}🔮)`)
+      return
+    }
+    if (stamina < cfg.cost.stamina) {
+      showBanner('😮‍💨', `Stamina insuficiente para transformar! (${cfg.cost.stamina}⚡)`)
+      return
+    }
+    setMp(prev => Math.max(0, prev - cfg.cost.mp))
+    setStamina(prev => Math.max(0, prev - cfg.cost.stamina))
+    persistStamina(cfg.cost.stamina)
+    setTransform({ type, turns: cfg.duration })
+    setShowFormPicker(false)
+    showBanner('✨', `${cfg.name} ativada! (${cfg.duration} turnos)`, 2800)
+    pushLog(`✨ Você assumiu a ${cfg.name}!`)
+  }
+
+  // Avança os contadores de transformação ao fim de cada turno ofensivo do jogador
+  const tickPlayerTurn = useCallback(() => {
+    const t = transformRef.current
+    if (t) {
+      const remaining = t.turns - 1
+      if (remaining <= 0) {
+        const cfg = TRANSFORMATION_CONFIG[t.type]
+        setTransform(null)
+        setTransformCd(cfg.cooldown)
+        showBanner('↩️', 'A transformação terminou')
+        pushLog('↩️ Sua transformação terminou.')
+      } else {
+        setTransform({ ...t, turns: remaining })
+      }
+    } else if (transformCdRef.current > 0) {
+      setTransformCd(transformCdRef.current - 1)
+    }
+  }, [showBanner, pushLog])
 
   const monsterAtkMod = (m: ScaledMonster) => Math.floor(m.attack + m.level / 2)
   const monsterDefMod = (m: ScaledMonster) => Math.floor(m.defense / 2)
@@ -512,6 +578,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     showBanner('😤', `Você recupera o fôlego (+${BREATH_RECOVER}⚡)`)
     pushLog(`😤 Você recuperou o fôlego (+${BREATH_RECOVER}⚡).`)
     setStage('busy')
+    tickPlayerTurn()
     later(() => monsterTelegraph(), 1600)
   }
 
@@ -564,6 +631,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     } else {
       pushLog(`💨 ${m.name} esquivou do seu ataque!`)
     }
+    tickPlayerTurn()
     later(() => monsterTelegraph(), 2000)
   }
 
@@ -617,7 +685,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     setPanelResult(null)
     setHasRolled(false)
 
-    const outcome = computeOutcome(atk, def, defenseChoice, atkDef.mult, character.defense + equipDef)
+    const outcome = computeOutcome(atk, def, defenseChoice, atkDef.mult, playerDefenseForDamage)
     pushBattleEvent({
       kind: 'resolve',
       attackerId: MONSTER_ID,
@@ -1070,6 +1138,65 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                     😤 Recuperar Fôlego
                     <span className="block text-[9px] opacity-80 font-normal">+{BREATH_RECOVER}⚡ • perde o turno</span>
                   </button>
+
+                  {/* Transformação (apenas raças com formas) */}
+                  {transformForms.length > 0 && (
+                    <div className="relative">
+                      {transform ? (
+                        <div className="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white bg-gradient-to-r from-fuchsia-700 to-purple-600 shadow-lg shadow-purple-900/50">
+                          {activeTransformCfg?.name}
+                          <span className="block text-[9px] opacity-90 font-normal">restam {transform.turns} turno(s)</span>
+                        </div>
+                      ) : (() => {
+                        const single = transformForms.length === 1 ? TRANSFORMATION_CONFIG[transformForms[0]] : null
+                        const disabled = transformCd > 0 || (!!single && (mp < single.cost.mp || stamina < single.cost.stamina))
+                        return (
+                          <>
+                            <button
+                              onClick={() => {
+                                if (transformCd > 0) return
+                                if (single) activateTransform(transformForms[0])
+                                else setShowFormPicker(v => !v)
+                              }}
+                              disabled={disabled}
+                              className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all shadow-lg ${
+                                disabled
+                                  ? 'bg-gray-700/60 opacity-50 cursor-not-allowed'
+                                  : 'bg-gradient-to-r from-fuchsia-700 to-purple-600 hover:scale-105'
+                              }`}
+                            >
+                              {transformCd > 0 ? `🌀 Recarga (${transformCd})` : '🌀 Transformar'}
+                              <span className="block text-[9px] opacity-80 font-normal">
+                                {single ? `${single.cost.mp}🔮 • ${single.cost.stamina}⚡` : `${transformForms.length} formas`}
+                              </span>
+                            </button>
+
+                            {showFormPicker && !single && (
+                              <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-50 w-60 bg-black/90 backdrop-blur-md border border-white/15 rounded-xl p-2 shadow-2xl space-y-1">
+                                {transformForms.map(t => {
+                                  const cfg = TRANSFORMATION_CONFIG[t]
+                                  const dis = mp < cfg.cost.mp || stamina < cfg.cost.stamina
+                                  return (
+                                    <button
+                                      key={t}
+                                      onClick={() => activateTransform(t)}
+                                      disabled={dis}
+                                      className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
+                                        dis ? 'opacity-40 cursor-not-allowed bg-white/5' : 'bg-white/10 hover:bg-white/20'
+                                      }`}
+                                    >
+                                      <span className="font-bold text-white text-xs">{cfg.name}</span>
+                                      <span className="block text-[9px] text-white/60">{cfg.cost.mp}🔮 • {cfg.cost.stamina}⚡ • {cfg.duration} turnos</span>
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </>
+                        )
+                      })()}
+                    </div>
+                  )}
                 </div>
               ) : stage === 'playerDefense' ? (
                 <div className="flex items-center justify-center gap-2">

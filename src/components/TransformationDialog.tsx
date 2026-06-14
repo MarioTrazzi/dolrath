@@ -52,7 +52,32 @@ const TRANSFORMATION_OPTIONS: Record<string, TransformationOption[]> = {
       description: 'Forma elusive com habilidades especiais de voo',
       cost: { mp: 20, stamina: 30 }
     }
+  ],
+  'humano': [
+    {
+      type: 'seventh_sense',
+      name: 'Despertar do 7º Sentido',
+      emoji: '✨',
+      description: 'Eleva reflexos, força e mente em harmonia — forma versátil e sem fraquezas',
+      cost: { mp: 30, stamina: 35 }
+    }
+  ],
+  'elfo': [
+    {
+      type: 'celestial',
+      name: 'Forma Celestial',
+      emoji: '🌟',
+      description: 'Avatar de luz astral: poder mágico e reflexos amplificados, corpo frágil',
+      cost: { mp: 25, stamina: 30 }
+    }
   ]
+}
+
+const RACE_INFO: Record<string, { title: string; text: string }> = {
+  draconiano: { title: '🐉 Habilidade Dracônica', text: 'Draconianos possuem uma única transformação poderosa' },
+  metamorfo: { title: '🔄 Metamorfose', text: 'Metamorfos podem escolher entre diferentes formas animais' },
+  humano: { title: '✨ Despertar do Cosmo', text: 'Humanos despertam o 7º Sentido, uma forma equilibrada e versátil' },
+  elfo: { title: '🌟 Ascensão Élfica', text: 'Elfos ascendem à Forma Celestial, amplificando sua magia' },
 }
 
 export default function TransformationDialog({
@@ -187,18 +212,14 @@ export default function TransformationDialog({
               ))}
 
               {/* Race Info */}
-              <div className="bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-400/30 rounded-lg p-4 mt-6">
-                <div className="text-center">
-                  <h4 className="font-semibold text-purple-300 mb-2">
-                    {characterRace === 'draconiano' ? '🐉 Habilidade Dracônica' : '🔄 Metamorfose'}
-                  </h4>
-                  <p className="text-sm text-white/70">
-                    {characterRace === 'draconiano' 
-                      ? 'Draconianos possuem uma única transformação poderosa'
-                      : 'Metamorfos podem escolher entre diferentes formas animais'}
-                  </p>
+              {RACE_INFO[characterRace] && (
+                <div className="bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-400/30 rounded-lg p-4 mt-6">
+                  <div className="text-center">
+                    <h4 className="font-semibold text-purple-300 mb-2">{RACE_INFO[characterRace].title}</h4>
+                    <p className="text-sm text-white/70">{RACE_INFO[characterRace].text}</p>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </motion.div>

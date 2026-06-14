@@ -6,10 +6,10 @@ export const RACES: Race[] = [
   {
     id: 'humano',
     name: 'Humano',
-    description: 'Versáteis com crescimento superior - compensam falta de transformação',
+    description: 'Versáteis com crescimento superior e o Despertar do 7º Sentido',
     bonuses: { strength: 20, dexterity: 20, intelligence: 20, constitution: 20 }, // 🔥 BUFF
-    abilities: ['Adaptabilidade Suprema', 'Crescimento Acelerado', 'Versatilidade Master'],
-    transformationAvailable: false
+    abilities: ['Adaptabilidade Suprema', 'Crescimento Acelerado', 'Despertar do 7º Sentido'],
+    transformationAvailable: true
   },
   {
     id: 'draconiano',
@@ -30,10 +30,10 @@ export const RACES: Race[] = [
   {
     id: 'elfo',
     name: 'Elfo',
-    description: 'Maestros mágicos supremos - compensam falta de transformação',
+    description: 'Maestros mágicos supremos que ascendem à Forma Celestial',
     bonuses: { intelligence: 40, dexterity: 30, wisdom: 20 }, // 🔥 BUFF
-    abilities: ['Maestria Arcana', 'Tiro Certeiro Élfico', 'Resistência Mágica'],
-    transformationAvailable: false
+    abilities: ['Maestria Arcana', 'Tiro Certeiro Élfico', 'Forma Celestial'],
+    transformationAvailable: true
   }
 ]
 

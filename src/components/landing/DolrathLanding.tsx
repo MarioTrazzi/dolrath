@@ -107,6 +107,7 @@ const NAV_LINKS = [
   { label: 'Personagens', href: '#racas' },
   { label: 'Masmorras', href: '#destaques' },
   { label: 'Marketplace', href: '#como-funciona' },
+  { label: 'Docs', href: '/doc' },
 ]
 
 function Navbar({ primaryHref }: { primaryHref: string }) {

@@ -31,7 +31,6 @@ export class CharacterFactory {
       dexterity: 100,
       intelligence: 100,
       constitution: 100,
-      wisdom: 100,
       charisma: 100
     }
     
@@ -155,7 +154,6 @@ export class CharacterFactory {
       dexterity: base.dexterity + totalBonus,
       intelligence: base.intelligence + totalBonus,
       constitution: base.constitution + totalBonus,
-      wisdom: base.wisdom + totalBonus,
       charisma: base.charisma + totalBonus
     }
   }

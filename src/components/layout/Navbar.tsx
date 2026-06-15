@@ -31,7 +31,11 @@ export function Navbar() {
     await signOut({ callbackUrl: '/' })
   }
 
+  // Rotas públicas: acessíveis sem login (ex.: documentação)
+  const PUBLIC_ROUTES = ['/doc']
+
   const handleProtectedRoute = (e: React.MouseEvent, path: string) => {
+    if (PUBLIC_ROUTES.includes(path)) return // deixa o Link navegar normalmente
     e.preventDefault()
     if (!session) {
       router.push('/auth/login')
@@ -157,6 +161,7 @@ export function Navbar() {
     { label: 'Combate', href: '/combat-lobby' },
     { label: 'Inventário', href: '/inventory' },
     { label: 'Loja', href: '/store' },
+    { label: 'Docs', href: '/doc' },
   ]
 
   return (

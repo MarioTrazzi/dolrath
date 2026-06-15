@@ -92,7 +92,6 @@ export interface Attributes {
   dexterity: number    // Destreza - bônus em esquiva
   intelligence: number // Inteligência - bônus em magias
   constitution: number // Constituição - bônus em HP
-  wisdom: number       // Sabedoria - bônus em MP
   charisma: number     // Carisma - bônus em liderança
 }
 

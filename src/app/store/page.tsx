@@ -710,19 +710,24 @@ export default function Store() {
               const shouldBypassNextImageOptimization = Boolean(
                 item.image && !/^(https?:\/\/|data:|ipfs:\/\/)/i.test(item.image)
               );
-              
+
               const visual = getItemVisual(item.type);
 
               return (
-                <div key={item.id} className="group relative">
+                <motion.div
+                  key={item.id}
+                  whileHover={{ scale: 1.02 }}
+                  className="relative overflow-hidden rounded-2xl border-2 group"
+                  style={{ borderColor: visual.accent + '55' }}
+                >
                   {/* Backdrop animado por categoria */}
-                  <div className="absolute inset-0 rounded-2xl overflow-hidden z-0">
+                  <div className="absolute inset-0">
                     <ItemCardBackdrop category={visual.category} />
                   </div>
+                  <div className="absolute inset-0 bg-black/30 group-hover:bg-black/15 transition-colors" />
 
-                  {/* Card com vidro */}
-                  <div className="relative z-10 bg-black/40 backdrop-blur-md border-2 rounded-2xl p-4 shadow-2xl hover:shadow-3xl transition-all duration-300"
-                    style={{ borderColor: visual.accent + '60' }}>
+                  {/* Conteúdo */}
+                  <div className="relative p-4 flex flex-col min-h-[280px]">
                     {resolvedImageUrl && (
                       <div className="w-full h-32 relative mb-3 rounded-lg overflow-hidden bg-black/20">
                         <Image
@@ -735,7 +740,7 @@ export default function Store() {
                       </div>
                     )}
 
-                    <h3 className="font-bold text-lg mb-2 text-white">{item.name}</h3>
+                    <h3 className="font-black text-lg mb-2 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">{item.name}</h3>
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <span className={`text-xs font-semibold px-2 py-1 rounded-full ${visual.chipBg} ${visual.chipText}`}>
                         {visual.emoji} {getItemTypeLabel(item.type)}
@@ -748,10 +753,10 @@ export default function Store() {
                     </div>
 
                     {item.description && (
-                      <p className="text-sm text-white/70 mb-3">{item.description}</p>
+                      <p className="text-sm text-white/60 mb-3 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">{item.description}</p>
                     )}
 
-                    <div className="text-lg font-semibold text-yellow-400 mb-3">
+                    <div className="text-base font-semibold text-amber-400 mb-3 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
                       💰 {item.goldPrice} gold
                     </div>
 
@@ -761,27 +766,35 @@ export default function Store() {
                       </div>
                     )}
 
-                    <div className="flex flex-col gap-2">
+                    <div className="mt-auto flex flex-col gap-2">
                       <button
                         onClick={() => handlePurchase(item.id)}
                         disabled={loading}
-                        className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-2 px-4 rounded-lg font-semibold hover:from-green-600 hover:to-green-700 disabled:opacity-50 transition-all shadow-lg"
+                        className="w-full px-4 py-2.5 rounded-xl font-black text-sm text-white transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                        style={{
+                          background: `linear-gradient(90deg, ${visual.accent}cc, ${visual.accent}77)`,
+                          boxShadow: `0 4px 20px ${visual.accentSoft}`,
+                        }}
                       >
-                        Comprar
+                        🛒 Comprar
                       </button>
 
                       {ownedQuantity > 0 && selectedCharacter && (
                         <button
                           onClick={() => handleQuickEquip(item.id)}
                           disabled={loading}
-                          className="w-full bg-gradient-to-r from-purple-500 to-purple-600 text-white py-2 px-4 rounded-lg font-semibold hover:from-purple-600 hover:to-purple-700 disabled:opacity-50 transition-all shadow-lg"
+                          className="w-full px-4 py-2.5 rounded-xl font-black text-sm text-white transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                          style={{
+                            background: `linear-gradient(90deg, ${visual.accent}99, ${visual.accent}55)`,
+                            boxShadow: `0 4px 14px ${visual.accentSoft}`,
+                          }}
                         >
                           ⚡ Equipar Rápido
                         </button>
                       )}
                     </div>
                   </div>
-                </div>
+                </motion.div>
               );
             })}
           </div>

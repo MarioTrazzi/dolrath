@@ -494,74 +494,98 @@ export default function InventoryPage() {
                   const isEnhanceable = !!getGearCategory(inventoryItem.item.type);
                   const visual = getItemVisual(inventoryItem.item.type);
                   return (
-                    <div key={inventoryItem.id} className="bg-black/40 backdrop-blur-sm border-2 p-4 rounded-2xl flex items-center justify-between hover:shadow-lg transition-all"
-                      style={{ borderColor: visual.accent + '40' }}>
-                      <div className="flex-1">
-                        <h3 className="font-medium text-white flex items-center gap-2">
-                          <span className={enhancementLevel >= 16 ? 'text-orange-400' : enhancementLevel > 0 ? 'text-cyan-300' : ''}>
-                            {getDisplayName(inventoryItem.item.name, enhancementLevel)}
-                          </span>
-                          {isEquipped && (
-                            <span className="px-2 py-1 bg-green-500/30 text-green-300 text-xs rounded-full border border-green-500/50 font-semibold">
-                              ✓ Equipado
-                            </span>
-                          )}
-                        </h3>
-                        <p className="text-sm text-white/70 mt-1">
-                          <span className={`inline-block ${visual.chipBg} ${visual.chipText} px-2 py-0.5 rounded-full text-xs font-semibold mr-2`}>
-                            {visual.emoji} {getItemTypeLabel(inventoryItem.item.type)}
-                          </span>
-                          x{inventoryItem.quantity}
-                          {isEnhanceable && inventoryItem.durability !== undefined && (
-                            <> | Durabilidade: <span className={inventoryItem.durability > 50 ? 'text-green-400' : inventoryItem.durability > 20 ? 'text-yellow-400' : 'text-red-400'}>
-                              {inventoryItem.durability}/{inventoryItem.maxDurability ?? 100}
-                            </span></>
-                          )}
-                        </p>
-                        {inventoryItem.item.description && (
-                          <p className="text-xs text-white/60 mt-1">{inventoryItem.item.description}</p>
-                        )}
+                    <div key={inventoryItem.id} className="relative overflow-hidden rounded-2xl border-2 group"
+                      style={{ borderColor: visual.accent + '55' }}>
+                      {/* Backdrop animado por categoria */}
+                      <div className="absolute inset-0">
+                        <ItemCardBackdrop category={visual.category} />
                       </div>
-                      <div className="flex gap-2">
-                        {inventoryItem.item.type === 'CONSUMABLE' ? (
-                          <button
-                            onClick={() => handleConsumeItem(inventoryItem.item.id)}
-                            disabled={loading}
-                            className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 transition-all shadow-lg font-semibold"
-                          >
-                            🧪 Consumir
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => isEquipped ? handleUnequipItem(inventoryItem.item.id) : handleEquipItem(inventoryItem.item.id)}
-                            disabled={loading}
-                            className={`px-4 py-2 rounded-lg text-sm disabled:opacity-50 transition-all shadow-lg font-semibold ${
-                              isEquipped 
-                                ? 'bg-gradient-to-r from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700' 
-                                : 'bg-gradient-to-r from-purple-500 to-purple-600 text-white hover:from-purple-600 hover:to-purple-700'
-                            }`}
-                          >
-                            {isEquipped ? '🔓 Desequipar' : '⚡ Equipar'}
-                          </button>
-                        )}
-                        {isEnhanceable && (
-                          <button
-                            onClick={() => setEnhanceTarget(inventoryItem)}
-                            disabled={loading}
-                            className="bg-gradient-to-r from-amber-500 to-amber-600 text-white px-4 py-2 rounded-lg text-sm hover:from-amber-600 hover:to-amber-700 disabled:opacity-50 transition-all shadow-lg font-semibold"
-                          >
-                            ⚒️ Aprimorar
-                          </button>
-                        )}
-                        {!isEquipped && inventoryItem.item.type !== 'CONSUMABLE' && (
-                          <button
-                            onClick={() => handleTransferToGlobal(inventoryItem.item.id)}
-                            disabled={loading}
-                            className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 transition-all shadow-lg font-semibold"
-                          >
-                            🌐 Global
-                          </button>
-                        )}
+                      <div className="absolute inset-0 bg-black/50 group-hover:bg-black/40 transition-colors" />
+
+                      {/* Conteúdo */}
+                      <div className="relative p-4 flex items-center justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-black text-white flex items-center gap-2 flex-wrap drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+                            <span className={enhancementLevel >= 16 ? 'text-orange-400' : enhancementLevel > 0 ? 'text-cyan-300' : ''}>
+                              {getDisplayName(inventoryItem.item.name, enhancementLevel)}
+                            </span>
+                            {isEquipped && (
+                              <span className="px-2 py-1 bg-green-500/30 text-green-300 text-xs rounded-full border border-green-500/50 font-semibold">
+                                ✓ Equipado
+                              </span>
+                            )}
+                          </h3>
+                          <p className="text-sm text-white/70 mt-1">
+                            <span className={`inline-block ${visual.chipBg} ${visual.chipText} px-2 py-0.5 rounded-full text-xs font-semibold mr-2`}>
+                              {visual.emoji} {getItemTypeLabel(inventoryItem.item.type)}
+                            </span>
+                            x{inventoryItem.quantity}
+                            {isEnhanceable && inventoryItem.durability !== undefined && (
+                              <> | Durabilidade: <span className={inventoryItem.durability > 50 ? 'text-green-400' : inventoryItem.durability > 20 ? 'text-yellow-400' : 'text-red-400'}>
+                                {inventoryItem.durability}/{inventoryItem.maxDurability ?? 100}
+                              </span></>
+                            )}
+                          </p>
+                          {inventoryItem.item.description && (
+                            <p className="text-xs text-white/60 mt-1 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">{inventoryItem.item.description}</p>
+                          )}
+                        </div>
+                        <div className="flex gap-2 flex-shrink-0">
+                          {inventoryItem.item.type === 'CONSUMABLE' ? (
+                            <button
+                              onClick={() => handleConsumeItem(inventoryItem.item.id)}
+                              disabled={loading}
+                              className="px-4 py-2 rounded-xl text-sm font-black text-white transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                              style={{
+                                background: `linear-gradient(90deg, ${visual.accent}cc, ${visual.accent}77)`,
+                                boxShadow: `0 4px 14px ${visual.accentSoft}`,
+                              }}
+                            >
+                              🧪 Consumir
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => isEquipped ? handleUnequipItem(inventoryItem.item.id) : handleEquipItem(inventoryItem.item.id)}
+                              disabled={loading}
+                              className="px-4 py-2 rounded-xl text-sm font-black text-white transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                              style={isEquipped ? {
+                                background: 'linear-gradient(90deg, #ef4444cc, #ef444477)',
+                                boxShadow: '0 4px 14px rgba(239,68,68,0.35)',
+                              } : {
+                                background: `linear-gradient(90deg, ${visual.accent}cc, ${visual.accent}77)`,
+                                boxShadow: `0 4px 14px ${visual.accentSoft}`,
+                              }}
+                            >
+                              {isEquipped ? '🔓 Desequipar' : '⚡ Equipar'}
+                            </button>
+                          )}
+                          {isEnhanceable && (
+                            <button
+                              onClick={() => setEnhanceTarget(inventoryItem)}
+                              disabled={loading}
+                              className="px-4 py-2 rounded-xl text-sm font-black text-white transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                              style={{
+                                background: 'linear-gradient(90deg, #f59e0bcc, #f59e0b77)',
+                                boxShadow: '0 4px 14px rgba(245,158,11,0.4)',
+                              }}
+                            >
+                              ⚒️ Aprimorar
+                            </button>
+                          )}
+                          {!isEquipped && inventoryItem.item.type !== 'CONSUMABLE' && (
+                            <button
+                              onClick={() => handleTransferToGlobal(inventoryItem.item.id)}
+                              disabled={loading}
+                              className="px-4 py-2 rounded-xl text-sm font-black text-white transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                              style={{
+                                background: 'linear-gradient(90deg, #3b82f6cc, #3b82f677)',
+                                boxShadow: '0 4px 14px rgba(59,130,246,0.35)',
+                              }}
+                            >
+                              🌐 Global
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );

@@ -39,6 +39,7 @@
     "seed": "node prisma/seed.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.104.1",
     "@auth/prisma-adapter": "^2.10.0",
     "@hookform/resolvers": "^5.1.1",
     "@prisma/client": "^6.11.1",

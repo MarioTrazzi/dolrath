@@ -11,7 +11,7 @@ import { isCloudinaryUploadConfigured, uploadImageToCloudinary } from '@/lib/clo
 import toast from 'react-hot-toast';
 
 export function AppearanceStep() {
-  const { selectedRace, selectedClass, distributedPoints, characterName, selectedImage, setSelectedImage, markStepComplete } = useCharacterCreationStore();
+  const { selectedRace, selectedClass, distributedPoints, selectedImage, setSelectedImage, markStepComplete } = useCharacterCreationStore();
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const [customPrompt, setCustomPrompt] = useState('');
@@ -66,60 +66,18 @@ export function AppearanceStep() {
     return { pts, physical, agility, intellect, defense };
   };
 
-  const getDefaultPrompt = () => {
-    const namePart = characterName ? `, name: ${characterName}` : '';
-    const raceName = selectedRace?.name ? selectedRace.name : 'Unknown Race';
-    const className = (selectedClass as any)?.name ? String((selectedClass as any).name) : 'Adventurer';
-    const raceLore = selectedRace?.lore ? String(selectedRace.lore) : '';
-
+  // Stat-derived hints passed to the server as supplementary context. The locked
+  // race+class style pre-prompt and the Claude merge now live server-side (single
+  // source of truth) — see src/lib/characterImagePrompt.ts.
+  const buildStatHints = () => {
     const { pts, physical, agility, intellect, defense } = statDescriptors();
-    const statsLine = `Stats focus (creation points): STR ${pts.str}, AGI ${pts.agi}, INT ${pts.int}, DEF ${pts.res}.`;
-
-    const raceFlavorById: Record<string, string> = {
-      draconiano:
-        'draconic lineage, subtle scales on arms/face, fierce eyes, ember glow, hints of transformation power',
-      metamorfo:
-        'shapeshifter vibe, wolf-like hints, predatory eyes, wilderness aura, hints of transformation power',
-      elfo:
-        'elegant elven features, pointed ears, ethereal beauty, arcane elegance',
-      humano:
-        'human adventurer, determined expression, versatile and resilient',
-    };
-
-    const raceFlavor = selectedRace?.id ? raceFlavorById[selectedRace.id] : '';
-
-    // Keep it short but specific; let the generator fill details.
     return [
-      // Base template: always consistent style.
-      `Fantasy RPG character portrait in the world of Dolrath${namePart}.`,
-      `Race: ${raceName}. Class: ${className}.`,
-      raceLore ? `Lore: ${raceLore}` : null,
-      raceFlavor ? `Visual identity: ${raceFlavor}.` : null,
-      statsLine,
-      `Visual cues based on stats: ${physical}; ${agility}; ${intellect}; ${defense}.`,
-      'Style constraints: cinematic fantasy, highly detailed, coherent anatomy, grounded design (not goofy), dramatic lighting, sharp focus, 1 character, portrait, no text, no watermark, no logo.',
-    ]
-      .filter(Boolean)
-      .join('\n');
-  };
-
-  const normalizePlayerPrompt = (value: string) => {
-    const s = String(value || '').replace(/\s+/g, ' ').trim();
-    if (!s) return '';
-    return s.slice(0, 400);
-  };
-
-  const buildFinalPrompt = () => {
-    const base = getDefaultPrompt();
-    const player = normalizePlayerPrompt(customPrompt);
-    if (!player) return base;
-
-    // Player prompt should only add preferences, never override the base lore/style.
-    return [
-      base,
-      'Player preferences (must follow the style constraints above; do not change art style):',
-      `- ${player}`,
-    ].join('\n');
+      `STR ${pts.str}, AGI ${pts.agi}, INT ${pts.int}, DEF ${pts.res}`,
+      physical,
+      agility,
+      intellect,
+      defense,
+    ].join('; ');
   };
 
   const generateImages = async () => {
@@ -130,9 +88,17 @@ export function AppearanceStep() {
     setSelectedImage(null);
 
     try {
-      const prompt = buildFinalPrompt();
-      
-      const result = await generateCharacterImage(prompt, 3); // Gerar 3 opções
+      // Send race/class + the player's request; the server builds the locked
+      // combination pre-prompt and merges the request with Claude.
+      const result = await generateCharacterImage({
+        numImages: 3,
+        raceId: selectedRace?.id,
+        classId: (selectedClass as any)?.id,
+        raceName: selectedRace?.name,
+        className: (selectedClass as any)?.name,
+        userPrompt: customPrompt,
+        statHints: buildStatHints(),
+      });
       const images = result.images;
 
       if (result.error) {

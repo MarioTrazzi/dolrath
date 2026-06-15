@@ -10,13 +10,13 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import XPProgressBar from '@/components/XPProgressBar';
 import CharacterStats from '@/components/CharacterStats';
+import KeepBackdrop from '@/components/dashboard/KeepBackdrop';
 // ...existing code...
 import { Character } from '@/types/game';
 import { getRaceById, getClassById } from '@/lib/gameData';
 import { ethers } from 'ethers';
 import Image from 'next/image';
 import { getWalletTxErrorMessage } from '@/lib/walletErrors';
-import KeepBackdrop from '@/components/dashboard/KeepBackdrop';
 // ...existing code...
 // ...existing code...
 
@@ -325,7 +325,7 @@ export default function DashboardPage() {
 
   return (
     <div className="relative min-h-screen overflow-hidden">
-      {/* Cenário animado do salão do castelo (igual às masmorras) */}
+      {/* Cenário animado da Câmara do Guardião */}
       <div className="fixed inset-0 z-0">
         <KeepBackdrop />
       </div>

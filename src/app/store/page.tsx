@@ -711,63 +711,75 @@ export default function Store() {
                 item.image && !/^(https?:\/\/|data:|ipfs:\/\/)/i.test(item.image)
               );
               
+              const visual = getItemVisual(item.type);
+
               return (
-                <div key={item.id} className="bg-surface/50 border border-white/20 rounded-lg p-4 shadow-lg hover:shadow-xl transition-all hover:border-primary/50">
-                  {resolvedImageUrl && (
-                    <div className="w-full h-32 relative mb-3">
-                      <Image
-                        src={resolvedImageUrl}
-                        alt={item.name}
-                        fill
-                        className="object-contain"
-                        unoptimized={shouldBypassNextImageOptimization}
-                      />
-                    </div>
-                  )}
-                  
-                  <h3 className="font-bold text-lg mb-2 text-text-primary">{item.name}</h3>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-sm text-text-secondary">Tipo:</span>
-                    <span className="text-sm bg-primary/20 text-primary px-2 py-1 rounded">{item.type}</span>
-                    {item.level && (
-                      <span className="text-sm bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded">
-                        Lv.{item.level}
-                      </span>
-                    )}
-                  </div>
-                  
-                  {item.description && (
-                    <p className="text-sm text-text-secondary mb-3">{item.description}</p>
-                  )}
-                  
-                  <div className="text-lg font-semibold text-yellow-400 mb-3">
-                    💰 {item.goldPrice} gold
+                <div key={item.id} className="group relative">
+                  {/* Backdrop animado por categoria */}
+                  <div className="absolute inset-0 rounded-2xl overflow-hidden z-0">
+                    <ItemCardBackdrop category={visual.category} />
                   </div>
 
-                  {ownedQuantity > 0 && (
-                    <div className="text-sm text-primary mb-2">
-                      Você possui: {ownedQuantity}
-                    </div>
-                  )}
-                  
-                  <div className="flex flex-col gap-2">
-                    <button
-                      onClick={() => handlePurchase(item.id)}
-                      disabled={loading}
-                      className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-2 px-4 rounded-lg font-semibold hover:from-green-600 hover:to-green-700 disabled:opacity-50 transition-all shadow-lg"
-                    >
-                      Comprar
-                    </button>
-                    
-                    {ownedQuantity > 0 && selectedCharacter && (
-                      <button
-                        onClick={() => handleQuickEquip(item.id)}
-                        disabled={loading}
-                        className="w-full bg-gradient-to-r from-purple-500 to-purple-600 text-white py-2 px-4 rounded-lg font-semibold hover:from-purple-600 hover:to-purple-700 disabled:opacity-50 transition-all shadow-lg"
-                      >
-                        ⚡ Equipar Rápido
-                      </button>
+                  {/* Card com vidro */}
+                  <div className="relative z-10 bg-black/40 backdrop-blur-md border-2 rounded-2xl p-4 shadow-2xl hover:shadow-3xl transition-all duration-300"
+                    style={{ borderColor: visual.accent + '60' }}>
+                    {resolvedImageUrl && (
+                      <div className="w-full h-32 relative mb-3 rounded-lg overflow-hidden bg-black/20">
+                        <Image
+                          src={resolvedImageUrl}
+                          alt={item.name}
+                          fill
+                          className="object-contain group-hover:scale-110 transition-transform duration-300"
+                          unoptimized={shouldBypassNextImageOptimization}
+                        />
+                      </div>
                     )}
+
+                    <h3 className="font-bold text-lg mb-2 text-white">{item.name}</h3>
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <span className={`text-xs font-semibold px-2 py-1 rounded-full ${visual.chipBg} ${visual.chipText}`}>
+                        {visual.emoji} {getItemTypeLabel(item.type)}
+                      </span>
+                      {item.level && (
+                        <span className="text-xs font-semibold bg-amber-500/30 text-amber-300 px-2 py-1 rounded-full">
+                          Lv.{item.level}
+                        </span>
+                      )}
+                    </div>
+
+                    {item.description && (
+                      <p className="text-sm text-white/70 mb-3">{item.description}</p>
+                    )}
+
+                    <div className="text-lg font-semibold text-yellow-400 mb-3">
+                      💰 {item.goldPrice} gold
+                    </div>
+
+                    {ownedQuantity > 0 && (
+                      <div className="text-sm text-amber-300 mb-2">
+                        ✓ Você possui: {ownedQuantity}
+                      </div>
+                    )}
+
+                    <div className="flex flex-col gap-2">
+                      <button
+                        onClick={() => handlePurchase(item.id)}
+                        disabled={loading}
+                        className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-2 px-4 rounded-lg font-semibold hover:from-green-600 hover:to-green-700 disabled:opacity-50 transition-all shadow-lg"
+                      >
+                        Comprar
+                      </button>
+
+                      {ownedQuantity > 0 && selectedCharacter && (
+                        <button
+                          onClick={() => handleQuickEquip(item.id)}
+                          disabled={loading}
+                          className="w-full bg-gradient-to-r from-purple-500 to-purple-600 text-white py-2 px-4 rounded-lg font-semibold hover:from-purple-600 hover:to-purple-700 disabled:opacity-50 transition-all shadow-lg"
+                        >
+                          ⚡ Equipar Rápido
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );

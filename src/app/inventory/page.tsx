@@ -5,6 +5,8 @@ import { useSession } from 'next-auth/react';
 import toast from 'react-hot-toast';
 import EnhancementDialog from '@/components/EnhancementDialog';
 import VaultBackdrop from '@/components/inventory/VaultBackdrop';
+import ItemCardBackdrop from '@/components/store/ItemCardBackdrop';
+import { getItemVisual, getItemTypeLabel } from '@/lib/itemVisuals';
 import { getGearCategory, getDisplayName } from '@/lib/enhancementSystem';
 
 interface Item {

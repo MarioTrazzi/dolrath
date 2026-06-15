@@ -7,7 +7,6 @@ import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { Search, Filter, X } from 'lucide-react';
 import { ethers } from 'ethers';
-import { resolveImageUrl } from '@/lib/imageUrl';
 import { decodeContractCustomErrorMessage, getWalletTxErrorMessage } from '@/lib/walletErrors';
 import BazaarBackdrop from '@/components/store/BazaarBackdrop';
 import ItemCardBackdrop from '@/components/store/ItemCardBackdrop';
@@ -706,10 +705,8 @@ export default function Store() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredItems.map((item) => {
               const ownedQuantity = getInventoryQuantity(item.id);
-              const resolvedImageUrl = resolveImageUrl(item.image) ?? item.image;
-              const shouldBypassNextImageOptimization = Boolean(
-                item.image && !/^(https?:\/\/|data:|ipfs:\/\/)/i.test(item.image)
-              );
+              // A API já resolve public IDs do Cloudinary server-side → item.image é sempre URL completa ou null
+              const resolvedImageUrl = item.image ?? null;
 
               const visual = getItemVisual(item.type);
 
@@ -735,7 +732,7 @@ export default function Store() {
                           alt={item.name}
                           fill
                           className="object-contain group-hover:scale-110 transition-transform duration-300"
-                          unoptimized={shouldBypassNextImageOptimization}
+                          unoptimized={Boolean(resolvedImageUrl && !/^https?:\/\//i.test(resolvedImageUrl))}
                         />
                       </div>
                     )}

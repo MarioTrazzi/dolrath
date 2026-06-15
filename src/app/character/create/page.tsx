@@ -32,6 +32,9 @@ export default function CharacterCreationPage() {
   const [nftMetaByTokenId, setNftMetaByTokenId] = useState<Record<string, any>>({});
   const [ownedNftContext, setOwnedNftContext] = useState<{ chainId?: number; contractAddress?: string } | null>(null);
   const [ownedNftsError, setOwnedNftsError] = useState<string>('');
+  // NFT just minted in this session, shown optimistically until the on-chain
+  // log scan catches up (the RPC often lags a few seconds behind the mint).
+  const [justCreatedNft, setJustCreatedNft] = useState<{ tokenId: string; tokenURI: string; metadata: any; character: any } | null>(null);
 
   const linkedWallet = session?.user?.walletAddress;
 
@@ -113,11 +116,42 @@ export default function CharacterCreationPage() {
     if (status !== 'authenticated') return;
     refreshOwnedNfts();
 
-    const handler = () => refreshOwnedNfts();
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent)?.detail || {};
+      const tokenId = detail?.tokenId ? String(detail.tokenId) : '';
+      if (tokenId) {
+        // Show the freshly-minted NFT immediately, regardless of RPC lag.
+        setJustCreatedNft({
+          tokenId,
+          tokenURI: String(detail.tokenURI || ''),
+          metadata: detail.metadata ?? null,
+          character: detail.characterId ? { id: String(detail.characterId) } : null,
+        });
+        if (detail.contractAddress || typeof detail.chainId === 'number') {
+          setOwnedNftContext((prev) => ({
+            chainId: typeof detail.chainId === 'number' ? detail.chainId : prev?.chainId,
+            contractAddress: detail.contractAddress || prev?.contractAddress,
+          }));
+        }
+      }
+      refreshOwnedNfts();
+    };
     window.addEventListener('dolrath:character-created', handler as any);
     return () => window.removeEventListener('dolrath:character-created', handler as any);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
+
+  // Merge the optimistic just-created NFT into the on-chain list until the
+  // scan picks it up (at which point it is deduped away).
+  const displayNfts = useMemo(() => {
+    if (
+      justCreatedNft &&
+      !ownedNfts.some((it) => String(it?.tokenId || '') === justCreatedNft.tokenId)
+    ) {
+      return [...ownedNfts, justCreatedNft];
+    }
+    return ownedNfts;
+  }, [ownedNfts, justCreatedNft]);
 
   // Dynamically assign components to steps
   useEffect(() => {
@@ -434,15 +468,17 @@ export default function CharacterCreationPage() {
                 <div className="text-xs text-error mb-3">{ownedNftsError}</div>
               ) : null}
 
-            {ownedNftsLoading ? (
+            {ownedNftsLoading && displayNfts.length === 0 ? (
               <div className="text-text-secondary">Carregando...</div>
-            ) : ownedNfts.length === 0 ? (
+            ) : displayNfts.length === 0 ? (
               <div className="text-text-secondary">Nenhuma NFT encontrada na sua carteira.</div>
             ) : (
               <div className="divide-y divide-white/10">
-                {ownedNfts.map((it) => {
+                {displayNfts.map((it) => {
                   const tokenId = String(it?.tokenId || '');
-                  const meta = nftMetaByTokenId[tokenId];
+                  const meta =
+                    nftMetaByTokenId[tokenId] ||
+                    (justCreatedNft?.tokenId === tokenId ? justCreatedNft.metadata : null);
                   const attrs = Array.isArray(meta?.attributes) ? meta.attributes : [];
                   const getTrait = (t: string) => attrs.find((a: any) => String(a?.trait_type) === t)?.value;
                   const displayName = String(getTrait('CharacterName') || meta?.name || `NFT #${tokenId}`);

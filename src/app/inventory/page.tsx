@@ -492,21 +492,26 @@ export default function InventoryPage() {
                   const isEquipped = isItemEquipped(inventoryItem.item.id);
                   const enhancementLevel = inventoryItem.enhancementLevel || 0;
                   const isEnhanceable = !!getGearCategory(inventoryItem.item.type);
+                  const visual = getItemVisual(inventoryItem.item.type);
                   return (
-                    <div key={inventoryItem.id} className="bg-surface/70 border border-white/10 p-4 rounded-lg flex items-center justify-between hover:border-primary/50 transition-colors">
-                      <div>
-                        <h3 className="font-medium text-text-primary flex items-center gap-2">
+                    <div key={inventoryItem.id} className="bg-black/40 backdrop-blur-sm border-2 p-4 rounded-2xl flex items-center justify-between hover:shadow-lg transition-all"
+                      style={{ borderColor: visual.accent + '40' }}>
+                      <div className="flex-1">
+                        <h3 className="font-medium text-white flex items-center gap-2">
                           <span className={enhancementLevel >= 16 ? 'text-orange-400' : enhancementLevel > 0 ? 'text-cyan-300' : ''}>
                             {getDisplayName(inventoryItem.item.name, enhancementLevel)}
                           </span>
                           {isEquipped && (
-                            <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded-full border border-green-500/30">
+                            <span className="px-2 py-1 bg-green-500/30 text-green-300 text-xs rounded-full border border-green-500/50 font-semibold">
                               ✓ Equipado
                             </span>
                           )}
                         </h3>
-                        <p className="text-sm text-text-secondary">
-                          Tipo: <span className="text-primary">{inventoryItem.item.type}</span> | Quantidade: <span className="text-yellow-400">{inventoryItem.quantity}</span>
+                        <p className="text-sm text-white/70 mt-1">
+                          <span className={`inline-block ${visual.chipBg} ${visual.chipText} px-2 py-0.5 rounded-full text-xs font-semibold mr-2`}>
+                            {visual.emoji} {getItemTypeLabel(inventoryItem.item.type)}
+                          </span>
+                          x{inventoryItem.quantity}
                           {isEnhanceable && inventoryItem.durability !== undefined && (
                             <> | Durabilidade: <span className={inventoryItem.durability > 50 ? 'text-green-400' : inventoryItem.durability > 20 ? 'text-yellow-400' : 'text-red-400'}>
                               {inventoryItem.durability}/{inventoryItem.maxDurability ?? 100}
@@ -514,7 +519,7 @@ export default function InventoryPage() {
                           )}
                         </p>
                         {inventoryItem.item.description && (
-                          <p className="text-xs text-text-secondary mt-1">{inventoryItem.item.description}</p>
+                          <p className="text-xs text-white/60 mt-1">{inventoryItem.item.description}</p>
                         )}
                       </div>
                       <div className="flex gap-2">

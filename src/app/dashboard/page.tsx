@@ -11,6 +11,8 @@ import Link from 'next/link';
 import XPProgressBar from '@/components/XPProgressBar';
 import CharacterStats from '@/components/CharacterStats';
 import KeepBackdrop from '@/components/dashboard/KeepBackdrop';
+import CreationCardBackdrop from '@/components/character/CreationCardBackdrop';
+import { getBlendedVisual } from '@/lib/creationVisuals';
 // ...existing code...
 import { Character } from '@/types/game';
 import { getRaceById, getClassById } from '@/lib/gameData';
@@ -27,6 +29,7 @@ export default function DashboardPage() {
   const [characterDetails, setCharacterDetails] = useState<any[]>([]);
   const [nftMetaByCharacterId, setNftMetaByCharacterId] = useState<Record<string, any>>({});
   const [ownedNfts, setOwnedNfts] = useState<any[]>([]);
+  const [selectedTokenId, setSelectedTokenId] = useState<string>('');
   const [nftMetaByTokenId, setNftMetaByTokenId] = useState<Record<string, any>>({});
   const [ownedNftContext, setOwnedNftContext] = useState<{ chainId?: number; contractAddress?: string } | null>(null);
   const [ownedNftsError, setOwnedNftsError] = useState<string>('');
@@ -160,6 +163,12 @@ export default function DashboardPage() {
       const items = Array.isArray(payload?.items) ? payload.items : [];
 
       setOwnedNfts(items);
+      // Mantém a seleção atual se ainda existir; senão seleciona a primeira NFT.
+      setSelectedTokenId((prev) => {
+        const stillExists = items.some((it: any) => String(it?.tokenId || '') === prev);
+        if (prev && stillExists) return prev;
+        return items.length > 0 ? String(items[0]?.tokenId || '') : '';
+      });
       setOwnedNftContext({
         chainId: typeof payload?.chainId === 'number' ? payload.chainId : undefined,
         contractAddress: typeof payload?.contractAddress === 'string' ? payload.contractAddress : undefined,
@@ -323,6 +332,14 @@ export default function DashboardPage() {
     }
   }, [status, router, session?.user?.walletAddress]);
 
+  // Personagem selecionado (a partir da NFT escolhida no card acima).
+  const selectedItem = ownedNfts.find((it: any) => String(it?.tokenId || '') === selectedTokenId);
+  const selectedCharId = selectedItem?.character?.id ? String(selectedItem.character.id) : '';
+  const detailToShow =
+    characterDetails.find((d: any) => String(d?.character?.id) === selectedCharId) ||
+    characterDetails[0] ||
+    null;
+
   return (
     <div className="relative min-h-screen overflow-hidden">
       {/* Cenário animado da Câmara do Guardião */}
@@ -398,7 +415,7 @@ export default function DashboardPage() {
           {ownedNfts.length === 0 ? (
             <div className="text-text-secondary text-sm">Nenhuma NFT encontrada na sua carteira.</div>
           ) : (
-            <div className="divide-y divide-border/30">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {ownedNfts.map((it: any) => {
                 const tokenId = String(it?.tokenId || '');
                 const meta = nftMetaByTokenId[tokenId];
@@ -411,232 +428,302 @@ export default function DashboardPage() {
                 const displayClass = String(getTrait('Class') || '');
                 const displayLevel = String(getTrait('Level') || '');
                 const characterId = it?.character?.id ? String(it.character.id) : '';
+                const isSelected = selectedTokenId === tokenId;
+                const visual = getBlendedVisual(displayRace, displayClass);
 
                 return (
-                  <div key={tokenId} className="py-3 flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full overflow-hidden border border-border/40 bg-surface/40 flex-shrink-0">
-                      {meta?.image ? (
-                        <Image
-                          src={String(meta.image)}
-                          alt={displayName}
-                          width={96}
-                          height={96}
-                          unoptimized
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full" />
-                      )}
+                  <motion.div
+                    key={tokenId}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.99 }}
+                    onClick={() => setSelectedTokenId(tokenId)}
+                    className="relative overflow-hidden rounded-2xl border-2 cursor-pointer transition-all group"
+                    style={{
+                      borderColor: isSelected ? visual.borderColor : `${visual.borderColor}55`,
+                      boxShadow: isSelected ? visual.glow : undefined,
+                    }}
+                  >
+                    {/* Cenário animado da raça */}
+                    <div className="absolute inset-0">
+                      <CreationCardBackdrop theme={visual.backdropTheme} />
                     </div>
+                    <div
+                      className={`absolute inset-0 transition-colors ${
+                        isSelected ? 'bg-black/30' : 'bg-black/50 group-hover:bg-black/40'
+                      }`}
+                    />
 
-                    <div className="flex-1 min-w-0">
-                      <div className="text-text-primary font-semibold truncate">{displayName}</div>
-                      <div className="text-xs text-text-secondary truncate">
-                        {displayRace}
-                        {displayRace && displayClass ? ' • ' : ''}
-                        {displayClass}
-                        {displayLevel ? ` • Lv ${displayLevel}` : ''}
+                    <div className="relative p-4 flex items-center gap-4">
+                      <div
+                        className="w-14 h-14 rounded-xl overflow-hidden border-2 flex-shrink-0 drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]"
+                        style={{ borderColor: `${visual.borderColor}88` }}
+                      >
+                        {meta?.image ? (
+                          <Image
+                            src={String(meta.image)}
+                            alt={displayName}
+                            width={112}
+                            height={112}
+                            unoptimized
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div
+                            className="w-full h-full flex items-center justify-center text-2xl"
+                            style={{ background: visual.gradient }}
+                          >
+                            {visual.raceVisual.emoji}
+                          </div>
+                        )}
                       </div>
-                      <div className="text-[11px] text-text-secondary truncate">Token ID: {tokenId}</div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="text-white font-bold truncate drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
+                          {displayName}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 mt-1.5">
+                          {displayRace && (
+                            <span
+                              className="px-2 py-0.5 text-[11px] font-semibold rounded-full text-white border"
+                              style={{ background: `${visual.raceVisual.accent}33`, borderColor: `${visual.raceVisual.accent}66` }}
+                            >
+                              {visual.raceVisual.emoji} {displayRace}
+                            </span>
+                          )}
+                          {displayClass && (
+                            <span
+                              className="px-2 py-0.5 text-[11px] font-semibold rounded-full text-white border"
+                              style={{ background: `${visual.classVisual.accent}33`, borderColor: `${visual.classVisual.accent}66` }}
+                            >
+                              {visual.classVisual.emoji} {displayClass}
+                            </span>
+                          )}
+                          {displayLevel && (
+                            <span className="px-2 py-0.5 text-[11px] font-semibold rounded-full text-white/90 bg-white/10 border border-white/20">
+                              Lv {displayLevel}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-white/50 truncate mt-1">Token ID: {tokenId}</div>
+                      </div>
+
+                      <div className="flex flex-col gap-2 flex-shrink-0">
+                        <Link href={`/character/${characterId || tokenId}`} onClick={(e) => e.stopPropagation()}>
+                          <button
+                            className="w-full px-4 py-2 rounded-xl font-black text-xs text-white shadow-lg transition-transform hover:scale-105"
+                            style={{ background: `linear-gradient(90deg, ${visual.raceVisual.accent}cc, ${visual.classVisual.accent}cc)` }}
+                          >
+                            Abrir
+                          </button>
+                        </Link>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openDeleteDialog({ tokenId, character: it?.character || null });
+                          }}
+                          className="px-4 py-2 rounded-xl font-bold text-xs text-red-300 border border-red-500/40 hover:border-red-500 hover:bg-red-500/10 transition-colors"
+                        >
+                          Excluir
+                        </button>
+                      </div>
                     </div>
-
-                    <Link href={`/character/${characterId || tokenId}`}>
-                      <Button variant="outline" size="sm">Abrir</Button>
-                    </Link>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openDeleteDialog({ tokenId, character: it?.character || null })}
-                      className="text-red-500 border-red-500/40 hover:border-red-500"
-                    >
-                      Excluir
-                    </Button>
-                  </div>
+                  </motion.div>
                 );
               })}
             </div>
           )}
         </div>
 
-        {characterDetails.length > 0 ? (
-          <div className="grid gap-8 mb-12">
-            {characterDetails.map(({ character, raceObj, classObj }: any, idx: number) => (
+        {detailToShow ? (
+          (() => {
+            const { character, raceObj, classObj } = detailToShow as any;
+            const meta = nftMetaByCharacterId[String(character.id)];
+            const attrs = Array.isArray(meta?.attributes) ? meta.attributes : [];
+            const getTrait = (traitType: string) =>
+              attrs.find((a: any) => String(a?.trait_type) === traitType)?.value;
+
+            const raceName = String(getTrait('Race') || raceObj?.name || '');
+            const className = String(getTrait('Class') || classObj?.name || '');
+            const visual = getBlendedVisual(raceObj?.id || raceName, classObj?.id || className);
+
+            const orderedTraits = [
+              { label: 'Race', value: getTrait('Race') || raceObj?.name },
+              { label: 'Class', value: getTrait('Class') || classObj?.name },
+              { label: 'Level', value: getTrait('Level') || character.level },
+              { label: 'STR', value: getTrait('STR') },
+              { label: 'AGI', value: getTrait('AGI') },
+              { label: 'INT', value: getTrait('INT') },
+              { label: 'DEF', value: getTrait('DEF') },
+            ].filter((t) => t.value !== undefined && t.value !== null && String(t.value) !== '');
+
+            return (
               <motion.div
                 key={character.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.1 * idx }}
-                className="glass-card p-8 flex flex-col md:flex-row items-center md:items-start gap-8 relative"
+                transition={{ duration: 0.5 }}
+                className="relative overflow-hidden rounded-3xl border-2 mb-12"
+                style={{ borderColor: visual.borderColor, boxShadow: visual.glow }}
               >
-                <button
-                  className="absolute top-4 right-4 text-red-500 hover:text-red-700 transition-colors"
-                  title="Excluir personagem"
-                  onClick={() => openDeleteDialog({ tokenId: String((character as any)?.nftTokenId || ''), character })}
-                >
-                  <Trash2 className="w-6 h-6" />
-                </button>
-                <div className="flex flex-col md:flex-row w-full gap-8">
-                  {/* Character Picture */}
-                  <div className="flex-shrink-0 flex justify-center md:justify-start items-center">
-                    {nftMetaByCharacterId[String(character.id)]?.image ? (
-                      <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-primary shadow-lg bg-surface/40">
-                        <Image
-                          src={String(nftMetaByCharacterId[String(character.id)].image)}
-                          alt={String(nftMetaByCharacterId[String(character.id)]?.name || character.name || 'NFT')}
-                          width={256}
-                          height={256}
-                          unoptimized
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    ) : (
-                      <div className="w-32 h-32 rounded-full flex items-center justify-center bg-gradient-to-br from-primary to-primary-dark text-5xl text-white border-4 border-primary shadow-lg">
-                        <User className="w-16 h-16" />
-                      </div>
-                    )}
-                  </div>
-                  {/* Character Info */}
-                  <div className="flex-1 text-center md:text-left">
-                    {(() => {
-                      const meta = nftMetaByCharacterId[String(character.id)];
-                      const attrs = Array.isArray(meta?.attributes) ? meta.attributes : [];
-                      const getTrait = (traitType: string) =>
-                        attrs.find((a: any) => String(a?.trait_type) === traitType)?.value;
+                {/* Cenário animado misturando raça e classe */}
+                <div className="absolute inset-0">
+                  <CreationCardBackdrop theme={visual.backdropTheme} />
+                </div>
+                <div className="absolute inset-0 bg-black/55" />
 
-                      const orderedTraits = [
-                        { label: 'Race', value: getTrait('Race') || raceObj?.name },
-                        { label: 'Class', value: getTrait('Class') || classObj?.name },
-                        { label: 'Level', value: getTrait('Level') || character.level },
-                        { label: 'STR', value: getTrait('STR') },
-                        { label: 'AGI', value: getTrait('AGI') },
-                        { label: 'INT', value: getTrait('INT') },
-                        { label: 'DEF', value: getTrait('DEF') },
-                      ].filter((t) => t.value !== undefined && t.value !== null && String(t.value) !== '');
-
-                      return (
-                        <>
-                          <h3 className="text-3xl font-bold text-text-primary mb-1">
-                            {String(getTrait('CharacterName') || character.name)}
-                          </h3>
-
-                          {meta?.name && (
-                            <div className="text-text-secondary text-sm mb-1">{String(meta.name)}</div>
-                          )}
-                          {meta?.description && (
-                            <div className="text-text-secondary text-sm mb-3">{String(meta.description)}</div>
-                          )}
-
-                          <div className="flex flex-col sm:flex-row gap-2 items-center justify-center md:justify-start mb-3">
-                            <span className="text-base font-semibold text-primary bg-surface/70 rounded px-3 py-1">
-                              {String(getTrait('Race') || raceObj?.name || '')}
-                            </span>
-                            <span className="text-base font-semibold text-primary bg-surface/70 rounded px-3 py-1">
-                              {String(getTrait('Class') || classObj?.name || '')}
-                            </span>
-                            <span className="text-base font-semibold text-primary bg-surface/70 rounded px-3 py-1">
-                              Lv {String(getTrait('Level') || character.level || 1)}
-                            </span>
-                          </div>
-
-                          {orderedTraits.length > 0 && (
-                            <div className="mb-4">
-                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                {orderedTraits.map((t) => (
-                                  <div
-                                    key={t.label}
-                                    className="bg-surface/60 rounded px-3 py-2 border border-border/40"
-                                  >
-                                    <div className="text-xs text-text-secondary">{t.label}</div>
-                                    <div className="text-sm font-semibold text-text-primary truncate">
-                                      {String(t.value)}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {(character.nftTokenUri || meta) && (
-                            <div className="mb-4">
-                              <div className="text-xs text-text-secondary">TokenURI</div>
-                              <div className="text-xs text-text-primary break-all">
-                                {String(character.nftTokenUri || '')}
-                              </div>
-                            </div>
-                          )}
-                        </>
-                      );
-                    })()}
-                    <div className="flex flex-col md:flex-row gap-2 mb-4">
-                      <Link href={`/character/${character.id}`} passHref>
-                        <Button variant="outline" size="sm">
-                          View Details
-                        </Button>
-                      </Link>
-                      {/* Botões de teste para XP */}
-                      <div className="flex gap-1">
-                        <Button 
-                          variant="secondary" 
-                          size="sm" 
-                          onClick={() => addXPToCharacter(character.id, 50)}
-                          className="text-xs"
+                <div className="relative p-6 sm:p-8 flex flex-col md:flex-row items-center md:items-start gap-8">
+                  <button
+                    className="absolute top-4 right-4 text-red-400 hover:text-red-300 transition-colors z-10"
+                    title="Excluir personagem"
+                    onClick={() => openDeleteDialog({ tokenId: String((character as any)?.nftTokenId || ''), character })}
+                  >
+                    <Trash2 className="w-6 h-6" />
+                  </button>
+                  <div className="flex flex-col md:flex-row w-full gap-8">
+                    {/* Character Picture */}
+                    <div className="flex-shrink-0 flex justify-center md:justify-start items-center">
+                      {meta?.image ? (
+                        <div
+                          className="w-32 h-32 rounded-2xl overflow-hidden border-4 shadow-lg bg-black/40"
+                          style={{ borderColor: visual.borderColor }}
                         >
-                          +50 XP
-                        </Button>
-                        <Button 
-                          variant="secondary" 
-                          size="sm" 
-                          onClick={() => addXPToCharacter(character.id, 200)}
-                          className="text-xs"
+                          <Image
+                            src={String(meta.image)}
+                            alt={String(meta?.name || character.name || 'NFT')}
+                            width={256}
+                            height={256}
+                            unoptimized
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      ) : (
+                        <div
+                          className="w-32 h-32 rounded-2xl flex items-center justify-center text-5xl text-white border-4 shadow-lg"
+                          style={{ background: visual.gradient, borderColor: visual.borderColor }}
                         >
-                          +200 XP
-                        </Button>
-                        <Button 
-                          variant="secondary" 
-                          size="sm" 
-                          onClick={() => addXPToCharacter(character.id, 1000)}
-                          className="text-xs"
-                        >
-                          +1000 XP
-                        </Button>
-                      </div>
+                          {visual.raceVisual.emoji}
+                        </div>
+                      )}
                     </div>
-                    
-                    {/* XP Progress Bar */}
-                    {character.levelInfo && (
-                      <div className="mb-4">
-                        <XPProgressBar levelInfo={character.levelInfo} />
+                    {/* Character Info */}
+                    <div className="flex-1 text-center md:text-left">
+                      <h3 className="text-3xl font-black text-white mb-1 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+                        {String(getTrait('CharacterName') || character.name)}
+                      </h3>
+
+                      {meta?.name && (
+                        <div className="text-white/70 text-sm mb-1">{String(meta.name)}</div>
+                      )}
+                      {meta?.description && (
+                        <div className="text-white/60 text-sm mb-3">{String(meta.description)}</div>
+                      )}
+
+                      <div className="flex flex-wrap gap-2 items-center justify-center md:justify-start mb-3">
+                        {raceName && (
+                          <span
+                            className="text-sm font-bold text-white rounded-full px-3 py-1 border"
+                            style={{ background: `${visual.raceVisual.accent}33`, borderColor: `${visual.raceVisual.accent}66` }}
+                          >
+                            {visual.raceVisual.emoji} {raceName}
+                          </span>
+                        )}
+                        {className && (
+                          <span
+                            className="text-sm font-bold text-white rounded-full px-3 py-1 border"
+                            style={{ background: `${visual.classVisual.accent}33`, borderColor: `${visual.classVisual.accent}66` }}
+                          >
+                            {visual.classVisual.emoji} {className}
+                          </span>
+                        )}
+                        <span className="text-sm font-bold text-white/90 rounded-full px-3 py-1 bg-white/10 border border-white/20">
+                          Lv {String(getTrait('Level') || character.level || 1)}
+                        </span>
                       </div>
-                    )}
-                    
-                    {/* Available Points Alert */}
-                    {character.availablePoints && character.availablePoints > 0 && (
-                      <div className="mb-4 p-3 bg-gradient-to-r from-primary/20 to-primary-dark/20 border border-primary/30 rounded-lg">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="text-primary font-bold text-sm">
-                              📊 {character.availablePoints} pontos para distribuir
-                            </span>
+
+                      {orderedTraits.length > 0 && (
+                        <div className="mb-4">
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            {orderedTraits.map((t) => (
+                              <div
+                                key={t.label}
+                                className="bg-black/40 rounded-xl px-3 py-2 border"
+                                style={{ borderColor: `${visual.borderColor}44` }}
+                              >
+                                <div className="text-xs text-white/60">{t.label}</div>
+                                <div className="text-sm font-semibold text-white truncate">
+                                  {String(t.value)}
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                          <Link href={`/character/${character.id}`} passHref>
-                            <Button variant="primary" size="sm" className="text-xs">
-                              Distribuir Pontos
-                            </Button>
-                          </Link>
+                        </div>
+                      )}
+
+                      <div className="flex flex-col sm:flex-row gap-2 mb-4 items-center justify-center md:justify-start">
+                        <Link href={`/character/${character.id}`}>
+                          <button
+                            className="px-5 py-2.5 rounded-xl font-black text-sm text-white shadow-lg transition-transform hover:scale-105"
+                            style={{
+                              background: `linear-gradient(90deg, ${visual.raceVisual.accent}cc, ${visual.classVisual.accent}cc)`,
+                              boxShadow: `0 4px 20px ${visual.raceVisual.accentSoft}`,
+                            }}
+                          >
+                            Ver Ficha Completa
+                          </button>
+                        </Link>
+                        {/* Botões de teste para XP */}
+                        <div className="flex gap-1.5">
+                          {[50, 200, 1000].map((xp) => (
+                            <button
+                              key={xp}
+                              onClick={() => addXPToCharacter(character.id, xp)}
+                              className="px-3 py-2 rounded-xl font-bold text-xs text-white/90 bg-white/10 border border-white/20 hover:bg-white/20 transition-colors"
+                            >
+                              +{xp} XP
+                            </button>
+                          ))}
                         </div>
                       </div>
-                    )}
-                    
-                    {/* Character Stats */}
-                    <div className="mb-4">
-                      <CharacterStats character={character} />
+
+                      {/* XP Progress Bar */}
+                      {character.levelInfo && (
+                        <div className="mb-4">
+                          <XPProgressBar levelInfo={character.levelInfo} />
+                        </div>
+                      )}
+
+                      {/* Available Points Alert */}
+                      {character.availablePoints && character.availablePoints > 0 && (
+                        <div
+                          className="mb-4 p-3 rounded-xl border"
+                          style={{ background: `${visual.borderColor}22`, borderColor: `${visual.borderColor}55` }}
+                        >
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <span className="text-white font-bold text-sm">
+                              📊 {character.availablePoints} pontos para distribuir
+                            </span>
+                            <Link href={`/character/${character.id}`}>
+                              <button
+                                className="px-4 py-2 rounded-xl font-black text-xs text-white shadow-lg transition-transform hover:scale-105"
+                                style={{ background: `linear-gradient(90deg, ${visual.raceVisual.accent}cc, ${visual.classVisual.accent}cc)` }}
+                              >
+                                Distribuir Pontos
+                              </button>
+                            </Link>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Character Stats */}
+                      <div className="mb-2">
+                        <CharacterStats character={character} />
+                      </div>
                     </div>
                   </div>
                 </div>
               </motion.div>
-            ))}
-          </div>
+            );
+          })()
         ) : (
           <motion.div
             initial={{ opacity: 0, y: 20 }}

@@ -219,11 +219,11 @@ function CombatPageContent() {
   // 🎯 CÁLCULOS DE BALANCEAMENTO - Mostrar chances calculadas
   const calculateDisplayStats = (player: Player | null | undefined) => {
     if (!player) return { critChance: 0, dodgeBonus: 0, specialType: 'físico' }
-    
-    const critChance = Math.min(50, player.agility * 2) // 2% por AGI (máx 50%)
-    const dodgeBonus = Math.floor(player.agility / 10) // +1 dado a cada 10 AGI
+
+    const critChance = Math.round(Math.min(40, 5 + player.agility * 1.2)) // 5% base +1.2%/AGI (máx 40%)
+    const dodgeBonus = Math.floor(player.agility / 5) // bônus no conteste de esquiva (cap pelo dado)
     const specialType = player.intelligence > player.strength ? 'mágico' : 'físico'
-    
+
     return { critChance, dodgeBonus, specialType }
   }
 
@@ -472,7 +472,8 @@ function CombatPageContent() {
               strength: charDetails.baseStats?.str || 10,
               agility: charDetails.baseStats?.agi || 10,
               intelligence: charDetails.baseStats?.int || 10,
-              resistance: charDetails.baseStats?.res || 10,
+              // res pode não existir em personagens antigos — derivar da DEF
+              resistance: charDetails.baseStats?.res ?? Math.floor((charDetails.baseStats?.def || 10) * 0.8),
               critical: charDetails.baseStats?.crit || 1.0,
               speed: charDetails.baseStats?.speed || 2.5,
               equipment: charDetails.equipment || {},
@@ -1054,15 +1055,20 @@ function CombatPageContent() {
                     myResult: currentPlayer ? diceResults[currentPlayer.id] : null,
                     waitingForOpponent: opponent ? !diceResults[opponent.id] : false
                   }
-              : combatRoom?.phase === CombatPhase.DICE_ROLL && combatRoom?.pendingAction
+              : combatRoom?.phase === CombatPhase.DICE_ROLL && combatRoom?.pendingAction &&
+                !(combatRoom.pendingAction.defenseAction === 'exhausted' && !isMyTurn)
                 ? {
                     visible: true,
                     diceType: combatRoom.pendingAction.diceType,
                     hasRolled: hasRolledDice,
-                    label: `🎲 Role o d${combatRoom.pendingAction.diceType}!`,
+                    label: combatRoom.pendingAction.defenseAction === 'exhausted'
+                      ? `😮‍💨 Oponente exausto! Role o d${combatRoom.pendingAction.diceType}!`
+                      : `🎲 Role o d${combatRoom.pendingAction.diceType}!`,
                     onRoll: () => handleRollDice(combatRoom.pendingAction.diceType),
                     myResult: currentPlayer ? diceResults[currentPlayer.id] : null,
-                    waitingForOpponent: opponent ? !diceResults[opponent.id] : false
+                    waitingForOpponent: combatRoom.pendingAction.defenseAction === 'exhausted'
+                      ? false
+                      : (opponent ? !diceResults[opponent.id] : false)
                   }
                 : null
             }
@@ -1251,7 +1257,7 @@ function CombatPageContent() {
                       : 'bg-gradient-to-r from-warning to-yellow-500 hover:from-yellow-500 hover:to-warning'
                     } text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                   >
-                    👊 Ataque Leve (d6, {STAMINA_COSTS[ActionType.LIGHT_ATTACK]}⚡)
+                    👊 Leve · AGI (d6, {STAMINA_COSTS[ActionType.LIGHT_ATTACK]}⚡)
                   </button>
                   <button
                     onClick={() => handlePlayerAction(ActionType.HEAVY_ATTACK)}
@@ -1261,7 +1267,7 @@ function CombatPageContent() {
                       : 'bg-gradient-to-r from-error to-red-600 hover:from-red-600 hover:to-error'
                     } text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                   >
-                    ⚔️ Ataque Pesado (d10, {STAMINA_COSTS[ActionType.HEAVY_ATTACK]}⚡)
+                    ⚔️ Pesado · STR quebra-armadura (d10, {STAMINA_COSTS[ActionType.HEAVY_ATTACK]}⚡)
                   </button>
                   <button
                     onClick={() => handlePlayerAction(ActionType.SPECIAL_ATTACK)}
@@ -1271,7 +1277,7 @@ function CombatPageContent() {
                       : 'bg-gradient-to-r from-primary to-primary-dark hover:shadow-lg hover:shadow-primary/25'
                     } text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                   >
-                    ✨ Especial ({playerStats.specialType}) (d20, 15🔮, {STAMINA_COSTS[ActionType.SPECIAL_ATTACK]}⚡)
+                    ✨ Especial · INT fura armadura (d20, 15🔮, {STAMINA_COSTS[ActionType.SPECIAL_ATTACK]}⚡)
                   </button>
                   
                   <div className="border-t border-white/10 my-3"></div>

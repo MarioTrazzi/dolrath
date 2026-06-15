@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
-import { getLevelInfo, calculateCharacterStats } from '@/lib/experienceSystem';
-import { getRaceById, getClassById } from '@/lib/gameData';
+import { getLevelInfo } from '@/lib/experienceSystem';
+import { computeDerivedStats } from '@/lib/combatFormulas';
 
 /**
  * Adiciona experiência a um personagem e faz level up automático se necessário
@@ -35,33 +35,39 @@ export async function addExperienceToCharacter(characterId: string, xpToAdd: num
     if (leveledUp) {
       // Calcular quantos pontos de atributo dar (1 por nível)
       const pointsToGive = newLevelInfo.level - oldLevelInfo.level;
-      
-      // Buscar dados da raça e classe
-      const raceData = getRaceById(character.race);
-      const classData = getClassById(character.class);
-      
-      // Calcular novos stats baseados no nível (stats base crescem automaticamente)
-      const newStats = calculateCharacterStats(newLevelInfo.level, raceData, classData);
-      
+
+      // 🎯 FÓRMULA UNIFICADA: recalcular derivados com os atributos ATUAIS do
+      // personagem + novo nível (mesma fórmula do distribute-points — antes
+      // eram duas fórmulas conflitantes e quem rodasse por último vencia)
+      const bs = ((character.baseStats && typeof character.baseStats === 'object') ? character.baseStats : {}) as any;
+      const derived = computeDerivedStats({
+        str: Number(bs.str) || 10,
+        agi: Number(bs.agi) || 10,
+        int: Number(bs.int) || 10,
+        def: Number(bs.def) || 10,
+        level: newLevelInfo.level,
+      });
+
       // Atualizar stats no banco quando há level up
       updateData = {
         ...updateData,
-        hp: newStats.hp,
-        maxHp: newStats.maxHp,
-        mp: newStats.mp,
-        maxMp: newStats.maxMp,
-        stamina: newStats.stamina,
-        maxStamina: newStats.maxStamina,
+        hp: derived.maxHp,
+        maxHp: derived.maxHp,
+        mp: derived.maxMp,
+        maxMp: derived.maxMp,
+        stamina: derived.maxStamina,
+        maxStamina: derived.maxStamina,
         availablePoints: (character.availablePoints || 0) + pointsToGive,
         // Atualizar também o baseStats para referência
         baseStats: {
-          ...(((character.baseStats && typeof character.baseStats === 'object') ? character.baseStats : {}) as any),
-          hp: newStats.hp,
-          maxHp: newStats.maxHp,
-          mp: newStats.mp,
-          maxMp: newStats.maxMp,
-          stamina: newStats.stamina,
-          maxStamina: newStats.maxStamina,
+          ...bs,
+          res: derived.res,
+          hp: derived.maxHp,
+          maxHp: derived.maxHp,
+          mp: derived.maxMp,
+          maxMp: derived.maxMp,
+          stamina: derived.maxStamina,
+          maxStamina: derived.maxStamina,
         }
       };
     }

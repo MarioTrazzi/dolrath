@@ -711,21 +711,42 @@ io.on('connection', (socket) => {
     
     // Se é um ataque, ir para OPPONENT_REACTION (não DICE_ROLL)
     if (['light_attack', 'heavy_attack', 'special_attack'].includes(action)) {
-      room.pendingAction = { 
-        action, 
-        diceType, 
-        playerId, 
-        type: 'attack',
-        attackRoll: undefined,  // Limpar rolls anteriores
-        defenseRoll: undefined  // Limpar rolls anteriores
+      // 😮‍💨 DEFENSOR EXAUSTO: sem stamina nem para esquivar (custo 1) —
+      // pula a reação e vai direto para a rolagem do atacante (evita soft-lock)
+      if ((opponent?.stamina || 0) < 1) {
+        room.pendingAction = {
+          action,
+          diceType,
+          playerId,
+          type: 'attack',
+          attackRoll: undefined,
+          defenseAction: 'exhausted',
+          defenseRoll: 0
+        }
+        room.phase = CombatPhase.DICE_ROLL
+        room.combatLog.push({
+          type: 'action',
+          player: currentPlayer.name,
+          message: `🎯 ${actionNames[action]} selecionado! 😮‍💨 ${opponent.name} está exausto e não pode reagir — role o d${diceType}!`,
+          timestamp: new Date()
+        })
+      } else {
+        room.pendingAction = {
+          action,
+          diceType,
+          playerId,
+          type: 'attack',
+          attackRoll: undefined,  // Limpar rolls anteriores
+          defenseRoll: undefined  // Limpar rolls anteriores
+        }
+        room.phase = CombatPhase.OPPONENT_REACTION // MUDANÇA AQUI!
+        room.combatLog.push({
+          type: 'action',
+          player: currentPlayer.name,
+          message: `🎯 ${actionNames[action]} selecionado! ${opponent.name}, escolha sua defesa.`,
+          timestamp: new Date()
+        })
       }
-      room.phase = CombatPhase.OPPONENT_REACTION // MUDANÇA AQUI!
-      room.combatLog.push({
-        type: 'action',
-        player: currentPlayer.name,
-        message: `🎯 ${actionNames[action]} selecionado! ${opponent.name}, escolha sua defesa.`,
-        timestamp: new Date()
-      })
     } else {
       // Outras ações (items, etc) processam normalmente
       room.pendingAction = { action, diceType, playerId, type: 'other' }
@@ -746,38 +767,35 @@ io.on('connection', (socket) => {
     const room = rooms.get(roomId)
     if (!room) return
 
+    // Defensor exausto não participa do conteste (apenas o atacante rola)
+    if (room.pendingAction?.type === 'attack' &&
+        room.pendingAction.defenseAction === 'exhausted' &&
+        playerId !== room.pendingAction.playerId) {
+      return
+    }
+
     const player = room.player1?.id === playerId ? room.player1 : room.player2
     const roll = Math.floor(Math.random() * sides) + 1
     
-    // 🎯 CALCULAR MODIFICADORES BASEADO NO CONTEXTO
+    // 🎯 MODIFICADOR DE ESQUIVA: conteste de AGI líquida (defensor − atacante),
+    // capado pelo tamanho do dado (d6→±1, d10→±2, d20→±3)
     let modifier = 0
-    let modifierDescription = ''
-    
-    // Se é uma ação de esquiva, adicionar bônus de agilidade
+
     if (room.pendingAction && room.phase === CombatPhase.DICE_ROLL) {
       const isDefender = playerId !== room.pendingAction.playerId
-      
+
       if (isDefender && room.pendingAction.defenseAction === 'dodge') {
-        // É o defensor rolando para esquiva
-        const attackType = room.pendingAction.action
-        
-        if (attackType === 'special_attack') {
-          // Ataque mágico: bônus direto no d20
-          modifier = Math.floor(player.agility / 10)
-          modifierDescription = `AGI`
-        } else {
-          // Ataque físico: ainda será d6 + dados extras (implementar depois)
-          modifier = 0 // Por enquanto, manter como estava para ataques físicos
-        }
+        const attacker = room.player1?.id === room.pendingAction.playerId ? room.player1 : room.player2
+        modifier = dodgeNetBonus(player.agility, attacker?.agility || 0, sides)
       }
     }
-    
+
     const total = roll + modifier
-    
+
     room.combatLog.push({
       type: 'action',
       player: player.name,
-      message: `🎲 ${player.name}: Rolou d${sides} = ${roll}${modifier > 0 ? ` + (${modifier})` : ''} = ${total}`,
+      message: `🎲 ${player.name}: Rolou d${sides} = ${roll}${modifier !== 0 ? ` ${modifier > 0 ? '+' : '−'} ${Math.abs(modifier)} (AGI) = ${total}` : ''}`,
       timestamp: new Date()
     })
     
@@ -868,6 +886,7 @@ io.on('connection', (socket) => {
 
     // Usar item consome o turno
     room.currentTurn = opponent.id
+    regenTurnStamina(room)
     room.combatLog.push({
       type: 'system',
       message: `🔄 Turno de ${opponent.name}`,
@@ -1105,82 +1124,84 @@ function regeneratePlayerResources(player, context = 'Activity') {
   console.log(`💚 ${context}: ${player.name} teve HP e MP restaurados, transformação resetada (Stamina: ${player.stamina}/${player.maxStamina})`)
 }
 
-// 🎯 SISTEMA DE BALANCEAMENTO PvP - TORNA INT/AGI VIÁVEIS
+// 🎯 SISTEMA DE BALANCEAMENTO PvP v2 — validado por simulação massiva
+// (scripts/pvp-balance-sim.js: mago INT ≈ guerreiro STR em todos os níveis)
+//
+// Identidade dos golpes: cada atributo tem seu botão
+//   Leve (d6)     → AGI×1.7 + STR×0.3
+//   Pesado (d10)  → STR×1.5 (ignora 30% da DEF — quebra-armadura)
+//   Especial (d20)→ INT×1.5 (fura armadura: só RES mitiga)
+// Dado conta ×2 para a sorte importar mesmo no late game.
 
 // 🎯 CÁLCULO DE DANO BASEADO EM ATRIBUTOS
 function calculateDamage(attacker, diceRoll, actionType, isCritical = false) {
   let baseDamage = 0
-  
+
   if (actionType === 'special_attack') {
-    // 🧙 ATAQUES ESPECIAIS USAM INTELLIGENCE (build mago viável)
-    baseDamage = diceRoll + attacker.attack + attacker.intelligence
+    // 🧙 ESPECIAL ESCALA SÓ COM INTELLIGENCE (build mago viável)
+    baseDamage = diceRoll * 2 + Math.floor(attacker.intelligence * 1.5)
+  } else if (actionType === 'light_attack') {
+    // 🗡️ LEVE ESCALA COM AGILITY (build assassino viável)
+    baseDamage = diceRoll * 2 + Math.floor(attacker.agility * 1.7) + Math.floor(attacker.strength * 0.3)
   } else {
-    // 🗡️ ATAQUES FÍSICOS USAM STRENGTH (build guerreiro)
-    baseDamage = diceRoll + attacker.attack + Math.floor(attacker.strength / 2)
+    // ⚔️ PESADO ESCALA COM STRENGTH (build guerreiro)
+    baseDamage = diceRoll * 2 + Math.floor(attacker.strength * 1.5)
   }
-  
-  // 🏃 CRITICAL HIT baseado em AGILITY (build assassino viável)
+
+  // 🏃 CRITICAL HIT baseado em AGILITY
   if (isCritical) {
     baseDamage = Math.floor(baseDamage * 1.5) // +50% dano crítico
   }
-  
+
   return Math.max(1, baseDamage) // Mínimo 1 de dano
 }
 
-// 🎯 CÁLCULO DE CHANCE DE CRÍTICO BASEADO EM AGILITY
+// 🎯 CHANCE DE CRÍTICO: 5% base + 1.2% por AGI (máximo 40%)
 function calculateCriticalChance(attacker) {
-  // 2% de chance de crítico por ponto de AGI (máximo 50%)
-  return Math.min(50, attacker.agility * 2)
+  return Math.min(40, 5 + attacker.agility * 1.2)
 }
 
-// 🏃 SISTEMA DE ESQUIVA BASEADO EM AGILITY
-function calculateDodgeRoll(defender, attackType = 'physical') {
-  // Ataques mágicos são mais difíceis de esquivar (d20), físicos são mais fáceis (d6)
-  const isPhysical = attackType !== 'special_attack'
-  const diceSize = isPhysical ? 6 : 20
-  
-  const baseRoll = Math.floor(Math.random() * diceSize) + 1
-  const agilityBonus = Math.floor(defender.agility / 10) // +1 por cada 10 AGI
-  
-  let totalRoll = baseRoll
-  let extraRolls = []
-  
-  // Para ataques físicos: dados extras de d6
-  // Para ataques mágicos: bônus direto no d20
-  if (isPhysical) {
-    // Rolar dados extras baseados em AGI para ataques físicos
-    for (let i = 0; i < agilityBonus; i++) {
-      const extraRoll = Math.floor(Math.random() * 6) + 1
-      extraRolls.push(extraRoll)
-      totalRoll += extraRoll
-    }
-  } else {
-    // Para ataques mágicos, adicionar bônus direto
-    totalRoll += agilityBonus
-  }
-  
-  return {
-    baseRoll,
-    extraRolls,
-    totalRoll,
-    agilityBonus,
-    diceType: isPhysical ? 'd6' : 'd20',
-    attackType: isPhysical ? 'físico' : 'mágico'
+// 🌪️ BÔNUS LÍQUIDO DE ESQUIVA no conteste de dados (defensor − atacante)
+// Capado pelo tamanho do dado: d6→±1, d10→±2, d20→±3
+function dodgeNetBonus(defenderAgi, attackerAgi, diceSides) {
+  const cap = Math.min(3, Math.floor(diceSides / 5))
+  const raw = Math.floor(((defenderAgi || 0) - (attackerAgi || 0)) / 5)
+  return Math.max(-cap, Math.min(cap, raw))
+}
+
+// 🛡️ Resistência mágica efetiva (transição: personagens antigos têm res=10 fixo)
+function effectiveResistance(defender) {
+  const res = Number(defender.resistance) || 0
+  const fromDef = Math.floor((Number(defender.defense) || 0) * 0.8)
+  return Math.max(res, fromDef)
+}
+
+// ⚡ +2 de stamina para quem inicia o turno (cap no máximo)
+function regenTurnStamina(room) {
+  const next = room.currentTurn === room.player1?.id ? room.player1 : room.player2
+  if (next) {
+    next.stamina = Math.min(next.maxStamina || 100, (next.stamina || 0) + 2)
   }
 }
 
-// 🛡️ CÁLCULO DE DEFESA COM RESISTANCE
+// 🛡️ CÁLCULO DE DEFESA
+// Especial: magia atravessa armadura — só RES mitiga (mago é o anti-tank)
+// Pesado: ignora 30% da DEF (quebra-armadura)
+// Piso de dano: 15% do dano bruto — ninguém é imortal
 function calculateDefense(defender, damage, actionType) {
-  let defense = defender.defense
-  
+  let defense
   if (actionType === 'special_attack') {
-    // 🛡️ RESISTANCE reduz dano de ataques especiais
-    defense += Math.floor(defender.resistance / 2)
+    defense = effectiveResistance(defender)
+  } else if (actionType === 'heavy_attack') {
+    defense = Math.floor((defender.defense || 0) * 0.7)
+  } else {
+    defense = defender.defense || 0
   }
-  
-  const finalDamage = Math.max(1, damage - defense)
+
+  const minDamage = Math.ceil(damage * 0.15)
+  const finalDamage = Math.max(minDamage, damage - defense)
   const damageReduced = damage - finalDamage
-  
+
   return {
     finalDamage,
     damageReduced,
@@ -1204,63 +1225,68 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
   
   let finalDamage = 0
   let hit = false
-  
+
   if (defenseAction === 'dodge') {
-    // 🏃 SISTEMA DE ESQUIVA 
-    if (attackAction === 'special_attack') {
-      // Para ataques mágicos, usar o defenseRoll que já inclui modificador AGI
-      if (defenseRoll >= attackRoll) {
-        room.combatLog.push({
-          type: 'result',
-          message: `🌪️ ${defender.name} esquivou ataque mágico! (${defenseRoll} vs ${attackRoll})`,
-          timestamp: new Date()
-        })
-        finalDamage = 0
-        hit = false
-      } else {
-        const defenseResult = calculateDefense(defender, baseDamage, attackAction)
-        finalDamage = defenseResult.finalDamage
-        hit = true
-        
-        room.combatLog.push({
-          type: 'result', 
-          message: `💥 Esquiva falhou! ${attacker.name} acerta por ${finalDamage} dano! (Esquiva: ${defenseRoll} vs Ataque: ${attackRoll})`,
-          timestamp: new Date()
-        })
-      }
+    // 🌪️ ESQUIVA UNIFICADA: conteste com o dado QUE O DEFENSOR ROLOU
+    // (defenseRoll já inclui o bônus líquido de AGI). Empate favorece o atacante.
+    if (defenseRoll > attackRoll) {
+      room.combatLog.push({
+        type: 'result',
+        message: `🌪️ ${defender.name} esquivou! (${defenseRoll} vs ${attackRoll})`,
+        timestamp: new Date()
+      })
+      finalDamage = 0
+      hit = false
     } else {
-      // Para ataques físicos, usar o sistema de múltiplos dados
-      const dodgeResult = calculateDodgeRoll(defender, attackAction)
-      
-      if (dodgeResult.totalRoll >= attackRoll) {
-        room.combatLog.push({
-          type: 'result',
-          message: `🌪️ ${defender.name} esquivou ataque físico! (${dodgeResult.totalRoll} vs ${attackRoll}) [Base: ${dodgeResult.baseRoll} + ${dodgeResult.agilityBonus} dados extras: ${dodgeResult.extraRolls.join('+')}]`,
-          timestamp: new Date()
-        })
-        finalDamage = 0
-        hit = false
-      } else {
-        const defenseResult = calculateDefense(defender, baseDamage, attackAction)
-        finalDamage = defenseResult.finalDamage
-        hit = true
-        
-        room.combatLog.push({
-          type: 'result', 
-          message: `💥 Esquiva falhou! ${attacker.name} acerta por ${finalDamage} dano! (Esquiva: ${dodgeResult.totalRoll} vs Ataque: ${attackRoll})`,
-          timestamp: new Date()
-        })
-      }
+      const defenseResult = calculateDefense(defender, baseDamage, attackAction)
+      finalDamage = defenseResult.finalDamage
+      hit = true
+
+      room.combatLog.push({
+        type: 'result',
+        message: `💥 Esquiva falhou! ${attacker.name} acerta por ${finalDamage} dano! (Esquiva: ${defenseRoll} vs Ataque: ${attackRoll})`,
+        timestamp: new Date()
+      })
     }
   } else if (defenseAction === 'defend') {
-    // 🛡️ DEFESA - sempre reduz dano
+    // 🛡️ DEFESA - sempre reduz: toma 45% do dano pós-mitigação
     const defenseResult = calculateDefense(defender, baseDamage, attackAction)
-    finalDamage = Math.floor(defenseResult.finalDamage * 0.5) // Defender reduz 50% adicional
+    finalDamage = Math.max(1, Math.floor(defenseResult.finalDamage * 0.45))
     hit = true
-    
+
     room.combatLog.push({
       type: 'result',
-      message: `🛡️ ${defender.name} defendeu! Dano reduzido: ${baseDamage} → ${finalDamage} (Defesa: ${defenseResult.defense}, Redução: ${defenseResult.damageReduced})`,
+      message: `🛡️ ${defender.name} defendeu! Dano reduzido: ${baseDamage} → ${finalDamage} (Defesa: ${defenseResult.defense})`,
+      timestamp: new Date()
+    })
+  } else if (defenseAction === 'exhausted') {
+    // 😮‍💨 EXAUSTO: sem stamina para reagir — toma o golpe com mitigação normal
+    const defenseResult = calculateDefense(defender, baseDamage, attackAction)
+    finalDamage = defenseResult.finalDamage
+    hit = true
+
+    room.combatLog.push({
+      type: 'result',
+      message: `😮‍💨 ${defender.name} está exausto e não consegue reagir! ${attacker.name} acerta por ${finalDamage} dano!`,
+      timestamp: new Date()
+    })
+  }
+
+  // ⚔️ MORTE SÚBITA: lutas longas demais escalam o dano (mata empates-bunker)
+  room.actionCount = (room.actionCount || 0) + 1
+  if (hit && finalDamage > 0) {
+    if (room.actionCount > 60) {
+      finalDamage = Math.floor(finalDamage * 2)
+    } else if (room.actionCount > 40) {
+      finalDamage = Math.floor(finalDamage * 1.5)
+    }
+  }
+  if (room.actionCount === 41 || room.actionCount === 61) {
+    room.combatLog.push({
+      type: 'system',
+      message: room.actionCount === 41
+        ? '⚔️ MORTE SÚBITA! A exaustão toma conta: todo dano agora é ×1.5!'
+        : '💀 MORTE SÚBITA TOTAL! Todo dano agora é ×2!',
       timestamp: new Date()
     })
   }
@@ -1348,10 +1374,13 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
     // Continuar combate - trocar turno
     room.currentTurn = room.currentTurn === room.player1?.id ? room.player2?.id : room.player1?.id
     room.phase = CombatPhase.PLAYER_TURN
-    
+
     // 🔄 PROCESSAR TRANSFORMAÇÕES
     processTransformationTurns(room)
-    
+
+    // ⚡ REGEN DE STAMINA: +2 no início do turno (evita exaustão permanente)
+    regenTurnStamina(room)
+
     room.combatLog.push({
       type: 'system',
       message: `🔄 Turno de ${room.currentTurn === room.player1?.id ? room.player1?.name : room.player2?.name}`,
@@ -1394,6 +1423,7 @@ function processActionResult(room, action, playerRoll, roomId) {
   // Próximo turno
   room.currentTurn = opponent.id
   room.phase = CombatPhase.PLAYER_TURN
+  regenTurnStamina(room)
   room.combatLog.push({
     type: 'system',
     message: `🔄 Turno de ${opponent.name}`,

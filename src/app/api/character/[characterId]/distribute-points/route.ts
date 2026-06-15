@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 import { recordAttributeDistribution } from '@/lib/characterHistory';
 import { getRaceById, getClassById } from '@/lib/gameData';
+import { computeDerivedStats, criticalChancePct } from '@/lib/combatFormulas';
 
 function serializeBigIntForJson<T>(value: T): T {
   return JSON.parse(
@@ -95,18 +96,27 @@ export async function POST(request: NextRequest, { params }: { params: { charact
     const finalAgi = currentAgi + raceAgi + classAgi;
     const finalInt = currentInt + raceInt + classInt;
     const finalDef = currentDef + raceDef + classDef;
-    // 🔥 FÓRMULAS BALANCEADAS COM BÔNUS - Recalcular stats derivados
-    const newHp = 80 + (finalStr * 2) + (finalDef * 4);              // DEF mais valioso
-    const newMp = 60 + (finalInt * 3) + (finalAgi * 1);              // INT menos dominante  
-    const newStamina = 120 + (finalAgi * 3);                         // AGI menos dominante
-    
-    // Novos stats derivados balanceados
-    const newAttack = Math.floor(finalStr * 1.2);                    // STR menos dominante
-    const newDefense = Math.floor(finalDef * 0.8);                   // DEF reduz dano real
-    const newCritical = (finalAgi * 0.8) + 5;                        // AGI mais útil
-    const newMagicPower = Math.floor(finalInt * 1.5);                // INT para magia
-    const newDodgeChance = finalAgi * 0.3;                           // AGI para esquiva
-    const newMagicResistance = Math.floor(finalInt * 0.4);           // INT para resistir magia
+    // 🎯 FÓRMULAS UNIFICADAS (validadas via simulação — ver src/lib/combatFormulas.ts)
+    // Base por nível garante que mago/assassino escalam HP como o guerreiro
+    const derived = computeDerivedStats({
+      str: finalStr,
+      agi: finalAgi,
+      int: finalInt,
+      def: finalDef,
+      level: character.level || 1,
+    });
+    const newHp = derived.maxHp;
+    const newMp = derived.maxMp;
+    const newStamina = derived.maxStamina;
+    const newRes = derived.res;                                      // resistência mágica (DEF×0.8)
+
+    // Stats derivados para exibição
+    const newAttack = Math.floor(finalStr * 1.5);                    // dano do golpe pesado
+    const newDefense = finalDef;                                     // mitigação física real
+    const newCritical = criticalChancePct(finalAgi);                 // 5% base +1.2/AGI (cap 40%)
+    const newMagicPower = Math.floor(finalInt * 1.5);                // dano do especial
+    const newDodgeChance = Math.floor(finalAgi / 5);                 // bônus no conteste de esquiva
+    const newMagicResistance = newRes;
 
     // Atualizar personagem no banco
     const updatedCharacter = await prisma.character.update({
@@ -125,16 +135,18 @@ export async function POST(request: NextRequest, { params }: { params: { charact
           agi: finalAgi,
           int: finalInt,
           def: finalDef,
+          res: newRes, // 🔥 FIX: res era apagado aqui, quebrando a resistência no combate
           hp: newHp,
           maxHp: newHp,
           mp: newMp,
           maxMp: newMp,
           stamina: newStamina,
           maxStamina: newStamina,
-          // Novos stats balanceados  
+          // Novos stats balanceados
           attack: newAttack,
           defense: newDefense,
           critical: newCritical,
+          crit: newCritical, // alias lido pela página de combate
           magicPower: newMagicPower,
           dodgeChance: newDodgeChance,
           magicResistance: newMagicResistance,

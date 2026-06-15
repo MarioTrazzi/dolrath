@@ -3,12 +3,15 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
 import Image from 'next/image';
+import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { Search, Filter, X } from 'lucide-react';
 import { ethers } from 'ethers';
 import { resolveImageUrl } from '@/lib/imageUrl';
 import { decodeContractCustomErrorMessage, getWalletTxErrorMessage } from '@/lib/walletErrors';
 import BazaarBackdrop from '@/components/store/BazaarBackdrop';
+import ItemCardBackdrop from '@/components/store/ItemCardBackdrop';
+import { getItemVisual, getItemTypeLabel } from '@/lib/itemVisuals';
 
 interface StoreItem {
   id: string;

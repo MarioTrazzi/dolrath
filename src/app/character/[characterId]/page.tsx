@@ -14,6 +14,9 @@ import { EquipmentSlot } from '@/components/EquipmentSlot';
 import { DraggableItem } from '@/components/DraggableItem';
 import AttributeDistributionPanel from '@/components/AttributeDistributionPanel';
 import CharacterHistory from '@/components/CharacterHistory';
+import CreationCardBackdrop from '@/components/character/CreationCardBackdrop';
+import PersonSilhouette from '@/components/character/PersonSilhouette';
+import { getBlendedVisual } from '@/lib/creationVisuals';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 import { ethers } from 'ethers';
@@ -113,6 +116,9 @@ export default function CharacterDetailsPage() {
 
   const raceObj = getRaceById(typeof character.race === 'string' ? character.race : character.race.id);
   const classObj = getClassById(typeof character.class === 'string' ? character.class : character.class.id);
+
+  // Identidade visual mesclando cores de raça e classe (mesmo padrão do dashboard/criação)
+  const visual = getBlendedVisual(raceObj?.id, classObj?.id);
 
   // Função para calcular stats totais incluindo equipamentos
   const calculateTotalStats = () => {
@@ -422,11 +428,26 @@ export default function CharacterDetailsPage() {
 
   return (
     <DndProvider backend={HTML5Backend}>
-      <div className="container mx-auto px-4 py-8">
-        <div className="glass-card p-8">
+      <div className="relative min-h-screen">
+        {/* Cenário animado da raça (fundo da página) */}
+        <div className="fixed inset-0 z-0">
+          <CreationCardBackdrop theme={visual.backdropTheme} />
+          <div className="absolute inset-0 bg-black/70" />
+        </div>
+
+        <div className="relative z-10 container mx-auto px-4 py-8">
+        <div
+          className="relative overflow-hidden rounded-3xl border-2 p-6 sm:p-8"
+          style={{ borderColor: visual.borderColor, boxShadow: visual.glow }}
+        >
+          <div className="absolute inset-0 bg-black/40 pointer-events-none" />
+          <div className="relative">
           {/* Character Header */}
           <div className="flex flex-col md:flex-row items-center gap-8 mb-8">
-            <div className="relative w-32 h-32 rounded-full bg-gradient-to-br from-primary to-primary-dark border-4 border-primary shadow-lg overflow-hidden">
+            <div
+              className="relative w-32 h-32 rounded-2xl border-4 shadow-lg overflow-hidden"
+              style={{ background: visual.gradient, borderColor: visual.borderColor }}
+            >
               <div className="absolute inset-0 flex items-center justify-center">
                 <span className="text-5xl text-white">
                   {character.name?.[0]?.toUpperCase() || '?'}
@@ -454,25 +475,34 @@ export default function CharacterDetailsPage() {
                 );
               })()}
             </div>
-            <div>
-              <h1 className="text-4xl font-bold text-text-primary mb-2">{character.name}</h1>
-              <div className="flex gap-4 mb-4">
-                <span className="text-lg font-semibold text-primary bg-surface/70 rounded px-4 py-2">
-                  {raceObj?.name}
+            <div className="text-center md:text-left">
+              <h1 className="text-4xl font-black text-white mb-2 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">{character.name}</h1>
+              <div className="flex flex-wrap gap-2 mb-4 justify-center md:justify-start">
+                <span
+                  className="text-base font-bold text-white rounded-full px-4 py-1.5 border"
+                  style={{ background: `${visual.raceVisual.accent}33`, borderColor: `${visual.raceVisual.accent}66` }}
+                >
+                  {visual.raceVisual.emoji} {raceObj?.name}
                 </span>
-                <span className="text-lg font-semibold text-primary bg-surface/70 rounded px-4 py-2">
-                  {classObj?.name}
+                <span
+                  className="text-base font-bold text-white rounded-full px-4 py-1.5 border"
+                  style={{ background: `${visual.classVisual.accent}33`, borderColor: `${visual.classVisual.accent}66` }}
+                >
+                  {visual.classVisual.emoji} {classObj?.name}
                 </span>
               </div>
-              <div className="flex gap-4">
-                <span className="bg-surface/70 px-4 py-2 rounded text-text-secondary">
+              <div className="flex flex-wrap gap-2 justify-center md:justify-start">
+                <span className="bg-black/40 px-4 py-2 rounded-xl text-white/80 border border-white/10">
                   Level {character.level}
                 </span>
-                <span className="bg-surface/70 px-4 py-2 rounded text-text-secondary">
+                <span className="bg-black/40 px-4 py-2 rounded-xl text-white/80 border border-white/10">
                   XP: {character.experience}/{character.nextLevelExperience || '?'}
                 </span>
                 {character.availablePoints && character.availablePoints > 0 && (
-                  <span className="bg-primary/20 px-4 py-2 rounded text-primary font-bold">
+                  <span
+                    className="px-4 py-2 rounded-xl text-white font-bold border"
+                    style={{ background: `${visual.borderColor}33`, borderColor: `${visual.borderColor}66` }}
+                  >
                     {character.availablePoints} pontos disponíveis
                   </span>
                 )}
@@ -544,18 +574,20 @@ export default function CharacterDetailsPage() {
             </div>
           </div>
 
-          {/* Action Buttons */}
+          {/* Action Buttons - estilo masmorras */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center mt-6">
             <button
               onClick={() => router.push('/combat-lobby')}
-              className="flex-1 sm:flex-none bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:from-red-600 hover:to-red-700 transition-all flex items-center justify-center gap-2"
+              className="flex-1 sm:flex-none px-6 py-3 rounded-xl font-black text-white shadow-lg transition-transform hover:scale-105 flex items-center justify-center gap-2"
+              style={{ background: 'linear-gradient(90deg, #ef4444cc, #ef444477)', boxShadow: '0 4px 20px rgba(239,68,68,0.35)' }}
             >
               <Sword className="w-5 h-5" />
               Entrar em Combate
             </button>
             <button
               onClick={() => router.push('/dungeons')}
-              className="flex-1 sm:flex-none bg-gradient-to-r from-purple-500 to-purple-600 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:from-purple-600 hover:to-purple-700 transition-all flex items-center justify-center gap-2"
+              className="flex-1 sm:flex-none px-6 py-3 rounded-xl font-black text-white shadow-lg transition-transform hover:scale-105 flex items-center justify-center gap-2"
+              style={{ background: 'linear-gradient(90deg, #a855f7cc, #a855f777)', boxShadow: '0 4px 20px rgba(168,85,247,0.35)' }}
             >
               <Shield className="w-5 h-5" />
               Explorar Dungeon
@@ -786,72 +818,61 @@ export default function CharacterDetailsPage() {
             </div>
           </div>
 
-            {/* Equipment Panel - Diablo Style */}
+            {/* Equipment Panel - estilo Black Desert (slots em volta da silhueta) */}
           <div className="glass-card p-6 col-span-2">
-            <h2 className="text-2xl font-bold mb-4 text-text-primary">Equipment</h2>
-            <div className="grid grid-cols-3 gap-4 p-4 bg-surface/30 rounded-lg">
-              <EquipmentSlot
-                type="HELMET"
-                item={character.equipment?.find(e => e.slot === 'HELMET')?.item}
-                onEquip={handleEquip}
-                onUnequip={handleUnequip}
-              />
-              <EquipmentSlot
-                type="NECKLACE"
-                item={character.equipment?.find(e => e.slot === 'NECKLACE')?.item}
-                onEquip={handleEquip}
-                onUnequip={handleUnequip}
-              />
-              <EquipmentSlot
-                type="RING_1"
-                item={character.equipment?.find(e => e.slot === 'RING_1')?.item}
-                onEquip={handleEquip}
-                onUnequip={handleUnequip}
-              />
-              <EquipmentSlot
-                type="ARMOR"
-                item={character.equipment?.find(e => e.slot === 'ARMOR')?.item}
-                onEquip={handleEquip}
-                onUnequip={handleUnequip}
-              />
-              <EquipmentSlot
-                type="WEAPON"
-                item={character.equipment?.find(e => e.slot === 'WEAPON')?.item}
-                onEquip={handleEquip}
-                onUnequip={handleUnequip}
-              />
-              <EquipmentSlot
-                type="SHIELD"
-                item={character.equipment?.find(e => e.slot === 'SHIELD')?.item}
-                onEquip={handleEquip}
-                onUnequip={handleUnequip}
-              />
-              <EquipmentSlot
-                type="GLOVES"
-                item={character.equipment?.find(e => e.slot === 'GLOVES')?.item}
-                onEquip={handleEquip}
-                onUnequip={handleUnequip}
-              />
-              <EquipmentSlot
-                type="RING_2"
-                item={character.equipment?.find(e => e.slot === 'RING_2')?.item}
-                onEquip={handleEquip}
-                onUnequip={handleUnequip}
-              />
-              <EquipmentSlot
-                type="BOOTS"
-                item={character.equipment?.find(e => e.slot === 'BOOTS')?.item}
-                onEquip={handleEquip}
-                onUnequip={handleUnequip}
-              />
+            <h2 className="text-2xl font-bold mb-4 text-white">Equipamentos</h2>
+            <div
+              className="relative overflow-hidden rounded-2xl border p-4 sm:p-6"
+              style={{ borderColor: `${visual.borderColor}44` }}
+            >
+              {/* Cenário animado + silhueta central */}
+              <div className="absolute inset-0 opacity-40">
+                <CreationCardBackdrop theme={visual.backdropTheme} />
+              </div>
+              <div className="absolute inset-0 bg-black/55" />
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <PersonSilhouette color={visual.borderColor} className="h-[90%] w-auto" />
+              </div>
+
+              {/* Slots em duas colunas ao redor da silhueta */}
+              <div className="relative flex items-stretch justify-between gap-2 min-h-[290px]">
+                {/* Coluna esquerda: defensivos (cor da raça) */}
+                <div className="flex flex-col justify-between gap-3">
+                  {(['HELMET', 'ARMOR', 'GLOVES', 'BOOTS'] as const).map((slot) => (
+                    <EquipmentSlot
+                      key={slot}
+                      compact
+                      accent={visual.raceVisual.accent}
+                      type={slot}
+                      item={character.equipment?.find(e => e.slot === slot)?.item}
+                      onEquip={handleEquip}
+                      onUnequip={handleUnequip}
+                    />
+                  ))}
+                </div>
+                {/* Coluna direita: ofensivos/acessórios (cor da classe) */}
+                <div className="flex flex-col justify-between gap-3">
+                  {(['WEAPON', 'SHIELD', 'NECKLACE', 'RING_1', 'RING_2'] as const).map((slot) => (
+                    <EquipmentSlot
+                      key={slot}
+                      compact
+                      accent={visual.classVisual.accent}
+                      type={slot}
+                      item={character.equipment?.find(e => e.slot === slot)?.item}
+                      onEquip={handleEquip}
+                      onUnequip={handleUnequip}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>            {/* Inventory Section */}
             <div className="mt-8">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-bold text-text-primary">
-                  Inventory ({inventory.length}/{character.inventorySlots || 10})
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                <h3 className="text-xl font-bold text-white">
+                  Inventário ({inventory.length}/{character.inventorySlots || 10})
                 </h3>
                 <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2 text-sm text-text-secondary">
+                  <div className="flex items-center gap-2 text-sm text-white/70">
                     <Coins className="w-4 h-4 text-yellow-500" />
                     <span>{goldOnchainText}</span>
                   </div>
@@ -859,24 +880,27 @@ export default function CharacterDetailsPage() {
                     onClick={handleExpandInventory}
                     disabled={expandingSlots}
                     title="Custo: 1000 GOLD"
-                    className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-yellow-500 to-yellow-600 text-white text-sm rounded-lg hover:from-yellow-600 hover:to-yellow-700 disabled:opacity-50 transition-all"
+                    className="flex items-center gap-2 px-4 py-2 text-white text-sm font-black rounded-xl shadow-lg hover:scale-105 disabled:opacity-50 transition-transform"
+                    style={{ background: 'linear-gradient(90deg, #eab308cc, #eab30877)', boxShadow: '0 4px 16px rgba(234,179,8,0.3)' }}
                   >
                     <Plus className="w-4 h-4" />
                     {expandingSlots ? 'Expandindo...' : '+5 Slots (1000 GOLD)'}
                   </button>
                 </div>
               </div>
-              <div className="grid grid-cols-6 gap-2">
+              <div className="grid grid-cols-8 sm:grid-cols-10 gap-1.5 p-3 bg-black/40 rounded-2xl border border-white/10">
                 {/* Renderizar itens nos slots disponíveis */}
                 {Array(character.inventorySlots || 10).fill(null).map((_, idx) => {
                   const inventoryItem = inventory[idx];
                   if (inventoryItem) {
                     const isEquipped = character.equipment?.some(e => e.item.id === inventoryItem.item.id) || false;
                     return (
-                      <DraggableItem 
-                        key={inventoryItem.item.id} 
-                        item={inventoryItem.item} 
+                      <DraggableItem
+                        key={inventoryItem.item.id}
+                        item={inventoryItem.item}
                         isEquipped={isEquipped}
+                        compact
+                        accent={visual.borderColor}
                         onEquip={handleEquip}
                         onUnequip={handleUnequip}
                         onConsume={handleConsume}
@@ -887,7 +911,7 @@ export default function CharacterDetailsPage() {
                   return (
                     <div
                       key={`empty-${idx}`}
-                      className="aspect-square bg-surface/50 rounded-lg border-2 border-primary/30"
+                      className="aspect-square rounded-md bg-black/40 border border-white/10"
                     />
                   );
                 })}
@@ -904,6 +928,8 @@ export default function CharacterDetailsPage() {
           
           {/* Character History Panel */}
           <CharacterHistory characterId={effectiveCharacterId || ''} />
+        </div>
+          </div>
         </div>
         </div>
       </div>

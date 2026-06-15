@@ -347,10 +347,10 @@ export default function CombatLobbyPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'waiting': return 'text-success bg-success/15 border border-success/30'
-      case 'in_progress': return 'text-warning bg-warning/15 border border-warning/30'
-      case 'finished': return 'text-textsec bg-white/5 border border-white/10'
-      default: return 'text-textsec bg-white/5 border border-white/10'
+      case 'waiting': return 'text-green-600 bg-green-100'
+      case 'in_progress': return 'text-orange-600 bg-orange-100'
+      case 'finished': return 'text-gray-600 bg-gray-100'
+      default: return 'text-gray-600 bg-gray-100'
     }
   }
 
@@ -386,7 +386,7 @@ export default function CombatLobbyPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-background via-secondary to-accent flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     )
@@ -394,27 +394,27 @@ export default function CombatLobbyPage() {
 
   return (
     <div className="relative min-h-screen text-white overflow-hidden">
-      {/* Cenário animado da arena (igual às masmorras) */}
+      {/* Cenário animado da arena */}
       <div className="fixed inset-0 z-0">
         <ArenaBackdrop />
       </div>
 
-      <div className="relative z-10 max-w-6xl mx-auto p-4 sm:p-6">
-        {/* Header - vidro translúcido sobre a arena */}
-        <div className="bg-black/30 backdrop-blur-md border-2 border-amber-500/40 text-white p-6 rounded-t-3xl shadow-2xl">
-          <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
+      <div className="relative z-10 max-w-6xl mx-auto p-4">
+        {/* Header - Estilo do CombatDialog */}
+        <div className="bg-gradient-to-r from-primary to-primary-dark text-white p-6 rounded-t-2xl shadow-2xl">
+          <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl sm:text-4xl font-black flex items-center drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]">
-                <Sword className="mr-3 text-amber-400" size={32} />
+              <h1 className="text-3xl font-bold flex items-center">
+                <Sword className="mr-3" size={32} />
                 Arena de Combate PvP
               </h1>
-              <p className="text-white/60 mt-2 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">Escolha uma sala ou crie a sua própria arena!</p>
+              <p className="text-white/80 mt-2">Escolha uma sala ou crie a sua própria arena!</p>
             </div>
-            <div className="text-left md:text-right">
+            <div className="text-right">
               {/* Seleção de Personagem */}
               {characters.length > 0 && (
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-white/60 mb-2">
+                  <label className="block text-sm font-medium text-white/70 mb-2">
                     Escolha seu personagem:
                   </label>
                   <select
@@ -423,28 +423,27 @@ export default function CombatLobbyPage() {
                       const character = characters.find(c => c.id === e.target.value)
                       setSelectedCharacter(character || null)
                     }}
-                    className="block w-full px-4 py-2.5 rounded-xl bg-black/60 border border-white/20 text-white text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                    className="block w-full px-3 py-2 border border-white/20 rounded-md shadow-sm bg-surface/20 text-white focus:outline-none focus:ring-primary focus:border-primary"
                   >
                     {characters.map((char) => (
-                      <option key={char.id} value={char.id} className="bg-stone-900 text-white">
+                      <option key={char.id} value={char.id} className="bg-surface text-text-primary">
                         {char.name} (Level {char.level}) - {char.race} {char.class}
                       </option>
                     ))}
                   </select>
                 </div>
               )}
-
+              
               {selectedCharacter && (
-                <div className="inline-flex flex-col items-start md:items-end bg-black/40 border border-white/10 rounded-xl px-4 py-2.5">
-                  <div className="font-bold text-lg drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">{selectedCharacter.name}</div>
-                  <div className="text-sm text-white/70">
-                    Nv.{selectedCharacter.level} • {selectedCharacter.race} {selectedCharacter.class}
-                  </div>
-                  <div className="text-sm text-white/70 flex items-center gap-3 mt-0.5">
-                    <span>❤️ {selectedCharacter.hp}/{selectedCharacter.maxHp}</span>
-                    <span>🔮 {selectedCharacter.mp}/{selectedCharacter.maxMp}</span>
+                <div>
+                  <div className="text-sm text-white/70">Personagem Selecionado:</div>
+                  <div className="font-bold text-lg">{selectedCharacter.name}</div>
+                  <div className="text-sm text-white/80">
+                    Level {selectedCharacter.level} • {selectedCharacter.race} {selectedCharacter.class}
+                    <br />
+                    ❤️ {selectedCharacter.hp}/{selectedCharacter.maxHp} HP • 🔮 {selectedCharacter.mp}/{selectedCharacter.maxMp} MP
                     {!selectedCharacter.isAlive && (
-                      <span className="text-red-400 font-bold">💀 MORTO</span>
+                      <span className="text-red-400 ml-2">💀 MORTO</span>
                     )}
                   </div>
                 </div>
@@ -453,7 +452,7 @@ export default function CombatLobbyPage() {
           </div>
         </div>
 
-        <div className="bg-black/20 backdrop-blur-md border-2 border-t-0 border-amber-500/40 rounded-b-3xl shadow-2xl">
+        <div className="bg-surface/95 backdrop-blur-xl border border-white/20 rounded-b-2xl shadow-2xl">
           
           {/* Aviso se personagem está morto */}
           {selectedCharacter && !selectedCharacter.isAlive && (
@@ -486,7 +485,7 @@ export default function CombatLobbyPage() {
           )}
 
           {/* Create Room Section */}
-          <div className="bg-white/[0.03] border-b border-white/10 p-6">
+          <div className="bg-surface/30 border-b border-white/10 p-6">
             <h2 className="text-xl font-bold text-text-primary mb-4 flex items-center">
               <Plus className="mr-2" size={24} />
               Criar Nova Sala
@@ -571,11 +570,11 @@ export default function CombatLobbyPage() {
                 {rooms.map((room) => (
                   <div
                     key={room.id}
-                    className={`bg-black/40 backdrop-blur-xl border rounded-2xl p-4 transition-all hover:shadow-lg hover:scale-[1.02] ${
-                      room.status === 'waiting'
-                        ? 'border-success/40 hover:border-success/60'
+                    className={`bg-surface/50 backdrop-blur-xl border rounded-xl p-4 transition-all hover:shadow-lg hover:border-primary/30 ${
+                      room.status === 'waiting' 
+                        ? 'border-success/30 hover:border-success/50' 
                         : room.status === 'in_progress'
-                        ? 'border-warning/40'
+                        ? 'border-warning/30'
                         : 'border-white/10'
                     }`}
                   >
@@ -719,7 +718,7 @@ export default function CombatLobbyPage() {
           </div>
 
           {/* 🐉 Modo Treino */}
-          <div className="bg-white/[0.03] border-t border-white/10 p-6">
+          <div className="bg-surface/30 border-t border-white/10 p-6">
             <div className="flex justify-between items-center mb-2">
               <h2 className="text-xl font-bold text-text-primary flex items-center">
                 <Shield className="mr-2" size={24} />
@@ -748,7 +747,7 @@ export default function CombatLobbyPage() {
                   <button
                     key={m.key}
                     onClick={() => startTraining(m.key)}
-                    className="bg-black/40 backdrop-blur-sm border border-purple-500/30 hover:border-purple-400 hover:bg-purple-500/10 rounded-xl p-4 text-center transition-all hover:scale-[1.03] group"
+                    className="bg-surface/50 border border-purple-500/30 hover:border-purple-400 hover:bg-purple-500/10 rounded-xl p-4 text-center transition-all hover:scale-[1.03] group"
                   >
                     <div className="text-4xl mb-2 group-hover:scale-110 transition-transform">{m.emoji}</div>
                     <div className="font-bold text-text-primary text-sm mb-1">{m.name}</div>
@@ -768,7 +767,7 @@ export default function CombatLobbyPage() {
           </div>
 
           {/* Quick Actions */}
-          <div className="bg-white/[0.03] border-t border-white/10 p-6">
+          <div className="bg-surface/30 border-t border-white/10 p-6">
             <div className="flex justify-center space-x-4">
               <button
                 onClick={() => router.push('/dashboard')}

@@ -3,15 +3,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
 import Image from 'next/image';
-import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { Search, Filter, X } from 'lucide-react';
 import { ethers } from 'ethers';
 import { resolveImageUrl } from '@/lib/imageUrl';
 import { decodeContractCustomErrorMessage, getWalletTxErrorMessage } from '@/lib/walletErrors';
 import BazaarBackdrop from '@/components/store/BazaarBackdrop';
-import ItemCardBackdrop from '@/components/store/ItemCardBackdrop';
-import { getItemVisual, getItemTypeLabel } from '@/lib/itemVisuals';
 
 interface StoreItem {
   id: string;
@@ -452,17 +449,17 @@ export default function Store() {
 
   return (
     <div className="relative min-h-screen text-white overflow-hidden">
-      {/* Cenário animado do bazar (igual às masmorras) */}
+      {/* Cenário animado do bazaar */}
       <div className="fixed inset-0 z-0">
         <BazaarBackdrop />
       </div>
 
       <div className="relative z-10 container mx-auto p-4 pt-20">
         <div className="mb-8">
-          <h1 className="text-4xl font-black text-white mb-2 drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]">
+          <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary-dark mb-2">
             🏪 Loja do Aventureiro
           </h1>
-          <p className="text-white/60 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">Encontre os melhores equipamentos para sua aventura!</p>
+          <p className="text-text-secondary">Encontre os melhores equipamentos para sua aventura!</p>
         </div>
         
         {/* Barra de Busca */}
@@ -474,7 +471,7 @@ export default function Store() {
               placeholder="Buscar itens..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-black/40 border border-white/20 rounded-lg text-text-primary placeholder-text-secondary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              className="w-full pl-10 pr-4 py-3 bg-surface/50 border border-white/20 rounded-lg text-text-primary placeholder-text-secondary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
             />
           </div>
         </div>
@@ -526,7 +523,7 @@ export default function Store() {
           <div className="flex flex-wrap gap-4 items-center justify-between">
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center gap-2 px-4 py-2 bg-black/40 border border-white/20 rounded-lg text-text-primary hover:bg-black/50 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-surface/50 border border-white/20 rounded-lg text-text-primary hover:bg-surface/70 transition-colors"
             >
               <Filter className="w-4 h-4" />
               Filtros
@@ -537,7 +534,7 @@ export default function Store() {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
-                className="px-3 py-2 bg-black/40 border border-white/20 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+                className="px-3 py-2 bg-surface/50 border border-white/20 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="name">Nome</option>
                 <option value="price">Preço</option>
@@ -547,7 +544,7 @@ export default function Store() {
               
               <button
                 onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-                className="px-3 py-2 bg-black/40 border border-white/20 rounded-lg text-text-primary hover:bg-black/50 transition-colors"
+                className="px-3 py-2 bg-surface/50 border border-white/20 rounded-lg text-text-primary hover:bg-surface/70 transition-colors"
               >
                 {sortOrder === 'asc' ? '↑' : '↓'}
               </button>
@@ -560,7 +557,7 @@ export default function Store() {
 
           {/* Painel de Filtros Expansível */}
           {showFilters && (
-            <div className="mt-4 p-4 bg-black/30 backdrop-blur-md border border-white/10 rounded-lg space-y-4">
+            <div className="mt-4 p-4 bg-surface/30 border border-white/10 rounded-lg space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Filtro de Tipo */}
                 <div>
@@ -568,11 +565,11 @@ export default function Store() {
                   <select
                     value={selectedType}
                     onChange={(e) => setSelectedType(e.target.value)}
-                    className="w-full px-3 py-2 bg-black/40 border border-white/20 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="w-full px-3 py-2 bg-surface/50 border border-white/20 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
                   >
                     <option value="ALL">Todos os tipos</option>
                     {itemTypes.map(type => (
-                      <option key={type} value={type}>{getItemTypeLabel(type)}</option>
+                      <option key={type} value={type}>{type}</option>
                     ))}
                   </select>
                 </div>
@@ -655,7 +652,7 @@ export default function Store() {
             <select
               value={selectedCharacter}
               onChange={(e) => setSelectedCharacter(e.target.value)}
-              className="px-4 py-2 bg-black/40 border border-white/20 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+              className="px-4 py-2 bg-surface/50 border border-white/20 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
             >
               <option value="">Selecione um personagem</option>
               {characters.map((character) => (
@@ -669,11 +666,11 @@ export default function Store() {
 
         {/* User Inventory Summary */}
         {userInventory.length > 0 && (
-          <div className="mb-6 p-4 bg-black/30 backdrop-blur-md border border-white/10 rounded-lg">
+          <div className="mb-6 p-4 bg-surface/30 border border-white/10 rounded-lg">
             <h2 className="text-lg font-semibold mb-3 text-text-primary">📦 Seu Inventário Global</h2>
             <div className="flex flex-wrap gap-2">
               {userInventory.map((inventoryItem) => (
-                <div key={inventoryItem.id} className="flex items-center gap-2 bg-black/40 border border-white/20 px-3 py-2 rounded">
+                <div key={inventoryItem.id} className="flex items-center gap-2 bg-surface/50 border border-white/20 px-3 py-2 rounded">
                   <span className="text-text-primary">{inventoryItem.item.name}</span>
                   <span className="text-sm text-text-secondary">x{inventoryItem.quantity}</span>
                   <button
@@ -693,12 +690,12 @@ export default function Store() {
         {itemsLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {[...Array(8)].map((_, index) => (
-              <div key={index} className="bg-black/40 border border-white/20 rounded-lg p-4 shadow-lg animate-pulse">
-                <div className="w-full h-32 bg-black/50 rounded mb-3"></div>
-                <div className="h-6 bg-black/50 rounded mb-2"></div>
-                <div className="h-4 bg-black/50 rounded w-3/4 mb-2"></div>
-                <div className="h-4 bg-black/50 rounded w-1/2 mb-3"></div>
-                <div className="h-8 bg-black/50 rounded"></div>
+              <div key={index} className="bg-surface/50 border border-white/20 rounded-lg p-4 shadow-lg animate-pulse">
+                <div className="w-full h-32 bg-surface/70 rounded mb-3"></div>
+                <div className="h-6 bg-surface/70 rounded mb-2"></div>
+                <div className="h-4 bg-surface/70 rounded w-3/4 mb-2"></div>
+                <div className="h-4 bg-surface/70 rounded w-1/2 mb-3"></div>
+                <div className="h-8 bg-surface/70 rounded"></div>
               </div>
             ))}
           </div>
@@ -710,92 +707,66 @@ export default function Store() {
               const shouldBypassNextImageOptimization = Boolean(
                 item.image && !/^(https?:\/\/|data:|ipfs:\/\/)/i.test(item.image)
               );
-              const visual = getItemVisual(item.type);
-
+              
               return (
-                <motion.div
-                  key={item.id}
-                  whileHover={{ scale: 1.02 }}
-                  className="relative overflow-hidden rounded-2xl border-2 shadow-2xl group flex flex-col"
-                  style={{ borderColor: `${visual.accent}55` }}
-                >
-                  {/* Cenário animado da categoria do item */}
-                  <div className="absolute inset-0">
-                    <ItemCardBackdrop category={visual.category} />
-                  </div>
-                  <div className="absolute inset-0 bg-black/40 group-hover:bg-black/25 transition-colors" />
-
-                  <div className="relative p-4 flex flex-col flex-1">
-                    {resolvedImageUrl ? (
-                      <div className="w-full h-32 relative mb-3 drop-shadow-[0_4px_12px_rgba(0,0,0,0.7)]">
-                        <Image
-                          src={resolvedImageUrl}
-                          alt={item.name}
-                          fill
-                          className="object-contain"
-                          unoptimized={shouldBypassNextImageOptimization}
-                        />
-                      </div>
-                    ) : (
-                      <div className="w-full h-32 flex items-center justify-center mb-3 text-6xl drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]">
-                        {visual.emoji}
-                      </div>
-                    )}
-
-                    <h3 className="font-bold text-lg mb-2 text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">{item.name}</h3>
-                    <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      <span
-                        className={`text-xs font-semibold ${visual.chipBg} ${visual.chipText} px-2 py-1 rounded-md border`}
-                        style={{ borderColor: `${visual.accent}55` }}
-                      >
-                        {visual.emoji} {getItemTypeLabel(item.type)}
+                <div key={item.id} className="bg-surface/50 border border-white/20 rounded-lg p-4 shadow-lg hover:shadow-xl transition-all hover:border-primary/50">
+                  {resolvedImageUrl && (
+                    <div className="w-full h-32 relative mb-3">
+                      <Image
+                        src={resolvedImageUrl}
+                        alt={item.name}
+                        fill
+                        className="object-contain"
+                        unoptimized={shouldBypassNextImageOptimization}
+                      />
+                    </div>
+                  )}
+                  
+                  <h3 className="font-bold text-lg mb-2 text-text-primary">{item.name}</h3>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-sm text-text-secondary">Tipo:</span>
+                    <span className="text-sm bg-primary/20 text-primary px-2 py-1 rounded">{item.type}</span>
+                    {item.level && (
+                      <span className="text-sm bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded">
+                        Lv.{item.level}
                       </span>
-                      {item.level && (
-                        <span className="text-xs font-semibold bg-yellow-500/20 text-yellow-300 px-2 py-1 rounded-md border border-yellow-500/40">
-                          Lv.{item.level}
-                        </span>
-                      )}
-                    </div>
-
-                    {item.description && (
-                      <p className="text-sm text-white/70 mb-3 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">{item.description}</p>
                     )}
-
-                    <div className="text-lg font-bold text-amber-300 mb-3 mt-auto drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
-                      💰 {item.goldPrice} gold
-                    </div>
-
-                    {ownedQuantity > 0 && (
-                      <div className="text-sm text-white/80 mb-2 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
-                        Você possui: {ownedQuantity}
-                      </div>
-                    )}
-
-                    <div className="flex flex-col gap-2">
-                      <button
-                        onClick={() => handlePurchase(item.id)}
-                        disabled={loading}
-                        className="w-full text-white py-2 px-4 rounded-lg font-bold disabled:opacity-50 transition-all shadow-lg hover:scale-[1.03]"
-                        style={{
-                          background: `linear-gradient(90deg, ${visual.accent}, ${visual.accent}aa)`,
-                          boxShadow: `0 4px 16px ${visual.accentSoft}`,
-                        }}
-                      >
-                        🛒 Comprar
-                      </button>
-
-                      {ownedQuantity > 0 && selectedCharacter && (
-                        <button
-                          onClick={() => handleQuickEquip(item.id)}
-                          disabled={loading}
-                          className="w-full bg-white/10 border border-white/25 text-white py-2 px-4 rounded-lg font-semibold hover:bg-white/20 disabled:opacity-50 transition-all"
-                        >
-                          ⚡ Equipar Rápido
-                        </button>
-                      )}
-                    </div>
                   </div>
-                </motion.div>
+                  
+                  {item.description && (
+                    <p className="text-sm text-text-secondary mb-3">{item.description}</p>
+                  )}
+                  
+                  <div className="text-lg font-semibold text-yellow-400 mb-3">
+                    💰 {item.goldPrice} gold
+                  </div>
+
+                  {ownedQuantity > 0 && (
+                    <div className="text-sm text-primary mb-2">
+                      Você possui: {ownedQuantity}
+                    </div>
+                  )}
+                  
+                  <div className="flex flex-col gap-2">
+                    <button
+                      onClick={() => handlePurchase(item.id)}
+                      disabled={loading}
+                      className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-2 px-4 rounded-lg font-semibold hover:from-green-600 hover:to-green-700 disabled:opacity-50 transition-all shadow-lg"
+                    >
+                      Comprar
+                    </button>
+                    
+                    {ownedQuantity > 0 && selectedCharacter && (
+                      <button
+                        onClick={() => handleQuickEquip(item.id)}
+                        disabled={loading}
+                        className="w-full bg-gradient-to-r from-purple-500 to-purple-600 text-white py-2 px-4 rounded-lg font-semibold hover:from-purple-600 hover:to-purple-700 disabled:opacity-50 transition-all shadow-lg"
+                      >
+                        ⚡ Equipar Rápido
+                      </button>
+                    )}
+                  </div>
+                </div>
               );
             })}
           </div>

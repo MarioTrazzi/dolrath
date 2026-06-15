@@ -5,8 +5,6 @@ import { useSession } from 'next-auth/react';
 import toast from 'react-hot-toast';
 import EnhancementDialog from '@/components/EnhancementDialog';
 import VaultBackdrop from '@/components/inventory/VaultBackdrop';
-import ItemCardBackdrop from '@/components/store/ItemCardBackdrop';
-import { getItemVisual, getItemTypeLabel } from '@/lib/itemVisuals';
 import { getGearCategory, getDisplayName } from '@/lib/enhancementSystem';
 
 interface Item {
@@ -390,32 +388,32 @@ export default function InventoryPage() {
 
   return (
     <div className="relative min-h-screen text-white overflow-hidden">
-      {/* Cenário animado da câmara do tesouro (igual às masmorras) */}
+      {/* Cenário animado da câmara do tesouro */}
       <div className="fixed inset-0 z-0">
         <VaultBackdrop />
       </div>
 
       <div className="relative z-10 container mx-auto p-4 pt-20">
         <div className="mb-8">
-          <h1 className="text-4xl font-black text-white mb-2 drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]">
+          <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary-dark mb-2">
             📦 Inventário
           </h1>
-          <p className="text-white/60 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">Gerencie seus itens e equipamentos</p>
+          <p className="text-text-secondary">Gerencie seus itens e equipamentos</p>
         </div>
 
         {/* Character Selection */}
         {characters.length > 0 && (
           <div className="mb-6">
-            <label className="block text-sm font-medium mb-2 text-white/60">
+            <label className="block text-sm font-medium mb-2 text-text-secondary">
               Selecionar Personagem:
             </label>
             <select
               value={selectedCharacter}
               onChange={(e) => setSelectedCharacter(e.target.value)}
-              className="px-4 py-2.5 bg-black/60 border border-white/20 rounded-xl text-white text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+              className="px-4 py-2 bg-surface/50 border border-white/20 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
             >
               {characters.map((character) => (
-                <option key={character.id} value={character.id} className="bg-stone-900 text-white">
+                <option key={character.id} value={character.id}>
                   {character.name} ({character.class})
                 </option>
               ))}
@@ -425,8 +423,8 @@ export default function InventoryPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* User Global Inventory */}
-          <div className="bg-black/30 backdrop-blur-md border-2 border-amber-500/40 rounded-3xl p-6 shadow-2xl">
-            <h2 className="text-xl font-bold mb-4 text-white flex items-center gap-2 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
+          <div className="bg-surface/50 border border-white/20 rounded-lg p-6 shadow-lg">
+            <h2 className="text-xl font-semibold mb-4 text-text-primary flex items-center gap-2">
               🌐 Inventário Global do Usuário
             </h2>
             <p className="text-sm text-text-secondary mb-4">
@@ -440,50 +438,33 @@ export default function InventoryPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {userInventory.map((inventoryItem) => {
-                  const visual = getItemVisual(inventoryItem.item.type);
-                  return (
-                  <div
-                    key={inventoryItem.id}
-                    className="relative overflow-hidden border-2 p-4 rounded-2xl flex items-center justify-between gap-3 group"
-                    style={{ borderColor: `${visual.accent}55` }}
-                  >
-                    <div className="absolute inset-0">
-                      <ItemCardBackdrop category={visual.category} />
-                    </div>
-                    <div className="absolute inset-0 bg-black/55 group-hover:bg-black/45 transition-colors" />
-                    <div className="relative min-w-0">
-                      <h3 className="font-bold text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">{inventoryItem.item.name}</h3>
-                      <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        <span
-                          className={`text-xs font-semibold ${visual.chipBg} ${visual.chipText} px-2 py-0.5 rounded-md border`}
-                          style={{ borderColor: `${visual.accent}55` }}
-                        >
-                          {visual.emoji} {getItemTypeLabel(inventoryItem.item.type)}
-                        </span>
-                        <span className="text-xs font-semibold text-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">x{inventoryItem.quantity}</span>
-                      </div>
+                {userInventory.map((inventoryItem) => (
+                  <div key={inventoryItem.id} className="bg-surface/70 border border-white/10 p-4 rounded-lg flex items-center justify-between hover:border-primary/50 transition-colors">
+                    <div>
+                      <h3 className="font-medium text-text-primary">{inventoryItem.item.name}</h3>
+                      <p className="text-sm text-text-secondary">
+                        Tipo: <span className="text-primary">{inventoryItem.item.type}</span> | Quantidade: <span className="text-yellow-400">{inventoryItem.quantity}</span>
+                      </p>
                       {inventoryItem.item.description && (
-                        <p className="text-xs text-white/65 mt-1 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">{inventoryItem.item.description}</p>
+                        <p className="text-xs text-text-secondary mt-1">{inventoryItem.item.description}</p>
                       )}
                     </div>
                     <button
                       onClick={() => handleTransferToCharacter(inventoryItem.item.id)}
                       disabled={loading || !selectedCharacter}
-                      className="relative flex-shrink-0 bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 transition-all shadow-lg font-semibold"
+                      className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 transition-all shadow-lg font-semibold"
                     >
                       Transferir →
                     </button>
                   </div>
-                  );
-                })}
+                ))}
               </div>
             )}
           </div>
 
           {/* Character Inventory */}
-          <div className="bg-black/30 backdrop-blur-md border-2 border-amber-500/40 rounded-3xl p-6 shadow-2xl">
-            <h2 className="text-xl font-bold mb-4 text-white flex items-center gap-2 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
+          <div className="bg-surface/50 border border-white/20 rounded-lg p-6 shadow-lg">
+            <h2 className="text-xl font-semibold mb-4 text-text-primary flex items-center gap-2">
               ⚔️ Inventário do Personagem
               {selectedCharacter && characters.find(c => c.id === selectedCharacter) && 
                 <span className="text-primary">- {characters.find(c => c.id === selectedCharacter)?.name}</span>
@@ -509,49 +490,32 @@ export default function InventoryPage() {
                   const isEquipped = isItemEquipped(inventoryItem.item.id);
                   const enhancementLevel = inventoryItem.enhancementLevel || 0;
                   const isEnhanceable = !!getGearCategory(inventoryItem.item.type);
-                  const visual = getItemVisual(inventoryItem.item.type);
                   return (
-                    <div
-                      key={inventoryItem.id}
-                      className="relative overflow-hidden border-2 p-4 rounded-2xl flex items-center justify-between gap-3 group"
-                      style={{ borderColor: isEquipped ? 'rgba(34,197,94,0.6)' : `${visual.accent}55` }}
-                    >
-                      <div className="absolute inset-0">
-                        <ItemCardBackdrop category={visual.category} />
-                      </div>
-                      <div className="absolute inset-0 bg-black/55 group-hover:bg-black/45 transition-colors" />
-                      <div className="relative min-w-0">
-                        <h3 className="font-bold text-white flex items-center gap-2 flex-wrap drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
+                    <div key={inventoryItem.id} className="bg-surface/70 border border-white/10 p-4 rounded-lg flex items-center justify-between hover:border-primary/50 transition-colors">
+                      <div>
+                        <h3 className="font-medium text-text-primary flex items-center gap-2">
                           <span className={enhancementLevel >= 16 ? 'text-orange-400' : enhancementLevel > 0 ? 'text-cyan-300' : ''}>
                             {getDisplayName(inventoryItem.item.name, enhancementLevel)}
                           </span>
                           {isEquipped && (
-                            <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded-full border border-green-500/30">
+                            <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded-full border border-green-500/30">
                               ✓ Equipado
                             </span>
                           )}
                         </h3>
-                        <div className="flex items-center gap-2 mt-1 flex-wrap text-xs">
-                          <span
-                            className={`font-semibold ${visual.chipBg} ${visual.chipText} px-2 py-0.5 rounded-md border`}
-                            style={{ borderColor: `${visual.accent}55` }}
-                          >
-                            {visual.emoji} {getItemTypeLabel(inventoryItem.item.type)}
-                          </span>
-                          <span className="font-semibold text-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">x{inventoryItem.quantity}</span>
+                        <p className="text-sm text-text-secondary">
+                          Tipo: <span className="text-primary">{inventoryItem.item.type}</span> | Quantidade: <span className="text-yellow-400">{inventoryItem.quantity}</span>
                           {isEnhanceable && inventoryItem.durability !== undefined && (
-                            <span className="text-white/80 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
-                              🛡️ <span className={inventoryItem.durability > 50 ? 'text-green-400' : inventoryItem.durability > 20 ? 'text-yellow-400' : 'text-red-400'}>
-                                {inventoryItem.durability}/{inventoryItem.maxDurability ?? 100}
-                              </span>
-                            </span>
+                            <> | Durabilidade: <span className={inventoryItem.durability > 50 ? 'text-green-400' : inventoryItem.durability > 20 ? 'text-yellow-400' : 'text-red-400'}>
+                              {inventoryItem.durability}/{inventoryItem.maxDurability ?? 100}
+                            </span></>
                           )}
-                        </div>
+                        </p>
                         {inventoryItem.item.description && (
-                          <p className="text-xs text-white/65 mt-1 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">{inventoryItem.item.description}</p>
+                          <p className="text-xs text-text-secondary mt-1">{inventoryItem.item.description}</p>
                         )}
                       </div>
-                      <div className="relative flex gap-2 flex-shrink-0 flex-wrap justify-end">
+                      <div className="flex gap-2">
                         {inventoryItem.item.type === 'CONSUMABLE' ? (
                           <button
                             onClick={() => handleConsumeItem(inventoryItem.item.id)}

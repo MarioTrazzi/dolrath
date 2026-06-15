@@ -155,6 +155,7 @@ export async function GET() {
 
   // Confirm current ownership (handles transfers-out).
   const owned: Array<{ tokenId: string; tokenURI: string }> = []
+  const ownedSet = new Set<string>()
   for (const tokenId of candidateTokenIds) {
     try {
       const owner = String(await contract.ownerOf(BigInt(tokenId)))
@@ -162,9 +163,58 @@ export async function GET() {
 
       const tokenURI = String(await contract.tokenURI(BigInt(tokenId)))
       owned.push({ tokenId, tokenURI })
+      ownedSet.add(tokenId)
     } catch {
       // token may not exist anymore or RPC issues
       continue
+    }
+  }
+
+  // Fetch all DB characters that carry a minted tokenId for this user. These
+  // rows are written at creation time, so they exist immediately even when the
+  // on-chain log scan (RPC) lags a few seconds behind a freshly-confirmed mint.
+  let dbCharacters: any[] = []
+  try {
+    dbCharacters = await prisma.character.findMany({
+      where: {
+        userId: session.user.id,
+        nftTokenId: { not: null },
+      },
+    })
+  } catch {
+    // DB is optional here; NFTs should still be returned even if Neon/Prisma is down.
+    dbCharacters = []
+  }
+
+  // Backfill tokens the log scan missed. Verify on-chain ownership when
+  // possible; if ownerOf reverts (token not yet visible on a lagging node)
+  // include it optimistically, since the DB says the user just minted it.
+  for (const c of dbCharacters) {
+    const tokenId = typeof c.nftTokenId === 'bigint' ? c.nftTokenId.toString() : ''
+    if (!tokenId || ownedSet.has(tokenId)) continue
+
+    let includeIt = true
+    let tokenURI = typeof c.nftTokenUri === 'string' ? c.nftTokenUri : ''
+    try {
+      const owner = String(await contract.ownerOf(BigInt(tokenId)))
+      // Owned by someone else now (e.g. burned/transferred out) -> skip.
+      includeIt = owner.toLowerCase() === walletAddress.toLowerCase()
+      if (includeIt) {
+        try {
+          tokenURI = String(await contract.tokenURI(BigInt(tokenId)))
+        } catch {
+          // keep the DB tokenURI fallback
+        }
+      }
+    } catch {
+      // ownerOf reverted: token likely not indexed yet on the RPC node.
+      // Trust the DB record and surface it optimistically.
+      includeIt = true
+    }
+
+    if (includeIt) {
+      owned.push({ tokenId, tokenURI })
+      ownedSet.add(tokenId)
     }
   }
 
@@ -176,29 +226,12 @@ export async function GET() {
     }
   })
 
-  // Optional: enrich with DB characters that are linked to these tokenIds
-  const tokenIdBigints = owned.map((o) => {
-    try {
-      return BigInt(o.tokenId)
-    } catch {
-      return null
-    }
-  }).filter(Boolean) as bigint[]
-
-  let dbCharacters: any[] = []
-  if (tokenIdBigints.length) {
-    try {
-      dbCharacters = await prisma.character.findMany({
-        where: {
-          userId: session.user.id,
-          nftTokenId: { in: tokenIdBigints },
-        },
-      })
-    } catch {
-      // DB is optional here; NFTs should still be returned even if Neon/Prisma is down.
-      dbCharacters = []
-    }
-  }
+  // Keep only the DB characters whose tokenId is actually in the returned set,
+  // for the per-token enrichment below.
+  dbCharacters = dbCharacters.filter((c) => {
+    const tid = typeof c.nftTokenId === 'bigint' ? c.nftTokenId.toString() : ''
+    return tid && ownedSet.has(tid)
+  })
 
   const byTokenId = new Map<string, any>()
   for (const c of dbCharacters) {

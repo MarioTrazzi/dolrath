@@ -5,11 +5,12 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { 
-  canTransform, 
-  applyTransformation, 
+import {
+  canTransform,
+  applyTransformation,
   TransformationType,
-  TRANSFORMATION_CONFIG 
+  TRANSFORMATION_CONFIG,
+  getRaceTransformations
 } from '@/lib/transformationSystem'
 
 export async function POST(
@@ -119,13 +120,7 @@ export async function GET(
     }
 
     // Determinar transformações disponíveis baseado na raça
-    let availableTransformations: string[] = []
-    
-    if (character.race === 'draconiano') {
-      availableTransformations = ['dragon']
-    } else if (character.race === 'metamorfo') {
-      availableTransformations = ['wolf', 'bear', 'eagle']
-    }
+    const availableTransformations: string[] = getRaceTransformations(character.race)
 
     // Verificar status de cada transformação
     const transformationStatus = availableTransformations.map(type => {

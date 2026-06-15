@@ -208,7 +208,9 @@ export function AnimatedDie({ sides, size = 80, mode, result, onClick, disabled 
               className={`text-xs font-bold ${isMax ? 'text-yellow-300' : 'text-white/90'}`}
             >
               {isMax && '🔥 '}
-              {result.modifier > 0 ? `${result.roll} + ${result.modifier} = ${result.total}` : `= ${result.total}`}
+              {result.modifier !== 0
+                ? `${result.roll} ${result.modifier > 0 ? '+' : '−'} ${Math.abs(result.modifier)} = ${result.total}`
+                : `= ${result.total}`}
               {isMax && ' 🔥'}
             </motion.span>
           )}
@@ -246,8 +248,10 @@ export function MiniDie({ sides, result, size = 38 }: { sides: number; result: D
           {result.roll}
         </span>
       </div>
-      {result.modifier > 0 && (
-        <span className="text-[9px] font-bold text-cyan-300 leading-none mt-0.5">+{result.modifier}={result.total}</span>
+      {result.modifier !== 0 && (
+        <span className={`text-[9px] font-bold leading-none mt-0.5 ${result.modifier > 0 ? 'text-cyan-300' : 'text-orange-300'}`}>
+          {result.modifier > 0 ? '+' : '−'}{Math.abs(result.modifier)}={result.total}
+        </span>
       )}
     </motion.div>
   )

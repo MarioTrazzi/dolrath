@@ -107,3 +107,62 @@ export function getCreationVisual(id?: string | null): CreationVisualDef {
   if (!id) return FALLBACK
   return CREATION_VISUALS[id as CreationTheme] ?? FALLBACK
 }
+
+// Nomes de exibição (PT) → tema visual, para resolver a identidade a
+// partir dos traits da NFT (que guardam nomes, não ids).
+const NAME_TO_THEME: Record<string, CreationTheme> = {
+  humano: 'humano',
+  draconiano: 'draconiano',
+  metamorfo: 'metamorfo',
+  elfo: 'elfo',
+  guerreiro: 'warrior',
+  ladino: 'rogue',
+  mago: 'mage',
+  monge: 'monk',
+  warrior: 'warrior',
+  rogue: 'rogue',
+  mage: 'mage',
+  monk: 'monk',
+}
+
+/** Resolve a definição visual a partir de um id OU de um nome de exibição */
+export function resolveCreationVisual(idOrName?: string | null): CreationVisualDef {
+  if (!idOrName) return FALLBACK
+  const key = String(idOrName).toLowerCase().trim()
+  const theme = NAME_TO_THEME[key]
+  if (theme) return CREATION_VISUALS[theme]
+  return CREATION_VISUALS[idOrName as CreationTheme] ?? FALLBACK
+}
+
+export interface BlendedVisual {
+  raceVisual: CreationVisualDef
+  classVisual: CreationVisualDef
+  /** Tema do cenário animado de fundo (usa a raça) */
+  backdropTheme: CreationTheme
+  /** Gradiente diagonal misturando raça → classe */
+  gradient: string
+  /** Cor de borda combinada (raça) */
+  borderColor: string
+  /** Glow para box-shadow misturando raça + classe */
+  glow: string
+}
+
+/**
+ * Mescla as identidades visuais de raça e classe num único conjunto de
+ * estilos (gradiente, borda e glow) usado nos cards e na ficha do dashboard.
+ */
+export function getBlendedVisual(
+  raceIdOrName?: string | null,
+  classIdOrName?: string | null
+): BlendedVisual {
+  const raceVisual = resolveCreationVisual(raceIdOrName)
+  const classVisual = resolveCreationVisual(classIdOrName)
+  return {
+    raceVisual,
+    classVisual,
+    backdropTheme: raceVisual.theme,
+    gradient: `linear-gradient(135deg, ${raceVisual.accent}, ${classVisual.accent})`,
+    borderColor: raceVisual.accent,
+    glow: `0 0 28px ${raceVisual.accentSoft}, 0 0 44px ${classVisual.accentSoft}`,
+  }
+}

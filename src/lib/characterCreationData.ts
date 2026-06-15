@@ -57,9 +57,9 @@ export const pointSystem = {
     costProgression: 'linear' // 1 ponto = 1 stat point
   },
   leveling: {
-    pointsPerLevel: 3,        // 3 pontos por level up
-    bonusEvery5Levels: 2,     // +2 pontos extras a cada 5 levels
+    pointsPerLevel: 1,        // 1 ponto por level up (fonte: characterLevelSystem)
+    bonusEvery5Levels: 0,     // sem bônus extra a cada 5 levels
     maxStatFromPoints: 50,    // Máximo de pontos que podem vir de distribuição
-    costProgression: 'exponential' // Fica mais caro conforme aumenta
+    costProgression: 'linear' // 1 ponto = 1 stat
   }
 };

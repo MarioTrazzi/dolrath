@@ -23,7 +23,7 @@ export const RACES: Race[] = [
     id: 'metamorfo',
     name: 'Metamorfo',
     description: 'Capazes de se transformar em animais, excelentes em esquiva',
-    bonuses: { dexterity: 50, wisdom: 30 }, // Mantido igual
+    bonuses: { dexterity: 50 }, // Mantido igual
     abilities: ['Transformação Animal', 'Instintos Selvagens', 'Agilidade Aprimorada'],
     transformationAvailable: true
   },
@@ -31,7 +31,7 @@ export const RACES: Race[] = [
     id: 'elfo',
     name: 'Elfo',
     description: 'Maestros mágicos supremos - compensam falta de transformação',
-    bonuses: { intelligence: 40, dexterity: 30, wisdom: 20 }, // 🔥 BUFF
+    bonuses: { intelligence: 40, dexterity: 30 }, // 🔥 BUFF
     abilities: ['Maestria Arcana', 'Tiro Certeiro Élfico', 'Resistência Mágica'],
     transformationAvailable: false
   }
@@ -58,7 +58,7 @@ export const CLASSES: CharacterClass[] = [
     id: 'mage',
     name: 'Mago',
     description: 'Manipulador de energias arcanas e magias poderosas',
-    bonuses: { intelligence: 50, wisdom: 30 },
+    bonuses: { intelligence: 50 },
     availableWeapons: [WeaponType.STAFF],
     abilities: ['Bola de Fogo', 'Escudo Mágico', 'Cura Menor']
   },
@@ -66,7 +66,7 @@ export const CLASSES: CharacterClass[] = [
     id: 'monk',
     name: 'Monge',
     description: 'Lutador desarmado que usa o próprio corpo como arma',
-    bonuses: { dexterity: 30, wisdom: 30, constitution: 20 },
+    bonuses: { dexterity: 30, constitution: 20 },
     availableWeapons: [WeaponType.FISTS],
     abilities: ['Punho de Ferro', 'Meditação', 'Rajada de Socos']
   }
@@ -102,7 +102,7 @@ export const WEAPONS: Weapon[] = [
     name: 'Cajado de Carvalho',
     type: WeaponType.STAFF,
     diceType: DiceType.D8,
-    bonuses: { intelligence: 25, wisdom: 15 },
+    bonuses: { intelligence: 25 },
     durability: 70,
     maxDurability: 100,
     value: 200,
@@ -185,7 +185,7 @@ export const ARMORS: Armor[] = [
     id: 'mage_robes',
     name: 'Vestes Arcanas',
     type: ArmorType.ROBES,
-    bonuses: { intelligence: 30, wisdom: 20 },
+    bonuses: { intelligence: 30 },
     durability: 60,
     maxDurability: 100,
     value: 300,

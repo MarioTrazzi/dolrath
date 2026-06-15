@@ -311,6 +311,7 @@ export function NameConfirmStep() {
       }
 
       // 4) Dialog: load from the NFT tokenURI (not from DB)
+      let mintedMetadata: any = null;
       setNftDialogOpen(true);
       setNftDialogLoading(true);
       try {
@@ -323,6 +324,7 @@ export function NameConfirmStep() {
           const metaRes = await fetch(onchainTokenUri);
           metadata = await metaRes.json();
         }
+        mintedMetadata = metadata;
 
         setNftData({
           chainId: chainIdNumber,
@@ -338,10 +340,20 @@ export function NameConfirmStep() {
       }
 
       // Notify parent pages (e.g. creation page list) to refresh.
+      // Include the freshly-minted NFT data so the list can show it
+      // optimistically — the on-chain log scan (RPC) often lags a few
+      // seconds behind a just-confirmed mint, so a plain refresh may miss it.
       try {
         window.dispatchEvent(
           new CustomEvent('dolrath:character-created', {
-            detail: { characterId: String(character.id) },
+            detail: {
+              characterId: String(character.id),
+              tokenId: mintedTokenId.toString(),
+              tokenURI: onchainTokenUri,
+              metadata: mintedMetadata,
+              contractAddress,
+              chainId: chainIdNumber,
+            },
           })
         );
       } catch {

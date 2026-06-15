@@ -1,11 +1,22 @@
 import { NextResponse } from 'next/server';
+import { buildCombinationPreprompt } from '@/lib/characterImagePrompt';
+import { mergePromptWithClaude } from '@/lib/anthropicPromptMerge';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 type Body = {
+  // Legacy: a fully-built prompt.
   prompt?: string;
   numImages?: number;
+  // Structured (NFT) mode: server builds the locked race+class style pre-prompt
+  // and merges the player's request with Claude.
+  raceId?: string;
+  classId?: string;
+  raceName?: string;
+  className?: string;
+  userPrompt?: string;
+  statHints?: string;
 };
 
 const clampInt = (value: unknown, min: number, max: number, fallback: number) => {
@@ -30,7 +41,31 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
   }
 
-  const prompt = String(body?.prompt || '').trim();
+  // Structured NFT mode: race/class drive a locked style pre-prompt, then Claude
+  // merges the player's request into the final DALL·E prompt (server-side).
+  const hasStructured = Boolean(body?.raceId || body?.classId);
+
+  let prompt = '';
+  let mergedByClaude = false;
+
+  if (hasStructured) {
+    const preprompt = buildCombinationPreprompt({
+      raceId: body?.raceId,
+      classId: body?.classId,
+      raceName: body?.raceName,
+      className: body?.className,
+    });
+    const merged = await mergePromptWithClaude({
+      preprompt,
+      userPrompt: body?.userPrompt,
+      statHints: body?.statHints,
+    });
+    prompt = merged.prompt;
+    mergedByClaude = merged.mergedByClaude;
+  } else {
+    prompt = String(body?.prompt || '').trim();
+  }
+
   if (!prompt) {
     return NextResponse.json({ error: 'Prompt obrigatório' }, { status: 400 });
   }
@@ -40,26 +75,28 @@ export async function POST(req: Request) {
   const model = (process.env.OPENAI_IMAGE_MODEL || 'dall-e-3').trim();
   const size = (process.env.OPENAI_IMAGE_SIZE || '1024x1024').trim();
 
-  const isDalle3 = model.toLowerCase() === 'dall-e-3';
+  const modelLc = model.toLowerCase();
+  const isDalle3 = modelLc === 'dall-e-3';
+  // The newer gpt-image-* models always return base64 and REJECT the
+  // `response_format` parameter; the dall-e-* models accept it.
+  const isGptImage = modelLc.startsWith('gpt-image');
 
   try {
-    const callOnce = async (): Promise<string> => {
+    // Requests `n` images in a single call and returns them as data URLs.
+    const generateBatch = async (n: number): Promise<string[]> => {
+      const payload: Record<string, unknown> = { model, prompt, n, size };
+      if (!isGptImage) {
+        // Avoid time-limited signed URLs (can 403 later); persist base64 instead.
+        payload.response_format = 'b64_json';
+      }
+
       const res = await fetch('https://api.openai.com/v1/images/generations', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${apiKey}`,
         },
-        body: JSON.stringify({
-          model,
-          prompt,
-          // DALL·E 3 only supports n=1.
-          n: 1,
-          size,
-          // Avoid time-limited signed URLs (can cause 403 later). We prefer data URLs,
-          // then upload to Cloudinary for a permanent HTTPS URL.
-          response_format: 'b64_json',
-        }),
+        body: JSON.stringify(payload),
       });
 
       const raw = await res.text();
@@ -79,74 +116,32 @@ export async function POST(req: Request) {
       }
 
       const data = Array.isArray(json?.data) ? json.data : [];
-      const first = data[0];
-      const img =
-        (typeof first?.url === 'string' && first.url) ? first.url
-        : (typeof first?.b64_json === 'string' && first.b64_json) ? `data:image/png;base64,${first.b64_json}`
-        : '';
-
-      if (!img) throw new Error(`Resposta da IA vazia (sem imagem) (model=${model})`);
-      return img;
-    };
-
-    const images: string[] = [];
-
-    if (isDalle3 && numImages > 1) {
-      // Preserve the UI UX (3 options) by doing multiple single-image calls.
-      for (let i = 0; i < numImages; i++) {
-        images.push(await callOnce());
-      }
-    } else {
-      // For other models, we can request up to numImages in one go.
-      const res = await fetch('https://api.openai.com/v1/images/generations', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model,
-          prompt,
-          n: numImages,
-          size,
-          // Avoid time-limited signed URLs; return base64 data we can persist.
-          response_format: 'b64_json',
-        }),
-      });
-
-      const raw = await res.text();
-      let json: any = null;
-      try {
-        json = raw ? JSON.parse(raw) : null;
-      } catch {
-        json = null;
-      }
-
-      if (!res.ok) {
-        const msg =
-          typeof json?.error?.message === 'string'
-            ? json.error.message
-            : `Falha ao gerar imagem (HTTP ${res.status})`;
-        return NextResponse.json({ error: `${msg} (model=${model})` }, { status: 500 });
-      }
-
-      const data = Array.isArray(json?.data) ? json.data : [];
-      const batch: string[] = data
+      return data
         .map((d: any) => {
           if (typeof d?.url === 'string' && d.url) return d.url;
           if (typeof d?.b64_json === 'string' && d.b64_json) return `data:image/png;base64,${d.b64_json}`;
           return null;
         })
-        .filter(Boolean);
+        .filter((v: string | null): v is string => Boolean(v));
+    };
 
-      images.push(...batch);
+    const images: string[] = [];
+
+    if (isDalle3 && numImages > 1) {
+      // DALL·E 3 only supports n=1, so fan out into multiple single-image calls.
+      for (let i = 0; i < numImages; i++) {
+        images.push(...(await generateBatch(1)));
+      }
+    } else {
+      // dall-e-2 and gpt-image-* accept n > 1 in a single call.
+      images.push(...(await generateBatch(numImages)));
     }
 
     if (images.length === 0) {
       return NextResponse.json({ error: `Resposta da IA vazia (sem imagens) (model=${model})` }, { status: 500 });
     }
 
-    return NextResponse.json({ images });
+    return NextResponse.json({ images, finalPrompt: prompt, mergedByClaude });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Erro ao gerar imagem';
     return NextResponse.json({ error: msg }, { status: 500 });

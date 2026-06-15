@@ -123,6 +123,8 @@ const TRANSFORM_EMOJI: Record<string, string> = {
   wolf: '🐺',
   bear: '🐻',
   eagle: '🦅',
+  seventh_sense: '✨',
+  celestial: '🌟',
 }
 
 const CLASS_EMOJI: Record<string, string> = {

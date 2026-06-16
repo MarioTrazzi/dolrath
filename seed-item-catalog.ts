@@ -20,6 +20,9 @@ async function seedItemCatalog() {
     const stats = {
       ...item.stats,
       rarity: item.rarity,
+      source: item.source,
+      build: item.build ?? null,
+      adventureBoss: item.adventureBoss ?? null,
       raceRestriction: item.raceRestriction ?? null,
       dungeons: item.dungeons,
       sellPrice: Math.floor(item.goldPrice * 0.6),

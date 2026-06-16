@@ -26,6 +26,7 @@ interface Character {
   id: string;
   name: string;
   class: string;
+  race: string;
 }
 
 interface UserInventoryItem {
@@ -48,6 +49,13 @@ export default function Store() {
   const [userInventory, setUserInventory] = useState<UserInventoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [itemsLoading, setItemsLoading] = useState(true);
+  // Filtro por raça do personagem ativo (ligado por padrão).
+  const [showAllRaces, setShowAllRaces] = useState(false);
+
+  const activeRace = useMemo(
+    () => characters.find((c) => c.id === selectedCharacter)?.race,
+    [characters, selectedCharacter]
+  );
   
   // Estados para busca e filtros
   const [searchQuery, setSearchQuery] = useState('');
@@ -136,15 +144,22 @@ export default function Store() {
   }, [items, searchQuery, selectedType, priceFilter, levelFilter, sortBy, sortOrder]);
 
   useEffect(() => {
-    fetchItems();
     fetchCharacters();
     fetchUserInventory();
   }, []);
 
-  const fetchItems = async () => {
+  // Recarrega a vitrine sempre que o personagem ativo (ou o toggle) muda,
+  // filtrando pela raça do personagem por padrão.
+  useEffect(() => {
+    fetchItems(showAllRaces ? undefined : activeRace);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRace, showAllRaces]);
+
+  const fetchItems = async (race?: string) => {
     setItemsLoading(true);
     try {
-      const response = await fetch('/api/store/items');
+      const url = race ? `/api/store/items?race=${encodeURIComponent(race)}` : '/api/store/items';
+      const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
         setItems(data);
@@ -651,18 +666,38 @@ export default function Store() {
             <label className="block text-sm font-medium mb-2 text-text-secondary">
               Selecionar Personagem:
             </label>
-            <select
-              value={selectedCharacter}
-              onChange={(e) => setSelectedCharacter(e.target.value)}
-              className="px-4 py-2 bg-surface/50 border border-white/20 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              <option value="">Selecione um personagem</option>
-              {characters.map((character) => (
-                <option key={character.id} value={character.id}>
-                  {character.name} ({character.class})
-                </option>
-              ))}
-            </select>
+            <div className="flex flex-wrap items-center gap-4">
+              <select
+                value={selectedCharacter}
+                onChange={(e) => setSelectedCharacter(e.target.value)}
+                className="px-4 py-2 bg-surface/50 border border-white/20 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">Selecione um personagem</option>
+                {characters.map((character) => (
+                  <option key={character.id} value={character.id}>
+                    {character.name} ({character.class})
+                  </option>
+                ))}
+              </select>
+
+              {/* Toggle de filtro por raça */}
+              <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={showAllRaces}
+                  onChange={(e) => setShowAllRaces(e.target.checked)}
+                  className="accent-primary w-4 h-4"
+                />
+                Mostrar todos (ignorar raça)
+              </label>
+            </div>
+
+            {/* Indicador do filtro por raça ativo */}
+            {activeRace && !showAllRaces && (
+              <div className="mt-2 inline-flex items-center gap-2 text-xs bg-primary/15 border border-primary/25 text-primary px-3 py-1.5 rounded-full">
+                🛡️ Mostrando só o que <span className="font-semibold capitalize">{activeRace}</span> pode usar
+              </div>
+            )}
           </div>
         )}
 

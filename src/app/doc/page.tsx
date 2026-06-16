@@ -18,7 +18,7 @@ import Link from 'next/link'
 import { races as RACES_SRC, pointSystem } from '@/lib/characterCreationData'
 import { CLASSES } from '@/lib/gameData'
 import { TRANSFORMATION_CONFIG } from '@/lib/transformationSystem'
-import { ITEM_CATALOG, RARITY_DROP_WEIGHT } from '@/lib/itemCatalog'
+import { ITEM_CATALOG, CONSUMABLE_CATALOG, RARITY_DROP_WEIGHT, type CatalogItem } from '@/lib/itemCatalog'
 import { DUNGEON_LIST } from '@/lib/dungeonAdventures'
 import { MATERIALS } from '@/lib/dungeonData'
 import { getXPForNextLevel } from '@/lib/experienceSystem'
@@ -113,7 +113,38 @@ function Todo() {
 const RACE_EMOJI: Record<string, string> = { draconiano: '🐉', metamorfo: '🐺', humano: '⚔️', elfo: '🧝' }
 const WEAPON_PT: Record<string, string> = { sword: 'Espada', dagger: 'Adaga', staff: 'Cajado', bow: 'Arco', mace: 'Maça', spear: 'Lança', fists: 'Punhos' }
 const BONUS_PT: Record<string, string> = { strength: 'STR', dexterity: 'DEX', intelligence: 'INT', constitution: 'CON' }
-const STAT_SHORT: Record<string, string> = { str: 'str', agi: 'agi', int: 'int', def: 'def', res: 'res', hp: 'hp', mp: 'mp', bonusDamage: 'dano', bonusDefense: 'defesa', bonusSpeed: 'vel' }
+const STAT_SHORT: Record<string, string> = { str: 'str', agi: 'agi', int: 'int', def: 'def', res: 'res', hp: 'hp', mp: 'mp', stamina: 'stm', bonusDamage: 'dano', bonusDefense: 'defesa', bonusSpeed: 'vel' }
+const SOURCE_LABEL: Record<string, string> = { shop: '🏪 Loja', dungeon: '🗝️ Masmorra', dungeon_boss: '👑 Chefe', adventure_boss: '🗓️ Aventura' }
+const BUILD_LABEL: Record<string, string> = { brute: '💪 Força', agile: '🏹 Agilidade', arcane: '🔮 Arcano', guardian: '🛡️ Guardião' }
+const DUNGEON_PT: Record<string, string> = { floresta: 'Floresta Sombria', caverna: 'Caverna de Cristal', pantano: 'Pântano Maldito', ruinas: 'Ruínas Arcanas' }
+const ADVENTURE_BOSSES = [
+  { day: 'Semana 1', emoji: '🔥', name: 'Krax-thar', title: 'o Devorador de Mundos', theme: 'Dragão ígneo' },
+  { day: 'Semana 2', emoji: '🕷️', name: "Vol'theris", title: 'a Tecelã do Vazio', theme: 'Aranha do vazio' },
+  { day: 'Semana 3', emoji: '🗿', name: 'Gorthak', title: 'o Colosso de Adamantite', theme: 'Golem titânico' },
+  { day: 'Semana 4', emoji: '✨', name: 'Sylariel', title: 'a Rainha Celeste', theme: 'Elfa caída' },
+]
+
+function dungeonAndRace(it: CatalogItem): React.ReactNode {
+  const where = it.adventureBoss
+    ? it.adventureBoss
+    : it.dungeons.map((d) => DUNGEON_PT[d] ?? d).join(', ') || '—'
+  return <span className="text-xs">{where}{it.raceRestriction ? <> · <Tag tone="warn">{it.raceRestriction}</Tag></> : null}</span>
+}
+
+function consumableEffectToString(stats: Record<string, any>): string {
+  const parts: string[] = []
+  if (stats.healAmount) parts.push(stats.healAmount >= 9999 ? 'HP total' : `+${stats.healAmount} HP`)
+  if (stats.manaAmount) parts.push(stats.manaAmount >= 9999 ? 'MP total' : `+${stats.manaAmount} MP`)
+  if (stats.staminaAmount) parts.push(`+${stats.staminaAmount} stm`)
+  if (stats.attackBonus) parts.push(`+${stats.attackBonus} ATK`)
+  if (stats.defenseBonus) parts.push(`+${stats.defenseBonus} DEF`)
+  if (stats.dodgeBonus) parts.push(`+${stats.dodgeBonus}% esquiva`)
+  if (stats.shieldAmount) parts.push(`escudo ${stats.shieldAmount}`)
+  if (stats.reviveHpPercent) parts.push(`revive ${stats.reviveHpPercent}%`)
+  if (stats.duration) parts.push(`${stats.duration} turnos`)
+  if (stats.cure) parts.push('cura status')
+  return parts.join(' · ')
+}
 const MOD_PT: Record<string, string> = { strength: 'STR', defense: 'DEF', hp: 'HP', agility: 'AGI', intelligence: 'INT', attack: 'ATK', critical: 'CRIT' }
 const TRANSF_RACE: Record<string, string> = { dragon: 'Draconiano', wolf: 'Metamorfo', bear: 'Metamorfo', eagle: 'Metamorfo' }
 
@@ -172,7 +203,7 @@ const RESOLVED = [
 ]
 
 const ROADMAP = [
-  { title: 'Aventuras semanais (PvE)', body: 'Novo modo de conteúdo semanal a ser projetado. Definir formato, recompensas e como o drop do itemCatalog (ids iron_mine, whispering_woods, etc.) se conecta a ele.' },
+  { title: 'Aventuras semanais (PvE) — implementação', body: 'Gear dos 4 chefes semanais já catalogado (Krax-thar, Vol\'theris, Gorthak, Sylariel). Falta implementar o modo em si: rotação por sábado (semana 1–4), encontro do chefe e a tabela de drop exclusiva (source adventure_boss).' },
   { title: 'Alinhar fonte de stats no servidor', body: 'A criação usa characterCreationData.ts (mais nova, rebalanceada), mas o servidor (api/character/route.ts) ainda computa stats por gameData.ts. Consolidar numa fonte única após a bateria de testes.' },
   { title: 'Balancear stamina + regeneração', body: 'Proposta: regenerar 2 stamina a cada 15 min. Precisa de bateria de testes para medir se o gasto por atividade está alto ou baixo. Limpar também o bloco STAMINA_COSTS duplicado.' },
   { title: 'IA: geração de imagens (Anthropic)', body: 'Migrar para chave Anthropic própria e gerar imagens de personagem no MESMO estilo, adicionando apenas as características que o player escolher. Melhorar o prompt para consistência.' },
@@ -505,30 +536,127 @@ boss: +2 níveis, recompensa maior`}</Formula>
 
             {/* Itens */}
             <Section id="items" kicker="Conteúdo" title="Itens">
-              <p>O catálogo é a fonte única de itens. Cada item tem raridade, nível, preço em GOLD e — para alguns — restrição de raça. Drop sorteado por peso de raridade. <Tag>fonte: itemCatalog.ts</Tag></p>
-              <Card>
-                <h3 className="font-semibold text-white">Pesos de drop por raridade</h3>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {RARITY_ORDER.map((rk) => <Tag key={rk}><Pill rarity={rk} /> peso {RARITY_DROP_WEIGHT[rk]}</Tag>)}
-                </div>
-                <p className="mt-3 text-sm">Restrições de armadura por raça: Draconiano não usa leve; Metamorfo e Elfo não usam pesada; Humano usa tudo.</p>
-              </Card>
-              {RARITY_ORDER.map((rk) => {
-                const items = ITEM_CATALOG.filter((i) => i.rarity === rk)
+              <p>O catálogo é a fonte única de itens, dividido por <strong className="text-white">como o item é obtido</strong>. A loja (NPC) vende o básico→intermediário para sustentar o early/mid-game; tudo <em>raro ou acima</em>, acessórios e os melhores consumíveis vêm de masmorras e aventuras. <Tag>fonte: itemCatalog.ts</Tag></p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Card>
+                  <h3 className="font-semibold text-white">Tiers & origem</h3>
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+                    <li><Pill rarity="COMMON" /> e <Pill rarity="UNCOMMON" /> (<em>Superior</em>) → <strong className="text-white">🏪 Loja</strong></li>
+                    <li><Pill rarity="RARE" /> → 🗝️ chão de masmorra</li>
+                    <li><Pill rarity="EPIC" /> → 👑 chefe de masmorra (exclusivo)</li>
+                    <li><Pill rarity="LEGENDARY" /> → 👑 chefe de masmorra ou 🗓️ aventura semanal</li>
+                  </ul>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {RARITY_ORDER.map((rk) => <Tag key={rk}><Pill rarity={rk} /> peso {RARITY_DROP_WEIGHT[rk]}</Tag>)}
+                  </div>
+                </Card>
+                <Card>
+                  <h3 className="font-semibold text-white">Builds & restrição de raça</h3>
+                  <p className="mt-2 text-sm">Cada tier da loja traz <strong className="text-white">4 variantes</strong> de potência parecida, mas distribuição de atributos diferente — o jogador escolhe pela build:</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {Object.entries(BUILD_LABEL).map(([k, v]) => <Tag key={k}>{v}</Tag>)}
+                  </div>
+                  <p className="mt-3 text-sm">Armadura por peso (via <Code>canRaceEquip</Code>): <strong className="text-white">Draconiano</strong> não usa leve; <strong className="text-white">Metamorfo</strong> e <strong className="text-white">Elfo</strong> não usam pesada; <strong className="text-white">Humano</strong> usa tudo. A loja já filtra pela raça do personagem ativo (<Code>getShopItems(race)</Code>).</p>
+                </Card>
+              </div>
+
+              {/* 🏪 Loja */}
+              <h3 className="pt-2 text-lg font-semibold text-white">🏪 Loja — armas, armaduras &amp; apoio</h3>
+              {(['COMMON', 'UNCOMMON'] as RarityKey[]).map((rk) => {
+                const items = ITEM_CATALOG.filter((i) => i.source === 'shop' && i.rarity === rk)
                 if (!items.length) return null
                 return (
                   <div key={rk} className="space-y-2">
-                    <div className="flex items-center gap-2 pt-2"><Pill rarity={rk} /><span className="text-sm text-textsec">{items.length} itens</span></div>
+                    <div className="flex items-center gap-2 pt-2"><Pill rarity={rk} /><span className="text-sm text-textsec">{rk === 'UNCOMMON' ? 'Superior · ' : ''}{items.length} itens</span></div>
                     <Table
-                      head={['Item', 'Tipo', 'Nv', 'GOLD', 'Stats', 'Masmorra / Raça']}
+                      head={['Item', 'Tipo', 'Nv', 'GOLD', 'Stats', 'Build']}
                       rows={items.map((it) => [
                         <span key={it.name} className={`font-semibold ${RARITY[rk].text}`}>{it.name}</span>,
                         <Code key="t">{it.type}</Code>,
                         it.level,
                         <span key="g" className="text-amber-300">{it.goldPrice}</span>,
                         <span key="s" className="font-game text-xs text-emerald-300">{itemStatsToString(it.stats)}</span>,
-                        <span key="w" className="text-xs">{it.dungeons.join(', ')}{it.raceRestriction ? <> · <Tag tone="warn">{it.raceRestriction}</Tag></> : null}</span>,
+                        <span key="b" className="text-xs">{it.build ? BUILD_LABEL[it.build] : '—'}</span>,
                       ])}
+                    />
+                  </div>
+                )
+              })}
+
+              {/* 🗝️ Masmorras & Aventuras */}
+              <h3 className="pt-4 text-lg font-semibold text-white">🗝️ Masmorras &amp; Aventuras — gear raro e acima</h3>
+              {(['RARE', 'EPIC', 'LEGENDARY'] as RarityKey[]).map((rk) => {
+                const items = ITEM_CATALOG.filter((i) => i.source !== 'shop' && i.rarity === rk)
+                if (!items.length) return null
+                return (
+                  <div key={rk} className="space-y-2">
+                    <div className="flex items-center gap-2 pt-2"><Pill rarity={rk} /><span className="text-sm text-textsec">{items.length} itens</span></div>
+                    <Table
+                      head={['Item', 'Tipo', 'Nv', 'GOLD', 'Stats', 'Origem', 'Masmorra / Raça']}
+                      rows={items.map((it) => [
+                        <span key={it.name} className={`font-semibold ${RARITY[rk].text}`}>{it.name}</span>,
+                        <Code key="t">{it.type}</Code>,
+                        it.level,
+                        <span key="g" className="text-amber-300">{it.goldPrice}</span>,
+                        <span key="s" className="font-game text-xs text-emerald-300">{itemStatsToString(it.stats)}</span>,
+                        <span key="o" className="text-xs">{SOURCE_LABEL[it.source]}</span>,
+                        dungeonAndRace(it),
+                      ])}
+                    />
+                  </div>
+                )
+              })}
+
+              {/* 🗓️ Aventuras semanais */}
+              <h3 className="pt-4 text-lg font-semibold text-white">🗓️ Chefes das Aventuras Semanais</h3>
+              <p className="text-sm">Um chefe único por sábado (rotação de 4 semanas), cada um com gear nomeado exclusivo — modelo Black Desert (Kzarka, Garmoth, Karanda…).</p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {ADVENTURE_BOSSES.map((b) => {
+                  const drops = ITEM_CATALOG.filter((i) => i.adventureBoss === b.name)
+                  return (
+                    <Card key={b.name}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2"><span className="text-2xl">{b.emoji}</span><div><h4 className="font-semibold text-white">{b.name}</h4><p className="text-xs text-textsec">{b.title}</p></div></div>
+                        <Tag>{b.day}</Tag>
+                      </div>
+                      <p className="mt-2 text-xs text-textsec">{b.theme} · Sábado</p>
+                      <ul className="mt-2 space-y-1 text-sm">
+                        {drops.map((d) => (
+                          <li key={d.name} className="flex items-center justify-between gap-2">
+                            <span className="text-amber-300">{d.name}</span>
+                            <Code>{d.type}</Code>
+                          </li>
+                        ))}
+                      </ul>
+                    </Card>
+                  )
+                })}
+              </div>
+
+              {/* 🧪 Consumíveis */}
+              <h3 className="pt-4 text-lg font-semibold text-white">🧪 Consumíveis</h3>
+              <p className="text-sm">Loja vende básicos e intermediários; masmorras e aventuras trazem versões aprimoradas e únicas. <Tag>fonte: itemCatalog.ts · seed-battle-consumables.ts</Tag></p>
+              {([
+                { label: '🏪 Loja — básicos & intermediários', filter: (c: typeof CONSUMABLE_CATALOG[number]) => c.source === 'shop' },
+                { label: '🗝️ Masmorras & Aventuras — aprimorados & únicos', filter: (c: typeof CONSUMABLE_CATALOG[number]) => c.source !== 'shop' },
+              ]).map((group) => {
+                const items = CONSUMABLE_CATALOG.filter(group.filter)
+                return (
+                  <div key={group.label} className="space-y-2">
+                    <div className="pt-2 text-sm font-semibold text-white">{group.label}</div>
+                    <Table
+                      head={['Consumível', 'Subtipo', 'Nv', 'GOLD', 'Efeito', 'Origem']}
+                      rows={items.map((c) => {
+                        const rk = c.rarity as RarityKey
+                        return [
+                          <span key={c.name} className={`font-semibold ${RARITY[rk].text}`}>{c.name}</span>,
+                          <Code key="t">{c.subtype}</Code>,
+                          c.level,
+                          <span key="g" className="text-amber-300">{c.goldPrice}</span>,
+                          <span key="e" className="font-game text-xs text-emerald-300">{consumableEffectToString(c.stats)}</span>,
+                          <span key="o" className="text-xs">{c.adventureBoss ?? SOURCE_LABEL[c.source]}</span>,
+                        ]
+                      })}
                     />
                   </div>
                 )

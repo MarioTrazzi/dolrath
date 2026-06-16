@@ -6,7 +6,7 @@
 // A imagem fica nula de propósito: a UI usa o ícone por tipo (ItemIcon).
 
 import { PrismaClient, ItemType } from '@prisma/client'
-import { ITEM_CATALOG } from './src/lib/itemCatalog'
+import { ITEM_CATALOG, itemImagePath } from './src/lib/itemCatalog'
 
 const prisma = new PrismaClient()
 
@@ -38,6 +38,7 @@ async function seedItemCatalog() {
           type: item.type as ItemType,
           level: item.level,
           goldPrice: item.goldPrice,
+          image: itemImagePath(item.name),
           stats,
         },
       })
@@ -51,6 +52,7 @@ async function seedItemCatalog() {
           type: item.type as ItemType,
           level: item.level,
           goldPrice: item.goldPrice,
+          image: itemImagePath(item.name),
           stats,
         },
       })

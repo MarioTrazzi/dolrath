@@ -51,6 +51,9 @@ export function resolveImageUrl(input?: string | null): string | null {
   const raw = typeof input === 'string' ? input.trim() : ''
   if (!raw) return null
 
+  // Caminho same-origin (ex.: /items/<slug>.webp) — já é uma URL válida.
+  if (raw.startsWith('/')) return raw
+
   if (isLikelyUrl(raw)) {
     return normalizeUrl(raw)
   }

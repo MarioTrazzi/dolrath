@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { ITEM_CATALOG } from '@/lib/itemCatalog'
+import { ITEM_CATALOG, itemImagePath } from '@/lib/itemCatalog'
 import { ItemType } from '@prisma/client'
 
 // Verificação básica: header X-SEED-SECRET deve corresponder à variável SEED_SECRET
@@ -31,6 +31,7 @@ async function seedItemCatalog() {
           type: item.type as ItemType,
           level: item.level,
           goldPrice: item.goldPrice,
+          image: itemImagePath(item.name),
           stats,
         },
       })
@@ -44,6 +45,7 @@ async function seedItemCatalog() {
           type: item.type as ItemType,
           level: item.level,
           goldPrice: item.goldPrice,
+          image: itemImagePath(item.name),
           stats,
         },
       })

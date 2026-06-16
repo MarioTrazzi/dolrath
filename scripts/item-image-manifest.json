@@ -1,0 +1,257 @@
+{
+  "Espada de Recruta": {
+    "file": "/items/espada-de-recruta.webp"
+  },
+  "Adaga Ligeira": {
+    "file": "/items/adaga-ligeira.webp"
+  },
+  "Cajado de Aprendiz": {
+    "file": "/items/cajado-de-aprendiz.webp"
+  },
+  "Machado do Guarda": {
+    "file": "/items/machado-do-guarda.webp"
+  },
+  "Espada do Veterano": {
+    "file": "/items/espada-do-veterano.webp"
+  },
+  "Arco do Batedor": {
+    "file": "/items/arco-do-batedor.webp"
+  },
+  "Cajado Rúnico": {
+    "file": "/items/cajado-runico.webp"
+  },
+  "Machado de Guerra": {
+    "file": "/items/machado-de-guerra.webp"
+  },
+  "Gibão de Couro": {
+    "file": "/items/gibao-de-couro.webp"
+  },
+  "Túnica de Linho Arcano": {
+    "file": "/items/tunica-de-linho-arcano.webp"
+  },
+  "Cota Acolchoada": {
+    "file": "/items/cota-acolchoada.webp"
+  },
+  "Peitoral de Ferro": {
+    "file": "/items/peitoral-de-ferro.webp"
+  },
+  "Armadura de Couro Batido": {
+    "file": "/items/armadura-de-couro-batido.webp"
+  },
+  "Vestes do Conjurador": {
+    "file": "/items/vestes-do-conjurador.webp"
+  },
+  "Brigantina Reforçada": {
+    "file": "/items/brigantina-reforcada.webp"
+  },
+  "Couraça de Aço": {
+    "file": "/items/couraca-de-aco.webp"
+  },
+  "Capuz de Couro": {
+    "file": "/items/capuz-de-couro.webp"
+  },
+  "Elmo de Ferro": {
+    "file": "/items/elmo-de-ferro.webp"
+  },
+  "Luvas de Couro": {
+    "file": "/items/luvas-de-couro.webp"
+  },
+  "Manoplas de Ferro": {
+    "file": "/items/manoplas-de-ferro.webp"
+  },
+  "Botas de Viajante": {
+    "file": "/items/botas-de-viajante.webp"
+  },
+  "Botas de Placa": {
+    "file": "/items/botas-de-placa.webp"
+  },
+  "Escudo de Madeira": {
+    "file": "/items/escudo-de-madeira.webp"
+  },
+  "Coif de Malha": {
+    "file": "/items/coif-de-malha.webp"
+  },
+  "Elmo do Sentinela": {
+    "file": "/items/elmo-do-sentinela.webp"
+  },
+  "Luvas de Malha": {
+    "file": "/items/luvas-de-malha.webp"
+  },
+  "Manoplas do Sentinela": {
+    "file": "/items/manoplas-do-sentinela.webp"
+  },
+  "Botas de Malha": {
+    "file": "/items/botas-de-malha.webp"
+  },
+  "Grevas de Aço": {
+    "file": "/items/grevas-de-aco.webp"
+  },
+  "Escudo de Ferro": {
+    "file": "/items/escudo-de-ferro.webp"
+  },
+  "Lâmina das Brasas": {
+    "file": "/items/lamina-das-brasas.webp"
+  },
+  "Couraça de Escamas Ígneas": {
+    "file": "/items/couraca-de-escamas-igneas.webp"
+  },
+  "Égide do Dragão Ancião": {
+    "file": "/items/egide-do-dragao-anciao.webp"
+  },
+  "Presas do Cataclismo": {
+    "file": "/items/presas-do-cataclismo.webp"
+  },
+  "Arco do Luar Élfico": {
+    "file": "/items/arco-do-luar-elfico.webp"
+  },
+  "Vestes do Bosque Celeste": {
+    "file": "/items/vestes-do-bosque-celeste.webp"
+  },
+  "Cajado da Aurora Arcana": {
+    "file": "/items/cajado-da-aurora-arcana.webp"
+  },
+  "Manto da Forma Celestial": {
+    "file": "/items/manto-da-forma-celestial.webp"
+  },
+  "Garras do Predador": {
+    "file": "/items/garras-do-predador.webp"
+  },
+  "Pelagem Mutável": {
+    "file": "/items/pelagem-mutavel.webp"
+  },
+  "Manto da Fera Primal": {
+    "file": "/items/manto-da-fera-primal.webp"
+  },
+  "Garras do Caçador Lunar": {
+    "file": "/items/garras-do-cacador-lunar.webp"
+  },
+  "Espada do Andarilho": {
+    "file": "/items/espada-do-andarilho.webp"
+  },
+  "Brigantina do Mercenário": {
+    "file": "/items/brigantina-do-mercenario.webp"
+  },
+  "Égide do Herói": {
+    "file": "/items/egide-do-heroi.webp"
+  },
+  "Lâmina do Sétimo Sentido": {
+    "file": "/items/lamina-do-setimo-sentido.webp"
+  },
+  "Anel da Seiva Ancestral": {
+    "file": "/items/anel-da-seiva-ancestral.webp"
+  },
+  "Anel de Cristal Pulsante": {
+    "file": "/items/anel-de-cristal-pulsante.webp"
+  },
+  "Anel da Névoa Tóxica": {
+    "file": "/items/anel-da-nevoa-toxica.webp"
+  },
+  "Anel do Selo Imperial": {
+    "file": "/items/anel-do-selo-imperial.webp"
+  },
+  "Amuleto da Coruja": {
+    "file": "/items/amuleto-da-coruja.webp"
+  },
+  "Colar do Veio Dourado": {
+    "file": "/items/colar-do-veio-dourado.webp"
+  },
+  "Talismã do Fogo-Fátuo": {
+    "file": "/items/talisma-do-fogo-fatuo.webp"
+  },
+  "Relicário do Lich": {
+    "file": "/items/relicario-do-lich.webp"
+  },
+  "Lâmina de Krax-thar": {
+    "file": "/items/lamina-de-krax-thar.webp"
+  },
+  "Coração de Krax-thar": {
+    "file": "/items/coracao-de-krax-thar.webp"
+  },
+  "Presas de Vol'theris": {
+    "file": "/items/presas-de-voltheris.webp"
+  },
+  "Manto de Vol'theris": {
+    "file": "/items/manto-de-voltheris.webp"
+  },
+  "Esmagador de Gorthak": {
+    "file": "/items/esmagador-de-gorthak.webp"
+  },
+  "Égide de Gorthak": {
+    "file": "/items/egide-de-gorthak.webp"
+  },
+  "Arco de Sylariel": {
+    "file": "/items/arco-de-sylariel.webp"
+  },
+  "Cajado de Sylariel": {
+    "file": "/items/cajado-de-sylariel.webp"
+  },
+  "Lágrima de Sylariel": {
+    "file": "/items/lagrima-de-sylariel.webp"
+  },
+  "Poção de Vida Pequena": {
+    "file": "/items/pocao-de-vida-pequena.webp"
+  },
+  "Poção de Vida": {
+    "file": "/items/pocao-de-vida.webp"
+  },
+  "Poção de Mana": {
+    "file": "/items/pocao-de-mana.webp"
+  },
+  "Poção de Stamina": {
+    "file": "/items/pocao-de-stamina.webp"
+  },
+  "Elixir Menor": {
+    "file": "/items/elixir-menor.webp"
+  },
+  "Poção de Força": {
+    "file": "/items/pocao-de-forca.webp"
+  },
+  "Poção de Defesa": {
+    "file": "/items/pocao-de-defesa.webp"
+  },
+  "Poção de Agilidade": {
+    "file": "/items/pocao-de-agilidade.webp"
+  },
+  "Antídoto": {
+    "file": "/items/antidoto.webp"
+  },
+  "Poção de Vida Grande": {
+    "file": "/items/pocao-de-vida-grande.webp"
+  },
+  "Poção de Cura Suprema": {
+    "file": "/items/pocao-de-cura-suprema.webp"
+  },
+  "Elixir Supremo": {
+    "file": "/items/elixir-supremo.webp"
+  },
+  "Tônico do Berserker": {
+    "file": "/items/tonico-do-berserker.webp"
+  },
+  "Pó de Fênix": {
+    "file": "/items/po-de-fenix.webp"
+  },
+  "Sangue de Dragão": {
+    "file": "/items/sangue-de-dragao.webp"
+  },
+  "Essência do Vazio": {
+    "file": "/items/essencia-do-vazio.webp"
+  },
+  "Núcleo de Adamantite": {
+    "file": "/items/nucleo-de-adamantite.webp"
+  },
+  "Lágrima Celeste": {
+    "file": "/items/lagrima-celeste.webp"
+  },
+  "Poção de Mana Grande": {
+    "file": "/items/pocao-de-mana-grande.webp"
+  },
+  "Elixir de Energia": {
+    "file": "/items/elixir-de-energia.webp"
+  },
+  "Elixir Maior": {
+    "file": "/items/elixir-maior.webp"
+  },
+  "Poção de Reviver": {
+    "file": "/items/pocao-de-reviver.webp"
+  }
+}

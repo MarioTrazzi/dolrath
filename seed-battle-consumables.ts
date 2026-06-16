@@ -1,4 +1,5 @@
 import { PrismaClient, ItemType, ConsumableSubtype } from '@prisma/client'
+import { itemImagePath } from './src/lib/itemCatalog'
 
 const prisma = new PrismaClient()
 
@@ -210,7 +211,7 @@ async function seedBattleConsumables() {
   for (const consumable of battleConsumables) {
     try {
       const created = await prisma.item.create({
-        data: consumable
+        data: { ...consumable, image: itemImagePath(consumable.name) }
       })
       console.log(`✅ Criado: ${created.name} (${created.subtype})`)
     } catch (error) {

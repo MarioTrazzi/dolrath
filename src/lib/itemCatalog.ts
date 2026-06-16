@@ -561,6 +561,21 @@ export const CONSUMABLE_CATALOG: ConsumableItem[] = [
 
 // === ÍNDICES E HELPERS ===
 
+/** Slug estável do nome do item (sem acentos/apóstrofos) usado nos assets. */
+export function itemImageSlug(name: string): string {
+  return name
+    .normalize('NFD').replace(/[̀-ͯ]/g, '') // remove acentos
+    .toLowerCase()
+    .replace(/['’]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+/** Caminho do asset de imagem do item (webp gerado por scripts/generate-item-images.ts). */
+export function itemImagePath(name: string): string {
+  return `/items/${itemImageSlug(name)}.webp`;
+}
+
 const BY_NAME = new Map(ITEM_CATALOG.map((i) => [i.name, i]));
 
 export function getCatalogItemByName(name: string): CatalogItem | undefined {

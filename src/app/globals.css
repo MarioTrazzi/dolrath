@@ -165,3 +165,49 @@
     animation-iteration-count: 1 !important;
   }
 }
+
+/* ============================================================
+   MAPA DE EXPLORAÇÃO DE MASMORRA (DungeonForestMap — handoff Claude Design)
+   Trilha serpenteante de nós, token caminhando, ambiente vivo.
+   Cores de destaque via --dgn / --dgn-soft (definidas inline por masmorra).
+   ============================================================ */
+
+/* Pulso convidativo do próximo nó */
+@keyframes node-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--dgn-soft, rgba(255,255,255,0.3)), 0 0 18px 2px var(--dgn-soft, rgba(255,255,255,0.3)); }
+  50%      { box-shadow: 0 0 0 10px transparent, 0 0 30px 6px var(--dgn, #fff); }
+}
+
+@keyframes firefly-drift {
+  0%   { transform: translate(0, 0) scale(1); opacity: 0.15; }
+  25%  { opacity: 0.85; }
+  50%  { transform: translate(var(--fx, 0), var(--fy, 0)) scale(1.25); opacity: 0.5; }
+  75%  { opacity: 0.8; }
+  100% { transform: translate(0, 0) scale(1); opacity: 0.15; }
+}
+
+@keyframes torch-flicker {
+  0%, 100% { opacity: 0.55; }
+  45%      { opacity: 0.9; }
+  60%      { opacity: 0.4; }
+  80%      { opacity: 0.75; }
+}
+
+@keyframes token-bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-3px); }
+}
+
+/* Deslize suave do token e do rastro entre nós */
+.token-pos { transition: left .85s cubic-bezier(.34,1.3,.5,1), top .85s cubic-bezier(.34,1.3,.5,1); }
+.trail-dot { transition: left .85s ease-out, top .85s ease-out, opacity .3s ease; }
+.float-num { animation: float-damage 1.5s ease-out forwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  .token-pos, .trail-dot {
+    transition: none !important;
+  }
+  [style*="node-pulse"], [style*="firefly-drift"], [style*="torch-flicker"], [style*="token-bob"] {
+    animation: none !important;
+  }
+}

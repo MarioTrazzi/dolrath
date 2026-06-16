@@ -3,11 +3,22 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import BattleScene, { BattleEvent, DiceResult, EquipmentMap, FighterView } from '@/components/battle/BattleScene'
-import { AnimatedDie } from '@/components/battle/AnimatedDice'
 import DungeonBackdrop from '@/components/dungeon/DungeonBackdrop'
+import {
+  buildTrailPoints,
+  MapTrail,
+  MapNode,
+  PlayerToken,
+  MapAmbient,
+  MasterNarration,
+  DiceOverlay,
+  NodeVisualState,
+  RevealedNode,
+} from '@/components/dungeon/DungeonMap'
 import {
   DungeonDef,
   DungeonEventDef,
+  DungeonEventKind,
   ScaledMonster,
   eventForRoll,
   pickMonster,
@@ -72,6 +83,15 @@ const DEFENSE_COSTS: Record<DefenseKind, number> = { dodge: 1, defend: 3 }
 const EXPLORE_COST = 8
 const ADVANCE_COST = 5
 const BREATH_RECOVER = 12
+
+// Falas de transição do Mestre entre as salas (genéricas, tom de RPG)
+const TRANSITIONS = [
+  'Você respira fundo e segue trilha adentro.',
+  'A vereda serpenteia entre raízes e sombras...',
+  'Mais fundo na masmorra, o ar fica denso e frio.',
+  'Galhos rangem acima; você avança com a lâmina à mão.',
+  'A névoa se abre por um instante, revelando o caminho.',
+]
 
 const MONSTER_ID = 'dungeon-monster'
 
@@ -158,14 +178,24 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
 
   // ---------- Estado geral da run ----------
   const [phase, setPhase] = useState<RunPhase>('explore')
-  const [room, setRoom] = useState(1)
-  const [roomExplored, setRoomExplored] = useState(false)
   const [log, setLog] = useState<string[]>([dungeon.enterText])
   const [totals, setTotals] = useState({ gold: 0, xp: 0, kills: 0, items: [] as string[] })
   const totalsRef = useRef(totals)
   totalsRef.current = totals
   const [levelUpMsg, setLevelUpMsg] = useState<string | null>(null)
   const [xpSaved, setXpSaved] = useState(false)
+
+  // ---------- Mapa de exploração (trilha de nós) ----------
+  // nó 0 = entrada; 1..rooms = salas de evento; último = covil do boss.
+  const trailPoints = useMemo(() => buildTrailPoints(dungeon.rooms), [dungeon.rooms])
+  const LAST = trailPoints.length - 1
+  const [tokenIdx, setTokenIdx] = useState(0)
+  const [moving, setMoving] = useState(false)
+  const [narration, setNarration] = useState(dungeon.enterText)
+  const [nodeEvents, setNodeEvents] = useState<Record<number, RevealedNode>>({})
+  const [floats, setFloats] = useState<{ id: number; label: string; color: string }[]>([])
+  const atBoss = tokenIdx === LAST
+  const nextIsBoss = tokenIdx === LAST - 1
 
   // ---------- Exploração ----------
   const [exploreRolling, setExploreRolling] = useState(false)
@@ -216,6 +246,13 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const pushLog = useCallback((msg: string) => {
     setLog(prev => [...prev.slice(-40), msg])
   }, [])
+
+  // Número flutuante sobre o mapa (efeito de ganho/perda)
+  const pushFloat = useCallback((label: string, color: string) => {
+    const id = Math.random()
+    setFloats(prev => [...prev, { id, label, color }])
+    later(() => setFloats(prev => prev.filter(f => f.id !== id)), 1500)
+  }, [later])
 
   const showBanner = useCallback((icon: string, text: string, duration = 2400) => {
     bannerKey.current += 1
@@ -320,28 +357,21 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   } : null, [monster, dungeon.name])
 
   // ============================================================
-  // EXPLORAÇÃO
+  // EXPLORAÇÃO — mapa de trilha de nós
   // ============================================================
 
-  const handleExploreRoll = () => {
-    if (exploreRolling || roomExplored) return
-    if (stamina < EXPLORE_COST) {
-      showBanner('😮‍💨', `Stamina insuficiente para explorar (precisa de ${EXPLORE_COST}⚡)`)
-      return
-    }
-    setStamina(prev => Math.max(0, prev - EXPLORE_COST))
-    persistStamina(EXPLORE_COST)
-    setExploreRolling(true)
-
-    const result = mkResult(20, 0)
-    later(() => setExploreResult(result), 500)
-    later(() => resolveExploration(result.roll), 2400)
+  // Estado visual de cada nó do mapa
+  const nodeState = (idx: number): NodeVisualState => {
+    if (idx === tokenIdx) return 'current'
+    if (idx < tokenIdx) return 'done'
+    if (idx === tokenIdx + 1) return 'next'
+    return 'locked'
   }
 
-  const resolveExploration = (roll: number) => {
+  // Resolve um evento (aplica efeitos + revela o nó); retorna o card a exibir.
+  const buildAndApplyEvent = (roll: number, atIdx: number): ResolvedEvent => {
     const ev = eventForRoll(dungeon, roll)
     const lvl = character.level
-    setRoomExplored(true)
 
     switch (ev.kind) {
       case 'trap': {
@@ -350,46 +380,46 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
         setHp(newHp)
         setTrapShake(true)
         later(() => setTrapShake(false), 600)
-        setEventCard({ def: ev, text: ev.description, effects: [`-${dmg} ❤️`] })
+        pushFloat(`-${dmg} ❤️`, '#e74c3c')
+        setNodeEvents(prev => ({ ...prev, [atIdx]: { kind: 'trap', emoji: ev.icon } }))
         pushLog(`${ev.icon} ${ev.title} Você perdeu ${dmg} HP.`)
-        if (newHp <= 0) {
-          later(() => handleDefeat(), 1800)
-        }
-        break
+        if (newHp <= 0) later(() => handleDefeat(), 1800)
+        return { def: ev, text: ev.description, effects: [`-${dmg} ❤️`] }
       }
       case 'monster': {
-        const scaled = scaleMonster(pickMonster(dungeon), dungeon, lvl, room)
-        setEventCard({
+        const scaled = scaleMonster(pickMonster(dungeon), dungeon, lvl, atIdx)
+        setNodeEvents(prev => ({ ...prev, [atIdx]: { kind: 'monster', emoji: scaled.emoji } }))
+        pushLog(`${ev.icon} ${ev.title} ${scaled.emoji} ${scaled.name} apareceu!`)
+        return {
           def: ev,
-          text: `${ev.description}`,
+          text: ev.description,
           effects: [`${scaled.emoji} ${scaled.name} • Nv.${scaled.level}`],
           monster: scaled,
-        })
-        pushLog(`${ev.icon} ${ev.title} ${scaled.emoji} ${scaled.name} apareceu!`)
-        break
+        }
       }
       case 'nothing': {
         const text = dungeon.ambience[Math.floor(Math.random() * dungeon.ambience.length)]
-        setEventCard({ def: ev, text, effects: [] })
+        setNodeEvents(prev => ({ ...prev, [atIdx]: { kind: 'nothing', emoji: ev.icon } }))
         pushLog(`${ev.icon} ${text}`)
-        break
+        return { def: ev, text, effects: [] }
       }
       case 'gold': {
         const [gMin, gMax] = ev.goldPerLevel || [10, 20]
         const amount = Math.floor((gMin + Math.random() * (gMax - gMin)) * lvl)
         setTotals(prev => ({ ...prev, gold: prev.gold + amount }))
         persistReward(amount)
-        setEventCard({ def: ev, text: ev.description, effects: [`+${amount} 💰`] })
+        pushFloat(`+${amount} 💰`, '#f39c12')
+        setNodeEvents(prev => ({ ...prev, [atIdx]: { kind: 'gold', emoji: ev.icon } }))
         pushLog(`${ev.icon} ${ev.title} +${amount} gold!`)
-        break
+        return { def: ev, text: ev.description, effects: [`+${amount} 💰`] }
       }
       case 'item': {
         const name = ev.itemNames?.[Math.floor(Math.random() * (ev.itemNames?.length || 1))] || 'Item Misterioso'
         setTotals(prev => ({ ...prev, items: [...prev.items, name] }))
         persistReward(0, name, `Encontrado em ${dungeon.name}`, ev.itemRarity)
-        setEventCard({ def: ev, text: ev.description, effects: [`📦 ${name}`] })
+        setNodeEvents(prev => ({ ...prev, [atIdx]: { kind: 'item', emoji: ev.icon } }))
         pushLog(`${ev.icon} ${ev.title} Você encontrou ${name}!`)
-        break
+        return { def: ev, text: ev.description, effects: [`📦 ${name}`] }
       }
       case 'blessing': {
         const effects: string[] = []
@@ -397,6 +427,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
         if (b?.hpPct) {
           const heal = Math.ceil(character.maxHp * b.hpPct / 100)
           setHp(prev => Math.min(character.maxHp, prev + heal))
+          pushFloat(`+${heal} ❤️`, '#2ecc71')
           effects.push(`+${heal} ❤️`)
         }
         if (b?.mpPct) {
@@ -419,41 +450,74 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
           const amount = Math.floor((gMin + Math.random() * (gMax - gMin)) * lvl)
           setTotals(prev => ({ ...prev, gold: prev.gold + amount }))
           persistReward(amount)
+          pushFloat(`+${amount} 💰`, '#f39c12')
           effects.push(`+${amount} 💰`)
         }
-        setEventCard({ def: ev, text: ev.description, effects })
+        setNodeEvents(prev => ({ ...prev, [atIdx]: { kind: 'blessing', emoji: ev.icon } }))
         pushLog(`${ev.icon} ${ev.title} ${effects.join(' • ')}`)
-        break
+        return { def: ev, text: ev.description, effects }
       }
     }
   }
 
+  // Botão principal: o token caminha para o próximo nó.
+  const advance = () => {
+    if (phase !== 'explore' || exploreRolling || moving || eventCard || atBoss) return
+    const dest = tokenIdx + 1
+
+    // Último passo: chega ao covil do boss (sem rolagem, custo reduzido).
+    if (dest === LAST) {
+      if (stamina < ADVANCE_COST) {
+        showBanner('😮‍💨', `Stamina insuficiente para avançar (precisa de ${ADVANCE_COST}⚡)`)
+        return
+      }
+      setStamina(prev => Math.max(0, prev - ADVANCE_COST))
+      persistStamina(ADVANCE_COST)
+      setMoving(true)
+      setTokenIdx(dest)
+      setNarration('Você chega a uma clareira sufocada por raízes. O ar treme... algo antigo se ergue.')
+      pushLog(`👑 Você chegou ao covil de ${dungeon.boss.name}...`)
+      later(() => setMoving(false), 900)
+      later(() => showBanner('👑', `${dungeon.boss.name} desperta!`, 3000), 950)
+      return
+    }
+
+    // Sala de evento: rola o d20, anda até o nó e revela o que aconteceu.
+    if (stamina < EXPLORE_COST) {
+      showBanner('😮‍💨', `Stamina insuficiente para explorar (precisa de ${EXPLORE_COST}⚡)`)
+      return
+    }
+    setStamina(prev => Math.max(0, prev - EXPLORE_COST))
+    persistStamina(EXPLORE_COST)
+    setExploreRolling(true)
+    setExploreResult(null)
+
+    const result = mkResult(20, 0)
+    later(() => setExploreResult(result), 700)
+    later(() => {
+      setExploreRolling(false)
+      setExploreResult(null)
+      setMoving(true)
+      setTokenIdx(dest)
+      const resolved = buildAndApplyEvent(result.roll, dest)
+      later(() => setMoving(false), 850)
+      later(() => setEventCard(resolved), 650)
+    }, 2200)
+  }
+
+  // Fecha o card de evento e o Mestre narra a transição.
   const dismissEvent = () => {
     setEventCard(null)
     setExploreResult(null)
     setExploreRolling(false)
-  }
-
-  const advanceRoom = () => {
-    if (stamina < ADVANCE_COST) {
-      showBanner('😮‍💨', `Stamina insuficiente para avançar (precisa de ${ADVANCE_COST}⚡)`)
-      return
-    }
-    setStamina(prev => Math.max(0, prev - ADVANCE_COST))
-    persistStamina(ADVANCE_COST)
-    dismissEvent()
-    setRoomExplored(false)
-    const next = room + 1
-    setRoom(next)
-    if (next > dungeon.rooms) {
-      pushLog(`👑 Você chegou ao covil de ${dungeon.boss.name}...`)
-      showBanner('👑', `${dungeon.boss.name} desperta!`, 3000)
-    } else {
-      pushLog(`🚪 Você avança para a sala ${next}.`)
+    if (nextIsBoss) {
+      setNarration('A trilha termina adiante. Você sente um olhar antigo cravado em você...')
+    } else if (!atBoss) {
+      setNarration(TRANSITIONS[tokenIdx % TRANSITIONS.length])
     }
   }
 
-  const isBossRoom = room > dungeon.rooms
+  const isBossRoom = atBoss
 
   // ============================================================
   // COMBATE (motor local na arena nova)
@@ -464,6 +528,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     setEventCard(null)
     setExploreResult(null)
     setExploreRolling(false)
+    setMoving(false)
     setCombatEnded(false)
     setWinnerId(null)
     setDiceResults({})
@@ -736,6 +801,9 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
         finishRun(true)
       } else {
         setPhase('explore')
+        setNarration(nextIsBoss
+          ? 'A trilha termina adiante. Você sente um olhar antigo cravado em você...'
+          : TRANSITIONS[tokenIdx % TRANSITIONS.length])
         showBanner('🏆', `+${m.goldReward} 💰  +${m.xpReward} XP`)
       }
     }, 2800)
@@ -839,6 +907,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
 
       <motion.div
         className="relative h-full flex flex-col"
+        style={{ ['--dgn' as string]: dungeon.accent, ['--dgn-soft' as string]: dungeon.accentSoft }}
         animate={trapShake ? { x: [0, -10, 10, -8, 8, 0] } : { x: 0 }}
         transition={{ duration: 0.5 }}
       >
@@ -852,13 +921,13 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                 {Array.from({ length: dungeon.rooms }).map((_, i) => (
                   <div
                     key={i}
-                    className={`w-2 h-2 rounded-full ${i + 1 < room ? 'bg-green-400' : i + 1 === room && !isBossRoom ? 'animate-pulse' : 'bg-white/20'}`}
-                    style={i + 1 === room && !isBossRoom ? { backgroundColor: dungeon.accent } : undefined}
+                    className={`w-2 h-2 rounded-full ${i + 1 < tokenIdx ? 'bg-green-400' : i + 1 === tokenIdx ? 'animate-pulse' : 'bg-white/20'}`}
+                    style={i + 1 === tokenIdx ? { backgroundColor: dungeon.accent } : undefined}
                   />
                 ))}
                 <span className={`text-[11px] ml-0.5 ${isBossRoom ? 'animate-pulse' : 'opacity-40'}`}>👑</span>
                 <span className="text-[10px] text-white/60 ml-1.5">
-                  {isBossRoom ? 'Covil do Boss' : `Sala ${room}/${dungeon.rooms}`}
+                  {isBossRoom ? 'Covil do Boss' : tokenIdx === 0 ? 'Entrada' : `Sala ${tokenIdx}/${dungeon.rooms}`}
                 </span>
               </div>
             </div>
@@ -918,162 +987,226 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
         {/* ============================================================ */}
         {phase === 'explore' && (
           <div className="flex-1 flex flex-col min-h-0">
-            <div className="flex-1 flex flex-col items-center justify-center gap-5 px-4">
-              {/* Sala do boss: confronto */}
-              {isBossRoom && !eventCard ? (
-                <motion.div
-                  initial={{ scale: 0.8, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ type: 'spring', stiffness: 200, damping: 16 }}
-                  className="text-center bg-black/70 backdrop-blur-md border-2 rounded-3xl px-6 sm:px-10 py-6 max-w-md shadow-2xl"
-                  style={{ borderColor: dungeon.accent, boxShadow: `0 0 50px ${dungeon.accentSoft}` }}
-                >
-                  <motion.div
-                    className="text-6xl mb-3"
-                    animate={{ scale: [1, 1.12, 1] }}
-                    transition={{ repeat: Infinity, duration: 1.8 }}
-                  >
-                    {dungeon.boss.emoji}
-                  </motion.div>
-                  <div className="text-amber-300 text-xs font-bold tracking-widest uppercase mb-1">👑 Boss Final</div>
-                  <h3 className="text-white font-black text-xl sm:text-2xl mb-1">{dungeon.boss.name}</h3>
-                  <p className="text-white/60 text-xs italic mb-4">"{dungeon.boss.title}"</p>
-                  <button
-                    onClick={() => startCombat(scaleMonster(dungeon.boss, dungeon, character.level, room, true))}
-                    className="px-6 py-3 rounded-xl font-black text-white text-sm bg-gradient-to-r from-red-700 to-amber-600 hover:from-red-600 hover:to-amber-500 shadow-lg transition-all hover:scale-105"
-                  >
-                    ⚔️ Enfrentar o Boss
-                  </button>
-                </motion.div>
-              ) : !roomExplored && !eventCard ? (
-                /* Dado de exploração */
-                <motion.div
-                  initial={{ y: 16, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  className="text-center bg-black/60 backdrop-blur-md border border-white/15 rounded-3xl px-6 sm:px-10 py-6 shadow-2xl"
-                  style={{ boxShadow: `0 0 40px ${dungeon.accentSoft}` }}
-                >
-                  <div className="text-white/90 font-bold text-sm sm:text-base mb-1">
-                    {dungeon.emoji} {dungeon.exploreAction}
-                  </div>
-                  <div className="text-white/50 text-xs mb-4">{dungeon.exploreHint} • custa {EXPLORE_COST}⚡</div>
-                  <div className="flex justify-center">
-                    <AnimatedDie
-                      sides={20}
-                      size={110}
-                      mode={exploreRolling ? 'rolling' : 'idle'}
-                      result={exploreResult}
-                      onClick={handleExploreRoll}
-                      disabled={stamina < EXPLORE_COST}
-                    />
-                  </div>
-                  {stamina < EXPLORE_COST && (
-                    <div className="text-red-400 text-[11px] font-bold mt-2">😮‍💨 Stamina insuficiente</div>
-                  )}
-                </motion.div>
-              ) : null}
+            {/* ---------- MAPA: trilha de nós ---------- */}
+            <main className="relative flex-1 min-h-0">
+              <MapAmbient />
 
-              {/* Card de evento dinâmico */}
+              <div className="absolute inset-0 mx-auto max-w-md">
+                <MapTrail points={trailPoints} progress={tokenIdx / LAST} />
+                {trailPoints.map((pt, idx) => (
+                  <MapNode
+                    key={idx}
+                    pt={pt}
+                    state={nodeState(idx)}
+                    revealed={nodeEvents[idx]}
+                    accent={dungeon.accent}
+                    bossName={dungeon.boss.name}
+                  />
+                ))}
+                <PlayerToken point={trailPoints[tokenIdx]} moving={moving} avatar={character.avatar} />
+
+                {/* números flutuantes (ganhos/perdas) */}
+                <div className="absolute left-1/2 top-3 -translate-x-1/2 flex flex-col items-center gap-1 pointer-events-none z-20">
+                  {floats.map(f => (
+                    <span
+                      key={f.id}
+                      className="float-num font-combat font-black text-lg"
+                      style={{ color: f.color, textShadow: '0 2px 8px rgba(0,0,0,0.8)' }}
+                    >
+                      {f.label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* selo de progresso */}
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 text-[10px] uppercase tracking-[0.2em] text-textsec/70 font-bold pointer-events-none">
+                {atBoss ? 'Covil do Chefe' : tokenIdx === 0 ? `Entrada • ${dungeon.rooms} salas` : `Sala ${tokenIdx} de ${dungeon.rooms}`}
+              </div>
+
+              {/* overlay: dado rolando */}
+              <DiceOverlay rolling={exploreRolling} result={exploreResult} />
+
+              {/* overlays: evento / boss */}
               <AnimatePresence>
                 {eventCard && (
                   <motion.div
-                    key={eventCard.def.title + room}
-                    initial={{ scale: 0.7, y: 30, opacity: 0 }}
-                    animate={{ scale: 1, y: 0, opacity: 1 }}
-                    exit={{ scale: 0.85, y: -20, opacity: 0 }}
-                    transition={{ type: 'spring', stiffness: 230, damping: 18 }}
-                    className="text-center bg-black/75 backdrop-blur-md border-2 rounded-3xl px-6 sm:px-10 py-6 max-w-md shadow-2xl"
-                    style={{
-                      borderColor: eventCard.def.kind === 'trap' ? 'rgba(248,113,113,0.6)'
-                        : eventCard.def.kind === 'monster' ? 'rgba(251,146,60,0.6)'
-                        : eventCard.def.kind === 'blessing' ? 'rgba(250,204,21,0.6)'
-                        : dungeon.accentSoft,
-                      boxShadow: `0 0 50px ${dungeon.accentSoft}`,
-                    }}
+                    key="event-overlay"
+                    className="absolute inset-0 z-30 grid place-items-center px-5"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
                   >
+                    <div className="absolute inset-0 bg-black/45 backdrop-blur-[2px]" />
                     <motion.div
-                      className="text-5xl mb-2"
-                      initial={{ rotate: -12, scale: 0.5 }}
-                      animate={{ rotate: 0, scale: 1 }}
-                      transition={{ type: 'spring', stiffness: 260, damping: 12 }}
+                      initial={{ scale: 0.4, y: 40, opacity: 0 }}
+                      animate={{ scale: 1, y: 0, opacity: 1 }}
+                      exit={{ scale: 0.6, opacity: 0, y: 20 }}
+                      transition={{ type: 'spring', stiffness: 260, damping: 16 }}
+                      className="relative w-full max-w-sm rounded-2xl p-6 text-center"
+                      style={{
+                        background: 'linear-gradient(180deg, rgba(30,30,63,0.92), rgba(15,15,35,0.96))',
+                        border: `1px solid ${eventCard.def.kind === 'trap' ? 'rgba(248,113,113,0.4)'
+                          : eventCard.def.kind === 'monster' ? 'rgba(231,76,60,0.4)'
+                          : eventCard.def.kind === 'blessing' ? 'rgba(253,230,138,0.4)'
+                          : dungeon.accentSoft}`,
+                        boxShadow: `0 24px 60px -12px ${dungeon.accentSoft}, 0 0 40px ${dungeon.accentSoft}`,
+                        backdropFilter: 'blur(20px)',
+                      }}
                     >
-                      {eventCard.monster ? eventCard.monster.emoji : eventCard.def.icon}
+                      {exploreResult && (
+                        <div
+                          className="absolute -top-3 left-1/2 -translate-x-1/2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-background border text-xs font-combat font-bold"
+                          style={{ borderColor: dungeon.accentSoft, color: dungeon.accent }}
+                        >
+                          🎲 d20 → {exploreResult.roll}
+                        </div>
+                      )}
+
+                      <motion.div
+                        initial={{ scale: 0, rotate: -20 }}
+                        animate={{ scale: 1, rotate: 0 }}
+                        transition={{ type: 'spring', stiffness: 240, damping: 12, delay: 0.08 }}
+                        className="text-6xl mb-2 mt-1 inline-block"
+                        style={{ filter: `drop-shadow(0 0 18px ${dungeon.accentSoft})` }}
+                      >
+                        {eventCard.monster ? eventCard.monster.emoji : eventCard.def.icon}
+                      </motion.div>
+
+                      <h3 className="text-2xl font-black mb-1.5" style={{ color: dungeon.accent }}>{eventCard.def.title}</h3>
+                      {eventCard.text && <p className="text-sm text-textsec leading-snug mb-4">{eventCard.text}</p>}
+
+                      {eventCard.effects.length > 0 && (
+                        <div className="flex flex-wrap justify-center gap-2 mb-5">
+                          {eventCard.effects.map((fx, i) => (
+                            <motion.span
+                              key={fx}
+                              initial={{ opacity: 0, y: 10, scale: 0.8 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              transition={{ delay: 0.2 + i * 0.12, type: 'spring', stiffness: 300, damping: 18 }}
+                              className="inline-flex items-center gap-1 px-3 py-1 rounded-full border text-sm font-bold font-combat bg-white/10 border-white/20 text-white"
+                            >
+                              {fx}
+                            </motion.span>
+                          ))}
+                        </div>
+                      )}
+
+                      {eventCard.monster ? (
+                        <button
+                          onClick={() => startCombat(eventCard.monster!)}
+                          className="w-full py-3.5 rounded-lg font-black text-white text-lg transition-transform active:scale-[0.98] hover:scale-[1.02] inline-flex items-center justify-center gap-2"
+                          style={{ background: 'linear-gradient(90deg, #e74c3c, #b91c1c)', boxShadow: '0 0 24px rgba(231,76,60,0.45)' }}
+                        >
+                          ⚔️ Lutar!
+                        </button>
+                      ) : (
+                        <button
+                          onClick={dismissEvent}
+                          className="w-full py-3.5 rounded-lg font-bold text-white text-base transition-transform active:scale-[0.98] hover:scale-[1.02]"
+                          style={{ background: `linear-gradient(90deg, ${dungeon.accent}, ${dungeon.accent}aa)`, boxShadow: `0 0 22px ${dungeon.accentSoft}` }}
+                        >
+                          Continuar a jornada →
+                        </button>
+                      )}
                     </motion.div>
-                    <h3 className="text-white font-black text-lg sm:text-xl mb-1.5">{eventCard.def.title}</h3>
-                    {eventCard.text && <p className="text-white/70 text-xs sm:text-sm mb-3">{eventCard.text}</p>}
+                  </motion.div>
+                )}
 
-                    {eventCard.effects.length > 0 && (
-                      <div className="flex flex-wrap justify-center gap-2 mb-4">
-                        {eventCard.effects.map((fx, i) => (
-                          <motion.span
-                            key={fx}
-                            initial={{ scale: 0, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            transition={{ delay: 0.3 + i * 0.15, type: 'spring', stiffness: 300 }}
-                            className="px-3 py-1 rounded-full bg-white/10 border border-white/20 text-white text-xs font-bold"
-                          >
-                            {fx}
-                          </motion.span>
-                        ))}
+                {atBoss && !eventCard && (
+                  <motion.div
+                    key="boss-overlay"
+                    className="absolute inset-0 z-30 grid place-items-center px-5"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                  >
+                    <div className="absolute inset-0 bg-black/65 backdrop-blur-[3px]" />
+                    <motion.div
+                      initial={{ scale: 0.5, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ type: 'spring', stiffness: 200, damping: 15 }}
+                      className="relative w-full max-w-sm rounded-2xl p-7 text-center overflow-hidden"
+                      style={{
+                        background: 'linear-gradient(180deg, rgba(60,8,40,0.92), rgba(15,8,20,0.97))',
+                        border: '1px solid rgba(231,76,60,0.5)',
+                        boxShadow: '0 30px 70px -10px rgba(231,76,60,0.5), 0 0 60px rgba(231,76,60,0.35)',
+                      }}
+                    >
+                      <motion.div
+                        className="absolute inset-0 pointer-events-none"
+                        animate={{ opacity: [0.3, 0.6, 0.3] }}
+                        transition={{ duration: 2.5, repeat: Infinity }}
+                        style={{ background: 'radial-gradient(circle at 50% 35%, rgba(231,76,60,0.25), transparent 60%)' }}
+                      />
+                      <div className="relative">
+                        <span className="text-[11px] font-black uppercase tracking-[0.3em] text-error">⚠ O Chefe Desperta</span>
+                        <motion.div
+                          animate={{ scale: [1, 1.06, 1], rotate: [0, -2, 2, 0] }}
+                          transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                          className="text-7xl my-3 inline-block"
+                          style={{ filter: 'drop-shadow(0 0 26px rgba(231,76,60,0.7))' }}
+                        >
+                          {dungeon.boss.emoji}
+                        </motion.div>
+                        <h2 className="text-3xl font-black text-white leading-none">{dungeon.boss.name}</h2>
+                        <p className="text-sm text-error/90 font-bold uppercase tracking-wider mt-1 mb-5">{dungeon.boss.title}</p>
+                        <button
+                          onClick={() => startCombat(scaleMonster(dungeon.boss, dungeon, character.level, tokenIdx, true))}
+                          className="w-full py-4 rounded-lg font-black text-white text-lg inline-flex items-center justify-center gap-2 transition-transform active:scale-[0.98] hover:scale-[1.02]"
+                          style={{ background: 'linear-gradient(90deg, #e94560, #b91c1c)', boxShadow: '0 0 28px rgba(233,69,96,0.5)' }}
+                        >
+                          👑 Enfrentar o Chefe
+                        </button>
                       </div>
-                    )}
-
-                    {eventCard.monster ? (
-                      <button
-                        onClick={() => startCombat(eventCard.monster!)}
-                        className="px-6 py-3 rounded-xl font-black text-white text-sm bg-gradient-to-r from-red-700 to-orange-600 hover:from-red-600 hover:to-orange-500 shadow-lg transition-all hover:scale-105"
-                      >
-                        ⚔️ Lutar!
-                      </button>
-                    ) : (
-                      <button
-                        onClick={dismissEvent}
-                        className="px-6 py-2.5 rounded-xl font-bold text-white/90 text-sm bg-white/10 hover:bg-white/20 border border-white/20 transition-all"
-                      >
-                        Continuar
-                      </button>
-                    )}
+                    </motion.div>
                   </motion.div>
                 )}
               </AnimatePresence>
+            </main>
 
-              {/* Avançar de sala */}
-              {roomExplored && !eventCard && !isBossRoom && (
-                <motion.button
-                  initial={{ y: 14, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  onClick={advanceRoom}
-                  className="px-6 py-3 rounded-xl font-black text-white text-sm shadow-lg transition-all hover:scale-105"
-                  style={{ background: `linear-gradient(90deg, ${dungeon.accent}aa, ${dungeon.accent}55)`, border: `1px solid ${dungeon.accent}` }}
+            {/* ---------- NARRAÇÃO DO MESTRE ---------- */}
+            <MasterNarration text={narration} />
+
+            {/* ---------- AÇÃO ---------- */}
+            <footer
+              className="flex-shrink-0 px-4 pt-1 pb-4 z-20"
+              style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+            >
+              <div className="mx-auto max-w-md flex items-center gap-2.5">
+                <button
+                  onClick={() => finishRun(false)}
+                  disabled={exploreRolling || moving}
+                  title="Sair da masmorra (mantém recompensas)"
+                  className="shrink-0 w-12 h-[52px] grid place-items-center rounded-xl border border-white/10 bg-black/50 backdrop-blur-xl text-textsec hover:text-white hover:border-white/25 transition-colors active:scale-95 disabled:opacity-40"
                 >
-                  {room + 1 > dungeon.rooms ? `👑 Ir ao covil do Boss (${ADVANCE_COST}⚡)` : `🚪 Avançar para a sala ${room + 1} (${ADVANCE_COST}⚡)`}
-                </motion.button>
-              )}
-            </div>
-
-            {/* Rodapé: personagem + log */}
-            <div className="flex-shrink-0 flex items-end justify-between gap-3 px-3 sm:px-5 pb-3">
-              <div className="flex items-center gap-2.5 bg-black/60 backdrop-blur-sm rounded-2xl border border-white/15 px-3 py-2">
-                <div className="w-11 h-11 rounded-xl overflow-hidden border border-white/20 bg-slate-800 flex items-center justify-center flex-shrink-0">
-                  {character.avatar ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={character.avatar} alt={character.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-xl">🧝</span>
-                  )}
-                </div>
-                <div className="leading-tight">
-                  <div className="text-white text-xs font-bold">{character.name} <span className="text-amber-300">Nv.{character.level}</span></div>
-                  <div className="text-white/50 text-[10px]">{character.race} • {character.class}</div>
-                </div>
+                  🚪
+                </button>
+                <button
+                  onClick={
+                    atBoss
+                      ? () => startCombat(scaleMonster(dungeon.boss, dungeon, character.level, tokenIdx, true))
+                      : advance
+                  }
+                  disabled={exploreRolling || moving || !!eventCard}
+                  className="flex-1 h-[52px] rounded-xl font-black text-lg text-white inline-flex items-center justify-center gap-2.5 transition-all active:scale-[0.98] hover:scale-[1.01] disabled:opacity-50 disabled:cursor-wait disabled:hover:scale-100"
+                  style={{
+                    background: atBoss
+                      ? 'linear-gradient(90deg, #e94560, #b91c1c)'
+                      : `linear-gradient(90deg, ${dungeon.accent}, ${dungeon.accent}aa)`,
+                    boxShadow: atBoss ? '0 0 26px rgba(233,69,96,0.5)' : `0 0 26px ${dungeon.accentSoft}`,
+                  }}
+                >
+                  {exploreRolling || moving
+                    ? '...'
+                    : atBoss
+                      ? '⚔️ Enfrentar o Chefe'
+                      : nextIsBoss
+                        ? '👑 Aproximar-se do covil'
+                        : '🎲 Seguir a trilha'}
+                </button>
               </div>
-
-              <div className="hidden md:block w-72 max-h-28 overflow-y-auto bg-black/50 backdrop-blur-sm rounded-xl border border-white/10 px-3 py-2">
-                {log.slice(-5).map((entry, i) => (
-                  <div key={`${i}-${entry.slice(0, 12)}`} className="text-[10px] text-white/70 py-0.5">{entry}</div>
-                ))}
-              </div>
-            </div>
+            </footer>
           </div>
         )}
 

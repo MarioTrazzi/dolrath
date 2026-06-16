@@ -104,12 +104,13 @@ export function MapTrail({ points, progress }: { points: MapPoint[]; progress: n
       <path
         d={d}
         fill="none"
-        stroke="var(--dgn)"
         strokeWidth="3"
         strokeLinecap="round"
         vectorEffect="non-scaling-stroke"
         pathLength={1}
         style={{
+          // `stroke` precisa ficar no style: var() não resolve em atributo SVG.
+          stroke: 'var(--dgn)',
           filter: 'drop-shadow(0 0 6px var(--dgn))',
           strokeDasharray: `${Math.max(progress, 0.0001)} 2`,
           transition: 'stroke-dasharray 0.9s ease-in-out',

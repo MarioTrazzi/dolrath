@@ -79,33 +79,40 @@ export function EquipmentSlot({ type, item, onEquip, onUnequip, compact, accent 
 
   // ---------------------- Modo compacto (Black Desert) ----------------------
   if (compact) {
+    const slotAccent = accent || '#d9a441';
     const borderColor =
       isOver && canDrop ? '#22c55e'
       : isOver && !canDrop ? '#ef4444'
-      : item ? (accent || '#a855f7')
-      : `${accent || '#a855f7'}55`;
+      : slotAccent;
 
     return (
       <div
         ref={ref}
         title={slotLabel}
-        className="equipment-slot w-12 h-12 sm:w-14 sm:h-14 rounded-lg border-2 bg-black/50 backdrop-blur-sm flex items-center justify-center relative transition-all"
+        className="w-[52px] h-[52px] sm:w-[54px] sm:h-[54px] flex items-center justify-center relative transition-all"
         style={{
-          borderColor,
-          boxShadow: item ? `0 0 12px ${accent || '#a855f7'}55` : undefined,
+          border: `2px solid ${borderColor}`,
+          background: 'linear-gradient(155deg, #1c232b, #0d1116)',
+          boxShadow: `inset 0 0 13px ${slotAccent}${item ? '4d' : '26'}`,
         }}
       >
         {item ? (
           <ItemTooltip item={item} isEquipped={true} onUnequip={onUnequip}>
             <div className="w-full h-full p-1.5 cursor-pointer group flex items-center justify-center">
               <ItemIcon type={item.type} size={24} className="group-hover:scale-110 transition-transform text-white" />
-              <div className="absolute bottom-0.5 right-1 text-[10px] font-bold bg-black/70 px-1 rounded text-white">
+              <span
+                style={{
+                  position: 'absolute', top: -7, right: -6, background: '#0e1318',
+                  border: `1px solid ${slotAccent}`, color: '#ece7da', fontSize: '9.5px',
+                  fontWeight: 700, padding: '0 3px', lineHeight: '13px',
+                }}
+              >
                 {item.level}
-              </div>
+              </span>
             </div>
           </ItemTooltip>
         ) : (
-          <span className="text-base opacity-30 select-none">{SLOT_EMOJI[type] || '▫️'}</span>
+          <span className="text-xl opacity-30 select-none">{SLOT_EMOJI[type] || '▫️'}</span>
         )}
       </div>
     );

@@ -40,22 +40,30 @@ export function DraggableItem({ item, isEquipped, onEquip, onUnequip, onConsume,
       >
         <div
           ref={drag as any}
-          className={`group relative aspect-square rounded-md border bg-black/50 hover:bg-black/30 transition-all cursor-pointer ${
-            isDragging ? 'opacity-50' : 'opacity-100'
-          }`}
-          style={{
-            borderColor: isEquipped ? '#22c55e' : `${accent || '#a855f7'}66`,
-            boxShadow: `0 0 8px ${accent || '#a855f7'}33`,
-          }}
+          className={`group relative aspect-square cursor-pointer ${isDragging ? 'opacity-50' : 'opacity-100'}`}
+          style={{ background: 'linear-gradient(160deg, #11161b, #0c1015)', border: '1px solid #262e37' }}
         >
-          <div className="absolute inset-0 flex items-center justify-center">
-            <ItemIcon type={item.type} size={22} className="group-hover:scale-110 transition-transform text-white" />
+          <div
+            style={{
+              position: 'absolute', inset: 3,
+              border: `1.5px solid ${isEquipped ? '#22c55e' : (accent || '#3f7fd6')}`,
+              background: 'linear-gradient(160deg, #262e38, #141a20)',
+              boxShadow: 'inset 0 0 7px rgba(0,0,0,0.5)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <ItemIcon type={item.type} size={20} className="group-hover:scale-110 transition-transform text-white" />
           </div>
-          <div className="absolute bottom-0 right-0.5 text-[9px] font-bold bg-black/70 px-0.5 rounded text-white">
+          <span
+            style={{
+              position: 'absolute', right: 3, bottom: 1, fontSize: '10px', fontWeight: 600,
+              color: '#e3ddcd', textShadow: '0 1px 2px #000',
+            }}
+          >
             {item.level}
-          </div>
+          </span>
           {isEquipped && (
-            <div className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-green-500 rounded-full"></div>
+            <div className="absolute top-1 right-1 w-1.5 h-1.5 bg-green-500 rounded-full"></div>
           )}
         </div>
       </ItemTooltip>

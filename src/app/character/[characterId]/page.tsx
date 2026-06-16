@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Heart, Shield, Sword, Zap, Plus, Coins, Battery, Brain, Star, Gauge } from 'lucide-react';
+import { Shield, Sword, Zap, Plus, Brain, Star, Search, Box, LayoutGrid, FileText, HelpCircle, X } from 'lucide-react';
 import { Character } from '@/types/game';
 import { EquipmentSlotType } from '@prisma/client';
 import { getRaceById, getClassById } from '@/lib/gameData';
@@ -42,6 +42,7 @@ export default function CharacterDetailsPage() {
   const [equipment, setEquipment] = useState<any[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [goldOnchainText, setGoldOnchainText] = useState<string>('—');
+  const [invSearch, setInvSearch] = useState<string>('');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -633,300 +634,248 @@ export default function CharacterDetailsPage() {
           />
         )}
 
-        {/* Character Stats and Equipment Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          {/* Stats Panel */}
-          <div className="glass-card p-6">
-            <h2 className="text-2xl font-bold mb-4 text-text-primary">Stats</h2>
-            <div className="space-y-3">
-              {/* HP */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Heart className="w-5 h-5 text-red-500" />
-                  <span className="text-text-secondary">HP:</span>
-                </div>
-                <div className="text-right">
-                  <div className="font-bold text-lg">
-                    {stats.total.hp}/{stats.total.maxHp}
-                  </div>
-                  {stats.equipment.hp > 0 && (
-                    <div className="text-xs text-green-400">
-                      {stats.base.hp} + {stats.equipment.hp}
-                    </div>
-                  )}
-                </div>
-              </div>
+        {/* ====== Janelas estilo Black Desert (Equipamento + Inventário) ====== */}
+        <div className="w-full overflow-x-auto pb-2">
+        <div className="flex gap-2 justify-center min-w-[1026px] mx-auto" style={{ fontFamily: "'Barlow', sans-serif" }}>
 
-              {/* MP */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Zap className="w-5 h-5 text-blue-500" />
-                  <span className="text-text-secondary">MP:</span>
-                </div>
-                <div className="text-right">
-                  <div className="font-bold text-lg">
-                    {stats.total.mp}/{stats.total.maxMp}
-                  </div>
-                  {stats.equipment.mp > 0 && (
-                    <div className="text-xs text-green-400">
-                      {stats.base.mp} + {stats.equipment.mp}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Stamina */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Battery className="w-5 h-5 text-orange-500" />
-                  <span className="text-text-secondary">Stamina:</span>
-                </div>
-                <div className="text-right">
-                  <div className="font-bold text-lg">
-                    {stats.total.stamina}/{stats.total.maxStamina}
-                  </div>
-                  {stats.equipment.stamina > 0 && (
-                    <div className="text-xs text-green-400">
-                      {stats.base.stamina} + {stats.equipment.stamina}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* STR */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Sword className="w-5 h-5 text-yellow-500" />
-                  <span className="text-text-secondary">STR:</span>
-                </div>
-                <div className="text-right">
-                  <div className="font-bold text-lg">
-                    {stats.total.str}
-                  </div>
-                  {stats.equipment.str > 0 && (
-                    <div className="text-xs text-green-400">
-                      {stats.base.str} + {stats.equipment.str}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* DEF */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Shield className="w-5 h-5 text-green-500" />
-                  <span className="text-text-secondary">DEF:</span>
-                </div>
-                <div className="text-right">
-                  <div className="font-bold text-lg">
-                    {stats.total.def}
-                  </div>
-                  {stats.equipment.def > 0 && (
-                    <div className="text-xs text-green-400">
-                      {stats.base.def} + {stats.equipment.def}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* AGI */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Zap className="w-5 h-5 text-cyan-500" />
-                  <span className="text-text-secondary">AGI:</span>
-                </div>
-                <div className="text-right">
-                  <div className="font-bold text-lg">
-                    {stats.base.agi}
-                  </div>
-                </div>
-              </div>
-
-              {/* INT */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Brain className="w-5 h-5 text-purple-500" />
-                  <span className="text-text-secondary">INT:</span>
-                </div>
-                <div className="text-right">
-                  <div className="font-bold text-lg">
-                    {stats.base.int}
-                  </div>
-                </div>
-              </div>
-
-              {/* CRIT */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Star className="w-5 h-5 text-yellow-400" />
-                  <span className="text-text-secondary">CRIT:</span>
-                </div>
-                <div className="text-right">
-                  <div className="font-bold text-lg">
-                    {(stats.base.agi * 0.2).toFixed(1)}%
-                  </div>
-                  <div className="text-xs text-text-secondary">
-                    AGI × 0.2
-                  </div>
-                </div>
-              </div>
-
-              {/* SPEED */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Gauge className="w-5 h-5 text-green-400" />
-                  <span className="text-text-secondary">SPEED:</span>
-                </div>
-                <div className="text-right">
-                  <div className="font-bold text-lg">
-                    {(stats.base.agi * 0.5).toFixed(1)}
-                  </div>
-                  <div className="text-xs text-text-secondary">
-                    AGI × 0.5
-                  </div>
-                </div>
-              </div>
-
-              {/* Bonus Stats (se existirem) */}
-              {stats.total.bonusDamage > 0 && (
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Sword className="w-5 h-5 text-orange-500" />
-                    <span className="text-text-secondary">Bonus DMG:</span>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-bold text-lg text-orange-400">
-                      +{stats.total.bonusDamage}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {stats.total.bonusSpeed > 0 && (
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Zap className="w-5 h-5 text-cyan-500" />
-                    <span className="text-text-secondary">Bonus SPD:</span>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-bold text-lg text-cyan-400">
-                      +{stats.total.bonusSpeed}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-            {/* Equipment Panel - estilo Black Desert (slots em volta da silhueta) */}
-          <div className="glass-card p-6 col-span-2">
-            <h2 className="text-2xl font-bold mb-4 text-white">Equipamentos</h2>
+          {/* ============ PAINEL EQUIPAMENTO ============ */}
+          <div
+            className="relative flex flex-col w-[548px]"
+            style={{ background: 'linear-gradient(180deg, rgba(26,32,38,0.96), rgba(20,25,30,0.97))', border: '1px solid #39424d' }}
+          >
+            {/* Retrato flutuante */}
             <div
-              className="relative overflow-hidden rounded-2xl border p-4 sm:p-6"
-              style={{ borderColor: `${visual.borderColor}44` }}
+              className="absolute z-[5] overflow-hidden flex items-center justify-center"
+              style={{ left: -2, top: -2, width: 66, height: 66, border: `2px solid ${visual.borderColor}`, background: '#0e1318', boxShadow: '0 0 0 1px rgba(0,0,0,0.5), 0 6px 14px rgba(0,0,0,0.5)' }}
             >
-              {/* Cenário animado + silhueta central */}
-              <div className="absolute inset-0 opacity-40">
-                <CreationCardBackdrop theme={visual.backdropTheme} />
-              </div>
-              <div className="absolute inset-0 bg-black/55" />
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <PersonSilhouette color={visual.borderColor} className="h-[90%] w-auto" />
-              </div>
+              {(() => {
+                const avatarUrl = resolveImageUrl(character.avatar);
+                return avatarUrl ? (
+                  <img src={avatarUrl} alt={character.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                ) : (
+                  <span className="text-2xl text-white/80">{character.name?.[0]?.toUpperCase() || '?'}</span>
+                );
+              })()}
+            </div>
 
-              {/* Slots em duas colunas ao redor da silhueta */}
-              <div className="relative flex items-stretch justify-between gap-2 min-h-[290px]">
-                {/* Coluna esquerda: defensivos (cor da raça) */}
-                <div className="flex flex-col justify-between gap-3">
-                  {(['HELMET', 'ARMOR', 'GLOVES', 'BOOTS'] as const).map((slot) => (
-                    <EquipmentSlot
-                      key={slot}
-                      compact
-                      accent={visual.raceVisual.accent}
-                      type={slot}
-                      item={character.equipment?.find(e => e.slot === slot)?.item}
-                      onEquip={handleEquip}
-                      onUnequip={handleUnequip}
-                    />
-                  ))}
-                </div>
-                {/* Coluna direita: ofensivos/acessórios (cor da classe) */}
-                <div className="flex flex-col justify-between gap-3">
-                  {(['WEAPON', 'SHIELD', 'NECKLACE', 'RING_1', 'RING_2'] as const).map((slot) => (
-                    <EquipmentSlot
-                      key={slot}
-                      compact
-                      accent={visual.classVisual.accent}
-                      type={slot}
-                      item={character.equipment?.find(e => e.slot === slot)?.item}
-                      onEquip={handleEquip}
-                      onUnequip={handleUnequip}
-                    />
-                  ))}
-                </div>
+            {/* Barra de título */}
+            <div className="flex items-center gap-2" style={{ height: 38, padding: '0 12px 0 76px', background: 'linear-gradient(180deg, #2b333c, #232a31)', borderBottom: '1px solid #11161a' }}>
+              <Sword size={17} style={{ color: visual.borderColor }} />
+              <span style={{ fontSize: 16, fontWeight: 600, color: '#ece7da', letterSpacing: '0.3px' }}>Equipamento</span>
+              <div className="flex-1" />
+              <div className="flex items-center gap-3" style={{ color: '#7e8893' }}>
+                <FileText size={15} /><HelpCircle size={15} /><X size={15} />
               </div>
-            </div>            {/* Inventory Section */}
-            <div className="mt-8">
-              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                <h3 className="text-xl font-bold text-white">
-                  Inventário ({inventory.length}/{character.inventorySlots || 10})
-                </h3>
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2 text-sm text-white/70">
-                    <Coins className="w-4 h-4 text-yellow-500" />
-                    <span>{goldOnchainText}</span>
-                  </div>
-                  <button
-                    onClick={handleExpandInventory}
-                    disabled={expandingSlots}
-                    title="Custo: 1000 GOLD"
-                    className="flex items-center gap-2 px-4 py-2 text-white text-sm font-black rounded-xl shadow-lg hover:scale-105 disabled:opacity-50 transition-transform"
-                    style={{ background: 'linear-gradient(90deg, #eab308cc, #eab30877)', boxShadow: '0 4px 16px rgba(234,179,8,0.3)' }}
-                  >
-                    <Plus className="w-4 h-4" />
-                    {expandingSlots ? 'Expandindo...' : '+5 Slots (1000 GOLD)'}
-                  </button>
-                </div>
-              </div>
-              <div className="grid grid-cols-8 sm:grid-cols-10 gap-1.5 p-3 bg-black/40 rounded-2xl border border-white/10">
-                {/* Renderizar itens nos slots disponíveis */}
-                {Array(character.inventorySlots || 10).fill(null).map((_, idx) => {
-                  const inventoryItem = inventory[idx];
-                  if (inventoryItem) {
-                    const isEquipped = character.equipment?.some(e => e.item.id === inventoryItem.item.id) || false;
-                    return (
-                      <DraggableItem
-                        key={inventoryItem.item.id}
-                        item={inventoryItem.item}
-                        isEquipped={isEquipped}
-                        compact
-                        accent={visual.borderColor}
-                        onEquip={handleEquip}
-                        onUnequip={handleUnequip}
-                        onConsume={handleConsume}
-                        characterId={effectiveCharacterId || ''}
-                      />
+            </div>
+
+            {/* Corpo: figura central + anel de slots */}
+            <div className="relative flex-1" style={{ padding: '14px 18px 0' }}>
+              <div className="absolute text-center" style={{ top: 8, left: 0, right: 0, fontSize: '12.5px', color: '#9aa3ae', letterSpacing: '1.2px', textTransform: 'uppercase' }}>Aparência</div>
+
+              <div className="relative" style={{ height: 392, width: 512, margin: '4px auto 0' }}>
+                {/* Sombra + figura central */}
+                <div className="absolute" style={{ top: 290, left: '50%', transform: 'translateX(-50%)', width: 120, height: 16, background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.55), transparent 70%)', zIndex: 0 }} />
+                <div className="absolute flex items-center justify-center" style={{ top: 24, left: '50%', transform: 'translateX(-50%)', width: 150, height: 272, background: `radial-gradient(70% 50% at 50% 20%, ${visual.borderColor}1a, transparent 60%)`, zIndex: 1 }}>
+                  {(() => {
+                    const avatarUrl = resolveImageUrl(character.avatar);
+                    return avatarUrl ? (
+                      <img src={avatarUrl} alt={character.name} style={{ width: 142, height: 264, objectFit: 'cover', borderRadius: 6, opacity: 0.96 }} referrerPolicy="no-referrer" />
+                    ) : (
+                      <PersonSilhouette color={visual.borderColor} className="h-full w-auto" />
                     );
-                  }
-                  return (
-                    <div
-                      key={`empty-${idx}`}
-                      className="aspect-square rounded-md bg-black/40 border border-white/10"
-                    />
-                  );
-                })}
-              </div>
-              {inventory.length > (character.inventorySlots || 10) && (
-                <div className="mt-4 p-3 bg-red-500/20 border border-red-500/30 rounded-lg">
-                  <p className="text-red-400 text-sm">
-                    ⚠️ Você tem mais itens do que slots disponíveis! Expanda seu inventário ou mova itens para o inventário global.
-                  </p>
+                  })()}
                 </div>
-              )}
+
+                {/* Anel de 12 slots (9 funcionais + 2 brincos e 1 cinto como placeholders) */}
+                {(() => {
+                  const RING: Array<{ key: string; type?: EquipmentSlotType; placeholder?: boolean; emoji?: string; badge?: string; color: string; top: number; left: number }> = [
+                    { key: 'BRINCO_1', placeholder: true, emoji: '💎', badge: 'II', color: '#e0b84c', top: 8, left: 150 },
+                    { key: 'HELMET', type: 'HELMET' as EquipmentSlotType, color: '#3f7fd6', top: 8, left: 229 },
+                    { key: 'BRINCO_2', placeholder: true, emoji: '💎', badge: 'III', color: '#9b59d0', top: 8, left: 308 },
+                    { key: 'ARMOR', type: 'ARMOR' as EquipmentSlotType, color: '#9b59d0', top: 76, left: 78 },
+                    { key: 'NECKLACE', type: 'NECKLACE' as EquipmentSlotType, color: '#9b59d0', top: 76, left: 380 },
+                    { key: 'WEAPON', type: 'WEAPON' as EquipmentSlotType, color: '#e08a2b', top: 156, left: 44 },
+                    { key: 'SHIELD', type: 'SHIELD' as EquipmentSlotType, color: '#3f7fd6', top: 156, left: 414 },
+                    { key: 'GLOVES', type: 'GLOVES' as EquipmentSlotType, color: '#4fae5a', top: 236, left: 78 },
+                    { key: 'RING_1', type: 'RING_1' as EquipmentSlotType, color: '#e0b84c', top: 236, left: 380 },
+                    { key: 'BOOTS', type: 'BOOTS' as EquipmentSlotType, color: '#4fae5a', top: 304, left: 150 },
+                    { key: 'CINTO', placeholder: true, emoji: '🎗️', badge: '+10', color: '#e08a2b', top: 304, left: 229 },
+                    { key: 'RING_2', type: 'RING_2' as EquipmentSlotType, color: '#3f7fd6', top: 304, left: 308 },
+                  ];
+                  return RING.map((s) => (
+                    <div key={s.key} style={{ position: 'absolute', top: s.top, left: s.left, zIndex: 2 }}>
+                      {s.placeholder ? (
+                        <div
+                          title="Em breve"
+                          className="relative flex items-center justify-center w-[54px] h-[54px] opacity-50"
+                          style={{ border: `2px solid ${s.color}`, background: 'linear-gradient(155deg, #1c232b, #0d1116)', boxShadow: `inset 0 0 13px ${s.color}26` }}
+                        >
+                          <span className="text-xl opacity-60">{s.emoji}</span>
+                          {s.badge && (
+                            <span style={{ position: 'absolute', top: -7, right: -6, background: '#0e1318', border: `1px solid ${s.color}`, color: '#ece7da', fontSize: '9.5px', fontWeight: 700, padding: '0 3px', lineHeight: '13px' }}>{s.badge}</span>
+                          )}
+                        </div>
+                      ) : (
+                        <EquipmentSlot
+                          compact
+                          accent={s.color}
+                          type={s.type as EquipmentSlotType}
+                          item={character.equipment?.find(e => e.slot === s.type)?.item}
+                          onEquip={handleEquip}
+                          onUnequip={handleUnequip}
+                        />
+                      )}
+                    </div>
+                  ));
+                })()}
+              </div>
+            </div>
+
+            {/* Atributos secundários */}
+            <div className="flex justify-center" style={{ gap: 22, padding: '10px 18px 12px', marginTop: 4 }}>
+              {[
+                { icon: <Sword size={18} style={{ color: '#e8d08a' }} />, val: String(stats.total.str), label: 'FOR' },
+                { icon: <Zap size={18} style={{ color: '#8fd6e0' }} />, val: String(stats.base.agi), label: 'AGI' },
+                { icon: <Brain size={18} style={{ color: '#c3a6ec' }} />, val: String(stats.base.int), label: 'INT' },
+                { icon: <Star size={18} style={{ color: '#f0c873' }} />, val: `${(stats.base.agi * 0.2).toFixed(1)}%`, label: 'CRÍT' },
+              ].map((a) => (
+                <div key={a.label} className="flex flex-col items-center" style={{ gap: 3 }}>
+                  {a.icon}
+                  <span style={{ fontSize: 14, fontWeight: 700, color: '#d7d2c4' }}>{a.val}</span>
+                  <span style={{ fontSize: '9.5px', color: '#7e8893', letterSpacing: '0.5px' }}>{a.label}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Stats principais */}
+            <div style={{ padding: '4px 22px 10px', borderTop: '1px solid #2a323b' }}>
+              {[
+                { icon: <Sword size={18} style={{ color: '#c98a6a' }} />, label: 'Ataque (AP)', val: stats.total.str + (stats.total.bonusDamage || 0) },
+                { icon: <Zap size={18} style={{ color: '#b06ae0' }} />, label: 'Poder Mágico (AP)', val: stats.total.int },
+                { icon: <Shield size={18} style={{ color: '#6aa9d6' }} />, label: 'Defesa (DP)', val: stats.total.def },
+              ].map((row, i, arr) => (
+                <div key={row.label} className="flex items-center justify-between" style={{ padding: '8px 0', borderBottom: i < arr.length - 1 ? '1px solid #20262d' : 'none' }}>
+                  <div className="flex items-center" style={{ gap: 9 }}>
+                    {row.icon}
+                    <span style={{ fontSize: 14, color: '#c4cad1' }}>{row.label}</span>
+                  </div>
+                  <span style={{ fontSize: 22, fontWeight: 700, color: '#ece7da' }}>{row.val}</span>
+                </div>
+              ))}
             </div>
           </div>
-          
-          {/* Character History Panel */}
+
+          {/* ============ PAINEL INVENTÁRIO ============ */}
+          <div
+            className="relative flex flex-col w-[470px]"
+            style={{ background: 'linear-gradient(180deg, rgba(26,32,38,0.96), rgba(20,25,30,0.97))', border: '1px solid #39424d' }}
+          >
+            {/* Barra de título */}
+            <div className="flex items-center gap-2" style={{ height: 38, padding: '0 12px', background: 'linear-gradient(180deg, #2b333c, #232a31)', borderBottom: '1px solid #11161a' }}>
+              <Box size={17} style={{ color: visual.borderColor }} />
+              <span style={{ fontSize: 16, fontWeight: 600, color: '#ece7da', letterSpacing: '0.3px' }}>Inventário</span>
+              <div className="flex-1" />
+              <div className="flex items-center gap-3" style={{ color: '#7e8893' }}>
+                <FileText size={15} /><HelpCircle size={15} /><X size={15} />
+              </div>
+            </div>
+
+            {/* Abas */}
+            <div className="flex items-end" style={{ gap: 26, padding: '8px 16px 0', borderBottom: '1px solid #2a323b' }}>
+              <div className="relative" style={{ paddingBottom: 9, fontSize: 14, fontWeight: 600, color: '#f1d79a' }}>
+                Inventário
+                <div className="absolute" style={{ left: 0, right: 0, bottom: -1, height: 2, background: visual.borderColor }} />
+              </div>
+            </div>
+
+            {/* Barra de ferramentas */}
+            <div className="flex items-center gap-2" style={{ padding: '11px 14px' }}>
+              <div className="flex-1 flex items-center gap-2" style={{ height: 30, padding: '0 10px', background: '#0f141a', border: '1px solid #313a44' }}>
+                <input
+                  value={invSearch}
+                  onChange={(e) => setInvSearch(e.target.value)}
+                  placeholder="Buscar no inventário"
+                  style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: '#c4cad1', fontSize: '12.5px' }}
+                />
+                <Search size={14} style={{ color: '#7e8893' }} />
+              </div>
+              <div className="flex items-center justify-center" style={{ width: 30, height: 30, background: `linear-gradient(180deg, ${visual.borderColor}33, ${visual.borderColor}14)`, border: `1px solid ${visual.borderColor}` }}>
+                <LayoutGrid size={15} style={{ color: '#f1d79a' }} />
+              </div>
+            </div>
+
+            {/* Grade de itens */}
+            <div className="flex-1" style={{ padding: '2px 14px 8px' }}>
+              <div className="grid" style={{ gridTemplateColumns: 'repeat(8, 1fr)', gap: 5 }}>
+                {(() => {
+                  const total = character.inventorySlots || 10;
+                  const q = invSearch.trim().toLowerCase();
+                  const shown = q ? inventory.filter((i) => (i.item.name || '').toLowerCase().includes(q)) : inventory;
+                  return Array(total).fill(null).map((_, idx) => {
+                    const inventoryItem = shown[idx];
+                    if (inventoryItem) {
+                      const isEquipped = character.equipment?.some(e => e.item.id === inventoryItem.item.id) || false;
+                      return (
+                        <DraggableItem
+                          key={inventoryItem.item.id}
+                          item={inventoryItem.item}
+                          isEquipped={isEquipped}
+                          compact
+                          accent={visual.borderColor}
+                          onEquip={handleEquip}
+                          onUnequip={handleUnequip}
+                          onConsume={handleConsume}
+                          characterId={effectiveCharacterId || ''}
+                        />
+                      );
+                    }
+                    return (
+                      <div key={`empty-${idx}`} className="aspect-square" style={{ background: 'linear-gradient(160deg, #11161b, #0c1015)', border: '1px solid #262e37' }} />
+                    );
+                  });
+                })()}
+              </div>
+            </div>
+
+            {/* Rodapé: slots / expandir */}
+            <div style={{ padding: '4px 16px 0', borderTop: '1px solid #2a323b' }}>
+              <div className="flex items-center gap-2" style={{ padding: '9px 0' }}>
+                <LayoutGrid size={16} style={{ color: '#8d96a1' }} />
+                <span style={{ fontSize: 13, color: '#c4cad1' }}>Slots do Inventário</span>
+                <div className="flex-1" />
+                <span style={{ fontSize: '13.5px', color: '#aeb5be' }}>{inventory.length} / {character.inventorySlots || 10}</span>
+                <button
+                  onClick={handleExpandInventory}
+                  disabled={expandingSlots}
+                  title="Expandir +5 slots (custo: 1000 GOLD)"
+                  className="flex items-center justify-center disabled:opacity-50"
+                  style={{ width: 22, height: 22, background: 'linear-gradient(180deg, #2f3842, #262e37)', border: '1px solid #46505c', cursor: 'pointer' }}
+                >
+                  <Plus size={13} style={{ color: '#cdd3da' }} />
+                </button>
+              </div>
+            </div>
+
+            {inventory.length > (character.inventorySlots || 10) && (
+              <div style={{ margin: '0 16px 8px', padding: 10, background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)' }}>
+                <p style={{ color: '#f0a8a8', fontSize: 12 }}>⚠️ Você tem mais itens do que slots. Expanda o inventário.</p>
+              </div>
+            )}
+
+            {/* Moedas */}
+            <div className="flex items-center flex-wrap" style={{ gap: '16px 24px', padding: '11px 18px 13px', borderTop: '1px solid #2a323b', background: 'rgba(0,0,0,0.18)' }}>
+              <div className="flex items-center" style={{ gap: 7 }}>
+                <div style={{ width: 16, height: 16, borderRadius: '50%', background: 'radial-gradient(circle at 35% 30%, #f6e08a, #c9962a)', border: '1px solid #8a6418' }} />
+                <span style={{ fontSize: 14, fontWeight: 600, color: '#ece7da' }}>{goldOnchainText}</span>
+                <span style={{ fontSize: 11, color: '#7e8893' }}>GOLD</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        </div>
+
+        {/* Painel de Histórico do Personagem */}
+        <div className="max-w-3xl mx-auto mt-6">
           <CharacterHistory characterId={effectiveCharacterId || ''} />
         </div>
           </div>

@@ -19,6 +19,7 @@ import {
   DungeonDef,
   DungeonEventDef,
   DungeonEventKind,
+  NodeScaling,
   ScaledMonster,
   eventForRoll,
   pickMonster,
@@ -29,6 +30,7 @@ import {
   getRaceTransformations,
   type TransformationType,
 } from '@/lib/transformationSystem'
+import { applyEnhancementToStats, STONE_NAMES } from '@/lib/enhancementSystem'
 
 // ============================================================
 // DungeonRun — experiência completa de uma masmorra:
@@ -73,16 +75,18 @@ type CombatStage =
 type AttackKind = 'light' | 'heavy' | 'special'
 type DefenseKind = 'dodge' | 'defend'
 
-const ATTACKS: Record<AttackKind, { label: string; icon: string; sides: number; mult: number; stamina: number; mp: number }> = {
-  light: { label: 'Ataque Leve', icon: '👊', sides: 6, mult: 1.0, stamina: 1, mp: 0 },
-  heavy: { label: 'Ataque Pesado', icon: '⚔️', sides: 10, mult: 1.45, stamina: 2, mp: 0 },
-  special: { label: 'Ataque Especial', icon: '✨', sides: 20, mult: 1.9, stamina: 4, mp: 15 },
+// Combate NÃO gasta stamina (a stamina é o orçamento DIÁRIO de runs).
+// O que limita o combate é HP (sobrevivência) e MP (especial/transformação).
+const ATTACKS: Record<AttackKind, { label: string; icon: string; sides: number; mult: number; mp: number }> = {
+  light: { label: 'Ataque Leve', icon: '👊', sides: 6, mult: 1.0, mp: 0 },
+  heavy: { label: 'Ataque Pesado', icon: '⚔️', sides: 10, mult: 1.45, mp: 0 },
+  special: { label: 'Ataque Especial', icon: '✨', sides: 20, mult: 1.9, mp: 15 },
 }
 
-const DEFENSE_COSTS: Record<DefenseKind, number> = { dodge: 1, defend: 3 }
-const EXPLORE_COST = 8
-const ADVANCE_COST = 5
-const BREATH_RECOVER = 12
+// Custo de stamina por TIPO de nó ao avançar na trilha (exploração).
+const MINOR_STEP_COST = 4 // nó menor
+const MAIN_STEP_COST = 8  // sala principal (encontro garantido)
+const BOSS_STEP_COST = 6  // aproximar-se do covil
 
 // Falas de transição do Mestre entre as salas (genéricas, tom de RPG)
 const TRANSITIONS = [
@@ -134,14 +138,33 @@ function mapEquipment(equipArray: any[]): EquipmentMap {
   return map
 }
 
-function equipmentBonus(equipArray: any[], key: 'attack' | 'defense'): number {
-  let total = 0
+// Stats efetivos de uma peça de equipamento JÁ com o aprimoramento aplicado.
+// (Antes o combate ignorava enhancementLevel e procurava chaves attack/defense
+//  inexistentes — então armadura e aprimoramento valiam zero na masmorra.)
+function enhancedStats(eq: any): Record<string, number> {
+  const raw = eq?.item?.stats || {}
+  const level = Number(eq?.enhancementLevel) || 0
+  return applyEnhancementToStats(raw, level) as Record<string, number>
+}
+
+const num = (v: any) => (typeof v === 'number' ? v : Number(v) || 0)
+
+// Poder agregado do equipamento (com aprimoramento) nas três dimensões usadas
+// pelo combate da masmorra.
+function equipmentPower(equipArray: any[]): { attack: number; defense: number; hp: number } {
+  let attack = 0
+  let defense = 0
+  let hp = 0
   for (const eq of equipArray || []) {
-    const stats = eq?.item?.stats
-    if (stats?.[key]) total += Number(stats[key]) || 0
-    if (key === 'attack' && stats?.bonusDamage) total += Number(stats.bonusDamage) || 0
+    const s = enhancedStats(eq)
+    // ataque: dano da arma + melhor atributo ofensivo da peça
+    attack += num(s.bonusDamage) + num(s.attack) + Math.max(num(s.str), num(s.agi), num(s.int))
+    // defesa: defesa da peça + resistência/constituição (metade)
+    defense += num(s.def) + num(s.defense) + Math.floor((num(s.res) + num(s.con)) / 2)
+    // vida extra das peças
+    hp += num(s.hp)
   }
-  return total
+  return { attack, defense, hp }
 }
 
 interface Outcome {
@@ -169,9 +192,10 @@ function computeOutcome(
 }
 
 export default function DungeonRun({ dungeon, character, onExit }: DungeonRunProps) {
-  // ---------- Recursos locais do personagem (persistem durante a run) ----------
-  const [hp, setHp] = useState(character.hp)
-  const [mp, setMp] = useState(character.mp)
+  // ---------- Recursos locais do personagem (durante a run) ----------
+  // HP e MP começam cheios: a stamina diária é o que limita as tentativas.
+  const [hp, setHp] = useState(() => character.maxHp + equipmentPower(character.equipment).hp)
+  const [mp, setMp] = useState(character.maxMp)
   const [stamina, setStamina] = useState(character.stamina)
   const hpRef = useRef(hp)
   hpRef.current = hp
@@ -186,8 +210,11 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const [xpSaved, setXpSaved] = useState(false)
 
   // ---------- Mapa de exploração (trilha de nós) ----------
-  // nó 0 = entrada; 1..rooms = salas de evento; último = covil do boss.
-  const trailPoints = useMemo(() => buildTrailPoints(dungeon.rooms), [dungeon.rooms])
+  // entrada → (nós menores + sala principal) × salas → covil do boss.
+  const trailPoints = useMemo(
+    () => buildTrailPoints(dungeon.rooms, dungeon.minorNodes),
+    [dungeon.rooms, dungeon.minorNodes]
+  )
   const LAST = trailPoints.length - 1
   const [tokenIdx, setTokenIdx] = useState(0)
   const [moving, setMoving] = useState(false)
@@ -196,6 +223,22 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const [floats, setFloats] = useState<{ id: number; label: string; color: string }[]>([])
   const atBoss = tokenIdx === LAST
   const nextIsBoss = tokenIdx === LAST - 1
+  const nextMainNode = trailPoints[tokenIdx + 1]?.kind === 'main'
+  // Progresso por SALA PRINCIPAL (os nós menores não contam como "sala").
+  const curTier = trailPoints[tokenIdx]?.tier || 0
+  const atMainNode = trailPoints[tokenIdx]?.kind === 'main'
+  const mainsDone = trailPoints.reduce((n, p, i) => n + (p.kind === 'main' && i < tokenIdx ? 1 : 0), 0)
+  // Escalonamento (tier/tipo de nó) a partir de um índice da trilha.
+  const scalingAt = (idx: number): NodeScaling => {
+    const pt = trailPoints[idx]
+    return { tier: pt?.tier || 1, isMain: pt?.kind === 'main', isBoss: pt?.kind === 'boss' }
+  }
+  const stepCost = (idx: number): number => {
+    const pt = trailPoints[idx]
+    if (pt?.kind === 'boss') return BOSS_STEP_COST
+    if (pt?.kind === 'main') return MAIN_STEP_COST
+    return MINOR_STEP_COST
+  }
 
   // ---------- Exploração ----------
   const [exploreRolling, setExploreRolling] = useState(false)
@@ -310,9 +353,12 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     }
   }, [character.id])
 
-  // ---------- Modificadores de dados ----------
-  const equipAtk = useMemo(() => equipmentBonus(character.equipment, 'attack'), [character.equipment])
-  const equipDef = useMemo(() => equipmentBonus(character.equipment, 'defense'), [character.equipment])
+  // ---------- Poder do equipamento (COM aprimoramento) ----------
+  const gear = useMemo(() => equipmentPower(character.equipment), [character.equipment])
+  const equipAtk = gear.attack
+  const equipDef = gear.defense
+  // HP efetivo = base do personagem + vida das peças aprimoradas
+  const effMaxHp = character.maxHp + gear.hp
   // Multiplicadores ativos da transformação (1 quando não transformado)
   const atkMult = activeTransformCfg ? activeTransformCfg.statModifiers.attack : 1
   const defMult = activeTransformCfg ? activeTransformCfg.statModifiers.defense : 1
@@ -329,7 +375,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     class: character.class,
     avatar: character.avatar,
     hp,
-    maxHp: character.maxHp,
+    maxHp: effMaxHp,
     mp,
     maxMp: character.maxMp,
     stamina,
@@ -368,14 +414,29 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     return 'locked'
   }
 
+  // Escolhe o tipo de evento conforme o nó: sala principal = monstro garantido;
+  // nó menor = chance reduzida de monstro (metade vira evento pacífico).
+  const pickEventDef = (roll: number, sc: NodeScaling): DungeonEventDef => {
+    let ev = eventForRoll(dungeon, roll)
+    if (sc.isMain) {
+      return dungeon.events.find(e => e.kind === 'monster') || ev
+    }
+    if (ev.kind === 'monster' && Math.random() > 0.5) {
+      const peaceful = dungeon.events.filter(e => e.kind === 'nothing' || e.kind === 'gold' || e.kind === 'item')
+      ev = peaceful[Math.floor(Math.random() * peaceful.length)] || dungeon.events.find(e => e.kind === 'nothing') || ev
+    }
+    return ev
+  }
+
   // Resolve um evento (aplica efeitos + revela o nó); retorna o card a exibir.
   const buildAndApplyEvent = (roll: number, atIdx: number): ResolvedEvent => {
-    const ev = eventForRoll(dungeon, roll)
+    const sc = scalingAt(atIdx)
+    const ev = pickEventDef(roll, sc)
     const lvl = character.level
 
     switch (ev.kind) {
       case 'trap': {
-        const dmg = Math.max(1, Math.ceil(character.maxHp * (ev.trapDamagePct || 10) / 100))
+        const dmg = Math.max(1, Math.ceil(effMaxHp * (ev.trapDamagePct || 10) / 100))
         const newHp = Math.max(0, hpRef.current - dmg)
         setHp(newHp)
         setTrapShake(true)
@@ -387,12 +448,12 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
         return { def: ev, text: ev.description, effects: [`-${dmg} ❤️`] }
       }
       case 'monster': {
-        const scaled = scaleMonster(pickMonster(dungeon), dungeon, lvl, atIdx)
+        const scaled = scaleMonster(pickMonster(dungeon), dungeon, lvl, sc)
         setNodeEvents(prev => ({ ...prev, [atIdx]: { kind: 'monster', emoji: scaled.emoji } }))
         pushLog(`${ev.icon} ${ev.title} ${scaled.emoji} ${scaled.name} apareceu!`)
         return {
           def: ev,
-          text: ev.description,
+          text: sc.isMain ? `Guardião da sala: ${ev.description}` : ev.description,
           effects: [`${scaled.emoji} ${scaled.name} • Nv.${scaled.level}`],
           monster: scaled,
         }
@@ -425,8 +486,8 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
         const effects: string[] = []
         const b = ev.blessing
         if (b?.hpPct) {
-          const heal = Math.ceil(character.maxHp * b.hpPct / 100)
-          setHp(prev => Math.min(character.maxHp, prev + heal))
+          const heal = Math.ceil(effMaxHp * b.hpPct / 100)
+          setHp(prev => Math.min(effMaxHp, prev + heal))
           pushFloat(`+${heal} ❤️`, '#2ecc71')
           effects.push(`+${heal} ❤️`)
         }
@@ -435,11 +496,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
           setMp(prev => Math.min(character.maxMp, prev + gain))
           effects.push(`+${gain} 🔮`)
         }
-        if (b?.staminaPct) {
-          const gain = Math.ceil(character.maxStamina * b.staminaPct / 100)
-          setStamina(prev => Math.min(character.maxStamina, prev + gain))
-          effects.push(`+${gain} ⚡`)
-        }
+        // staminaPct removido: stamina é o orçamento diário e não se recupera na run.
         if (b?.xpPerLevel) {
           const xp = b.xpPerLevel * lvl
           setTotals(prev => ({ ...prev, xp: prev.xp + xp }))
@@ -464,31 +521,29 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const advance = () => {
     if (phase !== 'explore' || exploreRolling || moving || eventCard || atBoss) return
     const dest = tokenIdx + 1
+    const cost = stepCost(dest)
 
-    // Último passo: chega ao covil do boss (sem rolagem, custo reduzido).
+    if (stamina < cost) {
+      showBanner('😮‍💨', `Stamina insuficiente (precisa de ${cost}⚡) — ela reseta amanhã`)
+      return
+    }
+
+    // Último passo: chega ao covil do boss (sem rolagem).
     if (dest === LAST) {
-      if (stamina < ADVANCE_COST) {
-        showBanner('😮‍💨', `Stamina insuficiente para avançar (precisa de ${ADVANCE_COST}⚡)`)
-        return
-      }
-      setStamina(prev => Math.max(0, prev - ADVANCE_COST))
-      persistStamina(ADVANCE_COST)
+      setStamina(prev => Math.max(0, prev - cost))
+      persistStamina(cost)
       setMoving(true)
       setTokenIdx(dest)
-      setNarration('Você chega a uma clareira sufocada por raízes. O ar treme... algo antigo se ergue.')
+      setNarration('A trilha desemboca no covil. O ar treme... algo antigo se ergue.')
       pushLog(`👑 Você chegou ao covil de ${dungeon.boss.name}...`)
       later(() => setMoving(false), 900)
       later(() => showBanner('👑', `${dungeon.boss.name} desperta!`, 3000), 950)
       return
     }
 
-    // Sala de evento: rola o d20, anda até o nó e revela o que aconteceu.
-    if (stamina < EXPLORE_COST) {
-      showBanner('😮‍💨', `Stamina insuficiente para explorar (precisa de ${EXPLORE_COST}⚡)`)
-      return
-    }
-    setStamina(prev => Math.max(0, prev - EXPLORE_COST))
-    persistStamina(EXPLORE_COST)
+    // Nó de evento (menor ou sala principal): rola o d20, anda e revela.
+    setStamina(prev => Math.max(0, prev - cost))
+    persistStamina(cost)
     setExploreRolling(true)
     setExploreResult(null)
 
@@ -547,7 +602,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     pushLog(`⚔️ Combate contra ${m.emoji} ${m.name} começou!`)
   }
 
-  // ---------- Transformação ----------
+  // ---------- Transformação (custa só MP; stamina é o orçamento diário) ----------
   const activateTransform = (type: TransformationType) => {
     const cfg = TRANSFORMATION_CONFIG[type]
     if (!cfg || transform || transformCd > 0) return
@@ -555,13 +610,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       showBanner('🔮', `MP insuficiente para transformar! (${cfg.cost.mp}🔮)`)
       return
     }
-    if (stamina < cfg.cost.stamina) {
-      showBanner('😮‍💨', `Stamina insuficiente para transformar! (${cfg.cost.stamina}⚡)`)
-      return
-    }
     setMp(prev => Math.max(0, prev - cfg.cost.mp))
-    setStamina(prev => Math.max(0, prev - cfg.cost.stamina))
-    persistStamina(cfg.cost.stamina)
     setTransform({ type, turns: cfg.duration })
     setShowFormPicker(false)
     showBanner('✨', `${cfg.name} ativada! (${cfg.duration} turnos)`, 2800)
@@ -616,35 +665,18 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     }, 3000)
   }
 
-  // ---------- Turno do jogador ----------
+  // ---------- Turno do jogador (ataque custa só MP no especial) ----------
   const choosePlayerAttack = (kind: AttackKind) => {
     const atk = ATTACKS[kind]
-    if (stamina < atk.stamina) {
-      showBanner('😮‍💨', `Stamina insuficiente! (${atk.stamina}⚡)`)
-      return
-    }
     if (mp < atk.mp) {
       showBanner('🔮', `MP insuficiente! (${atk.mp}🔮)`)
       return
-    }
-    if (atk.stamina > 0) {
-      setStamina(prev => Math.max(0, prev - atk.stamina))
-      persistStamina(atk.stamina)
     }
     if (atk.mp > 0) setMp(prev => Math.max(0, prev - atk.mp))
     setPendingAttack(kind)
     setPanelResult(null)
     setHasRolled(false)
     setStage('playerRoll')
-  }
-
-  const recoverBreath = () => {
-    setStamina(prev => Math.min(character.maxStamina, prev + BREATH_RECOVER))
-    showBanner('😤', `Você recupera o fôlego (+${BREATH_RECOVER}⚡)`)
-    pushLog(`😤 Você recuperou o fôlego (+${BREATH_RECOVER}⚡).`)
-    setStage('busy')
-    tickPlayerTurn()
-    later(() => monsterTelegraph(), 1600)
   }
 
   const handlePlayerAttackRoll = () => {
@@ -716,13 +748,6 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   }
 
   const choosePlayerDefense = (choice: DefenseKind) => {
-    const cost = DEFENSE_COSTS[choice]
-    if (stamina < cost) {
-      showBanner('😮‍💨', `Stamina insuficiente! (${cost}⚡)`)
-      return
-    }
-    setStamina(prev => Math.max(0, prev - cost))
-    persistStamina(cost)
     setDefenseChoice(choice)
     setPanelResult(null)
     setHasRolled(false)
@@ -795,6 +820,27 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     persistReward(m.goldReward)
     pushLog(`🏆 Você derrotou ${m.emoji} ${m.name}! +${m.goldReward} 💰 +${m.xpReward} XP`)
 
+    // Espólio extra de SALA PRINCIPAL e BOSS: item + pedra de aprimoramento.
+    const isMainNode = trailPoints[tokenIdx]?.kind === 'main'
+    if (m.isBoss || isMainNode) {
+      const itemEv = dungeon.events.find(e => e.kind === 'item')
+      const names = itemEv?.itemNames || []
+      if (names.length) {
+        const drop = names[Math.floor(Math.random() * names.length)]
+        setTotals(prev => ({ ...prev, items: [...prev.items, drop] }))
+        persistReward(0, drop, `Espólio de ${dungeon.name}`, itemEv?.itemRarity)
+        pushLog(`📦 Espólio: ${drop}`)
+      }
+      const stone = m.isBoss
+        ? STONE_NAMES.WEAPON_CONCENTRATED
+        : Math.random() < 0.5
+          ? STONE_NAMES.ARMOR_BASIC
+          : STONE_NAMES.WEAPON_BASIC
+      setTotals(prev => ({ ...prev, items: [...prev.items, stone] }))
+      persistReward(0, stone, 'Pedra de aprimoramento', 'COMMON')
+      pushLog(`⚒️ Espólio: ${stone}`)
+    }
+
     later(() => {
       setMonster(null)
       if (m.isBoss) {
@@ -811,11 +857,10 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
 
   const handleDefeat = () => {
     setPhase('defeat')
-    // Na derrota, metade do XP acumulado ainda é salvo
-    const xp = Math.floor(totalsRef.current.xp / 2)
-    if (xp > 0 && !xpSaved) {
+    // Sem penalidade: o XP acumulado é salvo INTEGRALMENTE (gear/itens já foram salvos na hora).
+    if (!xpSaved && totalsRef.current.xp > 0) {
       setXpSaved(true)
-      persistXp(xp)
+      persistXp(totalsRef.current.xp)
     }
   }
 
@@ -834,7 +879,8 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   }
 
   const exitRun = () => {
-    onExit({ hp: Math.max(1, hp), mp, stamina })
+    // HP e MP voltam ao cheio entre runs — só a stamina (orçamento diário) é consumida.
+    onExit({ hp: effMaxHp, mp: character.maxMp, stamina })
   }
 
   // ---------- Painel de dados da arena ----------
@@ -918,23 +964,27 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
             <div className="min-w-0">
               <h2 className="text-white font-black text-sm sm:text-base truncate">{dungeon.name}</h2>
               <div className="flex items-center gap-1">
-                {Array.from({ length: dungeon.rooms }).map((_, i) => (
-                  <div
-                    key={i}
-                    className={`w-2 h-2 rounded-full ${i + 1 < tokenIdx ? 'bg-green-400' : i + 1 === tokenIdx ? 'animate-pulse' : 'bg-white/20'}`}
-                    style={i + 1 === tokenIdx ? { backgroundColor: dungeon.accent } : undefined}
-                  />
-                ))}
+                {Array.from({ length: dungeon.rooms }).map((_, i) => {
+                  const done = i + 1 <= mainsDone
+                  const current = i + 1 === curTier && !isBossRoom
+                  return (
+                    <div
+                      key={i}
+                      className={`w-2 h-2 rounded-full ${done ? 'bg-green-400' : current ? 'animate-pulse' : 'bg-white/20'}`}
+                      style={current ? { backgroundColor: dungeon.accent } : undefined}
+                    />
+                  )
+                })}
                 <span className={`text-[11px] ml-0.5 ${isBossRoom ? 'animate-pulse' : 'opacity-40'}`}>👑</span>
                 <span className="text-[10px] text-white/60 ml-1.5">
-                  {isBossRoom ? 'Covil do Boss' : tokenIdx === 0 ? 'Entrada' : `Sala ${tokenIdx}/${dungeon.rooms}`}
+                  {isBossRoom ? 'Covil do Boss' : tokenIdx === 0 ? 'Entrada' : `Sala ${curTier}/${dungeon.rooms}`}
                 </span>
               </div>
             </div>
           </div>
 
           <div className="hidden sm:flex flex-col gap-0.5">
-            <ResourceBar icon="❤️" value={hp} max={character.maxHp} gradient="from-red-600 to-rose-400" />
+            <ResourceBar icon="❤️" value={hp} max={effMaxHp} gradient="from-red-600 to-rose-400" />
             <ResourceBar icon="🔮" value={mp} max={character.maxMp} gradient="from-blue-600 to-cyan-400" />
             <ResourceBar icon="⚡" value={stamina} max={character.maxStamina} gradient="from-yellow-600 to-amber-300" />
           </div>
@@ -1021,7 +1071,13 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
 
               {/* selo de progresso */}
               <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 text-[10px] uppercase tracking-[0.2em] text-textsec/70 font-bold pointer-events-none">
-                {atBoss ? 'Covil do Chefe' : tokenIdx === 0 ? `Entrada • ${dungeon.rooms} salas` : `Sala ${tokenIdx} de ${dungeon.rooms}`}
+                {atBoss
+                  ? 'Covil do Chefe'
+                  : tokenIdx === 0
+                    ? `Entrada • ${dungeon.rooms} salas`
+                    : atMainNode
+                      ? `⚔️ Sala ${curTier} de ${dungeon.rooms}`
+                      : `A caminho da sala ${curTier} de ${dungeon.rooms}`}
               </div>
 
               {/* overlay: dado rolando */}
@@ -1152,7 +1208,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                         <h2 className="text-3xl font-black text-white leading-none">{dungeon.boss.name}</h2>
                         <p className="text-sm text-error/90 font-bold uppercase tracking-wider mt-1 mb-5">{dungeon.boss.title}</p>
                         <button
-                          onClick={() => startCombat(scaleMonster(dungeon.boss, dungeon, character.level, tokenIdx, true))}
+                          onClick={() => startCombat(scaleMonster(dungeon.boss, dungeon, character.level, { tier: dungeon.rooms, isMain: true, isBoss: true }))}
                           className="w-full py-4 rounded-lg font-black text-white text-lg inline-flex items-center justify-center gap-2 transition-transform active:scale-[0.98] hover:scale-[1.02]"
                           style={{ background: 'linear-gradient(90deg, #e94560, #b91c1c)', boxShadow: '0 0 28px rgba(233,69,96,0.5)' }}
                         >
@@ -1185,7 +1241,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                 <button
                   onClick={
                     atBoss
-                      ? () => startCombat(scaleMonster(dungeon.boss, dungeon, character.level, tokenIdx, true))
+                      ? () => startCombat(scaleMonster(dungeon.boss, dungeon, character.level, { tier: dungeon.rooms, isMain: true, isBoss: true }))
                       : advance
                   }
                   disabled={exploreRolling || moving || !!eventCard}
@@ -1193,8 +1249,10 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                   style={{
                     background: atBoss
                       ? 'linear-gradient(90deg, #e94560, #b91c1c)'
-                      : `linear-gradient(90deg, ${dungeon.accent}, ${dungeon.accent}aa)`,
-                    boxShadow: atBoss ? '0 0 26px rgba(233,69,96,0.5)' : `0 0 26px ${dungeon.accentSoft}`,
+                      : nextMainNode
+                        ? 'linear-gradient(90deg, #f39c12, #b45309)'
+                        : `linear-gradient(90deg, ${dungeon.accent}, ${dungeon.accent}aa)`,
+                    boxShadow: atBoss ? '0 0 26px rgba(233,69,96,0.5)' : nextMainNode ? '0 0 26px rgba(243,156,18,0.45)' : `0 0 26px ${dungeon.accentSoft}`,
                   }}
                 >
                   {exploreRolling || moving
@@ -1203,7 +1261,9 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                       ? '⚔️ Enfrentar o Chefe'
                       : nextIsBoss
                         ? '👑 Aproximar-se do covil'
-                        : '🎲 Seguir a trilha'}
+                        : nextMainNode
+                          ? `⚔️ Entrar na sala ${trailPoints[tokenIdx + 1]?.tier}`
+                          : '🎲 Seguir a trilha'}
                 </button>
               </div>
             </footer>
@@ -1238,7 +1298,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                 <div className="flex flex-wrap items-center justify-center gap-2">
                   {(Object.keys(ATTACKS) as AttackKind[]).map(kind => {
                     const atk = ATTACKS[kind]
-                    const disabled = stamina < atk.stamina || mp < atk.mp
+                    const disabled = mp < atk.mp
                     return (
                       <button
                         key={kind}
@@ -1254,25 +1314,13 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                       >
                         {atk.icon} {atk.label}
                         <span className="block text-[9px] opacity-80 font-normal">
-                          d{atk.sides} • {atk.stamina}⚡{atk.mp > 0 ? ` • ${atk.mp}🔮` : ''}
+                          d{atk.sides}{atk.mp > 0 ? ` • ${atk.mp}🔮` : ''}
                         </span>
                       </button>
                     )
                   })}
-                  <button
-                    onClick={recoverBreath}
-                    disabled={stamina >= character.maxStamina}
-                    className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all shadow-lg ${
-                      stamina >= character.maxStamina
-                        ? 'bg-gray-700/60 opacity-50 cursor-not-allowed'
-                        : 'bg-gradient-to-r from-emerald-700 to-teal-600 hover:scale-105'
-                    }`}
-                  >
-                    😤 Recuperar Fôlego
-                    <span className="block text-[9px] opacity-80 font-normal">+{BREATH_RECOVER}⚡ • perde o turno</span>
-                  </button>
 
-                  {/* Transformação (apenas raças com formas) */}
+                  {/* Transformação (apenas raças com formas) — custa só MP */}
                   {transformForms.length > 0 && (
                     <div className="relative">
                       {transform ? (
@@ -1282,7 +1330,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                         </div>
                       ) : (() => {
                         const single = transformForms.length === 1 ? TRANSFORMATION_CONFIG[transformForms[0]] : null
-                        const disabled = transformCd > 0 || (!!single && (mp < single.cost.mp || stamina < single.cost.stamina))
+                        const disabled = transformCd > 0 || (!!single && mp < single.cost.mp)
                         return (
                           <>
                             <button
@@ -1300,7 +1348,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                             >
                               {transformCd > 0 ? `🌀 Recarga (${transformCd})` : '🌀 Transformar'}
                               <span className="block text-[9px] opacity-80 font-normal">
-                                {single ? `${single.cost.mp}🔮 • ${single.cost.stamina}⚡` : `${transformForms.length} formas`}
+                                {single ? `${single.cost.mp}🔮` : `${transformForms.length} formas`}
                               </span>
                             </button>
 
@@ -1308,7 +1356,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                               <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-50 w-60 bg-black/90 backdrop-blur-md border border-white/15 rounded-xl p-2 shadow-2xl space-y-1">
                                 {transformForms.map(t => {
                                   const cfg = TRANSFORMATION_CONFIG[t]
-                                  const dis = mp < cfg.cost.mp || stamina < cfg.cost.stamina
+                                  const dis = mp < cfg.cost.mp
                                   return (
                                     <button
                                       key={t}
@@ -1319,7 +1367,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                                       }`}
                                     >
                                       <span className="font-bold text-white text-xs">{cfg.name}</span>
-                                      <span className="block text-[9px] text-white/60">{cfg.cost.mp}🔮 • {cfg.cost.stamina}⚡ • {cfg.duration} turnos</span>
+                                      <span className="block text-[9px] text-white/60">{cfg.cost.mp}🔮 • {cfg.duration} turnos</span>
                                     </button>
                                   )
                                 })}
@@ -1336,27 +1384,17 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                   <span className="text-amber-300 text-xs font-bold mr-1 hidden sm:inline">🛡️ Reaja ao ataque:</span>
                   <button
                     onClick={() => choosePlayerDefense('dodge')}
-                    disabled={stamina < DEFENSE_COSTS.dodge}
-                    className={`px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all shadow-lg ${
-                      stamina < DEFENSE_COSTS.dodge
-                        ? 'bg-gray-700/60 opacity-50 cursor-not-allowed'
-                        : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:scale-105'
-                    }`}
+                    className="px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all shadow-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:scale-105"
                   >
                     🌪️ Esquivar
-                    <span className="block text-[9px] opacity-80 font-normal">{DEFENSE_COSTS.dodge}⚡ • anula se ganhar</span>
+                    <span className="block text-[9px] opacity-80 font-normal">anula se ganhar a rolagem</span>
                   </button>
                   <button
                     onClick={() => choosePlayerDefense('defend')}
-                    disabled={stamina < DEFENSE_COSTS.defend}
-                    className={`px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all shadow-lg ${
-                      stamina < DEFENSE_COSTS.defend
-                        ? 'bg-gray-700/60 opacity-50 cursor-not-allowed'
-                        : 'bg-gradient-to-r from-emerald-600 to-green-600 hover:scale-105'
-                    }`}
+                    className="px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all shadow-lg bg-gradient-to-r from-emerald-600 to-green-600 hover:scale-105"
                   >
                     🛡️ Defender
-                    <span className="block text-[9px] opacity-80 font-normal">{DEFENSE_COSTS.defend}⚡ • reduz o dano</span>
+                    <span className="block text-[9px] opacity-80 font-normal">reduz o dano recebido</span>
                   </button>
                 </div>
               ) : stage === 'initiative' || stage === 'playerRoll' || stage === 'defenseRoll' ? (
@@ -1451,10 +1489,10 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
               <div className="text-6xl mb-3">💀</div>
               <h3 className="text-red-400 font-black text-2xl mb-2">Você caiu...</h3>
               <p className="text-white/60 text-xs mb-4">
-                {dungeon.name} reivindica mais uma alma. Metade do XP acumulado foi preservado.
+                Sem perdas: tudo que você ganhou foi guardado. Volte mais forte — a stamina reseta amanhã.
               </p>
               <div className="text-white/70 text-xs mb-5">
-                💰 {totals.gold} ouro já salvo • ⭐ {Math.floor(totals.xp / 2)} XP preservado
+                💰 {totals.gold} ouro • ⭐ {totals.xp} XP • 📦 {totals.items.length} itens — tudo salvo
               </div>
               <button
                 onClick={exitRun}

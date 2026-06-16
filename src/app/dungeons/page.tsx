@@ -218,6 +218,11 @@ export default function DungeonsPage() {
                     <div className="text-white/60 text-[10px] mt-0.5">
                       {dungeon.rooms} salas + 👑
                     </div>
+                    <div
+                      className={`text-[10px] mt-0.5 font-bold ${selectedCharacter && selectedCharacter.level < dungeon.levelReq ? 'text-red-400' : 'text-white/50'}`}
+                    >
+                      Nv. {dungeon.levelReq}+
+                    </div>
                   </div>
                 </div>
 
@@ -245,27 +250,36 @@ export default function DungeonsPage() {
                     </span>
                   </div>
 
-                  <button
-                    onClick={() => canEnter && setActiveDungeon(dungeon)}
-                    disabled={!canEnter}
-                    className={`px-5 py-2.5 rounded-xl font-black text-sm text-white shadow-lg transition-all ${
-                      canEnter ? 'hover:scale-105' : 'opacity-50 cursor-not-allowed'
-                    }`}
-                    style={{
-                      background: `linear-gradient(90deg, ${dungeon.accent}cc, ${dungeon.accent}77)`,
-                      boxShadow: `0 4px 20px ${dungeon.accentSoft}`,
-                    }}
-                  >
-                    🚪 Entrar
-                  </button>
+                  {(() => {
+                    const meetsLevel = !!selectedCharacter && selectedCharacter.level >= dungeon.levelReq
+                    const enter = canEnter && meetsLevel
+                    return (
+                      <button
+                        onClick={() => enter && setActiveDungeon(dungeon)}
+                        disabled={!enter}
+                        title={!meetsLevel ? `Requer nível ${dungeon.levelReq}` : undefined}
+                        className={`px-5 py-2.5 rounded-xl font-black text-sm text-white shadow-lg transition-all ${
+                          enter ? 'hover:scale-105' : 'opacity-50 cursor-not-allowed'
+                        }`}
+                        style={{
+                          background: `linear-gradient(90deg, ${dungeon.accent}cc, ${dungeon.accent}77)`,
+                          boxShadow: `0 4px 20px ${dungeon.accentSoft}`,
+                        }}
+                      >
+                        {canEnter && !meetsLevel ? `🔒 Nv. ${dungeon.levelReq}` : '🚪 Entrar'}
+                      </button>
+                    )
+                  })()}
                 </div>
               </div>
             </motion.div>
           ))}
         </div>
 
-        <p className="text-center text-white/30 text-[11px] mt-6">
-          🎲 Explorar custa 8⚡ • Avançar de sala custa 5⚡ • Combate na arena com dados (d6/d10/d20) e reações em tempo real
+        <p className="text-center text-white/30 text-[11px] mt-6 max-w-2xl mx-auto">
+          ⚡ A stamina é seu orçamento de runs do dia (reseta amanhã) e só é gasta avançando na trilha — o combate não a consome.
+          ❤️🔮 HP e MP voltam ao cheio entre runs. Você nunca perde XP, ouro ou itens ao morrer ou sair: cada tentativa te deixa mais forte.
+          Salas principais (⚔️) têm monstro garantido e melhor espólio; os nós menores entre elas são mais fáceis.
         </p>
       </div>
     </div>

@@ -15,12 +15,13 @@ import { DungeonEventKind } from '@/lib/dungeonAdventures'
 // CSS vars --dgn / --dgn-soft (definidas pelo container pai).
 // ============================================================
 
-export type NodeKind = 'start' | 'event' | 'boss'
+export type NodeKind = 'start' | 'minor' | 'main' | 'boss'
 
 export interface MapPoint {
   x: number // 0..100 (%)
   y: number // 0..100 (%)
   kind: NodeKind
+  tier: number // sala principal associada (0 = entrada)
 }
 
 export type NodeVisualState = 'done' | 'current' | 'next' | 'locked'
@@ -41,22 +42,27 @@ export const KIND_GLOW: Record<DungeonEventKind, string> = {
 }
 
 // ------------------------------------------------------------
-// Gera a trilha serpenteante (de baixo p/ cima) a partir do
-// número de salas: nó 0 = entrada, 1..rooms = eventos, último = boss.
+// Gera a trilha serpenteante (de baixo p/ cima):
+//   entrada → (n nós menores + 1 sala principal) × salas → boss.
+// Nós menores herdam o tier da sala principal seguinte.
 // ------------------------------------------------------------
-export function buildTrailPoints(rooms: number): MapPoint[] {
-  const last = rooms + 1
-  const pts: MapPoint[] = []
-  for (let i = 0; i <= last; i++) {
+export function buildTrailPoints(rooms: number, minorNodes: number): MapPoint[] {
+  const seq: { kind: NodeKind; tier: number }[] = [{ kind: 'start', tier: 0 }]
+  for (let t = 1; t <= rooms; t++) {
+    for (let m = 0; m < minorNodes; m++) seq.push({ kind: 'minor', tier: t })
+    seq.push({ kind: 'main', tier: t })
+  }
+  seq.push({ kind: 'boss', tier: rooms })
+
+  const last = seq.length - 1
+  return seq.map((n, i) => {
     const t = last > 0 ? i / last : 0
     const y = 95 - t * 84 // 95% (base) -> 11% (topo)
     let x: number
     if (i === 0 || i === last) x = 50
-    else x = i % 2 === 1 ? 28 : 70
-    const kind: NodeKind = i === 0 ? 'start' : i === last ? 'boss' : 'event'
-    pts.push({ x, y, kind })
-  }
-  return pts
+    else x = i % 2 === 1 ? 24 : 74
+    return { x, y, kind: n.kind, tier: n.tier }
+  })
 }
 
 // ------------------------------------------------------------
@@ -138,9 +144,10 @@ export function MapNode({
 }) {
   const isBoss = pt.kind === 'boss'
   const isStart = pt.kind === 'start'
+  const isMain = pt.kind === 'main'
   const base =
     'absolute -translate-x-1/2 -translate-y-1/2 rounded-full flex items-center justify-center select-none'
-  const size = isBoss ? 'w-16 h-16' : 'w-11 h-11'
+  const size = isBoss ? 'w-16 h-16' : isMain ? 'w-12 h-12' : isStart ? 'w-10 h-10' : 'w-8 h-8'
   const glow = revealed ? (revealed.kind === 'item' ? accent : KIND_GLOW[revealed.kind]) : null
 
   let face: React.ReactNode = null
@@ -170,24 +177,28 @@ export function MapNode({
       <span className="w-2 h-2 rounded-full" style={{ background: 'var(--dgn)' }}></span>
     )
   } else if (state === 'next') {
-    ring = '2px solid var(--dgn)'
+    ring = `2px solid ${isMain ? '#f39c12' : 'var(--dgn)'}`
     fill = 'rgba(15,15,35,0.95)'
     face = isBoss ? (
       <span className="text-2xl">👑</span>
+    ) : isMain ? (
+      <span className="text-base">⚔️</span>
     ) : (
-      <span className="font-black text-base" style={{ color: 'var(--dgn)' }}>
+      <span className="font-black text-sm" style={{ color: 'var(--dgn)' }}>
         ?
       </span>
     )
   } else {
     // locked
-    ring = '1px solid rgba(255,255,255,0.1)'
+    ring = `1px solid ${isMain ? 'rgba(243,156,18,0.4)' : 'rgba(255,255,255,0.1)'}`
     fill = 'rgba(10,10,25,0.7)'
-    opacity = isBoss ? 0.7 : 0.4
+    opacity = isBoss ? 0.7 : isMain ? 0.55 : 0.4
     face = isBoss ? (
       <span className="text-2xl opacity-50">👑</span>
+    ) : isMain ? (
+      <span className="text-sm opacity-60">⚔️</span>
     ) : (
-      <span className="font-black text-sm text-white/30">?</span>
+      <span className="font-black text-xs text-white/30">·</span>
     )
   }
 

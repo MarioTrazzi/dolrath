@@ -46,8 +46,12 @@ export interface DungeonDef {
   emoji: string
   tagline: string
   description: string
-  /** Salas de exploração antes da sala do boss */
+  /** Salas PRINCIPAIS (monstro garantido + loot melhor) antes do boss */
   rooms: number
+  /** Nós menores entre cada sala principal (chance reduzida de monstro, mais fracos) */
+  minorNodes: number
+  /** Nível recomendado para entrar (gating de progressão) */
+  levelReq: number
   /** Multiplicador de dificuldade (escala monstros e recompensas) */
   difficulty: number
   difficultyStars: number
@@ -76,6 +80,8 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     description:
       'Uma mata ancestral onde as árvores sussurram e vagalumes guiam — ou enganam — os viajantes. Fontes élficas escondidas curam quem as encontra.',
     rooms: 3,
+    minorNodes: 2,
+    levelReq: 1,
     difficulty: 1.0,
     difficultyStars: 1,
     accent: '#34d399',
@@ -137,6 +143,8 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     description:
       'Galerias profundas onde cristais pulsam com luz própria. Veios de ouro atraem mineradores — e as criaturas que os devoraram.',
     rooms: 4,
+    minorNodes: 2,
+    levelReq: 10,
     difficulty: 1.15,
     difficultyStars: 2,
     accent: '#22d3ee',
@@ -199,6 +207,8 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     description:
       'Um lamaçal coberto de névoa onde fogos-fátuos dançam sobre tesouros afundados. Cada passo pode ser o último — ou o mais rico.',
     rooms: 4,
+    minorNodes: 3,
+    levelReq: 25,
     difficulty: 1.3,
     difficultyStars: 3,
     accent: '#a3e635',
@@ -260,6 +270,8 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     description:
       'Colunas partidas e altares cobertos de runas guardam o saber de um império extinto. Os mortos patrulham os corredores — e odeiam visitas.',
     rooms: 5,
+    minorNodes: 3,
+    levelReq: 40,
     difficulty: 1.45,
     difficultyStars: 4,
     accent: '#c084fc',
@@ -339,29 +351,54 @@ export interface ScaledMonster {
   isBoss: boolean
 }
 
+// ============================================================
+// TUNING DE DIFICULDADE — ajuste estes valores no playtest.
+// O poder do monstro = difficulty × tier × tipo-de-nó × nível.
+// Mira: Floresta exige comuns +6/+11/+15 por sala; masmorras
+// seguintes sobem para PRI/DUO/TRI/TET conforme o tier.
+// ============================================================
+const TIER_POWER_STEP = 0.6   // +60% de poder a cada sala principal dentro da masmorra
+const MINOR_NODE_FACTOR = 0.55 // nó menor = fração do poder da sala principal do mesmo tier
+const BOSS_POWER_MULT = 1.8   // ataque/defesa do boss sobre a última sala
+const BOSS_HP_MULT = 1.8      // HP extra do boss
+const LEVEL_POWER_STEP = 0.04 // influência do nível do personagem (sutil)
+
+export interface NodeScaling {
+  /** 1..rooms — qual sala principal (nós menores herdam o tier da próxima sala) */
+  tier: number
+  /** true em sala principal (monstro garantido, mais forte) */
+  isMain: boolean
+  isBoss?: boolean
+}
+
 export function scaleMonster(
   def: DungeonMonsterDef,
   dungeon: DungeonDef,
   characterLevel: number,
-  room: number,
-  isBoss = false
+  s: NodeScaling
 ): ScaledMonster {
-  const levelFactor = 1 + (characterLevel - 1) * 0.1 + (room - 1) * 0.05
   const d = dungeon.difficulty
-  const hp = Math.floor(def.baseHp * d * levelFactor)
-  const bossTitle = isBoss && 'title' in def ? ` • ${(def as DungeonBossDef).title}` : ''
+  const tierFactor = 1 + (s.tier - 1) * TIER_POWER_STEP
+  const nodeFactor = s.isBoss ? BOSS_POWER_MULT : s.isMain ? 1 : MINOR_NODE_FACTOR
+  const lvlFactor = 1 + Math.max(0, characterLevel - dungeon.levelReq) * LEVEL_POWER_STEP
+  const power = d * tierFactor * nodeFactor * lvlFactor
+
+  const hp = Math.floor(def.baseHp * power * (s.isBoss ? BOSS_HP_MULT : 1))
+  const bossTitle = s.isBoss && 'title' in def ? ` • ${(def as DungeonBossDef).title}` : ''
+  // Nível do monstro acompanha o requisito da masmorra + a sala (acopla evolução do player)
+  const monLevel = Math.max(1, Math.round(dungeon.levelReq + (s.tier - 1) * 3 + (s.isBoss ? 4 : s.isMain ? 1 : 0)))
   return {
-    id: `${isBoss ? 'boss' : 'monster'}-${Date.now()}`,
-    name: isBoss ? `👑 ${def.name}${bossTitle}` : def.name,
+    id: `${s.isBoss ? 'boss' : 'monster'}-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
+    name: s.isBoss ? `👑 ${def.name}${bossTitle}` : def.name,
     emoji: def.emoji,
-    level: Math.max(1, characterLevel + room - 1 + (isBoss ? 2 : 0)),
+    level: monLevel,
     hp,
     maxHp: hp,
-    attack: Math.floor(def.baseAttack * d * (1 + (characterLevel - 1) * 0.08)),
-    defense: Math.floor(def.baseDefense * d * (1 + (characterLevel - 1) * 0.06)),
-    goldReward: Math.floor((isBoss ? 150 + Math.random() * 150 : 12 + Math.random() * 18) * d * (1 + characterLevel * 0.1)),
-    xpReward: Math.floor((isBoss ? 120 + Math.random() * 80 : 18 + Math.random() * 22) * d),
-    isBoss,
+    attack: Math.floor(def.baseAttack * power),
+    defense: Math.floor(def.baseDefense * power),
+    goldReward: Math.floor((s.isBoss ? 150 + Math.random() * 150 : s.isMain ? 25 + Math.random() * 25 : 6 + Math.random() * 10) * d * tierFactor),
+    xpReward: Math.floor((s.isBoss ? 150 + Math.random() * 100 : s.isMain ? 35 + Math.random() * 25 : 12 + Math.random() * 12) * d * tierFactor),
+    isBoss: !!s.isBoss,
   }
 }
 

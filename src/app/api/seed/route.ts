@@ -116,16 +116,19 @@ async function seedEnhancementStones() {
   const results = { created: 0, updated: 0, items: [] as string[] }
 
   for (const stone of stones) {
+    // Pedras vêm de masmorras (luta/exploração), não da loja.
+    const stats = { ...stone.stats, source: 'dungeon' }
+    const image = itemImagePath(stone.name)
     const existing = await prisma.item.findFirst({ where: { name: stone.name } })
     if (existing) {
       await prisma.item.update({
         where: { id: existing.id },
-        data: { description: stone.description, stats: stone.stats, goldPrice: stone.goldPrice },
+        data: { description: stone.description, stats, goldPrice: stone.goldPrice, image },
       })
       results.updated++
       results.items.push(`🔄 ${stone.name}`)
     } else {
-      await prisma.item.create({ data: stone })
+      await prisma.item.create({ data: { ...stone, stats, image } })
       results.created++
       results.items.push(`✨ ${stone.name}`)
     }

@@ -44,6 +44,7 @@ export const TYPE_STYLE: Record<string, string> = {
   RING: 'A ring: a single ornate band with a set gemstone, shown large and detailed.',
   NECKLACE: 'A necklace/amulet: a pendant on a fine chain, the pendant prominent and detailed.',
   CONSUMABLE: 'A consumable: a glass potion vial or alchemical flask with a glowing liquid and a corked or sealed top.',
+  ENHANCEMENT_STONE: 'An enhancement stone (Black Desert "black stone" vibe): a single dark, polished obsidian-black stone fragment, faceted and floating, with glowing runic cracks of arcane energy running through it. A runic sigil is etched on its face. NO vial, NO bottle, NO liquid.',
 };
 
 // Per-rarity treatment — escalates ornamentation and magical aura.

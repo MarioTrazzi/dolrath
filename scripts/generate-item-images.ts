@@ -137,6 +137,12 @@ const subjects: Subject[] = [
   { name: 'Elixir de Energia', description: 'Restaura 40 de stamina instantaneamente.', type: 'CONSUMABLE', rarity: 'COMMON' as any },
   { name: 'Elixir Maior', description: 'Restaura 40 HP e 30 MP em combate.', type: 'CONSUMABLE', rarity: 'UNCOMMON' as any },
   { name: 'Poção de Reviver', description: 'Revive um personagem morto com 25% do HP máximo.', type: 'CONSUMABLE', rarity: 'RARE' as any },
+  // Pedras de aprimoramento (obtidas em masmorras). type ENHANCEMENT_STONE só
+  // muda o PROMPT (no DB continuam CONSUMABLE); o wiring da imagem é por nome.
+  { name: 'Pedra Negra (Arma)', description: 'Fragmento de pedra negra com brilho âmbar quente e uma marca de espadas cruzadas gravada em runas na face. Aprimora ARMAS de +1 a +15.', type: 'ENHANCEMENT_STONE', rarity: 'UNCOMMON' as any },
+  { name: 'Pedra Negra (Armadura)', description: 'Fragmento de pedra negra com brilho azul-aço e uma marca de escudo gravada em runas na face. Aprimora ARMADURAS de +1 a +15.', type: 'ENHANCEMENT_STONE', rarity: 'UNCOMMON' as any },
+  { name: 'Pedra Negra Mágica Concentrada (Arma)', description: 'Pedra negra condensada, maior e ardente, runas de espada e uma aura magenta intensa com fagulhas. Aprimora ARMAS aos níveis I–V.', type: 'ENHANCEMENT_STONE', rarity: 'EPIC' as any },
+  { name: 'Pedra Negra Mágica Concentrada (Armadura)', description: 'Pedra negra condensada, maior, runas de escudo e uma aura violeta intensa com fagulhas. Aprimora ARMADURAS aos níveis I–V.', type: 'ENHANCEMENT_STONE', rarity: 'EPIC' as any },
 ]
 
 async function main() {

@@ -253,5 +253,17 @@
   },
   "Poção de Reviver": {
     "file": "/items/pocao-de-reviver.webp"
+  },
+  "Pedra Negra (Arma)": {
+    "file": "/items/pedra-negra-arma.webp"
+  },
+  "Pedra Negra (Armadura)": {
+    "file": "/items/pedra-negra-armadura.webp"
+  },
+  "Pedra Negra Mágica Concentrada (Arma)": {
+    "file": "/items/pedra-negra-magica-concentrada-arma.webp"
+  },
+  "Pedra Negra Mágica Concentrada (Armadura)": {
+    "file": "/items/pedra-negra-magica-concentrada-armadura.webp"
   }
 }

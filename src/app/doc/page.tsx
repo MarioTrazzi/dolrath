@@ -164,6 +164,12 @@ const STAT_SHORT: Record<string, string> = { str: 'str', agi: 'agi', int: 'int',
 const SOURCE_LABEL: Record<string, string> = { shop: '🏪 Loja', dungeon: '🗝️ Masmorra', dungeon_boss: '👑 Chefe', adventure_boss: '🗓️ Aventura' }
 const BUILD_LABEL: Record<string, string> = { brute: '💪 Força', agile: '🏹 Agilidade', arcane: '🔮 Arcano', guardian: '🛡️ Guardião' }
 const DUNGEON_PT: Record<string, string> = { floresta: 'Floresta Sombria', caverna: 'Caverna de Cristal', pantano: 'Pântano Maldito', ruinas: 'Ruínas Arcanas' }
+const ENHANCEMENT_STONES = [
+  { name: 'Pedra Negra (Arma)', rarity: 'UNCOMMON' as RarityKey, use: '+1 a +15 · armas/escudos' },
+  { name: 'Pedra Negra (Armadura)', rarity: 'UNCOMMON' as RarityKey, use: '+1 a +15 · armaduras' },
+  { name: 'Pedra Negra Mágica Concentrada (Arma)', rarity: 'EPIC' as RarityKey, use: 'I–V (PRI–PEN) · armas/escudos' },
+  { name: 'Pedra Negra Mágica Concentrada (Armadura)', rarity: 'EPIC' as RarityKey, use: 'I–V (PRI–PEN) · armaduras' },
+]
 const ADVENTURE_BOSSES = [
   { day: 'Semana 1', emoji: '🔥', name: 'Krax-thar', title: 'o Devorador de Mundos', theme: 'Dragão ígneo' },
   { day: 'Semana 2', emoji: '🕷️', name: "Vol'theris", title: 'a Tecelã do Vazio', theme: 'Aranha do vazio' },
@@ -696,6 +702,15 @@ boss: +2 níveis, recompensa maior`}</Formula>
                   </div>
                 )
               })}
+
+              {/* ⚒️ Pedras de aprimoramento */}
+              <h3 className="pt-4 text-lg font-semibold text-white">⚒️ Pedras de Aprimoramento</h3>
+              <p className="text-sm">Obtidas em masmorras (luta com monstros / exploração) — não vendidas na loja. 10 pedras menores forjam 1 concentrada (sessão de crafting em breve). Detalhes do sistema na seção <a href="#enhancement" className="text-primary hover:underline">Aprimoramento</a>.</p>
+              <ItemGallery>
+                {ENHANCEMENT_STONES.map((s) => (
+                  <ItemArtCard key={s.name} name={s.name} type="ENHANCEMENT_STONE" rarity={s.rarity} meta={`🗝️ Masmorra · ${s.use}`} />
+                ))}
+              </ItemGallery>
             </Section>
 
             {/* Aprimoramento */}

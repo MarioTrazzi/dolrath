@@ -23,12 +23,12 @@ export async function GET(request: Request) {
       ],
     });
 
-    // A loja vende APENAS itens de origem "shop". Itens legados sem o campo
-    // `source` (consumíveis básicos, pedras) são tratados como de loja.
+    // A loja vende APENAS itens explicitamente de origem "shop" (catálogo final).
+    // Itens sem `source` (pedras de aprimoramento, materiais, gear legado) NÃO
+    // aparecem — são obtidos em masmorras/aventuras.
     const shopItems = items.filter((item) => {
       const stats = (item.stats ?? {}) as Record<string, any>;
-      const source = stats.source ?? 'shop';
-      if (source !== 'shop') return false;
+      if (stats.source !== 'shop') return false;
 
       // Filtro por raça do personagem ativo (peso de armadura + exclusividade).
       if (race) {

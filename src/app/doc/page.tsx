@@ -18,7 +18,7 @@ import Link from 'next/link'
 import { races as RACES_SRC, pointSystem } from '@/lib/characterCreationData'
 import { CLASSES } from '@/lib/gameData'
 import { TRANSFORMATION_CONFIG } from '@/lib/transformationSystem'
-import { ITEM_CATALOG, CONSUMABLE_CATALOG, RARITY_DROP_WEIGHT, type CatalogItem } from '@/lib/itemCatalog'
+import { ITEM_CATALOG, CONSUMABLE_CATALOG, RARITY_DROP_WEIGHT, itemImagePath, type CatalogItem } from '@/lib/itemCatalog'
 import { DUNGEON_LIST } from '@/lib/dungeonAdventures'
 import { MATERIALS } from '@/lib/dungeonData'
 import { getXPForNextLevel } from '@/lib/experienceSystem'
@@ -106,6 +106,53 @@ function Table({ head, rows }: { head: string[]; rows: React.ReactNode[][] }) {
 
 function Todo() {
   return <Tag tone="todo">🔜 TODO</Tag>
+}
+
+// Card visual de item (mesmo tamanho dos cards da /store) com a imagem gerada.
+// Usado na seção Itens para revisar toda a arte de uma vez.
+function ItemArtCard({
+  name, type, rarity, level, goldPrice, statsText, meta,
+}: {
+  name: string
+  type: string
+  rarity: RarityKey
+  level?: number
+  goldPrice?: number
+  statsText?: string
+  meta?: React.ReactNode
+}) {
+  const r = RARITY[rarity]
+  return (
+    <div className={`group relative flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-surface/40 ring-1 ${r.ring} shadow-lg`}>
+      <div className="relative aspect-square overflow-hidden bg-black/50">
+        {/* asset estático /items/<slug>.webp — img simples (sem next/image) */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={itemImagePath(name)}
+          alt={name}
+          loading="lazy"
+          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+        />
+        <span className="absolute left-2 top-2"><Pill rarity={rarity} /></span>
+        {typeof goldPrice === 'number' && goldPrice > 0 && (
+          <span className="absolute right-2 top-2 rounded-md bg-black/60 px-2 py-0.5 text-[11px] font-semibold text-amber-300 ring-1 ring-amber-500/30">{goldPrice} 🪙</span>
+        )}
+      </div>
+      <div className="flex flex-1 flex-col gap-1.5 p-3">
+        <h4 className={`text-sm font-bold leading-tight ${r.text}`}>{name}</h4>
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-textsec">
+          <Code>{type}</Code>
+          {typeof level === 'number' && <span>Nv {level}</span>}
+        </div>
+        {statsText && <p className="font-game text-[11px] leading-snug text-emerald-300">{statsText}</p>}
+        {meta && <div className="mt-auto pt-1 text-[11px] text-textsec">{meta}</div>}
+      </div>
+    </div>
+  )
+}
+
+function ItemGallery({ children }: { children: React.ReactNode }) {
+  return <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">{children}</div>
 }
 
 // ---------------- Derivações a partir das fontes ----------------
@@ -560,25 +607,25 @@ boss: +2 níveis, recompensa maior`}</Formula>
                 </Card>
               </div>
 
+              <p className="text-sm text-textsec">Galeria completa com a arte gerada de cada item (mesmo tamanho dos cards da <Code>/store</Code>) — para revisar tudo e marcar o que precisa refazer. {ITEM_CATALOG.length + CONSUMABLE_CATALOG.length} itens.</p>
+
               {/* 🏪 Loja */}
               <h3 className="pt-2 text-lg font-semibold text-white">🏪 Loja — armas, armaduras &amp; apoio</h3>
               {(['COMMON', 'UNCOMMON'] as RarityKey[]).map((rk) => {
                 const items = ITEM_CATALOG.filter((i) => i.source === 'shop' && i.rarity === rk)
                 if (!items.length) return null
                 return (
-                  <div key={rk} className="space-y-2">
+                  <div key={rk} className="space-y-3">
                     <div className="flex items-center gap-2 pt-2"><Pill rarity={rk} /><span className="text-sm text-textsec">{rk === 'UNCOMMON' ? 'Superior · ' : ''}{items.length} itens</span></div>
-                    <Table
-                      head={['Item', 'Tipo', 'Nv', 'GOLD', 'Stats', 'Build']}
-                      rows={items.map((it) => [
-                        <span key={it.name} className={`font-semibold ${RARITY[rk].text}`}>{it.name}</span>,
-                        <Code key="t">{it.type}</Code>,
-                        it.level,
-                        <span key="g" className="text-amber-300">{it.goldPrice}</span>,
-                        <span key="s" className="font-game text-xs text-emerald-300">{itemStatsToString(it.stats)}</span>,
-                        <span key="b" className="text-xs">{it.build ? BUILD_LABEL[it.build] : '—'}</span>,
-                      ])}
-                    />
+                    <ItemGallery>
+                      {items.map((it) => (
+                        <ItemArtCard
+                          key={it.name} name={it.name} type={it.type} rarity={it.rarity}
+                          level={it.level} goldPrice={it.goldPrice} statsText={itemStatsToString(it.stats)}
+                          meta={it.build ? BUILD_LABEL[it.build] : undefined}
+                        />
+                      ))}
+                    </ItemGallery>
                   </div>
                 )
               })}
@@ -589,42 +636,35 @@ boss: +2 níveis, recompensa maior`}</Formula>
                 const items = ITEM_CATALOG.filter((i) => i.source !== 'shop' && i.rarity === rk)
                 if (!items.length) return null
                 return (
-                  <div key={rk} className="space-y-2">
+                  <div key={rk} className="space-y-3">
                     <div className="flex items-center gap-2 pt-2"><Pill rarity={rk} /><span className="text-sm text-textsec">{items.length} itens</span></div>
-                    <Table
-                      head={['Item', 'Tipo', 'Nv', 'GOLD', 'Stats', 'Origem', 'Masmorra / Raça']}
-                      rows={items.map((it) => [
-                        <span key={it.name} className={`font-semibold ${RARITY[rk].text}`}>{it.name}</span>,
-                        <Code key="t">{it.type}</Code>,
-                        it.level,
-                        <span key="g" className="text-amber-300">{it.goldPrice}</span>,
-                        <span key="s" className="font-game text-xs text-emerald-300">{itemStatsToString(it.stats)}</span>,
-                        <span key="o" className="text-xs">{SOURCE_LABEL[it.source]}</span>,
-                        dungeonAndRace(it),
-                      ])}
-                    />
+                    <ItemGallery>
+                      {items.map((it) => (
+                        <ItemArtCard
+                          key={it.name} name={it.name} type={it.type} rarity={it.rarity}
+                          level={it.level} goldPrice={it.goldPrice} statsText={itemStatsToString(it.stats)}
+                          meta={<><span>{SOURCE_LABEL[it.source]}</span> · {dungeonAndRace(it)}</>}
+                        />
+                      ))}
+                    </ItemGallery>
                   </div>
                 )
               })}
 
-              {/* 🗓️ Aventuras semanais */}
+              {/* 🗓️ Aventuras semanais — contexto dos chefes */}
               <h3 className="pt-4 text-lg font-semibold text-white">🗓️ Chefes das Aventuras Semanais</h3>
-              <p className="text-sm">Um chefe único por sábado (rotação de 4 semanas), cada um com gear nomeado exclusivo — modelo Black Desert (Kzarka, Garmoth, Karanda…).</p>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <p className="text-sm">Um chefe único por sábado (rotação de 4 semanas), cada um com gear nomeado exclusivo (Lendário acima) — modelo Black Desert (Kzarka, Garmoth, Karanda…).</p>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {ADVENTURE_BOSSES.map((b) => {
                   const drops = ITEM_CATALOG.filter((i) => i.adventureBoss === b.name)
                   return (
                     <Card key={b.name}>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2"><span className="text-2xl">{b.emoji}</span><div><h4 className="font-semibold text-white">{b.name}</h4><p className="text-xs text-textsec">{b.title}</p></div></div>
-                        <Tag>{b.day}</Tag>
-                      </div>
-                      <p className="mt-2 text-xs text-textsec">{b.theme} · Sábado</p>
-                      <ul className="mt-2 space-y-1 text-sm">
+                      <div className="flex items-center gap-2"><span className="text-2xl">{b.emoji}</span><div><h4 className="font-semibold text-white">{b.name}</h4><p className="text-xs text-textsec">{b.title}</p></div></div>
+                      <p className="mt-2 text-xs text-textsec">{b.theme} · {b.day} · Sábado</p>
+                      <ul className="mt-2 space-y-1 text-xs">
                         {drops.map((d) => (
                           <li key={d.name} className="flex items-center justify-between gap-2">
-                            <span className="text-amber-300">{d.name}</span>
-                            <Code>{d.type}</Code>
+                            <span className="text-amber-300">{d.name}</span><Code>{d.type}</Code>
                           </li>
                         ))}
                       </ul>
@@ -635,29 +675,24 @@ boss: +2 níveis, recompensa maior`}</Formula>
 
               {/* 🧪 Consumíveis */}
               <h3 className="pt-4 text-lg font-semibold text-white">🧪 Consumíveis</h3>
-              <p className="text-sm">Loja vende básicos e intermediários; masmorras e aventuras trazem versões aprimoradas e únicas. <Tag>fonte: itemCatalog.ts · seed-battle-consumables.ts</Tag></p>
+              <p className="text-sm">Loja vende básicos e intermediários; masmorras e aventuras trazem versões aprimoradas e únicas.</p>
               {([
                 { label: '🏪 Loja — básicos & intermediários', filter: (c: typeof CONSUMABLE_CATALOG[number]) => c.source === 'shop' },
                 { label: '🗝️ Masmorras & Aventuras — aprimorados & únicos', filter: (c: typeof CONSUMABLE_CATALOG[number]) => c.source !== 'shop' },
               ]).map((group) => {
                 const items = CONSUMABLE_CATALOG.filter(group.filter)
                 return (
-                  <div key={group.label} className="space-y-2">
-                    <div className="pt-2 text-sm font-semibold text-white">{group.label}</div>
-                    <Table
-                      head={['Consumível', 'Subtipo', 'Nv', 'GOLD', 'Efeito', 'Origem']}
-                      rows={items.map((c) => {
-                        const rk = c.rarity as RarityKey
-                        return [
-                          <span key={c.name} className={`font-semibold ${RARITY[rk].text}`}>{c.name}</span>,
-                          <Code key="t">{c.subtype}</Code>,
-                          c.level,
-                          <span key="g" className="text-amber-300">{c.goldPrice}</span>,
-                          <span key="e" className="font-game text-xs text-emerald-300">{consumableEffectToString(c.stats)}</span>,
-                          <span key="o" className="text-xs">{c.adventureBoss ?? SOURCE_LABEL[c.source]}</span>,
-                        ]
-                      })}
-                    />
+                  <div key={group.label} className="space-y-3">
+                    <div className="pt-2 text-sm font-semibold text-white">{group.label} <span className="text-textsec">· {items.length}</span></div>
+                    <ItemGallery>
+                      {items.map((c) => (
+                        <ItemArtCard
+                          key={c.name} name={c.name} type="CONSUMABLE" rarity={c.rarity as RarityKey}
+                          level={c.level} goldPrice={c.goldPrice} statsText={consumableEffectToString(c.stats)}
+                          meta={c.adventureBoss ?? SOURCE_LABEL[c.source]}
+                        />
+                      ))}
+                    </ItemGallery>
                   </div>
                 )
               })}

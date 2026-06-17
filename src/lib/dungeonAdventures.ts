@@ -450,11 +450,28 @@ export type LootNodeKind = 'minor' | 'main' | 'boss'
 
 const LUCK_CFG: Record<
   LuckTier,
-  { goldBase: number; goldVar: number; pMaterial: number; pConsumable: number; pItem: number; pStone: number; rarities: string[] }
+  {
+    goldBase: number; goldVar: number; pMaterial: number; pConsumable: number; pStone: number;
+    // Items: normal (nós principais/menores) + boss (covil)
+    pItemCommon: number; pItemUncommon: number;
+    pItemRare: number; pItemEpic: number;
+  }
 > = {
-  low: { goldBase: 4, goldVar: 8, pMaterial: 0.7, pConsumable: 0.18, pItem: 0.12, pStone: 0.02, rarities: ['COMMON'] },
-  mid: { goldBase: 10, goldVar: 16, pMaterial: 0.5, pConsumable: 0.35, pItem: 0.35, pStone: 0.05, rarities: ['COMMON', 'UNCOMMON'] },
-  high: { goldBase: 18, goldVar: 30, pMaterial: 0.3, pConsumable: 0.45, pItem: 0.65, pStone: 0.1, rarities: ['COMMON', 'UNCOMMON', 'RARE', 'EPIC'] },
+  low: {
+    goldBase: 4, goldVar: 8, pMaterial: 0.7, pConsumable: 0.18, pStone: 0.02,
+    pItemCommon: 0.10, pItemUncommon: 0.05,
+    pItemRare: 0.02, pItemEpic: 0.01,
+  },
+  mid: {
+    goldBase: 10, goldVar: 16, pMaterial: 0.5, pConsumable: 0.35, pStone: 0.05,
+    pItemCommon: 0.25, pItemUncommon: 0.15,
+    pItemRare: 0.07, pItemEpic: 0.04,
+  },
+  high: {
+    goldBase: 18, goldVar: 30, pMaterial: 0.3, pConsumable: 0.45, pStone: 0.1,
+    pItemCommon: 0.40, pItemUncommon: 0.25,
+    pItemRare: 0.15, pItemEpic: 0.07,
+  },
 }
 
 // Nó menor dropa menos; pedra mais rara nele; sala/boss dão mais ouro.
@@ -469,40 +486,66 @@ const rarityOf = (x: { rarity: unknown }) => String(x.rarity).toUpperCase()
 
 export function rollNodeLoot(dungeon: DungeonDef, roll: number, nodeKind: LootNodeKind, level: number): NodeLoot {
   // roll é o d20 da exploração que determina a qualidade (tier) dos drops
-  // 1-5 = low tier (7% chance de item COMMON)
-  // 6-13 = mid tier (35% chance de COMMON/UNCOMMON)
-  // 14-20 = high tier (65% chance de COMMON/UNCOMMON/RARE/EPIC)
+  // RARE e EPIC só aparecem em BOSS
   const tier = luckTier(roll)
   const cfg = LUCK_CFG[tier]
   const mult = NODE_LOOT_MULT[nodeKind]
   const drops: LootDrop[] = []
+  const isBoss = nodeKind === 'boss'
 
   const gold = Math.max(
     0,
     Math.floor((cfg.goldBase + Math.random() * cfg.goldVar) * mult.gold * dungeon.difficulty * (1 + level * 0.04))
   )
 
-  // material de craft (mais provável no loot pobre)
+  // material de craft
   if (Math.random() < cfg.pMaterial * mult.all) {
-    const pool = MATERIALS.filter(m => cfg.rarities.includes(rarityOf(m)))
+    const pool = MATERIALS.filter(m => rarityOf(m) === 'COMMON')
     const m = pickFrom(pool.length ? pool : MATERIALS)
     if (m) drops.push({ name: m.name, kind: 'material', rarity: rarityOf(m), emoji: '🪨' })
   }
-  // consumível de masmorra (poções etc.)
+  // consumível de masmorra
   if (Math.random() < cfg.pConsumable * mult.all) {
     const all = getDungeonConsumables()
-    const pool = all.filter(c => cfg.rarities.includes(rarityOf(c)))
+    const pool = all.filter(c => rarityOf(c) === 'COMMON')
     const c = pickFrom(pool.length ? pool : all)
     if (c) drops.push({ name: c.name, kind: 'consumable', rarity: rarityOf(c), emoji: '🧪' })
   }
-  // equipamento temático da masmorra (a "sorte grande")
-  if (Math.random() < cfg.pItem * mult.all) {
+
+  // equipamento: COMMON
+  if (Math.random() < cfg.pItemCommon * mult.all) {
     const all = getDungeonDrops(dungeon.id)
-    const pool = all.filter(i => cfg.rarities.includes(rarityOf(i)))
+    const pool = all.filter(i => rarityOf(i) === 'COMMON')
     const i = pickFrom(pool.length ? pool : all)
     if (i) drops.push({ name: i.name, kind: 'item', rarity: rarityOf(i), emoji: '📦' })
   }
-  // pedra de aprimoramento (rara; ainda mais rara em nó menor)
+  // equipamento: UNCOMMON
+  if (Math.random() < cfg.pItemUncommon * mult.all) {
+    const all = getDungeonDrops(dungeon.id)
+    const pool = all.filter(i => rarityOf(i) === 'UNCOMMON')
+    const i = pickFrom(pool)
+    if (i) drops.push({ name: i.name, kind: 'item', rarity: rarityOf(i), emoji: '📦' })
+  }
+
+  // Itens RARE e EPIC só em BOSS
+  if (isBoss) {
+    // equipamento: RARE (só boss)
+    if (Math.random() < cfg.pItemRare * mult.all) {
+      const all = getDungeonDrops(dungeon.id)
+      const pool = all.filter(i => rarityOf(i) === 'RARE')
+      const i = pickFrom(pool)
+      if (i) drops.push({ name: i.name, kind: 'item', rarity: rarityOf(i), emoji: '📦' })
+    }
+    // equipamento: EPIC (só boss)
+    if (Math.random() < cfg.pItemEpic * mult.all) {
+      const all = getDungeonDrops(dungeon.id)
+      const pool = all.filter(i => rarityOf(i) === 'EPIC')
+      const i = pickFrom(pool)
+      if (i) drops.push({ name: i.name, kind: 'item', rarity: rarityOf(i), emoji: '📦' })
+    }
+  }
+
+  // pedra de aprimoramento
   if (Math.random() < cfg.pStone * mult.stone) {
     const concentrated = dungeon.difficultyStars >= 3
     const stone = concentrated

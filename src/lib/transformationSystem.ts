@@ -20,6 +20,21 @@ export function getRaceTransformations(race?: string | null): TransformationType
   return RACE_TRANSFORMATIONS[(race || '').toLowerCase()] || []
 }
 
+// 🎨 Cor do brilho do card por forma (usado no combate). hex = cor base do glow.
+export const TRANSFORMATION_GLOW: Record<TransformationType, { hex: string; label: string }> = {
+  dragon: { hex: '#ef4444', label: 'vermelho dracônico' },      // vermelho/fogo
+  wolf: { hex: '#93c5fd', label: 'prata-azulado' },             // prata-azul feral
+  bear: { hex: '#d97706', label: 'âmbar' },                     // âmbar/marrom
+  eagle: { hex: '#22d3ee', label: 'ciano' },                    // ciano/vento
+  seventh_sense: { hex: '#ffffff', label: 'cosmo branco' },     // branco/cosmo
+  celestial: { hex: '#fbbf24', label: 'dourado celestial' },    // dourado astral
+}
+
+export function getTransformationGlow(type?: string | null): { hex: string; label: string } {
+  const cfg = TRANSFORMATION_GLOW[(type || '') as TransformationType]
+  return cfg || { hex: '#a855f7', label: 'arcano' } // fallback roxo (comportamento antigo)
+}
+
 export interface TransformationConfig {
   name: string
   description: string
@@ -344,6 +359,11 @@ export function canTransform(character: any, transformationType: TransformationT
   }
   if (!allowed.includes(transformationType)) {
     return { canTransform: false, reason: 'Sua raça não pode assumir essa forma' }
+  }
+  // Metamorfo (e qualquer raça multi-forma) é travado na forma escolhida na criação.
+  const unlocked = (character.unlockedTransformation || '') as TransformationType
+  if (allowed.length > 1 && unlocked && unlocked !== transformationType) {
+    return { canTransform: false, reason: 'Você só pode assumir a forma escolhida na criação' }
   }
 
   // Verificar se já está transformado

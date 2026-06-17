@@ -14,7 +14,7 @@ import { decodeContractCustomErrorMessage, getWalletTxErrorMessage } from '@/lib
 
 export function NameConfirmStep() {
   const { data: session } = useSession();
-  const { selectedRace, selectedClass, distributedPoints, selectedImage, characterName, creationPaymentTxHash, setCharacterName, markStepComplete, resetCreation } = useCharacterCreationStore();
+  const { selectedRace, selectedClass, distributedPoints, selectedImage, chosenTransformation, transformationImage, characterName, creationPaymentTxHash, setCharacterName, markStepComplete, resetCreation } = useCharacterCreationStore();
   const [isCreating, setIsCreating] = useState(false);
   const [nameError, setNameError] = useState('');
 
@@ -279,6 +279,8 @@ export function NameConfirmStep() {
         characterClass: selectedClass.id,
         distributedPoints: statsRecord,
         avatar: selectedImage,
+        unlockedTransformation: chosenTransformation,
+        transformationImage: transformationImage,
         creationTxHash: creationPaymentTxHash,
         nftMintTxHash: String(mintTx.hash),
         nftTokenId: mintedTokenId.toString(),

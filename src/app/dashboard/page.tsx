@@ -16,6 +16,8 @@ import { getBlendedVisual } from '@/lib/creationVisuals';
 // ...existing code...
 import { Character } from '@/types/game';
 import { getRaceById, getClassById } from '@/lib/gameData';
+import { getRaceTransformations } from '@/lib/transformationSystem';
+import toast from 'react-hot-toast';
 import { ethers } from 'ethers';
 import Image from 'next/image';
 import { getWalletTxErrorMessage } from '@/lib/walletErrors';
@@ -27,6 +29,8 @@ export default function DashboardPage() {
   const router = useRouter();
   const [characters, setCharacters] = useState<Character[]>([]);
   const [characterDetails, setCharacterDetails] = useState<any[]>([]);
+  // IDs já tentados no backfill da imagem de transformação (evita disparos duplicados)
+  const transformBackfillRef = useRef<Set<string>>(new Set());
   const [nftMetaByCharacterId, setNftMetaByCharacterId] = useState<Record<string, any>>({});
   const [ownedNfts, setOwnedNfts] = useState<any[]>([]);
   const [selectedTokenId, setSelectedTokenId] = useState<string>('');
@@ -137,6 +141,40 @@ export default function DashboardPage() {
   };
 
   // Função para buscar personagens
+  // Gera (uma vez) a arte de transformação para personagens que ainda não têm.
+  const backfillTransformationImages = async (chars: any[]) => {
+    for (const char of chars) {
+      const id = String(char?.id || '');
+      if (!id || transformBackfillRef.current.has(id)) continue;
+
+      const forms = getRaceTransformations(char?.race);
+      if (forms.length === 0) continue; // raça sem transformação
+      if (char?.transformationImage) {
+        transformBackfillRef.current.add(id);
+        continue; // já tem
+      }
+      // Metamorfo (multi-forma) só gera depois de escolher a forma (criação).
+      if (forms.length > 1 && !char?.unlockedTransformation) continue;
+
+      transformBackfillRef.current.add(id);
+      try {
+        const res = await fetch(`/api/character/${id}/generate-transformation`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        if (res.ok) {
+          const data = await res.json().catch(() => null);
+          if (data?.transformationImage && !data?.alreadyExisted) {
+            toast.success('Forma de transformação gerada! ✨');
+          }
+        }
+      } catch {
+        // silencioso: backfill é best-effort
+      }
+    }
+  };
+
   const fetchCharacters = async () => {
     try {
       const response = await fetch('/api/nft/character/owned');
@@ -211,6 +249,10 @@ export default function DashboardPage() {
         .filter(Boolean) as Character[];
 
       setCharacters(dbChars);
+      // 🐉 Backfill automático da imagem de transformação (sem página dedicada).
+      // Gera para personagens de forma única (ex.: elfo→celestial) ou que já
+      // tenham uma forma travada. Metamorfo sem forma escolhida é ignorado.
+      void backfillTransformationImages(dbChars);
       setCharacterDetails(
         dbChars.map((char: any) => ({
           character: char,

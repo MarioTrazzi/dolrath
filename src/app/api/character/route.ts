@@ -7,6 +7,7 @@ import { verifyDolTransferTx } from '@/lib/dolPayments'
 import { getCharacterNftChainId, getCharacterNftContractAddress } from '@/lib/characterNftOnchain'
 import { verifyCharacterNftMintTx } from '@/lib/characterNftVerify'
 import { pointSystem } from '@/lib/characterCreationData'
+import { getRaceTransformations } from '@/lib/transformationSystem'
 
 function serializeBigIntForJson<T>(value: T): T {
   return JSON.parse(
@@ -88,6 +89,8 @@ export async function POST(req: Request) {
     nftMintTxHash,
     nftTokenId,
     nftTokenUri,
+    unlockedTransformation,
+    transformationImage,
   } = body
 
   const parsedDistributedPoints = (() => {
@@ -281,12 +284,26 @@ export async function POST(req: Request) {
       canTransform: raceData.transformationAvailable
     } : {};
 
+    // 🐉 Transformação escolhida na criação (forma travada + arte). Valida que a
+    // forma pertence à raça; caso contrário, ignora silenciosamente.
+    const raceForms = getRaceTransformations(race)
+    const requestedForm = String(unlockedTransformation || '').toLowerCase()
+    const lockedForm = raceForms.includes(requestedForm as any)
+      ? requestedForm
+      : (raceForms.length === 1 ? raceForms[0] : null)
+    const transformationImageUrl =
+      typeof transformationImage === 'string' && transformationImage.trim()
+        ? transformationImage.trim()
+        : null
+
     const character = await prisma.character.create({
       data: {
         name,
         race,
         class: class_,
         avatar: avatarUrl,
+        unlockedTransformation: lockedForm,
+        transformationImage: transformationImageUrl,
         level: 1,
         experience: 0,
         // Stats calculados baseados na distribuição + bônus raciais/classe

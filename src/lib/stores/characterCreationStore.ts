@@ -26,9 +26,12 @@ interface CharacterCreationState {
   distributedPoints: BaseStats;
   characterName: string;
   selectedImage: string | null;
+  // 🐉 Transformação escolhida na criação
+  chosenTransformation: string | null;
+  transformationImage: string | null;
   creationPaymentTxHash: string | null;
   isSubmitting: boolean;
-  
+
   // Actions
   nextStep: () => void;
   prevStep: () => void;
@@ -38,6 +41,8 @@ interface CharacterCreationState {
   setDistributedPoints: (points: BaseStats) => void;
   setCharacterName: (name: string) => void;
   setSelectedImage: (image: string | null) => void;
+  setChosenTransformation: (form: string | null) => void;
+  setTransformationImage: (image: string | null) => void;
   setCreationPaymentTxHash: (txHash: string | null) => void;
   markStepComplete: (stepId: string, isComplete: boolean) => void;
   createCharacter: () => Promise<void>;
@@ -82,6 +87,14 @@ export const useCharacterCreationStore = create<CharacterCreationState>()(
           isAccessible: false,
         },
         {
+          id: 'transformation',
+          title: 'Transformação',
+          description: 'Revele a forma que seu herói assume em combate',
+          component: () => null, // Placeholder
+          isComplete: false,
+          isAccessible: false,
+        },
+        {
           id: 'name-confirm',
           title: 'Nome e Confirmação',
           description: 'Finalize a criação do seu personagem',
@@ -95,6 +108,8 @@ export const useCharacterCreationStore = create<CharacterCreationState>()(
       distributedPoints: { str: 0, agi: 0, int: 0, res: 0, hp: 0, mp: 0, crit: 0, speed: 0 },
       characterName: '',
       selectedImage: null,
+      chosenTransformation: null,
+      transformationImage: null,
       creationPaymentTxHash: null,
       isSubmitting: false,
 
@@ -161,10 +176,33 @@ export const useCharacterCreationStore = create<CharacterCreationState>()(
           const hasImage = Boolean(image);
           const updatedSteps = state.creationSteps.map((step) => {
             if (step.id === 'appearance') return { ...step, isComplete: hasImage };
-            if (step.id === 'name-confirm') return { ...step, isAccessible: hasImage };
+            if (step.id === 'transformation') return { ...step, isAccessible: hasImage, isComplete: false };
+            // Trocar a imagem base invalida a transformação previamente gerada.
+            if (step.id === 'name-confirm') return { ...step, isAccessible: false };
             return step;
           });
-          return { selectedImage: image, creationSteps: updatedSteps };
+          // Reset da transformação: ela é derivada da imagem base.
+          return {
+            selectedImage: image,
+            chosenTransformation: null,
+            transformationImage: null,
+            creationSteps: updatedSteps,
+          };
+        }),
+
+      setChosenTransformation: (form: string | null) =>
+        // Trocar a forma invalida a arte gerada anteriormente.
+        set({ chosenTransformation: form, transformationImage: null }),
+
+      setTransformationImage: (image: string | null) =>
+        set((state) => {
+          const ready = Boolean(image);
+          const updatedSteps = state.creationSteps.map((step) => {
+            if (step.id === 'transformation') return { ...step, isComplete: ready };
+            if (step.id === 'name-confirm') return { ...step, isAccessible: ready };
+            return step;
+          });
+          return { transformationImage: image, creationSteps: updatedSteps };
         }),
 
       setCreationPaymentTxHash: (txHash: string | null) => set({ creationPaymentTxHash: txHash }),
@@ -211,6 +249,8 @@ export const useCharacterCreationStore = create<CharacterCreationState>()(
           distributedPoints: { str: 0, agi: 0, int: 0, res: 0, hp: 0, mp: 0, crit: 0, speed: 0 },
           characterName: '',
           selectedImage: null,
+          chosenTransformation: null,
+          transformationImage: null,
           creationPaymentTxHash: null,
           isSubmitting: false,
           creationSteps: state.creationSteps.map((step, index) => ({
@@ -237,6 +277,8 @@ export const useCharacterCreationStore = create<CharacterCreationState>()(
         distributedPoints: state.distributedPoints,
         characterName: state.characterName,
         selectedImage: state.selectedImage,
+        chosenTransformation: state.chosenTransformation,
+        transformationImage: state.transformationImage,
         creationPaymentTxHash: state.creationPaymentTxHash,
       }),
       merge: (persistedState: any, currentState) => {
@@ -271,12 +313,16 @@ export const useCharacterCreationStore = create<CharacterCreationState>()(
           creationSteps: mergedSteps,
         };
       },
-      version: 2,
+      version: 3,
       migrate: (persistedState: any) => {
         // Drop removed fields from older persisted versions.
         if (persistedState && typeof persistedState === 'object') {
           const next = { ...(persistedState as any) }
           delete (next as any).selectedSpecialization
+          // v3 adiciona a etapa de transformação; descarta o passo persistido
+          // para que a nova lista de etapas (com 'transformation') seja usada.
+          delete (next as any).creationSteps
+          delete (next as any).currentStep
           return next
         }
         return persistedState as any

@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import ItemIcon from '@/components/ItemIcon'
 import { AnimatedDie, MiniDie } from '@/components/battle/AnimatedDice'
+import { getTransformationGlow } from '@/lib/transformationSystem'
 
 // ============================================================
 // Tipos
@@ -35,6 +36,8 @@ export interface FighterView {
   maxStamina: number
   isTransformed?: boolean
   transformationType?: string | null
+  /** Arte da forma transformada (substitui o avatar enquanto transformado) */
+  transformationImage?: string | null
   equipmentMap?: EquipmentMap
   isAlive?: boolean
   /** Emoji usado como sprite quando não há avatar (ex.: monstros do modo treino) */
@@ -231,6 +234,12 @@ function FighterFigure({
   const transformEmoji = fighter.isTransformed && fighter.transformationType
     ? TRANSFORM_EMOJI[fighter.transformationType] || '🌟'
     : null
+  // Cor do brilho por forma (ex.: celestial = dourado, dragão = vermelho)
+  const glow = getTransformationGlow(fighter.transformationType)
+  // Enquanto transformado, mostra a arte da forma (se gerada); senão, o avatar normal.
+  const displayedImage = (fighter.isTransformed && fighter.transformationImage)
+    ? fighter.transformationImage
+    : fighter.avatar
 
   // Direção da investida: esquerda avança para a direita e vice-versa
   const lungeX = side === 'left' ? 90 : -90
@@ -285,11 +294,16 @@ function FighterFigure({
             : { duration: 0.2 }
           }
         >
-          {/* Aura de turno / transformação */}
+          {/* Aura de turno / transformação (cor da forma quando transformado) */}
           {(isTurn || fighter.isTransformed) && !isDefeated && (
-            <div className={`absolute -inset-2 rounded-2xl blur-md ${
-              fighter.isTransformed ? 'bg-purple-500/30' : 'bg-amber-400/20'
-            } animate-pulse pointer-events-none`} />
+            <div
+              className="absolute -inset-2 rounded-2xl blur-md animate-pulse pointer-events-none"
+              style={
+                fighter.isTransformed
+                  ? { backgroundColor: glow.hex, opacity: 0.4 }
+                  : { backgroundColor: '#fbbf24', opacity: 0.2 }
+              }
+            />
           )}
 
           {/* Bolha de defesa */}
@@ -309,14 +323,20 @@ function FighterFigure({
             transition={{ duration: 0.8, ease: 'easeIn' }}
             className={`relative w-28 h-36 sm:w-40 sm:h-52 rounded-2xl overflow-hidden border-2 shadow-2xl ${
               isWinner ? 'border-yellow-400 shadow-yellow-500/40'
+              : fighter.isTransformed ? ''
               : isTurn ? 'border-amber-400/70'
               : 'border-white/20'
             } ${isDefeated ? 'grayscale' : ''}`}
+            style={
+              fighter.isTransformed && !isDefeated && !isWinner
+                ? { borderColor: glow.hex, boxShadow: `0 0 18px 2px ${glow.hex}` }
+                : undefined
+            }
           >
-            {fighter.avatar ? (
+            {displayedImage ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={fighter.avatar}
+                src={displayedImage}
                 alt={fighter.name}
                 className={`w-full h-full object-cover ${side === 'right' ? 'scale-x-[-1]' : ''}`}
               />

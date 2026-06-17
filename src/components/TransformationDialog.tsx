@@ -10,6 +10,8 @@ interface TransformationDialogProps {
   characterRace: string
   onTransform: (transformationType: string) => void
   loading?: boolean
+  /** Forma travada na criação (metamorfo): restringe as opções a esta forma. */
+  lockedForm?: string | null
 }
 
 interface TransformationOption {
@@ -85,12 +87,17 @@ export default function TransformationDialog({
   onClose,
   characterRace,
   onTransform,
-  loading = false
+  loading = false,
+  lockedForm = null
 }: TransformationDialogProps) {
   const [selectedTransformation, setSelectedTransformation] = useState<string>('')
   const [showAnimation, setShowAnimation] = useState(false)
 
-  const transformations = TRANSFORMATION_OPTIONS[characterRace] || []
+  const allForms = TRANSFORMATION_OPTIONS[characterRace] || []
+  // Se houver uma forma travada na criação (e ela existir para a raça), só ela aparece.
+  const transformations = lockedForm && allForms.some((t) => t.type === lockedForm)
+    ? allForms.filter((t) => t.type === lockedForm)
+    : allForms
 
   const handleTransform = async (transformationType: string) => {
     setSelectedTransformation(transformationType)

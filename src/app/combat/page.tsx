@@ -55,6 +55,8 @@ interface Player {
   // Campos de transformação
   isTransformed?: boolean
   transformationType?: string | null
+  unlockedTransformation?: string | null
+  transformationImage?: string | null
   transformationData?: {
     remainingTurns?: number
     cooldownTurns?: number
@@ -479,6 +481,11 @@ function CombatPageContent() {
               equipment: charDetails.equipment || {},
               avatar: charDetails.avatar || null,
               equipmentMap: mapEquipment(charDetails.equipment),
+              // Transformação: forma travada + arte gerada (para glow e troca de imagem)
+              isTransformed: charDetails.isTransformed || false,
+              transformationType: charDetails.transformationType || null,
+              unlockedTransformation: charDetails.unlockedTransformation || null,
+              transformationImage: charDetails.transformationImage || null,
               isReady: false,
               isConnected: true,
               isAlive: charDetails.isAlive
@@ -1393,6 +1400,7 @@ function CombatPageContent() {
         isOpen={showTransformationDialog}
         onClose={() => setShowTransformationDialog(false)}
         characterRace={currentPlayer?.race || ''}
+        lockedForm={currentPlayer?.unlockedTransformation || null}
         onTransform={handleTransformationChoice}
         loading={isTransforming}
       />

@@ -8,6 +8,8 @@ export async function createCharacter(characterData: {
   nftMintTxHash?: string;
   nftTokenId?: string;
   nftTokenUri?: string;
+  unlockedTransformation?: string | null;
+  transformationImage?: string | null;
 }): Promise<any> {
   const response = await fetch('/api/character', {
     method: 'POST',

@@ -91,3 +91,73 @@ export function buildCombinationPreprompt(input: CombinationInput): string {
     `Class: ${className}. ${classStyle}`,
   ].join('\n');
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TRANSFORMATION ART
+//
+// These prompts are used with gpt-image-1's image *edit* endpoint: the player's
+// already-chosen NFT portrait is sent as the reference image, and the prompt asks
+// the model to reveal that SAME character mid/full transformation. The goal is
+// visual continuity — same face, same gear identity, same framing — now charged
+// with the form's energy and color so the combat reveal feels like "their" hero
+// ascending, not a different creature.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type TransformationArtId =
+  | 'dragon'
+  | 'wolf'
+  | 'bear'
+  | 'eagle'
+  | 'seventh_sense'
+  | 'celestial';
+
+const TRANSFORMATION_ART: Record<TransformationArtId, string> = {
+  dragon:
+    'Draconic ascension: the same character erupting into their ancestral dragon ' +
+    'form — crimson and molten-gold scales spreading across face and arms, ' +
+    'reptilian glowing eyes, jagged horns and wisps of fire-breath, a fierce ' +
+    'red-orange ember aura radiating around the body.',
+  wolf:
+    'Feral wolf form: the same character shifting into a savage werewolf-like ' +
+    'predator — grey-silver fur, elongated muzzle and fangs, piercing amber ' +
+    'eyes, claws bared in a low hunting stance, a cold silver-blue feral aura.',
+  bear:
+    'Mighty bear form: the same character swelling into a colossal, armored ' +
+    'bear-warrior — thick brown fur and broad muscular frame, massive claws, ' +
+    'an unshakable grounded stance, a warm amber-brown aura of brute resilience.',
+  eagle:
+    'Aerial eagle form: the same character taking flight as a winged raptor — ' +
+    'great feathered wings unfurled, sharp golden eyes, talons extended, a swift ' +
+    'soaring pose, a bright cyan wind-charged aura.',
+  seventh_sense:
+    'Awakening of the 7th Sense: the same character haloed by an explosive white ' +
+    'cosmic aura — radiant inner light, glowing eyes, swirling galaxies and stars ' +
+    'of cosmo energy around the body, serene yet overwhelmingly powerful.',
+  celestial:
+    'Celestial Form: the same character ascending into a being of astral light — ' +
+    'an ethereal golden-white radiance, luminous arcane runes orbiting the body, ' +
+    'softly glowing skin and eyes, translucent angelic light wisps, a divine ' +
+    'golden aura.',
+};
+
+const isTransformationArtId = (id: string): id is TransformationArtId =>
+  id in TRANSFORMATION_ART;
+
+// Builds the edit prompt that turns a chosen NFT portrait into its transformed
+// form while preserving the character's identity and the locked Dolrath style.
+export function buildTransformationPrompt(transformationType: string): string {
+  const id = String(transformationType || '').toLowerCase();
+  const art = isTransformationArtId(id) ? TRANSFORMATION_ART[id] : '';
+
+  return [
+    'Transform the SAME character shown in the reference image into their ' +
+      'unleashed combat transformation. Keep their identity recognizable — ' +
+      'same facial structure, same gear/armor cues, same three-quarter or ' +
+      'portrait framing.',
+    art,
+    DOLRATH_STYLE_BASE,
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+

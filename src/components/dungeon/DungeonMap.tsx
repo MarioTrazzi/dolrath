@@ -107,19 +107,23 @@ export function MapTrail({ points, progress }: { points: MapPoint[]; progress: n
         strokeLinecap="round"
         vectorEffect="non-scaling-stroke"
       />
+      <defs>
+        <mask id="trail-mask">
+          <rect x="0" y="0" width="100" height="100" fill="white" />
+          <rect x={progress * 100} y="0" width={100 - progress * 100} height="100" fill="black" />
+        </mask>
+      </defs>
       <path
         d={d}
         fill="none"
         strokeWidth="3"
         strokeLinecap="round"
         vectorEffect="non-scaling-stroke"
-        pathLength={1}
+        mask="url(#trail-mask)"
         style={{
-          // `stroke` precisa ficar no style: var() não resolve em atributo SVG.
           stroke: 'var(--dgn)',
           filter: 'drop-shadow(0 0 6px var(--dgn))',
-          strokeDasharray: `${progress} ${1 - progress}`,
-          transition: 'stroke-dasharray 0.9s ease-in-out',
+          transition: 'all 0.9s ease-in-out',
         }}
       />
     </svg>

@@ -290,6 +290,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const [battleEvent, setBattleEvent] = useState<BattleEvent | null>(null)
   const [combatEnded, setCombatEnded] = useState(false)
   const [winnerId, setWinnerId] = useState<string | null>(null)
+  const [lootCard, setLootCard] = useState<ResolvedEvent | null>(null)
   const battleEventCounter = useRef(0)
   // d20 de sorte do nó atual (define a qualidade do loot pós-combate)
   const lootRollRef = useRef(12)
@@ -380,7 +381,6 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       setTotals(prev => ({ ...prev, items: [...prev.items, d.name] }))
       persistReward(0, d.name, `Achado em ${dungeon.name}`, d.rarity)
       pushLog(`${d.emoji} ${d.name}`)
-      pushFloat(`${d.emoji} ${d.name}`, '#34d399')
     }
   }, [persistReward, pushFloat, pushLog, dungeon.name])
 
@@ -606,6 +606,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     setDefenseChoice(null)
     setCurrentTurnId(null)
     setBattleEvent(null)
+    setLootCard(null)
     // Transformação reinicia a cada combate
     setTransform(null)
     setTransformCd(0)
@@ -876,7 +877,27 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     // Espólio do monstro: rolado pela sorte do nó (boss = sorte máxima e mais drops).
     const nodeKind = m.isBoss ? 'boss' : trailPoints[tokenIdx]?.kind === 'main' ? 'main' : 'minor'
     const lootRoll = m.isBoss ? 20 : lootRollRef.current
-    applyLoot(rollNodeLoot(dungeon, lootRoll, nodeKind, character.level))
+    const loot = rollNodeLoot(dungeon, lootRoll, nodeKind, character.level)
+
+    // Aplicar loot e construir card para exibição
+    applyLoot(loot)
+
+    // Montar um card visual para mostrar o loot
+    if (loot.drops.length > 0 || loot.gold > 0) {
+      const effects: string[] = []
+      if (loot.gold > 0) effects.push(`+${loot.gold} 💰`)
+      for (const d of loot.drops) effects.push(`${d.emoji} ${d.name}`)
+
+      const def: DungeonEventDef = {
+        kind: loot.drops.some(d => d.kind === 'item' || d.kind === 'stone') ? 'item' : loot.gold > 0 ? 'gold' : 'nothing',
+        min: 0,
+        max: 0,
+        icon: loot.drops.some(d => d.kind === 'item' || d.kind === 'stone') ? '🌟' : '💰',
+        title: 'Espólio da Vitória',
+        description: `${m.emoji} ${m.name} deixou cair seus pertences.`
+      }
+      setLootCard({ def, text: def.description, effects })
+    }
 
     later(() => {
       setMonster(null)
@@ -1402,6 +1423,80 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
               dicePanel={dicePanel}
               backdrop={<DungeonBackdrop theme={dungeon.id} />}
             />
+
+            {/* Loot Card após vitória */}
+            <AnimatePresence>
+              {combatEnded && winnerId === character.id && lootCard && !monster.isBoss && (
+                <motion.div
+                  className="absolute inset-0 z-30 grid place-items-center px-5"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                >
+                  <div className="absolute inset-0 bg-black/45 backdrop-blur-[2px]" />
+                  <motion.div
+                    initial={{ scale: 0.4, y: 40, opacity: 0 }}
+                    animate={{ scale: 1, y: 0, opacity: 1 }}
+                    exit={{ scale: 0.6, opacity: 0, y: 20 }}
+                    transition={{ type: 'spring', stiffness: 260, damping: 16 }}
+                    className="relative w-full max-w-sm rounded-2xl p-6 text-center"
+                    style={{
+                      background: 'linear-gradient(180deg, rgba(30,30,63,0.92), rgba(15,15,35,0.96))',
+                      border: `1px solid ${dungeon.accentSoft}`,
+                      boxShadow: `0 24px 60px -12px ${dungeon.accentSoft}, 0 0 40px ${dungeon.accentSoft}`,
+                      backdropFilter: 'blur(20px)',
+                    }}
+                  >
+                    <motion.div
+                      initial={{ scale: 0, rotate: -20 }}
+                      animate={{ scale: 1, rotate: 0 }}
+                      transition={{ type: 'spring', stiffness: 240, damping: 12, delay: 0.08 }}
+                      className="text-6xl mb-2 mt-1 inline-block"
+                      style={{ filter: `drop-shadow(0 0 18px ${dungeon.accentSoft})` }}
+                    >
+                      {lootCard.def.icon}
+                    </motion.div>
+
+                    <h3 className="text-2xl font-black mb-1.5" style={{ color: dungeon.accent }}>{lootCard.def.title}</h3>
+                    {lootCard.text && <p className="text-sm text-textsec leading-snug mb-4">{lootCard.text}</p>}
+
+                    {lootCard.effects.length > 0 && (
+                      <div className="flex flex-wrap justify-center gap-2 mb-5">
+                        {lootCard.effects.map((fx, i) => (
+                          <motion.span
+                            key={fx}
+                            initial={{ opacity: 0, y: 10, scale: 0.8 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            transition={{ delay: 0.2 + i * 0.12, type: 'spring', stiffness: 300, damping: 18 }}
+                            className="inline-flex items-center gap-1 px-3 py-1 rounded-full border text-sm font-bold font-combat bg-white/10 border-white/20 text-white"
+                          >
+                            {fx}
+                          </motion.span>
+                        ))}
+                      </div>
+                    )}
+
+                    <button
+                      onClick={() => {
+                        setLootCard(null)
+                        if (!monster?.isBoss) {
+                          setMonster(null)
+                          setPhase('explore')
+                          setNarration(nextIsBoss
+                            ? 'A trilha termina adiante. Você sente um olhar antigo cravado em você...'
+                            : TRANSITIONS[tokenIdx % TRANSITIONS.length])
+                          showBanner('🏆', `+${monster?.goldReward || 0} 💰`)
+                        }
+                      }}
+                      className="w-full py-3.5 rounded-lg font-bold text-white text-base transition-transform active:scale-[0.98] hover:scale-[1.02]"
+                      style={{ background: `linear-gradient(90deg, ${dungeon.accent}, ${dungeon.accent}aa)`, boxShadow: `0 0 22px ${dungeon.accentSoft}` }}
+                    >
+                      Continuar a jornada →
+                    </button>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Barra de ações do combate */}
             <div className="flex-shrink-0 bg-black/70 backdrop-blur-md border-t border-white/10 px-3 sm:px-6 py-3 min-h-[88px] flex items-center justify-center">

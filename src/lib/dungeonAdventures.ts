@@ -452,9 +452,9 @@ const LUCK_CFG: Record<
   LuckTier,
   { goldBase: number; goldVar: number; pMaterial: number; pConsumable: number; pItem: number; pStone: number; rarities: string[] }
 > = {
-  low: { goldBase: 4, goldVar: 8, pMaterial: 0.7, pConsumable: 0.18, pItem: 0.07, pStone: 0.02, rarities: ['COMMON'] },
-  mid: { goldBase: 10, goldVar: 16, pMaterial: 0.5, pConsumable: 0.35, pItem: 0.28, pStone: 0.05, rarities: ['COMMON', 'UNCOMMON'] },
-  high: { goldBase: 18, goldVar: 30, pMaterial: 0.3, pConsumable: 0.45, pItem: 0.55, pStone: 0.1, rarities: ['UNCOMMON', 'RARE', 'EPIC'] },
+  low: { goldBase: 4, goldVar: 8, pMaterial: 0.7, pConsumable: 0.18, pItem: 0.12, pStone: 0.02, rarities: ['COMMON'] },
+  mid: { goldBase: 10, goldVar: 16, pMaterial: 0.5, pConsumable: 0.35, pItem: 0.35, pStone: 0.05, rarities: ['COMMON', 'UNCOMMON'] },
+  high: { goldBase: 18, goldVar: 30, pMaterial: 0.3, pConsumable: 0.45, pItem: 0.65, pStone: 0.1, rarities: ['COMMON', 'UNCOMMON', 'RARE', 'EPIC'] },
 }
 
 // Nó menor dropa menos; pedra mais rara nele; sala/boss dão mais ouro.
@@ -468,6 +468,10 @@ const pickFrom = <T>(arr: T[]): T | undefined => (arr.length ? arr[Math.floor(Ma
 const rarityOf = (x: { rarity: unknown }) => String(x.rarity).toUpperCase()
 
 export function rollNodeLoot(dungeon: DungeonDef, roll: number, nodeKind: LootNodeKind, level: number): NodeLoot {
+  // roll é o d20 da exploração que determina a qualidade (tier) dos drops
+  // 1-5 = low tier (7% chance de item COMMON)
+  // 6-13 = mid tier (35% chance de COMMON/UNCOMMON)
+  // 14-20 = high tier (65% chance de COMMON/UNCOMMON/RARE/EPIC)
   const tier = luckTier(roll)
   const cfg = LUCK_CFG[tier]
   const mult = NODE_LOOT_MULT[nodeKind]

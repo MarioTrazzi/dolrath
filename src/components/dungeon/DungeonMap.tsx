@@ -118,7 +118,7 @@ export function MapTrail({ points, progress }: { points: MapPoint[]; progress: n
           // `stroke` precisa ficar no style: var() não resolve em atributo SVG.
           stroke: 'var(--dgn)',
           filter: 'drop-shadow(0 0 6px var(--dgn))',
-          strokeDasharray: `${Math.max(progress, 0.0001)} 2`,
+          strokeDasharray: `${progress} ${1 - progress}`,
           transition: 'stroke-dasharray 0.9s ease-in-out',
         }}
       />
@@ -451,7 +451,7 @@ export function DiceOverlay({
             transition={{ type: 'spring', stiffness: 200, damping: 14 }}
             className="flex flex-col items-center gap-3"
           >
-            <AnimatedDie sides={20} size={130} mode={result ? 'idle' : 'rolling'} result={result} />
+            <AnimatedDie sides={20} size={130} mode={rolling ? 'rolling' : 'idle'} result={result} />
             <span className="text-xs uppercase tracking-[0.25em] text-textsec font-bold">
               Rolando o destino...
             </span>

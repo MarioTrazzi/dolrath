@@ -380,6 +380,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       setTotals(prev => ({ ...prev, items: [...prev.items, d.name] }))
       persistReward(0, d.name, `Achado em ${dungeon.name}`, d.rarity)
       pushLog(`${d.emoji} ${d.name}`)
+      pushFloat(`${d.emoji} ${d.name}`, '#34d399')
     }
   }, [persistReward, pushFloat, pushLog, dungeon.name])
 
@@ -604,6 +605,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     setMonsterPlan(null)
     setDefenseChoice(null)
     setCurrentTurnId(null)
+    setBattleEvent(null)
     // Transformação reinicia a cada combate
     setTransform(null)
     setTransformCd(0)

@@ -582,6 +582,18 @@ export function getCatalogItemByName(name: string): CatalogItem | undefined {
   return BY_NAME.get(name);
 }
 
+const CONSUMABLE_BY_NAME = new Map(CONSUMABLE_CATALOG.map((c) => [c.name, c]));
+
+/** Consumível do catálogo pelo nome (para recompensas de exploração criarem o item real). */
+export function getConsumableByName(name: string): ConsumableItem | undefined {
+  return CONSUMABLE_BY_NAME.get(name);
+}
+
+/** Consumíveis que caem em masmorra (não os de loja). */
+export function getDungeonConsumables(): ConsumableItem[] {
+  return CONSUMABLE_CATALOG.filter((c) => c.source === 'dungeon' || c.source === 'dungeon_boss');
+}
+
 export function getItemsForDungeon(dungeonId: string): CatalogItem[] {
   return ITEM_CATALOG.filter((i) => i.dungeons.includes(dungeonId));
 }

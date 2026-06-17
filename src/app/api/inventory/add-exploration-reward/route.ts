@@ -1,8 +1,8 @@
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
-import { ItemType } from '@prisma/client'
-import { getCatalogItemByName } from '@/lib/itemCatalog'
+import { ItemType, ConsumableSubtype } from '@prisma/client'
+import { getCatalogItemByName, getConsumableByName } from '@/lib/itemCatalog'
 
 export async function POST(req: Request) {
   const session = await auth()
@@ -67,6 +67,7 @@ export async function POST(req: Request) {
         // os demais caem no fallback genérico (CONSUMABLE).
         if (!existingItem) {
           const catalogItem = getCatalogItemByName(itemName)
+          const consumable = catalogItem ? undefined : getConsumableByName(itemName)
           if (catalogItem) {
             existingItem = await tx.item.create({
               data: {
@@ -81,6 +82,23 @@ export async function POST(req: Request) {
                   raceRestriction: catalogItem.raceRestriction ?? null,
                   dungeons: catalogItem.dungeons,
                   sellPrice: Math.floor(catalogItem.goldPrice * 0.6),
+                }
+              }
+            })
+          } else if (consumable) {
+            // Consumível do catálogo: cria com o subtipo correto para ser usável em combate.
+            existingItem = await tx.item.create({
+              data: {
+                name: consumable.name,
+                description: consumable.description,
+                type: 'CONSUMABLE',
+                subtype: consumable.subtype as ConsumableSubtype,
+                level: consumable.level,
+                goldPrice: consumable.goldPrice,
+                stats: {
+                  ...consumable.stats,
+                  rarity: consumable.rarity,
+                  sellPrice: Math.floor(consumable.goldPrice * 0.6),
                 }
               }
             })

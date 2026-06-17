@@ -20,9 +20,10 @@ import {
   DungeonEventDef,
   DungeonEventKind,
   NodeScaling,
+  NodeLoot,
   ScaledMonster,
-  eventForRoll,
   pickMonster,
+  rollNodeLoot,
   scaleMonster,
 } from '@/lib/dungeonAdventures'
 import {
@@ -30,7 +31,7 @@ import {
   getRaceTransformations,
   type TransformationType,
 } from '@/lib/transformationSystem'
-import { applyEnhancementToStats, STONE_NAMES } from '@/lib/enhancementSystem'
+import { applyEnhancementToStats } from '@/lib/enhancementSystem'
 
 // ============================================================
 // DungeonRun — experiência completa de uma masmorra:
@@ -87,6 +88,9 @@ const ATTACKS: Record<AttackKind, { label: string; icon: string; sides: number; 
 const MINOR_STEP_COST = 4 // nó menor
 const MAIN_STEP_COST = 8  // sala principal (encontro garantido)
 const BOSS_STEP_COST = 6  // aproximar-se do covil
+
+// Chance de encontrar monstro num nó MENOR (sala principal é sempre monstro).
+const MINOR_MONSTER_CHANCE = 0.4
 
 // Falas de transição do Mestre entre as salas (genéricas, tom de RPG)
 const TRANSITIONS = [
@@ -262,6 +266,8 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const [combatEnded, setCombatEnded] = useState(false)
   const [winnerId, setWinnerId] = useState<string | null>(null)
   const battleEventCounter = useRef(0)
+  // d20 de sorte do nó atual (define a qualidade do loot pós-combate)
+  const lootRollRef = useRef(12)
 
   // ---------- Transformação (local, por combate) ----------
   const transformForms = useMemo(() => getRaceTransformations(character.race), [character.race])
@@ -337,6 +343,20 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       }),
     }).catch(() => {})
   }, [character.id])
+
+  // Aplica o resultado do loot por sorte: ouro + drops (já persistindo no inventário).
+  const applyLoot = useCallback((loot: NodeLoot) => {
+    if (loot.gold > 0) {
+      setTotals(prev => ({ ...prev, gold: prev.gold + loot.gold }))
+      persistReward(loot.gold)
+      pushFloat(`+${loot.gold} 💰`, '#f39c12')
+    }
+    for (const d of loot.drops) {
+      setTotals(prev => ({ ...prev, items: [...prev.items, d.name] }))
+      persistReward(0, d.name, `Achado em ${dungeon.name}`, d.rarity)
+      pushLog(`${d.emoji} ${d.name}`)
+    }
+  }, [persistReward, pushFloat, pushLog, dungeon.name])
 
   const persistXp = useCallback(async (xp: number) => {
     if (xp <= 0) return null
@@ -414,107 +434,52 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     return 'locked'
   }
 
-  // Escolhe o tipo de evento conforme o nó: sala principal = monstro garantido;
-  // nó menor = chance reduzida de monstro (metade vira evento pacífico).
-  const pickEventDef = (roll: number, sc: NodeScaling): DungeonEventDef => {
-    let ev = eventForRoll(dungeon, roll)
-    if (sc.isMain) {
-      return dungeon.events.find(e => e.kind === 'monster') || ev
-    }
-    if (ev.kind === 'monster' && Math.random() > 0.5) {
-      const peaceful = dungeon.events.filter(e => e.kind === 'nothing' || e.kind === 'gold' || e.kind === 'item')
-      ev = peaceful[Math.floor(Math.random() * peaceful.length)] || dungeon.events.find(e => e.kind === 'nothing') || ev
-    }
-    return ev
-  }
-
-  // Resolve um evento (aplica efeitos + revela o nó); retorna o card a exibir.
+  // Resolve um nó: sala principal = monstro garantido; nó menor = chance de
+  // monstro, senão um ACHADO cuja qualidade é definida pela sorte do d20.
   const buildAndApplyEvent = (roll: number, atIdx: number): ResolvedEvent => {
     const sc = scalingAt(atIdx)
-    const ev = pickEventDef(roll, sc)
     const lvl = character.level
+    lootRollRef.current = roll // sorte usada também no loot pós-combate
 
-    switch (ev.kind) {
-      case 'trap': {
-        const dmg = Math.max(1, Math.ceil(effMaxHp * (ev.trapDamagePct || 10) / 100))
-        const newHp = Math.max(0, hpRef.current - dmg)
-        setHp(newHp)
-        setTrapShake(true)
-        later(() => setTrapShake(false), 600)
-        pushFloat(`-${dmg} ❤️`, '#e74c3c')
-        setNodeEvents(prev => ({ ...prev, [atIdx]: { kind: 'trap', emoji: ev.icon } }))
-        pushLog(`${ev.icon} ${ev.title} Você perdeu ${dmg} HP.`)
-        if (newHp <= 0) later(() => handleDefeat(), 1800)
-        return { def: ev, text: ev.description, effects: [`-${dmg} ❤️`] }
-      }
-      case 'monster': {
-        const scaled = scaleMonster(pickMonster(dungeon), dungeon, lvl, sc)
-        setNodeEvents(prev => ({ ...prev, [atIdx]: { kind: 'monster', emoji: scaled.emoji } }))
-        pushLog(`${ev.icon} ${ev.title} ${scaled.emoji} ${scaled.name} apareceu!`)
-        return {
-          def: ev,
-          text: sc.isMain ? `Guardião da sala: ${ev.description}` : ev.description,
-          effects: [`${scaled.emoji} ${scaled.name} • Nv.${scaled.level}`],
-          monster: scaled,
-        }
-      }
-      case 'nothing': {
-        const text = dungeon.ambience[Math.floor(Math.random() * dungeon.ambience.length)]
-        setNodeEvents(prev => ({ ...prev, [atIdx]: { kind: 'nothing', emoji: ev.icon } }))
-        pushLog(`${ev.icon} ${text}`)
-        return { def: ev, text, effects: [] }
-      }
-      case 'gold': {
-        const [gMin, gMax] = ev.goldPerLevel || [10, 20]
-        const amount = Math.floor((gMin + Math.random() * (gMax - gMin)) * lvl)
-        setTotals(prev => ({ ...prev, gold: prev.gold + amount }))
-        persistReward(amount)
-        pushFloat(`+${amount} 💰`, '#f39c12')
-        setNodeEvents(prev => ({ ...prev, [atIdx]: { kind: 'gold', emoji: ev.icon } }))
-        pushLog(`${ev.icon} ${ev.title} +${amount} gold!`)
-        return { def: ev, text: ev.description, effects: [`+${amount} 💰`] }
-      }
-      case 'item': {
-        const name = ev.itemNames?.[Math.floor(Math.random() * (ev.itemNames?.length || 1))] || 'Item Misterioso'
-        setTotals(prev => ({ ...prev, items: [...prev.items, name] }))
-        persistReward(0, name, `Encontrado em ${dungeon.name}`, ev.itemRarity)
-        setNodeEvents(prev => ({ ...prev, [atIdx]: { kind: 'item', emoji: ev.icon } }))
-        pushLog(`${ev.icon} ${ev.title} Você encontrou ${name}!`)
-        return { def: ev, text: ev.description, effects: [`📦 ${name}`] }
-      }
-      case 'blessing': {
-        const effects: string[] = []
-        const b = ev.blessing
-        if (b?.hpPct) {
-          const heal = Math.ceil(effMaxHp * b.hpPct / 100)
-          setHp(prev => Math.min(effMaxHp, prev + heal))
-          pushFloat(`+${heal} ❤️`, '#2ecc71')
-          effects.push(`+${heal} ❤️`)
-        }
-        if (b?.mpPct) {
-          const gain = Math.ceil(character.maxMp * b.mpPct / 100)
-          setMp(prev => Math.min(character.maxMp, prev + gain))
-          effects.push(`+${gain} 🔮`)
-        }
-        // staminaPct removido: stamina é o orçamento diário e não se recupera na run.
-        if (b?.xpPerLevel) {
-          const xp = b.xpPerLevel * lvl
-          setTotals(prev => ({ ...prev, xp: prev.xp + xp }))
-          effects.push(`+${xp} XP`)
-        }
-        if (ev.goldPerLevel) {
-          const [gMin, gMax] = ev.goldPerLevel
-          const amount = Math.floor((gMin + Math.random() * (gMax - gMin)) * lvl)
-          setTotals(prev => ({ ...prev, gold: prev.gold + amount }))
-          persistReward(amount)
-          pushFloat(`+${amount} 💰`, '#f39c12')
-          effects.push(`+${amount} 💰`)
-        }
-        setNodeEvents(prev => ({ ...prev, [atIdx]: { kind: 'blessing', emoji: ev.icon } }))
-        pushLog(`${ev.icon} ${ev.title} ${effects.join(' • ')}`)
-        return { def: ev, text: ev.description, effects }
+    const monsterEncounter = sc.isMain || (!sc.isBoss && Math.random() < MINOR_MONSTER_CHANCE)
+    if (monsterEncounter) {
+      const ev = dungeon.events.find(e => e.kind === 'monster')!
+      const scaled = scaleMonster(pickMonster(dungeon), dungeon, lvl, sc)
+      setNodeEvents(prev => ({ ...prev, [atIdx]: { kind: 'monster', emoji: scaled.emoji } }))
+      pushLog(`${ev.icon} ${ev.title} ${scaled.emoji} ${scaled.name} apareceu!`)
+      return {
+        def: ev,
+        text: sc.isMain ? `Guardião da sala: ${ev.description}` : ev.description,
+        effects: [`${scaled.emoji} ${scaled.name} • Nv.${scaled.level}`],
+        monster: scaled,
       }
     }
+
+    // Nó de achado — o d20 define a sorte do loot.
+    const loot = rollNodeLoot(dungeon, roll, sc.isMain ? 'main' : 'minor', lvl)
+    applyLoot(loot)
+
+    const hasGear = loot.drops.some(d => d.kind === 'item' || d.kind === 'stone')
+    const anyDrop = loot.drops.length > 0 || loot.gold > 0
+    const tier = roll <= 5 ? 'low' : roll <= 13 ? 'mid' : 'high'
+    const icon = hasGear ? '🌟' : anyDrop ? '✨' : '🍃'
+    const title = hasGear ? 'Grande achado!' : anyDrop ? 'Um bom achado' : 'Nada de útil...'
+    const text = !anyDrop
+      ? dungeon.ambience[Math.floor(Math.random() * dungeon.ambience.length)]
+      : tier === 'high'
+        ? 'A sorte sorri: você vasculha e encontra algo valioso.'
+        : tier === 'mid'
+          ? 'Entre folhas e pedras, você recolhe o que dá.'
+          : 'Pouca coisa — mas nada se perde.'
+    const revealKind: DungeonEventKind = hasGear ? 'item' : anyDrop ? 'gold' : 'nothing'
+    setNodeEvents(prev => ({ ...prev, [atIdx]: { kind: revealKind, emoji: icon } }))
+
+    const effects: string[] = []
+    if (loot.gold > 0) effects.push(`+${loot.gold} 💰`)
+    for (const d of loot.drops) effects.push(`${d.emoji} ${d.name}`)
+
+    const def: DungeonEventDef = { kind: revealKind, min: 0, max: 0, icon, title, description: text }
+    return { def, text, effects }
   }
 
   // Botão principal: o token caminha para o próximo nó.
@@ -820,26 +785,10 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     persistReward(m.goldReward)
     pushLog(`🏆 Você derrotou ${m.emoji} ${m.name}! +${m.goldReward} 💰 +${m.xpReward} XP`)
 
-    // Espólio extra de SALA PRINCIPAL e BOSS: item + pedra de aprimoramento.
-    const isMainNode = trailPoints[tokenIdx]?.kind === 'main'
-    if (m.isBoss || isMainNode) {
-      const itemEv = dungeon.events.find(e => e.kind === 'item')
-      const names = itemEv?.itemNames || []
-      if (names.length) {
-        const drop = names[Math.floor(Math.random() * names.length)]
-        setTotals(prev => ({ ...prev, items: [...prev.items, drop] }))
-        persistReward(0, drop, `Espólio de ${dungeon.name}`, itemEv?.itemRarity)
-        pushLog(`📦 Espólio: ${drop}`)
-      }
-      const stone = m.isBoss
-        ? STONE_NAMES.WEAPON_CONCENTRATED
-        : Math.random() < 0.5
-          ? STONE_NAMES.ARMOR_BASIC
-          : STONE_NAMES.WEAPON_BASIC
-      setTotals(prev => ({ ...prev, items: [...prev.items, stone] }))
-      persistReward(0, stone, 'Pedra de aprimoramento', 'COMMON')
-      pushLog(`⚒️ Espólio: ${stone}`)
-    }
+    // Espólio do monstro: rolado pela sorte do nó (boss = sorte máxima e mais drops).
+    const nodeKind = m.isBoss ? 'boss' : trailPoints[tokenIdx]?.kind === 'main' ? 'main' : 'minor'
+    const lootRoll = m.isBoss ? 20 : lootRollRef.current
+    applyLoot(rollNodeLoot(dungeon, lootRoll, nodeKind, character.level))
 
     later(() => {
       setMonster(null)

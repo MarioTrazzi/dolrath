@@ -5,6 +5,10 @@
 // - Usado pela experiência nova de masmorras (DungeonRun + BattleScene)
 // ============================================================
 
+import { getDungeonDrops, getDungeonConsumables } from './itemCatalog'
+import { MATERIALS } from './dungeonData'
+import { STONE_NAMES } from './enhancementSystem'
+
 export type DungeonId = 'floresta' | 'caverna' | 'pantano' | 'ruinas'
 
 export interface DungeonMonsterDef {
@@ -412,4 +416,100 @@ export function eventForRoll(dungeon: DungeonDef, roll: number): DungeonEventDef
     dungeon.events.find(e => e.kind === 'nothing') ||
     dungeon.events[0]
   )
+}
+
+// ============================================================
+// LOOT POR SORTE — o d20 rolado ao avançar define a QUALIDADE do
+// achado. Nada é garantido: a sorte só aumenta as chances.
+//   1–5   (low)  → materiais de craft + poucas moedas
+//   6–13  (mid)  → chances melhores
+//   14–20 (high) → chances ainda maiores (itens/consumíveis melhores)
+// Pedras de aprimoramento são raras — e ainda mais raras em nós menores.
+// ============================================================
+export type LuckTier = 'low' | 'mid' | 'high'
+
+export function luckTier(roll: number): LuckTier {
+  if (roll <= 5) return 'low'
+  if (roll <= 13) return 'mid'
+  return 'high'
+}
+
+export type LootKind = 'material' | 'consumable' | 'item' | 'stone'
+export interface LootDrop {
+  name: string
+  kind: LootKind
+  rarity?: string
+  emoji: string
+}
+export interface NodeLoot {
+  gold: number
+  drops: LootDrop[]
+}
+
+export type LootNodeKind = 'minor' | 'main' | 'boss'
+
+const LUCK_CFG: Record<
+  LuckTier,
+  { goldBase: number; goldVar: number; pMaterial: number; pConsumable: number; pItem: number; pStone: number; rarities: string[] }
+> = {
+  low: { goldBase: 4, goldVar: 8, pMaterial: 0.7, pConsumable: 0.18, pItem: 0.07, pStone: 0.02, rarities: ['COMMON'] },
+  mid: { goldBase: 10, goldVar: 16, pMaterial: 0.5, pConsumable: 0.35, pItem: 0.28, pStone: 0.05, rarities: ['COMMON', 'UNCOMMON'] },
+  high: { goldBase: 18, goldVar: 30, pMaterial: 0.3, pConsumable: 0.45, pItem: 0.55, pStone: 0.1, rarities: ['UNCOMMON', 'RARE', 'EPIC'] },
+}
+
+// Nó menor dropa menos; pedra mais rara nele; sala/boss dão mais ouro.
+const NODE_LOOT_MULT: Record<LootNodeKind, { all: number; stone: number; gold: number }> = {
+  minor: { all: 0.8, stone: 0.4, gold: 0.8 },
+  main: { all: 1.0, stone: 1.0, gold: 1.3 },
+  boss: { all: 1.0, stone: 2.5, gold: 2.0 },
+}
+
+const pickFrom = <T>(arr: T[]): T | undefined => (arr.length ? arr[Math.floor(Math.random() * arr.length)] : undefined)
+const rarityOf = (x: { rarity: unknown }) => String(x.rarity).toUpperCase()
+
+export function rollNodeLoot(dungeon: DungeonDef, roll: number, nodeKind: LootNodeKind, level: number): NodeLoot {
+  const tier = luckTier(roll)
+  const cfg = LUCK_CFG[tier]
+  const mult = NODE_LOOT_MULT[nodeKind]
+  const drops: LootDrop[] = []
+
+  const gold = Math.max(
+    0,
+    Math.floor((cfg.goldBase + Math.random() * cfg.goldVar) * mult.gold * dungeon.difficulty * (1 + level * 0.04))
+  )
+
+  // material de craft (mais provável no loot pobre)
+  if (Math.random() < cfg.pMaterial * mult.all) {
+    const pool = MATERIALS.filter(m => cfg.rarities.includes(rarityOf(m)))
+    const m = pickFrom(pool.length ? pool : MATERIALS)
+    if (m) drops.push({ name: m.name, kind: 'material', rarity: rarityOf(m), emoji: '🪨' })
+  }
+  // consumível de masmorra (poções etc.)
+  if (Math.random() < cfg.pConsumable * mult.all) {
+    const all = getDungeonConsumables()
+    const pool = all.filter(c => cfg.rarities.includes(rarityOf(c)))
+    const c = pickFrom(pool.length ? pool : all)
+    if (c) drops.push({ name: c.name, kind: 'consumable', rarity: rarityOf(c), emoji: '🧪' })
+  }
+  // equipamento temático da masmorra (a "sorte grande")
+  if (Math.random() < cfg.pItem * mult.all) {
+    const all = getDungeonDrops(dungeon.id)
+    const pool = all.filter(i => cfg.rarities.includes(rarityOf(i)))
+    const i = pickFrom(pool.length ? pool : all)
+    if (i) drops.push({ name: i.name, kind: 'item', rarity: rarityOf(i), emoji: '📦' })
+  }
+  // pedra de aprimoramento (rara; ainda mais rara em nó menor)
+  if (Math.random() < cfg.pStone * mult.stone) {
+    const concentrated = dungeon.difficultyStars >= 3
+    const stone = concentrated
+      ? Math.random() < 0.4
+        ? STONE_NAMES.WEAPON_CONCENTRATED
+        : STONE_NAMES.ARMOR_CONCENTRATED
+      : Math.random() < 0.5
+        ? STONE_NAMES.WEAPON_BASIC
+        : STONE_NAMES.ARMOR_BASIC
+    drops.push({ name: stone, kind: 'stone', rarity: 'COMMON', emoji: '⚒️' })
+  }
+
+  return { gold, drops }
 }

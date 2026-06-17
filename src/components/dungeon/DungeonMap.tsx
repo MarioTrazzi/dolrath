@@ -87,9 +87,13 @@ function smoothPath(pts: MapPoint[]): string {
 }
 
 // ============================================================
-// Trilha: caminho esmaecido de fundo + caminho aceso por cima
+// Trilha: apenas o caminho esmaecido de fundo (pontilhado).
+// O trecho "aceso" foi removido — como o viewBox é esticado
+// (preserveAspectRatio="none"), o dash não alinhava aos nós e
+// "vazava". O progresso já é comunicado pelo deslize do token
+// NFT de nó em nó (efeito de viagem) e pelo estado dos nós.
 // ============================================================
-export function MapTrail({ points, progress }: { points: MapPoint[]; progress: number }) {
+export function MapTrail({ points }: { points: MapPoint[]; progress?: number }) {
   const d = React.useMemo(() => smoothPath(points), [points])
   return (
     <svg
@@ -106,25 +110,6 @@ export function MapTrail({ points, progress }: { points: MapPoint[]; progress: n
         strokeDasharray="0.6 2.4"
         strokeLinecap="round"
         vectorEffect="non-scaling-stroke"
-      />
-      {/* Trecho aceso: revelado AO LONGO da trilha (não por x), via
-          dash normalizado pelo comprimento do caminho. Assim a linha
-          acompanha a serpentina e nunca "vaza" sobre nós futuros. */}
-      <path
-        d={d}
-        fill="none"
-        strokeWidth="3"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        vectorEffect="non-scaling-stroke"
-        pathLength={1}
-        strokeDasharray="1 1"
-        strokeDashoffset={1 - Math.max(0, Math.min(1, progress))}
-        style={{
-          stroke: 'var(--dgn)',
-          filter: 'drop-shadow(0 0 6px var(--dgn))',
-          transition: 'stroke-dashoffset 0.9s ease-in-out',
-        }}
       />
     </svg>
   )

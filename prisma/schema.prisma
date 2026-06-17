@@ -164,8 +164,12 @@ model Character {
   
   // 🐉 SISTEMA DE TRANSFORMAÇÃO
   isTransformed     Boolean       @default(false)
-  transformationType String?      // 'dragon', 'wolf', 'bear', 'eagle'
+  transformationType String?      // forma ATIVA no combate: 'dragon', 'wolf', 'bear', 'eagle', 'seventh_sense', 'celestial'
   transformationData Json?        @db.JsonB // { remainingTurns, cooldownTurns, originalStats }
+  // Forma FIXA escolhida na criação (trava o metamorfo em 1 das 3; demais raças = única da raça)
+  unlockedTransformation String? // 'dragon' | 'wolf' | 'bear' | 'eagle' | 'seventh_sense' | 'celestial'
+  // Imagem da forma transformada (a "segunda NFT"), gerada a partir do avatar via gpt-image-1
+  transformationImage    String?
   
   equipment     CharacterEquipment[]
   inventory     CharacterInventory[]

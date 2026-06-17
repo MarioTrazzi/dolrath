@@ -894,22 +894,27 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
           ? 'A trilha termina adiante. Você sente um olhar antigo cravado em você...'
           : TRANSITIONS[tokenIdx % TRANSITIONS.length])
 
-        // Montar um card visual para mostrar o loot DEPOIS que o combate fechou
-        if (loot.drops.length > 0 || loot.gold > 0) {
-          const effects: string[] = []
-          if (loot.gold > 0) effects.push(`+${loot.gold} 💰`)
-          for (const d of loot.drops) effects.push(`${d.emoji} ${d.name}`)
+        // Montar um card visual com TUDO que a vitória rendeu DEPOIS que o
+        // combate fechou: XP, ouro (recompensa do abate + ouro do espólio) e drops.
+        const totalGold = m.goldReward + loot.gold
+        const hasGear = loot.drops.some(d => d.kind === 'item' || d.kind === 'stone')
 
-          const def: DungeonEventDef = {
-            kind: loot.drops.some(d => d.kind === 'item' || d.kind === 'stone') ? 'item' : loot.gold > 0 ? 'gold' : 'nothing',
-            min: 0,
-            max: 0,
-            icon: loot.drops.some(d => d.kind === 'item' || d.kind === 'stone') ? '🌟' : '💰',
-            title: 'Espólio da Vitória',
-            description: `${m.emoji} ${m.name} deixou cair seus pertences.`
-          }
-          setLootCard({ def, text: def.description, effects })
+        const effects: string[] = []
+        if (m.xpReward > 0) effects.push(`+${m.xpReward} ⭐ XP`)
+        if (totalGold > 0) effects.push(`+${totalGold} 💰`)
+        for (const d of loot.drops) effects.push(`${d.emoji} ${d.name}`)
+
+        const def: DungeonEventDef = {
+          kind: hasGear ? 'item' : 'gold',
+          min: 0,
+          max: 0,
+          icon: hasGear ? '🌟' : '🏆',
+          title: 'Espólio da Vitória',
+          description: hasGear
+            ? `${m.emoji} ${m.name} foi derrotado e deixou cair seus pertences.`
+            : `${m.emoji} ${m.name} foi derrotado.`,
         }
+        setLootCard({ def, text: def.description, effects })
       }
     }, 2800)
   }

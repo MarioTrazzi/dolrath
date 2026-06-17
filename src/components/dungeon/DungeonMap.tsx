@@ -107,23 +107,23 @@ export function MapTrail({ points, progress }: { points: MapPoint[]; progress: n
         strokeLinecap="round"
         vectorEffect="non-scaling-stroke"
       />
-      <defs>
-        <mask id="trail-mask">
-          <rect x="0" y="0" width="100" height="100" fill="white" />
-          <rect x={progress * 100} y="0" width={100 - progress * 100} height="100" fill="black" />
-        </mask>
-      </defs>
+      {/* Trecho aceso: revelado AO LONGO da trilha (não por x), via
+          dash normalizado pelo comprimento do caminho. Assim a linha
+          acompanha a serpentina e nunca "vaza" sobre nós futuros. */}
       <path
         d={d}
         fill="none"
         strokeWidth="3"
         strokeLinecap="round"
+        strokeLinejoin="round"
         vectorEffect="non-scaling-stroke"
-        mask="url(#trail-mask)"
+        pathLength={1}
+        strokeDasharray="1 1"
+        strokeDashoffset={1 - Math.max(0, Math.min(1, progress))}
         style={{
           stroke: 'var(--dgn)',
           filter: 'drop-shadow(0 0 6px var(--dgn))',
-          transition: 'all 0.9s ease-in-out',
+          transition: 'stroke-dashoffset 0.9s ease-in-out',
         }}
       />
     </svg>

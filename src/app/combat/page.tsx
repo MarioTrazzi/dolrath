@@ -212,6 +212,20 @@ function CombatPageContent() {
   const opponent = combatRoom?.player1?.id === currentPlayer?.id ? combatRoom?.player2 : combatRoom?.player1
   // 🔥 CORREÇÃO: Card verde deve usar dados do combatRoom igual ao vermelho
   const currentPlayerDisplay = combatRoom?.player1?.id === currentPlayer?.id ? combatRoom?.player1 : combatRoom?.player2
+  // O objeto do socket (combatRoom.player1/2) não carrega a arte da transformação
+  // nem a forma travada (campos novos, não sincronizados pelo servidor de socket).
+  // Mesclamos esses campos a partir do currentPlayer (carregado do DB) para que a
+  // imagem troque corretamente ao transformar.
+  const currentPlayerView = currentPlayerDisplay
+    ? {
+        ...currentPlayerDisplay,
+        avatar: currentPlayerDisplay.avatar ?? currentPlayer?.avatar ?? null,
+        transformationImage:
+          currentPlayer?.transformationImage ?? currentPlayerDisplay.transformationImage ?? null,
+        unlockedTransformation:
+          currentPlayer?.unlockedTransformation ?? currentPlayerDisplay.unlockedTransformation ?? null,
+      }
+    : currentPlayer
   const isMyTurn = combatRoom?.currentTurn === currentPlayer?.id
   const isWinner = combatRoom?.winner === currentPlayer?.id
   const isCreator = combatRoom?.creator === currentPlayer?.id
@@ -1043,7 +1057,7 @@ function CombatPageContent() {
           {/* 🎬 Arena de Batalha - estilo Adventure Quest */}
           <BattleScene
             className="flex-1 min-h-[260px]"
-            left={(isSpectator || isModerator ? combatRoom?.player1 : (currentPlayerDisplay || currentPlayer)) || null}
+            left={(isSpectator || isModerator ? combatRoom?.player1 : (currentPlayerView || currentPlayer)) || null}
             right={(isSpectator || isModerator ? combatRoom?.player2 : opponent) || null}
             currentTurnId={combatRoom?.currentTurn}
             winnerId={combatRoom?.winner || null}

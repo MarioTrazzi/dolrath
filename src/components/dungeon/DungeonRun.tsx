@@ -116,6 +116,28 @@ interface Banner {
   text: string
 }
 
+// Efeito restaurador de um consumível a partir dos stats do catálogo.
+function consumableEffect(stats: any): { hp: number; mp: number } {
+  const s = stats || {}
+  return { hp: Number(s.healAmount) || 0, mp: Number(s.manaAmount) || 0 }
+}
+function consumableIcon(stats: any): string {
+  const e = consumableEffect(stats)
+  if (e.hp && e.mp) return '💖'
+  if (e.hp) return '❤️'
+  if (e.mp) return '🔮'
+  return '🧪'
+}
+
+interface DungeonConsumable {
+  id: string
+  name: string
+  hp: number
+  mp: number
+  qty: number
+  icon: string
+}
+
 function rollDie(sides: number): number {
   return 1 + Math.floor(Math.random() * sides)
 }
@@ -225,6 +247,9 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const [narration, setNarration] = useState(dungeon.enterText)
   const [nodeEvents, setNodeEvents] = useState<Record<number, RevealedNode>>({})
   const [floats, setFloats] = useState<{ id: number; label: string; color: string }[]>([])
+  // Consumíveis do inventário do personagem (usáveis no mapa e no combate)
+  const [consumables, setConsumables] = useState<DungeonConsumable[]>([])
+  const [showItems, setShowItems] = useState(false)
   const atBoss = tokenIdx === LAST
   const nextIsBoss = tokenIdx === LAST - 1
   const nextMainNode = trailPoints[tokenIdx + 1]?.kind === 'main'
@@ -357,6 +382,27 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       pushLog(`${d.emoji} ${d.name}`)
     }
   }, [persistReward, pushFloat, pushLog, dungeon.name])
+
+  // Carrega os consumíveis restauradores (HP/MP) do inventário do personagem.
+  const loadConsumables = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/store/inventory?characterId=${character.id}`)
+      if (!res.ok) return
+      const data = await res.json()
+      const list: DungeonConsumable[] = (Array.isArray(data) ? data : [])
+        .filter((row: any) => row?.item?.type === 'CONSUMABLE' && row.quantity > 0)
+        .map((row: any) => {
+          const e = consumableEffect(row.item.stats)
+          return { id: row.item.id, name: row.item.name, hp: e.hp, mp: e.mp, qty: row.quantity, icon: consumableIcon(row.item.stats) }
+        })
+        .filter((c: DungeonConsumable) => c.hp > 0 || c.mp > 0)
+      setConsumables(list)
+    } catch {
+      /* silencioso */
+    }
+  }, [character.id])
+
+  useEffect(() => { loadConsumables() }, [loadConsumables])
 
   const persistXp = useCallback(async (xp: number) => {
     if (xp <= 0) return null
@@ -712,6 +758,46 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     setStage('playerDefense')
   }
 
+  // ---------- Usar consumível (mapa e combate) ----------
+  const useConsumable = (c: DungeonConsumable) => {
+    if (c.qty <= 0) return
+    const inCombatTurn = phase === 'combat' && stage === 'playerSelect'
+    const hpFull = hpRef.current >= effMaxHp
+    const mpFull = mp >= character.maxMp
+    if ((c.hp > 0 && c.mp === 0 && hpFull) || (c.mp > 0 && c.hp === 0 && mpFull)) {
+      showBanner('✋', 'Recurso já está cheio')
+      return
+    }
+    if (c.hp > 0) {
+      const gain = Math.min(effMaxHp, hpRef.current + c.hp) - hpRef.current
+      setHp(prev => Math.min(effMaxHp, prev + c.hp))
+      if (gain > 0) pushFloat(`+${gain} ❤️`, '#2ecc71')
+    }
+    if (c.mp > 0) {
+      setMp(prev => Math.min(character.maxMp, prev + c.mp))
+      pushFloat(`+${c.mp} 🔮`, '#3b82f6')
+    }
+    pushLog(`🧪 Usou ${c.name}`)
+    showBanner(c.icon, `${c.name} usada!`)
+
+    // baixa otimista + persistência
+    setConsumables(prev => prev.map(x => (x.id === c.id ? { ...x, qty: x.qty - 1 } : x)).filter(x => x.qty > 0))
+    fetch(`/api/character/${character.id}/use-consumable`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itemId: c.id }),
+    }).catch(() => {})
+
+    setShowItems(false)
+
+    // No combate, usar item consome o turno do jogador.
+    if (inCombatTurn) {
+      setStage('busy')
+      tickPlayerTurn()
+      later(() => monsterTelegraph(), 1400)
+    }
+  }
+
   const choosePlayerDefense = (choice: DefenseKind) => {
     setDefenseChoice(choice)
     setPanelResult(null)
@@ -981,6 +1067,71 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
           </AnimatePresence>
         </div>
 
+        {/* ---------- Painel de consumíveis (mapa e combate) ---------- */}
+        {showItems && (
+          <div className="absolute inset-0 z-50 grid place-items-center px-5" onClick={() => setShowItems(false)}>
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+            <div
+              className="relative w-full max-w-sm rounded-2xl p-5 border border-white/15 bg-[#12122a]/95 shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-black text-white text-lg">🧪 Consumíveis</h3>
+                <div className="flex gap-3 text-xs font-combat">
+                  <span className="text-emerald-400">❤️ {Math.round(hp)}/{effMaxHp}</span>
+                  <span className="text-blue-400">🔮 {mp}/{character.maxMp}</span>
+                </div>
+              </div>
+              {consumables.length === 0 ? (
+                <p className="text-textsec text-sm text-center py-6">Nenhum consumível restaurador no inventário.</p>
+              ) : (
+                <div className="space-y-2 max-h-72 overflow-y-auto">
+                  {consumables.map(c => {
+                    const hpFull = hp >= effMaxHp
+                    const mpFull = mp >= character.maxMp
+                    const disabled =
+                      (c.hp > 0 && c.mp === 0 && hpFull) ||
+                      (c.mp > 0 && c.hp === 0 && mpFull) ||
+                      (c.hp > 0 && c.mp > 0 && hpFull && mpFull)
+                    return (
+                      <div key={c.id} className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-xl">{c.icon}</span>
+                          <div className="min-w-0">
+                            <div className="text-white text-sm font-bold truncate">
+                              {c.name} <span className="text-textsec font-normal">×{c.qty}</span>
+                            </div>
+                            <div className="text-textsec text-[11px]">
+                              {c.hp > 0 ? `+${c.hp} ❤️` : ''}{c.hp > 0 && c.mp > 0 ? ' • ' : ''}{c.mp > 0 ? `+${c.mp} 🔮` : ''}
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => useConsumable(c)}
+                          disabled={disabled}
+                          className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-black text-white disabled:opacity-40 transition-transform active:scale-95"
+                          style={{ background: 'linear-gradient(90deg,#2ecc71,#16a34a)' }}
+                        >
+                          Usar
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+              {phase === 'combat' && (
+                <p className="text-textsec/70 text-[10px] text-center mt-2">No combate, usar um item consome seu turno.</p>
+              )}
+              <button
+                onClick={() => setShowItems(false)}
+                className="mt-3 w-full py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm font-bold transition-colors"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ============================================================ */}
         {/* FASE: EXPLORAÇÃO */}
         {/* ============================================================ */}
@@ -1188,6 +1339,19 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                   🚪
                 </button>
                 <button
+                  onClick={() => { loadConsumables(); setShowItems(true) }}
+                  disabled={exploreRolling || moving}
+                  title="Usar consumível (HP/MP)"
+                  className="shrink-0 w-12 h-[52px] grid place-items-center rounded-xl border border-white/10 bg-black/50 backdrop-blur-xl text-textsec hover:text-white hover:border-white/25 transition-colors active:scale-95 disabled:opacity-40 relative"
+                >
+                  🧪
+                  {consumables.length > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-emerald-500 text-[9px] font-black grid place-items-center text-white">
+                      {consumables.reduce((n, c) => n + c.qty, 0)}
+                    </span>
+                  )}
+                </button>
+                <button
                   onClick={
                     atBoss
                       ? () => startCombat(scaleMonster(dungeon.boss, dungeon, character.level, { tier: dungeon.rooms, isMain: true, isBoss: true }))
@@ -1327,6 +1491,15 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                       })()}
                     </div>
                   )}
+
+                  {/* Usar consumível (consome o turno) */}
+                  <button
+                    onClick={() => { loadConsumables(); setShowItems(true) }}
+                    className="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all shadow-lg bg-gradient-to-r from-emerald-700 to-green-600 hover:scale-105"
+                  >
+                    🧪 Item
+                    <span className="block text-[9px] opacity-80 font-normal">HP/MP • gasta o turno</span>
+                  </button>
                 </div>
               ) : stage === 'playerDefense' ? (
                 <div className="flex items-center justify-center gap-2">

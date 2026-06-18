@@ -26,9 +26,11 @@ export const RACE_STYLE: Record<RaceId, string> = {
     'slit reptilian eyes, a faint ember glow under the skin, and an imposing, ' +
     'powerful build that hints at the dragon transformation within.',
   metamorfo:
-    'Shapeshifter heritage: a lean, predatory frame, feral amber eyes, ' +
-    'wolf-like or beast-like features bleeding through, and an untamed ' +
-    'wilderness aura hinting at animal transformation.',
+    'Shapeshifter heritage: a fully human adventurer in their normal, ' +
+    'untransformed form — ordinary human face and anatomy, NO fur, NO muzzle, ' +
+    'NO claws, NO scales and NO animal features. Only a subtle wild, untamed ' +
+    'presence and sharp, watchful eyes hint at the beast they can become; the ' +
+    'animal transformation itself is NOT shown here.',
   humano:
     'Human heritage: a determined, adaptable adventurer with expressive human ' +
     'features and a versatile, resilient bearing, carrying a faint inner spark ' +

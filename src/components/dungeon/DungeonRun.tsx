@@ -46,6 +46,8 @@ export interface DungeonCharacter {
   race: string
   class: string
   avatar?: string | null
+  /** Arte da forma transformada (gerada via gpt-image-1); substitui o avatar enquanto transformado */
+  transformationImage?: string | null
   hp: number
   maxHp: number
   mp: number
@@ -451,7 +453,8 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     isAlive: hp > 0,
     isTransformed: !!transform,
     transformationType: transform?.type ?? null,
-  }), [character, hp, mp, stamina, transform])
+    transformationImage: character.transformationImage ?? null,
+  }), [character, hp, mp, stamina, transform, effMaxHp])
 
   const monsterFighter: FighterView | null = useMemo(() => monster ? {
     id: MONSTER_ID,

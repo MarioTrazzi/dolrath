@@ -761,12 +761,12 @@ export default function Store() {
                   {/* Conteúdo */}
                   <div className="relative p-4 flex flex-col min-h-[280px]">
                     {resolvedImageUrl && (
-                      <div className="w-full h-32 relative mb-3 rounded-lg overflow-hidden bg-black/20">
+                      <div className="w-full aspect-square relative mb-3 rounded-xl overflow-hidden bg-black/40 ring-1 ring-white/10">
                         <Image
                           src={resolvedImageUrl}
                           alt={item.name}
                           fill
-                          className="object-contain group-hover:scale-110 transition-transform duration-300"
+                          className="object-cover group-hover:scale-105 transition-transform duration-300"
                           unoptimized={Boolean(resolvedImageUrl && !/^https?:\/\//i.test(resolvedImageUrl))}
                         />
                       </div>

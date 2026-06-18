@@ -168,8 +168,11 @@ model Character {
   transformationData Json?        @db.JsonB // { remainingTurns, cooldownTurns, originalStats }
   // Forma FIXA escolhida na criação (trava o metamorfo em 1 das 3; demais raças = única da raça)
   unlockedTransformation String? // 'dragon' | 'wolf' | 'bear' | 'eagle' | 'seventh_sense' | 'celestial'
-  // Imagem da forma transformada (a "segunda NFT"), gerada a partir do avatar via gpt-image-1
+  // Imagem da forma transformada (a "segunda NFT"), gerada a partir do avatar via gpt-image-1.
+  // Para o metamorfo, guarda a forma padrão; o mapa completo fica em transformationImages.
   transformationImage    String?
+  // Mapa de imagens por forma. Metamorfo: { wolf, bear, eagle }. Demais raças: 1 entrada.
+  transformationImages   Json?
   
   equipment     CharacterEquipment[]
   inventory     CharacterInventory[]

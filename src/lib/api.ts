@@ -10,6 +10,7 @@ export async function createCharacter(characterData: {
   nftTokenUri?: string;
   unlockedTransformation?: string | null;
   transformationImage?: string | null;
+  transformationImages?: Record<string, string> | null;
 }): Promise<any> {
   const response = await fetch('/api/character', {
     method: 'POST',

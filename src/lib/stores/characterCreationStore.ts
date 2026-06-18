@@ -29,6 +29,9 @@ interface CharacterCreationState {
   // 🐉 Transformação escolhida na criação
   chosenTransformation: string | null;
   transformationImage: string | null;
+  // Metamorfo: arte de TODAS as formas (wolf/bear/eagle) gerada na criação.
+  // Mapa forma -> imagem. Demais raças usam apenas transformationImage.
+  transformationImages: Record<string, string>;
   creationPaymentTxHash: string | null;
   isSubmitting: boolean;
 
@@ -43,6 +46,8 @@ interface CharacterCreationState {
   setSelectedImage: (image: string | null) => void;
   setChosenTransformation: (form: string | null) => void;
   setTransformationImage: (image: string | null) => void;
+  // Define/limpa a arte de uma forma específica (metamorfo). image=null remove a entrada.
+  setTransformationImageFor: (form: string, image: string | null) => void;
   setCreationPaymentTxHash: (txHash: string | null) => void;
   markStepComplete: (stepId: string, isComplete: boolean) => void;
   createCharacter: () => Promise<void>;
@@ -110,6 +115,7 @@ export const useCharacterCreationStore = create<CharacterCreationState>()(
       selectedImage: null,
       chosenTransformation: null,
       transformationImage: null,
+      transformationImages: {},
       creationPaymentTxHash: null,
       isSubmitting: false,
 
@@ -186,6 +192,7 @@ export const useCharacterCreationStore = create<CharacterCreationState>()(
             selectedImage: image,
             chosenTransformation: null,
             transformationImage: null,
+            transformationImages: {},
             creationSteps: updatedSteps,
           };
         }),
@@ -193,6 +200,14 @@ export const useCharacterCreationStore = create<CharacterCreationState>()(
       setChosenTransformation: (form: string | null) =>
         // Trocar a forma invalida a arte gerada anteriormente.
         set({ chosenTransformation: form, transformationImage: null }),
+
+      setTransformationImageFor: (form: string, image: string | null) =>
+        set((state) => {
+          const next = { ...state.transformationImages };
+          if (image) next[form] = image;
+          else delete next[form];
+          return { transformationImages: next };
+        }),
 
       setTransformationImage: (image: string | null) =>
         set((state) => {
@@ -251,6 +266,7 @@ export const useCharacterCreationStore = create<CharacterCreationState>()(
           selectedImage: null,
           chosenTransformation: null,
           transformationImage: null,
+          transformationImages: {},
           creationPaymentTxHash: null,
           isSubmitting: false,
           creationSteps: state.creationSteps.map((step, index) => ({
@@ -279,6 +295,7 @@ export const useCharacterCreationStore = create<CharacterCreationState>()(
         selectedImage: state.selectedImage,
         chosenTransformation: state.chosenTransformation,
         transformationImage: state.transformationImage,
+        transformationImages: state.transformationImages,
         creationPaymentTxHash: state.creationPaymentTxHash,
       }),
       merge: (persistedState: any, currentState) => {

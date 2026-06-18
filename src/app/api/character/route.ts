@@ -91,6 +91,7 @@ export async function POST(req: Request) {
     nftTokenUri,
     unlockedTransformation,
     transformationImage,
+    transformationImages,
   } = body
 
   const parsedDistributedPoints = (() => {
@@ -284,17 +285,41 @@ export async function POST(req: Request) {
       canTransform: raceData.transformationAvailable
     } : {};
 
-    // 🐉 Transformação escolhida na criação (forma travada + arte). Valida que a
-    // forma pertence à raça; caso contrário, ignora silenciosamente.
+    // 🐉 Transformação escolhida na criação. Metamorfo (multi-forma) gera TODAS as
+    // formas e fica DESTRAVADO (escolhe a forma em combate); demais raças têm 1
+    // forma travada. Valida que cada forma pertence à raça antes de salvar.
     const raceForms = getRaceTransformations(race)
+    const isMultiForm = raceForms.length > 1
+
+    // Sanitiza o mapa forma->imagem: só mantém formas válidas com URL não vazia.
+    const rawImages =
+      transformationImages && typeof transformationImages === 'object' ? transformationImages : {}
+    const transformationImagesMap: Record<string, string> = {}
+    for (const form of raceForms) {
+      const url = (rawImages as Record<string, unknown>)[form]
+      if (typeof url === 'string' && url.trim()) {
+        transformationImagesMap[form] = url.trim()
+      }
+    }
+
     const requestedForm = String(unlockedTransformation || '').toLowerCase()
-    const lockedForm = raceForms.includes(requestedForm as any)
-      ? requestedForm
-      : (raceForms.length === 1 ? raceForms[0] : null)
-    const transformationImageUrl =
+    // Multi-forma: null (destravado). Forma única: a forma da raça (ou a pedida válida).
+    const lockedForm = isMultiForm
+      ? null
+      : raceForms.includes(requestedForm as any)
+        ? requestedForm
+        : (raceForms.length === 1 ? raceForms[0] : null)
+
+    // Imagem padrão exibida: a explícita, ou a primeira forma disponível no mapa.
+    const explicitImage =
       typeof transformationImage === 'string' && transformationImage.trim()
         ? transformationImage.trim()
         : null
+    const transformationImageUrl =
+      explicitImage ?? raceForms.map((f) => transformationImagesMap[f]).find(Boolean) ?? null
+
+    const transformationImagesValue =
+      Object.keys(transformationImagesMap).length > 0 ? transformationImagesMap : null
 
     const character = await prisma.character.create({
       data: {
@@ -304,6 +329,7 @@ export async function POST(req: Request) {
         avatar: avatarUrl,
         unlockedTransformation: lockedForm,
         transformationImage: transformationImageUrl,
+        transformationImages: transformationImagesValue ?? undefined,
         level: 1,
         experience: 0,
         // Stats calculados baseados na distribuição + bônus raciais/classe

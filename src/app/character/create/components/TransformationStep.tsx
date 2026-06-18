@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { motion } from 'framer-motion';
 import { Wand2, RefreshCw, Check } from 'lucide-react';
 import { useCharacterCreationStore } from '@/lib/stores/characterCreationStore';
 import {
@@ -19,12 +18,15 @@ export function TransformationStep() {
     selectedImage,
     chosenTransformation,
     transformationImage,
+    transformationImages,
     setChosenTransformation,
     setTransformationImage,
+    setTransformationImageFor,
     markStepComplete,
   } = useCharacterCreationStore();
 
-  const [isGenerating, setIsGenerating] = useState(false);
+  // Formas sendo geradas no momento (uma ou várias em paralelo).
+  const [generating, setGenerating] = useState<Record<string, boolean>>({});
 
   const forms = getRaceTransformations(selectedRace?.id) as TransformationType[];
   const isMultiForm = forms.length > 1; // metamorfo
@@ -37,14 +39,16 @@ export function TransformationStep() {
     }
   }, [forms.length, markStepComplete]);
 
+  // Gera a arte de uma forma específica a partir da imagem base.
   const generate = useCallback(
     async (form: TransformationType) => {
       if (!selectedImage) {
         toast.error('Escolha a imagem do personagem primeiro.');
         return;
       }
-      setIsGenerating(true);
-      setChosenTransformation(form);
+      setGenerating((g) => ({ ...g, [form]: true }));
+      // Single-form: também registra a forma escolhida.
+      if (!isMultiForm) setChosenTransformation(form);
       try {
         const res = await fetch('/api/ai/transformation-image', {
           method: 'POST',
@@ -55,24 +59,36 @@ export function TransformationStep() {
         if (!res.ok || !json?.image) {
           throw new Error(json?.error || 'Falha ao gerar a transformação');
         }
-        setTransformationImage(json.image);
+        if (isMultiForm) {
+          setTransformationImageFor(form, json.image);
+        } else {
+          setTransformationImage(json.image);
+        }
       } catch (error) {
         toast.error(error instanceof Error ? error.message : 'Erro ao gerar transformação');
-        setTransformationImage(null);
+        if (isMultiForm) setTransformationImageFor(form, null);
+        else setTransformationImage(null);
       } finally {
-        setIsGenerating(false);
+        setGenerating((g) => ({ ...g, [form]: false }));
       }
     },
-    [selectedImage, setChosenTransformation, setTransformationImage]
+    [selectedImage, isMultiForm, setChosenTransformation, setTransformationImage, setTransformationImageFor]
   );
 
-  // Raças de forma única: gera automaticamente ao entrar na etapa.
+  // Single-form: gera automaticamente ao entrar na etapa.
   useEffect(() => {
-    if (singleForm && selectedImage && !transformationImage && !isGenerating) {
+    if (singleForm && selectedImage && !transformationImage && !generating[singleForm]) {
       void generate(singleForm);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [singleForm, selectedImage]);
+
+  // Multi-form (metamorfo): a etapa só conclui quando TODAS as formas têm arte.
+  useEffect(() => {
+    if (!isMultiForm) return;
+    const allDone = forms.every((f) => Boolean(transformationImages[f]));
+    markStepComplete('transformation', allDone);
+  }, [isMultiForm, forms, transformationImages, markStepComplete]);
 
   if (forms.length === 0) {
     return (
@@ -85,45 +101,114 @@ export function TransformationStep() {
     );
   }
 
+  // ───────────────────────── Metamorfo: gera as 3 formas ─────────────────────────
+  if (isMultiForm) {
+    const doneCount = forms.filter((f) => Boolean(transformationImages[f])).length;
+    const anyGenerating = forms.some((f) => generating[f]);
+
+    return (
+      <div className="space-y-8">
+        <div>
+          <h2 className="text-2xl font-bold text-text-primary mb-2">Transformações</h2>
+          <p className="text-text-secondary">
+            Como metamorfo, você domina <strong>todas</strong> as formas. A IA usa sua imagem
+            humana para criar a arte de cada uma — em combate (masmorra e PvP) você escolhe na
+            hora qual assumir. Gere as {forms.length} formas para concluir.
+          </p>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-text-secondary">
+            {doneCount}/{forms.length} formas geradas
+          </span>
+          <button
+            onClick={() => forms.forEach((f) => !transformationImages[f] && !generating[f] && generate(f))}
+            disabled={anyGenerating || doneCount === forms.length || !selectedImage}
+            className="text-xs flex items-center gap-1 text-primary hover:underline disabled:opacity-50"
+          >
+            <Wand2 className="w-3 h-3" /> Gerar todas as faltantes
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {forms.map((form) => {
+            const cfg = TRANSFORMATION_CONFIG[form];
+            const glow = getTransformationGlow(form);
+            const img = transformationImages[form];
+            const busy = Boolean(generating[form]);
+            return (
+              <div key={form} className="bg-surface/50 border border-white/10 rounded-lg p-4 space-y-3">
+                <div>
+                  <div className="font-bold text-text-primary">{cfg.name}</div>
+                  <div className="text-xs text-text-secondary">{cfg.description}</div>
+                </div>
+
+                <div
+                  className="relative w-full aspect-square rounded-lg overflow-hidden bg-background/40 flex items-center justify-center"
+                  style={img ? { boxShadow: `0 0 18px 2px ${glow.hex}` } : undefined}
+                >
+                  {busy ? (
+                    <div className="flex flex-col items-center gap-2 text-text-secondary">
+                      <RefreshCw className="w-6 h-6 animate-spin" />
+                      <span className="text-xs">Gerando...</span>
+                    </div>
+                  ) : img ? (
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={img} alt={cfg.name} className="w-full h-full object-cover" />
+                      <div className="absolute top-2 right-2 w-7 h-7 bg-primary rounded-full flex items-center justify-center">
+                        <Check className="w-4 h-4 text-white" />
+                      </div>
+                    </>
+                  ) : (
+                    <span className="text-xs text-text-secondary px-3 text-center">Ainda não gerada</span>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => generate(form)}
+                  disabled={busy || !selectedImage}
+                  className={cn(
+                    'w-full py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50',
+                    img
+                      ? 'bg-surface border border-white/20 text-text-secondary hover:text-text-primary'
+                      : 'bg-gradient-to-r from-primary to-primary-dark text-white'
+                  )}
+                >
+                  {busy ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : img ? (
+                    <>
+                      <RefreshCw className="w-4 h-4" /> Gerar de novo
+                    </>
+                  ) : (
+                    <>
+                      <Wand2 className="w-4 h-4" /> Gerar
+                    </>
+                  )}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // ───────────────────────── Forma única (demais raças) ─────────────────────────
   const activeForm = (chosenTransformation || singleForm) as TransformationType | null;
   const glow = activeForm ? getTransformationGlow(activeForm) : null;
+  const isGenerating = Boolean(singleForm && generating[singleForm]);
 
   return (
     <div className="space-y-8">
       <div>
         <h2 className="text-2xl font-bold text-text-primary mb-2">Transformação</h2>
         <p className="text-text-secondary">
-          {isMultiForm
-            ? 'Como metamorfo, escolha UMA forma — ela será a sua única transformação. A IA usa sua imagem para criar a arte da forma transformada.'
-            : 'A IA usa sua imagem para revelar a forma que seu herói assume em combate.'}
+          A IA usa sua imagem para revelar a forma que seu herói assume em combate.
         </p>
       </div>
 
-      {/* Seleção de forma (apenas metamorfo) */}
-      {isMultiForm && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {forms.map((form) => {
-            const cfg = TRANSFORMATION_CONFIG[form];
-            const selected = chosenTransformation === form;
-            return (
-              <button
-                key={form}
-                onClick={() => generate(form)}
-                disabled={isGenerating}
-                className={cn(
-                  'text-left bg-surface/50 border-2 rounded-lg p-4 transition-all disabled:opacity-50',
-                  selected ? 'border-primary shadow-lg shadow-primary/25' : 'border-white/10 hover:border-white/30'
-                )}
-              >
-                <div className="font-bold text-text-primary mb-1">{cfg.name}</div>
-                <div className="text-xs text-text-secondary">{cfg.description}</div>
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Resultado / preview */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
         {/* Imagem base */}
         <div className="bg-surface/50 border border-white/10 rounded-lg p-4">
@@ -162,9 +247,7 @@ export function TransformationStep() {
                 </div>
               </>
             ) : (
-              <span className="text-sm text-text-secondary px-4 text-center">
-                {isMultiForm ? 'Escolha uma forma acima para gerar' : 'Aguardando geração...'}
-              </span>
+              <span className="text-sm text-text-secondary px-4 text-center">Aguardando geração...</span>
             )}
           </div>
 

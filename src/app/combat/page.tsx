@@ -57,6 +57,8 @@ interface Player {
   transformationType?: string | null
   unlockedTransformation?: string | null
   transformationImage?: string | null
+  // Metamorfo: mapa forma->imagem (escolhe a forma em combate).
+  transformationImages?: Record<string, string> | null
   transformationData?: {
     remainingTurns?: number
     cooldownTurns?: number
@@ -506,6 +508,7 @@ function CombatPageContent() {
               transformationType: charDetails.transformationType || null,
               unlockedTransformation: charDetails.unlockedTransformation || null,
               transformationImage: charDetails.transformationImage || null,
+              transformationImages: charDetails.transformationImages || null,
               isReady: false,
               isConnected: true,
               isAlive: charDetails.isAlive
@@ -873,6 +876,11 @@ function CombatPageContent() {
     try {
       // Primeiro, verificar e consumir stamina (custos vêm da config — fonte única)
       const cfg = TRANSFORMATION_CONFIG[transformationType as TransformationType]
+      // Imagem da forma escolhida: metamorfo tem o mapa; demais raças têm a única.
+      const formImage =
+        currentPlayer.transformationImages?.[transformationType] ??
+        currentPlayer.transformationImage ??
+        null
       const staminaCost = cfg?.cost.stamina ?? 30
       const mpCost = cfg?.cost.mp ?? 20
 
@@ -948,6 +956,8 @@ function CombatPageContent() {
           critical: updatedCharacter.baseStats?.critical || prev.critical,
           isTransformed: true,
           transformationType: transformationType,
+          // Troca para a arte da forma escolhida (metamorfo muda por forma).
+          transformationImage: formImage ?? prev.transformationImage ?? null,
           transformationData: updatedCharacter.transformationData
         } : null)
         
@@ -960,7 +970,7 @@ function CombatPageContent() {
           transformationType,
           transformationName: cfg?.name,
           isTransformed: true,
-          transformationImage: currentPlayer.transformationImage,
+          transformationImage: formImage ?? currentPlayer.transformationImage,
           unlockedTransformation: updatedCharacter.unlockedTransformation ?? currentPlayer.unlockedTransformation,
           transformationData: updatedCharacter.transformationData,
           duration: data.transformation.duration,

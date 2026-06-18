@@ -6,6 +6,7 @@ import { Save, RefreshCw } from 'lucide-react';
 import { CharacterSummary } from './CharacterSummary';
 import { createCharacter } from '@/lib/api';
 import { useCharacterCreationStore } from '@/lib/stores/characterCreationStore';
+import { getRaceTransformations } from '@/lib/transformationSystem';
 import { cn } from '@/lib/utils';
 import { useSession } from 'next-auth/react';
 import { ethers } from 'ethers';
@@ -14,7 +15,7 @@ import { decodeContractCustomErrorMessage, getWalletTxErrorMessage } from '@/lib
 
 export function NameConfirmStep() {
   const { data: session } = useSession();
-  const { selectedRace, selectedClass, distributedPoints, selectedImage, chosenTransformation, transformationImage, characterName, creationPaymentTxHash, setCharacterName, markStepComplete, resetCreation } = useCharacterCreationStore();
+  const { selectedRace, selectedClass, distributedPoints, selectedImage, chosenTransformation, transformationImage, transformationImages, characterName, creationPaymentTxHash, setCharacterName, markStepComplete, resetCreation } = useCharacterCreationStore();
   const [isCreating, setIsCreating] = useState(false);
   const [nameError, setNameError] = useState('');
 
@@ -272,6 +273,17 @@ export function NameConfirmStep() {
 
       const onchainTokenUri = String(await nftContract.tokenURI(mintedTokenId));
 
+      // 🐉 Transformação: metamorfo gera TODAS as formas (mapa) e fica destravado
+      // (escolhe a forma em combate). Demais raças têm 1 forma travada.
+      const raceForms = getRaceTransformations(selectedRace.id);
+      const isMultiForm = raceForms.length > 1;
+      const formImagesMap = isMultiForm
+        ? transformationImages
+        : (chosenTransformation && transformationImage ? { [chosenTransformation]: transformationImage } : {});
+      const defaultTransformationImage = isMultiForm
+        ? (raceForms.map((f) => transformationImages[f]).find(Boolean) ?? null)
+        : transformationImage;
+
       // 3) Create character in DB (includes mint proof)
       const characterData = {
         name: characterName.trim(),
@@ -279,8 +291,10 @@ export function NameConfirmStep() {
         characterClass: selectedClass.id,
         distributedPoints: statsRecord,
         avatar: selectedImage,
-        unlockedTransformation: chosenTransformation,
-        transformationImage: transformationImage,
+        // Metamorfo destravado: null deixa todas as formas disponíveis no combate.
+        unlockedTransformation: isMultiForm ? null : chosenTransformation,
+        transformationImage: defaultTransformationImage,
+        transformationImages: formImagesMap,
         creationTxHash: creationPaymentTxHash,
         nftMintTxHash: String(mintTx.hash),
         nftTokenId: mintedTokenId.toString(),

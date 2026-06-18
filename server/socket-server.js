@@ -628,6 +628,58 @@ io.on('connection', (socket) => {
     })
   })
 
+  // 🐉 Sincroniza a transformação aplicada via API REST (criação) no estado da sala.
+  // O fluxo novo (combat/page.tsx -> /api/character/[id]/transform) já validou custos,
+  // calculou os stats e persistiu no banco — aqui só replicamos o resultado no objeto
+  // do player da sala para que o OPONENTE também veja a arte/glow da transformação.
+  socket.on('sync_transformation', ({
+    playerId, roomId, transformationType, transformationName,
+    isTransformed, transformationImage, unlockedTransformation,
+    transformationData, duration, stats
+  }) => {
+    const room = rooms.get(roomId)
+    if (!room) return
+
+    const player = room.player1?.id === playerId ? room.player1
+      : room.player2?.id === playerId ? room.player2
+      : null
+    if (!player) return
+
+    player.isTransformed = !!isTransformed
+    player.transformationType = transformationType || null
+    player.transformationImage = transformationImage || null
+    player.unlockedTransformation = unlockedTransformation || null
+    if (transformationData) player.transformationData = transformationData
+
+    if (stats && typeof stats === 'object') {
+      for (const [key, value] of Object.entries(stats)) {
+        if (value !== undefined && value !== null) player[key] = value
+      }
+    }
+
+    room.combatLog.push({
+      type: 'transformation',
+      player: player.name,
+      message: `🌟 ${player.name} se transformou${transformationName ? ` em ${transformationName}` : ''}!${duration ? ` (+${duration} turnos)` : ''}`,
+      timestamp: new Date()
+    })
+
+    // Transformação consome o turno (mesma regra do fluxo legado acima)
+    if (room.currentTurn === playerId) {
+      const nextTurn = room.player1?.id === playerId ? room.player2?.id : room.player1?.id
+      if (nextTurn) {
+        room.currentTurn = nextTurn
+        room.combatLog.push({
+          type: 'system',
+          message: `🔄 Vez de ${room.currentTurn === room.player1?.id ? room.player1?.name : room.player2?.name}`,
+          timestamp: new Date()
+        })
+      }
+    }
+
+    io.to(roomId).emit('room_updated', room)
+  })
+
   // Handler para usar habilidades especiais de transformação
   socket.on('use_special_ability', ({ playerId, roomId, abilityId }) => {
     const room = rooms.get(roomId)

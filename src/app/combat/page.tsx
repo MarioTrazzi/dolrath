@@ -214,8 +214,11 @@ function CombatPageContent() {
   const currentPlayerDisplay = combatRoom?.player1?.id === currentPlayer?.id ? combatRoom?.player1 : combatRoom?.player2
   // O objeto do socket (combatRoom.player1/2) não carrega a arte da transformação
   // nem a forma travada (campos novos, não sincronizados pelo servidor de socket).
-  // Mesclamos esses campos a partir do currentPlayer (carregado do DB) para que a
-  // imagem troque corretamente ao transformar.
+  // A transformação em si (handleTransformationChoice) também não emite nenhum evento
+  // de socket — só chama a API REST e atualiza o estado local — então o servidor de
+  // socket NUNCA marca isTransformed/transformationType no objeto da sala. Por isso
+  // esses dois campos também precisam vir do currentPlayer (estado local), senão o
+  // glow/imagem nunca aparecem (mesclar só avatar/transformationImage não bastava).
   const currentPlayerView = currentPlayerDisplay
     ? {
         ...currentPlayerDisplay,
@@ -224,6 +227,9 @@ function CombatPageContent() {
           currentPlayer?.transformationImage ?? currentPlayerDisplay.transformationImage ?? null,
         unlockedTransformation:
           currentPlayer?.unlockedTransformation ?? currentPlayerDisplay.unlockedTransformation ?? null,
+        isTransformed: currentPlayer?.isTransformed ?? currentPlayerDisplay.isTransformed ?? false,
+        transformationType:
+          currentPlayer?.transformationType ?? currentPlayerDisplay.transformationType ?? null,
       }
     : currentPlayer
   const isMyTurn = combatRoom?.currentTurn === currentPlayer?.id
@@ -945,19 +951,31 @@ function CombatPageContent() {
           transformationData: updatedCharacter.transformationData
         } : null)
         
-        // Notificar sala sobre transformação
-        const transformationName = transformationType === 'dragon' ? 'Dragão 🐉' :
-                                 transformationType === 'wolf' ? 'Lobo 🐺' :
-                                 transformationType === 'bear' ? 'Urso 🐻' : 'Águia 🦅'
-        
-        socket.emit('chat_message', { 
-          playerId: currentPlayer.id, 
-          roomId, 
-          message: `🌟 ${currentPlayer.name} se transformou em ${transformationName}! (+${data.transformation.duration} turnos)` 
+        // Sincronizar com o servidor de combate para que o OPONENTE também veja a
+        // transformação (imagem/glow) — o servidor não sabe nada disso até aqui,
+        // já que tudo acima foi feito via API REST, sem nenhum evento de socket.
+        socket.emit('sync_transformation', {
+          playerId: currentPlayer.id,
+          roomId,
+          transformationType,
+          transformationName: cfg?.name,
+          isTransformed: true,
+          transformationImage: currentPlayer.transformationImage,
+          unlockedTransformation: updatedCharacter.unlockedTransformation ?? currentPlayer.unlockedTransformation,
+          transformationData: updatedCharacter.transformationData,
+          duration: data.transformation.duration,
+          stats: {
+            maxHp: updatedCharacter.maxHp,
+            mp: currentPlayer.mp - mpCost,
+            stamina: currentPlayer.stamina - staminaCost,
+            attack: updatedCharacter.baseStats?.attack ?? currentPlayer.attack,
+            defense: updatedCharacter.baseStats?.defense ?? currentPlayer.defense,
+            strength: updatedCharacter.baseStats?.str ?? currentPlayer.strength,
+            agility: updatedCharacter.baseStats?.agi ?? currentPlayer.agility,
+            intelligence: updatedCharacter.baseStats?.int ?? currentPlayer.intelligence,
+            critical: updatedCharacter.baseStats?.critical ?? currentPlayer.critical,
+          }
         })
-        
-        // Perder o turno (transformação custa o turno)
-        socket.emit('end_turn', { playerId: currentPlayer.id, roomId })
       } else {
         const error = await response.json()
         socket.emit('chat_message', { 

@@ -8,7 +8,7 @@ import { Character } from '@/types/game';
 import { EquipmentSlotType } from '@prisma/client';
 import { getRaceById, getClassById } from '@/lib/gameData';
 import { applyEnhancementToStats } from '@/lib/enhancementSystem';
-import { getRaceTransformations, getTransformationGlow, TRANSFORMATION_CONFIG } from '@/lib/transformationSystem';
+import { getRaceTransformations, getTransformationGlow, TRANSFORMATION_CONFIG, TransformationType } from '@/lib/transformationSystem';
 import Link from 'next/link';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -36,6 +36,17 @@ interface InventoryItem {
   enhancementLevel?: number;
   item: Item;
 }
+
+// Rótulos exibidos no "burst" de stats da transformação (statModifiers são multiplicadores).
+const TRANSFORMATION_STAT_LABELS: Record<string, string> = {
+  strength: 'FOR',
+  defense: 'DEF',
+  hp: 'HP',
+  agility: 'AGI',
+  intelligence: 'INT',
+  attack: 'ATQ',
+  critical: 'CRÍT',
+};
 
 export default function CharacterDetailsPage() {
   const params = useParams();
@@ -836,12 +847,39 @@ export default function CharacterDetailsPage() {
                   </div>
                 </div>
               )}
+
+              {/* Burst de stats da transformação: o que essa forma muda nos atributos do personagem */}
+              {currentAppearance.key !== 'base' && TRANSFORMATION_CONFIG[currentAppearance.key as TransformationType] && (
+                <div className="flex flex-wrap items-center justify-center" style={{ gap: 5, marginTop: 8 }}>
+                  {Object.entries(TRANSFORMATION_CONFIG[currentAppearance.key as TransformationType].statModifiers).map(([stat, mult]) => {
+                    const pct = Math.round((mult - 1) * 100);
+                    if (pct === 0) return null;
+                    const positive = pct > 0;
+                    return (
+                      <span
+                        key={stat}
+                        className="font-bold rounded-full"
+                        style={{
+                          fontSize: '10.5px',
+                          padding: '2px 8px',
+                          color: positive ? '#86efac' : '#fca5a5',
+                          background: positive ? 'rgba(34,197,94,0.14)' : 'rgba(239,68,68,0.14)',
+                          border: `1px solid ${positive ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)'}`,
+                        }}
+                      >
+                        {TRANSFORMATION_STAT_LABELS[stat] || stat} {positive ? '+' : ''}{pct}%
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Atributos secundários */}
-            <div className="flex justify-center" style={{ gap: 22, padding: '10px 18px 12px', marginTop: 4 }}>
+            <div className="flex justify-center" style={{ gap: 18, padding: '10px 14px 12px', marginTop: 4 }}>
               {[
                 { icon: <Sword size={18} style={{ color: '#e8d08a' }} />, val: String(stats.total.str), label: 'FOR' },
+                { icon: <Shield size={18} style={{ color: '#6aa9d6' }} />, val: String(stats.total.def), label: 'DEF' },
                 { icon: <Zap size={18} style={{ color: '#8fd6e0' }} />, val: String(stats.base.agi), label: 'AGI' },
                 { icon: <Brain size={18} style={{ color: '#c3a6ec' }} />, val: String(stats.base.int), label: 'INT' },
                 { icon: <Star size={18} style={{ color: '#f0c873' }} />, val: `${(stats.base.agi * 0.2).toFixed(1)}%`, label: 'CRÍT' },

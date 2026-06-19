@@ -761,7 +761,7 @@ export default function Store() {
                   <div className="absolute inset-0 bg-black/30 group-hover:bg-black/15 transition-colors" />
 
                   {/* Conteúdo */}
-                  <div className="relative p-4 flex flex-col min-h-[280px]">
+                  <div className="relative p-4 flex flex-col h-full min-h-[280px]">
                     {resolvedImageUrl && (
                       <div className="w-full aspect-square relative mb-3 rounded-xl overflow-hidden bg-black/40 ring-1 ring-white/10">
                         <Image
@@ -801,17 +801,17 @@ export default function Store() {
                       </div>
                     )}
 
-                    <div className="text-base font-semibold text-amber-400 mb-3 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
-                      💰 {item.goldPrice} gold
-                    </div>
-
-                    {ownedQuantity > 0 && (
-                      <div className="text-sm text-amber-300 mb-2">
-                        ✓ Você possui: {ownedQuantity}
+                    <div className="mt-auto flex flex-col gap-2 pt-2">
+                      <div className="text-base font-semibold text-amber-400 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
+                        💰 {item.goldPrice} gold
                       </div>
-                    )}
 
-                    <div className="mt-auto flex flex-col gap-2">
+                      {ownedQuantity > 0 && (
+                        <div className="text-sm text-amber-300">
+                          ✓ Você possui: {ownedQuantity}
+                        </div>
+                      )}
+
                       <button
                         onClick={() => handlePurchase(item.id)}
                         disabled={loading}

@@ -65,6 +65,7 @@ export function CharacterItemGrid({
               key={row.id}
               item={row.item}
               enhancementLevel={row.enhancementLevel || 0}
+              quantity={row.quantity || 1}
               inventoryId={row.id}
               isEquipped={isEquipped ? isEquipped(row.item.id) : false}
               compact

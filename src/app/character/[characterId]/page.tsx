@@ -140,10 +140,10 @@ export default function CharacterDetailsPage() {
       maxStamina: character.maxStamina,
       str: (character.baseStats as any)?.str || 10,
       def:
-        (character.attributes as any)?.def ??
-        (character.attributes as any)?.defense ??
-        (character.baseStats as any)?.def ??
-        (character.baseStats as any)?.res ??
+        (character.attributes as any)?.def ||
+        (character.attributes as any)?.defense ||
+        (character.baseStats as any)?.def ||
+        (character.baseStats as any)?.res ||
         5,
       agi: (character.attributes as any)?.agi || (character.baseStats as any)?.agi || 0,
       int: (character.attributes as any)?.int || (character.baseStats as any)?.int || 0
@@ -883,7 +883,7 @@ export default function CharacterDetailsPage() {
                 transformação); o +N verde é o bônus somado pelos equipamentos. */}
             <div style={{ padding: '4px 22px 10px', borderTop: '1px solid #2a323b' }}>
               {[
-                { icon: <Sword size={18} style={{ color: '#c98a6a' }} />, label: 'Ataque (AP)', base: stats.base.str, equip: stats.equipment.str + (stats.total.bonusDamage || 0), mult: activeFormMods?.attack },
+                { icon: <Sword size={18} style={{ color: '#c98a6a' }} />, label: 'Ataque (AD)', base: stats.base.str, equip: stats.equipment.str + (stats.total.bonusDamage || 0), mult: activeFormMods?.attack },
                 { icon: <Zap size={18} style={{ color: '#b06ae0' }} />, label: 'Poder Mágico (AP)', base: stats.base.int, equip: 0, mult: activeFormMods?.intelligence },
                 { icon: <Shield size={18} style={{ color: '#6aa9d6' }} />, label: 'Defesa (DP)', base: stats.base.def, equip: stats.equipment.def, mult: activeFormMods?.defense },
               ].map((row, i, arr) => {

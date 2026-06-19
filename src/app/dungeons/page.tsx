@@ -49,6 +49,7 @@ export default function DungeonsPage() {
                 maxStamina: details.maxStamina ?? 100,
                 attack: details.baseStats?.str || 10,
                 defense: details.baseStats?.def || 10,
+                magicPower: details.baseStats?.int || 0,
                 equipment: details.equipment || [],
               }
             }
@@ -61,6 +62,7 @@ export default function DungeonsPage() {
               maxStamina: 100,
               attack: 10,
               defense: 10,
+              magicPower: 0,
               equipment: [],
             }
           })

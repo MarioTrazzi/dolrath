@@ -13,6 +13,8 @@ interface DraggableItemProps {
   isEquipped?: boolean;
   /** Nível de aprimoramento da instância (+1, +2, ...). 0 = sem aprimoramento. */
   enhancementLevel?: number;
+  /** Quantidade empilhada (consumíveis). Exibe badge quando > 1. */
+  quantity?: number;
   /** Id da linha de inventário (CharacterInventory). Necessário para aprimorar. */
   inventoryId?: string;
   onEquip?: (itemId: string, slotType: EquipmentSlotType) => void;
@@ -28,9 +30,10 @@ interface DraggableItemProps {
   accent?: string;
 }
 
-export function DraggableItem({ item, isEquipped, enhancementLevel = 0, inventoryId, onEquip, onUnequip, onConsume, onEnhance, onTransfer, onSendToGlobal, characterId, compact, accent }: DraggableItemProps) {
+export function DraggableItem({ item, isEquipped, enhancementLevel = 0, quantity = 1, inventoryId, onEquip, onUnequip, onConsume, onEnhance, onTransfer, onSendToGlobal, characterId, compact, accent }: DraggableItemProps) {
   const itemImage = resolveImageUrl(item.image);
   const showEnhancement = enhancementLevel > 0;
+  const showQuantity = quantity > 1;
   const [{ isDragging }, drag] = useDrag({
     type: 'ITEM',
     item: { ...item },
@@ -93,6 +96,16 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, inventor
           {isEquipped && (
             <div className="absolute top-1 right-1 w-1.5 h-1.5 bg-green-500 rounded-full"></div>
           )}
+          {showQuantity && (
+            <span
+              style={{
+                position: 'absolute', left: 3, bottom: 1, fontSize: '10px', fontWeight: 700,
+                color: '#fff', textShadow: '0 1px 2px #000, 0 0 3px #000',
+              }}
+            >
+              x{quantity}
+            </span>
+          )}
         </div>
       </ItemTooltip>
     );
@@ -140,6 +153,11 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, inventor
         )}
         {isEquipped && (
           <div className="absolute top-1 right-1 w-2 h-2 bg-green-500 rounded-full"></div>
+        )}
+        {showQuantity && (
+          <div className="absolute bottom-1 left-1 text-xs font-bold text-white bg-black/60 px-1 rounded">
+            x{quantity}
+          </div>
         )}
       </div>
     </ItemTooltip>

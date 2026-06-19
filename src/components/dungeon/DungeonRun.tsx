@@ -58,6 +58,8 @@ export interface DungeonCharacter {
   maxStamina: number
   attack: number
   defense: number
+  /** Poder mágico (AP), derivado de INT. Alimenta a Investida Arcana. */
+  magicPower: number
   equipment: any[]
 }
 
@@ -77,15 +79,26 @@ type CombatStage =
   | 'defenseRoll'
   | 'busy'
 
-type AttackKind = 'light' | 'heavy' | 'special'
+type AttackKind = 'precise' | 'brutal' | 'special'
 type DefenseKind = 'dodge' | 'defend'
 
 // Combate NÃO gasta stamina (a stamina é o orçamento DIÁRIO de runs).
 // O que limita o combate é HP (sobrevivência) e MP (especial/transformação).
-const ATTACKS: Record<AttackKind, { label: string; icon: string; sides: number; mult: number; mp: number }> = {
-  light: { label: 'Ataque Leve', icon: '👊', sides: 6, mult: 1.0, mp: 0 },
-  heavy: { label: 'Ataque Pesado', icon: '⚔️', sides: 10, mult: 1.45, mp: 0 },
-  special: { label: 'Ataque Especial', icon: '✨', sides: 20, mult: 1.9, mp: 15 },
+//
+// Cada ataque define a VARIÂNCIA da sorte (`band` = banda multiplicadora do dado)
+// e qual stat alimenta o núcleo determinístico (`stat`). O dado MULTIPLICA o
+// núcleo (ver computeOutcome) em vez de somar — assim o swing proporcional é
+// constante em qualquer nível de poder e a sorte continua relevante no end-game.
+//  - precise: dado pequeno = confiável (pouco swing), escala com AD.
+//  - brutal: dado grande = aposta (muito swing), escala com AD.
+//  - special: dado enorme + teto altíssimo, escala com max(AD, AP), custa MP.
+const ATTACKS: Record<
+  AttackKind,
+  { label: string; icon: string; sides: number; band: { lo: number; hi: number }; stat: 'ad' | 'max'; mp: number }
+> = {
+  precise: { label: 'Golpe Preciso', icon: '⚔️', sides: 6, band: { lo: 0.85, hi: 1.20 }, stat: 'ad', mp: 0 },
+  brutal: { label: 'Golpe Brutal', icon: '🪓', sides: 12, band: { lo: 0.85, hi: 1.95 }, stat: 'ad', mp: 0 },
+  special: { label: 'Investida Arcana', icon: '✨', sides: 20, band: { lo: 1.10, hi: 2.50 }, stat: 'max', mp: 15 },
 }
 
 // Custo de stamina por TIPO de nó ao avançar na trilha (exploração).
@@ -208,17 +221,25 @@ function computeOutcome(
   atk: DiceResult,
   def: DiceResult,
   defenseChoice: DefenseKind,
-  mult: number,
+  band: { lo: number; hi: number },
+  core: number,
   defenderDefense: number
 ): Outcome {
+  // Esquiva: contest de rolagem (dado + modificador). Stats ajudam a acertar/evitar.
   if (defenseChoice === 'dodge' && def.total >= atk.total) {
     return { hit: false, damage: 0, crit: false }
   }
-  const base = Math.round(atk.total * mult)
+  // Sorte MULTIPLICATIVA: o dado mapeia linearmente para a banda [lo..hi] e
+  // multiplica o núcleo determinístico (stats + equip + nível). Como é razão e
+  // não soma, o swing proporcional é constante — uma rolagem alta num personagem
+  // forte vira um número absoluto enorme (a sorte continua importando no end-game).
+  const t = atk.sides > 1 ? (atk.roll - 1) / (atk.sides - 1) : 1
+  const luck = band.lo + (band.hi - band.lo) * t
+  const base = Math.round(core * luck)
   const reduction = Math.floor(defenderDefense * 0.4) + (defenseChoice === 'defend' ? Math.floor(def.total * 0.5) : 0)
   let damage = Math.max(1, base - reduction)
   const crit = atk.roll === atk.sides
-  if (crit) damage = Math.round(damage * 1.5)
+  if (crit) damage = Math.round(damage * 1.75)
   return { hit: true, damage, crit }
 }
 
@@ -434,7 +455,13 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   // Multiplicadores ativos da transformação (1 quando não transformado)
   const atkMult = activeTransformCfg ? activeTransformCfg.statModifiers.attack : 1
   const defMult = activeTransformCfg ? activeTransformCfg.statModifiers.defense : 1
-  const playerAtkMod = Math.floor((character.attack + equipAtk + character.level / 2) * atkMult)
+  // Núcleos determinísticos do dano (antes de aplicar a sorte do dado).
+  // AD = físico (STR); AP = mágico (INT). A Investida Arcana usa o maior dos dois,
+  // dando finalmente função ao AP no combate (mago brilha; guerreiro usa via AD).
+  const adCore = (character.attack + equipAtk + character.level / 2) * atkMult
+  const apCore = (character.magicPower + equipAtk + character.level / 2) * atkMult
+  const coreForAttack = (kind: AttackKind) =>
+    ATTACKS[kind].stat === 'max' ? Math.max(adCore, apCore) : adCore
   const playerDefMod = Math.floor(((character.defense + equipDef) / 2) * defMult)
   const playerDefenseForDamage = Math.floor((character.defense + equipDef) * defMult)
 
@@ -708,7 +735,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     if (!m || hasRolled || !pendingAttack) return
     setHasRolled(true)
     const atkDef = ATTACKS[pendingAttack]
-    const atk = mkResult(atkDef.sides, playerAtkMod)
+    const atk = mkResult(atkDef.sides, Math.round(coreForAttack(pendingAttack)))
     setPanelResult(atk)
 
     // Monstro escolhe defesa e rola o mesmo dado
@@ -727,7 +754,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     setHasRolled(false)
     setPendingAttack(null)
 
-    const outcome = computeOutcome(atk, def, mDefChoice, atkDef.mult, m.defense)
+    const outcome = computeOutcome(atk, def, mDefChoice, atkDef.band, coreForAttack(pendingAttack), m.defense)
     pushBattleEvent({
       kind: 'resolve',
       attackerId: character.id,
@@ -764,8 +791,8 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     // Bosses preferem golpes fortes
     const r = Math.random()
     const kind: AttackKind = m.isBoss
-      ? r < 0.35 ? 'light' : r < 0.7 ? 'heavy' : 'special'
-      : r < 0.5 ? 'light' : r < 0.85 ? 'heavy' : 'special'
+      ? r < 0.35 ? 'precise' : r < 0.7 ? 'brutal' : 'special'
+      : r < 0.5 ? 'precise' : r < 0.85 ? 'brutal' : 'special'
     setMonsterPlan(kind)
     showBanner(m.emoji, `${m.name} prepara um ${ATTACKS[kind].label}!`, 2600)
     setStage('playerDefense')
@@ -839,7 +866,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     setPanelResult(null)
     setHasRolled(false)
 
-    const outcome = computeOutcome(atk, def, defenseChoice, atkDef.mult, playerDefenseForDamage)
+    const outcome = computeOutcome(atk, def, defenseChoice, atkDef.band, monsterAtkMod(m), playerDefenseForDamage)
     pushBattleEvent({
       kind: 'resolve',
       attackerId: MONSTER_ID,
@@ -1522,8 +1549,8 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                         className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all shadow-lg ${
                           disabled
                             ? 'bg-gray-700/60 opacity-50 cursor-not-allowed'
-                            : kind === 'light' ? 'bg-gradient-to-r from-yellow-600 to-amber-500 hover:scale-105'
-                            : kind === 'heavy' ? 'bg-gradient-to-r from-red-700 to-red-500 hover:scale-105'
+                            : kind === 'precise' ? 'bg-gradient-to-r from-yellow-600 to-amber-500 hover:scale-105'
+                            : kind === 'brutal' ? 'bg-gradient-to-r from-red-700 to-red-500 hover:scale-105'
                             : 'bg-gradient-to-r from-purple-700 to-fuchsia-600 hover:scale-105'
                         }`}
                       >

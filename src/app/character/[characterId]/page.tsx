@@ -37,17 +37,6 @@ interface InventoryItem {
   item: Item;
 }
 
-// Rótulos exibidos no "burst" de stats da transformação (statModifiers são multiplicadores).
-const TRANSFORMATION_STAT_LABELS: Record<string, string> = {
-  strength: 'FOR',
-  defense: 'DEF',
-  hp: 'HP',
-  agility: 'AGI',
-  intelligence: 'INT',
-  attack: 'ATQ',
-  critical: 'CRÍT',
-};
-
 export default function CharacterDetailsPage() {
   const params = useParams();
   const router = useRouter();
@@ -238,6 +227,14 @@ export default function CharacterDetailsPage() {
   const canFlip = appearances.length > 1;
   const appearanceIdx = canFlip ? appearanceIndex % appearances.length : 0;
   const currentAppearance = appearances[appearanceIdx] || appearances[0];
+
+  // Modificadores da forma exibida (null = forma original). A transformação deixa de
+  // ser exibida como % e passa a aparecer como bônus plano (+N) nos atributos abaixo,
+  // além de mudar a base de Ataque/Poder Mágico/Defesa (AP/DP).
+  const activeFormMods =
+    currentAppearance.key !== 'base'
+      ? TRANSFORMATION_CONFIG[currentAppearance.key as TransformationType]?.statModifiers
+      : null;
 
   const refreshCharacterAndInventory = async () => {
     if (!effectiveCharacterId) return;
@@ -848,65 +845,65 @@ export default function CharacterDetailsPage() {
                 </div>
               )}
 
-              {/* Burst de stats da transformação: o que essa forma muda nos atributos do personagem */}
-              {currentAppearance.key !== 'base' && TRANSFORMATION_CONFIG[currentAppearance.key as TransformationType] && (
-                <div className="flex flex-wrap items-center justify-center" style={{ gap: 5, marginTop: 8 }}>
-                  {Object.entries(TRANSFORMATION_CONFIG[currentAppearance.key as TransformationType].statModifiers).map(([stat, mult]) => {
-                    const pct = Math.round((mult - 1) * 100);
-                    if (pct === 0) return null;
-                    const positive = pct > 0;
-                    return (
-                      <span
-                        key={stat}
-                        className="font-bold rounded-full"
-                        style={{
-                          fontSize: '10.5px',
-                          padding: '2px 8px',
-                          color: positive ? '#86efac' : '#fca5a5',
-                          background: positive ? 'rgba(34,197,94,0.14)' : 'rgba(239,68,68,0.14)',
-                          border: `1px solid ${positive ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)'}`,
-                        }}
-                      >
-                        {TRANSFORMATION_STAT_LABELS[stat] || stat} {positive ? '+' : ''}{pct}%
-                      </span>
-                    );
-                  })}
-                </div>
-              )}
             </div>
 
-            {/* Atributos secundários */}
+            {/* Atributos secundários (FOR/DEF/AGI/INT/CRÍT). A transformação aparece como
+                bônus plano (+N) ao lado do valor, em vez de porcentagem. */}
             <div className="flex justify-center" style={{ gap: 18, padding: '10px 14px 12px', marginTop: 4 }}>
               {[
-                { icon: <Sword size={18} style={{ color: '#e8d08a' }} />, val: String(stats.total.str), label: 'FOR' },
-                { icon: <Shield size={18} style={{ color: '#6aa9d6' }} />, val: String(stats.total.def), label: 'DEF' },
-                { icon: <Zap size={18} style={{ color: '#8fd6e0' }} />, val: String(stats.base.agi), label: 'AGI' },
-                { icon: <Brain size={18} style={{ color: '#c3a6ec' }} />, val: String(stats.base.int), label: 'INT' },
-                { icon: <Star size={18} style={{ color: '#f0c873' }} />, val: `${(stats.base.agi * 0.2).toFixed(1)}%`, label: 'CRÍT' },
-              ].map((a) => (
-                <div key={a.label} className="flex flex-col items-center" style={{ gap: 3 }}>
-                  {a.icon}
-                  <span style={{ fontSize: 14, fontWeight: 700, color: '#d7d2c4' }}>{a.val}</span>
-                  <span style={{ fontSize: '9.5px', color: '#7e8893', letterSpacing: '0.5px' }}>{a.label}</span>
-                </div>
-              ))}
+                { icon: <Sword size={18} style={{ color: '#e8d08a' }} />, base: stats.total.str, label: 'FOR', mult: activeFormMods?.strength },
+                { icon: <Shield size={18} style={{ color: '#6aa9d6' }} />, base: stats.total.def, label: 'DEF', mult: activeFormMods?.defense },
+                { icon: <Zap size={18} style={{ color: '#8fd6e0' }} />, base: stats.base.agi, label: 'AGI', mult: activeFormMods?.agility },
+                { icon: <Brain size={18} style={{ color: '#c3a6ec' }} />, base: stats.base.int, label: 'INT', mult: activeFormMods?.intelligence },
+                { icon: <Star size={18} style={{ color: '#f0c873' }} />, base: stats.base.agi * 0.2, label: 'CRÍT', mult: activeFormMods?.critical, isPercent: true },
+              ].map((a) => {
+                const rawDelta = activeFormMods && a.mult ? a.base * a.mult - a.base : 0;
+                const delta = a.isPercent ? rawDelta : Math.round(rawDelta);
+                const positive = delta > 0;
+                return (
+                  <div key={a.label} className="flex flex-col items-center" style={{ gap: 3 }}>
+                    {a.icon}
+                    <div className="flex items-baseline" style={{ gap: 4 }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: '#d7d2c4' }}>
+                        {a.isPercent ? `${a.base.toFixed(1)}%` : a.base}
+                      </span>
+                      {delta !== 0 && (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: positive ? '#86efac' : '#fca5a5' }}>
+                          {positive ? '+' : ''}{a.isPercent ? delta.toFixed(1) : delta}
+                        </span>
+                      )}
+                    </div>
+                    <span style={{ fontSize: '9.5px', color: '#7e8893', letterSpacing: '0.5px' }}>{a.label}</span>
+                  </div>
+                );
+              })}
             </div>
 
-            {/* Stats principais */}
+            {/* Stats principais (AP/DP). O número grande é a base (modificada pela
+                transformação); o +N verde é o bônus somado pelos equipamentos. */}
             <div style={{ padding: '4px 22px 10px', borderTop: '1px solid #2a323b' }}>
               {[
-                { icon: <Sword size={18} style={{ color: '#c98a6a' }} />, label: 'Ataque (AP)', val: stats.total.str + (stats.total.bonusDamage || 0) },
-                { icon: <Zap size={18} style={{ color: '#b06ae0' }} />, label: 'Poder Mágico (AP)', val: stats.total.int },
-                { icon: <Shield size={18} style={{ color: '#6aa9d6' }} />, label: 'Defesa (DP)', val: stats.total.def },
-              ].map((row, i, arr) => (
-                <div key={row.label} className="flex items-center justify-between" style={{ padding: '8px 0', borderBottom: i < arr.length - 1 ? '1px solid #20262d' : 'none' }}>
-                  <div className="flex items-center" style={{ gap: 9 }}>
-                    {row.icon}
-                    <span style={{ fontSize: 14, color: '#c4cad1' }}>{row.label}</span>
+                { icon: <Sword size={18} style={{ color: '#c98a6a' }} />, label: 'Ataque (AP)', base: stats.base.str, equip: stats.equipment.str + (stats.total.bonusDamage || 0), mult: activeFormMods?.attack },
+                { icon: <Zap size={18} style={{ color: '#b06ae0' }} />, label: 'Poder Mágico (AP)', base: stats.base.int, equip: 0, mult: activeFormMods?.intelligence },
+                { icon: <Shield size={18} style={{ color: '#6aa9d6' }} />, label: 'Defesa (DP)', base: stats.base.def, equip: stats.equipment.def, mult: activeFormMods?.defense },
+              ].map((row, i, arr) => {
+                const transformedBase = activeFormMods && row.mult ? Math.round(row.base * row.mult) : row.base;
+                const equip = Math.round(row.equip);
+                return (
+                  <div key={row.label} className="flex items-center justify-between" style={{ padding: '8px 0', borderBottom: i < arr.length - 1 ? '1px solid #20262d' : 'none' }}>
+                    <div className="flex items-center" style={{ gap: 9 }}>
+                      {row.icon}
+                      <span style={{ fontSize: 14, color: '#c4cad1' }}>{row.label}</span>
+                    </div>
+                    <div className="flex items-baseline" style={{ gap: 6 }}>
+                      <span style={{ fontSize: 22, fontWeight: 700, color: '#ece7da' }}>{transformedBase}</span>
+                      {equip > 0 && (
+                        <span style={{ fontSize: 14, fontWeight: 700, color: '#86efac' }}>+{equip}</span>
+                      )}
+                    </div>
                   </div>
-                  <span style={{ fontSize: 22, fontWeight: 700, color: '#ece7da' }}>{row.val}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 

@@ -158,7 +158,7 @@ export function Navbar() {
       .finally(() => setGoldLoading(false))
   }, [session, walletAddress])
 
-  // Busca o personagem ativo para o link "Ficha".
+  // Busca o personagem ativo para o link "Personagem".
   useEffect(() => {
     if (!session) {
       setActiveCharacterId(null)
@@ -180,11 +180,11 @@ export function Navbar() {
     }
   }, [session])
 
-  // "Ficha" vai para o personagem ativo; sem personagem, leva à criação.
+  // "Personagem" vai para a ficha do personagem ativo; sem personagem, leva à criação.
   const fichaHref = activeCharacterId ? `/character/${activeCharacterId}` : '/character/create'
 
   const navLinks = [
-    { label: 'Ficha', href: fichaHref },
+    { label: 'Personagem', href: fichaHref },
     { label: 'Criar Personagem', href: '/character/create' },
     { label: 'Masmorras', href: '/dungeons' },
     { label: 'Combate', href: '/combat-lobby' },

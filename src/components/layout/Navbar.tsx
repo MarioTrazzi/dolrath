@@ -180,12 +180,11 @@ export function Navbar() {
     }
   }, [session])
 
-  // "Personagem" vai para a ficha do personagem ativo; sem personagem, leva à criação.
+  // "Personagem" leva à ficha do personagem ativo; sem personagem, à criação.
   const fichaHref = activeCharacterId ? `/character/${activeCharacterId}` : '/character/create'
 
   const navLinks = [
     { label: 'Personagem', href: fichaHref },
-    { label: 'Criar Personagem', href: '/character/create' },
     { label: 'Masmorras', href: '/dungeons' },
     { label: 'Combate', href: '/combat-lobby' },
     { label: 'Inventário', href: '/inventory' },

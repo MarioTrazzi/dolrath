@@ -99,7 +99,7 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, quantity
           {showQuantity && (
             <span
               style={{
-                position: 'absolute', left: 3, bottom: 1, fontSize: '10px', fontWeight: 700,
+                position: 'absolute', right: 3, bottom: 1, fontSize: '10px', fontWeight: 700,
                 color: '#fff', textShadow: '0 1px 2px #000, 0 0 3px #000',
               }}
             >
@@ -155,7 +155,7 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, quantity
           <div className="absolute top-1 right-1 w-2 h-2 bg-green-500 rounded-full"></div>
         )}
         {showQuantity && (
-          <div className="absolute bottom-1 left-1 text-xs font-bold text-white bg-black/60 px-1 rounded">
+          <div className="absolute bottom-1 right-1 text-xs font-bold text-white bg-black/60 px-1 rounded">
             x{quantity}
           </div>
         )}

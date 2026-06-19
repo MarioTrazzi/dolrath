@@ -503,7 +503,11 @@ export default function CharacterDetailsPage() {
           className="relative overflow-hidden rounded-3xl border-2 p-3 sm:p-8"
           style={{ borderColor: visual.borderColor, boxShadow: visual.glow }}
         >
-          <div className="absolute inset-0 bg-black/40 pointer-events-none" />
+          {/* Cenário animado da raça/classe como fundo do card (igual ao dashboard) */}
+          <div className="absolute inset-0 pointer-events-none">
+            <CreationCardBackdrop theme={visual.backdropTheme} />
+          </div>
+          <div className="absolute inset-0 bg-black/55 pointer-events-none" />
           <div className="relative">
           {/* Character Header */}
           <div className="flex flex-col md:flex-row items-center gap-8 mb-8">

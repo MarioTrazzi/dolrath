@@ -488,7 +488,16 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       (transform && character.transformationImages?.[transform.type]) ||
       character.transformationImage ||
       null,
-  }), [character, hp, mp, stamina, transform, effMaxHp])
+    // Mesmas fórmulas usadas no dano; os deltas são a parte vinda da transformação.
+    combatStats: {
+      ad: Math.round(adCore),
+      ap: Math.round(apCore),
+      dp: playerDefenseForDamage,
+      adDelta: Math.round(adCore - (character.attack + equipAtk + character.level / 2)),
+      apDelta: Math.round(apCore - (character.magicPower + equipAtk + character.level / 2)),
+      dpDelta: playerDefenseForDamage - Math.floor(character.defense + equipDef),
+    },
+  }), [character, hp, mp, stamina, transform, effMaxHp, adCore, apCore, playerDefenseForDamage, equipAtk, equipDef])
 
   const monsterFighter: FighterView | null = useMemo(() => monster ? {
     id: MONSTER_ID,
@@ -504,6 +513,10 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     stamina: 0,
     maxStamina: 0,
     isAlive: monster.hp > 0,
+    combatStats: {
+      ad: Math.floor(monster.attack + monster.level / 2),
+      dp: monster.defense,
+    },
   } : null, [monster, dungeon.name])
 
   // ============================================================

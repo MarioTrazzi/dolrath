@@ -47,6 +47,16 @@ export interface FighterView {
   isAlive?: boolean
   /** Emoji usado como sprite quando não há avatar (ex.: monstros do modo treino) */
   avatarEmoji?: string | null
+  /** Stats de combate exibidos no card (AD/AP/DP). Os *Delta são o bônus já
+   *  somado pela transformação (0/ausente quando não transformado). */
+  combatStats?: {
+    ad: number
+    ap?: number
+    dp: number
+    adDelta?: number
+    apDelta?: number
+    dpDelta?: number
+  }
 }
 
 export interface BattleEvent {
@@ -317,6 +327,27 @@ function FighterFigure({
             <StatBar value={fighter.mp} max={fighter.maxMp} gradient="from-blue-600 to-cyan-400" icon="🔮" />
             <StatBar value={fighter.stamina} max={fighter.maxStamina} gradient="from-yellow-600 to-amber-300" icon="⚡" />
           </div>
+
+          {/* AD / AP / DP — com o bônus da transformação entre parênteses */}
+          {fighter.combatStats && (
+            <div className="mt-1 flex flex-wrap items-baseline justify-center gap-x-1.5 gap-y-0.5 text-[9px] sm:text-[10px] leading-none">
+              {[
+                { label: 'AD', val: fighter.combatStats.ad, delta: fighter.combatStats.adDelta, color: '#e8a07a' },
+                ...(fighter.combatStats.ap != null
+                  ? [{ label: 'AP', val: fighter.combatStats.ap, delta: fighter.combatStats.apDelta, color: '#c08ae8' }]
+                  : []),
+                { label: 'DP', val: fighter.combatStats.dp, delta: fighter.combatStats.dpDelta, color: '#7ab6e8' },
+              ].map((s) => (
+                <span key={s.label} className="flex items-baseline gap-0.5">
+                  <span className="font-bold" style={{ color: s.color }}>{s.label}</span>
+                  <span className="font-bold text-white">{s.val}</span>
+                  {s.delta ? (
+                    <span className="font-bold text-emerald-400">({s.delta > 0 ? '+' : ''}{s.delta})</span>
+                  ) : null}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Resultado do dado (mini-dado girando) */}

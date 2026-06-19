@@ -2,12 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { Shield, Sword, Zap, Plus, Brain, Star, Search, Box, LayoutGrid, FileText, HelpCircle, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Shield, Sword, Zap, Plus, Brain, Star, Search, Box, LayoutGrid, FileText, HelpCircle, X, RefreshCw } from 'lucide-react';
 import { Character } from '@/types/game';
 import { EquipmentSlotType } from '@prisma/client';
 import { getRaceById, getClassById } from '@/lib/gameData';
 import { applyEnhancementToStats } from '@/lib/enhancementSystem';
+import { getRaceTransformations, getTransformationGlow, TRANSFORMATION_CONFIG } from '@/lib/transformationSystem';
 import Link from 'next/link';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -48,6 +49,8 @@ export default function CharacterDetailsPage() {
   const [goldOnchainText, setGoldOnchainText] = useState<string>('—');
   const [invSearch, setInvSearch] = useState<string>('');
   const [enhanceTarget, setEnhanceTarget] = useState<{ inventoryId: string; itemName: string } | null>(null);
+  // Índice da forma exibida na figura central (0 = forma original; demais = transformações).
+  const [appearanceIndex, setAppearanceIndex] = useState(0);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -199,6 +202,31 @@ export default function CharacterDetailsPage() {
   };
 
   const stats = calculateTotalStats();
+
+  // Formas de aparência da figura central: avatar base + transformações com imagem gerada.
+  // Metamorfo tem 3 formas (lobo/urso/águia); demais raças têm 1. Clicar na figura alterna (flip).
+  const transformationImagesMap = ((character as any).transformationImages || {}) as Record<string, string>;
+  const raceForms = getRaceTransformations(raceObj?.id);
+  const appearances: Array<{ key: string; label: string; img: string | null; glow: string }> = [
+    { key: 'base', label: 'Forma Original', img: resolveImageUrl(character.avatar), glow: visual.borderColor },
+  ];
+  for (const form of raceForms) {
+    const rawImg =
+      transformationImagesMap[form] ||
+      ((character as any).unlockedTransformation === form ? (character as any).transformationImage : null);
+    const img = resolveImageUrl(rawImg);
+    if (img) {
+      appearances.push({
+        key: form,
+        label: TRANSFORMATION_CONFIG[form]?.name || form,
+        img,
+        glow: getTransformationGlow(form).hex,
+      });
+    }
+  }
+  const canFlip = appearances.length > 1;
+  const appearanceIdx = canFlip ? appearanceIndex % appearances.length : 0;
+  const currentAppearance = appearances[appearanceIdx] || appearances[0];
 
   const refreshCharacterAndInventory = async () => {
     if (!effectiveCharacterId) return;
@@ -712,15 +740,38 @@ export default function CharacterDetailsPage() {
               <div className="relative equip-figure" style={{ height: 392, width: 512, margin: '4px auto 0' }}>
                 {/* Sombra + figura central */}
                 <div className="absolute" style={{ top: 290, left: '50%', transform: 'translateX(-50%)', width: 120, height: 16, background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.55), transparent 70%)', zIndex: 0 }} />
-                <div className="absolute flex items-center justify-center" style={{ top: 24, left: '50%', transform: 'translateX(-50%)', width: 150, height: 272, background: `radial-gradient(70% 50% at 50% 20%, ${visual.borderColor}1a, transparent 60%)`, zIndex: 1 }}>
-                  {(() => {
-                    const avatarUrl = resolveImageUrl(character.avatar);
-                    return avatarUrl ? (
-                      <img src={avatarUrl} alt={character.name} style={{ width: 142, height: 264, objectFit: 'cover', borderRadius: 6, opacity: 0.96 }} referrerPolicy="no-referrer" />
+                <div
+                  className="absolute flex items-center justify-center"
+                  onClick={() => { if (canFlip) setAppearanceIndex((i) => (i + 1) % appearances.length); }}
+                  title={canFlip ? 'Clique para alternar entre as formas' : undefined}
+                  style={{ top: 24, left: '50%', transform: 'translateX(-50%)', width: 150, height: 272, background: `radial-gradient(70% 50% at 50% 20%, ${currentAppearance.glow}1f, transparent 60%)`, zIndex: 1, cursor: canFlip ? 'pointer' : 'default', perspective: 900 }}
+                >
+                  <AnimatePresence mode="wait" initial={false}>
+                    {currentAppearance.img ? (
+                      <motion.img
+                        key={currentAppearance.key}
+                        src={currentAppearance.img}
+                        alt={`${character.name} — ${currentAppearance.label}`}
+                        initial={{ rotateY: -90, opacity: 0 }}
+                        animate={{ rotateY: 0, opacity: 1 }}
+                        exit={{ rotateY: 90, opacity: 0 }}
+                        transition={{ duration: 0.3, ease: 'easeInOut' }}
+                        style={{ width: 142, height: 264, objectFit: 'cover', borderRadius: 6, opacity: 0.96, backfaceVisibility: 'hidden', boxShadow: currentAppearance.key === 'base' ? 'none' : `0 0 22px ${currentAppearance.glow}66` }}
+                        referrerPolicy="no-referrer"
+                      />
                     ) : (
-                      <PersonSilhouette color={visual.borderColor} className="h-full w-auto" />
-                    );
-                  })()}
+                      <PersonSilhouette key="silhouette" color={visual.borderColor} className="h-full w-auto" />
+                    )}
+                  </AnimatePresence>
+
+                  {canFlip && (
+                    <div
+                      className="absolute flex items-center justify-center"
+                      style={{ bottom: 6, right: 8, width: 26, height: 26, borderRadius: '50%', background: 'rgba(0,0,0,0.55)', border: `1px solid ${currentAppearance.glow}99`, pointerEvents: 'none' }}
+                    >
+                      <RefreshCw size={14} style={{ color: currentAppearance.glow }} />
+                    </div>
+                  )}
                 </div>
 
                 {/* Anel de 12 slots (9 funcionais + 2 brincos e 1 cinto como placeholders) */}
@@ -765,6 +816,26 @@ export default function CharacterDetailsPage() {
                 })()}
               </div>
               </div>
+
+              {/* Seletor de forma (flip): nome da forma + dots */}
+              {canFlip && (
+                <div className="flex items-center justify-center" style={{ gap: 10, marginTop: 2 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: currentAppearance.glow, letterSpacing: '0.3px' }}>
+                    {currentAppearance.label}
+                  </span>
+                  <div className="flex items-center" style={{ gap: 6 }}>
+                    {appearances.map((a, i) => (
+                      <button
+                        key={a.key}
+                        onClick={() => setAppearanceIndex(i)}
+                        aria-label={a.label}
+                        title={a.label}
+                        style={{ width: 8, height: 8, borderRadius: '50%', border: 'none', padding: 0, cursor: 'pointer', background: i === appearanceIdx ? a.glow : 'rgba(255,255,255,0.25)', boxShadow: i === appearanceIdx ? `0 0 8px ${a.glow}` : 'none' }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Atributos secundários */}

@@ -35,6 +35,7 @@ web3/node_modules/
 # Database
 prisma/dev.db
 prisma/dev.db-journal
+create-test-user-production.ts
 
 # Personal test files
 cookies.txt

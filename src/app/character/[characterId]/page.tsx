@@ -642,7 +642,7 @@ export default function CharacterDetailsPage() {
           </div>
 
           {/* Action Buttons - estilo masmorras */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mt-6">
+          <div className="flex flex-col sm:flex-row gap-4 justify-center mt-10 sm:mt-12">
             <button
               onClick={() => router.push('/combat-lobby')}
               className="flex-1 sm:flex-none px-6 py-3 rounded-xl font-black text-white shadow-lg transition-transform hover:scale-105 flex items-center justify-center gap-2"
@@ -702,7 +702,7 @@ export default function CharacterDetailsPage() {
 
         {/* ====== Janelas estilo Black Desert (Equipamento + Inventário) ====== */}
         <style>{`
-          .equip-figure-wrap { width: 100%; }
+          .equip-figure-wrap { width: 100%; display: flex; justify-content: center; }
           @media (max-width: 579px) {
             .equip-figure-wrap { height: calc(396px * var(--equip-scale, 0.6)); overflow: hidden; }
             .equip-figure { transform: scale(var(--equip-scale, 0.6)); transform-origin: top center; }
@@ -749,7 +749,7 @@ export default function CharacterDetailsPage() {
               <div className="absolute text-center" style={{ top: 8, left: 0, right: 0, fontSize: '12.5px', color: '#9aa3ae', letterSpacing: '1.2px', textTransform: 'uppercase' }}>Aparência</div>
 
               <div className="equip-figure-wrap">
-              <div className="relative equip-figure" style={{ height: 392, width: 512, margin: '4px auto 0' }}>
+              <div className="relative equip-figure" style={{ height: 392, width: 512, margin: '4px 0 0' }}>
                 {/* Sombra + figura central */}
                 <div className="absolute" style={{ top: 290, left: '50%', transform: 'translateX(-50%)', width: 120, height: 16, background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.55), transparent 70%)', zIndex: 0 }} />
                 <div

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Sword, Zap, Plus, Brain, Star, Search, Box, LayoutGrid, FileText, HelpCircle, X, RefreshCw } from 'lucide-react';
+import { Shield, Sword, Zap, Plus, Brain, Star, Search, Box, LayoutGrid, HelpCircle, RefreshCw } from 'lucide-react';
 import { Character } from '@/types/game';
 import { EquipmentSlotType } from '@prisma/client';
 import { getRaceById, getClassById } from '@/lib/gameData';
@@ -740,9 +740,14 @@ export default function CharacterDetailsPage() {
               <Sword size={17} style={{ color: visual.borderColor }} />
               <span style={{ fontSize: 16, fontWeight: 600, color: '#ece7da', letterSpacing: '0.3px' }}>Equipamento</span>
               <div className="flex-1" />
-              <div className="flex items-center gap-3" style={{ color: '#7e8893' }}>
-                <FileText size={15} /><HelpCircle size={15} /><X size={15} />
-              </div>
+              <Link
+                href="/doc#items"
+                title="Ver documentação de itens"
+                className="transition-colors hover:text-white"
+                style={{ color: '#7e8893' }}
+              >
+                <HelpCircle size={15} />
+              </Link>
             </div>
 
             {/* Corpo: figura central + anel de slots */}
@@ -922,9 +927,14 @@ export default function CharacterDetailsPage() {
               <Box size={17} style={{ color: visual.borderColor }} />
               <span style={{ fontSize: 16, fontWeight: 600, color: '#ece7da', letterSpacing: '0.3px' }}>Inventário</span>
               <div className="flex-1" />
-              <div className="flex items-center gap-3" style={{ color: '#7e8893' }}>
-                <FileText size={15} /><HelpCircle size={15} /><X size={15} />
-              </div>
+              <Link
+                href="/doc#items"
+                title="Ver documentação de itens"
+                className="transition-colors hover:text-white"
+                style={{ color: '#7e8893' }}
+              >
+                <HelpCircle size={15} />
+              </Link>
             </div>
 
             {/* Abas */}

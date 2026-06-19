@@ -25,6 +25,9 @@ export function Navbar() {
 
   const [isLinkingWallet, setIsLinkingWallet] = useState(false)
 
+  // Personagem ativo (primeiro de /api/character/me, mesma convenção do inventário/loja)
+  const [activeCharacterId, setActiveCharacterId] = useState<string | null>(null)
+
   const walletAddress = session?.user?.walletAddress
 
   const handleSignOut = async () => {
@@ -155,7 +158,33 @@ export function Navbar() {
       .finally(() => setGoldLoading(false))
   }, [session, walletAddress])
 
+  // Busca o personagem ativo para o link "Ficha".
+  useEffect(() => {
+    if (!session) {
+      setActiveCharacterId(null)
+      return
+    }
+    let cancelled = false
+    fetch('/api/character/me')
+      .then(async (res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled) return
+        const list = Array.isArray(data) ? data : data ? [data] : []
+        setActiveCharacterId(list.length > 0 ? String(list[0].id) : null)
+      })
+      .catch(() => {
+        if (!cancelled) setActiveCharacterId(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [session])
+
+  // "Ficha" vai para o personagem ativo; sem personagem, leva à criação.
+  const fichaHref = activeCharacterId ? `/character/${activeCharacterId}` : '/character/create'
+
   const navLinks = [
+    { label: 'Ficha', href: fichaHref },
     { label: 'Criar Personagem', href: '/character/create' },
     { label: 'Masmorras', href: '/dungeons' },
     { label: 'Combate', href: '/combat-lobby' },

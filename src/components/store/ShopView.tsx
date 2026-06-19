@@ -751,28 +751,6 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
           </div>
         )}
 
-        {/* User Inventory Summary */}
-        {userInventory.length > 0 && (
-          <div className="mb-6 p-4 bg-surface/30 border border-white/10 rounded-lg">
-            <h2 className="text-lg font-semibold mb-3 text-text-primary">📦 Seu Inventário Global</h2>
-            <div className="flex flex-wrap gap-2">
-              {userInventory.map((inventoryItem) => (
-                <div key={inventoryItem.id} className="flex items-center gap-2 bg-surface/50 border border-white/20 px-3 py-2 rounded">
-                  <span className="text-text-primary">{inventoryItem.item.name}</span>
-                  <span className="text-sm text-text-secondary">x{inventoryItem.quantity}</span>
-                  <button
-                    onClick={() => handleTransferToCharacter(inventoryItem.item.id)}
-                    disabled={loading || !selectedCharacter}
-                    className="text-xs bg-primary/80 text-white px-2 py-1 rounded hover:bg-primary disabled:opacity-50 transition-colors"
-                  >
-                    Transferir
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Items Grid */}
         {itemsLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">

@@ -58,6 +58,7 @@ export interface CharacterEquipment {
   item: Item
   itemId: string
   slot: EquipmentSlotType
+  enhancementLevel?: number
   createdAt: Date
   updatedAt: Date
 }
@@ -68,6 +69,7 @@ export interface CharacterInventory {
   item: Item
   itemId: string
   quantity: number
+  enhancementLevel?: number
   createdAt: Date
   updatedAt: Date
 }

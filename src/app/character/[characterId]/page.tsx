@@ -29,6 +29,7 @@ interface InventoryItem {
   id: string;
   itemId: string;
   quantity: number;
+  enhancementLevel?: number;
   item: Item;
 }
 
@@ -688,10 +689,10 @@ export default function CharacterDetailsPage() {
 
                 {/* Anel de 12 slots (9 funcionais + 2 brincos e 1 cinto como placeholders) */}
                 {(() => {
-                  const RING: Array<{ key: string; type?: EquipmentSlotType; placeholder?: boolean; emoji?: string; badge?: string; color: string; top: number; left: number }> = [
-                    { key: 'BRINCO_1', placeholder: true, emoji: '💎', badge: 'II', color: '#e0b84c', top: 8, left: 150 },
+                  const RING: Array<{ key: string; type?: EquipmentSlotType; placeholder?: boolean; emoji?: string; color: string; top: number; left: number }> = [
+                    { key: 'BRINCO_1', placeholder: true, emoji: '💎', color: '#e0b84c', top: 8, left: 150 },
                     { key: 'HELMET', type: 'HELMET' as EquipmentSlotType, color: '#3f7fd6', top: 8, left: 229 },
-                    { key: 'BRINCO_2', placeholder: true, emoji: '💎', badge: 'III', color: '#9b59d0', top: 8, left: 308 },
+                    { key: 'BRINCO_2', placeholder: true, emoji: '💎', color: '#9b59d0', top: 8, left: 308 },
                     { key: 'ARMOR', type: 'ARMOR' as EquipmentSlotType, color: '#9b59d0', top: 76, left: 78 },
                     { key: 'NECKLACE', type: 'NECKLACE' as EquipmentSlotType, color: '#9b59d0', top: 76, left: 380 },
                     { key: 'WEAPON', type: 'WEAPON' as EquipmentSlotType, color: '#e08a2b', top: 156, left: 44 },
@@ -699,7 +700,7 @@ export default function CharacterDetailsPage() {
                     { key: 'GLOVES', type: 'GLOVES' as EquipmentSlotType, color: '#4fae5a', top: 236, left: 78 },
                     { key: 'RING_1', type: 'RING_1' as EquipmentSlotType, color: '#e0b84c', top: 236, left: 380 },
                     { key: 'BOOTS', type: 'BOOTS' as EquipmentSlotType, color: '#4fae5a', top: 304, left: 150 },
-                    { key: 'CINTO', placeholder: true, emoji: '🎗️', badge: '+10', color: '#e08a2b', top: 304, left: 229 },
+                    { key: 'CINTO', placeholder: true, emoji: '🎗️', color: '#e08a2b', top: 304, left: 229 },
                     { key: 'RING_2', type: 'RING_2' as EquipmentSlotType, color: '#3f7fd6', top: 304, left: 308 },
                   ];
                   return RING.map((s) => (
@@ -711,9 +712,6 @@ export default function CharacterDetailsPage() {
                           style={{ border: `2px solid ${s.color}`, background: 'linear-gradient(155deg, #1c232b, #0d1116)', boxShadow: `inset 0 0 13px ${s.color}26` }}
                         >
                           <span className="text-xl opacity-60">{s.emoji}</span>
-                          {s.badge && (
-                            <span style={{ position: 'absolute', top: -7, right: -6, background: '#0e1318', border: `1px solid ${s.color}`, color: '#ece7da', fontSize: '9.5px', fontWeight: 700, padding: '0 3px', lineHeight: '13px' }}>{s.badge}</span>
-                          )}
                         </div>
                       ) : (
                         <EquipmentSlot
@@ -721,6 +719,7 @@ export default function CharacterDetailsPage() {
                           accent={s.color}
                           type={s.type as EquipmentSlotType}
                           item={character.equipment?.find(e => e.slot === s.type)?.item}
+                          enhancementLevel={character.equipment?.find(e => e.slot === s.type)?.enhancementLevel || 0}
                           onEquip={handleEquip}
                           onUnequip={handleUnequip}
                         />
@@ -819,6 +818,7 @@ export default function CharacterDetailsPage() {
                         <DraggableItem
                           key={inventoryItem.item.id}
                           item={inventoryItem.item}
+                          enhancementLevel={inventoryItem.enhancementLevel || 0}
                           isEquipped={isEquipped}
                           compact
                           accent={visual.borderColor}

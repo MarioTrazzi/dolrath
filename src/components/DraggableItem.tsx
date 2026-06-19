@@ -5,10 +5,13 @@ import ItemIcon from './ItemIcon';
 import { Item } from '@/types/item';
 import { ItemTooltip } from './ItemTooltip';
 import { EquipmentSlotType } from '@prisma/client';
+import { resolveImageUrl } from '@/lib/imageUrl';
 
 interface DraggableItemProps {
   item: Item;
   isEquipped?: boolean;
+  /** Nível de aprimoramento da instância (+1, +2, ...). 0 = sem aprimoramento. */
+  enhancementLevel?: number;
   onEquip?: (itemId: string, slotType: EquipmentSlotType) => void;
   onUnequip?: (itemId: string) => void;
   onConsume?: (itemId: string) => void;
@@ -19,7 +22,9 @@ interface DraggableItemProps {
   accent?: string;
 }
 
-export function DraggableItem({ item, isEquipped, onEquip, onUnequip, onConsume, characterId, compact, accent }: DraggableItemProps) {
+export function DraggableItem({ item, isEquipped, enhancementLevel = 0, onEquip, onUnequip, onConsume, characterId, compact, accent }: DraggableItemProps) {
+  const itemImage = resolveImageUrl(item.image);
+  const showEnhancement = enhancementLevel > 0;
   const [{ isDragging }, drag] = useDrag({
     type: 'ITEM',
     item: { ...item },
@@ -50,18 +55,30 @@ export function DraggableItem({ item, isEquipped, onEquip, onUnequip, onConsume,
               background: 'linear-gradient(160deg, #262e38, #141a20)',
               boxShadow: 'inset 0 0 7px rgba(0,0,0,0.5)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
+              overflow: 'hidden',
             }}
           >
-            <ItemIcon type={item.type} size={20} className="group-hover:scale-110 transition-transform text-white" />
+            {itemImage ? (
+              <img
+                src={itemImage}
+                alt={item.name}
+                className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <ItemIcon type={item.type} size={20} className="group-hover:scale-110 transition-transform text-white" />
+            )}
           </div>
-          <span
-            style={{
-              position: 'absolute', right: 3, bottom: 1, fontSize: '10px', fontWeight: 600,
-              color: '#e3ddcd', textShadow: '0 1px 2px #000',
-            }}
-          >
-            {item.level}
-          </span>
+          {showEnhancement && (
+            <span
+              style={{
+                position: 'absolute', right: 3, bottom: 1, fontSize: '10px', fontWeight: 700,
+                color: '#f1d79a', textShadow: '0 1px 2px #000',
+              }}
+            >
+              +{enhancementLevel}
+            </span>
+          )}
           {isEquipped && (
             <div className="absolute top-1 right-1 w-1.5 h-1.5 bg-green-500 rounded-full"></div>
           )}
@@ -88,12 +105,23 @@ export function DraggableItem({ item, isEquipped, onEquip, onUnequip, onConsume,
           ${isEquipped ? 'border-green-500' : ''}
         `}
       >
-        <div className="absolute inset-0 flex items-center justify-center">
-          <ItemIcon type={item.type} size={32} className="group-hover:scale-110 transition-transform" />
+        <div className="absolute inset-0 flex items-center justify-center overflow-hidden rounded-lg">
+          {itemImage ? (
+            <img
+              src={itemImage}
+              alt={item.name}
+              className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <ItemIcon type={item.type} size={32} className="group-hover:scale-110 transition-transform" />
+          )}
         </div>
-        <div className="absolute bottom-1 right-1 text-xs bg-black/50 px-1 rounded">
-          {item.level}
-        </div>
+        {showEnhancement && (
+          <div className="absolute bottom-1 right-1 text-xs font-bold text-[#f1d79a] bg-black/60 px-1 rounded">
+            +{enhancementLevel}
+          </div>
+        )}
         {isEquipped && (
           <div className="absolute top-1 right-1 w-2 h-2 bg-green-500 rounded-full"></div>
         )}

@@ -7,10 +7,13 @@ import { ItemTooltip } from './ItemTooltip';
 import { Item } from '@/types/item';
 import { EquipmentSlotType } from '@prisma/client';
 import { useRef } from 'react';
+import { resolveImageUrl } from '@/lib/imageUrl';
 
 interface EquipmentSlotProps {
   type: EquipmentSlotType;
   item?: Item;
+  /** Nível de aprimoramento da instância equipada (+1, +2, ...). 0 = sem aprimoramento. */
+  enhancementLevel?: number;
   onEquip: (itemId: string, slotType: EquipmentSlotType) => void;
   onUnequip: (itemId: string) => void;
   /** Modo compacto estilo Black Desert: slot pequeno e quadrado, com emoji-placeholder */
@@ -56,7 +59,10 @@ function canEquipInSlot(itemType: string, slotType: EquipmentSlotType): boolean 
   }
 }
 
-export function EquipmentSlot({ type, item, onEquip, onUnequip, compact, accent }: EquipmentSlotProps) {
+export function EquipmentSlot({ type, item, enhancementLevel = 0, onEquip, onUnequip, compact, accent }: EquipmentSlotProps) {
+  const itemImage = item ? resolveImageUrl(item.image) : null;
+  const showEnhancement = enhancementLevel > 0;
+
   const ref = useRef<HTMLDivElement>(null);
   const [{ isOver, canDrop }, drop] = useDrop({
     accept: 'ITEM',
@@ -98,17 +104,28 @@ export function EquipmentSlot({ type, item, onEquip, onUnequip, compact, accent 
       >
         {item ? (
           <ItemTooltip item={item} isEquipped={true} onUnequip={onUnequip}>
-            <div className="w-full h-full p-1.5 cursor-pointer group flex items-center justify-center">
-              <ItemIcon type={item.type} size={24} className="group-hover:scale-110 transition-transform text-white" />
-              <span
-                style={{
-                  position: 'absolute', top: -7, right: -6, background: '#0e1318',
-                  border: `1px solid ${slotAccent}`, color: '#ece7da', fontSize: '9.5px',
-                  fontWeight: 700, padding: '0 3px', lineHeight: '13px',
-                }}
-              >
-                {item.level}
-              </span>
+            <div className="w-full h-full cursor-pointer group flex items-center justify-center overflow-hidden">
+              {itemImage ? (
+                <img
+                  src={itemImage}
+                  alt={item.name}
+                  className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <ItemIcon type={item.type} size={24} className="group-hover:scale-110 transition-transform text-white" />
+              )}
+              {showEnhancement && (
+                <span
+                  style={{
+                    position: 'absolute', top: -7, right: -6, background: '#0e1318',
+                    border: `1px solid ${slotAccent}`, color: '#f1d79a', fontSize: '9.5px',
+                    fontWeight: 700, padding: '0 3px', lineHeight: '13px',
+                  }}
+                >
+                  +{enhancementLevel}
+                </span>
+              )}
             </div>
           </ItemTooltip>
         ) : (
@@ -134,11 +151,22 @@ export function EquipmentSlot({ type, item, onEquip, onUnequip, compact, accent 
           isEquipped={true}
           onUnequip={onUnequip}
         >
-          <div className="w-full h-full p-2 cursor-pointer group">
-            <ItemIcon type={item.type} size={32} className="group-hover:scale-110 transition-transform" />
-            <div className="absolute bottom-1 right-1 text-xs bg-black/50 px-1 rounded">
-              {item.level}
-            </div>
+          <div className="w-full h-full cursor-pointer group flex items-center justify-center overflow-hidden rounded-md">
+            {itemImage ? (
+              <img
+                src={itemImage}
+                alt={item.name}
+                className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <ItemIcon type={item.type} size={32} className="group-hover:scale-110 transition-transform" />
+            )}
+            {showEnhancement && (
+              <div className="absolute bottom-1 right-1 text-xs font-bold text-[#f1d79a] bg-black/60 px-1 rounded">
+                +{enhancementLevel}
+              </div>
+            )}
           </div>
         </ItemTooltip>
       ) : (

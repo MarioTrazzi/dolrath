@@ -890,8 +890,9 @@ export default function CharacterDetailsPage() {
               })}
             </div>
 
-            {/* Stats principais (AP/DP). O número grande é a base (modificada pela
-                transformação); o +N verde é o bônus somado pelos equipamentos. */}
+            {/* Stats principais (AP/DP). O número grande é o total já modificado
+                pela transformação; entre parênteses vem o bônus da transformação
+                e o +N verde é o bônus somado pelos equipamentos. */}
             <div style={{ padding: '4px 22px 10px', borderTop: '1px solid #2a323b' }}>
               {[
                 { icon: <Sword size={18} style={{ color: '#c98a6a' }} />, label: 'Ataque (AD)', base: stats.base.str, equip: stats.equipment.str + (stats.total.bonusDamage || 0), mult: activeFormMods?.attack },
@@ -899,6 +900,7 @@ export default function CharacterDetailsPage() {
                 { icon: <Shield size={18} style={{ color: '#6aa9d6' }} />, label: 'Defesa (DP)', base: stats.base.def, equip: stats.equipment.def, mult: activeFormMods?.defense },
               ].map((row, i, arr) => {
                 const transformedBase = activeFormMods && row.mult ? Math.round(row.base * row.mult) : row.base;
+                const transformDelta = transformedBase - row.base;
                 const equip = Math.round(row.equip);
                 return (
                   <div key={row.label} className="flex items-center justify-between" style={{ padding: '8px 0', borderBottom: i < arr.length - 1 ? '1px solid #20262d' : 'none' }}>
@@ -908,6 +910,11 @@ export default function CharacterDetailsPage() {
                     </div>
                     <div className="flex items-baseline" style={{ gap: 6 }}>
                       <span style={{ fontSize: 22, fontWeight: 700, color: '#ece7da' }}>{transformedBase}</span>
+                      {transformDelta !== 0 && (
+                        <span style={{ fontSize: 12, fontWeight: 700, color: transformDelta > 0 ? '#86efac' : '#fca5a5' }}>
+                          ({transformDelta > 0 ? '+' : ''}{transformDelta})
+                        </span>
+                      )}
                       {equip > 0 && (
                         <span style={{ fontSize: 14, fontWeight: 700, color: '#86efac' }}>+{equip}</span>
                       )}

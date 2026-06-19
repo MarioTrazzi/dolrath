@@ -5,6 +5,7 @@
 // e os riscos da tentativa (perda de durabilidade, downgrade ou destruição).
 
 import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getLevelLabel } from '@/lib/enhancementSystem';
 import ItemIcon from './ItemIcon';
@@ -202,7 +203,7 @@ export default function EnhancementDialog({
     }
   };
 
-  if (!open) return null;
+  if (!open || typeof document === 'undefined') return null;
 
   const chancePct = info?.chance !== undefined ? (info.chance * 100).toFixed(1) : null;
   const durabilityPct =
@@ -211,7 +212,10 @@ export default function EnhancementDialog({
       : null;
   const isAccessory = info?.category === 'ACCESSORY';
 
-  return (
+  // Renderiza num portal no body: o card da bancada (e outros pais) usa
+  // backdrop-filter, que cria bloco de contenção para position:fixed e cortaria
+  // o diálogo (quebrando a rolagem). No body ele fica sempre na frente de tudo.
+  return createPortal(
     <AnimatePresence>
       <motion.div
         initial={{ opacity: 0 }}
@@ -571,6 +575,7 @@ export default function EnhancementDialog({
           )}
         </motion.div>
       </motion.div>
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }

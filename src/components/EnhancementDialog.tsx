@@ -224,7 +224,7 @@ export default function EnhancementDialog({
           initial={{ scale: 0.9, y: 20 }}
           animate={{ scale: 1, y: 0 }}
           exit={{ scale: 0.9, y: 20 }}
-          className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-xl border border-amber-500/30 bg-gradient-to-b from-gray-900 to-gray-950 p-6 shadow-2xl shadow-amber-900/30"
+          className="w-full max-w-md max-h-[90vh] overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden rounded-xl border border-amber-500/30 bg-gradient-to-b from-gray-900 to-gray-950 p-6 shadow-2xl shadow-amber-900/30"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Cabeçalho */}
@@ -543,7 +543,7 @@ export default function EnhancementDialog({
                     <button
                       key={it.id}
                       onClick={() => setSelectedId(it.id)}
-                      title={`${it.name}${it.enhancementLevel > 0 ? ` +${it.enhancementLevel}` : ''}`}
+                      title={`${it.name}${it.enhancementLevel > 0 ? ` ${getLevelLabel(it.enhancementLevel)}` : ''}`}
                       className={`relative aspect-square overflow-hidden rounded-lg border transition-all ${
                         isSel
                           ? 'border-amber-400 ring-2 ring-amber-400/60'
@@ -560,7 +560,7 @@ export default function EnhancementDialog({
                       )}
                       {it.enhancementLevel > 0 && (
                         <span className="absolute right-0.5 bottom-0.5 text-[10px] font-black text-[#f1d79a]" style={{ textShadow: '0 1px 2px #000' }}>
-                          +{it.enhancementLevel}
+                          {getLevelLabel(it.enhancementLevel)}
                         </span>
                       )}
                     </button>

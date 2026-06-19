@@ -346,7 +346,7 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryI
                     </button>
                   )}
 
-                  {onSendToGlobal && !isEquipped && !isConsumable && (
+                  {onSendToGlobal && !isEquipped && (
                     <button
                       onClick={() => { onSendToGlobal(item.id); setShowTooltip(false); }}
                       className={storeButtonClass}

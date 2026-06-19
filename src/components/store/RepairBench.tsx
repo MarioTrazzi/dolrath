@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import Image from 'next/image';
 import toast from 'react-hot-toast';
 import { getItemVisual, getItemTypeLabel, getItemCategory } from '@/lib/itemVisuals';
-import { getDisplayName } from '@/lib/enhancementSystem';
+import { getDisplayName, getLevelLabel } from '@/lib/enhancementSystem';
+import { resolveImageUrl } from '@/lib/imageUrl';
 
 const REPAIR_PER_DUPLICATE = 10;
 
@@ -28,11 +28,6 @@ interface InventoryItem {
     type: string;
     image?: string | null;
   };
-}
-
-function isUsableImage(value?: string | null): value is string {
-  if (!value) return false;
-  return /^https?:\/\//i.test(value) || /^data:/i.test(value) || value.includes('res.cloudinary.com');
 }
 
 export default function RepairBench({ characters }: { characters: Character[] }) {
@@ -70,20 +65,22 @@ export default function RepairBench({ characters }: { characters: Character[] })
     if (selectedCharacterId) fetchInventory(selectedCharacterId);
   }, [selectedCharacterId, fetchInventory]);
 
-  // Equipamentos danificados (consumíveis não entram).
-  const damaged = useMemo(
+  // Equipamentos do personagem (consumíveis não entram na forja).
+  const equipment = useMemo(
     () =>
       inventory
-        .filter(
-          (inv) =>
-            getItemCategory(inv.item.type) !== 'consumable' &&
-            inv.durability < inv.maxDurability
-        )
+        .filter((inv) => getItemCategory(inv.item.type) !== 'consumable')
         .sort((a, b) => a.durability / a.maxDurability - b.durability / b.maxDurability),
     [inventory]
   );
 
-  // Mantém uma seleção válida.
+  // Equipamentos danificados (passíveis de reparo).
+  const damaged = useMemo(
+    () => equipment.filter((inv) => inv.durability < inv.maxDurability),
+    [equipment]
+  );
+
+  // Mantém uma seleção válida (sempre um item danificado).
   useEffect(() => {
     if (damaged.length === 0) {
       if (selectedInventoryId) setSelectedInventoryId('');
@@ -146,7 +143,7 @@ export default function RepairBench({ characters }: { characters: Character[] })
   };
 
   const visual = selected ? getItemVisual(selected.item.type) : null;
-  const selectedImage = selected && isUsableImage(selected.item.image) ? selected.item.image : null;
+  const selectedImage = selected ? resolveImageUrl(selected.item.image) : null;
 
   return (
     <div className="relative overflow-hidden rounded-2xl border-2 border-amber-500/40 bg-gradient-to-br from-amber-950/40 to-black/50 p-5 backdrop-blur-sm">
@@ -170,37 +167,106 @@ export default function RepairBench({ characters }: { characters: Character[] })
       </div>
 
       <p className="text-sm text-white/60 mb-4">
-        Coloque o equipamento desgastado e queime cópias dele (nível 0) para restaurar a durabilidade.
-        Cada cópia repara <span className="text-amber-300 font-semibold">+{REPAIR_PER_DUPLICATE}</span>.
+        Escolha um equipamento desgastado do inventário e queime cópias dele (nível 0) para restaurar
+        a durabilidade. Cada cópia repara{' '}
+        <span className="text-amber-300 font-semibold">+{REPAIR_PER_DUPLICATE}</span>.
       </p>
 
       {loadingInv ? (
         <div className="text-white/50 text-sm py-8 text-center">Carregando inventário…</div>
-      ) : damaged.length === 0 ? (
+      ) : equipment.length === 0 ? (
         <div className="text-white/50 text-sm py-8 text-center">
-          ✨ Nenhum equipamento desgastado neste personagem.
+          🎒 Este personagem não possui equipamentos.
         </div>
       ) : (
         <>
-          {/* Seletor do item a reparar */}
-          <label className="block text-xs font-semibold text-amber-200/80 mb-1">
-            Equipamento a reparar
+          {/* Inventário do personagem (estilo /inventory) */}
+          <label className="block text-xs font-semibold text-amber-200/80 mb-2">
+            Inventário do personagem — clique em um item desgastado para reparar
           </label>
-          <select
-            value={selectedInventoryId}
-            onChange={(e) => setSelectedInventoryId(e.target.value)}
-            className="w-full mb-4 px-3 py-2 bg-black/40 border border-amber-500/30 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+          <div
+            className="grid mb-5"
+            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(64px, 1fr))', gap: 6 }}
           >
-            {damaged.map((inv) => (
-              <option key={inv.id} value={inv.id}>
-                {getDisplayName(inv.item.name, inv.enhancementLevel)} —{' '}
-                {Math.round((inv.durability / inv.maxDurability) * 100)}% ({inv.durability}/
-                {inv.maxDurability})
-              </option>
-            ))}
-          </select>
+            {equipment.map((inv) => {
+              const itemVisual = getItemVisual(inv.item.type);
+              const image = resolveImageUrl(inv.item.image);
+              const pct = Math.round((inv.durability / inv.maxDurability) * 100);
+              const isDamaged = inv.durability < inv.maxDurability;
+              const isSelected = inv.id === selectedInventoryId;
+              const barColor = pct < 30 ? '#ef4444' : pct < 70 ? '#f59e0b' : '#10b981';
 
-          {selected && (
+              return (
+                <button
+                  key={inv.id}
+                  type="button"
+                  onClick={() => {
+                    if (isDamaged) setSelectedInventoryId(inv.id);
+                  }}
+                  title={`${getDisplayName(inv.item.name, inv.enhancementLevel)} — ${inv.durability}/${inv.maxDurability} (${pct}%)`}
+                  disabled={!isDamaged}
+                  className={`group relative aspect-square overflow-hidden rounded-lg transition-transform ${
+                    isDamaged ? 'cursor-pointer hover:scale-105' : 'cursor-default opacity-70'
+                  }`}
+                  style={{
+                    border: `2px solid ${isSelected ? '#fbbf24' : (itemVisual.accent || '#3f7fd6') + '66'}`,
+                    background: 'linear-gradient(160deg, #262e38, #141a20)',
+                    boxShadow: isSelected
+                      ? '0 0 0 2px #fbbf2455, inset 0 0 8px rgba(0,0,0,0.6)'
+                      : 'inset 0 0 7px rgba(0,0,0,0.5)',
+                  }}
+                >
+                  <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
+                    {image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={image}
+                        alt={inv.item.name}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <span className="text-2xl">{itemVisual.emoji ?? '🗡️'}</span>
+                    )}
+                  </div>
+
+                  {/* Quantidade */}
+                  {inv.quantity > 1 && (
+                    <span
+                      className="absolute top-0.5 left-1 text-[10px] font-black leading-none text-white"
+                      style={{ textShadow: '0 1px 2px #000, 0 0 3px #000' }}
+                    >
+                      x{inv.quantity}
+                    </span>
+                  )}
+
+                  {/* Nível de aprimoramento */}
+                  {inv.enhancementLevel > 0 && (
+                    <span
+                      className="absolute top-0.5 right-1 text-[10px] font-bold"
+                      style={{ color: '#f1d79a', textShadow: '0 1px 2px #000' }}
+                    >
+                      {getLevelLabel(inv.enhancementLevel)}
+                    </span>
+                  )}
+
+                  {/* Barra de durabilidade */}
+                  <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-black/60">
+                    <div
+                      className="h-full transition-all"
+                      style={{ width: `${pct}%`, background: barColor }}
+                    />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {damaged.length === 0 ? (
+            <div className="text-emerald-300/70 text-sm py-4 text-center">
+              ✨ Nenhum equipamento desgastado — está tudo em ótimo estado!
+            </div>
+          ) : selected ? (
             <>
               {/* Os dois slots da forja */}
               <div className="flex items-center justify-center gap-4 mb-4">
@@ -211,15 +277,23 @@ export default function RepairBench({ characters }: { characters: Character[] })
                     style={{ borderColor: (visual?.accent ?? '#f59e0b') + '99' }}
                   >
                     {selectedImage ? (
-                      <Image
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
                         src={selectedImage}
                         alt={selected.item.name}
-                        fill
-                        className="object-cover"
-                        unoptimized={!/^https?:\/\//i.test(selectedImage)}
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
                       />
                     ) : (
                       <span className="text-4xl">{visual?.emoji ?? '🗡️'}</span>
+                    )}
+                    {selected.enhancementLevel > 0 && (
+                      <span
+                        className="absolute bottom-0.5 right-1.5 text-sm font-black"
+                        style={{ color: '#f1d79a', textShadow: '0 1px 2px #000, 0 0 3px #000' }}
+                      >
+                        {getLevelLabel(selected.enhancementLevel)}
+                      </span>
                     )}
                   </div>
                   <span className="text-[11px] text-white/70 max-w-[96px] text-center truncate">
@@ -239,12 +313,12 @@ export default function RepairBench({ characters }: { characters: Character[] })
                     style={{ borderColor: copiesAvailable > 0 ? '#f59e0b99' : '#ffffff33' }}
                   >
                     {copiesAvailable > 0 && selectedImage ? (
-                      <Image
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
                         src={selectedImage}
                         alt={selected.item.name}
-                        fill
-                        className="object-cover grayscale"
-                        unoptimized={!/^https?:\/\//i.test(selectedImage)}
+                        className="w-full h-full object-cover grayscale"
+                        referrerPolicy="no-referrer"
                       />
                     ) : (
                       <span className="text-4xl grayscale">{visual?.emoji ?? '🗡️'}</span>
@@ -307,7 +381,7 @@ export default function RepairBench({ characters }: { characters: Character[] })
                 </button>
               </div>
             </>
-          )}
+          ) : null}
         </>
       )}
     </div>

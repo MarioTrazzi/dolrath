@@ -8,14 +8,17 @@ import { EquipmentSlotType } from '@prisma/client';
 interface ItemTooltipProps {
   item: Item;
   isEquipped?: boolean;
+  /** Id da linha de inventário (CharacterInventory). Necessário para aprimorar. */
+  inventoryId?: string;
   onEquip?: (itemId: string, slotType: EquipmentSlotType) => void;
   onUnequip?: (itemId: string) => void;
   onConsume?: (itemId: string) => void;
+  onEnhance?: (inventoryId: string, itemName: string) => void;
   characterId?: string;
   children: React.ReactNode;
 }
 
-export function ItemTooltip({ item, isEquipped, onEquip, onUnequip, onConsume, characterId, children }: ItemTooltipProps) {
+export function ItemTooltip({ item, isEquipped, inventoryId, onEquip, onUnequip, onConsume, onEnhance, characterId, children }: ItemTooltipProps) {
   const [showTooltip, setShowTooltip] = useState(false);
   const [coords, setCoords] = useState<{ top: number; left: number; placement: 'top' | 'bottom' }>({ top: 0, left: 0, placement: 'top' });
   const [mounted, setMounted] = useState(false);
@@ -136,6 +139,14 @@ export function ItemTooltip({ item, isEquipped, onEquip, onUnequip, onConsume, c
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
     setShowTooltip((prev) => !prev);
+  };
+
+  // Aprimoramento só faz sentido para equipamentos que estão no inventário.
+  const canEnhance = !!onEnhance && !!inventoryId && item.type !== 'CONSUMABLE';
+
+  const handleEnhanceClick = () => {
+    if (onEnhance && inventoryId) onEnhance(inventoryId, item.name);
+    setShowTooltip(false);
   };
 
   const handleAction = () => {
@@ -270,6 +281,16 @@ export function ItemTooltip({ item, isEquipped, onEquip, onUnequip, onConsume, c
               : '🛡️ Equipar'
             }
           </button>
+
+          {/* Aprimorar (apenas equipamentos no inventário) */}
+          {canEnhance && (
+            <button
+              onClick={handleEnhanceClick}
+              className="w-full mt-2 py-2 px-4 rounded font-semibold text-sm transition-all duration-200 bg-amber-600 hover:bg-amber-700 text-white border border-amber-500 hover:border-amber-400 shadow-lg hover:shadow-xl transform hover:scale-105"
+            >
+              ⚒️ Aprimorar
+            </button>
+          )}
         </div>,
         document.body
       )}

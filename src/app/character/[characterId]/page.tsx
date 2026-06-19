@@ -12,6 +12,7 @@ import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { EquipmentSlot } from '@/components/EquipmentSlot';
 import { DraggableItem } from '@/components/DraggableItem';
+import EnhancementDialog from '@/components/EnhancementDialog';
 import AttributeDistributionPanel from '@/components/AttributeDistributionPanel';
 import CharacterHistory from '@/components/CharacterHistory';
 import CreationCardBackdrop from '@/components/character/CreationCardBackdrop';
@@ -44,6 +45,7 @@ export default function CharacterDetailsPage() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [goldOnchainText, setGoldOnchainText] = useState<string>('—');
   const [invSearch, setInvSearch] = useState<string>('');
+  const [enhanceTarget, setEnhanceTarget] = useState<{ inventoryId: string; itemName: string } | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -195,6 +197,23 @@ export default function CharacterDetailsPage() {
   };
 
   const stats = calculateTotalStats();
+
+  const refreshCharacterAndInventory = async () => {
+    if (!effectiveCharacterId) return;
+    try {
+      const [characterResponse, inventoryResponse] = await Promise.all([
+        fetch(`/api/character/${effectiveCharacterId}`),
+        fetch(`/api/store/inventory?characterId=${effectiveCharacterId}`),
+      ]);
+      if (characterResponse.ok) setCharacter(await characterResponse.json());
+      if (inventoryResponse.ok) {
+        const data = await inventoryResponse.json();
+        setInventory(Array.isArray(data) ? data : (data.items || []));
+      }
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    }
+  };
 
   const handleEquip = async (itemId: string, slotType: EquipmentSlotType) => {
     try {
@@ -820,15 +839,17 @@ export default function CharacterDetailsPage() {
                       const isEquipped = character.equipment?.some(e => e.item.id === inventoryItem.item.id) || false;
                       return (
                         <DraggableItem
-                          key={inventoryItem.item.id}
+                          key={inventoryItem.id}
                           item={inventoryItem.item}
                           enhancementLevel={inventoryItem.enhancementLevel || 0}
+                          inventoryId={inventoryItem.id}
                           isEquipped={isEquipped}
                           compact
                           accent={visual.borderColor}
                           onEquip={handleEquip}
                           onUnequip={handleUnequip}
                           onConsume={handleConsume}
+                          onEnhance={(invId, name) => setEnhanceTarget({ inventoryId: invId, itemName: name })}
                           characterId={effectiveCharacterId || ''}
                         />
                       );
@@ -886,6 +907,18 @@ export default function CharacterDetailsPage() {
         </div>
         </div>
       </div>
+
+      {/* Dialog de aprimoramento (acionado pelo card do item no inventário) */}
+      {enhanceTarget && effectiveCharacterId && (
+        <EnhancementDialog
+          open={!!enhanceTarget}
+          onClose={() => setEnhanceTarget(null)}
+          characterId={effectiveCharacterId}
+          inventoryId={enhanceTarget.inventoryId}
+          itemName={enhanceTarget.itemName}
+          onChanged={refreshCharacterAndInventory}
+        />
+      )}
     </DndProvider>
   );
 }

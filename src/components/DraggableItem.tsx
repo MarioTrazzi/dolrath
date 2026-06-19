@@ -12,9 +12,12 @@ interface DraggableItemProps {
   isEquipped?: boolean;
   /** Nível de aprimoramento da instância (+1, +2, ...). 0 = sem aprimoramento. */
   enhancementLevel?: number;
+  /** Id da linha de inventário (CharacterInventory). Necessário para aprimorar. */
+  inventoryId?: string;
   onEquip?: (itemId: string, slotType: EquipmentSlotType) => void;
   onUnequip?: (itemId: string) => void;
   onConsume?: (itemId: string) => void;
+  onEnhance?: (inventoryId: string, itemName: string) => void;
   characterId?: string;
   /** Modo compacto estilo Black Desert: slot pequeno, fundo escuro */
   compact?: boolean;
@@ -22,7 +25,7 @@ interface DraggableItemProps {
   accent?: string;
 }
 
-export function DraggableItem({ item, isEquipped, enhancementLevel = 0, onEquip, onUnequip, onConsume, characterId, compact, accent }: DraggableItemProps) {
+export function DraggableItem({ item, isEquipped, enhancementLevel = 0, inventoryId, onEquip, onUnequip, onConsume, onEnhance, characterId, compact, accent }: DraggableItemProps) {
   const itemImage = resolveImageUrl(item.image);
   const showEnhancement = enhancementLevel > 0;
   const [{ isDragging }, drag] = useDrag({
@@ -38,9 +41,11 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, onEquip,
       <ItemTooltip
         item={item}
         isEquipped={isEquipped}
+        inventoryId={inventoryId}
         onEquip={onEquip}
         onUnequip={onUnequip}
         onConsume={onConsume}
+        onEnhance={onEnhance}
         characterId={characterId}
       >
         <div
@@ -91,9 +96,11 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, onEquip,
     <ItemTooltip
       item={item}
       isEquipped={isEquipped}
+      inventoryId={inventoryId}
       onEquip={onEquip}
       onUnequip={onUnequip}
       onConsume={onConsume}
+      onEnhance={onEnhance}
       characterId={characterId}
     >
       <div

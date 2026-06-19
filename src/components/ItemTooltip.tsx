@@ -163,6 +163,8 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryI
   const itemImage = resolveImageUrl(item.image);
   const showEnhancement = enhancementLevel > 0;
   const isConsumable = item.type === 'CONSUMABLE';
+  // Pedra Negra: consumível de aprimoramento. "Consumir" abre o seletor de aprimoramento.
+  const isEnhancementStone = isConsumable && !!(item.stats as any)?.enhancementStone;
 
   // Estilo de botão da loja: gradiente da cor de destaque + sombra.
   const buttonStyle = (hex: string, soft: string) => ({
@@ -173,11 +175,20 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryI
     'w-full px-4 py-2.5 rounded-xl font-black text-sm text-white transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed';
 
   const handleEnhanceClick = () => {
-    if (onEnhance && inventoryId) onEnhance(inventoryId, item.name);
+    if (!onEnhance) return;
+    // Pedra negra → abre o seletor (sem item pré-selecionado).
+    // Item normal → abre já com o item escolhido.
+    if (isEnhancementStone) onEnhance('', '');
+    else if (inventoryId) onEnhance(inventoryId, item.name);
     setShowTooltip(false);
   };
 
   const handleAction = () => {
+    // Pedra negra: "Consumir" abre o aprimoramento em vez de consumir.
+    if (isEnhancementStone) {
+      handleEnhanceClick();
+      return;
+    }
     // Para itens consumíveis, consumir ao invés de equipar
     if (item.type === 'CONSUMABLE' && onConsume && characterId) {
       onConsume(item.id);
@@ -302,14 +313,22 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryI
                 onClick={handleAction}
                 className={storeButtonClass}
                 style={
-                  isConsumable
+                  isEnhancementStone
+                    ? buttonStyle('#f59e0b', 'rgba(245,158,11,0.35)')
+                    : isConsumable
                     ? buttonStyle('#22c55e', 'rgba(34,197,94,0.35)')
                     : isEquipped
                     ? buttonStyle('#ef4444', 'rgba(239,68,68,0.35)')
                     : buttonStyle(visual.accent, visual.accentSoft)
                 }
               >
-                {isConsumable ? '🧪 Consumir' : isEquipped ? '⚔️ Desequipar' : '🛡️ Equipar'}
+                {isEnhancementStone
+                  ? '⚒️ Aprimorar'
+                  : isConsumable
+                  ? '🧪 Consumir'
+                  : isEquipped
+                  ? '⚔️ Desequipar'
+                  : '🛡️ Equipar'}
               </button>
 
               {canEnhance && (

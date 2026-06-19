@@ -908,14 +908,23 @@ export default function CharacterDetailsPage() {
         </div>
       </div>
 
-      {/* Dialog de aprimoramento (acionado pelo card do item no inventário) */}
+      {/* Dialog de aprimoramento (acionado pelo card do item ou por uma Pedra Negra) */}
       {enhanceTarget && effectiveCharacterId && (
         <EnhancementDialog
           open={!!enhanceTarget}
           onClose={() => setEnhanceTarget(null)}
           characterId={effectiveCharacterId}
-          inventoryId={enhanceTarget.inventoryId}
+          inventoryId={enhanceTarget.inventoryId || undefined}
           itemName={enhanceTarget.itemName}
+          items={inventory
+            .filter((i) => i.item.type !== 'CONSUMABLE')
+            .map((i) => ({
+              id: i.id,
+              name: i.item.name,
+              type: i.item.type,
+              image: i.item.image,
+              enhancementLevel: i.enhancementLevel || 0,
+            }))}
           onChanged={refreshCharacterAndInventory}
         />
       )}

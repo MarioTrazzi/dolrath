@@ -7,6 +7,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getLevelLabel } from '@/lib/enhancementSystem';
+import ItemIcon from './ItemIcon';
+import { resolveImageUrl } from '@/lib/imageUrl';
+
+/** Item enhanceável exibido no seletor do diálogo (inventário do personagem). */
+export interface EnhanceablePickerItem {
+  id: string; // id da linha de inventário (CharacterInventory)
+  name: string;
+  type: string;
+  image?: string | null;
+  enhancementLevel: number;
+}
 
 export interface EnhanceInfo {
   maxLevel: boolean;
@@ -42,8 +53,11 @@ interface EnhancementDialogProps {
   open: boolean;
   onClose: () => void;
   characterId: string;
-  inventoryId: string;
-  itemName: string;
+  /** Seleção inicial (id da linha de inventário). Opcional: pode escolher no seletor. */
+  inventoryId?: string;
+  itemName?: string;
+  /** Itens enhanceáveis do inventário, exibidos no seletor abaixo. */
+  items?: EnhanceablePickerItem[];
   // Permite injetar implementações mock (página de teste / Storybook)
   fetchInfoOverride?: () => Promise<EnhanceInfo>;
   attemptOverride?: () => Promise<EnhanceResult>;
@@ -57,11 +71,13 @@ export default function EnhancementDialog({
   characterId,
   inventoryId,
   itemName,
+  items,
   fetchInfoOverride,
   attemptOverride,
   repairOverride,
   onChanged,
 }: EnhancementDialogProps) {
+  const [selectedId, setSelectedId] = useState<string>(inventoryId || '');
   const [info, setInfo] = useState<EnhanceInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [attempting, setAttempting] = useState(false);
@@ -74,6 +90,10 @@ export default function EnhancementDialog({
   const CHARGE_MS = 1500;
 
   const fetchInfo = useCallback(async () => {
+    if (!selectedId) {
+      setInfo(null);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -81,7 +101,7 @@ export default function EnhancementDialog({
         setInfo(await fetchInfoOverride());
       } else {
         const res = await fetch(
-          `/api/character/${characterId}/enhance-item?inventoryId=${inventoryId}`
+          `/api/character/${characterId}/enhance-item?inventoryId=${selectedId}`
         );
         const data = await res.json();
         if (!res.ok) {
@@ -94,7 +114,12 @@ export default function EnhancementDialog({
       setError('Erro ao carregar informações de aprimoramento');
     }
     setLoading(false);
-  }, [characterId, inventoryId, fetchInfoOverride]);
+  }, [characterId, selectedId, fetchInfoOverride]);
+
+  // Reseta a seleção ao (re)abrir o diálogo.
+  useEffect(() => {
+    if (open) setSelectedId(inventoryId || '');
+  }, [open, inventoryId]);
 
   useEffect(() => {
     if (open) {
@@ -124,7 +149,7 @@ export default function EnhancementDialog({
         const res = await fetch(`/api/character/${characterId}/enhance-item`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ inventoryId }),
+          body: JSON.stringify({ inventoryId: selectedId }),
         });
         const json = await res.json();
         if (!res.ok) {
@@ -162,7 +187,7 @@ export default function EnhancementDialog({
         const res = await fetch(`/api/character/${characterId}/repair-item`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ inventoryId }),
+          body: JSON.stringify({ inventoryId: selectedId }),
         });
         const json = await res.json();
         if (!res.ok) {
@@ -199,7 +224,7 @@ export default function EnhancementDialog({
           initial={{ scale: 0.9, y: 20 }}
           animate={{ scale: 1, y: 0 }}
           exit={{ scale: 0.9, y: 20 }}
-          className="w-full max-w-md rounded-xl border border-amber-500/30 bg-gradient-to-b from-gray-900 to-gray-950 p-6 shadow-2xl shadow-amber-900/30"
+          className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-xl border border-amber-500/30 bg-gradient-to-b from-gray-900 to-gray-950 p-6 shadow-2xl shadow-amber-900/30"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Cabeçalho */}
@@ -215,6 +240,13 @@ export default function EnhancementDialog({
 
           {loading && (
             <div className="py-10 text-center text-gray-400">Consultando o Espírito Negro...</div>
+          )}
+
+          {!loading && !selectedId && (
+            <div className="rounded-lg border border-white/10 bg-black/40 p-6 text-center text-gray-300">
+              <div className="mb-1 text-3xl">⚒️</div>
+              Selecione abaixo o item que deseja aprimorar.
+            </div>
           )}
 
           {!loading && info && (
@@ -494,6 +526,47 @@ export default function EnhancementDialog({
           {!loading && !info && error && (
             <div className="rounded-lg border border-red-500/40 bg-red-950/40 p-3 text-sm text-red-300">
               {error}
+            </div>
+          )}
+
+          {/* Seletor: inventário do personagem para escolher o item a aprimorar */}
+          {items && items.length > 0 && (
+            <div className="mt-5 border-t border-white/10 pt-4">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                Itens do inventário
+              </div>
+              <div className="grid grid-cols-5 gap-2 sm:grid-cols-6">
+                {items.map((it) => {
+                  const img = resolveImageUrl(it.image);
+                  const isSel = it.id === selectedId;
+                  return (
+                    <button
+                      key={it.id}
+                      onClick={() => setSelectedId(it.id)}
+                      title={`${it.name}${it.enhancementLevel > 0 ? ` +${it.enhancementLevel}` : ''}`}
+                      className={`relative aspect-square overflow-hidden rounded-lg border transition-all ${
+                        isSel
+                          ? 'border-amber-400 ring-2 ring-amber-400/60'
+                          : 'border-white/15 hover:border-amber-400/60'
+                      }`}
+                      style={{ background: 'linear-gradient(160deg, #1c232b, #0d1116)' }}
+                    >
+                      {img ? (
+                        <img src={img} alt={it.name} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                      ) : (
+                        <span className="flex h-full w-full items-center justify-center text-white">
+                          <ItemIcon type={it.type as any} size={22} />
+                        </span>
+                      )}
+                      {it.enhancementLevel > 0 && (
+                        <span className="absolute right-0.5 bottom-0.5 text-[10px] font-black text-[#f1d79a]" style={{ textShadow: '0 1px 2px #000' }}>
+                          +{it.enhancementLevel}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
         </motion.div>

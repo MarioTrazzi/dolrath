@@ -204,22 +204,28 @@ export async function POST(request: NextRequest) {
       battleResult.winnerLevel
     );
 
-    // Atualizar vencedor
+    // Atualizar vencedor.
+    // O ouro vai para a carteira off-chain do usuário (User.goldBalance) —
+    // é esse saldo que dá claim on-chain e é gasto na loja, não Character.gold.
     const [winnerXpResult] = await Promise.all([
       addExperienceToCharacter(battleResult.winnerId, winnerRewards.xp),
-      prisma.character.update({
-        where: { id: battleResult.winnerId },
-        data: { gold: { increment: winnerRewards.gold } }
-      })
+      winner.userId && winnerRewards.gold > 0
+        ? prisma.user.update({
+            where: { id: winner.userId },
+            data: { goldBalance: { increment: winnerRewards.gold } }
+          })
+        : Promise.resolve()
     ]);
 
     // Atualizar perdedor
     const [loserXpResult] = await Promise.all([
       addExperienceToCharacter(battleResult.loserId, loserRewards.xp),
-      prisma.character.update({
-        where: { id: battleResult.loserId },
-        data: { gold: { increment: loserRewards.gold } }
-      })
+      loser.userId && loserRewards.gold > 0
+        ? prisma.user.update({
+            where: { id: loser.userId },
+            data: { goldBalance: { increment: loserRewards.gold } }
+          })
+        : Promise.resolve()
     ]);
 
     // Registrar no histórico

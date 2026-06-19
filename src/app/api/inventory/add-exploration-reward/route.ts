@@ -39,14 +39,16 @@ export async function POST(req: Request) {
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      let updatedCharacter = character
+      const updatedCharacter = character
 
-      // Adicionar ouro se especificado
+      // Adicionar ouro à carteira off-chain do usuário (User.goldBalance).
+      // É esse saldo que pode dar claim on-chain e ser gasto na loja —
+      // Character.gold não é claimável nem usado nas compras.
       if (gold > 0) {
-        updatedCharacter = await tx.character.update({
-          where: { id: characterId },
+        await tx.user.update({
+          where: { id: userId },
           data: {
-            gold: {
+            goldBalance: {
               increment: gold
             }
           }

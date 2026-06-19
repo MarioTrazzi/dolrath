@@ -190,7 +190,8 @@ export function Navbar() {
     { label: 'Inventário', href: '/inventory' },
     { label: 'Ferreiro', href: '/blacksmith' },
     { label: 'Alquimista', href: '/alchemist' },
-    { label: 'Docs', href: '/doc' },
+    // "Docs" só aparece deslogado (landing page), para não ocupar espaço na barra logado
+    ...(!session ? [{ label: 'Docs', href: '/doc' }] : []),
   ]
 
   return (

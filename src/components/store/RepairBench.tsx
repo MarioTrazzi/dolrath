@@ -6,8 +6,40 @@ import { getItemVisual, getItemTypeLabel, getItemCategory } from '@/lib/itemVisu
 import { getDisplayName, getLevelLabel } from '@/lib/enhancementSystem';
 import { formatItemStats } from '@/lib/itemStats';
 import { resolveImageUrl } from '@/lib/imageUrl';
+import EnhancementDialog, { EnhanceablePickerItem } from '@/components/EnhancementDialog';
+import type { EquipmentSlotType } from '@prisma/client';
 
 const REPAIR_PER_DUPLICATE = 10;
+
+// Mapeia o tipo do item para o slot de equipamento (espelha /inventory).
+function getSlotTypeFromItemType(itemType: string): EquipmentSlotType {
+  switch (itemType) {
+    case 'LIGHT_HELMET':
+    case 'MEDIUM_HELMET':
+    case 'HEAVY_HELMET':
+      return 'HELMET';
+    case 'LIGHT_ARMOR':
+    case 'MEDIUM_ARMOR':
+    case 'HEAVY_ARMOR':
+      return 'ARMOR';
+    case 'SHIELD':
+      return 'SHIELD';
+    case 'LIGHT_GLOVES':
+    case 'MEDIUM_GLOVES':
+    case 'HEAVY_GLOVES':
+      return 'GLOVES';
+    case 'LIGHT_BOOTS':
+    case 'MEDIUM_BOOTS':
+    case 'HEAVY_BOOTS':
+      return 'BOOTS';
+    case 'NECKLACE':
+      return 'NECKLACE';
+    case 'RING':
+      return 'RING_1';
+    default:
+      return 'WEAPON';
+  }
+}
 
 interface Character {
   id: string;
@@ -54,6 +86,7 @@ export default function RepairBench({
   const [selectedInventoryId, setSelectedInventoryId] = useState<string>('');
   const [busy, setBusy] = useState(false);
   const [loadingInv, setLoadingInv] = useState(false);
+  const [enhanceOpen, setEnhanceOpen] = useState(false);
 
   // Seleciona o primeiro personagem assim que a lista chega (apenas modo interno).
   useEffect(() => {
@@ -218,6 +251,47 @@ export default function RepairBench({
       setBusy(false);
     }
   };
+
+  // Equipa a peça selecionada no personagem ativo. A API resolve o slot final
+  // (anéis em RING_1/RING_2) e devolve ao inventário a peça que já estava no slot.
+  const handleEquip = async () => {
+    if (!selected || !selectedCharacterId) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/character/${selectedCharacterId}/equip-item`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          itemId: selected.itemId,
+          slotType: getSlotTypeFromItemType(selected.item.type),
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(json.error || 'Erro ao equipar');
+        return;
+      }
+      toast.success(`⚡ ${getDisplayName(selected.item.name, selected.enhancementLevel)} equipado!`);
+      await fetchInventory(selectedCharacterId);
+    } catch {
+      toast.error('Erro inesperado ao equipar');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Itens enhanceáveis do personagem para o seletor do diálogo de aprimoramento.
+  const enhanceableItems: EnhanceablePickerItem[] = useMemo(
+    () =>
+      equipment.map((inv) => ({
+        id: inv.id,
+        name: inv.item.name,
+        type: inv.item.type,
+        image: inv.item.image,
+        enhancementLevel: inv.enhancementLevel,
+      })),
+    [equipment]
+  );
 
   const visual = selected ? getItemVisual(selected.item.type) : null;
   const selectedImage = selected ? resolveImageUrl(selected.item.image) : null;
@@ -423,6 +497,24 @@ export default function RepairBench({
                 </div>
               </div>
 
+              {/* Ações: equipar no personagem e aprimorar */}
+              <div className="mb-4 pb-4 border-b border-white/10 flex gap-3">
+                <button
+                  onClick={handleEquip}
+                  disabled={busy}
+                  className="flex-1 px-4 py-2.5 rounded-xl font-bold text-sm text-white bg-sky-700/70 hover:bg-sky-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  ⚡ Equipar
+                </button>
+                <button
+                  onClick={() => setEnhanceOpen(true)}
+                  disabled={busy}
+                  className="flex-1 px-4 py-2.5 rounded-xl font-black text-sm text-black bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  ⚒️ Aprimorar
+                </button>
+              </div>
+
               {/* Reparo (somente itens desgastados) */}
               {selectedDamaged && (
                 <div className="mb-4 pb-4 border-b border-white/10">
@@ -535,6 +627,19 @@ export default function RepairBench({
             </div>
           )}
         </>
+      )}
+
+      {/* Diálogo de aprimoramento (estilo BDO), partilhado com /inventory */}
+      {selectedCharacterId && (
+        <EnhancementDialog
+          open={enhanceOpen}
+          onClose={() => setEnhanceOpen(false)}
+          characterId={selectedCharacterId}
+          inventoryId={selected?.id}
+          itemName={selected?.item.name}
+          items={enhanceableItems}
+          onChanged={() => fetchInventory(selectedCharacterId)}
+        />
       )}
     </div>
   );

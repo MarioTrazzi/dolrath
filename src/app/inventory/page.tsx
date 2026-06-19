@@ -3,11 +3,12 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import toast from 'react-hot-toast';
+import { DndProvider } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
 import EnhancementDialog from '@/components/EnhancementDialog';
 import VaultBackdrop from '@/components/inventory/VaultBackdrop';
-import ItemCardBackdrop from '@/components/store/ItemCardBackdrop';
-import { getItemVisual, getItemTypeLabel } from '@/lib/itemVisuals';
-import { getGearCategory, getDisplayName } from '@/lib/enhancementSystem';
+import { DraggableItem } from '@/components/DraggableItem';
+import { CharacterItemGrid } from '@/components/inventory/CharacterItemGrid';
 
 interface Item {
   id: string;
@@ -15,6 +16,9 @@ interface Item {
   type: string;
   stats: any;
   description?: string;
+  image?: string | null;
+  level?: number;
+  goldPrice?: number;
 }
 
 interface UserInventoryItem {
@@ -52,7 +56,7 @@ export default function InventoryPage() {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [selectedCharacter, setSelectedCharacter] = useState<string>('');
   const [loading, setLoading] = useState(false);
-  const [enhanceTarget, setEnhanceTarget] = useState<CharacterInventoryItem | null>(null);
+  const [enhanceTarget, setEnhanceTarget] = useState<{ inventoryId: string; itemName: string } | null>(null);
 
   useEffect(() => {
     fetchUserInventory();
@@ -389,6 +393,7 @@ export default function InventoryPage() {
   }
 
   return (
+    <DndProvider backend={HTML5Backend}>
     <div className="relative min-h-screen text-white overflow-hidden">
       {/* Cenário animado da câmara do tesouro */}
       <div className="fixed inset-0 z-0">
@@ -439,28 +444,32 @@ export default function InventoryPage() {
                 <p className="text-text-secondary">Nenhum item no inventário global</p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {userInventory.map((inventoryItem) => (
-                  <div key={inventoryItem.id} className="bg-surface/70 border border-white/10 p-4 rounded-lg flex items-center justify-between hover:border-primary/50 transition-colors">
-                    <div>
-                      <h3 className="font-medium text-text-primary">{inventoryItem.item.name}</h3>
-                      <p className="text-sm text-text-secondary">
-                        Tipo: <span className="text-primary">{inventoryItem.item.type}</span> | Quantidade: <span className="text-yellow-400">{inventoryItem.quantity}</span>
-                      </p>
-                      {inventoryItem.item.description && (
-                        <p className="text-xs text-text-secondary mt-1">{inventoryItem.item.description}</p>
+              <>
+                {!selectedCharacter && (
+                  <p className="mb-2 text-xs text-amber-300/80">Selecione um personagem para transferir os itens.</p>
+                )}
+                <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(50px, 1fr))', gap: 5 }}>
+                  {userInventory.map((inventoryItem) => (
+                    <div key={inventoryItem.id} className="relative">
+                      <DraggableItem
+                        item={inventoryItem.item as any}
+                        compact
+                        accent="#3b82f6"
+                        characterId={selectedCharacter}
+                        onTransfer={(itemId) => handleTransferToCharacter(itemId)}
+                      />
+                      {inventoryItem.quantity > 1 && (
+                        <span
+                          className="absolute top-0 left-0 text-[10px] font-black leading-none text-white px-0.5"
+                          style={{ textShadow: '0 1px 2px #000, 0 0 3px #000' }}
+                        >
+                          x{inventoryItem.quantity}
+                        </span>
                       )}
                     </div>
-                    <button
-                      onClick={() => handleTransferToCharacter(inventoryItem.item.id)}
-                      disabled={loading || !selectedCharacter}
-                      className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 transition-all shadow-lg font-semibold"
-                    >
-                      Transferir →
-                    </button>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
 
@@ -487,110 +496,17 @@ export default function InventoryPage() {
                 <p className="text-text-secondary">Este personagem não possui itens</p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {characterInventory.map((inventoryItem) => {
-                  const isEquipped = isItemEquipped(inventoryItem.item.id);
-                  const enhancementLevel = inventoryItem.enhancementLevel || 0;
-                  const isEnhanceable = !!getGearCategory(inventoryItem.item.type);
-                  const visual = getItemVisual(inventoryItem.item.type);
-                  return (
-                    <div key={inventoryItem.id} className="relative overflow-hidden rounded-2xl border-2 group"
-                      style={{ borderColor: visual.accent + '55' }}>
-                      {/* Backdrop animado por categoria */}
-                      <div className="absolute inset-0">
-                        <ItemCardBackdrop category={visual.category} />
-                      </div>
-                      <div className="absolute inset-0 bg-black/50 group-hover:bg-black/40 transition-colors" />
-
-                      {/* Conteúdo */}
-                      <div className="relative p-4 flex items-center justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-black text-white flex items-center gap-2 flex-wrap drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
-                            <span className={enhancementLevel >= 16 ? 'text-orange-400' : enhancementLevel > 0 ? 'text-cyan-300' : ''}>
-                              {getDisplayName(inventoryItem.item.name, enhancementLevel)}
-                            </span>
-                            {isEquipped && (
-                              <span className="px-2 py-1 bg-green-500/30 text-green-300 text-xs rounded-full border border-green-500/50 font-semibold">
-                                ✓ Equipado
-                              </span>
-                            )}
-                          </h3>
-                          <p className="text-sm text-white/70 mt-1">
-                            <span className={`inline-block ${visual.chipBg} ${visual.chipText} px-2 py-0.5 rounded-full text-xs font-semibold mr-2`}>
-                              {visual.emoji} {getItemTypeLabel(inventoryItem.item.type)}
-                            </span>
-                            x{inventoryItem.quantity}
-                            {isEnhanceable && inventoryItem.durability !== undefined && (
-                              <> | Durabilidade: <span className={inventoryItem.durability > 50 ? 'text-green-400' : inventoryItem.durability > 20 ? 'text-yellow-400' : 'text-red-400'}>
-                                {inventoryItem.durability}/{inventoryItem.maxDurability ?? 100}
-                              </span></>
-                            )}
-                          </p>
-                          {inventoryItem.item.description && (
-                            <p className="text-xs text-white/60 mt-1 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">{inventoryItem.item.description}</p>
-                          )}
-                        </div>
-                        <div className="flex gap-2 flex-shrink-0">
-                          {inventoryItem.item.type === 'CONSUMABLE' ? (
-                            <button
-                              onClick={() => handleConsumeItem(inventoryItem.item.id)}
-                              disabled={loading}
-                              className="px-4 py-2 rounded-xl text-sm font-black text-white transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
-                              style={{
-                                background: `linear-gradient(90deg, ${visual.accent}cc, ${visual.accent}77)`,
-                                boxShadow: `0 4px 14px ${visual.accentSoft}`,
-                              }}
-                            >
-                              🧪 Consumir
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => isEquipped ? handleUnequipItem(inventoryItem.item.id) : handleEquipItem(inventoryItem.item.id)}
-                              disabled={loading}
-                              className="px-4 py-2 rounded-xl text-sm font-black text-white transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
-                              style={isEquipped ? {
-                                background: 'linear-gradient(90deg, #ef4444cc, #ef444477)',
-                                boxShadow: '0 4px 14px rgba(239,68,68,0.35)',
-                              } : {
-                                background: `linear-gradient(90deg, ${visual.accent}cc, ${visual.accent}77)`,
-                                boxShadow: `0 4px 14px ${visual.accentSoft}`,
-                              }}
-                            >
-                              {isEquipped ? '🔓 Desequipar' : '⚡ Equipar'}
-                            </button>
-                          )}
-                          {isEnhanceable && (
-                            <button
-                              onClick={() => setEnhanceTarget(inventoryItem)}
-                              disabled={loading}
-                              className="px-4 py-2 rounded-xl text-sm font-black text-white transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
-                              style={{
-                                background: 'linear-gradient(90deg, #f59e0bcc, #f59e0b77)',
-                                boxShadow: '0 4px 14px rgba(245,158,11,0.4)',
-                              }}
-                            >
-                              ⚒️ Aprimorar
-                            </button>
-                          )}
-                          {!isEquipped && inventoryItem.item.type !== 'CONSUMABLE' && (
-                            <button
-                              onClick={() => handleTransferToGlobal(inventoryItem.item.id)}
-                              disabled={loading}
-                              className="px-4 py-2 rounded-xl text-sm font-black text-white transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
-                              style={{
-                                background: 'linear-gradient(90deg, #3b82f6cc, #3b82f677)',
-                                boxShadow: '0 4px 14px rgba(59,130,246,0.35)',
-                              }}
-                            >
-                              🌐 Global
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <CharacterItemGrid
+                items={characterInventory as any}
+                isEquipped={(itemId) => isItemEquipped(itemId)}
+                accent="#d9a441"
+                characterId={selectedCharacter}
+                onEquip={(itemId) => handleEquipItem(itemId)}
+                onUnequip={(itemId) => handleUnequipItem(itemId)}
+                onConsume={(itemId) => handleConsumeItem(itemId)}
+                onEnhance={(invId, name) => setEnhanceTarget({ inventoryId: invId, itemName: name })}
+                onSendToGlobal={(itemId) => handleTransferToGlobal(itemId)}
+              />
             )}
           </div>
         </div>
@@ -601,8 +517,17 @@ export default function InventoryPage() {
             open={!!enhanceTarget}
             onClose={() => setEnhanceTarget(null)}
             characterId={selectedCharacter}
-            inventoryId={enhanceTarget.id}
-            itemName={enhanceTarget.item.name}
+            inventoryId={enhanceTarget.inventoryId || undefined}
+            itemName={enhanceTarget.itemName}
+            items={characterInventory
+              .filter((i) => i.item.type !== 'CONSUMABLE')
+              .map((i) => ({
+                id: i.id,
+                name: i.item.name,
+                type: i.item.type,
+                image: i.item.image,
+                enhancementLevel: i.enhancementLevel || 0,
+              }))}
             onChanged={() => {
               fetchCharacterInventory(selectedCharacter);
               fetchEquippedItems(selectedCharacter);
@@ -611,5 +536,6 @@ export default function InventoryPage() {
         )}
       </div>
     </div>
+    </DndProvider>
   );
 }

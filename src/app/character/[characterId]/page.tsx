@@ -12,7 +12,7 @@ import Link from 'next/link';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { EquipmentSlot } from '@/components/EquipmentSlot';
-import { DraggableItem } from '@/components/DraggableItem';
+import { CharacterItemGrid } from '@/components/inventory/CharacterItemGrid';
 import EnhancementDialog from '@/components/EnhancementDialog';
 import AttributeDistributionPanel from '@/components/AttributeDistributionPanel';
 import CharacterHistory from '@/components/CharacterHistory';
@@ -829,38 +829,20 @@ export default function CharacterDetailsPage() {
 
             {/* Grade de itens */}
             <div className="flex-1" style={{ padding: '2px 14px 8px' }}>
-              <div className="grid" style={{ gridTemplateColumns: 'repeat(8, 1fr)', gap: 5 }}>
-                {(() => {
-                  const total = character.inventorySlots || 10;
-                  const q = invSearch.trim().toLowerCase();
-                  const shown = q ? inventory.filter((i) => (i.item.name || '').toLowerCase().includes(q)) : inventory;
-                  return Array(total).fill(null).map((_, idx) => {
-                    const inventoryItem = shown[idx];
-                    if (inventoryItem) {
-                      const isEquipped = character.equipment?.some(e => e.item.id === inventoryItem.item.id) || false;
-                      return (
-                        <DraggableItem
-                          key={inventoryItem.id}
-                          item={inventoryItem.item}
-                          enhancementLevel={inventoryItem.enhancementLevel || 0}
-                          inventoryId={inventoryItem.id}
-                          isEquipped={isEquipped}
-                          compact
-                          accent={visual.borderColor}
-                          onEquip={handleEquip}
-                          onUnequip={handleUnequip}
-                          onConsume={handleConsume}
-                          onEnhance={(invId, name) => setEnhanceTarget({ inventoryId: invId, itemName: name })}
-                          characterId={effectiveCharacterId || ''}
-                        />
-                      );
-                    }
-                    return (
-                      <div key={`empty-${idx}`} className="aspect-square" style={{ background: 'linear-gradient(160deg, #11161b, #0c1015)', border: '1px solid #262e37' }} />
-                    );
-                  });
-                })()}
-              </div>
+              <CharacterItemGrid
+                items={inventory}
+                totalSlots={character.inventorySlots || 10}
+                isEquipped={(itemId) => character.equipment?.some(e => e.item.id === itemId) || false}
+                accent={visual.borderColor}
+                characterId={effectiveCharacterId || ''}
+                search={invSearch}
+                gridTemplateColumns="repeat(8, 1fr)"
+                gap={5}
+                onEquip={handleEquip}
+                onUnequip={handleUnequip}
+                onConsume={handleConsume}
+                onEnhance={(invId, name) => setEnhanceTarget({ inventoryId: invId, itemName: name })}
+              />
             </div>
 
             {/* Rodapé: slots / expandir */}

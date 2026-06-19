@@ -18,6 +18,8 @@ interface DraggableItemProps {
   onUnequip?: (itemId: string) => void;
   onConsume?: (itemId: string) => void;
   onEnhance?: (inventoryId: string, itemName: string) => void;
+  onTransfer?: (itemId: string) => void;
+  onSendToGlobal?: (itemId: string) => void;
   characterId?: string;
   /** Modo compacto estilo Black Desert: slot pequeno, fundo escuro */
   compact?: boolean;
@@ -25,7 +27,7 @@ interface DraggableItemProps {
   accent?: string;
 }
 
-export function DraggableItem({ item, isEquipped, enhancementLevel = 0, inventoryId, onEquip, onUnequip, onConsume, onEnhance, characterId, compact, accent }: DraggableItemProps) {
+export function DraggableItem({ item, isEquipped, enhancementLevel = 0, inventoryId, onEquip, onUnequip, onConsume, onEnhance, onTransfer, onSendToGlobal, characterId, compact, accent }: DraggableItemProps) {
   const itemImage = resolveImageUrl(item.image);
   const showEnhancement = enhancementLevel > 0;
   const [{ isDragging }, drag] = useDrag({
@@ -47,6 +49,8 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, inventor
         onUnequip={onUnequip}
         onConsume={onConsume}
         onEnhance={onEnhance}
+        onTransfer={onTransfer}
+        onSendToGlobal={onSendToGlobal}
         characterId={characterId}
       >
         <div
@@ -103,6 +107,8 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, inventor
       onUnequip={onUnequip}
       onConsume={onConsume}
       onEnhance={onEnhance}
+      onTransfer={onTransfer}
+      onSendToGlobal={onSendToGlobal}
       characterId={characterId}
     >
       <div

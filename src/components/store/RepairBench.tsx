@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { getItemVisual, getItemTypeLabel, getItemCategory } from '@/lib/itemVisuals';
 import { getDisplayName, getLevelLabel } from '@/lib/enhancementSystem';
+import { formatItemStats } from '@/lib/itemStats';
 import { resolveImageUrl } from '@/lib/imageUrl';
 
 const REPAIR_PER_DUPLICATE = 10;
@@ -27,6 +28,10 @@ interface InventoryItem {
     name: string;
     type: string;
     image?: string | null;
+    description?: string | null;
+    level?: number | null;
+    goldPrice?: number | null;
+    stats?: Record<string, any> | null;
   };
 }
 
@@ -89,22 +94,18 @@ export default function RepairBench({
     [inventory]
   );
 
-  // Equipamentos danificados (passíveis de reparo).
-  const damaged = useMemo(
-    () => equipment.filter((inv) => inv.durability < inv.maxDurability),
-    [equipment]
-  );
-
-  // Mantém uma seleção válida (sempre um item danificado).
+  // Mantém uma seleção válida. Qualquer equipamento pode ser selecionado (para
+  // reparar e/ou vender); ao perder a seleção, prioriza um item danificado.
   useEffect(() => {
-    if (damaged.length === 0) {
+    if (equipment.length === 0) {
       if (selectedInventoryId) setSelectedInventoryId('');
       return;
     }
-    if (!damaged.some((d) => d.id === selectedInventoryId)) {
-      setSelectedInventoryId(damaged[0].id);
+    if (!equipment.some((e) => e.id === selectedInventoryId)) {
+      const firstDamaged = equipment.find((e) => e.durability < e.maxDurability);
+      setSelectedInventoryId(firstDamaged ? firstDamaged.id : '');
     }
-  }, [damaged, selectedInventoryId]);
+  }, [equipment, selectedInventoryId]);
 
   const selected = useMemo(
     () => inventory.find((inv) => inv.id === selectedInventoryId) || null,
@@ -157,8 +158,42 @@ export default function RepairBench({
     }
   };
 
+  // Venda ao ferreiro por metade do preço (burn off-chain).
+  const sellUnitPrice = selected ? Math.max(0, Math.floor((selected.item.goldPrice ?? 0) / 2)) : 0;
+
+  const handleSell = async (quantity: number) => {
+    if (!selected || !selectedCharacterId) return;
+    const qty = Math.max(1, Math.min(selected.quantity, quantity));
+    const name = getDisplayName(selected.item.name, selected.enhancementLevel);
+    const ok = window.confirm(
+      `Vender ${qty}x ${name} ao ferreiro por ${sellUnitPrice * qty} gold?\nO item será destruído (não dá pra desfazer).`
+    );
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/character/${selectedCharacterId}/sell-item`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inventoryId: selected.id, quantity: qty }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error(json.error || 'Erro ao vender');
+        return;
+      }
+      toast.success(json.message || '💰 Item vendido!');
+      await fetchInventory(selectedCharacterId);
+    } catch {
+      toast.error('Erro inesperado ao vender');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const visual = selected ? getItemVisual(selected.item.type) : null;
   const selectedImage = selected ? resolveImageUrl(selected.item.image) : null;
+  const selectedDamaged = selected ? selected.durability < selected.maxDurability : false;
+  const selectedStats = selected ? formatItemStats(selected.item.stats ?? undefined, selected.item.type) : [];
 
   return (
     <div className="relative overflow-hidden rounded-2xl border-2 border-amber-500/40 bg-gradient-to-br from-amber-950/40 to-black/50 p-5 backdrop-blur-sm">
@@ -182,9 +217,9 @@ export default function RepairBench({
       </div>
 
       <p className="text-sm text-white/60 mb-4">
-        Escolha um equipamento desgastado do inventário e queime cópias dele (nível 0) para restaurar
-        a durabilidade. Cada cópia repara{' '}
-        <span className="text-amber-300 font-semibold">+{REPAIR_PER_DUPLICATE}</span>.
+        Clique num item do inventário para ver os detalhes, repará-lo (queimando cópias nível 0,{' '}
+        <span className="text-amber-300 font-semibold">+{REPAIR_PER_DUPLICATE}</span> cada) ou vendê-lo
+        ao ferreiro por metade do preço.
       </p>
 
       {loadingInv ? (
@@ -197,7 +232,7 @@ export default function RepairBench({
         <>
           {/* Inventário do personagem (estilo /inventory) */}
           <label className="block text-xs font-semibold text-amber-200/80 mb-2">
-            Inventário do personagem — clique em um item desgastado para reparar
+            Inventário do personagem — clique num item para reparar ou vender
           </label>
           <div
             className="grid mb-5"
@@ -207,7 +242,6 @@ export default function RepairBench({
               const itemVisual = getItemVisual(inv.item.type);
               const image = resolveImageUrl(inv.item.image);
               const pct = Math.round((inv.durability / inv.maxDurability) * 100);
-              const isDamaged = inv.durability < inv.maxDurability;
               const isSelected = inv.id === selectedInventoryId;
               const barColor = pct < 30 ? '#ef4444' : pct < 70 ? '#f59e0b' : '#10b981';
 
@@ -215,14 +249,9 @@ export default function RepairBench({
                 <button
                   key={inv.id}
                   type="button"
-                  onClick={() => {
-                    if (isDamaged) setSelectedInventoryId(inv.id);
-                  }}
+                  onClick={() => setSelectedInventoryId(inv.id)}
                   title={`${getDisplayName(inv.item.name, inv.enhancementLevel)} — ${inv.durability}/${inv.maxDurability} (${pct}%)`}
-                  disabled={!isDamaged}
-                  className={`group relative aspect-square overflow-hidden rounded-lg transition-transform ${
-                    isDamaged ? 'cursor-pointer hover:scale-105' : 'cursor-default opacity-70'
-                  }`}
+                  className="group relative aspect-square overflow-hidden rounded-lg cursor-pointer hover:scale-105 transition-transform"
                   style={{
                     border: `2px solid ${isSelected ? '#fbbf24' : (itemVisual.accent || '#3f7fd6') + '66'}`,
                     background: 'linear-gradient(160deg, #262e38, #141a20)',
@@ -277,82 +306,78 @@ export default function RepairBench({
             })}
           </div>
 
-          {damaged.length === 0 ? (
-            <div className="text-emerald-300/70 text-sm py-4 text-center">
-              ✨ Nenhum equipamento desgastado — está tudo em ótimo estado!
+          {!selected ? (
+            <div className="text-white/50 text-sm py-4 text-center">
+              👆 Selecione um item acima para ver detalhes, reparar ou vender.
             </div>
-          ) : selected ? (
-            <>
-              {/* Os dois slots da forja */}
-              <div className="flex items-center justify-center gap-4 mb-4">
-                {/* Slot: item a reparar */}
-                <div className="flex flex-col items-center gap-1">
-                  <div
-                    className="w-24 h-24 rounded-xl border-2 flex items-center justify-center overflow-hidden bg-black/40 relative"
-                    style={{ borderColor: (visual?.accent ?? '#f59e0b') + '99' }}
-                  >
-                    {selectedImage ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={selectedImage}
-                        alt={selected.item.name}
-                        className="w-full h-full object-cover"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <span className="text-4xl">{visual?.emoji ?? '🗡️'}</span>
-                    )}
-                    {selected.enhancementLevel > 0 && (
-                      <span
-                        className="absolute bottom-0.5 right-1.5 text-sm font-black"
-                        style={{ color: '#f1d79a', textShadow: '0 1px 2px #000, 0 0 3px #000' }}
-                      >
-                        {getLevelLabel(selected.enhancementLevel)}
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-[11px] text-white/70 max-w-[96px] text-center truncate">
-                    {getDisplayName(selected.item.name, selected.enhancementLevel)}
-                  </span>
-                  <span className="text-[10px] text-white/40">{getItemTypeLabel(selected.item.type)}</span>
+          ) : (
+            <div className="rounded-xl border border-amber-500/30 bg-black/30 p-4">
+              {/* Cabeçalho: imagem + infos do item */}
+              <div className="flex gap-4 mb-4">
+                <div
+                  className="w-24 h-24 shrink-0 rounded-xl border-2 flex items-center justify-center overflow-hidden bg-black/40 relative"
+                  style={{ borderColor: (visual?.accent ?? '#f59e0b') + '99' }}
+                >
+                  {selectedImage ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={selectedImage}
+                      alt={selected.item.name}
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <span className="text-4xl">{visual?.emoji ?? '🗡️'}</span>
+                  )}
+                  {selected.enhancementLevel > 0 && (
+                    <span
+                      className="absolute bottom-0.5 right-1.5 text-sm font-black"
+                      style={{ color: '#f1d79a', textShadow: '0 1px 2px #000, 0 0 3px #000' }}
+                    >
+                      {getLevelLabel(selected.enhancementLevel)}
+                    </span>
+                  )}
                 </div>
 
-                <span className="text-3xl text-amber-400">＋</span>
-
-                {/* Slot: cópia consumida */}
-                <div className="flex flex-col items-center gap-1">
-                  <div
-                    className={`w-24 h-24 rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden relative ${
-                      copiesAvailable > 0 ? 'bg-black/40' : 'bg-black/20 opacity-50'
-                    }`}
-                    style={{ borderColor: copiesAvailable > 0 ? '#f59e0b99' : '#ffffff33' }}
-                  >
-                    {copiesAvailable > 0 && selectedImage ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={selectedImage}
-                        alt={selected.item.name}
-                        className="w-full h-full object-cover grayscale"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <span className="text-4xl grayscale">{visual?.emoji ?? '🗡️'}</span>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-black text-lg text-white truncate">
+                    {getDisplayName(selected.item.name, selected.enhancementLevel)}
+                  </h3>
+                  <div className="flex items-center gap-2 mt-1 mb-2 flex-wrap">
+                    <span
+                      className="text-xs font-semibold px-2 py-0.5 rounded-full text-white"
+                      style={{ background: (visual?.accent ?? '#f59e0b') + '33' }}
+                    >
+                      {visual?.emoji} {getItemTypeLabel(selected.item.type)}
+                    </span>
+                    {selected.item.level != null && (
+                      <span className="text-xs font-semibold bg-amber-500/30 text-amber-300 px-2 py-0.5 rounded-full">
+                        Lv.{selected.item.level}
+                      </span>
                     )}
-                    {copiesAvailable > 0 && (
-                      <span className="absolute bottom-0.5 right-1 text-xs font-bold bg-black/70 text-amber-300 px-1.5 rounded">
-                        x{copiesAvailable}
+                    {selected.quantity > 1 && (
+                      <span className="text-xs font-semibold bg-white/10 text-white/80 px-2 py-0.5 rounded-full">
+                        x{selected.quantity}
                       </span>
                     )}
                   </div>
-                  <span className="text-[11px] text-white/70">Cópia (nível 0)</span>
-                  <span className="text-[10px] text-white/40">
-                    {copiesAvailable > 0 ? `${copiesAvailable} disponível${copiesAvailable > 1 ? 'eis' : ''}` : 'nenhuma'}
-                  </span>
+                  {selectedStats.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {selectedStats.map((stat, i) => (
+                        <span
+                          key={i}
+                          className="text-xs font-semibold bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full"
+                        >
+                          {stat}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Barra de durabilidade */}
-              <div className="mb-3">
+              <div className="mb-4">
                 <div className="flex justify-between text-xs text-white/60 mb-1">
                   <span>Durabilidade</span>
                   <span>
@@ -369,34 +394,117 @@ export default function RepairBench({
                 </div>
               </div>
 
-              <p className="text-xs text-white/50 mb-3">
-                Faltam <span className="text-amber-300">{missing}</span> de durabilidade — precisa de{' '}
-                <span className="text-amber-300">{copiesNeeded}</span> cópia{copiesNeeded > 1 ? 's' : ''}, você tem{' '}
-                <span className={copiesAvailable >= copiesNeeded ? 'text-emerald-300' : 'text-red-300'}>
-                  {copiesAvailable}
-                </span>
-                .
-              </p>
+              {/* Reparo (somente itens desgastados) */}
+              {selectedDamaged && (
+                <div className="mb-4 pb-4 border-b border-white/10">
+                  {/* Os dois slots da forja */}
+                  <div className="flex items-center justify-center gap-4 mb-3">
+                    {/* Slot: item a reparar */}
+                    <div className="flex flex-col items-center gap-1">
+                      <div
+                        className="w-20 h-20 rounded-xl border-2 flex items-center justify-center overflow-hidden bg-black/40 relative"
+                        style={{ borderColor: (visual?.accent ?? '#f59e0b') + '99' }}
+                      >
+                        {selectedImage ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={selectedImage}
+                            alt={selected.item.name}
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <span className="text-3xl">{visual?.emoji ?? '🗡️'}</span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-white/50">item</span>
+                    </div>
 
-              {/* Botões */}
-              <div className="flex gap-3">
-                <button
-                  onClick={() => handleRepair('single')}
-                  disabled={busy || copiesAvailable < 1}
-                  className="flex-1 px-4 py-2.5 rounded-xl font-bold text-sm text-white bg-amber-600/80 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  🔧 Reparar +{REPAIR_PER_DUPLICATE} (1 cópia)
-                </button>
-                <button
-                  onClick={() => handleRepair('full')}
-                  disabled={busy || copiesAvailable < 1}
-                  className="flex-1 px-4 py-2.5 rounded-xl font-black text-sm text-white bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  ⚒️ Reparar 100% ({Math.min(copiesNeeded, copiesAvailable)} cópia{Math.min(copiesNeeded, copiesAvailable) > 1 ? 's' : ''})
-                </button>
+                    <span className="text-3xl text-amber-400">＋</span>
+
+                    {/* Slot: cópia consumida */}
+                    <div className="flex flex-col items-center gap-1">
+                      <div
+                        className={`w-20 h-20 rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden relative ${
+                          copiesAvailable > 0 ? 'bg-black/40' : 'bg-black/20 opacity-50'
+                        }`}
+                        style={{ borderColor: copiesAvailable > 0 ? '#f59e0b99' : '#ffffff33' }}
+                      >
+                        {copiesAvailable > 0 && selectedImage ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={selectedImage}
+                            alt={selected.item.name}
+                            className="w-full h-full object-cover grayscale"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <span className="text-3xl grayscale">{visual?.emoji ?? '🗡️'}</span>
+                        )}
+                        {copiesAvailable > 0 && (
+                          <span className="absolute bottom-0.5 right-1 text-xs font-bold bg-black/70 text-amber-300 px-1.5 rounded">
+                            x{copiesAvailable}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-white/50">cópia nível 0</span>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-white/50 mb-3 text-center">
+                    Faltam <span className="text-amber-300">{missing}</span> — precisa de{' '}
+                    <span className="text-amber-300">{copiesNeeded}</span> cópia{copiesNeeded > 1 ? 's' : ''}, você tem{' '}
+                    <span className={copiesAvailable >= copiesNeeded ? 'text-emerald-300' : 'text-red-300'}>
+                      {copiesAvailable}
+                    </span>
+                    .
+                  </p>
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => handleRepair('single')}
+                      disabled={busy || copiesAvailable < 1}
+                      className="flex-1 px-4 py-2.5 rounded-xl font-bold text-sm text-white bg-amber-600/80 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      🔧 Reparar +{REPAIR_PER_DUPLICATE} (1 cópia)
+                    </button>
+                    <button
+                      onClick={() => handleRepair('full')}
+                      disabled={busy || copiesAvailable < 1}
+                      className="flex-1 px-4 py-2.5 rounded-xl font-black text-sm text-white bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      ⚒️ Reparar 100% ({Math.min(copiesNeeded, copiesAvailable)} cópia{Math.min(copiesNeeded, copiesAvailable) > 1 ? 's' : ''})
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Venda ao ferreiro (½ preço) — também serve de burn */}
+              <div className="flex flex-col gap-2">
+                <span className="text-[11px] text-white/40">
+                  Vender ao ferreiro destrói o item por metade do preço (½ de {selected.item.goldPrice ?? 0} 🪙).
+                </span>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => handleSell(1)}
+                    disabled={busy}
+                    className="flex-1 px-4 py-2.5 rounded-xl font-bold text-sm text-white bg-rose-700/70 hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    💰 Vender 1 por {sellUnitPrice} 🪙
+                  </button>
+                  {selected.quantity > 1 && (
+                    <button
+                      onClick={() => handleSell(selected.quantity)}
+                      disabled={busy}
+                      className="flex-1 px-4 py-2.5 rounded-xl font-bold text-sm text-white bg-rose-800/70 hover:bg-rose-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      💰 Vender {selected.quantity} por {sellUnitPrice * selected.quantity} 🪙
+                    </button>
+                  )}
+                </div>
               </div>
-            </>
-          ) : null}
+            </div>
+          )}
         </>
       )}
     </div>

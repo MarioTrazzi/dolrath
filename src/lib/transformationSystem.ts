@@ -72,15 +72,15 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
     cooldown: 6,          // Era 8 - reduzido para permitir mais uso
     cost: { mp: 35, stamina: 40 }, // Era 40/50 - ligeiramente reduzido
     
-    // Multiplicadores balanceados
+    // Multiplicadores: nenhuma forma nerfa nem fica neutra (piso de +10%).
     statModifiers: {
-      strength: 1.6,        // Era 1.8 - reduzido para balancear
-      defense: 1.5,         // Era 1.6 - ligeiramente reduzido
-      hp: 1.4,             // Era 1.5 - reduzido
-      agility: 0.8,        // Era 0.7 - melhorado (menos lento)
-      intelligence: 0.9,    // Era 0.8 - melhorado
-      attack: 1.6,         // Era 1.8 - balanceado
-      critical: 1.3        // Mantido
+      strength: 1.6,
+      defense: 1.5,
+      hp: 1.4,
+      agility: 1.10,       // Era 0.8 - sem nerf (piso +10%)
+      intelligence: 1.10,  // Era 0.9 - sem nerf (piso +10%)
+      attack: 1.6,
+      critical: 1.3
     },
     
     // Habilidades especiais exclusivas durante transformação
@@ -123,13 +123,13 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
     cost: { mp: 20, stamina: 30 }, // Era 25/35 - reduzido
     
     statModifiers: {
-      agility: 1.8,        // Era 2.2 - reduzido mas ainda alto
-      strength: 1.3,       // Era 1.4 - ligeiramente reduzido
+      agility: 1.8,        // +80% AGI (predador veloz)
+      strength: 1.3,       // +30% STR
       critical: 2.5,       // +150% chance crítica
       attack: 1.4,         // +40% ataque
-      defense: 0.8,        // -20% DEF (mais frágil)
-      hp: 0.9,            // -10% HP (menos resistente)
-      intelligence: 0.7    // -30% INT (instintos)
+      defense: 1.10,       // Era 0.8 - sem nerf (piso +10%)
+      hp: 1.10,            // Era 0.9 - sem nerf (piso +10%)
+      intelligence: 1.10   // Era 0.7 - sem nerf (piso +10%)
     },
     
     specialAbilities: [
@@ -173,10 +173,10 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
       strength: 1.7,       // +70% STR (força bruta)
       defense: 2.0,        // +100% DEF (super tanque)
       hp: 1.8,            // +80% HP (muita vida)
-      agility: 0.5,       // -50% AGI (muito lento)
-      critical: 0.4,      // -60% crítico (pouca precisão)
+      agility: 1.10,      // Era 0.5 - sem nerf (piso +10%)
+      critical: 1.10,     // Era 0.4 - sem nerf (piso +10%)
       attack: 1.7,        // +70% ataque
-      intelligence: 0.6   // -40% INT
+      intelligence: 1.10  // Era 0.6 - sem nerf (piso +10%)
     },
     
     specialAbilities: [
@@ -221,9 +221,9 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
       intelligence: 1.6,   // +60% INT (visão aguçada)
       critical: 3.0,       // +200% chance crítica
       attack: 1.2,         // +20% ataque (precisão)
-      strength: 0.6,       // -40% STR (frágil)
-      defense: 0.4,        // -60% DEF (muito frágil)
-      hp: 0.7             // -30% HP (glass cannon)
+      strength: 1.10,      // Era 0.6 - sem nerf (piso +10%)
+      defense: 1.10,       // Era 0.4 - sem nerf (piso +10%)
+      hp: 1.10            // Era 0.7 - sem nerf (piso +10%)
     },
     
     specialAbilities: [
@@ -315,8 +315,8 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
       agility: 1.50,
       critical: 1.80,
       attack: 1.30,
-      strength: 0.90,
-      defense: 1.0,
+      strength: 1.10,       // Era 0.90 - sem nerf (piso +10%)
+      defense: 1.10,        // Era 1.0 - agora dá ganho (piso +10%)
       hp: 1.10,
     },
 

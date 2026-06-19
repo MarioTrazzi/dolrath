@@ -462,9 +462,9 @@ export default function CharacterDetailsPage() {
           <div className="absolute inset-0 bg-black/70" />
         </div>
 
-        <div className="relative z-10 container mx-auto px-4 py-8">
+        <div className="relative z-10 container mx-auto px-2 sm:px-4 py-8">
         <div
-          className="relative overflow-hidden rounded-3xl border-2 p-6 sm:p-8"
+          className="relative overflow-hidden rounded-3xl border-2 p-3 sm:p-8"
           style={{ borderColor: visual.borderColor, boxShadow: visual.glow }}
         >
           <div className="absolute inset-0 bg-black/40 pointer-events-none" />
@@ -525,7 +525,7 @@ export default function CharacterDetailsPage() {
                 <span className="bg-black/40 px-4 py-2 rounded-xl text-white/80 border border-white/10">
                   XP: {character.experience}/{character.nextLevelExperience || '?'}
                 </span>
-                {character.availablePoints && character.availablePoints > 0 && (
+                {(character.availablePoints ?? 0) > 0 && (
                   <span
                     className="px-4 py-2 rounded-xl text-white font-bold border"
                     style={{ background: `${visual.borderColor}33`, borderColor: `${visual.borderColor}66` }}
@@ -622,10 +622,10 @@ export default function CharacterDetailsPage() {
           </div>
 
         {/* Attribute Distribution Panel */}
-        {character.availablePoints && character.availablePoints > 0 && (
+        {(character.availablePoints ?? 0) > 0 && (
           <AttributeDistributionPanel
             characterId={effectiveCharacterId || ''}
-            availablePoints={character.availablePoints}
+            availablePoints={character.availablePoints ?? 0}
             currentAttributes={{
               str: (character.attributes as any)?.str || (character.baseStats as any)?.str || 0,
               agi: (character.attributes as any)?.agi || 0,
@@ -661,13 +661,23 @@ export default function CharacterDetailsPage() {
         )}
 
         {/* ====== Janelas estilo Black Desert (Equipamento + Inventário) ====== */}
+        <style>{`
+          .equip-figure-wrap { width: 100%; }
+          @media (max-width: 579px) {
+            .equip-figure-wrap { height: calc(396px * var(--equip-scale, 0.6)); overflow: hidden; }
+            .equip-figure { transform: scale(var(--equip-scale, 0.6)); transform-origin: top center; }
+          }
+          @media (max-width: 400px) {
+            .equip-figure-wrap { --equip-scale: 0.5; }
+          }
+        `}</style>
         <div className="w-full overflow-x-auto pb-2">
-        <div className="flex gap-2 justify-center min-w-[1026px] mx-auto" style={{ fontFamily: "'Barlow', sans-serif" }}>
+        <div className="flex flex-col items-center gap-4 xl:flex-row xl:items-stretch xl:justify-center xl:gap-2 xl:min-w-[1026px] mx-auto" style={{ fontFamily: "'Barlow', sans-serif" }}>
 
           {/* ============ PAINEL EQUIPAMENTO ============ */}
           <div
-            className="relative flex flex-col w-[548px]"
-            style={{ background: 'linear-gradient(180deg, rgba(26,32,38,0.96), rgba(20,25,30,0.97))', border: '1px solid #39424d' }}
+            className="relative flex flex-col w-full max-w-[548px] rounded-2xl overflow-hidden border-2 backdrop-blur-md shadow-xl"
+            style={{ background: 'linear-gradient(180deg, rgba(26,32,38,0.78), rgba(20,25,30,0.82))', borderColor: `${visual.borderColor}40` }}
           >
             {/* Retrato flutuante */}
             <div
@@ -698,7 +708,8 @@ export default function CharacterDetailsPage() {
             <div className="relative flex-1" style={{ padding: '14px 18px 0' }}>
               <div className="absolute text-center" style={{ top: 8, left: 0, right: 0, fontSize: '12.5px', color: '#9aa3ae', letterSpacing: '1.2px', textTransform: 'uppercase' }}>Aparência</div>
 
-              <div className="relative" style={{ height: 392, width: 512, margin: '4px auto 0' }}>
+              <div className="equip-figure-wrap">
+              <div className="relative equip-figure" style={{ height: 392, width: 512, margin: '4px auto 0' }}>
                 {/* Sombra + figura central */}
                 <div className="absolute" style={{ top: 290, left: '50%', transform: 'translateX(-50%)', width: 120, height: 16, background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.55), transparent 70%)', zIndex: 0 }} />
                 <div className="absolute flex items-center justify-center" style={{ top: 24, left: '50%', transform: 'translateX(-50%)', width: 150, height: 272, background: `radial-gradient(70% 50% at 50% 20%, ${visual.borderColor}1a, transparent 60%)`, zIndex: 1 }}>
@@ -753,6 +764,7 @@ export default function CharacterDetailsPage() {
                   ));
                 })()}
               </div>
+              </div>
             </div>
 
             {/* Atributos secundários */}
@@ -791,8 +803,8 @@ export default function CharacterDetailsPage() {
 
           {/* ============ PAINEL INVENTÁRIO ============ */}
           <div
-            className="relative flex flex-col w-[470px]"
-            style={{ background: 'linear-gradient(180deg, rgba(26,32,38,0.96), rgba(20,25,30,0.97))', border: '1px solid #39424d' }}
+            className="relative flex flex-col w-full max-w-[548px] xl:max-w-[470px] rounded-2xl overflow-hidden border-2 backdrop-blur-md shadow-xl"
+            style={{ background: 'linear-gradient(180deg, rgba(26,32,38,0.78), rgba(20,25,30,0.82))', borderColor: `${visual.borderColor}40` }}
           >
             {/* Barra de título */}
             <div className="flex items-center gap-2" style={{ height: 38, padding: '0 12px', background: 'linear-gradient(180deg, #2b333c, #232a31)', borderBottom: '1px solid #11161a' }}>

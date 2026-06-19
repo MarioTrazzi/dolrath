@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { Search, Filter, X } from 'lucide-react';
 import { ethers } from 'ethers';
 import { decodeContractCustomErrorMessage, getWalletTxErrorMessage } from '@/lib/walletErrors';
+import { getPolygonFeeOverrides } from '@/lib/gasFees';
 import BazaarBackdrop from '@/components/store/BazaarBackdrop';
 import ItemCardBackdrop from '@/components/store/ItemCardBackdrop';
 import { getItemVisual, getItemTypeLabel } from '@/lib/itemVisuals';
@@ -260,7 +261,8 @@ export default function Store() {
         return;
       }
 
-      const payTx = await gold.transfer(treasuryAddress, costWei);
+      const feeOverrides = await getPolygonFeeOverrides(provider);
+      const payTx = await gold.transfer(treasuryAddress, costWei, feeOverrides);
       toast.success('Pagamento enviado! Aguardando confirmação…');
       const payReceipt = await payTx.wait();
       if (!payReceipt || payReceipt.status !== 1) {
@@ -328,7 +330,7 @@ export default function Store() {
         mintArgs.tokenURI,
         BigInt(mintArgs.deadline),
         mintArgs.signature,
-        gasLimit ? { gasLimit } : {}
+        { ...feeOverrides, ...(gasLimit ? { gasLimit } : {}) }
       );
       toast.success('Mint do item enviado! Aguardando confirmação…');
       const mintReceipt = await mintTx.wait();

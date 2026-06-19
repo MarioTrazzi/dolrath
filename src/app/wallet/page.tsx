@@ -7,6 +7,7 @@ import { Coins, Wallet } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { ethers } from 'ethers'
 import { decodeContractCustomErrorMessage, getWalletTxErrorMessage } from '@/lib/walletErrors'
+import { getPolygonFeeOverrides } from '@/lib/gasFees'
 
 type GoldStatus = {
   walletLinked: boolean
@@ -162,7 +163,8 @@ export default function WalletPage() {
         throw new Error(getWalletTxErrorMessage(preErr))
       }
 
-      const tx = await contract.claimWithSig(to, amountWei, nonce, deadline, signature, gasLimit ? { gasLimit } : {})
+      const feeOverrides = await getPolygonFeeOverrides(provider)
+      const tx = await contract.claimWithSig(to, amountWei, nonce, deadline, signature, { ...feeOverrides, ...(gasLimit ? { gasLimit } : {}) })
       toast.success('Transação enviada! Aguardando confirmação…')
 
       const receipt = await tx.wait()

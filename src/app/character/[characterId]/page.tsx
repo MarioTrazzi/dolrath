@@ -23,6 +23,7 @@ import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 import { ethers } from 'ethers';
 import { getWalletTxErrorMessage } from '@/lib/walletErrors';
+import { getPolygonFeeOverrides } from '@/lib/gasFees';
 import { resolveImageUrl } from '@/lib/imageUrl';
 
 import { Item } from '@/types/item';
@@ -388,7 +389,7 @@ export default function CharacterDetailsPage() {
         return;
       }
 
-      const payTx = await gold.transfer(treasuryAddress, costWei);
+      const payTx = await gold.transfer(treasuryAddress, costWei, await getPolygonFeeOverrides(provider));
       toast.success('Pagamento enviado! Aguardando confirmação…');
       const payReceipt = await payTx.wait();
       if (!payReceipt || payReceipt.status !== 1) {

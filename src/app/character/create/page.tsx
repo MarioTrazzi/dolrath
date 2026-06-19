@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { useSession, signIn } from 'next-auth/react';
 import { ethers } from 'ethers';
 import { getWalletTxErrorMessage } from '@/lib/walletErrors';
+import { getPolygonFeeOverrides } from '@/lib/gasFees';
 import Link from 'next/link';
 import Image from 'next/image';
 
@@ -292,7 +293,7 @@ export default function CharacterCreationPage() {
       const decimals: number = Number(await erc20.decimals());
       const amount = ethers.parseUnits(String(creationCostDol), decimals);
 
-      const tx = await erc20.transfer(treasuryAddress, amount);
+      const tx = await erc20.transfer(treasuryAddress, amount, await getPolygonFeeOverrides(providerAfterSwitch));
       await tx.wait();
 
       setCreationPaymentTxHash(tx.hash);
@@ -349,7 +350,7 @@ export default function CharacterCreationPage() {
       signer
     );
 
-    const tx = await erc721.transferFrom(from, burnAddress, BigInt(tokenId));
+    const tx = await erc721.transferFrom(from, burnAddress, BigInt(tokenId), await getPolygonFeeOverrides(providerAfterSwitch));
     await tx.wait();
   };
 

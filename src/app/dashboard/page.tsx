@@ -21,6 +21,7 @@ import toast from 'react-hot-toast';
 import { ethers } from 'ethers';
 import Image from 'next/image';
 import { getWalletTxErrorMessage } from '@/lib/walletErrors';
+import { getPolygonFeeOverrides } from '@/lib/gasFees';
 // ...existing code...
 // ...existing code...
 
@@ -329,7 +330,7 @@ export default function DashboardPage() {
         signer
       );
 
-      const tx = await erc721.transferFrom(from, burnAddress, BigInt(tokenId));
+      const tx = await erc721.transferFrom(from, burnAddress, BigInt(tokenId), await getPolygonFeeOverrides(providerAfterSwitch));
       await tx.wait();
 
       closeDeleteDialog();

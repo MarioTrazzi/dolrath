@@ -188,7 +188,8 @@ export function Navbar() {
     { label: 'Masmorras', href: '/dungeons' },
     { label: 'Combate', href: '/combat-lobby' },
     { label: 'Inventário', href: '/inventory' },
-    { label: 'Loja', href: '/store' },
+    { label: 'Ferreiro', href: '/blacksmith' },
+    { label: 'Alquimista', href: '/alchemist' },
     { label: 'Docs', href: '/doc' },
   ]
 

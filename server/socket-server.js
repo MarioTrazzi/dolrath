@@ -1181,7 +1181,7 @@ function regeneratePlayerResources(player, context = 'Activity') {
 //
 // Identidade dos golpes: cada atributo tem seu botão
 //   Leve (d6)     → AGI×1.7 + STR×0.3
-//   Pesado (d10)  → STR×1.5 (ignora 30% da DEF — quebra-armadura)
+//   Pesado (d10)  → STR×1.8 (ignora 30% da DEF — quebra-armadura)
 //   Especial (d20)→ INT×1.5 (fura armadura: só RES mitiga)
 // Dado conta ×2 para a sorte importar mesmo no late game.
 
@@ -1197,7 +1197,9 @@ function calculateDamage(attacker, diceRoll, actionType, isCritical = false) {
     baseDamage = diceRoll * 2 + Math.floor(attacker.agility * 1.7) + Math.floor(attacker.strength * 0.3)
   } else {
     // ⚔️ PESADO ESCALA COM STRENGTH (build guerreiro)
-    baseDamage = diceRoll * 2 + Math.floor(attacker.strength * 1.5)
+    // ×1.8: STR só gera dano (AGI também dá crit+esquiva+stamina), então o
+    // pesado precisa de multiplicador maior pra guerreiro não colapsar no late.
+    baseDamage = diceRoll * 2 + Math.floor(attacker.strength * 1.8)
   }
 
   // 🏃 CRITICAL HIT baseado em AGILITY

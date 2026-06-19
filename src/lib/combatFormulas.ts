@@ -6,7 +6,7 @@
  * nenhum confronto 0%/100%, lutas de 15–40 turnos, zero soft-locks.
  *
  * Identidade de cada atributo:
- *   STR → dano do Ataque Pesado (×1.5) e um pouco de HP
+ *   STR → dano do Ataque Pesado (×1.8) e um pouco de HP
  *   AGI → dano do Ataque Leve (×1.7), crítico, esquiva e stamina
  *   INT → dano do Especial (×1.5, fura armadura) e pool de MP
  *   DEF → HP (×4), mitigação física, resistência mágica (×0.8) e stamina

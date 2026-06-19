@@ -22,7 +22,7 @@ const rnd = (n) => 1 + Math.floor(Math.random() * n)
 // 🔧 Knobs do patch (ajustados iterativamente via simulação)
 const K = {
   lightAgi: 1.7,      // leve: 2×d6 + AGI×1.4 + STR×0.3
-  heavyStr: 1.5,      // pesado: 2×d10 + STR×1.5
+  heavyStr: 1.8,      // pesado: 2×d10 + STR×1.8 (STR só gera dano; AGI dá crit+esquiva)
   specInt: 1.5,       // especial: 2×d20 + INT×1.7 (ignora DEF, só RES resiste)
   resFromDef: 0.8,    // RES = DEF×0.8 (constituição resiste magia)
   defendRed: 0.45,     // defender: toma 40% do dano pós-mitigação
@@ -49,8 +49,8 @@ const K = {
 const RACES = {
   humano: { strength: 20, dexterity: 20, intelligence: 20, constitution: 20 },
   draconiano: { strength: 30, constitution: 50 },
-  metamorfo: { dexterity: 50 },
-  elfo: { intelligence: 40, dexterity: 30 },
+  metamorfo: { dexterity: 50, constitution: 30 }, // wisdom→constitution (servidor ignora wisdom)
+  elfo: { intelligence: 40, dexterity: 30, constitution: 20 }, // idem
 }
 const CLASSES = {
   warrior: { strength: 40, constitution: 30 },

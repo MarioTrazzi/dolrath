@@ -23,7 +23,7 @@ export const RACES: Race[] = [
     id: 'metamorfo',
     name: 'Metamorfo',
     description: 'Capazes de se transformar em animais, excelentes em esquiva',
-    bonuses: { dexterity: 50, wisdom: 30 }, // Mantido igual
+    bonuses: { dexterity: 50, constitution: 30 }, // wisdom→constitution (servidor ignora wisdom): +8 efetivo, esquiva+resistência
     abilities: ['Transformação Animal', 'Instintos Selvagens', 'Agilidade Aprimorada'],
     transformationAvailable: true
   },
@@ -31,7 +31,7 @@ export const RACES: Race[] = [
     id: 'elfo',
     name: 'Elfo',
     description: 'Maestros mágicos supremos que ascendem à Forma Celestial',
-    bonuses: { intelligence: 40, dexterity: 30, wisdom: 20 }, // 🔥 BUFF
+    bonuses: { intelligence: 40, dexterity: 30, constitution: 20 }, // wisdom→constitution (servidor ignora wisdom): dá sobrevida ao mago/arqueiro élfico
     abilities: ['Maestria Arcana', 'Tiro Certeiro Élfico', 'Forma Celestial'],
     transformationAvailable: true
   }

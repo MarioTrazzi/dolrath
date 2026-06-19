@@ -1,10 +1,13 @@
 'use client'
 
 import React, { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import ItemIcon from '@/components/ItemIcon'
 import { AnimatedDie, MiniDie } from '@/components/battle/AnimatedDice'
 import { getTransformationGlow } from '@/lib/transformationSystem'
+import { applyEnhancementToStats } from '@/lib/enhancementSystem'
+import { formatItemStats } from '@/lib/itemStats'
 
 // ============================================================
 // Tipos
@@ -16,6 +19,8 @@ export interface EquippedItem {
   image?: string | null
   type?: string
   stats?: Record<string, number | undefined>
+  /** Nível de aprimoramento da instância equipada (+1, +2, ...). */
+  enhancementLevel?: number
 }
 
 // Chaves: WEAPON, SHIELD, HELMET, ARMOR, GLOVES, BOOTS, NECKLACE, RING_1, RING_2
@@ -145,16 +150,6 @@ function hpBarColor(pct: number): string {
   return 'from-red-600 to-red-400'
 }
 
-function equipStatsSummary(item: EquippedItem): string {
-  const s = item.stats || {}
-  const parts: string[] = []
-  if (s.attack) parts.push(`ATK +${s.attack}`)
-  if (s.defense) parts.push(`DEF +${s.defense}`)
-  if (s.hp) parts.push(`HP +${s.hp}`)
-  if (s.mp) parts.push(`MP +${s.mp}`)
-  if (s.bonusDamage) parts.push(`DANO +${s.bonusDamage}`)
-  return parts.length ? ` (${parts.join(', ')})` : ''
-}
 
 // ============================================================
 // Sub-componentes
@@ -180,28 +175,83 @@ function StatBar({ value, max, gradient, icon }: { value: number; max: number; g
   )
 }
 
+// Slot de equipamento no combate: mostra o item, badge +N e, ao passar o mouse,
+// um card (via portal) com os stats já aprimorados — mesmo formato do inventário.
+function EquipSlot({ slot, item }: { slot: string; item: EquippedItem }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [hover, setHover] = useState(false)
+  const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
+
+  const level = item.enhancementLevel || 0
+  const stats = formatItemStats(applyEnhancementToStats(item.stats, level), item.type)
+
+  const show = () => {
+    const r = ref.current?.getBoundingClientRect()
+    if (r) {
+      const W = 190
+      let left = r.left + r.width / 2 - W / 2
+      left = Math.max(8, Math.min(left, window.innerWidth - W - 8))
+      setPos({ top: r.top - 8, left })
+    }
+    setHover(true)
+  }
+
+  return (
+    <div
+      ref={ref}
+      onMouseEnter={show}
+      onMouseLeave={() => setHover(false)}
+      className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-black/40 border border-amber-500/40 flex items-center justify-center overflow-hidden hover:border-amber-400 hover:scale-110 transition-all cursor-help shadow-lg shadow-black/50"
+    >
+      {item.image ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+      ) : item.type ? (
+        <ItemIcon type={item.type as any} size={18} className="text-amber-300" />
+      ) : (
+        <span className="text-sm">{SLOT_EMOJI[slot] || '❔'}</span>
+      )}
+      {level > 0 && (
+        <span
+          className="absolute right-0 bottom-0 text-[9px] font-black leading-none text-amber-300 px-0.5"
+          style={{ textShadow: '0 1px 2px #000, 0 0 3px #000' }}
+        >
+          +{level}
+        </span>
+      )}
+
+      {hover && typeof document !== 'undefined' && createPortal(
+        <div
+          className="pointer-events-none fixed z-[9999] w-[190px] rounded-lg border border-amber-500/40 bg-gray-950/95 p-2 shadow-2xl"
+          style={{ top: pos.top, left: pos.left, transform: 'translateY(-100%)' }}
+        >
+          <div className="flex items-center gap-1 text-xs font-bold text-white">
+            <span className="truncate">{item.name}</span>
+            {level > 0 && <span className="flex-shrink-0 text-[10px] font-black text-amber-300">+{level}</span>}
+          </div>
+          {stats.length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {stats.map((s, i) => (
+                <span key={i} className="rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">
+                  {s}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>,
+        document.body
+      )}
+    </div>
+  )
+}
+
 function EquipmentColumn({ equipment, side }: { equipment?: EquipmentMap; side: 'left' | 'right' }) {
   return (
     <div className={`flex flex-col gap-1 ${side === 'left' ? 'items-start' : 'items-end'}`}>
       {SLOT_ORDER.map(slot => {
         const item = equipment?.[slot]
         if (!item) return null
-        return (
-          <div
-            key={slot}
-            title={`${item.name}${equipStatsSummary(item)}`}
-            className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-black/40 border border-amber-500/40 flex items-center justify-center overflow-hidden hover:border-amber-400 hover:scale-110 transition-all cursor-help shadow-lg shadow-black/50"
-          >
-            {item.image ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
-            ) : item.type ? (
-              <ItemIcon type={item.type as any} size={18} className="text-amber-300" />
-            ) : (
-              <span className="text-sm">{SLOT_EMOJI[slot] || '❔'}</span>
-            )}
-          </div>
-        )
+        return <EquipSlot key={slot} slot={slot} item={item} />
       })}
     </div>
   )

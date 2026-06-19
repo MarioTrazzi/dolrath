@@ -139,6 +139,7 @@ function mapEquipment(equipArray: any[]): EquipmentMap {
         image: eq.item.image,
         type: eq.item.type,
         stats: eq.item.stats || {},
+        enhancementLevel: eq.enhancementLevel || 0,
       }
     }
   }

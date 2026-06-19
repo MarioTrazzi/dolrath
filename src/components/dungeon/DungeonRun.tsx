@@ -515,6 +515,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     isAlive: monster.hp > 0,
     combatStats: {
       ad: Math.floor(monster.attack + monster.level / 2),
+      ap: monster.hasSpecial ? Math.floor(monster.magicPower + monster.level / 2) : undefined,
       dp: monster.defense,
     },
   } : null, [monster, dungeon.name])
@@ -702,6 +703,9 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
 
   const monsterAtkMod = (m: ScaledMonster) => Math.floor(m.attack + m.level / 2)
   const monsterDefMod = (m: ScaledMonster) => Math.floor(m.defense / 2)
+  // Núcleo de dano do monstro: especial usa AP (magicPower); demais usam o ataque físico.
+  const monsterCoreFor = (m: ScaledMonster, kind: AttackKind) =>
+    kind === 'special' ? Math.floor(m.magicPower + m.level / 2) : monsterAtkMod(m)
 
   // ---------- Iniciativa ----------
   const handleInitiativeRoll = () => {
@@ -801,11 +805,13 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     const m = monsterRef.current
     if (!m) return
     setCurrentTurnId(MONSTER_ID)
-    // Bosses preferem golpes fortes
+    // Bosses preferem golpes fortes; só quem tem habilidade especial pode usá-la.
     const r = Math.random()
     const kind: AttackKind = m.isBoss
-      ? r < 0.35 ? 'precise' : r < 0.7 ? 'brutal' : 'special'
-      : r < 0.5 ? 'precise' : r < 0.85 ? 'brutal' : 'special'
+      ? (r < 0.35 ? 'precise' : r < 0.7 ? 'brutal' : 'special')
+      : m.hasSpecial
+        ? (r < 0.5 ? 'precise' : r < 0.8 ? 'brutal' : 'special')
+        : (r < 0.55 ? 'precise' : 'brutal')
     setMonsterPlan(kind)
     showBanner(m.emoji, `${m.name} prepara um ${ATTACKS[kind].label}!`, 2600)
     setStage('playerDefense')
@@ -866,7 +872,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     const def = mkResult(atkDef.sides, playerDefMod + (defenseChoice === 'defend' ? 2 : 1))
     setPanelResult(def)
 
-    const atk = mkResult(atkDef.sides, monsterAtkMod(m))
+    const atk = mkResult(atkDef.sides, monsterCoreFor(m, monsterPlan))
     later(() => setDiceResults(prev => ({ ...prev, [MONSTER_ID]: atk })), 1700)
     later(() => resolveMonsterAttack(atk, def), 3000)
   }
@@ -879,7 +885,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     setPanelResult(null)
     setHasRolled(false)
 
-    const outcome = computeOutcome(atk, def, defenseChoice, atkDef.band, monsterAtkMod(m), playerDefenseForDamage)
+    const outcome = computeOutcome(atk, def, defenseChoice, atkDef.band, monsterCoreFor(m, monsterPlan), playerDefenseForDamage)
     pushBattleEvent({
       kind: 'resolve',
       attackerId: MONSTER_ID,

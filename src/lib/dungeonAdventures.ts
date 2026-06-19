@@ -350,6 +350,11 @@ export interface ScaledMonster {
   maxHp: number
   attack: number
   defense: number
+  /** Poder mágico (AP) — alimenta o ataque especial. 0 em monstros sem especial. */
+  magicPower: number
+  /** Pode usar ataque especial (Investida Arcana). Os fraquinhos das primeiras
+   *  salas não têm; o boss e as últimas salas antes dele têm. */
+  hasSpecial: boolean
   goldReward: number
   xpReward: number
   isBoss: boolean
@@ -391,6 +396,12 @@ export function scaleMonster(
   const bossTitle = s.isBoss && 'title' in def ? ` • ${(def as DungeonBossDef).title}` : ''
   // Nível do monstro acompanha o requisito da masmorra + a sala (acopla evolução do player)
   const monLevel = Math.max(1, Math.round(dungeon.levelReq + (s.tier - 1) * 3 + (s.isBoss ? 4 : s.isMain ? 1 : 0)))
+  // Quem tem ataque especial: o boss e as salas PRINCIPAIS mais próximas dele.
+  // Quantas salas finais têm especial cresce com a dificuldade da masmorra
+  // (Floresta = só boss + última sala; masmorras mais difíceis começam antes).
+  // Nós menores ("fraquinhos") nunca têm especial.
+  const specialFromTier = dungeon.rooms - (dungeon.difficultyStars - 1)
+  const hasSpecial = !!s.isBoss || (!!s.isMain && s.tier >= specialFromTier)
   return {
     id: `${s.isBoss ? 'boss' : 'monster'}-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
     name: s.isBoss ? `👑 ${def.name}${bossTitle}` : def.name,
@@ -400,6 +411,9 @@ export function scaleMonster(
     maxHp: hp,
     attack: Math.floor(def.baseAttack * power),
     defense: Math.floor(def.baseDefense * power),
+    // AP um pouco acima do ataque físico para o especial ser ameaçador.
+    magicPower: hasSpecial ? Math.floor(def.baseAttack * power * 1.2) : 0,
+    hasSpecial,
     goldReward: Math.floor((s.isBoss ? 150 + Math.random() * 150 : s.isMain ? 25 + Math.random() * 25 : 6 + Math.random() * 10) * d * tierFactor),
     xpReward: Math.floor((s.isBoss ? 150 + Math.random() * 100 : s.isMain ? 35 + Math.random() * 25 : 12 + Math.random() * 12) * d * tierFactor),
     isBoss: !!s.isBoss,

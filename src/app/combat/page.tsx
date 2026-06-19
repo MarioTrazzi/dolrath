@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { X, Users, Sword, Shield, Zap, Heart, Sparkles } from 'lucide-react'
 import { io, Socket } from 'socket.io-client'
 import TransformationDialog from '@/components/TransformationDialog'
-import BattleScene, { BattleEvent, DiceResult, EquipmentMap } from '@/components/battle/BattleScene'
+import BattleScene, { BattleEvent, DiceResult, EquipmentMap, FighterView } from '@/components/battle/BattleScene'
 import { TRANSFORMATION_CONFIG, getRaceTransformations, type TransformationType } from '@/lib/transformationSystem'
 
 interface Equipment {
@@ -254,6 +254,33 @@ function CombatPageContent() {
 
   const playerStats = calculateDisplayStats(currentPlayerDisplay)
   const opponentStats = calculateDisplayStats(opponent)
+
+  // AD/AP/DP exibidos no card de cada lutador. Quando transformado, os stats já
+  // vêm multiplicados (applyTransformation): AD×attack, AP×intelligence, DP×defense.
+  // O delta entre parênteses é a parcela vinda da transformação.
+  const withFighterStats = (p: Player | null | undefined): FighterView | null => {
+    if (!p) return null
+    const cfg = p.isTransformed && p.transformationType
+      ? TRANSFORMATION_CONFIG[p.transformationType as TransformationType]
+      : null
+    const m = cfg?.statModifiers
+    const calc = (val: number, mult?: number) => {
+      const v = Math.round(val || 0)
+      if (!m || !mult || mult === 1) return { val: v, delta: 0 }
+      return { val: v, delta: v - Math.round((val || 0) / mult) }
+    }
+    const ad = calc(p.attack, m?.attack)
+    const ap = calc(p.intelligence, m?.intelligence)
+    const dp = calc(p.defense, m?.defense)
+    return {
+      ...p,
+      combatStats: {
+        ad: ad.val, adDelta: ad.delta,
+        ap: ap.val, apDelta: ap.delta,
+        dp: dp.val, dpDelta: dp.delta,
+      },
+    }
+  }
 
   // Auto scroll para o chat quando novas mensagens chegam
   useEffect(() => {
@@ -1086,8 +1113,8 @@ function CombatPageContent() {
           {/* 🎬 Arena de Batalha - estilo Adventure Quest */}
           <BattleScene
             className="flex-1 min-h-[260px]"
-            left={(isSpectator || isModerator ? combatRoom?.player1 : (currentPlayerView || currentPlayer)) || null}
-            right={(isSpectator || isModerator ? combatRoom?.player2 : opponent) || null}
+            left={withFighterStats((isSpectator || isModerator ? combatRoom?.player1 : (currentPlayerView || currentPlayer)) || null)}
+            right={withFighterStats((isSpectator || isModerator ? combatRoom?.player2 : opponent) || null)}
             currentTurnId={combatRoom?.currentTurn}
             winnerId={combatRoom?.winner || null}
             combatEnded={combatRoom?.phase === CombatPhase.COMBAT_END}

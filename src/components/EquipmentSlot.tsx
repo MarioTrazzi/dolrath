@@ -103,7 +103,7 @@ export function EquipmentSlot({ type, item, enhancementLevel = 0, onEquip, onUne
         }}
       >
         {item ? (
-          <ItemTooltip item={item} isEquipped={true} onUnequip={onUnequip}>
+          <ItemTooltip item={item} isEquipped={true} enhancementLevel={enhancementLevel} onUnequip={onUnequip}>
             <div className="w-full h-full cursor-pointer group flex items-center justify-center overflow-hidden">
               {itemImage ? (
                 <img
@@ -149,6 +149,7 @@ export function EquipmentSlot({ type, item, enhancementLevel = 0, onEquip, onUne
         <ItemTooltip
           item={item}
           isEquipped={true}
+          enhancementLevel={enhancementLevel}
           onUnequip={onUnequip}
         >
           <div className="w-full h-full cursor-pointer group flex items-center justify-center overflow-hidden rounded-md">

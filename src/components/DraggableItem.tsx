@@ -41,6 +41,7 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, inventor
       <ItemTooltip
         item={item}
         isEquipped={isEquipped}
+        enhancementLevel={enhancementLevel}
         inventoryId={inventoryId}
         onEquip={onEquip}
         onUnequip={onUnequip}
@@ -96,6 +97,7 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, inventor
     <ItemTooltip
       item={item}
       isEquipped={isEquipped}
+      enhancementLevel={enhancementLevel}
       inventoryId={inventoryId}
       onEquip={onEquip}
       onUnequip={onUnequip}

@@ -4,10 +4,15 @@ import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Item } from '@/types/item';
 import { EquipmentSlotType } from '@prisma/client';
+import { getItemVisual, getItemTypeLabel } from '@/lib/itemVisuals';
+import { resolveImageUrl } from '@/lib/imageUrl';
+import ItemCardBackdrop from '@/components/store/ItemCardBackdrop';
 
 interface ItemTooltipProps {
   item: Item;
   isEquipped?: boolean;
+  /** Nível de aprimoramento da instância (+1, +2, ...). 0 = sem aprimoramento. */
+  enhancementLevel?: number;
   /** Id da linha de inventário (CharacterInventory). Necessário para aprimorar. */
   inventoryId?: string;
   onEquip?: (itemId: string, slotType: EquipmentSlotType) => void;
@@ -18,7 +23,7 @@ interface ItemTooltipProps {
   children: React.ReactNode;
 }
 
-export function ItemTooltip({ item, isEquipped, inventoryId, onEquip, onUnequip, onConsume, onEnhance, characterId, children }: ItemTooltipProps) {
+export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryId, onEquip, onUnequip, onConsume, onEnhance, characterId, children }: ItemTooltipProps) {
   const [showTooltip, setShowTooltip] = useState(false);
   const [coords, setCoords] = useState<{ top: number; left: number; placement: 'top' | 'bottom' }>({ top: 0, left: 0, placement: 'top' });
   const [mounted, setMounted] = useState(false);
@@ -29,21 +34,30 @@ export function ItemTooltip({ item, isEquipped, inventoryId, onEquip, onUnequip,
 
   useEffect(() => setMounted(true), []);
 
-  const TOOLTIP_WIDTH = 256; // w-64
+  const TOOLTIP_WIDTH = 288; // w-72
 
   // Posiciona o tooltip (via portal, position: fixed) a partir da posição do item,
-  // escapando de overflow/stacking contexts dos painéis ao redor.
+  // escapando de overflow/stacking contexts dos painéis ao redor. Mede a altura real
+  // do card e mantém tudo dentro da viewport (prefere acima, senão abaixo, com clamp).
   useLayoutEffect(() => {
     if (!showTooltip || !containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
+    const tipH = tooltipRef.current?.getBoundingClientRect().height ?? 360;
     const GAP = 8;
-    const centerX = rect.left + rect.width / 2;
-    let left = centerX - TOOLTIP_WIDTH / 2;
-    left = Math.max(8, Math.min(left, window.innerWidth - TOOLTIP_WIDTH - 8));
-    // Sem espaço suficiente acima → mostra abaixo do item.
-    const placeBelow = rect.top < 340;
-    const top = placeBelow ? rect.bottom + GAP : rect.top - GAP;
-    setCoords({ top, left, placement: placeBelow ? 'bottom' : 'top' });
+    const M = 8;
+
+    let left = rect.left + rect.width / 2 - TOOLTIP_WIDTH / 2;
+    left = Math.max(M, Math.min(left, window.innerWidth - TOOLTIP_WIDTH - M));
+
+    // Prefere acima do item; se não couber, mostra abaixo.
+    let top = rect.top - GAP - tipH;
+    if (top < M) top = rect.bottom + GAP;
+    // Garante que não ultrapasse o rodapé da viewport.
+    if (top + tipH > window.innerHeight - M) {
+      top = Math.max(M, window.innerHeight - M - tipH);
+    }
+
+    setCoords({ top, left, placement: 'bottom' });
   }, [showTooltip]);
 
   const getSlotTypeFromItemType = (itemType: string): EquipmentSlotType => {
@@ -144,6 +158,20 @@ export function ItemTooltip({ item, isEquipped, inventoryId, onEquip, onUnequip,
   // Aprimoramento só faz sentido para equipamentos que estão no inventário.
   const canEnhance = !!onEnhance && !!inventoryId && item.type !== 'CONSUMABLE';
 
+  // Identidade visual idêntica à da loja (cor de destaque, chips, cenário).
+  const visual = getItemVisual(item.type);
+  const itemImage = resolveImageUrl(item.image);
+  const showEnhancement = enhancementLevel > 0;
+  const isConsumable = item.type === 'CONSUMABLE';
+
+  // Estilo de botão da loja: gradiente da cor de destaque + sombra.
+  const buttonStyle = (hex: string, soft: string) => ({
+    background: `linear-gradient(90deg, ${hex}cc, ${hex}77)`,
+    boxShadow: `0 4px 20px ${soft}`,
+  });
+  const storeButtonClass =
+    'w-full px-4 py-2.5 rounded-xl font-black text-sm text-white transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed';
+
   const handleEnhanceClick = () => {
     if (onEnhance && inventoryId) onEnhance(inventoryId, item.name);
     setShowTooltip(false);
@@ -183,14 +211,6 @@ export function ItemTooltip({ item, isEquipped, inventoryId, onEquip, onUnequip,
     return stats;
   };
 
-  const getRarityColor = (level: number) => {
-    if (level >= 80) return 'border-orange-500 bg-orange-900/20'; // Legendary
-    if (level >= 60) return 'border-purple-500 bg-purple-900/20'; // Epic
-    if (level >= 40) return 'border-blue-500 bg-blue-900/20'; // Rare
-    if (level >= 20) return 'border-green-500 bg-green-900/20'; // Uncommon
-    return 'border-gray-500 bg-gray-900/20'; // Common
-  };
-
   return (
     <div
       ref={containerRef}
@@ -204,93 +224,105 @@ export function ItemTooltip({ item, isEquipped, inventoryId, onEquip, onUnequip,
       {showTooltip && mounted && createPortal(
         <div
           ref={tooltipRef}
-          className={`fixed w-64 p-4 border rounded-lg shadow-2xl backdrop-blur-sm ${getRarityColor(item.level)}`}
+          className="fixed w-72 rounded-2xl border-2 overflow-hidden shadow-2xl group"
           style={{
-            background: 'rgba(17, 24, 39, 0.98)',
+            borderColor: visual.accent + '55',
             top: coords.top,
             left: coords.left,
             zIndex: 9999,
-            transform: coords.placement === 'top' ? 'translateY(-100%)' : 'none',
           }}
           onMouseEnter={handleTooltipMouseEnter}
           onMouseLeave={handleTooltipMouseLeave}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Item Name with rarity color */}
-          <h3 className={`text-lg font-bold mb-2 ${
-            item.level >= 80 ? 'text-orange-400' :
-            item.level >= 60 ? 'text-purple-400' :
-            item.level >= 40 ? 'text-blue-400' :
-            item.level >= 20 ? 'text-green-400' :
-            'text-gray-300'
-          }`}>
-            {item.name}
-          </h3>
-          
-          {/* Item Level and Type */}
-          <div className="text-sm text-gray-300 mb-2 flex justify-between">
-            <span>Level {item.level}</span>
-            <span className="text-gray-400">{item.type}</span>
+          {/* Backdrop animado por categoria (igual à loja) */}
+          <div className="absolute inset-0">
+            <ItemCardBackdrop category={visual.category} />
           </div>
-          
-          {/* Item Description */}
-          {item.description && (
-            <p className="text-sm text-gray-400 mb-3 italic">{item.description}</p>
-          )}
-          
-          {/* Item Stats */}
-          {formatStats().length > 0 && (
-            <div className="mb-3">
-              <h4 className="text-sm font-semibold text-green-400 mb-1">Stats:</h4>
-              <div className="text-sm text-gray-300 space-y-1">
+          <div className="absolute inset-0 bg-black/45" />
+
+          {/* Conteúdo */}
+          <div className="relative p-4 flex flex-col">
+            {itemImage && (
+              <div className="w-full aspect-square relative mb-3 rounded-xl overflow-hidden bg-black/40 ring-1 ring-white/10">
+                <img
+                  src={itemImage}
+                  alt={item.name}
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+            )}
+
+            <h3 className="font-black text-lg mb-2 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">{item.name}</h3>
+
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <span className={`text-xs font-semibold px-2 py-1 rounded-full ${visual.chipBg} ${visual.chipText}`}>
+                {visual.emoji} {getItemTypeLabel(item.type)}
+              </span>
+              {item.level > 0 && (
+                <span className="text-xs font-semibold bg-amber-500/30 text-amber-300 px-2 py-1 rounded-full">
+                  Lv.{item.level}
+                </span>
+              )}
+              {showEnhancement && (
+                <span className="text-xs font-black bg-yellow-500/30 text-yellow-200 px-2 py-1 rounded-full">
+                  +{enhancementLevel}
+                </span>
+              )}
+            </div>
+
+            {item.description && (
+              <p className="text-sm text-white/60 mb-3 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">{item.description}</p>
+            )}
+
+            {/* Stats */}
+            {formatStats().length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-3">
                 {formatStats().map((stat, index) => (
-                  <div key={index} className="text-green-300">{stat}</div>
+                  <span key={index} className="text-xs font-semibold bg-emerald-500/20 text-emerald-300 px-2 py-1 rounded-full">
+                    {stat}
+                  </span>
                 ))}
               </div>
-            </div>
-          )}
-          
-          {/* Special Effect */}
-          {item.stats.specialEffect && (
-            <div className="mb-3">
-              <h4 className="text-sm font-semibold text-purple-400 mb-1">Special Effect:</h4>
-              <p className="text-sm text-purple-300">{item.stats.specialEffect}</p>
-            </div>
-          )}
-          
-          {/* Gold Value */}
-          <div className="mb-3 text-sm text-yellow-400">
-            💰 {item.goldPrice} gold
-          </div>
-          
-          {/* Action Button */}
-          <button
-            onClick={handleAction}
-            className={`w-full py-2 px-4 rounded font-semibold text-sm transition-all duration-200 ${
-              item.type === 'CONSUMABLE'
-                ? 'bg-blue-600 hover:bg-blue-700 text-white border border-blue-500 hover:border-blue-400'
-                : isEquipped
-                ? 'bg-red-600 hover:bg-red-700 text-white border border-red-500 hover:border-red-400'
-                : 'bg-green-600 hover:bg-green-700 text-white border border-green-500 hover:border-green-400'
-            } shadow-lg hover:shadow-xl transform hover:scale-105`}
-          >
-            {item.type === 'CONSUMABLE'
-              ? '🧪 Consumir'
-              : isEquipped
-              ? '⚔️ Desequipar'
-              : '🛡️ Equipar'
-            }
-          </button>
+            )}
 
-          {/* Aprimorar (apenas equipamentos no inventário) */}
-          {canEnhance && (
-            <button
-              onClick={handleEnhanceClick}
-              className="w-full mt-2 py-2 px-4 rounded font-semibold text-sm transition-all duration-200 bg-amber-600 hover:bg-amber-700 text-white border border-amber-500 hover:border-amber-400 shadow-lg hover:shadow-xl transform hover:scale-105"
-            >
-              ⚒️ Aprimorar
-            </button>
-          )}
+            {/* Special Effect */}
+            {item.stats.specialEffect && (
+              <p className="text-sm text-purple-300 mb-3 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">✨ {item.stats.specialEffect}</p>
+            )}
+
+            <div className="text-base font-semibold text-amber-400 mb-3 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
+              💰 {item.goldPrice} gold
+            </div>
+
+            {/* Botões — mesmo estilo da loja */}
+            <div className="mt-auto flex flex-col gap-2">
+              <button
+                onClick={handleAction}
+                className={storeButtonClass}
+                style={
+                  isConsumable
+                    ? buttonStyle('#22c55e', 'rgba(34,197,94,0.35)')
+                    : isEquipped
+                    ? buttonStyle('#ef4444', 'rgba(239,68,68,0.35)')
+                    : buttonStyle(visual.accent, visual.accentSoft)
+                }
+              >
+                {isConsumable ? '🧪 Consumir' : isEquipped ? '⚔️ Desequipar' : '🛡️ Equipar'}
+              </button>
+
+              {canEnhance && (
+                <button
+                  onClick={handleEnhanceClick}
+                  className={storeButtonClass}
+                  style={buttonStyle('#f59e0b', 'rgba(245,158,11,0.35)')}
+                >
+                  ⚒️ Aprimorar
+                </button>
+              )}
+            </div>
+          </div>
         </div>,
         document.body
       )}

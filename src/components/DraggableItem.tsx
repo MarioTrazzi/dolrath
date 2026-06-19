@@ -6,6 +6,7 @@ import { Item } from '@/types/item';
 import { ItemTooltip } from './ItemTooltip';
 import { EquipmentSlotType } from '@prisma/client';
 import { resolveImageUrl } from '@/lib/imageUrl';
+import { getLevelLabel } from '@/lib/enhancementSystem';
 
 interface DraggableItemProps {
   item: Item;
@@ -86,7 +87,7 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, inventor
                 color: '#f1d79a', textShadow: '0 1px 2px #000',
               }}
             >
-              +{enhancementLevel}
+              {getLevelLabel(enhancementLevel)}
             </span>
           )}
           {isEquipped && (
@@ -134,7 +135,7 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, inventor
         </div>
         {showEnhancement && (
           <div className="absolute bottom-1 right-1 text-xs font-bold text-[#f1d79a] bg-black/60 px-1 rounded">
-            +{enhancementLevel}
+            {getLevelLabel(enhancementLevel)}
           </div>
         )}
         {isEquipped && (

@@ -8,6 +8,7 @@ import { Item } from '@/types/item';
 import { EquipmentSlotType } from '@prisma/client';
 import { useRef } from 'react';
 import { resolveImageUrl } from '@/lib/imageUrl';
+import { getLevelLabel } from '@/lib/enhancementSystem';
 
 interface EquipmentSlotProps {
   type: EquipmentSlotType;
@@ -123,7 +124,7 @@ export function EquipmentSlot({ type, item, enhancementLevel = 0, onEquip, onUne
                     fontWeight: 700, padding: '0 3px', lineHeight: '13px',
                   }}
                 >
-                  +{enhancementLevel}
+                  {getLevelLabel(enhancementLevel)}
                 </span>
               )}
             </div>
@@ -165,7 +166,7 @@ export function EquipmentSlot({ type, item, enhancementLevel = 0, onEquip, onUne
             )}
             {showEnhancement && (
               <div className="absolute bottom-1 right-1 text-xs font-bold text-[#f1d79a] bg-black/60 px-1 rounded">
-                +{enhancementLevel}
+                {getLevelLabel(enhancementLevel)}
               </div>
             )}
           </div>

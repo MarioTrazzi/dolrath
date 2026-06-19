@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import ItemIcon from '@/components/ItemIcon'
 import { AnimatedDie, MiniDie } from '@/components/battle/AnimatedDice'
 import { getTransformationGlow } from '@/lib/transformationSystem'
-import { applyEnhancementToStats } from '@/lib/enhancementSystem'
+import { applyEnhancementToStats, getLevelLabel } from '@/lib/enhancementSystem'
 import { formatItemStats } from '@/lib/itemStats'
 
 // ============================================================
@@ -216,7 +216,7 @@ function EquipSlot({ slot, item }: { slot: string; item: EquippedItem }) {
           className="absolute right-0 bottom-0 text-[9px] font-black leading-none text-amber-300 px-0.5"
           style={{ textShadow: '0 1px 2px #000, 0 0 3px #000' }}
         >
-          +{level}
+          {getLevelLabel(level)}
         </span>
       )}
 
@@ -227,7 +227,7 @@ function EquipSlot({ slot, item }: { slot: string; item: EquippedItem }) {
         >
           <div className="flex items-center gap-1 text-xs font-bold text-white">
             <span className="truncate">{item.name}</span>
-            {level > 0 && <span className="flex-shrink-0 text-[10px] font-black text-amber-300">+{level}</span>}
+            {level > 0 && <span className="flex-shrink-0 text-[10px] font-black text-amber-300">{getLevelLabel(level)}</span>}
           </div>
           {stats.length > 0 && (
             <div className="mt-1 flex flex-wrap gap-1">

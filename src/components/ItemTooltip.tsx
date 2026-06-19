@@ -6,7 +6,7 @@ import { Item } from '@/types/item';
 import { EquipmentSlotType } from '@prisma/client';
 import { getItemVisual, getItemTypeLabel } from '@/lib/itemVisuals';
 import { resolveImageUrl } from '@/lib/imageUrl';
-import { applyEnhancementToStats } from '@/lib/enhancementSystem';
+import { applyEnhancementToStats, getLevelLabel } from '@/lib/enhancementSystem';
 import { formatItemStats } from '@/lib/itemStats';
 import ItemCardBackdrop from '@/components/store/ItemCardBackdrop';
 
@@ -272,7 +272,7 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryI
               )}
               {showEnhancement && (
                 <span className="text-xs font-black bg-yellow-500/30 text-yellow-200 px-2 py-1 rounded-full">
-                  +{enhancementLevel}
+                  {getLevelLabel(enhancementLevel)}
                 </span>
               )}
             </div>

@@ -95,6 +95,8 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
   const getQty = (id: string) => Math.max(1, quantities[id] ?? 1);
   const setQty = (id: string, value: number) =>
     setQuantities((prev) => ({ ...prev, [id]: Math.max(1, Math.min(99, Math.floor(value || 1))) }));
+  // Sinaliza à Bancada de Reparo que o inventário do personagem mudou (compra/transferência).
+  const [inventoryRefreshKey, setInventoryRefreshKey] = useState(0);
   // Filtro por raça e level do personagem ativo (ligado por padrão).
   const [showAll, setShowAll] = useState(false);
 
@@ -429,10 +431,35 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
         purchased++;
       }
 
+      // O item cai no inventário global. Para já poder equipar/reparar, movemos
+      // automaticamente as unidades compradas para o personagem selecionado.
+      let tail = '';
+      if (selectedCharacter && purchased > 0) {
+        try {
+          toast.loading('Enviando ao personagem…', { id: progressId });
+          const tRes = await fetch(`/api/character/${selectedCharacter}/transfer-item`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ itemId, quantity: purchased }),
+          });
+          if (tRes.ok) {
+            tail = ' e enviado(s) ao personagem';
+            setInventoryRefreshKey((k) => k + 1);
+          } else {
+            const err = await tRes.json().catch(() => ({}));
+            tail = ` (no inventário global — transferência falhou: ${err?.error || 'erro'})`;
+          }
+        } catch {
+          tail = ' (no inventário global — falha ao transferir ao personagem)';
+        }
+      } else if (purchased > 0) {
+        tail = ' (no inventário global — selecione um personagem para usar)';
+      }
+
       fetchUserInventory();
       toast.success(
-        `🛒 ${purchased} item(ns) comprado(s) e mintado(s)! (${item.goldPrice * purchased} GOLD)`,
-        { id: progressId, duration: 3000 }
+        `🛒 ${purchased} item(ns) comprado(s)${tail}! (${item.goldPrice * purchased} GOLD)`,
+        { id: progressId, duration: 3500 }
       );
     } catch (error) {
       console.error('Error purchasing item:', error);
@@ -558,7 +585,11 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
         {/* Bancada de reparo (somente o ferreiro) */}
         {config.hasRepairBench && (
           <div className="mb-8">
-            <RepairBench characters={characters} />
+            <RepairBench
+              characters={characters}
+              characterId={selectedCharacter || undefined}
+              refreshSignal={inventoryRefreshKey}
+            />
           </div>
         )}
 

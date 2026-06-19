@@ -30,19 +30,32 @@ interface InventoryItem {
   };
 }
 
-export default function RepairBench({ characters }: { characters: Character[] }) {
-  const [selectedCharacterId, setSelectedCharacterId] = useState<string>('');
+export default function RepairBench({
+  characters,
+  characterId,
+  refreshSignal,
+}: {
+  characters: Character[];
+  /** Personagem controlado pela loja. Se ausente, a bancada gerencia o próprio. */
+  characterId?: string;
+  /** Muda quando o inventário do personagem foi alterado fora da bancada (ex.: compra). */
+  refreshSignal?: number;
+}) {
+  const [internalCharacterId, setInternalCharacterId] = useState<string>('');
+  // Modo controlado: usa o personagem da loja; senão, o estado interno.
+  const controlled = characterId != null;
+  const selectedCharacterId = controlled ? characterId : internalCharacterId;
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [selectedInventoryId, setSelectedInventoryId] = useState<string>('');
   const [busy, setBusy] = useState(false);
   const [loadingInv, setLoadingInv] = useState(false);
 
-  // Seleciona o primeiro personagem assim que a lista chega.
+  // Seleciona o primeiro personagem assim que a lista chega (apenas modo interno).
   useEffect(() => {
-    if (!selectedCharacterId && characters.length > 0) {
-      setSelectedCharacterId(characters[0].id);
+    if (!controlled && !internalCharacterId && characters.length > 0) {
+      setInternalCharacterId(characters[0].id);
     }
-  }, [characters, selectedCharacterId]);
+  }, [controlled, characters, internalCharacterId]);
 
   const fetchInventory = useCallback(async (characterId: string) => {
     setLoadingInv(true);
@@ -63,7 +76,9 @@ export default function RepairBench({ characters }: { characters: Character[] })
 
   useEffect(() => {
     if (selectedCharacterId) fetchInventory(selectedCharacterId);
-  }, [selectedCharacterId, fetchInventory]);
+    // refreshSignal força recarregar após uma compra/transferência na loja.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCharacterId, refreshSignal, fetchInventory]);
 
   // Equipamentos do personagem (consumíveis não entram na forja).
   const equipment = useMemo(
@@ -151,10 +166,10 @@ export default function RepairBench({ characters }: { characters: Character[] })
         <h2 className="text-2xl font-black text-amber-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
           🔧 Bancada de Reparo
         </h2>
-        {characters.length > 1 && (
+        {!controlled && characters.length > 1 && (
           <select
             value={selectedCharacterId}
-            onChange={(e) => setSelectedCharacterId(e.target.value)}
+            onChange={(e) => setInternalCharacterId(e.target.value)}
             className="px-3 py-2 bg-black/40 border border-amber-500/30 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
           >
             {characters.map((c) => (

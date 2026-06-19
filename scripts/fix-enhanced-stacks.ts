@@ -5,9 +5,9 @@
 // > 0), deixando a linha aprimorada com quantity > 1 — quando deveria ser sempre
 // quantity 1 (uma instância única por linha).
 //
-// Este script separa essas linhas: mantém 1 instância aprimorada e move o
-// excedente para a pilha base (nível 0) do mesmo item (incrementa a existente ou
-// cria uma nova com durabilidade padrão de cópia recém-comprada).
+// Este script separa essas linhas: mantém 1 instância aprimorada e transforma o
+// excedente em cópias base (nível 0) — UMA LINHA POR CÓPIA (quantity 1), porque o
+// inventário do personagem não deve agrupar (cada item ocupa seu próprio slot).
 //
 // Dry-run por padrão. Para aplicar de fato: --apply
 //   DATABASE_URL=... npx tsx scripts/fix-enhanced-stacks.ts                  # dry-run (personagem "Arkantos")
@@ -62,7 +62,7 @@ async function main() {
       const excess = row.quantity - 1
       console.log(
         `   • ${row.item.name} +${row.enhancementLevel}: quantity ${row.quantity} → 1; ` +
-          `movendo ${excess} cópia(s) base (nível 0)`
+          `criando ${excess} slot(s) base separado(s) (nível 0, quantity 1 cada)`
       )
       rowsFixed++
       copiesMoved += excess
@@ -76,29 +76,16 @@ async function main() {
           data: { quantity: 1 },
         })
 
-        // 2. Excedente vai para a pilha base (nível 0) do mesmo item.
-        const baseStack = await tx.characterInventory.findFirst({
-          where: {
-            characterId: character.id,
-            itemId: row.itemId,
-            enhancementLevel: 0,
-          },
-        })
-
-        if (baseStack) {
-          await tx.characterInventory.update({
-            where: { id: baseStack.id },
-            data: { quantity: { increment: excess } },
-          })
-        } else {
+        // 2. Cada cópia excedente vira sua própria linha (slot), pois o
+        //    inventário do personagem não agrupa. durability/maxDurability
+        //    ficam no padrão do schema (100/100), como cópia recém-comprada.
+        for (let i = 0; i < excess; i++) {
           await tx.characterInventory.create({
             data: {
               characterId: character.id,
               itemId: row.itemId,
-              quantity: excess,
+              quantity: 1,
               enhancementLevel: 0,
-              // durability/maxDurability ficam no padrão do schema (100/100),
-              // equivalente a uma cópia base recém-comprada.
             },
           })
         }

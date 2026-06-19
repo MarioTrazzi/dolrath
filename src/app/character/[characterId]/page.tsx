@@ -896,7 +896,7 @@ export default function CharacterDetailsPage() {
             <div style={{ padding: '4px 22px 10px', borderTop: '1px solid #2a323b' }}>
               {[
                 { icon: <Sword size={18} style={{ color: '#c98a6a' }} />, label: 'Ataque (AD)', base: stats.base.str, equip: stats.equipment.str + (stats.total.bonusDamage || 0), mult: activeFormMods?.attack },
-                { icon: <Zap size={18} style={{ color: '#b06ae0' }} />, label: 'Poder Mágico (AP)', base: stats.base.int, equip: 0, mult: activeFormMods?.intelligence },
+                { icon: <Zap size={18} style={{ color: '#b06ae0' }} />, label: 'Poder Mágico (AP)', base: stats.base.int, equip: 0, mult: activeFormMods?.attack },
                 { icon: <Shield size={18} style={{ color: '#6aa9d6' }} />, label: 'Defesa (DP)', base: stats.base.def, equip: stats.equipment.def, mult: activeFormMods?.defense },
               ].map((row, i, arr) => {
                 const transformedBase = activeFormMods && row.mult ? Math.round(row.base * row.mult) : row.base;

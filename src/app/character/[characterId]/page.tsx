@@ -869,17 +869,18 @@ export default function CharacterDetailsPage() {
               ].map((a) => {
                 const rawDelta = activeFormMods && a.mult ? a.base * a.mult - a.base : 0;
                 const delta = a.isPercent ? rawDelta : Math.round(rawDelta);
+                const total = a.base + delta;
                 const positive = delta > 0;
                 return (
                   <div key={a.label} className="flex flex-col items-center" style={{ gap: 3 }}>
                     {a.icon}
                     <div className="flex items-baseline" style={{ gap: 4 }}>
                       <span style={{ fontSize: 14, fontWeight: 700, color: '#d7d2c4' }}>
-                        {a.isPercent ? `${a.base.toFixed(1)}%` : a.base}
+                        {a.isPercent ? `${total.toFixed(1)}%` : total}
                       </span>
                       {delta !== 0 && (
                         <span style={{ fontSize: 11, fontWeight: 700, color: positive ? '#86efac' : '#fca5a5' }}>
-                          {positive ? '+' : ''}{a.isPercent ? delta.toFixed(1) : delta}
+                          ({positive ? '+' : ''}{a.isPercent ? delta.toFixed(1) : delta})
                         </span>
                       )}
                     </div>

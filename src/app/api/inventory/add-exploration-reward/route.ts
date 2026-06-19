@@ -122,11 +122,13 @@ export async function POST(req: Request) {
           }
         }
 
-        // Adicionar ao inventário do personagem
+        // Adicionar ao inventário do personagem — empilha só na pilha base
+        // (nível 0); itens aprimorados são instâncias únicas e não empilham.
         const existingInventoryItem = await tx.characterInventory.findFirst({
           where: {
             characterId: characterId,
-            itemId: existingItem.id
+            itemId: existingItem.id,
+            enhancementLevel: 0
           }
         })
 

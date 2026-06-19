@@ -59,11 +59,13 @@ export async function POST(
       },
     });
 
-    // Verificar se já tem o item (para não contar duplicatas)
+    // Verificar se já tem uma pilha base (nível 0) do item — só essa empilha.
+    // Itens aprimorados (nível > 0) são instâncias únicas e não contam aqui.
     const existingItem = await prisma.characterInventory.findFirst({
       where: {
         characterId: character.id,
         itemId: itemId,
+        enhancementLevel: 0,
       },
     });
 
@@ -98,11 +100,12 @@ export async function POST(
         });
       }
 
-      // Check if character already has this item
+      // Empilha somente na pilha base (nível 0); nunca num item aprimorado.
       const existingCharacterItem = await tx.characterInventory.findFirst({
         where: {
           characterId: character.id,
           itemId: itemId,
+          enhancementLevel: 0,
         },
       });
 

@@ -65,6 +65,7 @@ interface Character {
   name: string;
   class: string;
   race: string;
+  level?: number;
 }
 
 interface UserInventoryItem {
@@ -88,13 +89,15 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
   const [userInventory, setUserInventory] = useState<UserInventoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [itemsLoading, setItemsLoading] = useState(true);
-  // Filtro por raça do personagem ativo (ligado por padrão).
-  const [showAllRaces, setShowAllRaces] = useState(false);
+  // Filtro por raça e level do personagem ativo (ligado por padrão).
+  const [showAll, setShowAll] = useState(false);
 
-  const activeRace = useMemo(
-    () => characters.find((c) => c.id === selectedCharacter)?.race,
+  const activeCharacter = useMemo(
+    () => characters.find((c) => c.id === selectedCharacter),
     [characters, selectedCharacter]
   );
+  const activeRace = activeCharacter?.race;
+  const activeLevel = activeCharacter?.level;
   
   // Estados para busca e filtros
   const [searchQuery, setSearchQuery] = useState('');
@@ -144,19 +147,23 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
       // Filtro por loja (ferreiro = equipamento, alquimista = consumíveis)
       if (!config.showItem(item.type)) return false;
 
+      // Filtro por level do personagem: só mostra o que ele já pode usar/comprar
+      // (a menos que o usuário marque "ignorar raça e level").
+      const itemLevelValue = item.level || 1;
+      if (!showAll && activeLevel != null && itemLevelValue > activeLevel) return false;
+
       // Filtro de busca por nome
       const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
-      
+
       // Filtro de tipo
       const matchesType = selectedType === 'ALL' || item.type === selectedType;
-      
+
       // Filtro de preço
       const matchesPrice = item.goldPrice >= priceFilter.min && item.goldPrice <= priceFilter.max;
-      
-      // Filtro de level
-      const itemLevel = item.level || 1;
-      const matchesLevel = itemLevel >= levelFilter.min && itemLevel <= levelFilter.max;
-      
+
+      // Filtro de level (slider)
+      const matchesLevel = itemLevelValue >= levelFilter.min && itemLevelValue <= levelFilter.max;
+
       return matchesSearch && matchesType && matchesPrice && matchesLevel;
     });
 
@@ -183,7 +190,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
     });
 
     return filtered;
-  }, [items, searchQuery, selectedType, priceFilter, levelFilter, sortBy, sortOrder, config]);
+  }, [items, searchQuery, selectedType, priceFilter, levelFilter, sortBy, sortOrder, config, showAll, activeLevel]);
 
   useEffect(() => {
     fetchCharacters();
@@ -193,9 +200,9 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
   // Recarrega a vitrine sempre que o personagem ativo (ou o toggle) muda,
   // filtrando pela raça do personagem por padrão.
   useEffect(() => {
-    fetchItems(showAllRaces ? undefined : activeRace);
+    fetchItems(showAll ? undefined : activeRace);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeRace, showAllRaces]);
+  }, [activeRace, showAll]);
 
   const fetchItems = async (race?: string) => {
     setItemsLoading(true);
@@ -730,22 +737,26 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                 ))}
               </select>
 
-              {/* Toggle de filtro por raça */}
+              {/* Toggle de filtro por raça e level */}
               <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer select-none">
                 <input
                   type="checkbox"
-                  checked={showAllRaces}
-                  onChange={(e) => setShowAllRaces(e.target.checked)}
+                  checked={showAll}
+                  onChange={(e) => setShowAll(e.target.checked)}
                   className="accent-primary w-4 h-4"
                 />
-                Mostrar todos (ignorar raça)
+                Mostrar todos (ignorar raça e level)
               </label>
             </div>
 
-            {/* Indicador do filtro por raça ativo */}
-            {activeRace && !showAllRaces && (
+            {/* Indicador do filtro por raça e level ativo */}
+            {activeRace && !showAll && (
               <div className="mt-2 inline-flex items-center gap-2 text-xs bg-primary/15 border border-primary/25 text-primary px-3 py-1.5 rounded-full">
-                🛡️ Mostrando só o que <span className="font-semibold capitalize">{activeRace}</span> pode usar
+                🛡️ Mostrando só o que <span className="font-semibold capitalize">{activeRace}</span>
+                {activeLevel != null && (
+                  <> de até <span className="font-semibold">level {activeLevel}</span></>
+                )}{' '}
+                pode comprar
               </div>
             )}
           </div>

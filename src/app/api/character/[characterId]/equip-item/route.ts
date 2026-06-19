@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { EquipmentSlotType } from '@prisma/client'
 import { recordEquipmentChange } from '@/lib/characterHistory'
 import { canRaceEquip, ItemTypeStr, RaceId } from '@/lib/itemCatalog'
+import { restoreItemToInventory, removeOneFromInventory } from '@/lib/inventoryMutations'
 
 export async function POST(
   request: NextRequest,
@@ -86,68 +87,54 @@ export async function POST(
       return NextResponse.json({ error: `🧬 ${raceCheck.reason}` }, { status: 400 });
     }
 
-    // Para anéis, verificar qual slot está disponível
+    // Determina o slot final (anéis podem cair em RING_1 ou RING_2).
     let finalSlotType = slotType as EquipmentSlotType;
     if (slotType === 'RING_1') {
-      // Verificar se RING_1 está ocupado, se sim, usar RING_2
       const ring1Equipment = await prisma.characterEquipment.findFirst({
-        where: {
-          characterId: params.characterId,
-          slot: 'RING_1',
-        },
+        where: { characterId: params.characterId, slot: 'RING_1' },
       });
-      
       if (ring1Equipment) {
-        // RING_1 ocupado, verificar se RING_2 está livre
         const ring2Equipment = await prisma.characterEquipment.findFirst({
-          where: {
-            characterId: params.characterId,
-            slot: 'RING_2',
-          },
+          where: { characterId: params.characterId, slot: 'RING_2' },
         });
-        
-        if (ring2Equipment) {
-          // Ambos slots de anel estão ocupados, desequipar RING_1
-          await prisma.characterEquipment.delete({
-            where: {
-              id: ring1Equipment.id,
-            },
-          });
-          console.log('Removed existing ring from RING_1');
-        } else {
-          // RING_2 está livre, usar ele
+        // RING_2 livre → usa RING_2; ambos ocupados → troca o de RING_1.
+        if (!ring2Equipment) {
           finalSlotType = 'RING_2';
           console.log('Using RING_2 slot instead');
         }
       }
-    } else {
-      // Para outros tipos de equipamento, verificar se já existe um item equipado no slot
-      const existingEquipment = await prisma.characterEquipment.findFirst({
-        where: {
-          characterId: params.characterId,
-          slot: finalSlotType,
-        },
-      });
-
-      // Se existe um item equipado no slot, desequipar primeiro
-      if (existingEquipment) {
-        await prisma.characterEquipment.delete({
-          where: {
-            id: existingEquipment.id,
-          },
-        });
-        console.log(`Removed existing item from ${finalSlotType} slot`);
-      }
     }
 
-    // Equipar o novo item
-    const newEquipment = await prisma.characterEquipment.create({
-      data: {
-        characterId: params.characterId,
-        itemId: itemId,
-        slot: finalSlotType,
-        enhancementLevel: characterInventoryItem.enhancementLevel,
-      },
+    // Tudo que muda estado roda em transação: devolve item trocado ao inventário,
+    // remove o item equipado do inventário e cria o registro de equipamento.
+    const newEquipment = await prisma.$transaction(async (tx) => {
+      // Item atualmente equipado no slot final (se houver) volta para o inventário.
+      const existingEquipment = await tx.characterEquipment.findFirst({
+        where: { characterId: params.characterId, slot: finalSlotType },
+      });
+      if (existingEquipment) {
+        await tx.characterEquipment.delete({ where: { id: existingEquipment.id } });
+        await restoreItemToInventory(
+          tx,
+          params.characterId,
+          existingEquipment.itemId,
+          existingEquipment.enhancementLevel,
+        );
+        console.log(`Unequipped existing item from ${finalSlotType} back to inventory`);
+      }
+
+      // O item equipado sai do inventário.
+      await removeOneFromInventory(tx, characterInventoryItem.id);
+
+      // Cria o equipamento com o nível de aprimoramento da instância escolhida.
+      return tx.characterEquipment.create({
+        data: {
+          characterId: params.characterId,
+          itemId: itemId,
+          slot: finalSlotType,
+          enhancementLevel: characterInventoryItem.enhancementLevel,
+        },
+      });
     });
 
     console.log(`Item ${itemId} equipped in slot ${finalSlotType}`);

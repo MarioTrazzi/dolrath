@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Item } from '@/types/item';
 import { EquipmentSlotType } from '@prisma/client';
 
@@ -16,10 +17,31 @@ interface ItemTooltipProps {
 
 export function ItemTooltip({ item, isEquipped, onEquip, onUnequip, onConsume, characterId, children }: ItemTooltipProps) {
   const [showTooltip, setShowTooltip] = useState(false);
+  const [coords, setCoords] = useState<{ top: number; left: number; placement: 'top' | 'bottom' }>({ top: 0, left: 0, placement: 'top' });
+  const [mounted, setMounted] = useState(false);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<NodeJS.Timeout>();
   const hideTimeoutRef = useRef<NodeJS.Timeout>();
+
+  useEffect(() => setMounted(true), []);
+
+  const TOOLTIP_WIDTH = 256; // w-64
+
+  // Posiciona o tooltip (via portal, position: fixed) a partir da posição do item,
+  // escapando de overflow/stacking contexts dos painéis ao redor.
+  useLayoutEffect(() => {
+    if (!showTooltip || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const GAP = 8;
+    const centerX = rect.left + rect.width / 2;
+    let left = centerX - TOOLTIP_WIDTH / 2;
+    left = Math.max(8, Math.min(left, window.innerWidth - TOOLTIP_WIDTH - 8));
+    // Sem espaço suficiente acima → mostra abaixo do item.
+    const placeBelow = rect.top < 340;
+    const top = placeBelow ? rect.bottom + GAP : rect.top - GAP;
+    setCoords({ top, left, placement: placeBelow ? 'bottom' : 'top' });
+  }, [showTooltip]);
 
   const getSlotTypeFromItemType = (itemType: string): EquipmentSlotType => {
     switch (itemType) {
@@ -96,6 +118,26 @@ export function ItemTooltip({ item, isEquipped, onEquip, onUnequip, onConsume, c
     };
   }, []);
 
+  // Fecha o card ao clicar fora dele (quando aberto por clique).
+  useEffect(() => {
+    if (!showTooltip) return;
+    const onDocMouseDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (containerRef.current?.contains(target)) return;
+      if (tooltipRef.current?.contains(target)) return;
+      setShowTooltip(false);
+    };
+    document.addEventListener('mousedown', onDocMouseDown);
+    return () => document.removeEventListener('mousedown', onDocMouseDown);
+  }, [showTooltip]);
+
+  const handleClick = () => {
+    // Clicar abre/fecha o card de opções (alternativa ao drag and drop).
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+    setShowTooltip((prev) => !prev);
+  };
+
   const handleAction = () => {
     // Para itens consumíveis, consumir ao invés de equipar
     if (item.type === 'CONSUMABLE' && onConsume && characterId) {
@@ -139,31 +181,30 @@ export function ItemTooltip({ item, isEquipped, onEquip, onUnequip, onConsume, c
   };
 
   return (
-    <div 
+    <div
       ref={containerRef}
       className="relative"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onClick={handleClick}
     >
       {children}
-      
-      {showTooltip && (
-        <div 
+
+      {showTooltip && mounted && createPortal(
+        <div
           ref={tooltipRef}
-          className={`absolute z-50 w-64 p-4 border rounded-lg shadow-2xl backdrop-blur-sm ${getRarityColor(item.level)} 
-                     bottom-full left-1/2 transform -translate-x-1/2 mb-2`}
-          style={{ 
-            background: 'rgba(17, 24, 39, 0.98)'
+          className={`fixed w-64 p-4 border rounded-lg shadow-2xl backdrop-blur-sm ${getRarityColor(item.level)}`}
+          style={{
+            background: 'rgba(17, 24, 39, 0.98)',
+            top: coords.top,
+            left: coords.left,
+            zIndex: 9999,
+            transform: coords.placement === 'top' ? 'translateY(-100%)' : 'none',
           }}
           onMouseEnter={handleTooltipMouseEnter}
           onMouseLeave={handleTooltipMouseLeave}
+          onClick={(e) => e.stopPropagation()}
         >
-          {/* Pequena seta apontando para o item */}
-          <div 
-            className="absolute w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent border-t-gray-700
-                       top-full left-1/2 transform -translate-x-1/2"
-          />
-          
           {/* Item Name with rarity color */}
           <h3 className={`text-lg font-bold mb-2 ${
             item.level >= 80 ? 'text-orange-400' :
@@ -222,14 +263,15 @@ export function ItemTooltip({ item, isEquipped, onEquip, onUnequip, onConsume, c
                 : 'bg-green-600 hover:bg-green-700 text-white border border-green-500 hover:border-green-400'
             } shadow-lg hover:shadow-xl transform hover:scale-105`}
           >
-            {item.type === 'CONSUMABLE' 
-              ? '🧪 Consumir' 
-              : isEquipped 
-              ? '⚔️ Unequip' 
-              : '🛡️ Equip'
+            {item.type === 'CONSUMABLE'
+              ? '🧪 Consumir'
+              : isEquipped
+              ? '⚔️ Desequipar'
+              : '🛡️ Equipar'
             }
           </button>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

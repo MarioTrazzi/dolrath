@@ -257,12 +257,16 @@ export default function CharacterDetailsPage() {
 
         if (inventoryResponse.ok) {
           const inventoryData = await inventoryResponse.json();
-          console.log('Inventory data:', inventoryData);
-          setInventory(inventoryData.items || []);
+          setInventory(Array.isArray(inventoryData) ? inventoryData : (inventoryData.items || []));
         }
+        toast.success('🎒 Item desequipado!');
+      } else {
+        const error = await response.json().catch(() => ({}));
+        toast.error(`❌ ${error.error || 'Falha ao desequipar item'}`);
       }
     } catch (error) {
       console.error('Error unequipping item:', error);
+      toast.error('💥 Erro inesperado ao desequipar item');
     }
   };
 

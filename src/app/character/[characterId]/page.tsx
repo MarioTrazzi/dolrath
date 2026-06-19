@@ -7,6 +7,7 @@ import { Shield, Sword, Zap, Plus, Brain, Star, Search, Box, LayoutGrid, FileTex
 import { Character } from '@/types/game';
 import { EquipmentSlotType } from '@prisma/client';
 import { getRaceById, getClassById } from '@/lib/gameData';
+import { applyEnhancementToStats } from '@/lib/enhancementSystem';
 import Link from 'next/link';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -144,9 +145,9 @@ export default function CharacterDetailsPage() {
       int: (character.attributes as any)?.int || (character.baseStats as any)?.int || 0
     };
 
-    // Somar stats dos equipamentos
+    // Somar stats dos equipamentos (com o aprimoramento aplicado, igual ao combate)
     const equipmentStats = (character.equipment || []).reduce((total, equipment) => {
-      const itemStats = equipment.item.stats || {};
+      const itemStats = applyEnhancementToStats(equipment.item.stats, equipment.enhancementLevel || 0);
       return {
         hp: total.hp + (itemStats.hp || 0),
         maxHp: total.maxHp + (itemStats.hp || 0), // HP adicional aumenta o max também

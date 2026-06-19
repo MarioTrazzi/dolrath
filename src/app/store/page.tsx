@@ -11,6 +11,7 @@ import { decodeContractCustomErrorMessage, getWalletTxErrorMessage } from '@/lib
 import BazaarBackdrop from '@/components/store/BazaarBackdrop';
 import ItemCardBackdrop from '@/components/store/ItemCardBackdrop';
 import { getItemVisual, getItemTypeLabel } from '@/lib/itemVisuals';
+import { formatItemStats } from '@/lib/itemStats';
 
 interface StoreItem {
   id: string;
@@ -20,6 +21,7 @@ interface StoreItem {
   level?: number;
   image?: string;
   goldPrice: number;
+  stats?: Record<string, any>;
 }
 
 interface Character {
@@ -786,6 +788,17 @@ export default function Store() {
 
                     {item.description && (
                       <p className="text-sm text-white/60 mb-3 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">{item.description}</p>
+                    )}
+
+                    {/* Stats do item */}
+                    {formatItemStats(item.stats, item.type).length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mb-3">
+                        {formatItemStats(item.stats, item.type).map((stat, i) => (
+                          <span key={i} className="text-xs font-semibold bg-emerald-500/20 text-emerald-300 px-2 py-1 rounded-full">
+                            {stat}
+                          </span>
+                        ))}
+                      </div>
                     )}
 
                     <div className="text-base font-semibold text-amber-400 mb-3 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">

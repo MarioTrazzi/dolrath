@@ -6,6 +6,8 @@ import { Item } from '@/types/item';
 import { EquipmentSlotType } from '@prisma/client';
 import { getItemVisual, getItemTypeLabel } from '@/lib/itemVisuals';
 import { resolveImageUrl } from '@/lib/imageUrl';
+import { applyEnhancementToStats } from '@/lib/enhancementSystem';
+import { formatItemStats } from '@/lib/itemStats';
 import ItemCardBackdrop from '@/components/store/ItemCardBackdrop';
 
 interface ItemTooltipProps {
@@ -201,26 +203,9 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryI
     setShowTooltip(false); // Hide tooltip after action
   };
 
-  const formatStats = () => {
-    const stats = [];
-    
-    // Para itens consumíveis, mostrar efeitos de restauração
-    if (item.type === 'CONSUMABLE') {
-      if ((item.stats as any).staminaRestore) stats.push(`Restaura ${(item.stats as any).staminaRestore} Stamina`);
-      if ((item.stats as any).healthRestore) stats.push(`Restaura ${(item.stats as any).healthRestore} HP`);
-      if ((item.stats as any).manaRestore) stats.push(`Restaura ${(item.stats as any).manaRestore} MP`);
-    } else {
-      // Para equipamentos, mostrar stats normais
-      if (item.stats.str) stats.push(`STR: +${item.stats.str}`);
-      if (item.stats.def) stats.push(`DEF: +${item.stats.def}`);
-      if (item.stats.hp) stats.push(`HP: +${item.stats.hp}`);
-      if (item.stats.mp) stats.push(`MP: +${item.stats.mp}`);
-      if (item.stats.bonusDamage) stats.push(`Damage: +${item.stats.bonusDamage}`);
-      if (item.stats.bonusSpeed) stats.push(`Speed: +${item.stats.bonusSpeed}`);
-    }
-    
-    return stats;
-  };
+  // Stats já com o aprimoramento aplicado (mesma fórmula usada em combate).
+  const formatStats = () =>
+    formatItemStats(applyEnhancementToStats(item.stats, enhancementLevel), item.type);
 
   return (
     <div

@@ -2,7 +2,7 @@ import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { ItemType, ConsumableSubtype } from '@prisma/client'
-import { getCatalogItemByName, getConsumableByName } from '@/lib/itemCatalog'
+import { getCatalogItemByName, getConsumableByName, getIngredientByName } from '@/lib/itemCatalog'
 
 export async function POST(req: Request) {
   const session = await auth()
@@ -70,6 +70,7 @@ export async function POST(req: Request) {
         if (!existingItem) {
           const catalogItem = getCatalogItemByName(itemName)
           const consumable = catalogItem ? undefined : getConsumableByName(itemName)
+          const ingredient = catalogItem || consumable ? undefined : getIngredientByName(itemName)
           if (catalogItem) {
             existingItem = await tx.item.create({
               data: {
@@ -101,6 +102,24 @@ export async function POST(req: Request) {
                   ...consumable.stats,
                   rarity: consumable.rarity,
                   sellPrice: Math.floor(consumable.goldPrice * 0.6),
+                }
+              }
+            })
+          } else if (ingredient) {
+            // Ingrediente de alquimia: Item type=CONSUMABLE marcado com
+            // stats.kind='ingredient' (não usável em combate; só craft).
+            existingItem = await tx.item.create({
+              data: {
+                name: ingredient.name,
+                description: ingredient.description,
+                type: 'CONSUMABLE',
+                level: 1,
+                goldPrice: ingredient.goldValue,
+                stats: {
+                  kind: 'ingredient',
+                  rarity: ingredient.rarity,
+                  emoji: ingredient.emoji,
+                  sellPrice: Math.floor(ingredient.goldValue * 0.6),
                 }
               }
             })

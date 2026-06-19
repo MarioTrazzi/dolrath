@@ -559,6 +559,46 @@ export const CONSUMABLE_CATALOG: ConsumableItem[] = [
   },
 ];
 
+// === CATÁLOGO DE INGREDIENTES DE ALQUIMIA ===
+// Espólios de masmorra usados nas receitas de poção (src/lib/alchemy.ts).
+// NÃO são vendidos na loja (source != 'shop') e NÃO são usáveis em combate
+// (sem healAmount/manaAmount). No banco viram Item type=CONSUMABLE com
+// stats.kind='ingredient', distinguindo-os das poções de verdade.
+
+export interface AlchemyIngredient {
+  name: string;
+  description: string;
+  emoji: string;
+  rarity: Rarity;
+  /** Valor de venda ao alquimista (gold). */
+  goldValue: number;
+  /** Onde cai: chão de masmorra (comum/incomum) ou só chefe (raro/épico). */
+  source: 'dungeon' | 'dungeon_boss';
+}
+
+export const INGREDIENT_CATALOG: AlchemyIngredient[] = [
+  // ---------- COMUM (chão de masmorra, inclusive a Floresta) ----------
+  { name: 'Água Pura', description: 'Água de fonte límpida — solvente base de quase toda poção.', emoji: '💧', rarity: 'COMMON', goldValue: 6, source: 'dungeon' },
+  { name: 'Erva Medicinal', description: 'Folhas cicatrizantes que fecham feridas e acalmam o corpo.', emoji: '🌿', rarity: 'COMMON', goldValue: 8, source: 'dungeon' },
+  { name: 'Flor de Mana', description: 'Pétalas que guardam um resíduo de energia arcana.', emoji: '💠', rarity: 'COMMON', goldValue: 8, source: 'dungeon' },
+  { name: 'Raiz Vigorosa', description: 'Raiz fibrosa que devolve fôlego e disposição.', emoji: '🌱', rarity: 'COMMON', goldValue: 8, source: 'dungeon' },
+  { name: 'Cogumelo Lunar', description: 'Cresce só ao luar; base de toxinas e estimulantes.', emoji: '🍄', rarity: 'COMMON', goldValue: 10, source: 'dungeon' },
+
+  // ---------- INCOMUM (chão de masmorra, sorte melhor) ----------
+  { name: 'Seiva Ancestral', description: 'Resina de árvore milenar; concentra o poder curativo.', emoji: '🩸', rarity: 'UNCOMMON', goldValue: 22, source: 'dungeon' },
+  { name: 'Pó de Osso', description: 'Osso de monstro moído, reforça músculos e couraça.', emoji: '🦴', rarity: 'UNCOMMON', goldValue: 20, source: 'dungeon' },
+  { name: 'Cristal de Mana', description: 'Fragmento cristalino que amplifica efeitos mágicos.', emoji: '🔮', rarity: 'UNCOMMON', goldValue: 24, source: 'dungeon' },
+  { name: 'Glândula de Veneno', description: 'Extraída de criaturas peçonhentas; isola e neutraliza toxinas.', emoji: '🟢', rarity: 'UNCOMMON', goldValue: 22, source: 'dungeon' },
+
+  // ---------- RARO (só de chefe) ----------
+  { name: 'Sangue de Monstro', description: 'Sangue fervente de feras; combustível da fúria berserker.', emoji: '🟥', rarity: 'RARE', goldValue: 60, source: 'dungeon_boss' },
+  { name: 'Lótus Negra', description: 'Flor rara que só desabrocha em água apodrecida; potência suprema.', emoji: '🌸', rarity: 'RARE', goldValue: 65, source: 'dungeon_boss' },
+
+  // ---------- ÉPICO (só de chefe) ----------
+  { name: 'Pena de Fênix', description: 'Brasa viva que carrega a centelha da ressurreição.', emoji: '🪶', rarity: 'EPIC', goldValue: 160, source: 'dungeon_boss' },
+  { name: 'Essência Cristalina', description: 'Essência destilada de núcleos arcanos; cura impossível.', emoji: '✨', rarity: 'EPIC', goldValue: 170, source: 'dungeon_boss' },
+];
+
 // === ÍNDICES E HELPERS ===
 
 /** Slug estável do nome do item (sem acentos/apóstrofos) usado nos assets. */
@@ -592,6 +632,18 @@ export function getConsumableByName(name: string): ConsumableItem | undefined {
 /** Consumíveis que caem em masmorra (não os de loja). */
 export function getDungeonConsumables(): ConsumableItem[] {
   return CONSUMABLE_CATALOG.filter((c) => c.source === 'dungeon' || c.source === 'dungeon_boss');
+}
+
+const INGREDIENT_BY_NAME = new Map(INGREDIENT_CATALOG.map((i) => [i.name, i]));
+
+/** Ingrediente de alquimia pelo nome (para o loot e o craft resolverem o item). */
+export function getIngredientByName(name: string): AlchemyIngredient | undefined {
+  return INGREDIENT_BY_NAME.get(name);
+}
+
+/** Ingredientes de uma raridade (usado pelo sorteio de loot). */
+export function getIngredientsByRarity(rarity: Rarity): AlchemyIngredient[] {
+  return INGREDIENT_CATALOG.filter((i) => i.rarity === rarity);
 }
 
 export function getItemsForDungeon(dungeonId: string): CatalogItem[] {

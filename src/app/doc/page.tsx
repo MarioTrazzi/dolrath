@@ -18,7 +18,8 @@ import Link from 'next/link'
 import { races as RACES_SRC, pointSystem } from '@/lib/characterCreationData'
 import { CLASSES } from '@/lib/gameData'
 import { TRANSFORMATION_CONFIG } from '@/lib/transformationSystem'
-import { ITEM_CATALOG, CONSUMABLE_CATALOG, RARITY_DROP_WEIGHT, itemImagePath, type CatalogItem } from '@/lib/itemCatalog'
+import { ITEM_CATALOG, CONSUMABLE_CATALOG, INGREDIENT_CATALOG, RARITY_DROP_WEIGHT, getIngredientByName, itemImagePath, type CatalogItem } from '@/lib/itemCatalog'
+import { POTION_RECIPES } from '@/lib/alchemy'
 import { DUNGEON_LIST } from '@/lib/dungeonAdventures'
 import { MATERIALS } from '@/lib/dungeonData'
 import { getXPForNextLevel } from '@/lib/experienceSystem'
@@ -775,6 +776,42 @@ até +${SAFE_ENHANCE_MAX}: chance = 100% (seguro)`}</Formula>
                 />
                 <p className="mt-2 text-xs text-textsec">Falha no craft devolve metade dos materiais.</p>
               </Card>
+
+              {/* ⚗️ Alquimia & Poções — livro de receitas (fonte: alchemy.ts) */}
+              <h3 className="pt-4 text-lg font-semibold text-white">⚗️ Alquimia &amp; Poções</h3>
+              <p className="text-sm">
+                A <strong className="text-white">Alquimista</strong> destila poções a partir de <strong className="text-white">ingredientes</strong> obtidos como espólio nas masmorras.
+                Cada craft consome os ingredientes da receita + uma <strong className="text-white">taxa em gold</strong> (sempre dá certo).
+                Ingredientes <Pill rarity="COMMON" /> / <Pill rarity="UNCOMMON" /> caem no chão (já na Floresta); <Pill rarity="RARE" /> / <Pill rarity="EPIC" /> só de <strong className="text-white">chefe</strong>.
+                <Tag tone="ok"> fonte: alchemy.ts</Tag>
+              </p>
+
+              <h4 className="pt-2 text-sm font-semibold text-textsec uppercase tracking-wide">Ingredientes</h4>
+              <Table
+                head={['Ingrediente', 'Raridade', 'Onde dropa']}
+                rows={[...INGREDIENT_CATALOG]
+                  .sort((a, b) => RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity))
+                  .map((ing) => [
+                    <span key={ing.name} className={`font-semibold ${RARITY[ing.rarity].text}`}>{ing.emoji} {ing.name}</span>,
+                    <Pill key="r" rarity={ing.rarity} />,
+                    <span key="s" className="text-xs">{ing.source === 'dungeon_boss' ? '👑 Chefe' : '🗝️ Chão de masmorra'}</span>,
+                  ])}
+              />
+
+              <h4 className="pt-2 text-sm font-semibold text-textsec uppercase tracking-wide">Receitas</h4>
+              <Table
+                head={['Poção', 'Raridade', 'Ingredientes', 'Taxa']}
+                rows={[...POTION_RECIPES]
+                  .sort((a, b) => RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity))
+                  .map((r) => [
+                    <span key={r.id} className={`font-semibold ${RARITY[r.rarity].text}`}>🧪 {r.outputName}</span>,
+                    <Pill key="r" rarity={r.rarity} />,
+                    <span key="i" className="text-xs">
+                      {r.ingredients.map((ing) => `${getIngredientByName(ing.name)?.emoji ?? ''} ${ing.quantity}× ${ing.name}`).join(' · ')}
+                    </span>,
+                    <span key="c" className="text-amber-300">{r.goldCost} 🪙</span>,
+                  ])}
+              />
             </Section>
 
             {/* Stamina */}

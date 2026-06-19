@@ -6,7 +6,7 @@
 // ============================================================
 
 import { getDungeonDrops, getDungeonConsumables } from './itemCatalog'
-import { MATERIALS } from './dungeonData'
+import { pickIngredient } from './alchemy'
 import { STONE_NAMES } from './enhancementSystem'
 
 export type DungeonId = 'floresta' | 'caverna' | 'pantano' | 'ruinas'
@@ -434,7 +434,7 @@ export function luckTier(roll: number): LuckTier {
   return 'high'
 }
 
-export type LootKind = 'material' | 'consumable' | 'item' | 'stone'
+export type LootKind = 'ingredient' | 'consumable' | 'item' | 'stone'
 export interface LootDrop {
   name: string
   kind: LootKind
@@ -498,11 +498,14 @@ export function rollNodeLoot(dungeon: DungeonDef, roll: number, nodeKind: LootNo
     Math.floor((cfg.goldBase + Math.random() * cfg.goldVar) * mult.gold * dungeon.difficulty * (1 + level * 0.04))
   )
 
-  // material de craft
+  // ingrediente de alquimia (espólio de craft de poção).
+  // Nó normal → COMUM/INCOMUM; chefe → também RARO/ÉPICO.
   if (Math.random() < cfg.pMaterial * mult.all) {
-    const pool = MATERIALS.filter(m => rarityOf(m) === 'COMMON')
-    const m = pickFrom(pool.length ? pool : MATERIALS)
-    if (m) drops.push({ name: m.name, kind: 'material', rarity: rarityOf(m), emoji: '🪨' })
+    const rarities = isBoss
+      ? (['COMMON', 'UNCOMMON', 'RARE', 'EPIC'] as const)
+      : (['COMMON', 'UNCOMMON'] as const)
+    const ing = pickIngredient([...rarities])
+    if (ing) drops.push({ name: ing.name, kind: 'ingredient', rarity: rarityOf(ing), emoji: ing.emoji })
   }
   // consumível de masmorra
   if (Math.random() < cfg.pConsumable * mult.all) {
@@ -542,6 +545,15 @@ export function rollNodeLoot(dungeon: DungeonDef, roll: number, nodeKind: LootNo
       const pool = all.filter(i => rarityOf(i) === 'EPIC')
       const i = pickFrom(pool)
       if (i) drops.push({ name: i.name, kind: 'item', rarity: rarityOf(i), emoji: '📦' })
+    }
+    // poção raro/épica PRONTA (alternativa ao craft) — chance baixa, só boss
+    if (Math.random() < cfg.pItemRare * mult.all) {
+      const pool = getDungeonConsumables().filter(c => {
+        const r = rarityOf(c)
+        return r === 'RARE' || r === 'EPIC'
+      })
+      const c = pickFrom(pool)
+      if (c) drops.push({ name: c.name, kind: 'consumable', rarity: rarityOf(c), emoji: '🧪' })
     }
   }
 

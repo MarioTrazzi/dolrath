@@ -50,6 +50,8 @@ function recipe(
   return { id, outputName, rarity, ingredients, goldCost: feeFor(outputName) };
 }
 
+// TODA receita tem EXATAMENTE 3 elementos (somando as quantidades) — é o que
+// vai nos 3 vértices do Triângulo de Transmutação da Bancada de Alquimia.
 export const POTION_RECIPES: PotionRecipe[] = [
   // ---------- COMUNS (só ingredientes comuns) ----------
   recipe('vida_pequena', 'Poção de Vida Pequena', 'COMMON', [
@@ -67,13 +69,13 @@ export const POTION_RECIPES: PotionRecipe[] = [
   recipe('antidoto', 'Antídoto', 'COMMON', [
     { name: 'Erva Medicinal', quantity: 1 },
     { name: 'Glândula de Veneno', quantity: 1 },
+    { name: 'Água Pura', quantity: 1 },
   ]),
 
   // ---------- INCOMUNS (comum + incomum) ----------
   recipe('vida', 'Poção de Vida', 'UNCOMMON', [
     { name: 'Erva Medicinal', quantity: 2 },
     { name: 'Seiva Ancestral', quantity: 1 },
-    { name: 'Água Pura', quantity: 1 },
   ]),
   recipe('elixir_menor', 'Elixir Menor', 'UNCOMMON', [
     { name: 'Erva Medicinal', quantity: 1 },
@@ -92,11 +94,12 @@ export const POTION_RECIPES: PotionRecipe[] = [
   recipe('agilidade', 'Poção de Agilidade', 'UNCOMMON', [
     { name: 'Cogumelo Lunar', quantity: 1 },
     { name: 'Cristal de Mana', quantity: 1 },
+    { name: 'Flor de Mana', quantity: 1 },
   ]),
 
   // ---------- RARAS (precisam de ingrediente raro — só de chefe) ----------
   recipe('vida_grande', 'Poção de Vida Grande', 'RARE', [
-    { name: 'Erva Medicinal', quantity: 3 },
+    { name: 'Erva Medicinal', quantity: 1 },
     { name: 'Seiva Ancestral', quantity: 1 },
     { name: 'Lótus Negra', quantity: 1 },
   ]),
@@ -115,7 +118,6 @@ export const POTION_RECIPES: PotionRecipe[] = [
   recipe('cura_suprema', 'Poção de Cura Suprema', 'EPIC', [
     { name: 'Lótus Negra', quantity: 2 },
     { name: 'Essência Cristalina', quantity: 1 },
-    { name: 'Seiva Ancestral', quantity: 1 },
   ]),
   recipe('po_fenix', 'Pó de Fênix', 'EPIC', [
     { name: 'Pena de Fênix', quantity: 1 },
@@ -128,6 +130,25 @@ const RECIPE_BY_ID = new Map(POTION_RECIPES.map((r) => [r.id, r]));
 
 export function getRecipeById(id: string): PotionRecipe | undefined {
   return RECIPE_BY_ID.get(id);
+}
+
+/** Expande uma receita na lista ordenada dos seus 3 elementos (com repetição). */
+export function expandRecipe(recipe: PotionRecipe): string[] {
+  return recipe.ingredients
+    .flatMap((i) => Array.from({ length: i.quantity }, () => i.name))
+    .sort();
+}
+
+// Índice por combinação ordenada dos 3 elementos → receita.
+const RECIPE_BY_COMBO = new Map(POTION_RECIPES.map((r) => [expandRecipe(r).join('|'), r]));
+
+/**
+ * Acha a receita que casa com os 3 ingredientes colocados no triângulo
+ * (independe da ordem). Retorna undefined se não houver combinação válida.
+ */
+export function findRecipeByIngredients(names: string[]): PotionRecipe | undefined {
+  if (names.length !== 3) return undefined;
+  return RECIPE_BY_COMBO.get([...names].sort().join('|'));
 }
 
 const RECIPE_RARITY_ORDER: Rarity[] = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY'];

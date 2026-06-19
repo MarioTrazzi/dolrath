@@ -703,6 +703,7 @@ export default function CharacterDetailsPage() {
         {/* ====== Janelas estilo Black Desert (Equipamento + Inventário) ====== */}
         <style>{`
           .equip-figure-wrap { width: 100%; display: flex; justify-content: center; }
+          .equip-figure { flex: none; }
           @media (max-width: 579px) {
             .equip-figure-wrap { height: calc(396px * var(--equip-scale, 0.6)); overflow: hidden; }
             .equip-figure { transform: scale(var(--equip-scale, 0.6)); transform-origin: top center; }
@@ -711,7 +712,7 @@ export default function CharacterDetailsPage() {
             .equip-figure-wrap { --equip-scale: 0.5; }
           }
         `}</style>
-        <div className="w-full overflow-x-auto pb-2">
+        <div className="w-full overflow-x-auto pb-2 mt-8">
         <div className="flex flex-col items-center gap-4 xl:flex-row xl:items-stretch xl:justify-center xl:gap-2 xl:min-w-[1026px] mx-auto" style={{ fontFamily: "'Barlow', sans-serif" }}>
 
           {/* ============ PAINEL EQUIPAMENTO ============ */}

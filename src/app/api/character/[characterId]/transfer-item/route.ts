@@ -14,6 +14,7 @@ export async function POST(
 
   try {
     const { itemId, quantity = 1 } = await req.json();
+    const qty = Math.max(1, Math.floor(Number(quantity) || 1));
 
     if (!itemId) {
       return NextResponse.json(
@@ -37,6 +38,17 @@ export async function POST(
       );
     }
 
+    const item = await prisma.item.findUnique({
+      where: { id: itemId },
+      select: { type: true },
+    });
+    if (!item) {
+      return NextResponse.json({ error: 'Item not found' }, { status: 404 });
+    }
+    // Equipamento NÃO agrupa (cada peça ocupa seu próprio slot, para a economia
+    // de slots). Consumíveis empilham normalmente.
+    const isConsumable = item.type === 'CONSUMABLE';
+
     // Check if user has the item in their global inventory
     const userInventoryItem = await prisma.userInventory.findFirst({
       where: {
@@ -45,98 +57,72 @@ export async function POST(
       },
     });
 
-    if (!userInventoryItem || userInventoryItem.quantity < quantity) {
+    if (!userInventoryItem || userInventoryItem.quantity < qty) {
       return NextResponse.json(
         { error: 'Not enough items in user inventory' },
         { status: 400 }
       );
     }
 
-    // Verificar se o personagem tem slots suficientes no inventário
+    // Verificar se o personagem tem slots suficientes no inventário.
     const currentInventoryCount = await prisma.characterInventory.count({
       where: {
         characterId: character.id,
       },
     });
 
-    // Verificar se já tem uma pilha base (nível 0) do item — só essa empilha.
-    // Itens aprimorados (nível > 0) são instâncias únicas e não contam aqui.
-    const existingItem = await prisma.characterInventory.findFirst({
-      where: {
-        characterId: character.id,
-        itemId: itemId,
-        enhancementLevel: 0,
-      },
-    });
+    // Consumível empilha numa pilha existente (≤ 1 slot novo); equipamento
+    // precisa de 1 slot por unidade.
+    const existingConsumable = isConsumable
+      ? await prisma.characterInventory.findFirst({
+          where: { characterId: character.id, itemId, enhancementLevel: 0 },
+        })
+      : null;
+    const slotsNeeded = isConsumable ? (existingConsumable ? 0 : 1) : qty;
 
-    // Se não tem o item e está no limite de slots
-    if (!existingItem && currentInventoryCount >= character.inventorySlots) {
+    if (currentInventoryCount + slotsNeeded > character.inventorySlots) {
+      const free = Math.max(0, character.inventorySlots - currentInventoryCount);
       return NextResponse.json({
-        error: `Inventário cheio! Você tem ${character.inventorySlots} slots. Expanda seus slots ou mova itens para o inventário global.`
+        error: `Inventário cheio! Precisa de ${slotsNeeded} slot(s) livre(s), mas só há ${free}. Expanda seus slots ou mova itens para o inventário global.`
       }, { status: 400 });
     }
 
     // Start transaction to transfer items
     const result = await prisma.$transaction(async (tx) => {
       // Remove item from user inventory
-      if (userInventoryItem.quantity === quantity) {
-        // Delete the record if transferring all items
-        await tx.userInventory.delete({
-          where: {
-            id: userInventoryItem.id,
-          },
-        });
+      if (userInventoryItem.quantity === qty) {
+        await tx.userInventory.delete({ where: { id: userInventoryItem.id } });
       } else {
-        // Decrease quantity
         await tx.userInventory.update({
-          where: {
-            id: userInventoryItem.id,
-          },
-          data: {
-            quantity: {
-              decrement: quantity,
-            },
-          },
+          where: { id: userInventoryItem.id },
+          data: { quantity: { decrement: qty } },
         });
       }
 
-      // Empilha somente na pilha base (nível 0); nunca num item aprimorado.
-      const existingCharacterItem = await tx.characterInventory.findFirst({
-        where: {
-          characterId: character.id,
-          itemId: itemId,
-          enhancementLevel: 0,
-        },
-      });
-
-      if (existingCharacterItem) {
-        // Update quantity if character already has the item
-        return await tx.characterInventory.update({
-          where: {
-            id: existingCharacterItem.id,
-          },
-          data: {
-            quantity: {
-              increment: quantity,
-            },
-          },
-          include: {
-            item: true,
-          },
-        });
-      } else {
-        // Add new item to character's inventory
-        return await tx.characterInventory.create({
-          data: {
-            characterId: character.id,
-            itemId: itemId,
-            quantity: quantity,
-          },
-          include: {
-            item: true,
-          },
+      if (isConsumable) {
+        // Consumível: empilha numa única linha.
+        if (existingConsumable) {
+          return tx.characterInventory.update({
+            where: { id: existingConsumable.id },
+            data: { quantity: { increment: qty } },
+            include: { item: true },
+          });
+        }
+        return tx.characterInventory.create({
+          data: { characterId: character.id, itemId, quantity: qty },
+          include: { item: true },
         });
       }
+
+      // Equipamento: cria uma linha (slot) por unidade — não agrupa.
+      let last = null;
+      for (let i = 0; i < qty; i++) {
+        last = await tx.characterInventory.create({
+          data: { characterId: character.id, itemId, quantity: 1 },
+          include: { item: true },
+        });
+      }
+      return last;
     });
 
     return NextResponse.json(result);

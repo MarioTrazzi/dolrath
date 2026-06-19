@@ -94,6 +94,20 @@ export default function RepairBench({
     [inventory]
   );
 
+  // O inventário do personagem não agrupa (cada peça é uma linha), mas a bancada
+  // PODE agrupar visualmente instâncias idênticas (mesmo item, aprimoramento e
+  // durabilidade) num único slot com contador, pra não poluir a forja.
+  const displayGroups = useMemo(() => {
+    const map = new Map<string, InventoryItem[]>();
+    for (const inv of equipment) {
+      const key = `${inv.itemId}:${inv.enhancementLevel}:${inv.durability}:${inv.maxDurability}`;
+      const arr = map.get(key);
+      if (arr) arr.push(inv);
+      else map.set(key, [inv]);
+    }
+    return Array.from(map.values()).map((rows) => ({ rep: rows[0], rows, count: rows.length }));
+  }, [equipment]);
+
   // Mantém uma seleção válida. Qualquer equipamento pode ser selecionado (para
   // reparar e/ou vender); ao perder a seleção, prioriza um item danificado.
   useEffect(() => {
@@ -111,6 +125,13 @@ export default function RepairBench({
     () => inventory.find((inv) => inv.id === selectedInventoryId) || null,
     [inventory, selectedInventoryId]
   );
+
+  // Grupo de exibição da peça selecionada (instâncias idênticas), para vender em lote.
+  const selectedGroup = useMemo(
+    () => displayGroups.find((g) => g.rows.some((r) => r.id === selectedInventoryId)) || null,
+    [displayGroups, selectedInventoryId]
+  );
+  const selectedCount = selectedGroup?.count ?? (selected ? 1 : 0);
 
   // Cópias base (nível 0) disponíveis do mesmo item, excluindo a peça selecionada.
   const copiesAvailable = useMemo(() => {
@@ -161,27 +182,35 @@ export default function RepairBench({
   // Venda ao ferreiro por metade do preço (burn off-chain).
   const sellUnitPrice = selected ? Math.max(0, Math.floor((selected.item.goldPrice ?? 0) / 2)) : 0;
 
-  const handleSell = async (quantity: number) => {
-    if (!selected || !selectedCharacterId) return;
-    const qty = Math.max(1, Math.min(selected.quantity, quantity));
+  // Cada peça de equipamento é uma linha (quantity 1). Vender N significa
+  // destruir N linhas idênticas do grupo selecionado.
+  const handleSell = async (rowIds: string[]) => {
+    if (!selected || !selectedCharacterId || rowIds.length === 0) return;
+    const n = rowIds.length;
     const name = getDisplayName(selected.item.name, selected.enhancementLevel);
     const ok = window.confirm(
-      `Vender ${qty}x ${name} ao ferreiro por ${sellUnitPrice * qty} gold?\nO item será destruído (não dá pra desfazer).`
+      `Vender ${n}x ${name} ao ferreiro por ${sellUnitPrice * n} gold?\nO${n > 1 ? 's itens serão destruídos' : ' item será destruído'} (não dá pra desfazer).`
     );
     if (!ok) return;
     setBusy(true);
     try {
-      const res = await fetch(`/api/character/${selectedCharacterId}/sell-item`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ inventoryId: selected.id, quantity: qty }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        toast.error(json.error || 'Erro ao vender');
-        return;
+      let sold = 0;
+      for (const id of rowIds) {
+        const res = await fetch(`/api/character/${selectedCharacterId}/sell-item`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ inventoryId: id, quantity: 1 }),
+        });
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}));
+          toast.error(json.error || 'Erro ao vender');
+          break;
+        }
+        sold++;
       }
-      toast.success(json.message || '💰 Item vendido!');
+      if (sold > 0) {
+        toast.success(`💰 Vendeu ${sold}x ${name} por ${sellUnitPrice * sold} gold!`);
+      }
       await fetchInventory(selectedCharacterId);
     } catch {
       toast.error('Erro inesperado ao vender');
@@ -238,19 +267,19 @@ export default function RepairBench({
             className="grid mb-5"
             style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(64px, 1fr))', gap: 6 }}
           >
-            {equipment.map((inv) => {
-              const itemVisual = getItemVisual(inv.item.type);
-              const image = resolveImageUrl(inv.item.image);
-              const pct = Math.round((inv.durability / inv.maxDurability) * 100);
-              const isSelected = inv.id === selectedInventoryId;
+            {displayGroups.map(({ rep, count }) => {
+              const itemVisual = getItemVisual(rep.item.type);
+              const image = resolveImageUrl(rep.item.image);
+              const pct = Math.round((rep.durability / rep.maxDurability) * 100);
+              const isSelected = rep.id === selectedInventoryId;
               const barColor = pct < 30 ? '#ef4444' : pct < 70 ? '#f59e0b' : '#10b981';
 
               return (
                 <button
-                  key={inv.id}
+                  key={rep.id}
                   type="button"
-                  onClick={() => setSelectedInventoryId(inv.id)}
-                  title={`${getDisplayName(inv.item.name, inv.enhancementLevel)} — ${inv.durability}/${inv.maxDurability} (${pct}%)`}
+                  onClick={() => setSelectedInventoryId(rep.id)}
+                  title={`${getDisplayName(rep.item.name, rep.enhancementLevel)}${count > 1 ? ` (x${count})` : ''} — ${rep.durability}/${rep.maxDurability} (${pct}%)`}
                   className="group relative aspect-square overflow-hidden rounded-lg cursor-pointer hover:scale-105 transition-transform"
                   style={{
                     border: `2px solid ${isSelected ? '#fbbf24' : (itemVisual.accent || '#3f7fd6') + '66'}`,
@@ -265,7 +294,7 @@ export default function RepairBench({
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={image}
-                        alt={inv.item.name}
+                        alt={rep.item.name}
                         className="w-full h-full object-cover group-hover:scale-110 transition-transform"
                         referrerPolicy="no-referrer"
                       />
@@ -274,23 +303,23 @@ export default function RepairBench({
                     )}
                   </div>
 
-                  {/* Quantidade */}
-                  {inv.quantity > 1 && (
+                  {/* Contador de instâncias idênticas (agrupadas só na forja) */}
+                  {count > 1 && (
                     <span
                       className="absolute top-0.5 left-1 text-[10px] font-black leading-none text-white"
                       style={{ textShadow: '0 1px 2px #000, 0 0 3px #000' }}
                     >
-                      x{inv.quantity}
+                      x{count}
                     </span>
                   )}
 
                   {/* Nível de aprimoramento */}
-                  {inv.enhancementLevel > 0 && (
+                  {rep.enhancementLevel > 0 && (
                     <span
                       className="absolute top-0.5 right-1 text-[10px] font-bold"
                       style={{ color: '#f1d79a', textShadow: '0 1px 2px #000' }}
                     >
-                      {getLevelLabel(inv.enhancementLevel)}
+                      {getLevelLabel(rep.enhancementLevel)}
                     </span>
                   )}
 
@@ -355,9 +384,9 @@ export default function RepairBench({
                         Lv.{selected.item.level}
                       </span>
                     )}
-                    {selected.quantity > 1 && (
+                    {selectedCount > 1 && (
                       <span className="text-xs font-semibold bg-white/10 text-white/80 px-2 py-0.5 rounded-full">
-                        x{selected.quantity}
+                        x{selectedCount} no inventário
                       </span>
                     )}
                   </div>
@@ -486,19 +515,19 @@ export default function RepairBench({
                 </span>
                 <div className="flex gap-3">
                   <button
-                    onClick={() => handleSell(1)}
+                    onClick={() => handleSell([selected.id])}
                     disabled={busy}
                     className="flex-1 px-4 py-2.5 rounded-xl font-bold text-sm text-white bg-rose-700/70 hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
                     💰 Vender 1 por {sellUnitPrice} 🪙
                   </button>
-                  {selected.quantity > 1 && (
+                  {selectedGroup && selectedCount > 1 && (
                     <button
-                      onClick={() => handleSell(selected.quantity)}
+                      onClick={() => handleSell(selectedGroup.rows.map((r) => r.id))}
                       disabled={busy}
                       className="flex-1 px-4 py-2.5 rounded-xl font-bold text-sm text-white bg-rose-800/70 hover:bg-rose-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
-                      💰 Vender {selected.quantity} por {sellUnitPrice * selected.quantity} 🪙
+                      💰 Vender {selectedCount} por {sellUnitPrice * selectedCount} 🪙
                     </button>
                   )}
                 </div>

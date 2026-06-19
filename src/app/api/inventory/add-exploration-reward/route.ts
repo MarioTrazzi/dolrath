@@ -122,15 +122,18 @@ export async function POST(req: Request) {
           }
         }
 
-        // Adicionar ao inventário do personagem — empilha só na pilha base
-        // (nível 0); itens aprimorados são instâncias únicas e não empilham.
-        const existingInventoryItem = await tx.characterInventory.findFirst({
-          where: {
-            characterId: characterId,
-            itemId: existingItem.id,
-            enhancementLevel: 0
-          }
-        })
+        // Adicionar ao inventário do personagem. Equipamento NÃO agrupa (cada
+        // peça é um slot próprio, para a economia de slots); consumível empilha.
+        const isConsumable = existingItem.type === 'CONSUMABLE'
+        const existingInventoryItem = isConsumable
+          ? await tx.characterInventory.findFirst({
+              where: {
+                characterId: characterId,
+                itemId: existingItem.id,
+                enhancementLevel: 0
+              }
+            })
+          : null
 
         if (existingInventoryItem) {
           await tx.characterInventory.update({

@@ -7,7 +7,7 @@
  *
  * Identidade de cada atributo:
  *   STR → dano do Ataque Pesado (×1.8) e um pouco de HP
- *   AGI → dano do Ataque Leve (×1.7), crítico, esquiva e stamina
+ *   AGI → dano do Ataque Leve (×1.7, teto suave acima de 32), crítico, esquiva e stamina
  *   INT → dano do Especial (×1.5, fura armadura) e pool de MP
  *   DEF → HP (×4), mitigação física, resistência mágica (×0.8) e stamina
  *

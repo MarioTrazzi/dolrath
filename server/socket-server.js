@@ -11,7 +11,10 @@ const { spawnTrainingBot, MONSTERS } = require('./training-bot')
 const PORT = process.env.PORT || 3001
 
 // 🐉 CONFIGURAÇÕES DE TRANSFORMAÇÃO REBALANCEADAS
-const transformationConfigs = {
+// (nome em MAIÚSCULA: é o identificador usado em getConfig/handler — antes
+//  era `transformationConfigs`, que deixava TRANSFORMATION_CONFIG undefined
+//  e quebrava QUALQUER transformação no PvP com ReferenceError.)
+const TRANSFORMATION_CONFIG = {
   // DRACONIANOS - Tank supremo com poder devastador
   dragon: {
     statModifiers: {
@@ -134,6 +137,7 @@ function revertPlayerTransformation(player) {
   player.agility = original.agility
   player.intelligence = original.intelligence
   player.defense = original.defense
+  player.resistance = Math.floor(original.defense * 0.8) // espelha o campo de topo usado na mitigação
   player.hp = Math.min(player.hp, original.maxHp)
   player.maxHp = original.maxHp
   player.baseStats = {
@@ -501,6 +505,16 @@ io.on('connection', (socket) => {
     const player = room.player1?.id === playerId ? room.player1 : room.player2
     if (!player) return
 
+    // 🚧 EM REBALANCEAMENTO: a transformação no PvP está OP e assimétrica (só
+    // draconiano/metamorfo têm forma; multiplicadores derrubam humano/elfo) —
+    // medido em scripts/pvp-race-class-sim.js (TRANSFORM=1). Desabilitada por
+    // padrão até as formas das 4 raças + magnitude serem balanceadas e a UI
+    // de humano/elfo existir. Reative com ENABLE_PVP_TRANSFORM=1.
+    if (!process.env.ENABLE_PVP_TRANSFORM) {
+      socket.emit('error', { message: 'Transformação está em manutenção e voltará balanceada em breve!' })
+      return
+    }
+
     // Verificar se pode transformar
     if (player.isTransformed) {
       socket.emit('error', { message: 'Já está transformado!' })
@@ -588,6 +602,15 @@ io.on('connection', (socket) => {
       attack: newAttack,
       critical: newCritical
     }
+
+    // ⚔️ O combate lê os campos de TOPO (attacker.strength/agility/intelligence,
+    // defender.defense/resistance), não baseStats. Sem atualizá-los, a
+    // transformação só mexia no HP e NÃO aumentava dano/defesa. Corrigido:
+    player.strength = newStr
+    player.agility = newAgi
+    player.intelligence = newInt
+    player.defense = newDef
+    player.resistance = Math.floor(newDef * 0.8)
 
     // Aplicar modificador de HP se necessário
     if (config.statModifiers.hp !== 1.0) {
@@ -1185,6 +1208,14 @@ function regeneratePlayerResources(player, context = 'Activity') {
 //   Especial (d20)→ INT×1.5 (fura armadura: só RES mitiga)
 // Dado conta ×2 para a sorte importar mesmo no late game.
 
+// 🌀 TETO SUAVE DE AGI no dano leve: retornos decrescentes acima de 32.
+// AGI já dá crit (cap 40%), esquiva (cap ±3) e stamina; sem isso o assassino
+// escala dano sem limite e domina o late. Não afeta crit/esquiva.
+function effAgiForLight(agi) {
+  const CAP = 32, SLOPE = 0.75
+  return (agi || 0) <= CAP ? (agi || 0) : CAP + ((agi || 0) - CAP) * SLOPE
+}
+
 // 🎯 CÁLCULO DE DANO BASEADO EM ATRIBUTOS
 function calculateDamage(attacker, diceRoll, actionType, isCritical = false) {
   let baseDamage = 0
@@ -1193,8 +1224,8 @@ function calculateDamage(attacker, diceRoll, actionType, isCritical = false) {
     // 🧙 ESPECIAL ESCALA SÓ COM INTELLIGENCE (build mago viável)
     baseDamage = diceRoll * 2 + Math.floor(attacker.intelligence * 1.5)
   } else if (actionType === 'light_attack') {
-    // 🗡️ LEVE ESCALA COM AGILITY (build assassino viável)
-    baseDamage = diceRoll * 2 + Math.floor(attacker.agility * 1.7) + Math.floor(attacker.strength * 0.3)
+    // 🗡️ LEVE ESCALA COM AGILITY (build assassino viável) — com teto suave
+    baseDamage = diceRoll * 2 + Math.floor(effAgiForLight(attacker.agility) * 1.7) + Math.floor(attacker.strength * 0.3)
   } else {
     // ⚔️ PESADO ESCALA COM STRENGTH (build guerreiro)
     // ×1.8: STR só gera dano (AGI também dá crit+esquiva+stamina), então o

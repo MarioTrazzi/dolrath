@@ -55,11 +55,87 @@ const RACES = process.env.RACES_OLD ? {
   metamorfo:  { dexterity: 50, constitution: 30 },  // era wisdom 30 → con  (+8)
   elfo:       { intelligence: 40, dexterity: 30, constitution: 20 }, // era wis 20 → con (+9)
 }
+// Monge: env MONK escolhe o bônus de classe p/ comparar.
+//   hybrid = PRODUÇÃO: wisdom→dex+con (dex40+con40 → +8, bruiser ágil resiliente)
+//   cur    = baseline pré-fix (dex30+con20, wisdom30 desperdiçado → só +5)
+//   con    = wisdom→con (dex30+con50 → +8, tank-esquiva extremo)
+const MONK_BONUS = {
+  cur:    { dexterity: 30, constitution: 20 },
+  hybrid: { dexterity: 40, constitution: 40 },
+  con:    { dexterity: 30, constitution: 50 },
+}[process.env.MONK || 'hybrid']
 const CLASSES = {
   warrior: { strength: 40, constitution: 30 },
   rogue:   { dexterity: 40, intelligence: 20 },
   mage:    { intelligence: 50 /* + wisdom 30 IGNORADO */ },
-  monk:    { dexterity: 30, constitution: 20 /* + wisdom 30 IGNORADO */ },
+  monk:    MONK_BONUS,
+}
+
+// 🔧 Teto suave de AGI: retornos decrescentes no DANO leve acima de AGICAP
+// (não toca crítico/esquiva). Tame o Ladino no late sem nerfar o early.
+// Produção: CAP=32, SLOPE=0.75. Use AGICAP=999 p/ comparar com o baseline sem teto.
+const AGICAP = Number(process.env.AGICAP) || 32
+const AGISLOPE = process.env.AGISLOPE !== undefined ? Number(process.env.AGISLOPE) : 0.75
+function effAgi(agi) {
+  return agi <= AGICAP ? agi : AGICAP + (agi - AGICAP) * AGISLOPE
+}
+
+// ============================================================
+// TRANSFORMAÇÕES (TRANSFORM=1) — espelham server/socket-server.js.
+// O combate só lê str/agi/int/def/hp; critical/attack/speed são cosméticos
+// (o servidor calcula crit a partir de AGI). Só draconiano e metamorfo
+// transformam no PvP (humano/elfo têm transformationAvailable mas SEM wiring).
+// Forma do metamorfo: env FORM=wolf|bear|eagle|auto (default auto por classe).
+// ============================================================
+// Orçamento são e COMUM às 4 raças: spike ~+40-50% no eixo primário, modesto no
+// resto, piso 1.0 em def/hp (nenhuma forma "frágil"). Uptime ~50% (dur/cooldown).
+const TF_CONFIG = {
+  dragon:    { strength: 1.5, agility: 1.1, intelligence: 1.2, defense: 1.2, hp: 1.4, duration: 4, cooldown: 3, mp: 15 }, // draconiano: tank-bruiser
+  despertar: { strength: 1.3, agility: 1.3, intelligence: 1.4, defense: 1.2, hp: 1.3, duration: 4, cooldown: 3, mp: 12 }, // humano: 7º Sentido (versátil)
+  celestial: { strength: 1.0, agility: 1.3, intelligence: 1.7, defense: 1.15, hp: 1.2, duration: 4, cooldown: 3, mp: 12 }, // elfo: Forma Celestial (arcano)
+  wolf:      { strength: 1.2, agility: 1.5, intelligence: 1.1, defense: 1.15, hp: 1.2, duration: 4, cooldown: 3, mp: 10 }, // metamorfo: striker ágil
+  bear:      { strength: 1.4, agility: 1.0, intelligence: 1.0, defense: 1.3, hp: 1.4, duration: 4, cooldown: 3, mp: 10 }, // metamorfo: tank
+  eagle:     { strength: 1.0, agility: 1.5, intelligence: 1.5, defense: 1.1, hp: 1.1, duration: 4, cooldown: 3, mp: 10 }, // metamorfo: crit/caster
+}
+const TRANSFORM = Boolean(process.env.TRANSFORM)
+const FORM = process.env.FORM || 'auto'
+// TFSCALE comprime os multiplicadores em direção a 1.0 p/ achar a magnitude sã:
+// mult_efetivo = 1 + (mult-1)*TFSCALE. 1.0=atual, 0.5=metade do bônus.
+const TFSCALE = process.env.TFSCALE !== undefined ? Number(process.env.TFSCALE) : 1
+const sc = (x) => 1 + (x - 1) * TFSCALE
+function pickForm(klass) {
+  if (FORM !== 'auto') return FORM
+  if (klass === 'warrior') return 'bear'   // pesado→STR/DEF
+  if (klass === 'mage') return 'eagle'     // especial→INT (+agi)
+  return 'wolf'                            // leve→AGI, durável
+}
+function getTF(race, klass) {
+  if (!TRANSFORM) return null
+  if (race === 'draconiano') return TF_CONFIG.dragon
+  if (race === 'humano') return TF_CONFIG.despertar
+  if (race === 'elfo') return TF_CONFIG.celestial
+  if (race === 'metamorfo') return TF_CONFIG[pickForm(klass)]
+  return null
+}
+function applyTransform(me) {
+  if (!me._base) me._base = { str: me.strength, agi: me.agility, int: me.intelligence, def: me.defense, maxHp: me.maxHp }
+  const b = me._base, m = me.tf
+  me.strength = Math.floor(b.str * sc(m.strength))
+  me.agility = Math.floor(b.agi * sc(m.agility))
+  me.intelligence = Math.floor(b.int * sc(m.intelligence))
+  me.defense = Math.floor(b.def * sc(m.defense))
+  me.resistance = Math.floor(me.defense * 0.8)
+  const newMaxHp = Math.floor(b.maxHp * sc(m.hp))
+  me.hp = Math.min(me.hp + (newMaxHp - b.maxHp), newMaxHp)
+  me.maxHp = newMaxHp
+  me.transformed = true
+}
+function revertTransform(me) {
+  const b = me._base
+  me.strength = b.str; me.agility = b.agi; me.intelligence = b.int; me.defense = b.def
+  me.resistance = Math.floor(b.def * 0.8)
+  me.hp = Math.min(me.hp, b.maxHp); me.maxHp = b.maxHp
+  me.transformed = false
 }
 
 // Como cada CLASSE gasta os pontos distribuídos (10 + nível-1).
@@ -124,7 +200,7 @@ const MP_COST = { light_attack: 0, heavy_attack: 0, special_attack: 15 }
 function calculateDamage(att, roll, action, isCrit) {
   let base
   if (action === 'special_attack') base = roll * 2 + Math.floor(att.intelligence * MULT.spec)
-  else if (action === 'light_attack') base = roll * 2 + Math.floor(att.agility * MULT.light) + Math.floor(att.strength * 0.3)
+  else if (action === 'light_attack') base = roll * 2 + Math.floor(effAgi(att.agility) * MULT.light) + Math.floor(att.strength * 0.3)
   else base = roll * 2 + Math.floor(att.strength * MULT.heavy)
   if (isCrit) base = Math.floor(base * 1.5)
   return Math.max(1, base)
@@ -161,7 +237,7 @@ function chooseAttack(me) {
   if (me.stamina >= STAMINA_COST.heavy_attack)
     opts.push(['heavy_attack', 11 + me.strength * MULT.heavy])
   if (me.stamina >= STAMINA_COST.light_attack)
-    opts.push(['light_attack', 7 + me.agility * MULT.light + me.strength * 0.3])
+    opts.push(['light_attack', 7 + effAgi(me.agility) * MULT.light + me.strength * 0.3])
   if (!opts.length) return null
   opts.sort((a, b) => b[1] - a[1])
   return opts[0][0]
@@ -191,8 +267,23 @@ function fight(c1, c2) {
     turns++
     att.stamina = Math.min(att.maxStamina, att.stamina + 2) // regen no início do turno
 
+    // 🐉 Transformação: gasta o turno inteiro; aplicada cedo p/ maximizar uptime.
+    if (att.tfCd > 0) att.tfCd--
+    if (att.tf && !att.transformed && att.tfCd <= 0 && att.mp >= att.tf.mp && att.stamina >= 3) {
+      applyTransform(att)
+      att.mp -= att.tf.mp
+      att.stamina -= 3
+      att.tfTurns = att.tf.duration
+      ;[att, defn] = [defn, att]
+      continue
+    }
+
     const action = chooseAttack(att)
-    if (!action) { [att, defn] = [defn, att]; continue }
+    if (!action) {
+      if (att.transformed && --att.tfTurns <= 0) { revertTransform(att); att.tfCd = att.tf.cooldown }
+      ;[att, defn] = [defn, att]
+      continue
+    }
     att.stamina -= STAMINA_COST[action]
     att.mp -= MP_COST[action]
 
@@ -219,6 +310,8 @@ function fight(c1, c2) {
       else if (actionCount > 40) damage = Math.floor(damage * 1.5)
       defn.hp -= damage
     }
+    // 🐉 fim do turno: consome 1 turno de transformação; reverte ao acabar
+    if (att.transformed && --att.tfTurns <= 0) { revertTransform(att); att.tfCd = att.tf.cooldown }
     ;[att, defn] = [defn, att]
   }
   if (turns >= MAX) return null // empate por timeout
@@ -239,12 +332,13 @@ console.log(`\n${'='.repeat(80)}`)
 console.log(`  DOLRATH PvP — BALANCEAMENTO RAÇA × CLASSE  |  ${FIGHTS} lutas/par  |  regras de produção`)
 console.log('='.repeat(80))
 console.log('  Builds por classe: Guer=70%STR/30%DEF  Lad=85%AGI/15%DEF  Mago=85%INT/15%DEF  Monge=55%AGI/45%DEF')
+if (TRANSFORM) console.log(`  🐉 TRANSFORM ON — draconiano=dragon, metamorfo=${FORM} (humano/elfo NÃO transformam)`)
 
 for (const level of LEVELS) {
   const fighters = []
   for (const r of RACE_NAMES)
     for (const k of CLASS_NAMES)
-      fighters.push({ id: `${r}/${k}`, race: r, klass: k, ...buildCharacter(r, k, level) })
+      fighters.push({ id: `${r}/${k}`, race: r, klass: k, ...buildCharacter(r, k, level), tf: getTF(r, k), tfTurns: 0, tfCd: 0, transformed: false })
 
   console.log(`\n\n${'█'.repeat(80)}`)
   console.log(`  NÍVEL ${level}`)

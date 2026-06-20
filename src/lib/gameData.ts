@@ -66,7 +66,7 @@ export const CLASSES: CharacterClass[] = [
     id: 'monk',
     name: 'Monge',
     description: 'Lutador desarmado que usa o próprio corpo como arma',
-    bonuses: { dexterity: 30, wisdom: 30, constitution: 20 },
+    bonuses: { dexterity: 40, constitution: 40 }, // wisdom→dex+con (servidor ignora wisdom): bruiser ágil e resiliente, nicho próprio
     availableWeapons: [WeaponType.FISTS],
     abilities: ['Punho de Ferro', 'Meditação', 'Rajada de Socos']
   }

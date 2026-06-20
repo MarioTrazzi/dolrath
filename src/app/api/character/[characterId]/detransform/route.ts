@@ -49,6 +49,8 @@ export async function POST(
         // Restaurar stats originais
         hp: revertedCharacter.hp,
         maxHp: revertedCharacter.maxHp,
+        mp: revertedCharacter.mp,
+        maxMp: revertedCharacter.maxMp, // reverte a reserva ampliada pelo mpPool
 
         // Restaurar baseStats originais
         baseStats: revertedCharacter.baseStats

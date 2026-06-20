@@ -70,6 +70,7 @@ export async function POST(
         hp: transformedCharacter.hp,
         maxHp: transformedCharacter.maxHp,
         mp: transformedCharacter.mp,
+        maxMp: transformedCharacter.maxMp, // mpPool amplia a reserva durante a forma
         stamina: transformedCharacter.stamina,
 
         // Atualizar baseStats que agora contém os stats modificados

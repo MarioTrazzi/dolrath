@@ -81,21 +81,27 @@ function effAgi(agi) {
 }
 
 // ============================================================
-// TRANSFORMAÇÕES (TRANSFORM=1) — espelham server/socket-server.js.
-// O combate só lê str/agi/int/def/hp; critical/attack/speed são cosméticos
-// (o servidor calcula crit a partir de AGI). Só draconiano e metamorfo
-// transformam no PvP (humano/elfo têm transformationAvailable mas SEM wiring).
+// TRANSFORMAÇÕES (TRANSFORM=1) — espelham src/lib/transformationSystem.ts (v11).
+// Todas as 4 raças transformam (humano=seventh_sense, elfo=celestial). O combate
+// só lê str/agi/int/def/hp/mp; abilities/resistances NÃO são modeladas aqui.
 // Forma do metamorfo: env FORM=wolf|bear|eagle|auto (default auto por classe).
+//
+// Princípios do balanceamento (validados no teste simétrico):
+//  (1) magnitude MODESTA — transformação não deve warpar o meta;
+//  (2) str sub-pesado (pesado ×1.8 já fura DEF) + int/mpPool reforçados (mago
+//      sustenta a luta longa transformado);
+//  (3) def≈1.0 — inflar DEF subiria a RES e mataria o mago (só RES mitiga magia);
+//  (4) COMPENSAÇÃO INVERSA: draconiano (base forte) → forma mais fraca; elfo
+//      (base fraca) → forma mais forte;
+//  (5) metamorfo = 3 formas especializadas (sua identidade), ~iguais no total.
 // ============================================================
-// Orçamento são e COMUM às 4 raças: spike ~+40-50% no eixo primário, modesto no
-// resto, piso 1.0 em def/hp (nenhuma forma "frágil"). Uptime ~50% (dur/cooldown).
 const TF_CONFIG = {
-  dragon:    { strength: 1.5, agility: 1.1, intelligence: 1.2, defense: 1.2, hp: 1.4, duration: 4, cooldown: 3, mp: 15 }, // draconiano: tank-bruiser
-  despertar: { strength: 1.3, agility: 1.3, intelligence: 1.4, defense: 1.2, hp: 1.3, duration: 4, cooldown: 3, mp: 12 }, // humano: 7º Sentido (versátil)
-  celestial: { strength: 1.0, agility: 1.3, intelligence: 1.7, defense: 1.15, hp: 1.2, duration: 4, cooldown: 3, mp: 12 }, // elfo: Forma Celestial (arcano)
-  wolf:      { strength: 1.2, agility: 1.5, intelligence: 1.1, defense: 1.15, hp: 1.2, duration: 4, cooldown: 3, mp: 10 }, // metamorfo: striker ágil
-  bear:      { strength: 1.4, agility: 1.0, intelligence: 1.0, defense: 1.3, hp: 1.4, duration: 4, cooldown: 3, mp: 10 }, // metamorfo: tank
-  eagle:     { strength: 1.0, agility: 1.5, intelligence: 1.5, defense: 1.1, hp: 1.1, duration: 4, cooldown: 3, mp: 10 }, // metamorfo: crit/caster
+  dragon:    { strength: 1.15, agility: 1.22, intelligence: 1.25, defense: 1.03, hp: 1.19, mpPool: 1.26, duration: 4, cooldown: 3, mp: 15 }, // draconiano
+  seventh_sense: { strength: 1.17, agility: 1.23, intelligence: 1.27, defense: 1.02, hp: 1.21, mpPool: 1.28, duration: 4, cooldown: 3, mp: 12 }, // humano: 7º Sentido (universal)
+  celestial: { strength: 1.16, agility: 1.24, intelligence: 1.34, defense: 1.02, hp: 1.22, mpPool: 1.40, duration: 4, cooldown: 3, mp: 12 }, // elfo: Forma Celestial (base fraca → forma forte arcana)
+  wolf:      { strength: 1.15, agility: 1.32, intelligence: 1.22, defense: 1.03, hp: 1.17, mpPool: 1.22, duration: 4, cooldown: 3, mp: 10 }, // metamorfo: striker
+  bear:      { strength: 1.20, agility: 1.14, intelligence: 1.20, defense: 1.07, hp: 1.28, mpPool: 1.22, duration: 4, cooldown: 3, mp: 10 }, // metamorfo: tank
+  eagle:     { strength: 1.12, agility: 1.28, intelligence: 1.33, defense: 1.00, hp: 1.16, mpPool: 1.32, duration: 4, cooldown: 3, mp: 10 }, // metamorfo: caster
 }
 const TRANSFORM = Boolean(process.env.TRANSFORM)
 const FORM = process.env.FORM || 'auto'
@@ -112,13 +118,13 @@ function pickForm(klass) {
 function getTF(race, klass) {
   if (!TRANSFORM) return null
   if (race === 'draconiano') return TF_CONFIG.dragon
-  if (race === 'humano') return TF_CONFIG.despertar
+  if (race === 'humano') return TF_CONFIG.seventh_sense
   if (race === 'elfo') return TF_CONFIG.celestial
   if (race === 'metamorfo') return TF_CONFIG[pickForm(klass)]
   return null
 }
 function applyTransform(me) {
-  if (!me._base) me._base = { str: me.strength, agi: me.agility, int: me.intelligence, def: me.defense, maxHp: me.maxHp }
+  if (!me._base) me._base = { str: me.strength, agi: me.agility, int: me.intelligence, def: me.defense, maxHp: me.maxHp, maxMp: me.maxMp }
   const b = me._base, m = me.tf
   me.strength = Math.floor(b.str * sc(m.strength))
   me.agility = Math.floor(b.agi * sc(m.agility))
@@ -128,6 +134,11 @@ function applyTransform(me) {
   const newMaxHp = Math.floor(b.maxHp * sc(m.hp))
   me.hp = Math.min(me.hp + (newMaxHp - b.maxHp), newMaxHp)
   me.maxHp = newMaxHp
+  if (m.mpPool) { // reserva de mana ampliada (caster sustenta a luta longa)
+    const nm = Math.floor(b.maxMp * sc(m.mpPool))
+    me.mp = Math.min(me.mp + (nm - b.maxMp), nm)
+    me.maxMp = nm
+  }
   me.transformed = true
 }
 function revertTransform(me) {
@@ -135,6 +146,7 @@ function revertTransform(me) {
   me.strength = b.str; me.agility = b.agi; me.intelligence = b.int; me.defense = b.def
   me.resistance = Math.floor(b.def * 0.8)
   me.hp = Math.min(me.hp, b.maxHp); me.maxHp = b.maxHp
+  me.mp = Math.min(me.mp, b.maxMp); me.maxMp = b.maxMp
   me.transformed = false
 }
 
@@ -174,7 +186,7 @@ function buildCharacter(race, klass, level) {
 
   // Derivados — idênticos ao combate ao vivo (computeDerivedStats / combat page)
   const maxHp = 100 + level * 6 + Math.floor(str * 0.5) + def * 4
-  const maxMp = 60 + int * 4 + agi
+  const maxMp = process.env.BIGMP ? 99999 : 60 + int * 4 + agi // BIGMP: diagnóstico de mana
   const maxStamina = 120 + agi * 2 + def * 2
   const resistance = Math.floor(def * 0.8)
 

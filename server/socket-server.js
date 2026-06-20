@@ -140,6 +140,10 @@ function revertPlayerTransformation(player) {
   player.resistance = Math.floor(original.defense * 0.8) // espelha o campo de topo usado na mitigação
   player.hp = Math.min(player.hp, original.maxHp)
   player.maxHp = original.maxHp
+  if (original.maxMp != null) { // reverte a reserva de mana ampliada pelo mpPool
+    player.maxMp = original.maxMp
+    player.mp = Math.min(player.mp ?? original.maxMp, original.maxMp)
+  }
   player.baseStats = {
     ...player.baseStats,
     str: original.strength,
@@ -151,13 +155,15 @@ function revertPlayerTransformation(player) {
     hp: Math.min(player.hp, original.maxHp),
     maxHp: original.maxHp
   }
-  
+
   // Marcar como não transformado e iniciar cooldown
+  // (config pode ser undefined: a transformação real vem de transformationSystem.ts
+  //  via sync; este TRANSFORMATION_CONFIG do socket é legado e não tem todas as formas)
   player.isTransformed = false
   player.transformationType = null
   player.transformationData = {
     ...player.transformationData,
-    cooldownTurns: config.cooldown,
+    cooldownTurns: config?.cooldown ?? 5,
     remainingTurns: 0
   }
 }
@@ -505,15 +511,9 @@ io.on('connection', (socket) => {
     const player = room.player1?.id === playerId ? room.player1 : room.player2
     if (!player) return
 
-    // 🚧 EM REBALANCEAMENTO: a transformação no PvP está OP e assimétrica (só
-    // draconiano/metamorfo têm forma; multiplicadores derrubam humano/elfo) —
-    // medido em scripts/pvp-race-class-sim.js (TRANSFORM=1). Desabilitada por
-    // padrão até as formas das 4 raças + magnitude serem balanceadas e a UI
-    // de humano/elfo existir. Reative com ENABLE_PVP_TRANSFORM=1.
-    if (!process.env.ENABLE_PVP_TRANSFORM) {
-      socket.emit('error', { message: 'Transformação está em manutenção e voltará balanceada em breve!' })
-      return
-    }
+    // ⚠️ HANDLER LEGADO: o cliente NÃO emite 'transform' — o fluxo real é a rota
+    // REST /api/character/[id]/transform (applyTransformation de transformationSystem.ts)
+    // seguida de 'sync_transformation'. Este handler é mantido por compatibilidade.
 
     // Verificar se pode transformar
     if (player.isTransformed) {

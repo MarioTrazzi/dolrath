@@ -1004,7 +1004,8 @@ function CombatPageContent() {
           duration: data.transformation.duration,
           stats: {
             maxHp: updatedCharacter.maxHp,
-            mp: currentPlayer.mp - mpCost,
+            maxMp: updatedCharacter.maxMp ?? currentPlayer.maxMp,
+            mp: updatedCharacter.mp ?? (currentPlayer.mp - mpCost),
             stamina: currentPlayer.stamina - staminaCost,
             attack: updatedCharacter.baseStats?.attack ?? currentPlayer.attack,
             defense: updatedCharacter.baseStats?.defense ?? currentPlayer.defense,

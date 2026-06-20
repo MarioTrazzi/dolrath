@@ -49,6 +49,7 @@ export interface TransformationConfig {
     intelligence: number
     attack: number
     critical: number
+    mpPool?: number // amplia a reserva de mana (caster sustenta a luta longa)
   }
   specialAbilities: Array<{
     id: string
@@ -68,19 +69,23 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
   dragon: {
     name: '🐉 Dragão',
     description: 'Transformação ancestral dracônica que aumenta drasticamente força e resistência',
-    duration: 4,           // 4 turnos de duração
-    cooldown: 6,          // Era 8 - reduzido para permitir mais uso
-    cost: { mp: 35, stamina: 40 }, // Era 40/50 - ligeiramente reduzido
-    
-    // Multiplicadores: nenhuma forma nerfa nem fica neutra (piso de +10%).
+    duration: 4,
+    cooldown: 5,
+    cost: { mp: 35, stamina: 40 },
+
+    // ⚖️ Rebalanceado (scripts/pvp-race-class-sim.js, teste simétrico das 4 raças):
+    // boost MODESTO e ~uniforme em str/agi/int (preserva equilíbrio de classe),
+    // DEF≈1.0 (não inflar RES → mago vive), +mpPool (caster sustenta).
+    // Draconiano tem a base mais forte → forma mais fraca (compensação inversa).
     statModifiers: {
-      strength: 1.6,
-      defense: 1.5,
-      hp: 1.4,
-      agility: 1.10,       // Era 0.8 - sem nerf (piso +10%)
-      intelligence: 1.10,  // Era 0.9 - sem nerf (piso +10%)
-      attack: 1.6,
-      critical: 1.3
+      strength: 1.15,
+      defense: 1.03,
+      hp: 1.19,
+      agility: 1.22,
+      intelligence: 1.25,
+      attack: 1.15,
+      critical: 1.10,
+      mpPool: 1.26
     },
     
     // Habilidades especiais exclusivas durante transformação
@@ -118,18 +123,20 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
   wolf: {
     name: '🐺 Lobo',
     description: 'Forma predatória focada em velocidade e ataques críticos',
-    duration: 4,           // Era 5 - reduzido para balancear
-    cooldown: 4,          // Era 6 - balanceado
-    cost: { mp: 20, stamina: 30 }, // Era 25/35 - reduzido
-    
+    duration: 4,
+    cooldown: 5,
+    cost: { mp: 20, stamina: 30 },
+
+    // ⚖️ Metamorfo: forma ÁGIL (striker). Especializada porém modesta.
     statModifiers: {
-      agility: 1.8,        // +80% AGI (predador veloz)
-      strength: 1.3,       // +30% STR
-      critical: 2.5,       // +150% chance crítica
-      attack: 1.4,         // +40% ataque
-      defense: 1.10,       // Era 0.8 - sem nerf (piso +10%)
-      hp: 1.10,            // Era 0.9 - sem nerf (piso +10%)
-      intelligence: 1.10   // Era 0.7 - sem nerf (piso +10%)
+      agility: 1.32,
+      strength: 1.15,
+      critical: 1.20,
+      attack: 1.15,
+      defense: 1.03,
+      hp: 1.17,
+      intelligence: 1.22,
+      mpPool: 1.22
     },
     
     specialAbilities: [
@@ -165,18 +172,21 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
   bear: {
     name: '🐻 Urso',
     description: 'Forma defensiva suprema com alta resistência e força bruta',
-    duration: 6,           // Maior duração
-    cooldown: 7,
+    duration: 4,
+    cooldown: 5,
     cost: { mp: 30, stamina: 40 },
-    
+
+    // ⚖️ Metamorfo: forma TANK. DEF moderada (inflar DEF mataria o mago via RES);
+    // a tankeza vem do HP. Especializada porém modesta.
     statModifiers: {
-      strength: 1.7,       // +70% STR (força bruta)
-      defense: 2.0,        // +100% DEF (super tanque)
-      hp: 1.8,            // +80% HP (muita vida)
-      agility: 1.10,      // Era 0.5 - sem nerf (piso +10%)
-      critical: 1.10,     // Era 0.4 - sem nerf (piso +10%)
-      attack: 1.7,        // +70% ataque
-      intelligence: 1.10  // Era 0.6 - sem nerf (piso +10%)
+      strength: 1.20,
+      defense: 1.07,
+      hp: 1.28,
+      agility: 1.14,
+      critical: 1.05,
+      attack: 1.20,
+      intelligence: 1.20,
+      mpPool: 1.22
     },
     
     specialAbilities: [
@@ -212,18 +222,20 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
   eagle: {
     name: '🦅 Águia',
     description: 'Forma aérea focada em esquiva suprema e ataques precisos',
-    duration: 4,           // Duração menor (mais frágil)
-    cooldown: 5,           // Cooldown menor (mais flexível)
+    duration: 4,
+    cooldown: 5,
     cost: { mp: 20, stamina: 30 },
-    
+
+    // ⚖️ Metamorfo: forma CASTER/crítico (agi+int). Frágil em DEF, sustenta via mpPool.
     statModifiers: {
-      agility: 2.8,        // +180% AGI (esquiva suprema)
-      intelligence: 1.6,   // +60% INT (visão aguçada)
-      critical: 3.0,       // +200% chance crítica
-      attack: 1.2,         // +20% ataque (precisão)
-      strength: 1.10,      // Era 0.6 - sem nerf (piso +10%)
-      defense: 1.10,       // Era 0.4 - sem nerf (piso +10%)
-      hp: 1.10            // Era 0.7 - sem nerf (piso +10%)
+      agility: 1.28,
+      intelligence: 1.33,
+      critical: 1.25,
+      attack: 1.12,
+      strength: 1.12,
+      defense: 1.00,
+      hp: 1.16,
+      mpPool: 1.32
     },
     
     specialAbilities: [
@@ -260,17 +272,19 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
     name: '✨ Despertar do 7º Sentido',
     description: 'O humano desperta o cosmo interior: reflexos, força e mente elevados em harmonia. Forma versátil, sem fraquezas marcantes.',
     duration: 4,
-    cooldown: 6,
+    cooldown: 5,
     cost: { mp: 30, stamina: 35 },
 
+    // ⚖️ Humano: forma UNIVERSAL (str≈agi≈int) — serve qualquer classe, sem fraquezas.
     statModifiers: {
-      strength: 1.35,
-      defense: 1.30,
-      hp: 1.25,
-      agility: 1.50,
-      intelligence: 1.35,
-      attack: 1.40,
-      critical: 2.0,        // percepção aguçada = muito crítico
+      strength: 1.17,
+      defense: 1.02,
+      hp: 1.21,
+      agility: 1.23,
+      intelligence: 1.27,
+      attack: 1.17,
+      critical: 1.15,
+      mpPool: 1.28
     },
 
     specialAbilities: [
@@ -307,17 +321,20 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
     name: '🌟 Forma Celestial',
     description: 'O elfo ascende a uma forma de luz astral, amplificando drasticamente o poder mágico e os reflexos — mas com corpo etéreo e frágil.',
     duration: 4,
-    cooldown: 6,
+    cooldown: 5,
     cost: { mp: 25, stamina: 30 },
 
+    // ⚖️ Elfo: forma ARCANA (lean INT + mpPool alto). Base élfica é a mais fraca
+    // fisicamente → forma um pouco mais forte (compensação inversa).
     statModifiers: {
-      intelligence: 1.90,   // amplificação mágica suprema
-      agility: 1.50,
-      critical: 1.80,
-      attack: 1.30,
-      strength: 1.10,       // Era 0.90 - sem nerf (piso +10%)
-      defense: 1.10,        // Era 1.0 - agora dá ganho (piso +10%)
-      hp: 1.10,
+      intelligence: 1.34,
+      agility: 1.24,
+      critical: 1.20,
+      attack: 1.16,
+      strength: 1.16,
+      defense: 1.02,
+      hp: 1.22,
+      mpPool: 1.40
     },
 
     specialAbilities: [
@@ -407,10 +424,12 @@ export function applyTransformation(character: any, transformationType: Transfor
     defense: character.defense || character.baseStats?.def || 0,
     hp: character.hp,
     maxHp: character.maxHp,
+    mp: character.mp,
+    maxMp: character.maxMp,
     attack: character.baseStats?.attack || 0,
     critical: character.baseStats?.critical || 0
   }
-  
+
   // Aplicar multiplicadores
   const transformedStats: any = {
     strength: Math.floor(originalStats.strength * config.statModifiers.strength),
@@ -420,13 +439,21 @@ export function applyTransformation(character: any, transformationType: Transfor
     attack: Math.floor(originalStats.attack * config.statModifiers.attack),
     critical: originalStats.critical * config.statModifiers.critical
   }
-  
+
   // Aplicar mudanças de HP se necessário
   if (config.statModifiers.hp !== 1.0) {
     const newMaxHp = Math.floor(originalStats.maxHp * config.statModifiers.hp)
     const hpDifference = newMaxHp - originalStats.maxHp
     transformedStats.hp = Math.min(character.hp + hpDifference, newMaxHp)
     transformedStats.maxHp = newMaxHp
+  }
+
+  // Ampliar a reserva de mana (caster sustenta a luta longa transformado)
+  if (config.statModifiers.mpPool && config.statModifiers.mpPool !== 1.0) {
+    const newMaxMp = Math.floor((originalStats.maxMp || 0) * config.statModifiers.mpPool)
+    const mpDifference = newMaxMp - (originalStats.maxMp || 0)
+    transformedStats.maxMp = newMaxMp
+    transformedStats.mp = Math.min((character.mp || 0) + mpDifference, newMaxMp)
   }
   
   return {
@@ -449,6 +476,7 @@ export function applyTransformation(character: any, transformationType: Transfor
     defense: transformedStats.defense,
     hp: transformedStats.hp || character.hp,
     maxHp: transformedStats.maxHp || character.maxHp,
+    maxMp: transformedStats.maxMp || character.maxMp,
     // Recalcular stats derivados com novos valores
     baseStats: {
       ...character.baseStats,
@@ -459,10 +487,11 @@ export function applyTransformation(character: any, transformationType: Transfor
       attack: transformedStats.attack,
       critical: transformedStats.critical,
       hp: transformedStats.hp || character.hp,
-      maxHp: transformedStats.maxHp || character.maxHp
+      maxHp: transformedStats.maxHp || character.maxHp,
+      maxMp: transformedStats.maxMp || character.maxMp
     },
-    // Consumir recursos
-    mp: character.mp - config.cost.mp,
+    // Consumir recursos (a reserva ampliada pelo mpPool já está em transformedStats.mp)
+    mp: (transformedStats.mp ?? character.mp) - config.cost.mp,
     stamina: character.stamina - config.cost.stamina
   }
 }
@@ -492,6 +521,8 @@ export function revertTransformation(character: any) {
     defense: original.defense,
     hp: Math.min(character.hp, original.maxHp), // Não pode ter mais HP que o máximo original
     maxHp: original.maxHp,
+    maxMp: original.maxMp ?? character.maxMp,
+    mp: Math.min(character.mp, original.maxMp ?? character.maxMp),
     baseStats: {
       ...character.baseStats,
       str: original.strength,
@@ -501,7 +532,8 @@ export function revertTransformation(character: any) {
       attack: original.attack,
       critical: original.critical,
       hp: Math.min(character.hp, original.maxHp),
-      maxHp: original.maxHp
+      maxHp: original.maxHp,
+      maxMp: original.maxMp ?? character.maxMp
     }
   }
 }

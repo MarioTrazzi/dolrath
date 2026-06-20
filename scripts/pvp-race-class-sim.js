@@ -36,6 +36,9 @@ const MULT = {
   light: Number(process.env.LIGHT) || 1.7, // leve:   AGI×
   spec: Number(process.env.SPEC) || 1.5,   // especial: INT×
 }
+// Multiplicador do DADO (default produção = ×2). Reduzir diminui o peso da sorte
+// quando os stats são baixos (nv1), onde o dado grande (d20 do especial) domina.
+const DICEMULT = Number(process.env.DICEMULT) || 2
 
 // ============================================================
 // DADOS DO JOGO (espelham src/lib/gameData.ts, escala 0-100 → /10)
@@ -171,18 +174,20 @@ function split(points, weights) {
   return out
 }
 
+const BASEPTS = Number(process.env.BASEPTS) || 18 // pontos na criação (produção: 18, era 10)
 function buildCharacter(race, klass, level) {
-  const points = 10 + Math.max(0, level - 1)
+  const points = BASEPTS + Math.max(0, level - 1)
   const d = CLASS_BUILD[klass](points)
 
   const rb = RACES[race] || {}
   const cb = CLASSES[klass] || {}
   const bonus = (k) => Math.floor((rb[k] || 0) / 10) + Math.floor((cb[k] || 0) / 10)
 
-  const str = d.str + bonus('strength')
-  const agi = d.agi + bonus('dexterity')
-  const int = d.int + bonus('intelligence')
-  const def = d.def + bonus('constitution')
+  const FLAT = Number(process.env.FLATBASE) || 0 // piso inato em TODOS os stats
+  const str = d.str + bonus('strength') + FLAT
+  const agi = d.agi + bonus('dexterity') + FLAT
+  const int = d.int + bonus('intelligence') + FLAT
+  const def = d.def + bonus('constitution') + FLAT
 
   // Derivados — idênticos ao combate ao vivo (computeDerivedStats / combat page)
   const maxHp = 100 + level * 6 + Math.floor(str * 0.5) + def * 4
@@ -211,9 +216,9 @@ const MP_COST = { light_attack: 0, heavy_attack: 0, special_attack: 15 }
 
 function calculateDamage(att, roll, action, isCrit) {
   let base
-  if (action === 'special_attack') base = roll * 2 + Math.floor(att.intelligence * MULT.spec)
-  else if (action === 'light_attack') base = roll * 2 + Math.floor(effAgi(att.agility) * MULT.light) + Math.floor(att.strength * 0.3)
-  else base = roll * 2 + Math.floor(att.strength * MULT.heavy)
+  if (action === 'special_attack') base = roll * DICEMULT + Math.floor(att.intelligence * MULT.spec)
+  else if (action === 'light_attack') base = roll * DICEMULT + Math.floor(effAgi(att.agility) * MULT.light) + Math.floor(att.strength * 0.3)
+  else base = roll * DICEMULT + Math.floor(att.strength * MULT.heavy)
   if (isCrit) base = Math.floor(base * 1.5)
   return Math.max(1, base)
 }

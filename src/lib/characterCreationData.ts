@@ -53,9 +53,14 @@ export const races: CharacterRace[] = [
 
 export const pointSystem = {
   creation: {
-    availablePoints: 10,      // 10 pontos livres na criação
+    availablePoints: 18,      // 18 pontos livres na criação (era 10): com stats
+                              // mais altos no nv1, o dado (fixo) pesa menos e o
+                              // early game deixa de ser coinflip — Ladino sai de
+                              // ~30% p/ ~40% sem afetar o nv20/50 (validado em
+                              // scripts/pvp-race-class-sim.js, BASEPTS).
     minStatValue: 0,          // Mínimo 0 pontos adicionais
-    maxStatValue: 10,         // Máximo 10 pontos por stat
+    maxStatValue: 10,         // Máximo 10 pontos por stat (na criação; força um
+                              // pouco de espalhamento — ajuda o equilíbrio do nv1)
     costProgression: 'linear' // 1 ponto = 1 stat point
   },
   leveling: {

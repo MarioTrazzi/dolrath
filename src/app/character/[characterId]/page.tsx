@@ -805,7 +805,7 @@ export default function CharacterDetailsPage() {
                     { key: 'GLOVES', type: 'GLOVES' as EquipmentSlotType, color: '#4fae5a', top: 236, left: 78 },
                     { key: 'RING_1', type: 'RING_1' as EquipmentSlotType, color: '#e0b84c', top: 236, left: 380 },
                     { key: 'BOOTS', type: 'BOOTS' as EquipmentSlotType, color: '#4fae5a', top: 304, left: 150 },
-                    { key: 'CINTO', placeholder: true, emoji: '🎗️', color: '#e08a2b', top: 304, left: 229 },
+                    { key: 'BELT', type: 'BELT' as EquipmentSlotType, color: '#e08a2b', top: 304, left: 229 },
                     { key: 'RING_2', type: 'RING_2' as EquipmentSlotType, color: '#3f7fd6', top: 304, left: 308 },
                   ];
                   return RING.map((s) => (

@@ -43,6 +43,9 @@ export const TYPE_STYLE: Record<string, string> = {
   HEAVY_BOOTS: 'Heavy boots: a pair of plated sabatons.',
   RING: 'A ring: a single ornate band with a set gemstone, shown large and detailed.',
   NECKLACE: 'A necklace/amulet: a pendant on a fine chain, the pendant prominent and detailed.',
+  GAUNTLET: 'A martial fist weapon (monk): reinforced metal knuckle gauntlets / a spiked cestus with hardened plating over the knuckles — a WEAPON for unarmed strikes, not simple gloves.',
+  ORB: 'A mage offhand orb: a floating polished crystal sphere cradled in an ornate metal holder, swirling arcane energy and runic glyphs glowing inside the glass.',
+  BELT: 'A belt/girdle: a wide waist belt with a prominent engraved metal buckle and hanging straps or pouches, laid out horizontally.',
   CONSUMABLE: 'A consumable: a glass potion vial or alchemical flask with a glowing liquid and a corked or sealed top.',
   ENHANCEMENT_STONE: 'An enhancement stone (Black Desert "black stone" vibe): a single dark, polished obsidian-black stone fragment, faceted and floating, with glowing runic cracks of arcane energy running through it. A runic sigil is etched on its face. NO vial, NO bottle, NO liquid.',
 };

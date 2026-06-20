@@ -49,7 +49,8 @@ export enum EquipmentSlotType {
   WEAPON = 'WEAPON',
   SHIELD = 'SHIELD',
   GLOVES = 'GLOVES',
-  BOOTS = 'BOOTS'
+  BOOTS = 'BOOTS',
+  BELT = 'BELT'
 }
 
 export interface CharacterEquipment {

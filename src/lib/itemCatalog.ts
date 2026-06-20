@@ -38,7 +38,8 @@ export type ItemTypeStr =
   | 'LIGHT_HELMET' | 'MEDIUM_HELMET' | 'HEAVY_HELMET'
   | 'LIGHT_GLOVES' | 'MEDIUM_GLOVES' | 'HEAVY_GLOVES'
   | 'LIGHT_BOOTS' | 'MEDIUM_BOOTS' | 'HEAVY_BOOTS'
-  | 'RING' | 'NECKLACE' | 'SHIELD';
+  | 'RING' | 'NECKLACE' | 'SHIELD'
+  | 'GAUNTLET' | 'ORB' | 'BELT';
 
 export interface CatalogItem {
   name: string;
@@ -238,6 +239,65 @@ export const ITEM_CATALOG: CatalogItem[] = [
     name: 'Escudo de Ferro', description: 'Disco de ferro batido, resistente a golpes pesados.',
     type: 'SHIELD', level: 5, rarity: 'UNCOMMON', goldPrice: 350, source: 'shop', build: 'guardian', dungeons: [],
     stats: { def: 12 },
+  },
+
+  // ============================================================
+  // 🏪 LOJA — ARMA DO MONGE (manoplas) e OFFHAND DO MAGO (orbe)
+  //   GAUNTLET vai no slot de arma; ORB vai no slot de secundária.
+  // ============================================================
+  {
+    name: 'Manoplas do Discípulo', description: 'Couro envolto em ferro nos nós dos dedos; o primeiro passo da via marcial.',
+    type: 'GAUNTLET', level: 1, rarity: 'COMMON', goldPrice: 100, source: 'shop', build: 'agile', dungeons: [],
+    stats: { agi: 9, hp: 4 },
+  },
+  {
+    name: 'Punhos de Aço', description: 'Cestus reforçado com placas; cada golpe carrega o peso do aço.',
+    type: 'GAUNTLET', level: 6, rarity: 'UNCOMMON', goldPrice: 430, source: 'shop', build: 'agile', dungeons: [],
+    stats: { agi: 17, hp: 8 },
+  },
+  {
+    name: 'Orbe de Cristal', description: 'Esfera de quartzo que flutua na mão livre do conjurador, ampliando o foco.',
+    type: 'ORB', level: 1, rarity: 'COMMON', goldPrice: 95, source: 'shop', build: 'arcane', dungeons: [],
+    stats: { int: 4, mp: 8 },
+  },
+  {
+    name: 'Orbe Rúnico', description: 'Cristais menores orbitam o núcleo, sussurrando fórmulas arcanas.',
+    type: 'ORB', level: 7, rarity: 'UNCOMMON', goldPrice: 450, source: 'shop', build: 'arcane', dungeons: [],
+    stats: { int: 7, mp: 16 },
+  },
+
+  // ============================================================
+  // 🏪 LOJA — CINTOS (slot novo; 4 builds + superiores)
+  // ============================================================
+  {
+    name: 'Cinturão de Couro', description: 'Tira larga de couro com fivela de ferro; firma a postura na linha de frente.',
+    type: 'BELT', level: 1, rarity: 'COMMON', goldPrice: 85, source: 'shop', build: 'guardian', dungeons: [],
+    stats: { def: 3, hp: 10 },
+  },
+  {
+    name: 'Faixa Ágil', description: 'Tecido leve amarrado na cintura, sem atrapalhar o movimento.',
+    type: 'BELT', level: 1, rarity: 'COMMON', goldPrice: 80, source: 'shop', build: 'agile', dungeons: [],
+    stats: { agi: 3, hp: 6 },
+  },
+  {
+    name: 'Cinta de Mana', description: 'Bolsos costurados com fios prateados que estabilizam o fluxo arcano.',
+    type: 'BELT', level: 1, rarity: 'COMMON', goldPrice: 80, source: 'shop', build: 'arcane', dungeons: [],
+    stats: { int: 3, mp: 12 },
+  },
+  {
+    name: 'Cinturão de Força', description: 'Pesado e largo; distribui o esforço dos golpes mais brutais.',
+    type: 'BELT', level: 2, rarity: 'COMMON', goldPrice: 90, source: 'shop', build: 'brute', dungeons: [],
+    stats: { str: 3, hp: 8 },
+  },
+  {
+    name: 'Cinturão Reforçado', description: 'Placas rebitadas sobre couro grosso; uma muralha na cintura.',
+    type: 'BELT', level: 7, rarity: 'UNCOMMON', goldPrice: 360, source: 'shop', build: 'guardian', dungeons: [],
+    stats: { def: 6, hp: 22 },
+  },
+  {
+    name: 'Faixa do Conjurador', description: 'Runas bordadas guardam reservas extras de mana para o feiticeiro.',
+    type: 'BELT', level: 7, rarity: 'UNCOMMON', goldPrice: 350, source: 'shop', build: 'arcane', dungeons: [],
+    stats: { int: 6, mp: 22 },
   },
 
   // ============================================================

@@ -30,20 +30,26 @@ const SLOT_EMOJI: Record<string, string> = {
   GLOVES: '🧤',
   BOOTS: '🥾',
   WEAPON: '⚔️',
-  SHIELD: '🛡️',
+  SHIELD: '🛡️', // slot de secundária/offhand (escudo, orbe, adaga, manopla)
   NECKLACE: '📿',
   RING_1: '💍',
   RING_2: '💍',
+  BELT: '🎗️',
 };
 
 function canEquipInSlot(itemType: string, slotType: EquipmentSlotType): boolean {
   switch (slotType) {
     case EquipmentSlotType.WEAPON:
-      return ['SWORD', 'AXE', 'DAGGER', 'STAFF', 'BOW'].includes(itemType);
+      // Arma primária por classe (GAUNTLET = punhos do Monge)
+      return ['SWORD', 'AXE', 'DAGGER', 'STAFF', 'BOW', 'GAUNTLET'].includes(itemType);
     case EquipmentSlotType.ARMOR:
       return ['LIGHT_ARMOR', 'MEDIUM_ARMOR', 'HEAVY_ARMOR'].includes(itemType);
     case EquipmentSlotType.SHIELD:
-      return itemType === 'SHIELD';
+      // Secundária/offhand: escudo (guerreiro), orbe (mago), adaga (ladino, dual),
+      // manopla (monge, dual punhos)
+      return ['SHIELD', 'ORB', 'DAGGER', 'GAUNTLET'].includes(itemType);
+    case EquipmentSlotType.BELT:
+      return itemType === 'BELT';
     case EquipmentSlotType.HELMET:
       return ['LIGHT_HELMET', 'MEDIUM_HELMET', 'HEAVY_HELMET'].includes(itemType);
     case EquipmentSlotType.BOOTS:

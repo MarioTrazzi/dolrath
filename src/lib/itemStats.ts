@@ -1,6 +1,8 @@
 // Formatação de stats de itens para exibição (loja, card do item, etc.).
 // Mantém os mesmos rótulos em todas as telas.
 
+// Gear dá ATRIBUTOS REAIS (str/agi/int/def/hp/mp) — os antigos stats abstratos
+// (bonusDamage/bonusDefense/bonusSpeed) foram convertidos para atributos.
 const EQUIP_STAT_LABELS: [string, string][] = [
   ['str', 'STR'],
   ['agi', 'AGI'],
@@ -8,8 +10,8 @@ const EQUIP_STAT_LABELS: [string, string][] = [
   ['def', 'DEF'],
   ['hp', 'HP'],
   ['mp', 'MP'],
-  ['bonusDamage', 'Dano'],
-  ['bonusSpeed', 'Velocidade'],
+  ['res', 'RES'],
+  ['con', 'CON'],
 ];
 
 /**

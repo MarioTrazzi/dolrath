@@ -83,26 +83,26 @@ function buildChar(race, klass, level) {
   }
 }
 
-// ---- Gear comum (itemCatalog.ts). Guardião (tank) + arma p/ o dano. ----
-// equipmentPower (DungeonRun): atk += bonusDamage + attack + max(str,agi,int);
-//                              def += def + defense + (res+con)/2 ; hp += hp
-// ⚠️ bonusDefense é IGNORADO pelo combate (bug de alinhamento).
+// ---- Gear comum (itemCatalog.ts) — set guardião (tank) + arma p/ o dano. ----
+// equipmentPower (DungeonRun): atk += max(str,agi,int) ; def += def ; hp += hp.
+// Gear dá ATRIBUTOS REAIS (os antigos bonusDamage/bonusDefense/bonusSpeed foram
+// convertidos p/ str/agi/int/def — bonusDefense agora CONTA na defesa).
 const COMMON_SET = [
-  { str: 2, def: 2, hp: 8, bonusDamage: 5 },        // Machado do Guarda (arma)
-  { def: 6, hp: 18, bonusDefense: 6 },              // Peitoral de Ferro (corpo)
-  { def: 4, hp: 8, bonusDefense: 4 },               // Elmo de Ferro
-  { def: 3, str: 1, bonusDamage: 3 },               // Manoplas de Ferro
-  { def: 3, hp: 8, bonusDefense: 3 },               // Botas de Placa
-  { def: 2, bonusDefense: 4 },                       // Escudo de Madeira
+  { str: 7, def: 2, hp: 8 },   // Machado do Guarda (arma)
+  { def: 12, hp: 18 },         // Peitoral de Ferro (corpo)
+  { def: 8, hp: 8 },           // Elmo de Ferro
+  { str: 4, def: 3 },          // Manoplas de Ferro
+  { def: 6, hp: 8 },           // Botas de Placa
+  { def: 6 },                  // Escudo de Madeira
 ]
 const num = (v) => typeof v === 'number' ? v : 0
-function equipmentPower(set, enh, countBonusDef = false) {
+function equipmentPower(set, enh) {
   let attack = 0, defense = 0, hp = 0
   const m = statMult(enh)
   for (const piece of set) {
     const s = {}; for (const k of Object.keys(piece)) s[k] = Math.round(piece[k] * m)
-    attack += num(s.bonusDamage) + num(s.attack) + Math.max(num(s.str), num(s.agi), num(s.int))
-    defense += num(s.def) + num(s.defense) + (countBonusDef ? num(s.bonusDefense) : 0)
+    attack += Math.max(num(s.str), num(s.agi), num(s.int)) // gear dá atributos reais
+    defense += num(s.def)
     hp += num(s.hp)
   }
   return { attack, defense, hp }
@@ -144,10 +144,9 @@ const GEARS = [
   { label: 'comum +15', set: COMMON_SET, enh: 15 },
   { label: 'comum PRI', set: COMMON_SET, enh: 16 },
 ]
-const BONUSDEF = Boolean(process.env.BONUSDEF) // se 1, conta bonusDefense (proposta de fix)
 
 console.log(`\n${'='.repeat(76)}`)
-console.log(`  DOLRATH — DIFICULDADE DA DUNGEON (boss) | criação ${CREATION_PTS} pts | bonusDefense ${BONUSDEF ? 'CONTA' : 'ignorado (atual)'}`)
+console.log(`  DOLRATH — DIFICULDADE DA DUNGEON (boss) | criação ${CREATION_PTS} pts | gear = atributos reais`)
 console.log(`  TTK = turnos p/ matar. Jogador VENCE se TTK_boss(jogador) < TTK_jogador(boss).`)
 console.log('='.repeat(76))
 
@@ -159,7 +158,7 @@ for (const dg of DUNGEONS) {
   console.log(`\n── ${dg.id.toUpperCase()} (lvlReq ${dg.levelReq}, ${dg.rooms} salas) — ${RACE}/${CLASS} ──`)
   console.log(`   boss: HP ${boss.hp}  atk ${boss.attack}  def ${boss.defense}  | jogador base: atk ${char.attack} def ${char.defense} HP ${char.maxHp}`)
   for (const g of GEARS) {
-    const gear = equipmentPower(g.set, g.enh, BONUSDEF)
+    const gear = equipmentPower(g.set, g.enh)
     const pHP = char.maxHp + gear.hp
     const pdps = playerDPS(char, gear, boss)
     const bdps = bossDPS(boss, char, gear)

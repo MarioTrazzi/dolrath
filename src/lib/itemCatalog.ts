@@ -72,44 +72,44 @@ export const ITEM_CATALOG: CatalogItem[] = [
   {
     name: 'Espada de Recruta', description: 'Lâmina de ferro padrão da guarda. Equilíbrio e confiança para quem começa.',
     type: 'SWORD', level: 1, rarity: 'COMMON', goldPrice: 110, source: 'shop', build: 'brute', dungeons: [],
-    stats: { str: 3, bonusDamage: 6 },
+    stats: { str: 9 },
   },
   {
     name: 'Adaga Ligeira', description: 'Leve e afiada, premia reflexos rápidos e golpes em sequência.',
     type: 'DAGGER', level: 1, rarity: 'COMMON', goldPrice: 95, source: 'shop', build: 'agile', dungeons: [],
-    stats: { agi: 3, bonusDamage: 4, bonusSpeed: 4 },
+    stats: { agi: 11 },
   },
   {
     name: 'Cajado de Aprendiz', description: 'Madeira tratada que conduz as primeiras faíscas arcanas.',
     type: 'STAFF', level: 1, rarity: 'COMMON', goldPrice: 90, source: 'shop', build: 'arcane', dungeons: [],
-    stats: { int: 3, mp: 10, bonusDamage: 3 },
+    stats: { int: 6, mp: 10 },
   },
   {
     name: 'Machado do Guarda', description: 'Pesado e estável; troca velocidade por impacto e firmeza.',
     type: 'AXE', level: 2, rarity: 'COMMON', goldPrice: 120, source: 'shop', build: 'guardian', dungeons: [],
-    stats: { str: 2, def: 2, hp: 8, bonusDamage: 5 },
+    stats: { str: 7, def: 2, hp: 8 },
   },
 
   // ---------- SUPERIOR (UNCOMMON, nível 5–11) ----------
   {
     name: 'Espada do Veterano', description: 'Aço temperado de quem já viu batalhas. Corte limpo e poderoso.',
     type: 'SWORD', level: 6, rarity: 'UNCOMMON', goldPrice: 420, source: 'shop', build: 'brute', dungeons: [],
-    stats: { str: 5, bonusDamage: 11 },
+    stats: { str: 16 },
   },
   {
     name: 'Arco do Batedor', description: 'Arco composto para o combatente ágil que prefere a distância.',
     type: 'BOW', level: 6, rarity: 'UNCOMMON', goldPrice: 410, source: 'shop', build: 'agile', dungeons: [],
-    stats: { agi: 5, bonusDamage: 10, bonusSpeed: 5 },
+    stats: { agi: 20 },
   },
   {
     name: 'Cajado Rúnico', description: 'Runas gravadas amplificam o fluxo de mana do conjurador.',
     type: 'STAFF', level: 7, rarity: 'UNCOMMON', goldPrice: 450, source: 'shop', build: 'arcane', dungeons: [],
-    stats: { int: 5, mp: 18, bonusDamage: 8 },
+    stats: { int: 13, mp: 18 },
   },
   {
     name: 'Machado de Guerra', description: 'Cabeça maciça que esmaga defesas. Para quem segura a linha de frente.',
     type: 'AXE', level: 8, rarity: 'UNCOMMON', goldPrice: 480, source: 'shop', build: 'guardian', dungeons: [],
-    stats: { str: 4, def: 3, hp: 16, bonusDamage: 9 },
+    stats: { str: 13, def: 3, hp: 16 },
   },
 
   // ============================================================
@@ -121,7 +121,7 @@ export const ITEM_CATALOG: CatalogItem[] = [
   {
     name: 'Gibão de Couro', description: 'Leve e flexível; prioriza mobilidade e esquiva.',
     type: 'LIGHT_ARMOR', level: 1, rarity: 'COMMON', goldPrice: 130, source: 'shop', build: 'agile', dungeons: [],
-    stats: { def: 3, agi: 2, hp: 8, bonusSpeed: 5 },
+    stats: { agi: 7, def: 3, hp: 8 },
   },
   {
     name: 'Túnica de Linho Arcano', description: 'Tecido fino tratado com sais mágicos. Favorece conjuradores.',
@@ -136,29 +136,29 @@ export const ITEM_CATALOG: CatalogItem[] = [
   {
     name: 'Peitoral de Ferro', description: 'Placa frontal robusta para quem encara o dano de frente.',
     type: 'HEAVY_ARMOR', level: 3, rarity: 'COMMON', goldPrice: 200, source: 'shop', build: 'guardian', dungeons: [],
-    stats: { def: 6, hp: 18, bonusDefense: 6 },
+    stats: { def: 12, hp: 18 },
   },
 
   // ---------- SUPERIOR (UNCOMMON, nível 5–11) ----------
   {
     name: 'Armadura de Couro Batido', description: 'Couro endurecido em camadas; ágil sem abrir mão da proteção.',
     type: 'LIGHT_ARMOR', level: 6, rarity: 'UNCOMMON', goldPrice: 480, source: 'shop', build: 'agile', dungeons: [],
-    stats: { def: 6, agi: 4, hp: 18, bonusSpeed: 8 },
+    stats: { agi: 12, def: 6, hp: 18 },
   },
   {
     name: 'Vestes do Conjurador', description: 'Bordadas com fios de prata que canalizam mana.',
     type: 'LIGHT_ARMOR', level: 7, rarity: 'UNCOMMON', goldPrice: 460, source: 'shop', build: 'arcane', dungeons: [],
-    stats: { def: 4, int: 5, mp: 22, bonusDefense: 4 },
+    stats: { int: 5, def: 8, mp: 22 },
   },
   {
     name: 'Brigantina Reforçada', description: 'Placas rebitadas em couro; o meio-termo versátil para todos.',
     type: 'MEDIUM_ARMOR', level: 8, rarity: 'UNCOMMON', goldPrice: 560, source: 'shop', build: 'guardian', dungeons: [],
-    stats: { def: 8, hp: 25, agi: 2, bonusDefense: 8 },
+    stats: { agi: 2, def: 16, hp: 25 },
   },
   {
     name: 'Couraça de Aço', description: 'Armadura completa de placas. Muralha ambulante.',
     type: 'HEAVY_ARMOR', level: 10, rarity: 'UNCOMMON', goldPrice: 680, source: 'shop', build: 'guardian', dungeons: [],
-    stats: { def: 11, hp: 35, str: 2, bonusDefense: 12 },
+    stats: { str: 2, def: 23, hp: 35 },
   },
 
   // ============================================================
@@ -170,74 +170,74 @@ export const ITEM_CATALOG: CatalogItem[] = [
   {
     name: 'Capuz de Couro', description: 'Cobertura leve para a cabeça, sem atrapalhar a visão.',
     type: 'LIGHT_HELMET', level: 1, rarity: 'COMMON', goldPrice: 70, source: 'shop', build: 'agile', dungeons: [],
-    stats: { def: 2, agi: 1, bonusSpeed: 2 },
+    stats: { agi: 3, def: 2 },
   },
   {
     name: 'Elmo de Ferro', description: 'Casco metálico que absorve impactos na cabeça.',
     type: 'HEAVY_HELMET', level: 2, rarity: 'COMMON', goldPrice: 95, source: 'shop', build: 'guardian', dungeons: [],
-    stats: { def: 4, hp: 8, bonusDefense: 4 },
+    stats: { def: 8, hp: 8 },
   },
   {
     name: 'Luvas de Couro', description: 'Boa pegada e proteção básica para as mãos.',
     type: 'LIGHT_GLOVES', level: 1, rarity: 'COMMON', goldPrice: 65, source: 'shop', build: 'agile', dungeons: [],
-    stats: { def: 1, agi: 2, bonusSpeed: 3 },
+    stats: { agi: 5, def: 1 },
   },
   {
     name: 'Manoplas de Ferro', description: 'Mãos blindadas para quem dá e recebe golpes pesados.',
     type: 'HEAVY_GLOVES', level: 2, rarity: 'COMMON', goldPrice: 90, source: 'shop', build: 'guardian', dungeons: [],
-    stats: { def: 3, str: 1, bonusDamage: 3 },
+    stats: { str: 4, def: 3 },
   },
   {
     name: 'Botas de Viajante', description: 'Solado firme para longas caminhadas e fugas rápidas.',
     type: 'LIGHT_BOOTS', level: 1, rarity: 'COMMON', goldPrice: 65, source: 'shop', build: 'agile', dungeons: [],
-    stats: { def: 1, agi: 2, bonusSpeed: 4 },
+    stats: { agi: 6, def: 1 },
   },
   {
     name: 'Botas de Placa', description: 'Pesadas, mas mantêm o portador firme no chão.',
     type: 'HEAVY_BOOTS', level: 2, rarity: 'COMMON', goldPrice: 90, source: 'shop', build: 'guardian', dungeons: [],
-    stats: { def: 3, hp: 8, bonusDefense: 3 },
+    stats: { def: 6, hp: 8 },
   },
   {
     name: 'Escudo de Madeira', description: 'Tábuas reforçadas que aparam os primeiros golpes.',
     type: 'SHIELD', level: 1, rarity: 'COMMON', goldPrice: 90, source: 'shop', build: 'guardian', dungeons: [],
-    stats: { def: 2, bonusDefense: 4 },
+    stats: { def: 6 },
   },
 
   // ---------- SUPERIOR (UNCOMMON) ----------
   {
     name: 'Coif de Malha', description: 'Capuz de anéis entrelaçados; leve proteção sem perder agilidade.',
     type: 'LIGHT_HELMET', level: 6, rarity: 'UNCOMMON', goldPrice: 300, source: 'shop', build: 'agile', dungeons: [],
-    stats: { def: 4, agi: 3, mp: 6, bonusSpeed: 4 },
+    stats: { agi: 7, def: 4, mp: 6 },
   },
   {
     name: 'Elmo do Sentinela', description: 'Visor reforçado que protege rosto e pescoço.',
     type: 'HEAVY_HELMET', level: 8, rarity: 'UNCOMMON', goldPrice: 380, source: 'shop', build: 'guardian', dungeons: [],
-    stats: { def: 7, hp: 18, bonusDefense: 8 },
+    stats: { def: 15, hp: 18 },
   },
   {
     name: 'Luvas de Malha', description: 'Articuladas e leves, ideais para empunhar qualquer arma.',
     type: 'LIGHT_GLOVES', level: 6, rarity: 'UNCOMMON', goldPrice: 290, source: 'shop', build: 'agile', dungeons: [],
-    stats: { def: 3, agi: 4, bonusSpeed: 5 },
+    stats: { agi: 9, def: 3 },
   },
   {
     name: 'Manoplas do Sentinela', description: 'Placas articuladas que somam soco e bloqueio.',
     type: 'HEAVY_GLOVES', level: 8, rarity: 'UNCOMMON', goldPrice: 360, source: 'shop', build: 'guardian', dungeons: [],
-    stats: { def: 5, str: 3, bonusDamage: 6 },
+    stats: { str: 9, def: 5 },
   },
   {
     name: 'Botas de Malha', description: 'Passos silenciosos e protegidos.',
     type: 'LIGHT_BOOTS', level: 6, rarity: 'UNCOMMON', goldPrice: 290, source: 'shop', build: 'agile', dungeons: [],
-    stats: { def: 3, agi: 4, bonusSpeed: 8 },
+    stats: { agi: 12, def: 3 },
   },
   {
     name: 'Grevas de Aço', description: 'Pernas blindadas que reduzem quedas e empurrões.',
     type: 'HEAVY_BOOTS', level: 8, rarity: 'UNCOMMON', goldPrice: 360, source: 'shop', build: 'guardian', dungeons: [],
-    stats: { def: 6, hp: 16, bonusDefense: 6 },
+    stats: { def: 12, hp: 16 },
   },
   {
     name: 'Escudo de Ferro', description: 'Disco de ferro batido, resistente a golpes pesados.',
     type: 'SHIELD', level: 5, rarity: 'UNCOMMON', goldPrice: 350, source: 'shop', build: 'guardian', dungeons: [],
-    stats: { def: 4, bonusDefense: 8 },
+    stats: { def: 12 },
   },
 
   // ============================================================
@@ -250,88 +250,88 @@ export const ITEM_CATALOG: CatalogItem[] = [
   {
     name: 'Lâmina das Brasas', description: 'Forjada em magma; a lâmina nunca esfria nas mãos de um dracônico.',
     type: 'SWORD', level: 14, rarity: 'RARE', goldPrice: 1500, source: 'dungeon', raceRestriction: 'draconiano',
-    stats: { str: 7, bonusDamage: 16, specialEffect: 'Chance de causar dano de fogo' }, dungeons: ['caverna'],
+    stats: { str: 23, specialEffect: 'Chance de causar dano de fogo' }, dungeons: ['caverna'],
   },
   {
     name: 'Couraça de Escamas Ígneas', description: 'Escamas sobrepostas que fervem ao toque inimigo.',
     type: 'HEAVY_ARMOR', level: 16, rarity: 'RARE', goldPrice: 1800, source: 'dungeon', raceRestriction: 'draconiano',
-    stats: { def: 10, hp: 35, str: 3, bonusDefense: 16 }, dungeons: ['pantano'],
+    stats: { str: 3, def: 26, hp: 35 }, dungeons: ['pantano'],
   },
   {
     name: 'Égide do Dragão Ancião', description: 'Couraça das escamas de um dragão milenar. Só um descendente suporta seu peso ardente.',
     type: 'HEAVY_ARMOR', level: 24, rarity: 'EPIC', goldPrice: 3400, source: 'dungeon_boss', raceRestriction: 'draconiano',
-    stats: { def: 14, hp: 55, str: 5, bonusDefense: 22, specialEffect: 'Imunidade parcial a fogo' }, dungeons: ['pantano'],
+    stats: { str: 5, def: 36, hp: 55, specialEffect: 'Imunidade parcial a fogo' }, dungeons: ['pantano'],
   },
   {
     name: 'Presas do Cataclismo', description: 'Machado gêmeo feito das presas de um dragão. Pulsa com fúria ancestral.',
     type: 'AXE', level: 30, rarity: 'LEGENDARY', goldPrice: 9000, source: 'dungeon_boss', raceRestriction: 'draconiano',
-    stats: { str: 13, bonusDamage: 38, bonusSpeed: 3, specialEffect: 'Explosão ígnea massiva em crítico' }, dungeons: ['ruinas'],
+    stats: { str: 51, agi: 3, specialEffect: 'Explosão ígnea massiva em crítico' }, dungeons: ['ruinas'],
   },
 
   // 🧝 ELFO — INT/AGI, arco/cajado, leve
   {
     name: 'Arco do Luar Élfico', description: 'Esculpido em madeira-luar; leve como uma folha, certeiro como o destino.',
     type: 'BOW', level: 12, rarity: 'RARE', goldPrice: 1400, source: 'dungeon', raceRestriction: 'elfo',
-    stats: { agi: 8, int: 3, bonusDamage: 15, bonusSpeed: 6 }, dungeons: ['floresta'],
+    stats: { agi: 14, int: 18 }, dungeons: ['floresta'],
   },
   {
     name: 'Vestes do Bosque Celeste', description: 'Folhagem encantada que respira mana junto ao portador.',
     type: 'LIGHT_ARMOR', level: 13, rarity: 'RARE', goldPrice: 1300, source: 'dungeon', raceRestriction: 'elfo',
-    stats: { def: 6, int: 6, mp: 25, bonusDefense: 6, specialEffect: 'Regeneração de mana' }, dungeons: ['floresta'],
+    stats: { int: 6, def: 12, mp: 25, specialEffect: 'Regeneração de mana' }, dungeons: ['floresta'],
   },
   {
     name: 'Cajado da Aurora Arcana', description: 'Canaliza a luz das primeiras horas; magia mais barata e brilhante.',
     type: 'STAFF', level: 23, rarity: 'EPIC', goldPrice: 3600, source: 'dungeon_boss', raceRestriction: 'elfo',
-    stats: { int: 15, mp: 55, bonusDamage: 24, specialEffect: 'Reduz drasticamente o custo de mana' }, dungeons: ['ruinas'],
+    stats: { int: 39, mp: 55, specialEffect: 'Reduz drasticamente o custo de mana' }, dungeons: ['ruinas'],
   },
   {
     name: 'Manto da Forma Celestial', description: 'Tecido de luz astral que ergue o elfo à sua forma ascendida.',
     type: 'LIGHT_ARMOR', level: 29, rarity: 'LEGENDARY', goldPrice: 9500, source: 'dungeon_boss', raceRestriction: 'elfo',
-    stats: { def: 10, int: 12, agi: 8, mp: 60, bonusSpeed: 10, specialEffect: 'Aumenta poder mágico e esquiva' }, dungeons: ['ruinas'],
+    stats: { agi: 18, int: 12, def: 10, mp: 60, specialEffect: 'Aumenta poder mágico e esquiva' }, dungeons: ['ruinas'],
   },
 
   // 🐺 METAMORFO — AGI, garras/adaga, leve/médio
   {
     name: 'Garras do Predador', description: 'Garras que se fundem às mãos do metamorfo, afiadas como navalhas.',
     type: 'DAGGER', level: 13, rarity: 'RARE', goldPrice: 1500, source: 'dungeon', raceRestriction: 'metamorfo',
-    stats: { agi: 9, str: 3, bonusDamage: 17, bonusSpeed: 9 }, dungeons: ['caverna'],
+    stats: { str: 3, agi: 35 }, dungeons: ['caverna'],
   },
   {
     name: 'Pelagem Mutável', description: 'Tecido vivo que se adapta à forma e ao instinto do portador.',
     type: 'MEDIUM_ARMOR', level: 14, rarity: 'RARE', goldPrice: 1600, source: 'dungeon', raceRestriction: 'metamorfo',
-    stats: { def: 7, agi: 7, hp: 28, bonusSpeed: 10, specialEffect: 'Aumenta a esquiva' }, dungeons: ['pantano'],
+    stats: { agi: 17, def: 7, hp: 28, specialEffect: 'Aumenta a esquiva' }, dungeons: ['pantano'],
   },
   {
     name: 'Manto da Fera Primal', description: 'Carrega o cheiro de mil caçadas; desperta o predador interior.',
     type: 'MEDIUM_ARMOR', level: 22, rarity: 'EPIC', goldPrice: 3400, source: 'dungeon_boss', raceRestriction: 'metamorfo',
-    stats: { def: 9, agi: 10, hp: 35, bonusSpeed: 12, specialEffect: 'Esquiva aprimorada' }, dungeons: ['caverna'],
+    stats: { agi: 22, def: 9, hp: 35, specialEffect: 'Esquiva aprimorada' }, dungeons: ['caverna'],
   },
   {
     name: 'Garras do Caçador Lunar', description: 'Brilham sob a lua cheia; cada golpe encadeia o próximo.',
     type: 'DAGGER', level: 28, rarity: 'LEGENDARY', goldPrice: 9200, source: 'dungeon_boss', raceRestriction: 'metamorfo',
-    stats: { agi: 14, str: 5, bonusDamage: 36, bonusSpeed: 14, specialEffect: 'Golpes em sequência ignoram parte da defesa' }, dungeons: ['pantano'],
+    stats: { str: 5, agi: 64, specialEffect: 'Golpes em sequência ignoram parte da defesa' }, dungeons: ['pantano'],
   },
 
   // ⚔️ HUMANO — versátil, qualquer peso/arma
   {
     name: 'Espada do Andarilho', description: 'Equilibrada para a versatilidade humana — boa em qualquer mão.',
     type: 'SWORD', level: 11, rarity: 'RARE', goldPrice: 1300, source: 'dungeon', raceRestriction: 'humano',
-    stats: { str: 6, agi: 5, bonusDamage: 14, bonusSpeed: 4 }, dungeons: ['floresta'],
+    stats: { str: 6, agi: 23 }, dungeons: ['floresta'],
   },
   {
     name: 'Brigantina do Mercenário', description: 'Proteção confiável de quem vive da espada por contrato.',
     type: 'MEDIUM_ARMOR', level: 12, rarity: 'RARE', goldPrice: 1350, source: 'dungeon', raceRestriction: 'humano',
-    stats: { def: 8, hp: 25, agi: 3, bonusDefense: 10 }, dungeons: ['caverna'],
+    stats: { agi: 3, def: 18, hp: 25 }, dungeons: ['caverna'],
   },
   {
     name: 'Égide do Herói', description: 'Carrega a determinação inquebrável da humanidade.',
     type: 'HEAVY_ARMOR', level: 21, rarity: 'EPIC', goldPrice: 3200, source: 'dungeon_boss', raceRestriction: 'humano',
-    stats: { def: 13, hp: 45, str: 4, bonusDefense: 20, specialEffect: 'Reduz dano físico' }, dungeons: ['pantano'],
+    stats: { str: 4, def: 33, hp: 45, specialEffect: 'Reduz dano físico' }, dungeons: ['pantano'],
   },
   {
     name: 'Lâmina do Sétimo Sentido', description: 'Desperta com o portador; corta onde a mente prevê o golpe.',
     type: 'SWORD', level: 28, rarity: 'LEGENDARY', goldPrice: 9500, source: 'dungeon_boss', raceRestriction: 'humano',
-    stats: { str: 10, agi: 8, int: 6, bonusDamage: 38, bonusSpeed: 6, specialEffect: 'Ignora parte da defesa e concede XP extra' }, dungeons: ['ruinas'],
+    stats: { str: 10, agi: 14, int: 44, specialEffect: 'Ignora parte da defesa e concede XP extra' }, dungeons: ['ruinas'],
   },
 
   // ============================================================
@@ -349,12 +349,12 @@ export const ITEM_CATALOG: CatalogItem[] = [
   {
     name: 'Anel de Cristal Pulsante', description: 'Lapidado de um veio vivo da Caverna de Cristal.',
     type: 'RING', level: 12, rarity: 'RARE', goldPrice: 1400, source: 'dungeon', dungeons: ['caverna'],
-    stats: { int: 6, mp: 30, bonusDamage: 8, specialEffect: 'Aumenta regeneração de mana' },
+    stats: { int: 14, mp: 30 },
   },
   {
     name: 'Anel da Névoa Tóxica', description: 'Condensa os miasmas do Pântano Maldito num aro de osso.',
     type: 'RING', level: 18, rarity: 'EPIC', goldPrice: 2800, source: 'dungeon_boss', dungeons: ['pantano'],
-    stats: { agi: 7, bonusSpeed: 8, bonusDamage: 12, specialEffect: 'Chance de envenenar o alvo' },
+    stats: { agi: 27 },
   },
   {
     name: 'Anel do Selo Imperial', description: 'Insígnia de um império morto que ainda comanda obediência.',
@@ -366,7 +366,7 @@ export const ITEM_CATALOG: CatalogItem[] = [
   {
     name: 'Amuleto da Coruja', description: 'Olho de âmbar que enxerga a fraqueza do inimigo na escuridão.',
     type: 'NECKLACE', level: 7, rarity: 'RARE', goldPrice: 950, source: 'dungeon', dungeons: ['floresta'],
-    stats: { agi: 6, bonusSpeed: 6, specialEffect: 'Aumenta a chance de crítico' },
+    stats: { agi: 12 },
   },
   {
     name: 'Colar do Veio Dourado', description: 'Pepita bruta do coração da caverna; atrai a fortuna.',
@@ -393,7 +393,7 @@ export const ITEM_CATALOG: CatalogItem[] = [
   {
     name: 'Lâmina de Krax-thar', description: 'Forjada na garganta do Devorador. Arde com a fome de um mundo.',
     type: 'SWORD', level: 35, rarity: 'LEGENDARY', goldPrice: 16000, source: 'adventure_boss', adventureBoss: 'Krax-thar', dungeons: [],
-    stats: { str: 12, bonusDamage: 42, bonusSpeed: 4, specialEffect: 'Dano de fogo massivo; queima o alvo por turnos' },
+    stats: { str: 54, agi: 4 },
   },
   {
     name: 'Coração de Krax-thar', description: 'O coração ainda pulsante do dragão; quanto mais ferido você está, mais ele queima.',
@@ -405,36 +405,36 @@ export const ITEM_CATALOG: CatalogItem[] = [
   {
     name: "Presas de Vol'theris", description: 'Adagas-presa que mordem entre os planos, ignorando armaduras.',
     type: 'DAGGER', level: 35, rarity: 'LEGENDARY', goldPrice: 16000, source: 'adventure_boss', adventureBoss: "Vol'theris", dungeons: [],
-    stats: { agi: 14, int: 6, bonusDamage: 40, bonusSpeed: 16, specialEffect: 'Ataques ignoram defesa; chance de reposicionar' },
+    stats: { agi: 30, int: 46 },
   },
   {
     name: "Manto de Vol'theris", description: 'Tecido com fios do vazio; por instantes, você simplesmente não está lá.',
     type: 'LIGHT_ARMOR', level: 35, rarity: 'LEGENDARY', goldPrice: 15500, source: 'adventure_boss', adventureBoss: "Vol'theris", dungeons: [],
-    stats: { def: 11, agi: 10, int: 10, mp: 55, bonusSpeed: 12, specialEffect: 'Chance de anular completamente um golpe' },
+    stats: { agi: 22, int: 10, def: 11, mp: 55 },
   },
 
   // 🗿 Sábado 3 — Gorthak, o Colosso de Adamantite
   {
     name: 'Esmagador de Gorthak', description: 'Machado-martelo de adamantite bruta. O chão treme onde ele cai.',
     type: 'AXE', level: 35, rarity: 'LEGENDARY', goldPrice: 16500, source: 'adventure_boss', adventureBoss: 'Gorthak', dungeons: [],
-    stats: { str: 15, def: 6, bonusDamage: 44, specialEffect: 'Ignora parte da defesa; atordoa em crítico' },
+    stats: { str: 59, def: 6 },
   },
   {
     name: 'Égide de Gorthak', description: 'Forjada do núcleo do Colosso; praticamente indestrutível.',
     type: 'HEAVY_ARMOR', level: 35, rarity: 'LEGENDARY', goldPrice: 16000, source: 'adventure_boss', adventureBoss: 'Gorthak', dungeons: [],
-    stats: { def: 20, hp: 90, bonusDefense: 30, specialEffect: 'Reflete parte do dano físico recebido' },
+    stats: { def: 50, hp: 90 },
   },
 
   // ✨ Sábado 4 — Sylariel, a Rainha Celeste (elfa caída)
   {
     name: 'Arco de Sylariel', description: 'Dispara flechas de luz pura que perfuram a noite e a carne.',
     type: 'BOW', level: 35, rarity: 'LEGENDARY', goldPrice: 16000, source: 'adventure_boss', adventureBoss: 'Sylariel', dungeons: [],
-    stats: { agi: 15, int: 8, bonusDamage: 42, bonusSpeed: 12, specialEffect: 'Flechas perfurantes; crítico aumentado' },
+    stats: { agi: 27, int: 50 },
   },
   {
     name: 'Cajado de Sylariel', description: 'Cetro da Rainha Celeste; cada feitiço devolve um sopro de vida.',
     type: 'STAFF', level: 35, rarity: 'LEGENDARY', goldPrice: 16500, source: 'adventure_boss', adventureBoss: 'Sylariel', dungeons: [],
-    stats: { int: 18, mp: 70, bonusDamage: 30, specialEffect: 'Magias custam menos mana e curam o conjurador' },
+    stats: { int: 48, mp: 70 },
   },
   {
     name: 'Lágrima de Sylariel', description: 'Uma única lágrima cristalizada da Rainha, fria e radiante.',

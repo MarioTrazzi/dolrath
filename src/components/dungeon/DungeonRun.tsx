@@ -201,10 +201,10 @@ function equipmentPower(equipArray: any[]): { attack: number; defense: number; h
   let hp = 0
   for (const eq of equipArray || []) {
     const s = enhancedStats(eq)
-    // ataque: dano da arma + melhor atributo ofensivo da peça
-    attack += num(s.bonusDamage) + num(s.attack) + Math.max(num(s.str), num(s.agi), num(s.int))
-    // defesa: defesa da peça + resistência/constituição (metade)
-    defense += num(s.def) + num(s.defense) + Math.floor((num(s.res) + num(s.con)) / 2)
+    // ataque: melhor atributo ofensivo da peça (gear dá atributos REAIS — STR/AGI/INT)
+    attack += Math.max(num(s.str), num(s.agi), num(s.int))
+    // defesa: DEF da peça (+ resistência/constituição, se houver)
+    defense += num(s.def) + Math.floor((num(s.res) + num(s.con)) / 2)
     // vida extra das peças
     hp += num(s.hp)
   }

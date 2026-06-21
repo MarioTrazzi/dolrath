@@ -1,7 +1,7 @@
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { resolveImageUrl } from '@/lib/imageUrl';
-import { canRaceEquip, ItemTypeStr } from '@/lib/itemCatalog';
+import { canEquip, ItemTypeStr } from '@/lib/itemCatalog';
 import { NextResponse } from 'next/server';
 
 export async function GET(request: Request) {
@@ -11,9 +11,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Raça do personagem ativo (opcional). Quando presente, filtra a vitrine
-  // para mostrar só o que aquela raça pode equipar.
-  const race = new URL(request.url).searchParams.get('race');
+  // Raça + classe do personagem ativo (opcionais). Filtram a vitrine para
+  // mostrar só o que aquele personagem pode equipar (arma/peso por classe).
+  const url = new URL(request.url);
+  const race = url.searchParams.get('race');
+  const charClass = url.searchParams.get('class');
 
   try {
     const items = await prisma.item.findMany({
@@ -30,9 +32,9 @@ export async function GET(request: Request) {
       const stats = (item.stats ?? {}) as Record<string, any>;
       if (stats.source !== 'shop') return false;
 
-      // Filtro por raça do personagem ativo (peso de armadura + exclusividade).
-      if (race) {
-        const check = canRaceEquip(race, item.type as ItemTypeStr, stats.raceRestriction ?? null);
+      // Filtro pelo personagem ativo: exclusividade de raça + arma/peso por classe.
+      if (race || charClass) {
+        const check = canEquip(race, charClass, item.type as ItemTypeStr, stats.raceRestriction ?? null);
         if (!check.ok) return false;
       }
       return true;

@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
 import { EquipmentSlotType } from '@prisma/client'
 import { recordEquipmentChange } from '@/lib/characterHistory'
-import { canRaceEquip, ItemTypeStr, RaceId } from '@/lib/itemCatalog'
+import { canEquip, ItemTypeStr, RaceId } from '@/lib/itemCatalog'
 import { restoreItemToInventory, removeOneFromInventory } from '@/lib/inventoryMutations'
 
 export async function POST(
@@ -76,15 +76,16 @@ export async function POST(
       }, { status: 400 });
     }
 
-    // Verificar restrição de raça (item exclusivo + peso de armadura) 🧬
+    // Restrição de equipamento: exclusividade de RAÇA + arma/peso por CLASSE 🧬⚔️
     const itemStats = (characterInventoryItem.item.stats as Record<string, any>) || {};
-    const raceCheck = canRaceEquip(
+    const equipCheck = canEquip(
       character.race,
+      character.class,
       characterInventoryItem.item.type as ItemTypeStr,
       (itemStats.raceRestriction as RaceId | null) || undefined
     );
-    if (!raceCheck.ok) {
-      return NextResponse.json({ error: `🧬 ${raceCheck.reason}` }, { status: 400 });
+    if (!equipCheck.ok) {
+      return NextResponse.json({ error: `🧬 ${equipCheck.reason}` }, { status: 400 });
     }
 
     // Determina o slot final (anéis podem cair em RING_1 ou RING_2).

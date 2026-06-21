@@ -112,6 +112,16 @@ export const ITEM_CATALOG: CatalogItem[] = [
     type: 'AXE', level: 8, rarity: 'UNCOMMON', goldPrice: 480, source: 'shop', build: 'guardian', dungeons: [],
     stats: { str: 13, def: 3, hp: 16 },
   },
+  {
+    name: 'Arco Curto', description: 'Arco simples de madeira flexível; o primeiro passo do batedor.',
+    type: 'BOW', level: 2, rarity: 'COMMON', goldPrice: 100, source: 'shop', build: 'agile', dungeons: [],
+    stats: { agi: 9 },
+  },
+  {
+    name: 'Punhal do Caçador', description: 'Lâmina curva e leve; perfeita para golpes rápidos em sequência.',
+    type: 'DAGGER', level: 6, rarity: 'UNCOMMON', goldPrice: 420, source: 'shop', build: 'agile', dungeons: [],
+    stats: { agi: 18 },
+  },
 
   // ============================================================
   // 🏪 LOJA — ARMADURA DE CORPO (4 variantes por tier)
@@ -507,6 +517,52 @@ export const ITEM_CATALOG: CatalogItem[] = [
   },
 
   // ============================================================
+  // 🗝️ MASMORRAS — ARMAS QUE FALTAVAM POR RARIDADE
+  //   Escudo (2ª do Guerreiro): Raro→Lendário · cajado Raro · épicos.
+  // ============================================================
+
+  // --- ESCUDOS (secundária do Guerreiro) — completam Raro/Épico/Lendário ---
+  {
+    name: 'Escudo do Guardião', description: 'Disco de aço maciço com o brasão de uma ordem esquecida.',
+    type: 'SHIELD', level: 13, rarity: 'RARE', goldPrice: 1450, source: 'dungeon', dungeons: ['caverna'],
+    stats: { def: 22, hp: 10 },
+  },
+  {
+    name: 'Égide do Baluarte', description: 'Tão grande que vira uma parede; pouco a atravessa.',
+    type: 'SHIELD', level: 22, rarity: 'EPIC', goldPrice: 3300, source: 'dungeon_boss', dungeons: ['pantano'],
+    stats: { def: 34, hp: 22, specialEffect: 'Reduz o dano recebido por alguns turnos' },
+  },
+  {
+    name: 'Muralha Viva', description: 'Metal rúnico que endurece ao receber o golpe e o devolve.',
+    type: 'SHIELD', level: 29, rarity: 'LEGENDARY', goldPrice: 9300, source: 'dungeon_boss', dungeons: ['ruinas'],
+    stats: { def: 50, hp: 32, specialEffect: 'Reflete parte do dano ao atacante' },
+  },
+
+  // --- CAJADO Raro (preenche o tier do Mago) ---
+  {
+    name: 'Cajado do Bosque Antigo', description: 'Galho da árvore-mãe que ainda conduz a seiva mágica da floresta.',
+    type: 'STAFF', level: 12, rarity: 'RARE', goldPrice: 1350, source: 'dungeon', dungeons: ['floresta'],
+    stats: { int: 24, mp: 28 },
+  },
+
+  // --- ARMAS ÉPICAS (preenchem o tier vazio) ---
+  {
+    name: 'Lâmina do Carrasco', description: 'Espada larga que pesa como uma sentença; busca o golpe final.',
+    type: 'SWORD', level: 22, rarity: 'EPIC', goldPrice: 3400, source: 'dungeon_boss', dungeons: ['pantano'],
+    stats: { str: 42, specialEffect: 'Dano extra contra alvos feridos' },
+  },
+  {
+    name: 'Presas Gêmeas', description: 'Par de adagas curvas que mordem duas vezes a cada investida.',
+    type: 'DAGGER', level: 22, rarity: 'EPIC', goldPrice: 3300, source: 'dungeon_boss', dungeons: ['caverna'],
+    stats: { agi: 42, specialEffect: 'Chance de ataque duplo' },
+  },
+  {
+    name: 'Arco da Tormenta', description: 'A corda zune como vento de tempestade; a flecha não conhece armadura.',
+    type: 'BOW', level: 26, rarity: 'EPIC', goldPrice: 3500, source: 'dungeon_boss', dungeons: ['ruinas'],
+    stats: { agi: 40, int: 6, specialEffect: 'Flecha perfurante ignora parte da defesa' },
+  },
+
+  // ============================================================
   // 🗓️ AVENTURAS SEMANAIS — CHEFES ÚNICOS (gear nomeado, Lendário)
   //   1 chefe por sábado (semana 1–4 do mês). Drop exclusivo do chefe.
   // ============================================================
@@ -776,11 +832,11 @@ export function getItemsByRarity(rarity: Rarity): CatalogItem[] {
   return ITEM_CATALOG.filter((i) => i.rarity === rarity);
 }
 
-/** Itens vendidos na loja (NPC). Opcionalmente filtrados pela raça do personagem ativo. */
-export function getShopItems(race?: string | null): CatalogItem[] {
+/** Itens vendidos na loja (NPC). Filtra pelo que a raça+classe do personagem ativo pode equipar. */
+export function getShopItems(race?: string | null, charClass?: string | null): CatalogItem[] {
   const shop = ITEM_CATALOG.filter((i) => i.source === 'shop');
-  if (!race) return shop;
-  return shop.filter((i) => canRaceEquip(race, i.type, i.raceRestriction).ok);
+  if (!race && !charClass) return shop;
+  return shop.filter((i) => canEquip(race, charClass, i.type, i.raceRestriction).ok);
 }
 
 /** Drops de uma masmorra (não inclui itens de loja, que têm dungeons vazio). */
@@ -802,14 +858,37 @@ export const RARITY_DROP_WEIGHT: Record<Rarity, number> = {
   LEGENDARY: 1,
 };
 
-// Restrições de peso de armadura por raça (texto em characterCreationData).
-// 'LIGHT' = peças leves; 'HEAVY' = peças pesadas.
-const RACE_FORBIDDEN_WEIGHT: Record<RaceId, 'LIGHT' | 'HEAVY' | null> = {
-  draconiano: 'LIGHT', // "Não pode usar armaduras leves"
-  metamorfo: 'HEAVY',  // "Não pode usar armaduras pesadas"
-  elfo: 'HEAVY',       // "Não pode usar armaduras pesadas"
-  humano: null,
+// 🎯 Restrições de equipamento por CLASSE (não por raça): peso de armadura e
+// tipo de arma seguem a classe, como no BDO. A raça segue importando para
+// stats, transformações e itens lendários EXCLUSIVOS (raceRestriction).
+export type ClassId = 'warrior' | 'rogue' | 'mage' | 'monk';
+
+// Pesos de armadura que cada classe pode vestir.
+const CLASS_ALLOWED_WEIGHT: Record<ClassId, Array<'LIGHT' | 'MEDIUM' | 'HEAVY'>> = {
+  warrior: ['MEDIUM', 'HEAVY'], // tanque/bruiser
+  rogue:   ['LIGHT', 'MEDIUM'],  // ágil
+  mage:    ['LIGHT'],            // tecido/vestes
+  monk:    ['LIGHT', 'MEDIUM'],  // marcial ágil
 };
+
+// Tipos de ARMA (primária + secundária) de cada classe.
+const CLASS_WEAPONS: Record<ClassId, ItemTypeStr[]> = {
+  warrior: ['SWORD', 'AXE', 'SHIELD'],
+  rogue:   ['DAGGER', 'BOW'],
+  mage:    ['STAFF', 'ORB'],
+  monk:    ['GAUNTLET'],
+};
+
+const CLASS_LABEL: Record<ClassId, string> = {
+  warrior: 'Guerreiro', rogue: 'Ladino', mage: 'Mago', monk: 'Monge',
+};
+
+// Tipos que são ARMA (sujeitos à restrição de arma por classe).
+const WEAPON_TYPES: ItemTypeStr[] = ['SWORD', 'AXE', 'DAGGER', 'STAFF', 'BOW', 'GAUNTLET', 'ORB', 'SHIELD'];
+
+function isClassId(v: string): v is ClassId {
+  return v === 'warrior' || v === 'rogue' || v === 'mage' || v === 'monk';
+}
 
 function armorWeightOf(type: ItemTypeStr): 'LIGHT' | 'MEDIUM' | 'HEAVY' | null {
   if (type.startsWith('LIGHT_')) return 'LIGHT';
@@ -825,38 +904,60 @@ const RACE_LABEL: Record<RaceId, string> = {
   elfo: 'Elfo',
 };
 
-function isRaceId(v: string): v is RaceId {
-  return v === 'draconiano' || v === 'metamorfo' || v === 'humano' || v === 'elfo';
-}
-
 /**
- * Verifica se uma raça pode equipar um item.
- * Considera tanto a exclusividade do item (raceRestriction) quanto a
- * restrição de peso de armadura da raça.
+ * Verifica a exclusividade de RAÇA do item (itens lendários raceRestriction).
+ * A restrição de peso/arma virou responsabilidade da CLASSE (canClassEquip).
  */
 export function canRaceEquip(
   race: string | null | undefined,
-  itemType: ItemTypeStr,
+  _itemType: ItemTypeStr,
   raceRestriction?: RaceId | null,
 ): { ok: boolean; reason?: string } {
   const r = (race || '').toLowerCase();
-
-  // 1. Item exclusivo de raça
   if (raceRestriction && r !== raceRestriction) {
     return { ok: false, reason: `Item exclusivo da raça ${RACE_LABEL[raceRestriction]}.` };
   }
+  return { ok: true };
+}
 
-  // 2. Restrição de peso de armadura
-  if (isRaceId(r)) {
-    const forbidden = RACE_FORBIDDEN_WEIGHT[r];
-    const weight = armorWeightOf(itemType);
-    if (forbidden && weight === forbidden) {
-      const label = forbidden === 'LIGHT' ? 'leves' : 'pesadas';
-      return { ok: false, reason: `${RACE_LABEL[r]} não pode usar armaduras ${label}.` };
+/**
+ * Verifica se uma CLASSE pode equipar um item: tipo de arma (primária/secundária)
+ * e peso de armadura permitidos. Classe desconhecida não bloqueia.
+ */
+export function canClassEquip(
+  charClass: string | null | undefined,
+  itemType: ItemTypeStr,
+): { ok: boolean; reason?: string } {
+  const c = (charClass || '').toLowerCase();
+  if (!isClassId(c)) return { ok: true };
+
+  // Arma: precisa estar na lista de armas da classe
+  if (WEAPON_TYPES.includes(itemType)) {
+    if (!CLASS_WEAPONS[c].includes(itemType)) {
+      return { ok: false, reason: `${CLASS_LABEL[c]} não pode usar esse tipo de arma.` };
     }
+    return { ok: true };
   }
 
+  // Armadura: peso precisa ser permitido para a classe
+  const weight = armorWeightOf(itemType);
+  if (weight && !CLASS_ALLOWED_WEIGHT[c].includes(weight)) {
+    const label = weight === 'LIGHT' ? 'leves' : weight === 'HEAVY' ? 'pesadas' : 'médias';
+    return { ok: false, reason: `${CLASS_LABEL[c]} não pode usar armaduras ${label}.` };
+  }
   return { ok: true };
+}
+
+/** Exclusividade de raça + restrição de classe (arma/peso) combinadas. */
+export function canEquip(
+  race: string | null | undefined,
+  charClass: string | null | undefined,
+  itemType: ItemTypeStr,
+  raceRestriction?: RaceId | null,
+): { ok: boolean; reason?: string } {
+  const r = canRaceEquip(race, itemType, raceRestriction);
+  if (!r.ok) return r;
+  return canClassEquip(charClass, itemType);
 }
 
 /**

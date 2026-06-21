@@ -11,7 +11,7 @@ export const races: CharacterRace[] = [
     specialAbility: 'Transformação em Dragão',
     transformation: 'Dragão',
     lore: 'Antigas linhagens dracônicas que mantiveram sua humanidade...',
-    restrictions: ['Não pode usar armaduras leves']
+    restrictions: [] // equipamento agora é por CLASSE (canClassEquip), não por raça
   },
   {
     id: 'metamorfo',
@@ -23,7 +23,7 @@ export const races: CharacterRace[] = [
     specialAbility: 'Transformação Animal',
     transformation: 'Qualquer Animal',
     lore: 'Seres capazes de alterar sua forma física...',
-    restrictions: ['Não pode usar armaduras pesadas']
+    restrictions: [] // equipamento agora é por CLASSE (canClassEquip), não por raça
   },
   {
     id: 'humano',
@@ -47,7 +47,7 @@ export const races: CharacterRace[] = [
     specialAbility: 'Maestria Arcana',
     transformation: 'Forma Celestial',
     lore: 'Antigos guardiões da magia, os elfos podem ascender à Forma Celestial — um avatar de luz astral que amplifica o poder mágico e os reflexos, ao custo de um corpo etéreo e frágil.',
-    restrictions: ['Não pode usar armaduras pesadas']
+    restrictions: [] // equipamento agora é por CLASSE (canClassEquip), não por raça
   }
 ];
 

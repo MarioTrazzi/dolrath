@@ -610,7 +610,7 @@ boss: +2 níveis, recompensa maior`}</Formula>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {Object.entries(BUILD_LABEL).map(([k, v]) => <Tag key={k}>{v}</Tag>)}
                   </div>
-                  <p className="mt-3 text-sm">Armadura por peso (via <Code>canRaceEquip</Code>): <strong className="text-white">Draconiano</strong> não usa leve; <strong className="text-white">Metamorfo</strong> e <strong className="text-white">Elfo</strong> não usam pesada; <strong className="text-white">Humano</strong> usa tudo. A loja já filtra pela raça do personagem ativo (<Code>getShopItems(race)</Code>).</p>
+                  <p className="mt-3 text-sm">Equipamento por <strong className="text-white">CLASSE</strong> (via <Code>canClassEquip</Code>): <strong className="text-white">Guerreiro</strong> usa pesada/média + espada/machado/escudo; <strong className="text-white">Ladino</strong> leve/média + adaga/arco; <strong className="text-white">Mago</strong> leve + cajado/orbe; <strong className="text-white">Monge</strong> leve/média + manopla. A raça segue valendo para stats, transformações e itens lendários exclusivos. A loja filtra por raça+classe (<Code>getShopItems(race, class)</Code>).</p>
                 </Card>
               </div>
 

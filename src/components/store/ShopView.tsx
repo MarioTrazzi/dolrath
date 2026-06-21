@@ -109,6 +109,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
     [characters, selectedCharacter]
   );
   const activeRace = activeCharacter?.race;
+  const activeClass = (activeCharacter as any)?.class;
   const activeLevel = activeCharacter?.level;
   
   // Estados para busca e filtros
@@ -212,14 +213,18 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
   // Recarrega a vitrine sempre que o personagem ativo (ou o toggle) muda,
   // filtrando pela raça do personagem por padrão.
   useEffect(() => {
-    fetchItems(showAll ? undefined : activeRace);
+    fetchItems(showAll ? undefined : activeRace, showAll ? undefined : activeClass);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeRace, showAll]);
+  }, [activeRace, activeClass, showAll]);
 
-  const fetchItems = async (race?: string) => {
+  const fetchItems = async (race?: string, charClass?: string) => {
     setItemsLoading(true);
     try {
-      const url = race ? `/api/store/items?race=${encodeURIComponent(race)}` : '/api/store/items';
+      const params = new URLSearchParams();
+      if (race) params.set('race', race);
+      if (charClass) params.set('class', charClass);
+      const qs = params.toString();
+      const url = qs ? `/api/store/items?${qs}` : '/api/store/items';
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();

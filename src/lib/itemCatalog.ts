@@ -445,6 +445,68 @@ export const ITEM_CATALOG: CatalogItem[] = [
   },
 
   // ============================================================
+  // 🗝️ MASMORRAS — MANOPLAS (Monge), ORBES (Mago) e CINTOS
+  //   Sem restrição de raça (são por classe/build). Raro→Lendário.
+  //   Épico/Lendário só de CHEFE.
+  // ============================================================
+
+  // --- MANOPLAS (arma do Monge) ---
+  {
+    name: 'Manoplas da Fera', description: 'Couro curtido com presas incrustadas; cada soco rosna como o predador que as forjou.',
+    type: 'GAUNTLET', level: 13, rarity: 'RARE', goldPrice: 1450, source: 'dungeon', dungeons: ['caverna'],
+    stats: { agi: 30, hp: 12 },
+  },
+  {
+    name: 'Punhos do Mestre Marcial', description: 'Disciplina de mil treinos cristalizada em aço; a velocidade vira sequência.',
+    type: 'GAUNTLET', level: 22, rarity: 'EPIC', goldPrice: 3300, source: 'dungeon_boss', dungeons: ['pantano'],
+    stats: { agi: 40, hp: 18, specialEffect: 'Rajada de golpes em sequência' },
+  },
+  {
+    name: 'Punhos do Dragão Interior', description: 'Despertam o cosmo do portador; o golpe atravessa carne e armadura.',
+    type: 'GAUNTLET', level: 29, rarity: 'LEGENDARY', goldPrice: 9300, source: 'dungeon_boss', dungeons: ['ruinas'],
+    stats: { str: 6, agi: 60, specialEffect: 'Golpes encadeados ignoram parte da defesa' },
+  },
+
+  // --- ORBES (offhand do Mago) ---
+  {
+    name: 'Orbe da Mata Espectral', description: 'Aprisiona a névoa luminosa da Floresta Sombria, que sussurra feitiços.',
+    type: 'ORB', level: 12, rarity: 'RARE', goldPrice: 1350, source: 'dungeon', dungeons: ['floresta'],
+    stats: { int: 22, mp: 28 },
+  },
+  {
+    name: 'Orbe da Tempestade Arcana', description: 'Raios miniaturizados orbitam o núcleo, prontos para se espalhar pelo campo.',
+    type: 'ORB', level: 22, rarity: 'EPIC', goldPrice: 3400, source: 'dungeon_boss', dungeons: ['pantano'],
+    stats: { int: 40, mp: 45, specialEffect: 'Feitiços atingem em área' },
+  },
+  {
+    name: 'Coração de Mana Eterno', description: 'Um cristal que pulsa como um coração vivo de pura energia arcana.',
+    type: 'ORB', level: 29, rarity: 'LEGENDARY', goldPrice: 9400, source: 'dungeon_boss', dungeons: ['ruinas'],
+    stats: { int: 58, mp: 65, specialEffect: 'Reduz o custo de mana e amplifica o dano mágico' },
+  },
+
+  // --- CINTOS (universais; 1 por masmorra) ---
+  {
+    name: 'Cinto da Mata Viva', description: 'Trançado de raízes que ainda respiram; firma o corpo e a vontade.',
+    type: 'BELT', level: 7, rarity: 'RARE', goldPrice: 920, source: 'dungeon', dungeons: ['floresta'],
+    stats: { def: 6, hp: 30, specialEffect: 'Regeneração lenta de HP' },
+  },
+  {
+    name: 'Cinta de Cristal Pulsante', description: 'Cristais vivos costurados ao couro reabastecem a mana do portador.',
+    type: 'BELT', level: 12, rarity: 'RARE', goldPrice: 1450, source: 'dungeon', dungeons: ['caverna'],
+    stats: { int: 10, mp: 28 },
+  },
+  {
+    name: 'Cinturão do Colosso', description: 'Placa central do tamanho de um escudo; carrega o peso de uma muralha.',
+    type: 'BELT', level: 18, rarity: 'EPIC', goldPrice: 2900, source: 'dungeon_boss', dungeons: ['pantano'],
+    stats: { str: 5, def: 20, hp: 48, specialEffect: 'Reduz o dano físico recebido' },
+  },
+  {
+    name: 'Faixa do Destino', description: 'Tecida com fios de eras esquecidas; eleva tudo no portador.',
+    type: 'BELT', level: 26, rarity: 'EPIC', goldPrice: 3700, source: 'dungeon_boss', dungeons: ['ruinas'],
+    stats: { str: 5, agi: 5, int: 5, def: 8, hp: 35, specialEffect: 'Bônus em todos os atributos' },
+  },
+
+  // ============================================================
   // 🗓️ AVENTURAS SEMANAIS — CHEFES ÚNICOS (gear nomeado, Lendário)
   //   1 chefe por sábado (semana 1–4 do mês). Drop exclusivo do chefe.
   // ============================================================

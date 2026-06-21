@@ -184,14 +184,44 @@ function buildCharacter(race, klass, level) {
   const bonus = (k) => Math.floor((rb[k] || 0) / 10) + Math.floor((cb[k] || 0) / 10)
 
   const FLAT = Number(process.env.FLATBASE) || 0 // piso inato em TODOS os stats
-  const str = d.str + bonus('strength') + FLAT
-  const agi = d.agi + bonus('dexterity') + FLAT
-  const int = d.int + bonus('intelligence') + FLAT
-  const def = d.def + bonus('constitution') + FLAT
+  let str = d.str + bonus('strength') + FLAT
+  let agi = d.agi + bonus('dexterity') + FLAT
+  let int = d.int + bonus('intelligence') + FLAT
+  let def = d.def + bonus('constitution') + FLAT
+
+  // 🎽 GEAR no PvP (GEAR=1): soma o set BiS lendário +IV (TET ×4) por classe,
+  // escalado por GEARMULT (1.0 = bruto da dungeon; <1 reduz a dominância no PvP).
+  // Captura a assimetria: Ladino/Monge dual-wield (2 armas ofensivas), Guerreiro
+  // tem escudo (def, 0 ofensivo), Mago cajado+orbe (2 ofensivos).
+  let gearHp = 0, gearMp = 0
+  if (process.env.GEAR) {
+    const GM = process.env.GEARMULT !== undefined ? Number(process.env.GEARMULT) : 1
+    // GEARRAW=1 → BiS cru (mostra o desequilíbrio). Senão → ORÇAMENTO equilibrado:
+    // ofensivo ~comparável + def/hp modesto p/ todos (gear conta sem o tank dominar).
+    const G = (process.env.GEARRAW ? {
+      warrior: { str: 236, def: 400, hp: 360 },
+      rogue:   { agi: 512, def: 40,  hp: 20  },
+      mage:    { int: 424, def: 40,  hp: 0   },
+      monk:    { agi: 480, def: 120, hp: 80  },
+    } : {
+      // Playbook das transformações: DEF baixa (não inflar RES→mago vive),
+      // STR sub-pesado (pesado já fura DEF), Mago +INT +MP (sustenta).
+      warrior: { str: 175, def: 45, hp: 130, mp: 0   },
+      rogue:   { agi: 215, def: 40, hp: 95,  mp: 0   },
+      mage:    { int: 250, def: 35, hp: 90,  mp: 420 },
+      monk:    { agi: 200, def: 40, hp: 85,  mp: 0   },
+    })[klass] || {}
+    str += Math.floor((G.str || 0) * GM)
+    agi += Math.floor((G.agi || 0) * GM)
+    int += Math.floor((G.int || 0) * GM)
+    def += Math.floor((G.def || 0) * GM)
+    gearHp = Math.floor((G.hp || 0) * GM)
+    gearMp = Math.floor((G.mp || 0) * GM)
+  }
 
   // Derivados — idênticos ao combate ao vivo (computeDerivedStats / combat page)
-  const maxHp = 100 + level * 6 + Math.floor(str * 0.5) + def * 4
-  const maxMp = process.env.BIGMP ? 99999 : 60 + int * 4 + agi // BIGMP: diagnóstico de mana
+  const maxHp = 100 + level * 6 + Math.floor(str * 0.5) + def * 4 + gearHp
+  const maxMp = process.env.BIGMP ? 99999 : 60 + int * 4 + agi + gearMp // BIGMP: diagnóstico de mana
   const maxStamina = 120 + agi * 2 + def * 2
   const resistance = Math.floor(def * 0.8)
 

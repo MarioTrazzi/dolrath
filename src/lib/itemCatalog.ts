@@ -325,12 +325,12 @@ export const ITEM_CATALOG: CatalogItem[] = [
   {
     name: 'Couraça de Escamas Ígneas', description: 'Escamas sobrepostas que fervem ao toque inimigo.',
     type: 'HEAVY_ARMOR', level: 16, rarity: 'RARE', goldPrice: 1800, source: 'dungeon', raceRestriction: 'draconiano',
-    stats: { str: 3, def: 26, hp: 35 }, dungeons: ['pantano'],
+    stats: { str: 3, def: 20, hp: 35 }, dungeons: ['pantano'],
   },
   {
     name: 'Égide do Dragão Ancião', description: 'Couraça das escamas de um dragão milenar. Só um descendente suporta seu peso ardente.',
     type: 'HEAVY_ARMOR', level: 24, rarity: 'EPIC', goldPrice: 3400, source: 'dungeon_boss', raceRestriction: 'draconiano',
-    stats: { str: 5, def: 36, hp: 55, specialEffect: 'Imunidade parcial a fogo' }, dungeons: ['pantano'],
+    stats: { str: 5, def: 26, hp: 55, specialEffect: 'Imunidade parcial a fogo' }, dungeons: ['pantano'],
   },
   {
     name: 'Presas do Cataclismo', description: 'Machado gêmeo feito das presas de um dragão. Pulsa com fúria ancestral.',
@@ -396,7 +396,7 @@ export const ITEM_CATALOG: CatalogItem[] = [
   {
     name: 'Égide do Herói', description: 'Carrega a determinação inquebrável da humanidade.',
     type: 'HEAVY_ARMOR', level: 21, rarity: 'EPIC', goldPrice: 3200, source: 'dungeon_boss', raceRestriction: 'humano',
-    stats: { str: 4, def: 33, hp: 45, specialEffect: 'Reduz dano físico' }, dungeons: ['pantano'],
+    stats: { str: 4, def: 24, hp: 45, specialEffect: 'Reduz dano físico' }, dungeons: ['pantano'],
   },
   {
     name: 'Lâmina do Sétimo Sentido', description: 'Desperta com o portador; corta onde a mente prevê o golpe.',
@@ -525,17 +525,17 @@ export const ITEM_CATALOG: CatalogItem[] = [
   {
     name: 'Escudo do Guardião', description: 'Disco de aço maciço com o brasão de uma ordem esquecida.',
     type: 'SHIELD', level: 13, rarity: 'RARE', goldPrice: 1450, source: 'dungeon', dungeons: ['caverna'],
-    stats: { def: 22, hp: 10 },
+    stats: { def: 16, hp: 10 },
   },
   {
     name: 'Égide do Baluarte', description: 'Tão grande que vira uma parede; pouco a atravessa.',
     type: 'SHIELD', level: 22, rarity: 'EPIC', goldPrice: 3300, source: 'dungeon_boss', dungeons: ['pantano'],
-    stats: { def: 34, hp: 22, specialEffect: 'Reduz o dano recebido por alguns turnos' },
+    stats: { def: 24, hp: 22, specialEffect: 'Reduz o dano recebido por alguns turnos' },
   },
   {
     name: 'Muralha Viva', description: 'Metal rúnico que endurece ao receber o golpe e o devolve.',
     type: 'SHIELD', level: 29, rarity: 'LEGENDARY', goldPrice: 9300, source: 'dungeon_boss', dungeons: ['ruinas'],
-    stats: { def: 50, hp: 32, specialEffect: 'Reflete parte do dano ao atacante' },
+    stats: { def: 34, hp: 32, specialEffect: 'Reflete parte do dano ao atacante' },
   },
 
   // --- CAJADO Raro (preenche o tier do Mago) ---
@@ -600,7 +600,7 @@ export const ITEM_CATALOG: CatalogItem[] = [
   {
     name: 'Égide de Gorthak', description: 'Forjada do núcleo do Colosso; praticamente indestrutível.',
     type: 'HEAVY_ARMOR', level: 35, rarity: 'LEGENDARY', goldPrice: 16000, source: 'adventure_boss', adventureBoss: 'Gorthak', dungeons: [],
-    stats: { def: 50, hp: 90 },
+    stats: { def: 35, hp: 90 },
   },
 
   // ✨ Sábado 4 — Sylariel, a Rainha Celeste (elfa caída)

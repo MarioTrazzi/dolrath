@@ -160,19 +160,25 @@ export function getDisplayName(itemName: string, level: number): string {
 
 // === BÔNUS DE STATS ===
 
-// Multiplicador aplicado aos stats do item: +8% por nível até +15,
-// depois saltos maiores em I..V
+// Multiplicador aplicado aos stats do item: +5% por nível até +15,
+// depois saltos menores em I..V.
+//
+// ⚖️ CURVA ACHATADA (2026-06-21): antes a curva explodia (+8%/nv, IV ×4.0). Com
+// stats de lendário já altos (arma str51 → 204 STR numa peça IV), o gear passava
+// a valer ~90% do poder de combate no end-game — desproporcional à base. A curva
+// nova mantém o aprimoramento relevante (IV dobra os stats) sem deixá-lo eclipsar
+// os atributos por nível. Validada em scripts/late-game-gear-sim.js.
 const TIER_MULTIPLIERS: Record<number, number> = {
-  [PRI]: 2.5,
-  [DUO]: 2.9,
-  [TRI]: 3.4,
-  [TET]: 4.0,
-  [PEN]: 4.8,
+  [PRI]: 1.9,
+  [DUO]: 2.0,
+  [TRI]: 2.1,
+  [TET]: 2.2,
+  [PEN]: 2.5,
 };
 
 export function getStatMultiplier(level: number): number {
   if (level <= 0) return 1;
-  if (level <= 15) return 1 + level * 0.08;
+  if (level <= 15) return 1 + level * 0.05;
   return TIER_MULTIPLIERS[level] ?? 1;
 }
 

@@ -1,0 +1,116 @@
+/**
+ * ⚔️ MODELO DE COMBATE ENXUTO — espelho CommonJS de src/lib/combatModel.ts.
+ * O socket é Node JS puro (require) e não importa TS; mantenha os dois em sincronia.
+ * Documentação e princípios: src/lib/combatModel.ts + docs/combate-ataque-por-arma.md.
+ */
+
+const PROFILE = {
+  warrior: { power: 102, armor: 160, hp: 438, evade: 0.05 },
+  rogue: { power: 160, armor: 55, hp: 282, evade: 0.30 },
+  mage: { power: 175, armor: 50, hp: 312, evade: 0.18 },
+  monk: { power: 132, armor: 120, hp: 316, evade: 0.22 },
+}
+
+const DICE_SIDES = 12
+const LUCK_LO = 0.55
+const LUCK_HI = 1.75
+const CRIT_MULT = 1.6
+const K50 = 220
+const WEIGHT_LEVEL = 0.5
+const WEIGHT_GEAR = 0.5
+const GEAR_FLOOR = 0.25
+const MAX_LEVEL_REF = 50
+const DODGE_STAMINA_COST = 3
+const BLOCK_ARMOR_MULT = 2.5
+
+// Ataques gated por recurso de combate UNIFORME (ver src/lib/combatModel.ts).
+const ATTACKS = {
+  basic: { powerMult: 0.72, stamina: 1, requiresTransform: false, label: 'Ataque Básico' },
+  weapon: { powerMult: 1.0, stamina: 2, requiresTransform: false, label: 'Ataque da Arma' },
+  special: { powerMult: 1.5, stamina: 3, requiresTransform: true, label: 'Especial' },
+}
+function attackPower(basePower, type) { return basePower * ((ATTACKS[type] && ATTACKS[type].powerMult) || 1) }
+function chooseAttack(opts) {
+  opts = opts || {}
+  const stam = opts.stamina != null ? opts.stamina : 99
+  if (opts.transformed && stam >= ATTACKS.special.stamina) return 'special'
+  if (stam >= ATTACKS.weapon.stamina) return 'weapon'
+  return 'basic'
+}
+
+function clampGearTier(tier) {
+  if (Number.isNaN(tier)) return GEAR_FLOOR
+  return Math.max(GEAR_FLOOR, Math.min(1, tier))
+}
+
+// === tier do gear (equipamento → [0,1], BiS lendário IV = 1) ===
+const RARITY_WEIGHT = { COMMON: 0.25, UNCOMMON: 0.4, RARE: 0.58, EPIC: 0.78, LEGENDARY: 1.0 }
+const NOMINAL_SLOTS = 9
+
+function enhanceTierFactor(enhancementLevel) {
+  const lvl = Math.max(0, Math.min(20, Math.floor(enhancementLevel || 0)))
+  const TIER = { 16: 1.9, 17: 2.0, 18: 2.1, 19: 2.2, 20: 2.5 }
+  const mult = lvl <= 15 ? 1 + lvl * 0.05 : (TIER[lvl] != null ? TIER[lvl] : 2.2)
+  return mult / 2.2
+}
+
+function deriveGearTier(equipped) {
+  if (!equipped || equipped.length === 0) return 0
+  let sum = 0
+  for (const eq of equipped) {
+    const w = RARITY_WEIGHT[(eq.rarity || '').toUpperCase()] != null ? RARITY_WEIGHT[(eq.rarity || '').toUpperCase()] : 0.25
+    sum += w * enhanceTierFactor(eq.enhancementLevel || 0)
+  }
+  return Math.min(1, sum / NOMINAL_SLOTS)
+}
+
+function powerScale(level, gearTier) {
+  const lvl = Math.max(0, level) / MAX_LEVEL_REF
+  return WEIGHT_LEVEL * lvl + WEIGHT_GEAR * clampGearTier(gearTier)
+}
+
+function computeLevers(cls, level, gearTier) {
+  const p = PROFILE[cls] || PROFILE.warrior
+  const S = powerScale(level, gearTier)
+  return { power: p.power * S, armor: p.armor * S, hp: p.hp * S, evade: p.evade, K: K50 * S, scale: S }
+}
+
+function luckOf(roll) {
+  const t = DICE_SIDES > 1 ? (roll - 1) / (DICE_SIDES - 1) : 1
+  let mult = LUCK_LO + (LUCK_HI - LUCK_LO) * t
+  if (roll >= DICE_SIDES) mult *= CRIT_MULT
+  return mult
+}
+
+function rollDie(rng) {
+  return 1 + Math.floor((rng || Math.random)() * DICE_SIDES)
+}
+
+function damageReduction(armor, K) {
+  const a = Math.max(0, armor)
+  return a / (a + K)
+}
+
+function resolveHit(attacker, defender, opts) {
+  opts = opts || {}
+  const rng = opts.rng || Math.random
+  const roll = opts.forcedRoll != null ? opts.forcedRoll : rollDie(rng)
+  const crit = roll >= DICE_SIDES
+  if (opts.defense === 'dodge') {
+    const dodged = opts.dodgeSucceeded != null ? opts.dodgeSucceeded : rng() < defender.evade
+    if (dodged) return { damage: 0, roll, crit, dodged: true, blocked: false }
+  }
+  const block = opts.defense === 'block'
+  const effArmor = block ? defender.armor * BLOCK_ARMOR_MULT : defender.armor
+  const raw = attacker.power * luckOf(roll)
+  const damage = Math.max(1, Math.round(raw * (1 - damageReduction(effArmor, defender.K))))
+  return { damage, roll, crit, dodged: false, blocked: block }
+}
+
+module.exports = {
+  PROFILE, DICE_SIDES, LUCK_LO, LUCK_HI, CRIT_MULT, K50,
+  WEIGHT_LEVEL, WEIGHT_GEAR, GEAR_FLOOR, MAX_LEVEL_REF, DODGE_STAMINA_COST, BLOCK_ARMOR_MULT,
+  clampGearTier, powerScale, computeLevers, luckOf, rollDie, damageReduction, resolveHit,
+  RARITY_WEIGHT, NOMINAL_SLOTS, enhanceTierFactor, deriveGearTier,
+  ATTACKS, attackPower, chooseAttack,
+}

@@ -22,6 +22,17 @@
 
 export type CombatClass = 'warrior' | 'rogue' | 'mage' | 'monk'
 
+/** Normaliza um nome de classe (PT/EN, livre) para a CombatClass do modelo. null = desconhecida (monstro). */
+export function normalizeCombatClass(raw: string | null | undefined): CombatClass | null {
+  const c = String(raw || '').toLowerCase().trim()
+  if (!c) return null
+  if (c === 'warrior' || c.includes('guerr') || c.includes('warri')) return 'warrior'
+  if (c === 'rogue' || c.includes('ladin') || c.includes('assass') || c.includes('arqueir') || c.includes('rogue')) return 'rogue'
+  if (c === 'mage' || c.includes('mag') || c.includes('feiti')) return 'mage'
+  if (c === 'monk' || c.includes('monge') || c.includes('monk')) return 'monk'
+  return null
+}
+
 export interface ClassProfile {
   /** dano-base por golpe (antes da sorte) no nv50 BiS */
   power: number
@@ -154,11 +165,58 @@ export function powerScale(level: number, gearTier: number): number {
   return WEIGHT_LEVEL * lvl + WEIGHT_GEAR * clampGearTier(gearTier)
 }
 
-/** Deriva os 4 levers efetivos de combate da classe/nível/gear. */
-export function computeLevers(cls: CombatClass, level: number, gearTier: number): Levers {
+// === TILT DE ATRIBUTOS (pontos da CRIAÇÃO + de NÍVEL) → ajuste nos levers ===
+// Os pontos distribuídos em STR/AGI/INT/DEF ajustam os levers SOBRE o PROFILE.
+// PRINCÍPIO DE EQUILÍBRIO: toda classe gasta o MESMO orçamento de pontos (18 na
+// criação + 1/nível) e cada ponto vale ~o mesmo em combate (coeficientes calibrados
+// no lean-combat-sim p/ que builds "puras" fiquem dentro do spread que o dado cobre).
+// Logo a build é uma ESCOLHA de tilt, não uma vantagem de soma → o equilíbrio entre
+// classes se preserva. STR/INT → poder (físico/mágico unificado); DEF → armadura+HP;
+// AGI → evasão. Magnitude modesta: a curva de poder continua governada por nível+gear.
+export interface AttrPoints {
+  str: number
+  agi: number
+  int: number
+  def: number
+}
+// Coeficientes calibrados no lean-combat-sim --build: builds PURAS (67 pts num stat
+// só, nv50) ficam em ~45-57% num espelho (spread ~12, dentro do que o dado cobre).
+// Builds reais (mistas) equilibram ainda mais. DEF dá DOIS levers (armor+hp), por
+// isso seu valor/ponto é baixo; STR/INT dão só poder.
+export const ATTR_TILT = {
+  power: 0.55,    // por ponto de STR ou INT (poder unificado)
+  powerAgi: 0.30, // por ponto de AGI (parte ofensiva do ágil — o resto vira evasão)
+  armor: 0.5,     // por ponto de DEF (mitigação)
+  hp: 1.3,        // por ponto de DEF (sobrevivência)
+  evade: 0.0020,  // por ponto de AGI (chance de esquiva)
+  evadeCap: 0.6,  // teto absoluto de evasão já com o tilt
+}
+
+/** Aplica o tilt dos atributos distribuídos sobre os levers (no-op se attrs ausente). */
+export function applyAttrTilt(levers: Levers, attrs?: Partial<AttrPoints> | null): Levers {
+  if (!attrs) return levers
+  const str = Math.max(0, Number(attrs.str) || 0)
+  const agi = Math.max(0, Number(attrs.agi) || 0)
+  const int = Math.max(0, Number(attrs.int) || 0)
+  const def = Math.max(0, Number(attrs.def) || 0)
+  const t = ATTR_TILT
+  return {
+    ...levers,
+    power: levers.power + (str + int) * t.power + agi * t.powerAgi,
+    armor: levers.armor + def * t.armor,
+    hp: levers.hp + def * t.hp,
+    evade: Math.min(t.evadeCap, levers.evade + agi * t.evade),
+  }
+}
+
+/**
+ * Deriva os 4 levers efetivos de combate da classe/nível/gear.
+ * `attrs` (opcional) = pontos distribuídos da criação+nível → tilt simétrico (ver applyAttrTilt).
+ */
+export function computeLevers(cls: CombatClass, level: number, gearTier: number, attrs?: Partial<AttrPoints> | null): Levers {
   const p = PROFILE[cls] ?? PROFILE.warrior
   const S = powerScale(level, gearTier)
-  return {
+  const base: Levers = {
     power: p.power * S,
     armor: p.armor * S,
     hp: p.hp * S,
@@ -166,6 +224,7 @@ export function computeLevers(cls: CombatClass, level: number, gearTier: number)
     K: K50 * S,
     scale: S,
   }
+  return applyAttrTilt(base, attrs)
 }
 
 /**

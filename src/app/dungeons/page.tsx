@@ -50,6 +50,11 @@ export default function DungeonsPage() {
                 attack: details.baseStats?.str || 10,
                 defense: details.baseStats?.def || 10,
                 magicPower: details.baseStats?.int || 0,
+                // Atributos distribuídos (alimentam o TILT do modelo enxuto no combate)
+                str: details.baseStats?.str ?? 0,
+                agi: details.baseStats?.agi ?? 0,
+                int: details.baseStats?.int ?? 0,
+                def: details.baseStats?.def ?? 0,
                 equipment: details.equipment || [],
               }
             }

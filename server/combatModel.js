@@ -74,10 +74,41 @@ function powerScale(level, gearTier) {
   return WEIGHT_LEVEL * lvl + WEIGHT_GEAR * clampGearTier(gearTier)
 }
 
-function computeLevers(cls, level, gearTier) {
+// === TILT DE ATRIBUTOS (criação + nível) → ajuste simétrico nos levers ===
+// Espelho de src/lib/combatModel.ts. STR/INT→poder; DEF→armadura+HP; AGI→evasão.
+const ATTR_TILT = { power: 0.55, powerAgi: 0.30, armor: 0.5, hp: 1.3, evade: 0.0020, evadeCap: 0.6 }
+function applyAttrTilt(levers, attrs) {
+  if (!attrs) return levers
+  const str = Math.max(0, Number(attrs.str) || 0)
+  const agi = Math.max(0, Number(attrs.agi) || 0)
+  const int = Math.max(0, Number(attrs.int) || 0)
+  const def = Math.max(0, Number(attrs.def) || 0)
+  const t = ATTR_TILT
+  return {
+    ...levers,
+    power: levers.power + (str + int) * t.power + agi * t.powerAgi,
+    armor: levers.armor + def * t.armor,
+    hp: levers.hp + def * t.hp,
+    evade: Math.min(t.evadeCap, levers.evade + agi * t.evade),
+  }
+}
+
+function computeLevers(cls, level, gearTier, attrs) {
   const p = PROFILE[cls] || PROFILE.warrior
   const S = powerScale(level, gearTier)
-  return { power: p.power * S, armor: p.armor * S, hp: p.hp * S, evade: p.evade, K: K50 * S, scale: S }
+  const base = { power: p.power * S, armor: p.armor * S, hp: p.hp * S, evade: p.evade, K: K50 * S, scale: S }
+  return applyAttrTilt(base, attrs)
+}
+
+/** Normaliza um nome de classe (PT/EN) para a CombatClass. null = desconhecida (monstro). */
+function normalizeCombatClass(raw) {
+  const c = String(raw || '').toLowerCase().trim()
+  if (!c) return null
+  if (c === 'warrior' || c.includes('guerr') || c.includes('warri')) return 'warrior'
+  if (c === 'rogue' || c.includes('ladin') || c.includes('assass') || c.includes('arqueir') || c.includes('rogue')) return 'rogue'
+  if (c === 'mage' || c.includes('mag') || c.includes('feiti')) return 'mage'
+  if (c === 'monk' || c.includes('monge') || c.includes('monk')) return 'monk'
+  return null
 }
 
 // Aplica o buff de transformação aos levers (escala simétrica). Retorna NOVOS levers;
@@ -145,4 +176,5 @@ module.exports = {
   clampGearTier, powerScale, computeLevers, luckOf, rollDie, damageReduction, resolveHit,
   RARITY_WEIGHT, NOMINAL_SLOTS, enhanceTierFactor, deriveGearTier,
   ATTACKS, attackPower, chooseAttack,
+  ATTR_TILT, applyAttrTilt, normalizeCombatClass,
 }

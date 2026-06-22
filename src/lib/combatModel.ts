@@ -69,6 +69,11 @@ export const MAX_LEVEL_REF = 50 // nível de referência onde S(level)=1 com BiS
 export const DODGE_STAMINA_COST = 3
 export const BLOCK_ARMOR_MULT = 2.5 // bloqueio amplifica a armadura efetiva no golpe
 
+// 🐉 Transformação = buff temporário SIMÉTRICO: equivale a subir o poder de escala S
+// por um fator único (poder/armadura/hp/K sobem juntos; evasão é invariante de escala).
+// Por ser simétrico entre classes, o equilíbrio se preserva por construção.
+export const TRANSFORM_SCALE = 1.25
+
 // === ATAQUES ===
 // O `power` equilibrado da classe = o ATAQUE DA ARMA. Básico é o fallback barato;
 // ESPECIAL (burst) só com a TRANSFORMAÇÃO ativa — a transformação é o gate (custo/
@@ -160,6 +165,33 @@ export function computeLevers(cls: CombatClass, level: number, gearTier: number)
     evade: p.evade, // % é invariante de escala
     K: K50 * S,
     scale: S,
+  }
+}
+
+/**
+ * Aplica o buff de transformação aos levers (escala simétrica). Retorna NOVOS levers;
+ * o caller deve guardar os levers-base para reverter com revertTransformLevers().
+ */
+export function transformLevers(levers: Levers, scale: number = TRANSFORM_SCALE): Levers {
+  return {
+    power: levers.power * scale,
+    armor: levers.armor * scale,
+    hp: levers.hp * scale,
+    evade: levers.evade, // % é invariante de escala
+    K: levers.K * scale,
+    scale: levers.scale * scale,
+  }
+}
+
+/** Reverte o buff (divide pelo fator). Use com o MESMO scale aplicado. */
+export function revertTransformLevers(levers: Levers, scale: number = TRANSFORM_SCALE): Levers {
+  return {
+    power: levers.power / scale,
+    armor: levers.armor / scale,
+    hp: levers.hp / scale,
+    evade: levers.evade,
+    K: levers.K / scale,
+    scale: levers.scale / scale,
   }
 }
 

@@ -7,6 +7,60 @@ const { getStaminaCost, checkStaminaLevel, calculateStaminaRegeneration } = requ
 // 🐉 Modo treino - bot monstro que joga pelas regras do PvP
 const { spawnTrainingBot, MONSTERS } = require('./training-bot')
 
+// ⚔️ MODELO DE COMBATE ENXUTO (fonte da verdade): poder × sorte × (1−DR), mitigação
+// proporcional, levers por classe (poder/armadura/hp/evasão) escalados por nível+gear.
+// Ver server/combatModel.js + src/lib/combatModel.ts + docs/combate-ataque-por-arma.md.
+const CM = require('./combatModel')
+
+// Normaliza o nome da classe (PT da criação) para a chave do PROFILE do modelo.
+// Retorna null para classes desconhecidas (ex.: monstros do treino) → usa fallback por stats.
+function normalizeClass(cls) {
+  const c = String(cls || '').toLowerCase()
+  if (c === 'warrior' || c.includes('guerre')) return 'warrior'
+  if (c === 'rogue' || c.includes('ladin') || c.includes('assass') || c.includes('arqueir')) return 'rogue'
+  if (c === 'mage' || c.includes('mag') || c.includes('feiti')) return 'mage'
+  if (c === 'monk' || c.includes('monge') || c.includes('monk')) return 'monk'
+  return null
+}
+
+// Deriva os levers de combate do jogador a partir de classe/nível/equipamento.
+// Classe de jogador → PROFILE do modelo escalado por S; classe desconhecida (monstro)
+// → fallback que mapeia os stats fornecidos para levers (preserva a dificuldade do treino).
+function derivePlayerLevers(player) {
+  const cls = normalizeClass(player.class)
+  const level = Math.max(1, Number(player.level) || 1)
+  const equipped = Array.isArray(player.equipment)
+    ? player.equipment.map((e) => ({ rarity: e?.item?.rarity ?? e?.rarity, enhancementLevel: e?.enhancementLevel }))
+    : []
+  const gearTier = CM.deriveGearTier(equipped)
+
+  if (cls) {
+    const levers = CM.computeLevers(cls, level, gearTier)
+    return { levers, cls, gearTier }
+  }
+
+  // Fallback p/ monstro/classe desconhecida: levers a partir dos stats brutos.
+  const S = level / CM.MAX_LEVEL_REF + 0.5
+  const power = Math.max(1, Number(player.attack) || Number(player.strength) || 20)
+  const armor = Math.max(0, Number(player.defense) || 0)
+  const hp = Math.max(1, Number(player.maxHp) || Number(player.hp) || 100)
+  return {
+    levers: { power, armor, hp, evade: 0.08, K: CM.K50 * S, scale: S },
+    cls: null,
+    gearTier,
+  }
+}
+
+// Mapeia os nomes de ação do cliente/bot (legado) para os tipos de ataque do modelo.
+const ATTACK_TYPE_MAP = {
+  light_attack: 'basic', basic: 'basic',
+  heavy_attack: 'weapon', weapon: 'weapon',
+  special_attack: 'special', special: 'special',
+}
+// Mapeia a reação do defensor para a defesa do modelo (defesa antiga → bloqueio).
+const DEFENSE_MAP = { dodge: 'dodge', defend: 'block', block: 'block' }
+const ATTACK_ACTIONS = ['light_attack', 'heavy_attack', 'special_attack', 'basic', 'weapon', 'special']
+
 // Configuração de porta - Railway usa PORT, Heroku também
 const PORT = process.env.PORT || 3001
 
@@ -131,29 +185,35 @@ function revertPlayerTransformation(player) {
   
   const original = player.transformationData.originalStats
   const config = TRANSFORMATION_CONFIG[player.transformationType]
-  
-  // Restaurar stats originais
-  player.strength = original.strength
-  player.agility = original.agility
-  player.intelligence = original.intelligence
-  player.defense = original.defense
-  player.resistance = Math.floor(original.defense * 0.8) // espelha o campo de topo usado na mitigação
-  player.hp = Math.min(player.hp, original.maxHp)
-  player.maxHp = original.maxHp
-  if (original.maxMp != null) { // reverte a reserva de mana ampliada pelo mpPool
-    player.maxMp = original.maxMp
-    player.mp = Math.min(player.mp ?? original.maxMp, original.maxMp)
-  }
-  player.baseStats = {
-    ...player.baseStats,
-    str: original.strength,
-    agi: original.agility,
-    int: original.intelligence,
-    def: original.defense,
-    attack: original.attack,
-    critical: original.critical,
-    hp: Math.min(player.hp, original.maxHp),
-    maxHp: original.maxHp
+
+  // Restaurar atributos originais (best-effort): o caminho sync_transformation do
+  // modelo enxuto pode não enviar originalStats — o combate lê levers, então isso é
+  // só bookkeeping legado. Pula com segurança quando ausente.
+  if (original) {
+    player.strength = original.strength
+    player.agility = original.agility
+    player.intelligence = original.intelligence
+    player.defense = original.defense
+    player.resistance = Math.floor((original.defense || 0) * 0.8)
+    if (original.maxHp != null) {
+      player.hp = Math.min(player.hp, original.maxHp)
+      player.maxHp = original.maxHp
+    }
+    if (original.maxMp != null) { // reverte a reserva de mana ampliada pelo mpPool
+      player.maxMp = original.maxMp
+      player.mp = Math.min(player.mp ?? original.maxMp, original.maxMp)
+    }
+    player.baseStats = {
+      ...player.baseStats,
+      str: original.strength,
+      agi: original.agility,
+      int: original.intelligence,
+      def: original.defense,
+      attack: original.attack,
+      critical: original.critical,
+      hp: Math.min(player.hp, original.maxHp ?? player.maxHp),
+      maxHp: original.maxHp ?? player.maxHp
+    }
   }
 
   // Marcar como não transformado e iniciar cooldown
@@ -165,6 +225,14 @@ function revertPlayerTransformation(player) {
     ...player.transformationData,
     cooldownTurns: config?.cooldown ?? 5,
     remainingTurns: 0
+  }
+
+  // ⚔️ MODELO ENXUTO: restaurar os levers-base (desfaz o buff simétrico) e o HP máximo.
+  if (player.baseLevers) {
+    player.levers = player.baseLevers
+    const newMaxHp = Math.round(player.baseLevers.hp)
+    player.hp = Math.min(player.hp, newMaxHp)
+    player.maxHp = newMaxHp
   }
 }
 
@@ -290,6 +358,17 @@ io.on('connection', (socket) => {
     const participantData = { ...player, role, socketId: socket.id }
     
     if (role === RoomRole.FIGHTER) {
+      // ⚔️ MODELO ENXUTO: computar os levers de combate (poder/armadura/hp/evasão) a partir
+      // de classe/nível/equipamento. HP passa a vir dos levers (PROFILE.hp × escala), não
+      // mais dos atributos. O cliente já envia class/level/equipment no payload.
+      const { levers, cls, gearTier } = derivePlayerLevers(player)
+      player.levers = levers
+      player.baseLevers = levers // guardado p/ reverter o buff de transformação
+      player.combatClass = cls
+      player.gearTier = gearTier
+      player.maxHp = Math.round(levers.hp)
+      player.hp = player.maxHp
+
       // Criador retornando (refresh/remontagem): remover a entrada antiga para não ocupar a vaga do oponente
       if (isCreator && room.player1 && room.player1.id !== player.id) {
         room.participants.fighters = room.participants.fighters.filter(f => f.id !== room.player1.id)
@@ -680,6 +759,24 @@ io.on('connection', (socket) => {
       }
     }
 
+    // ⚔️ MODELO ENXUTO: a transformação vira um buff SIMÉTRICO de escala nos levers
+    // (poder/armadura/hp/K ×TRANSFORM_SCALE; evasão invariante) + libera o especial.
+    // Aplica sobre os levers-base; o HP máximo sobe proporcional (mantém a fração de HP).
+    if (player.baseLevers) {
+      if (player.isTransformed) {
+        player.levers = CM.transformLevers(player.baseLevers)
+        const newMaxHp = Math.round(player.levers.hp)
+        const ratio = player.maxHp > 0 ? player.hp / player.maxHp : 1
+        player.maxHp = newMaxHp
+        player.hp = Math.max(1, Math.min(newMaxHp, Math.round(newMaxHp * ratio)))
+      } else {
+        player.levers = player.baseLevers
+        const newMaxHp = Math.round(player.baseLevers.hp)
+        player.maxHp = newMaxHp
+        player.hp = Math.min(player.hp, newMaxHp)
+      }
+    }
+
     room.combatLog.push({
       type: 'transformation',
       player: player.name,
@@ -750,42 +847,55 @@ io.on('connection', (socket) => {
     processTransformationTurns(room)
 
     const actionNames = {
-      'light_attack': 'Ataque Leve',
-      'heavy_attack': 'Ataque Pesado',
+      'light_attack': 'Ataque Básico',
+      'basic': 'Ataque Básico',
+      'heavy_attack': 'Ataque da Arma',
+      'weapon': 'Ataque da Arma',
       'special_attack': 'Especial',
+      'special': 'Especial',
       'dodge': 'Esquivar',
-      'defend': 'Defender',
+      'defend': 'Bloquear',
+      'block': 'Bloquear',
       'use_item': 'Item'
     }
 
     const currentPlayer = room.currentTurn === room.player1?.id ? room.player1 : room.player2
     const opponent = room.currentTurn === room.player1?.id ? room.player2 : room.player1
-    
-    // Usar sistema de stamina atualizado
-    const systemStaminaCost = getStaminaCost('pvp', { 
-      playerLevel: currentPlayer.level || 1,
-      actionType: action 
-    })
+
+    const isAttack = ATTACK_ACTIONS.includes(action)
+    const attackType = ATTACK_TYPE_MAP[action]
+
+    // 🐉 GATE DO ESPECIAL: para classes de jogador, o especial só libera com a
+    // transformação ativa (o burst é desbloqueado pela transformação). Monstros
+    // (sem combatClass) podem usar especial livremente.
+    if (attackType === 'special' && currentPlayer.combatClass && !currentPlayer.isTransformed) {
+      socket.emit('error', { message: 'O Especial só pode ser usado transformado!' })
+      return
+    }
+
+    // ⚔️ Custo de stamina pelo modelo enxuto (sem custo de MP em ataques).
+    const systemStaminaCost = isAttack
+      ? (CM.ATTACKS[attackType]?.stamina ?? 1)
+      : getStaminaCost('pvp', { playerLevel: currentPlayer.level || 1, actionType: action })
 
     // Verificar stamina necessária
     if (currentPlayer.stamina < systemStaminaCost) {
-      socket.emit('error', { 
-        message: `Stamina insuficiente! Precisa de ${systemStaminaCost} Stamina` 
+      socket.emit('error', {
+        message: `Stamina insuficiente! Precisa de ${systemStaminaCost} Stamina`
       })
       return
     }
-    
-    // Aplicar custos de MP e stamina
-    if (mpCost > 0) {
-      currentPlayer.mp = Math.max(0, currentPlayer.mp - mpCost)
-    }
+
     currentPlayer.stamina = Math.max(0, currentPlayer.stamina - systemStaminaCost)
-    
+
+    // O modelo usa um único dado de SORTE (d12). Ignora o diceType legado do cliente.
+    diceType = CM.DICE_SIDES
+
     // 🔥 ATUALIZAÇÃO IMEDIATA para mostrar consumo de recursos
     io.to(roomId).emit('room_updated', room)
-    
+
     // Se é um ataque, ir para OPPONENT_REACTION (não DICE_ROLL)
-    if (['light_attack', 'heavy_attack', 'special_attack'].includes(action)) {
+    if (isAttack) {
       // 😮‍💨 DEFENSOR EXAUSTO: sem stamina nem para esquivar (custo 1) —
       // pula a reação e vai direto para a rolagem do atacante (evita soft-lock)
       if ((opponent?.stamina || 0) < 1) {
@@ -850,34 +960,24 @@ io.on('connection', (socket) => {
     }
 
     const player = room.player1?.id === playerId ? room.player1 : room.player2
-    const roll = Math.floor(Math.random() * sides) + 1
-    
-    // 🎯 MODIFICADOR DE ESQUIVA: conteste de AGI líquida (defensor − atacante),
-    // capado pelo tamanho do dado (d6→±1, d10→±2, d20→±3)
-    let modifier = 0
-
-    if (room.pendingAction && room.phase === CombatPhase.DICE_ROLL) {
-      const isDefender = playerId !== room.pendingAction.playerId
-
-      if (isDefender && room.pendingAction.defenseAction === 'dodge') {
-        const attacker = room.player1?.id === room.pendingAction.playerId ? room.player1 : room.player2
-        modifier = dodgeNetBonus(player.agility, attacker?.agility || 0, sides)
-      }
-    }
-
-    const total = roll + modifier
+    // ⚔️ Modelo enxuto: o dado de combate é SEMPRE um d12 de SORTE (ignora `sides`
+    // legado). Não há mais modificador de AGI no dado — a esquiva é resolvida pela
+    // evasão da classe na resolução do golpe (processCompleteAction).
+    const diceSides = CM.DICE_SIDES
+    const roll = Math.floor(Math.random() * diceSides) + 1
+    const total = roll
 
     room.combatLog.push({
       type: 'action',
       player: player.name,
-      message: `🎲 ${player.name}: Rolou d${sides} = ${roll}${modifier !== 0 ? ` ${modifier > 0 ? '+' : '−'} ${Math.abs(modifier)} (AGI) = ${total}` : ''}`,
+      message: `🎲 ${player.name}: Rolou d${diceSides} = ${roll}`,
       timestamp: new Date()
     })
-    
+
     io.to(roomId).emit('dice_rolled', {
       playerId,
-      sides,
-      result: { roll, modifier, total }
+      sides: diceSides,
+      result: { roll, modifier: 0, total }
     })
 
     // Para ataques na fase DICE_ROLL, salvar os rolls de ambos
@@ -897,8 +997,11 @@ io.on('connection', (socket) => {
         room.pendingAction.defenseRoll = total
       }
       
-      // Só processar quando AMBOS tiverem rolado
-      if (room.pendingAction.attackRoll !== undefined && room.pendingAction.defenseRoll !== undefined) {
+      // Só processar quando AMBOS tiverem rolado (uma única vez: `resolving` evita
+      // agendar duas resoluções se um roll_dice duplicado chegar por race de rede)
+      if (room.pendingAction.attackRoll !== undefined && room.pendingAction.defenseRoll !== undefined && !room.pendingAction.resolving) {
+        room.pendingAction.resolving = true
+        const pending = room.pendingAction
         room.combatLog.push({
           type: 'system',
           message: `⚔️ Ambos rolaram! Calculando resultado...`,
@@ -907,7 +1010,9 @@ io.on('connection', (socket) => {
         // Atualizar sala antes de processar
         io.to(roomId).emit('room_updated', room)
         setTimeout(() => {
-          processCompleteAction(room, room.pendingAction.action, room.pendingAction.attackRoll, room.pendingAction.defenseAction, room.pendingAction.defenseRoll, roomId)
+          // Se a pendingAction já foi substituída/limpa, não há o que resolver.
+          if (room.pendingAction !== pending) return
+          processCompleteAction(room, pending.action, pending.attackRoll, pending.defenseAction, pending.defenseRoll, roomId)
         }, 1000)
       }
     } else {
@@ -1300,59 +1405,53 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
 
   if (!attacker || !defender) return
 
-  // 🎯 VERIFICAR CHANCE DE CRÍTICO BASEADO EM AGI
-  const criticalChance = calculateCriticalChance(attacker)
-  const criticalRoll = Math.random() * 100
-  const isCritical = criticalRoll < criticalChance
+  // ⚔️ MODELO ENXUTO: dano = poder × sorte(d12) × (1 − DR), DR = armadura/(armadura+K).
+  // Crítico = rolagem máxima do d12 (embutida na banda de sorte). Esquiva (evasão da
+  // classe) zera o golpe; bloqueio amplifica a armadura efetiva.
+  const attackType = ATTACK_TYPE_MAP[attackAction] || 'weapon'
+  const aLev = attacker.levers || derivePlayerLevers(attacker).levers
+  const dLev = defender.levers || derivePlayerLevers(defender).levers
+  const attackerPower = aLev.power * (CM.ATTACKS[attackType]?.powerMult ?? 1)
+  const defenseModel = DEFENSE_MAP[defenseAction] // 'dodge' | 'block' | undefined
 
-  // 🎯 CALCULAR DANO COM NOVO SISTEMA BALANCEADO
-  let baseDamage = calculateDamage(attacker, attackRoll, attackAction, isCritical)
-  
-  let finalDamage = 0
-  let hit = false
+  // Esquiva resolvida pela rolagem d12 do defensor: sucesso se cair na faixa de evasão.
+  let dodgeSucceeded
+  if (defenseModel === 'dodge') {
+    const evadeBand = Math.round((dLev.evade || 0) * CM.DICE_SIDES)
+    dodgeSucceeded = defenseRoll <= evadeBand
+  }
 
-  if (defenseAction === 'dodge') {
-    // 🌪️ ESQUIVA UNIFICADA: conteste com o dado QUE O DEFENSOR ROLOU
-    // (defenseRoll já inclui o bônus líquido de AGI). Empate favorece o atacante.
-    if (defenseRoll > attackRoll) {
-      room.combatLog.push({
-        type: 'result',
-        message: `🌪️ ${defender.name} esquivou! (${defenseRoll} vs ${attackRoll})`,
-        timestamp: new Date()
-      })
-      finalDamage = 0
-      hit = false
-    } else {
-      const defenseResult = calculateDefense(defender, baseDamage, attackAction)
-      finalDamage = defenseResult.finalDamage
-      hit = true
+  const hitResult = CM.resolveHit(
+    { power: attackerPower },
+    { armor: dLev.armor, K: dLev.K, evade: dLev.evade },
+    { defense: defenseModel || 'none', forcedRoll: attackRoll, dodgeSucceeded }
+  )
+  const isCritical = hitResult.crit && !hitResult.dodged
+  let finalDamage = hitResult.dodged ? 0 : hitResult.damage
+  let hit = !hitResult.dodged
 
-      room.combatLog.push({
-        type: 'result',
-        message: `💥 Esquiva falhou! ${attacker.name} acerta por ${finalDamage} dano! (Esquiva: ${defenseRoll} vs Ataque: ${attackRoll})`,
-        timestamp: new Date()
-      })
-    }
-  } else if (defenseAction === 'defend') {
-    // 🛡️ DEFESA - sempre reduz: toma 45% do dano pós-mitigação
-    const defenseResult = calculateDefense(defender, baseDamage, attackAction)
-    finalDamage = Math.max(1, Math.floor(defenseResult.finalDamage * 0.45))
-    hit = true
-
+  if (hitResult.dodged) {
     room.combatLog.push({
       type: 'result',
-      message: `🛡️ ${defender.name} defendeu! Dano reduzido: ${baseDamage} → ${finalDamage} (Defesa: ${defenseResult.defense})`,
+      message: `🌪️ ${defender.name} esquivou! (rolou ${defenseRoll}, evasão ${Math.round((dLev.evade || 0) * 100)}%)`,
+      timestamp: new Date()
+    })
+  } else if (hitResult.blocked) {
+    room.combatLog.push({
+      type: 'result',
+      message: `🛡️ ${defender.name} bloqueou! ${attacker.name} acerta por ${finalDamage} (armadura reforçada).`,
       timestamp: new Date()
     })
   } else if (defenseAction === 'exhausted') {
-    // 😮‍💨 EXAUSTO: sem stamina para reagir — toma o golpe com mitigação normal
-    const defenseResult = calculateDefense(defender, baseDamage, attackAction)
-    finalDamage = defenseResult.finalDamage
-    hit = true
-
     room.combatLog.push({
       type: 'result',
       message: `😮‍💨 ${defender.name} está exausto e não consegue reagir! ${attacker.name} acerta por ${finalDamage} dano!`,
+      timestamp: new Date()
+    })
+  } else {
+    room.combatLog.push({
+      type: 'result',
+      message: `💥 ${attacker.name} acerta por ${finalDamage} dano!`,
       timestamp: new Date()
     })
   }
@@ -1378,30 +1477,22 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
 
   // 🎯 APLICAR DANO E LOGS DETALHADOS
   if (hit && finalDamage > 0) {
-    // Log de crítico se aplicável
+    // Log de crítico se aplicável (rolagem máxima do d12)
     if (isCritical) {
       room.combatLog.push({
         type: 'result',
-        message: `� CRÍTICO! (${criticalChance}% chance baseado em ${attacker.agility} AGI) +50% dano!`,
+        message: `🎯 CRÍTICO! Rolagem máxima — dano amplificado!`,
         timestamp: new Date()
       })
     }
-    
-    // Log do sistema de dano usado
-    if (attackAction === 'special_attack') {
-      room.combatLog.push({
-        type: 'action',
-        message: `✨ Ataque especial usando INT: ${attacker.intelligence} (Build Mago)`,
-        timestamp: new Date()
-      })
-    } else {
-      room.combatLog.push({
-        type: 'action', 
-        message: `⚔️ Ataque físico usando STR: ${attacker.strength} (Build Guerreiro)`,
-        timestamp: new Date()
-      })
-    }
-    
+
+    // Log do tipo de ataque
+    room.combatLog.push({
+      type: 'action',
+      message: `${attackType === 'special' ? '✨' : attackType === 'weapon' ? '⚔️' : '👊'} ${CM.ATTACKS[attackType]?.label || 'Ataque'} (poder ${Math.round(attackerPower)})`,
+      timestamp: new Date()
+    })
+
     defender.hp = Math.max(0, defender.hp - finalDamage)
     
     room.combatLog.push({

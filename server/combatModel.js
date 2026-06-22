@@ -23,6 +23,11 @@ const MAX_LEVEL_REF = 50
 const DODGE_STAMINA_COST = 3
 const BLOCK_ARMOR_MULT = 2.5
 
+// 🐉 Transformação = buff temporário SIMÉTRICO: equivale a subir o poder de escala S
+// por um fator único (poder/armadura/hp/K sobem juntos; evasão é invariante de escala).
+// Por ser simétrico entre classes, o equilíbrio se preserva por construção.
+const TRANSFORM_SCALE = 1.25
+
 // Ataques gated por recurso de combate UNIFORME (ver src/lib/combatModel.ts).
 const ATTACKS = {
   basic: { powerMult: 0.72, stamina: 1, requiresTransform: false, label: 'Ataque Básico' },
@@ -75,6 +80,32 @@ function computeLevers(cls, level, gearTier) {
   return { power: p.power * S, armor: p.armor * S, hp: p.hp * S, evade: p.evade, K: K50 * S, scale: S }
 }
 
+// Aplica o buff de transformação aos levers (escala simétrica). Retorna NOVOS levers;
+// o caller deve guardar os levers-base para reverter (revertTransformLevers).
+function transformLevers(levers, scale) {
+  const f = scale || TRANSFORM_SCALE
+  return {
+    power: levers.power * f,
+    armor: levers.armor * f,
+    hp: levers.hp * f,
+    evade: levers.evade, // % é invariante de escala
+    K: levers.K * f,
+    scale: levers.scale * f,
+  }
+}
+// Reverte o buff (divide pelo fator). Use com o MESMO scale aplicado.
+function revertTransformLevers(levers, scale) {
+  const f = scale || TRANSFORM_SCALE
+  return {
+    power: levers.power / f,
+    armor: levers.armor / f,
+    hp: levers.hp / f,
+    evade: levers.evade,
+    K: levers.K / f,
+    scale: levers.scale / f,
+  }
+}
+
 function luckOf(roll) {
   const t = DICE_SIDES > 1 ? (roll - 1) / (DICE_SIDES - 1) : 1
   let mult = LUCK_LO + (LUCK_HI - LUCK_LO) * t
@@ -110,6 +141,7 @@ function resolveHit(attacker, defender, opts) {
 module.exports = {
   PROFILE, DICE_SIDES, LUCK_LO, LUCK_HI, CRIT_MULT, K50,
   WEIGHT_LEVEL, WEIGHT_GEAR, GEAR_FLOOR, MAX_LEVEL_REF, DODGE_STAMINA_COST, BLOCK_ARMOR_MULT,
+  TRANSFORM_SCALE, transformLevers, revertTransformLevers,
   clampGearTier, powerScale, computeLevers, luckOf, rollDie, damageReduction, resolveHit,
   RARITY_WEIGHT, NOMINAL_SLOTS, enhanceTierFactor, deriveGearTier,
   ATTACKS, attackPower, chooseAttack,

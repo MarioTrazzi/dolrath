@@ -328,15 +328,15 @@ function FighterFigure({
             <StatBar value={fighter.stamina} max={fighter.maxStamina} gradient="from-yellow-600 to-amber-300" icon="⚡" />
           </div>
 
-          {/* AD / AP / DP — com o bônus da transformação entre parênteses */}
+          {/* PODER / ARMADURA / HP (modelo enxuto) — bônus da transformação entre parênteses */}
           {fighter.combatStats && (
             <div className="mt-1 flex flex-wrap items-baseline justify-center gap-x-1.5 gap-y-0.5 text-[9px] sm:text-[10px] leading-none">
               {[
-                { label: 'AD', val: fighter.combatStats.ad, delta: fighter.combatStats.adDelta, color: '#e8a07a' },
+                { label: 'PWR', val: fighter.combatStats.ad, delta: fighter.combatStats.adDelta, color: '#e8a07a' },
                 ...(fighter.combatStats.ap != null
-                  ? [{ label: 'AP', val: fighter.combatStats.ap, delta: fighter.combatStats.apDelta, color: '#c08ae8' }]
+                  ? [{ label: 'ARM', val: fighter.combatStats.ap, delta: fighter.combatStats.apDelta, color: '#c08ae8' }]
                   : []),
-                { label: 'DP', val: fighter.combatStats.dp, delta: fighter.combatStats.dpDelta, color: '#7ab6e8' },
+                { label: 'HP', val: fighter.combatStats.dp, delta: fighter.combatStats.dpDelta, color: '#7ab6e8' },
               ].map((s) => (
                 <span key={s.label} className="flex items-baseline gap-0.5">
                   <span className="font-bold" style={{ color: s.color }}>{s.label}</span>

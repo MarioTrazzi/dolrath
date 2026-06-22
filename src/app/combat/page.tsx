@@ -7,6 +7,7 @@ import { io, Socket } from 'socket.io-client'
 import TransformationDialog from '@/components/TransformationDialog'
 import BattleScene, { BattleEvent, DiceResult, EquipmentMap, FighterView } from '@/components/battle/BattleScene'
 import { TRANSFORMATION_CONFIG, getRaceTransformations, type TransformationType } from '@/lib/transformationSystem'
+import { TRANSFORM_SCALE } from '@/lib/combatModel'
 
 interface Equipment {
   id: string
@@ -49,6 +50,8 @@ interface Player {
   }
   avatar?: string | null
   equipmentMap?: EquipmentMap
+  // ⚔️ Levers do modelo enxuto, computados pelo servidor no join (poder/armadura/hp/evasão).
+  levers?: { power: number; armor: number; hp: number; evade: number; K: number; scale: number }
   isReady: boolean
   isConnected: boolean
   isAlive: boolean
@@ -200,13 +203,13 @@ function CombatPageContent() {
     setBattleEvent({ ...data, id: battleEventCounter.current })
   }
 
-  // Sistema de Stamina (custos por ação) - Balanceado para 10 lutas diárias
+  // Custos de stamina por ação (modelo enxuto: básico 1 / arma 2 / especial 3; defesa 3)
   const STAMINA_COSTS = {
-    [ActionType.LIGHT_ATTACK]: 1,   // Ataque leve: 1 stamina
-    [ActionType.HEAVY_ATTACK]: 2,   // Ataque pesado: 2 stamina
-    [ActionType.SPECIAL_ATTACK]: 4, // Ataque especial: 4 stamina
-    [ActionType.DODGE]: 1,          // Esquivar: 1 stamina
-    [ActionType.DEFEND]: 3,         // Defender: 3 stamina (mais caro para incentivar ação)
+    [ActionType.LIGHT_ATTACK]: 1,   // Básico: 1 stamina
+    [ActionType.HEAVY_ATTACK]: 2,   // Arma: 2 stamina
+    [ActionType.SPECIAL_ATTACK]: 3, // Especial: 3 stamina
+    [ActionType.DODGE]: 3,          // Esquivar: 3 stamina
+    [ActionType.DEFEND]: 3,         // Bloquear: 3 stamina
     [ActionType.USE_ITEM]: 0        // Usar item: 0 stamina
   }
 
@@ -241,43 +244,45 @@ function CombatPageContent() {
   const isSpectator = userRole === 'spectator'
   const isModerator = userRole === 'moderator'
 
-  // 🎯 CÁLCULOS DE BALANCEAMENTO - Mostrar chances calculadas
+  // 🎯 CÁLCULOS DE EXIBIÇÃO (modelo enxuto): crítico = rolagem máxima do d12 (fixo),
+  // evasão = lever da classe, poder = lever de ataque.
   const calculateDisplayStats = (player: Player | null | undefined) => {
-    if (!player) return { critChance: 0, dodgeBonus: 0, specialType: 'físico' }
+    if (!player) return { critChance: 0, evade: 0, power: 0 }
 
-    const critChance = Math.round(Math.min(40, 5 + player.agility * 1.2)) // 5% base +1.2%/AGI (máx 40%)
-    const dodgeBonus = Math.floor(player.agility / 5) // bônus no conteste de esquiva (cap pelo dado)
-    const specialType = player.intelligence > player.strength ? 'mágico' : 'físico'
+    const critChance = Math.round(100 / 12) // rolagem máxima do d12 ≈ 8%
+    const evade = Math.round((player.levers?.evade || 0) * 100)
+    const power = Math.round(player.levers?.power || 0)
 
-    return { critChance, dodgeBonus, specialType }
+    return { critChance, evade, power }
   }
 
   const playerStats = calculateDisplayStats(currentPlayerDisplay)
   const opponentStats = calculateDisplayStats(opponent)
 
-  // AD/AP/DP exibidos no card de cada lutador. Quando transformado, os stats já
-  // vêm multiplicados (applyTransformation): AD×attack, AP×intelligence, DP×defense.
-  // O delta entre parênteses é a parcela vinda da transformação.
+  // ⚔️ PODER / ARMADURA / HP exibidos no card de cada lutador (modelo enxuto, dos levers
+  // computados pelo servidor). O delta entre parênteses é o ganho da transformação
+  // (buff simétrico ×TRANSFORM_SCALE). Fallback p/ atributos crus se ainda não houver levers.
   const withFighterStats = (p: Player | null | undefined): FighterView | null => {
     if (!p) return null
-    const cfg = p.isTransformed && p.transformationType
-      ? TRANSFORMATION_CONFIG[p.transformationType as TransformationType]
-      : null
-    const m = cfg?.statModifiers
-    const calc = (val: number, mult?: number) => {
-      const v = Math.round(val || 0)
-      if (!m || !mult || mult === 1) return { val: v, delta: 0 }
-      return { val: v, delta: v - Math.round((val || 0) / mult) }
+    if (p.levers) {
+      const round = (v: number) => Math.round(v || 0)
+      const delta = (v: number) => (p.isTransformed ? round(v) - round(v / TRANSFORM_SCALE) : 0)
+      return {
+        ...p,
+        combatStats: {
+          ad: round(p.levers.power), adDelta: delta(p.levers.power),
+          ap: round(p.levers.armor), apDelta: delta(p.levers.armor),
+          dp: round(p.levers.hp), dpDelta: delta(p.levers.hp),
+        },
+      }
     }
-    const ad = calc(p.attack, m?.attack)
-    const ap = calc(p.intelligence, m?.intelligence)
-    const dp = calc(p.defense, m?.defense)
+    // Fallback (sem levers ainda): mostra os atributos crus, sem delta.
     return {
       ...p,
       combatStats: {
-        ad: ad.val, adDelta: ad.delta,
-        ap: ap.val, apDelta: ap.delta,
-        dp: dp.val, dpDelta: dp.delta,
+        ad: Math.round(p.attack || 0), adDelta: 0,
+        ap: Math.round(p.defense || 0), apDelta: 0,
+        dp: Math.round(p.maxHp || 0), dpDelta: 0,
       },
     }
   }
@@ -750,64 +755,47 @@ function CombatPageContent() {
 
   const handlePlayerAction = (action: ActionType) => {
     if (!currentPlayer) return
-    
-    // Verificar custos antes de enviar ação
-    const mpCost = action === ActionType.SPECIAL_ATTACK ? 15 : 0
+
+    // 🐉 GATE DO ESPECIAL: só disponível com a transformação ativa (o burst é
+    // desbloqueado pela transformação — sem custo de MP no modelo enxuto).
+    if (action === ActionType.SPECIAL_ATTACK && !currentPlayer.isTransformed) {
+      socket.emit('chat_message', {
+        playerId: currentPlayer.id,
+        roomId,
+        message: `❌ O Especial só pode ser usado transformado!`
+      })
+      return
+    }
+
     const staminaCost = STAMINA_COSTS[action]
-    
-    if (mpCost > 0 && currentPlayer.mp < mpCost) {
-      // Adicionar mensagem no chat
-      socket.emit('chat_message', { 
-        playerId: currentPlayer.id, 
-        roomId, 
-        message: `❌ MP insuficiente para ataque especial! (${mpCost} MP necessário)` 
-      })
-      return
-    }
-    
+
     if (staminaCost > 0 && currentPlayer.stamina < staminaCost) {
-      // Adicionar mensagem no chat
-      socket.emit('chat_message', { 
-        playerId: currentPlayer.id, 
-        roomId, 
-        message: `❌ Stamina insuficiente para esta ação! (${staminaCost} stamina necessária)` 
+      socket.emit('chat_message', {
+        playerId: currentPlayer.id,
+        roomId,
+        message: `❌ Stamina insuficiente para esta ação! (${staminaCost} stamina necessária)`
       })
       return
     }
-    
-    // ✅ APLICAR CUSTOS LOCALMENTE IMEDIATAMENTE (como no sistema de dungeon)
-    if (mpCost > 0) {
-      setCurrentPlayer(prev => prev ? {
-        ...prev,
-        mp: Math.max(0, prev.mp - mpCost)
-      } : null)
-    }
-    
+
+    // ✅ APLICAR CUSTO DE STAMINA LOCALMENTE (otimista; sem custo de MP)
     if (staminaCost > 0) {
       setCurrentPlayer(prev => prev ? {
         ...prev,
         stamina: Math.max(0, prev.stamina - staminaCost)
       } : null)
     }
-    
-    const diceTypes = {
-      [ActionType.LIGHT_ATTACK]: 6,
-      [ActionType.HEAVY_ATTACK]: 10,
-      [ActionType.SPECIAL_ATTACK]: 20,
-      [ActionType.DODGE]: 6,
-      [ActionType.DEFEND]: 6,
-      [ActionType.USE_ITEM]: 4
-    }
 
-    const diceType = diceTypes[action]
-    
+    // ⚔️ Modelo enxuto: dado único de SORTE (d12) para todas as ações.
+    const diceType = 12
+
     // Enviar ação (que irá para OPPONENT_REACTION, não DICE_ROLL diretamente)
-    socket.emit('player_action', { 
-      playerId: currentPlayer.id, 
-      roomId, 
-      action, 
+    socket.emit('player_action', {
+      playerId: currentPlayer.id,
+      roomId,
+      action,
       diceType,
-      mpCost,
+      mpCost: 0,
       staminaCost
     })
   }
@@ -1156,11 +1144,11 @@ function CombatPageContent() {
           {!isSpectator && !isModerator && currentPlayerDisplay && (
             <div className="bg-background/40 border-y border-white/10 px-2 py-1 flex items-center justify-center gap-3 text-[10px] text-text-secondary flex-shrink-0">
               <span>CRIT: <span className="font-bold text-yellow-300">{playerStats.critChance}%</span></span>
-              <span>ESQ: <span className="font-bold text-cyan-300">+{playerStats.dodgeBonus}🎲</span></span>
-              <span>ESP: <span className="font-bold text-purple-300">{playerStats.specialType}</span></span>
+              <span>EVA: <span className="font-bold text-cyan-300">{playerStats.evade}%</span></span>
+              <span>PWR: <span className="font-bold text-purple-300">{playerStats.power}</span></span>
               <span className="text-white/20">|</span>
-              <span>Oponente → CRIT: <span className="font-bold text-yellow-300/80">{opponentStats.critChance}%</span></span>
-              <span>ESQ: <span className="font-bold text-cyan-300/80">+{opponentStats.dodgeBonus}🎲</span></span>
+              <span>Oponente → EVA: <span className="font-bold text-cyan-300/80">{opponentStats.evade}%</span></span>
+              <span>PWR: <span className="font-bold text-yellow-300/80">{opponentStats.power}</span></span>
             </div>
           )}
 
@@ -1335,27 +1323,28 @@ function CombatPageContent() {
                       : 'bg-gradient-to-r from-warning to-yellow-500 hover:from-yellow-500 hover:to-warning'
                     } text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                   >
-                    👊 Leve · AGI (d6, {STAMINA_COSTS[ActionType.LIGHT_ATTACK]}⚡)
+                    👊 Básico (d12, {STAMINA_COSTS[ActionType.LIGHT_ATTACK]}⚡)
                   </button>
                   <button
                     onClick={() => handlePlayerAction(ActionType.HEAVY_ATTACK)}
                     disabled={!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.HEAVY_ATTACK]}
-                    className={`w-full ${!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.HEAVY_ATTACK] 
-                      ? 'bg-gray-600 opacity-50 cursor-not-allowed' 
+                    className={`w-full ${!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.HEAVY_ATTACK]
+                      ? 'bg-gray-600 opacity-50 cursor-not-allowed'
                       : 'bg-gradient-to-r from-error to-red-600 hover:from-red-600 hover:to-error'
                     } text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                   >
-                    ⚔️ Pesado · STR quebra-armadura (d10, {STAMINA_COSTS[ActionType.HEAVY_ATTACK]}⚡)
+                    ⚔️ Arma (d12, {STAMINA_COSTS[ActionType.HEAVY_ATTACK]}⚡)
                   </button>
                   <button
                     onClick={() => handlePlayerAction(ActionType.SPECIAL_ATTACK)}
-                    disabled={!currentPlayer || currentPlayer.mp < 15 || currentPlayer.stamina < STAMINA_COSTS[ActionType.SPECIAL_ATTACK]}
-                    className={`w-full ${!currentPlayer || currentPlayer.mp < 15 || currentPlayer.stamina < STAMINA_COSTS[ActionType.SPECIAL_ATTACK]
-                      ? 'bg-gray-600 opacity-50 cursor-not-allowed' 
+                    disabled={!currentPlayer || !currentPlayer.isTransformed || currentPlayer.stamina < STAMINA_COSTS[ActionType.SPECIAL_ATTACK]}
+                    title={!currentPlayer?.isTransformed ? 'Disponível apenas transformado' : undefined}
+                    className={`w-full ${!currentPlayer || !currentPlayer.isTransformed || currentPlayer.stamina < STAMINA_COSTS[ActionType.SPECIAL_ATTACK]
+                      ? 'bg-gray-600 opacity-50 cursor-not-allowed'
                       : 'bg-gradient-to-r from-primary to-primary-dark hover:shadow-lg hover:shadow-primary/25'
                     } text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                   >
-                    ✨ Especial · INT fura armadura (d20, 15🔮, {STAMINA_COSTS[ActionType.SPECIAL_ATTACK]}⚡)
+                    {currentPlayer?.isTransformed ? '✨' : '🔒'} Especial (d12, {STAMINA_COSTS[ActionType.SPECIAL_ATTACK]}⚡{currentPlayer?.isTransformed ? '' : ' · transforme-se'})
                   </button>
                   
                   <div className="border-t border-white/10 my-3"></div>
@@ -1390,8 +1379,8 @@ function CombatPageContent() {
                     </div>
                   )}
                   
-                  {/* Botão de Transformação */}
-                  {currentPlayer && (currentPlayer.race === 'draconiano' || currentPlayer.race === 'metamorfo') && (
+                  {/* Botão de Transformação (todas as raças têm uma forma) */}
+                  {currentPlayer && getRaceTransformations(currentPlayer.race).length > 0 && (
                     <button
                       onClick={handleTransformation}
                       disabled={
@@ -1412,16 +1401,14 @@ function CombatPageContent() {
                         : 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-blue-600 hover:to-purple-600'
                       } text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                     >
-                      {currentPlayer.isTransformed ? 
+                      {currentPlayer.isTransformed ?
                         '🐉 Já Transformado' :
                         (currentPlayer.transformationData?.cooldownTurns || 0) > 0 ?
                         `⏰ Cooldown (${currentPlayer.transformationData?.cooldownTurns || 0})` :
                         isTransforming ? '⏳ Transformando...' :
                         currentPlayer.stamina < 30 || currentPlayer.mp < 20 ?
                         '❌ Recursos insuficientes' :
-                        currentPlayer.race === 'draconiano' ? 
-                        '🐉 Transformar (50⚡ 40🔮)' :
-                        '🔄 Transformar (30⚡ 20🔮)'
+                        '🔆 Transformar (libera o Especial)'
                       }
                     </button>
                   )}
@@ -1439,7 +1426,7 @@ function CombatPageContent() {
                       : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-blue-600 hover:to-cyan-600'
                     } text-white py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                   >
-                    🌪️ Esquivar (+{playerStats.dodgeBonus}🎲, {STAMINA_COSTS[ActionType.DODGE]}⚡)
+                    🌪️ Esquivar · evasão{currentPlayerDisplay?.levers ? ` ${Math.round((currentPlayerDisplay.levers.evade || 0) * 100)}%` : ''} ({STAMINA_COSTS[ActionType.DODGE]}⚡)
                   </button>
                   <button
                     onClick={() => handleDefenseChoice('defend')}
@@ -1449,7 +1436,7 @@ function CombatPageContent() {
                       : 'bg-gradient-to-r from-emerald-600 to-green-600 hover:from-green-600 hover:to-emerald-600'
                     } text-white py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                   >
-                    🛡️ Defender ({STAMINA_COSTS[ActionType.DEFEND]}⚡)
+                    🛡️ Bloquear · armadura reforçada ({STAMINA_COSTS[ActionType.DEFEND]}⚡)
                   </button>
                 </div>
               ) : (

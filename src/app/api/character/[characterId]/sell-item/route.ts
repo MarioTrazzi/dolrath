@@ -39,6 +39,13 @@ export async function POST(
       return NextResponse.json({ error: 'Item não encontrado no inventário' }, { status: 404 })
     }
 
+    // Anti-duplicação: peça travada por um lazy-mint em andamento não pode ser
+    // vendida ao ferreiro (senão o jogador ganharia gold E a NFT). A trava expira só.
+    const lockedAt = (inventoryItem as any).listingLockedAt as Date | null
+    if (lockedAt && Date.now() - new Date(lockedAt).getTime() < 20 * 60_000) {
+      return NextResponse.json({ error: 'Esta peça está sendo listada no mercado. Aguarde alguns minutos.' }, { status: 409 })
+    }
+
     const qty = Math.max(1, Math.min(inventoryItem.quantity, requestedQty || 1))
     const unitPrice = Math.max(0, Math.floor((inventoryItem.item.goldPrice ?? 0) / 2))
     const goldEarned = unitPrice * qty

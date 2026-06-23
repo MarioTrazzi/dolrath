@@ -230,6 +230,11 @@ model ItemNft {
   contract      String
   tokenId       BigInt
   paidGoldWei   String
+  // ⚒️ Aprimoramento congelado no momento do mint (lazy-mint de item ganho).
+  // 0 para itens de loja. Preserva a fidelidade (+N) no display do marketplace.
+  enhancementLevel Int   @default(0)
+  // Origem do mint: 'store' (compra) | 'lazy' (item ganho cunhado ao listar).
+  mintSource    String   @default("store")
   purchaseTxHash String? @unique
   mintTxHash    String?  @unique
   mintedAt      DateTime @default(now())
@@ -250,6 +255,10 @@ model CharacterInventory {
   enhancementLevel Int  @default(0)
   durability       Int  @default(100)
   maxDurability    Int  @default(100)
+  // 🔒 Trava temporária durante o lazy-mint (list-intent → list-confirm). Evita
+  // que a peça seja vendida/consumida entre o voucher e o mint (duplicação).
+  // Expira sozinha após alguns minutos se a listagem não completar.
+  listingLockedAt  DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 

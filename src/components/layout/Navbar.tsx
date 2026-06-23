@@ -188,6 +188,7 @@ export function Navbar() {
     { label: 'Masmorras', href: '/dungeons' },
     { label: 'Combate', href: '/combat-lobby' },
     { label: 'Inventário', href: '/inventory' },
+    { label: 'Mercado', href: '/marketplace' },
     { label: 'Ferreiro', href: '/blacksmith' },
     { label: 'Alquimista', href: '/alchemist' },
     // "Docs" só aparece deslogado (landing page), para não ocupar espaço na barra logado

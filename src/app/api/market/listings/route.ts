@@ -79,6 +79,8 @@ export async function GET() {
               type: db.item.type,
               level: db.item.level,
               goldPrice: db.item.goldPrice,
+              enhancementLevel: db.enhancementLevel,
+              mintSource: db.mintSource,
             }
           : null,
         dbOwner: db

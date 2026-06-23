@@ -69,6 +69,13 @@ export async function POST(
       return NextResponse.json({ error: 'Item not found in character inventory' }, { status: 404 });
     }
 
+    // Anti-duplicação: peça travada por um lazy-mint em andamento não pode ser
+    // equipada (senão sairia do inventário e ainda viraria NFT). Trava expira só.
+    const lockedAt = (characterInventoryItem as any).listingLockedAt as Date | null
+    if (lockedAt && Date.now() - new Date(lockedAt).getTime() < 20 * 60_000) {
+      return NextResponse.json({ error: 'Esta peça está sendo listada no mercado. Aguarde alguns minutos.' }, { status: 409 });
+    }
+
     // Verificar se o personagem tem nível suficiente para equipar o item
     if (character.level < characterInventoryItem.item.level) {
       return NextResponse.json({

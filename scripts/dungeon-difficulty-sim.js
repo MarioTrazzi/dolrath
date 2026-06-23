@@ -41,11 +41,14 @@ const BOSS_ARM_MULT = process.env.BARM !== undefined ? Number(process.env.BARM) 
 const PRI = 16, DUO = 17, TRI = 18, TET = 19, PEN = 20
 
 // ---- Dungeons + GEAR-ALVO pro boss (rarity × enhancement) ----
+// clearLevel = NÍVEL-TOPO do band (onde o boss é vencido c/ o gear-alvo). O boss ancora
+// nesse nível FIXO → under-leveled trava, over-leveled vira farm. Floresta 1→10, Caverna
+// 10→25, Pântano 25→40, Ruínas 40→50.
 const DUNGEONS = [
-  { id: 'floresta', rooms: 3, levelReq: 1,  difficulty: 1.0,  bossHpMult: 1.48, target: { rarity: 'UNCOMMON',  enh: PRI }, targetLabel: 'incomum PRI' },
-  { id: 'caverna',  rooms: 4, levelReq: 10, difficulty: 1.15, bossHpMult: 1.42, target: { rarity: 'RARE',      enh: DUO }, targetLabel: 'raro DUO' },
-  { id: 'pantano',  rooms: 4, levelReq: 25, difficulty: 1.3,  bossHpMult: 1.40, target: { rarity: 'EPIC',      enh: TRI }, targetLabel: 'épico TRI' },
-  { id: 'ruinas',   rooms: 5, levelReq: 40, difficulty: 1.45, bossHpMult: 1.37, target: { rarity: 'LEGENDARY', enh: TET }, targetLabel: 'lendário TET' },
+  { id: 'floresta', rooms: 3, levelReq: 1,  clearLevel: 10, difficulty: 1.0,  bossHpMult: 1.48, target: { rarity: 'UNCOMMON',  enh: PRI }, targetLabel: 'incomum PRI/+15' },
+  { id: 'caverna',  rooms: 4, levelReq: 10, clearLevel: 25, difficulty: 1.15, bossHpMult: 1.42, target: { rarity: 'RARE',      enh: DUO }, targetLabel: 'raro DUO' },
+  { id: 'pantano',  rooms: 4, levelReq: 25, clearLevel: 40, difficulty: 1.3,  bossHpMult: 1.40, target: { rarity: 'EPIC',      enh: TRI }, targetLabel: 'épico TRI' },
+  { id: 'ruinas',   rooms: 5, levelReq: 40, clearLevel: 50, difficulty: 1.45, bossHpMult: 1.37, target: { rarity: 'LEGENDARY', enh: TET }, targetLabel: 'lendário TET' },
 ]
 
 // ---- Escada de gear (rungs) p/ contar a história do gate ----
@@ -112,8 +115,8 @@ function neutralAnchor(dg, race) {
   const { gearTier, gearHp } = gearFor(dg.target.rarity, dg.target.enh)
   let powerSum = 0, hpSum = 0
   for (const k of ALL_KLASS) {
-    const c = buildChar(race, k, dg.levelReq)
-    const lv = CM.computeLevers(k, dg.levelReq, gearTier, { str: c.str, agi: c.agi, int: c.int, def: c.def })
+    const c = buildChar(race, k, dg.clearLevel)
+    const lv = CM.computeLevers(k, dg.clearLevel, gearTier, { str: c.str, agi: c.agi, int: c.int, def: c.def })
     powerSum += lv.power
     hpSum += c.gameMaxHp + gearHp
   }
@@ -121,10 +124,10 @@ function neutralAnchor(dg, race) {
 }
 function makeBoss(dg, race, _klass, hpMultOverride) {
   const a = neutralAnchor(dg, race)
-  const S = CM.powerScale(dg.levelReq, a.gearTier)
+  const S = CM.powerScale(dg.clearLevel, a.gearTier)
   const hpMult = hpMultOverride !== undefined ? hpMultOverride
     : process.env.BHP !== undefined ? Number(process.env.BHP) : dg.bossHpMult
-  const bossLevel = Math.round(dg.levelReq + (dg.rooms - 1) * 3 + 4)
+  const bossLevel = dg.clearLevel + 2 // K segue o nível-topo do band
   return {
     power: a.power * BOSS_POW_MULT,
     armor: MON_ARMOR * S * BOSS_ARM_MULT,
@@ -136,33 +139,67 @@ function makeBoss(dg, race, _klass, hpMultOverride) {
 }
 
 // ============================================================
-// COMBATE — Monte Carlo espelhando o fluxo do DungeonRun.
-// Fluxo FIEL ao DungeonRun.tsx:
-//  • jogador ataca SEMPRE com a arma (weapon, 1.0); o MONSTRO reage 50/50 dodge/defend.
-//  • monstro ataca com mix de boss (basic .35 / weapon .35 / special .30); o JOGADOR
-//    reage RACIONALMENTE por valor esperado (o que um bom jogador faz — bloquear mitiga
-//    todo golpe ×2.5; esquivar é tudo-ou-nada, falha ainda mitiga pela armadura normal).
-//  • combate NÃO gasta stamina (orçamento diário); transformação ignorada (conservador).
+// COMBATE — DISPUTA DE DADOS (novo modelo, 2026-06-22).
+// Atacante e defensor rolam o MESMO dado do ataque (básico d8 / arma d12 / especial d20),
+// normalizados (0,1). margem = na − (nd + edgeDef):
+//   • margem < 0 → defesa vence: ESQUIVA = 0 dano; DEFENDER = golpe aparado (dano mínimo).
+//   • margem ≥ 0 → ACERTA: dano = poder × powerMult × mult(margem) × (1−DR).
+//       DR: esquiva falha = SEM mitigação (alto risco); defender = armadura×2.5 (seguro).
+//       margem grande (≥ CRIT_MARGIN) = CRÍTICO.
+// Poder e mitigação (levers) seguem dimensionando o dano → preserva o balanceamento.
+// Transformação modelada: duty-cycle (ativa TR_ON turnos, cd TR_OFF), ×1.25 nos levers e
+// libera o ESPECIAL (d20). Boss tunado p/ que MESMO transformado precise do gear-alvo.
 // ============================================================
-function chooseDefense(armor, K, evade) {
-  const dodgeF = (1 - evade) * (1 - CM.damageReduction(armor, K))
-  const blockF = 1 - CM.damageReduction(armor * CM.BLOCK_ARMOR_MULT, K)
-  return blockF <= dodgeF ? 'block' : 'dodge'
+const DIE = { basic: 8, weapon: 12, special: 20 }
+const HIT_MIN = 0.6, HIT_SLOPE = 1.5, CRIT_MULT = 1.9, CRIT_MARGIN = 0.5
+const DODGE_EDGE = 1.0   // peso da evasão (lever) na margem da esquiva
+const BLOCK_EDGE = 0.10  // chance-base de "defesa perfeita" ao bloquear
+const TR_ON = 4, TR_OFF = 6 // duty-cycle da transformação (~40% uptime)
+
+const ACC_W = process.env.ACC_W !== undefined ? Number(process.env.ACC_W) : 1.6 // peso da VANTAGEM DE ESCALA (gear+nível) no acerto (0=gate mole, 4=binário)
+const rollN = (sides) => (1 + Math.floor(Math.random() * sides) - 0.5) / sides
+// acc = (escala do atacante − escala do defensor)·ACC_W → gear melhor ACERTA mais (afia o
+// gate); num espelho as escalas se cancelam → luta de igual continua ~50/50.
+function contestedHit(power, sides, defender, choice, atkScale = 0, defScale = 0) {
+  const edge = (choice === 'dodge' ? defender.evade * DODGE_EDGE : BLOCK_EDGE) - (atkScale - defScale) * ACC_W
+  const margin = rollN(sides) - (rollN(sides) + edge)
+  if (margin < 0) {
+    if (choice === 'dodge') return 0
+    const dr = CM.damageReduction(defender.armor * CM.BLOCK_ARMOR_MULT, defender.K)
+    return Math.max(1, Math.round(power * 0.15 * (1 - dr)))
+  }
+  let mult = HIT_MIN + margin * HIT_SLOPE
+  if (margin >= CRIT_MARGIN) mult = Math.max(mult, CRIT_MULT)
+  const dr = choice === 'block' ? CM.damageReduction(defender.armor * CM.BLOCK_ARMOR_MULT, defender.K) : 0
+  return Math.max(1, Math.round(power * mult * (1 - dr)))
 }
-function fight(pLevers, pHP, boss) {
+// Defesa racional do jogador: MC rápido — escolhe dodge/block de menor dano esperado.
+function chooseDefense(attackerPower, sides, defender, atkScale, defScale) {
+  let dDmg = 0, bDmg = 0
+  for (let i = 0; i < 400; i++) {
+    dDmg += contestedHit(attackerPower, sides, defender, 'dodge', atkScale, defScale)
+    bDmg += contestedHit(attackerPower, sides, defender, 'block', atkScale, defScale)
+  }
+  return bDmg <= dDmg ? 'block' : 'dodge'
+}
+function fight(base, pHP, boss, pDef) {
+  const tr = { power: base.power * CM.TRANSFORM_SCALE, armor: base.armor * CM.TRANSFORM_SCALE, hp: base.hp, evade: base.evade, K: base.K * CM.TRANSFORM_SCALE, scale: base.scale * CM.TRANSFORM_SCALE }
   let php = pHP, mhp = boss.hp
-  const pDef = chooseDefense(pLevers.armor, pLevers.K, pLevers.evade) // jogador racional (fixo)
   let playerTurn = Math.random() < 0.5
-  for (let t = 0; t < 400 && php > 0 && mhp > 0; t++) {
+  let phase = 0 // ciclo de transformação em turnos do jogador: [0,TR_ON) transformado; resto cooldown
+  const isTransformed = () => phase < TR_ON
+  for (let t = 0; t < 600 && php > 0 && mhp > 0; t++) {
     if (playerTurn) {
-      const mDef = Math.random() < 0.5 ? 'dodge' : 'block' // monstro reage 50/50 (= jogo)
-      const r = CM.resolveHit({ power: pLevers.power * CM.ATTACKS.weapon.powerMult }, boss, { defense: mDef })
-      mhp -= r.dodged ? 0 : r.damage
+      const pl = isTransformed() ? tr : base
+      const kind = isTransformed() ? 'special' : 'weapon' // especial só transformado
+      const mDef = Math.random() < 0.5 ? 'dodge' : 'block' // monstro reage 50/50
+      mhp -= contestedHit(pl.power * CM.ATTACKS[kind].powerMult, DIE[kind], boss, mDef, pl.scale, boss.anchorS)
+      phase = (phase + 1) % (TR_ON + TR_OFF)
     } else {
       const x = Math.random()
       const kind = x < 0.35 ? 'basic' : x < 0.7 ? 'weapon' : 'special'
-      const r = CM.resolveHit({ power: boss.power * CM.ATTACKS[kind].powerMult }, { armor: pLevers.armor, K: pLevers.K, evade: pLevers.evade }, { defense: pDef })
-      php -= r.dodged ? 0 : r.damage
+      const pl = isTransformed() ? tr : base
+      php -= contestedHit(boss.power * CM.ATTACKS[kind].powerMult, DIE[kind], { armor: pl.armor, K: pl.K, evade: pl.evade }, pDef, boss.anchorS, pl.scale)
     }
     playerTurn = !playerTurn
   }
@@ -177,22 +214,23 @@ const SOLVE = process.env.SOLVE !== '0' // por padrão resolve o hpMult; SOLVE=0
 
 // win% de uma classe/rung contra um boss dado.
 function winRate(dg, race, klass, rung, boss, n = FIGHTS) {
-  const char = buildChar(race, klass, dg.levelReq)
+  const char = buildChar(race, klass, dg.clearLevel)
   const { gearTier, gearHp } = gearFor(rung.rarity, rung.enh)
   const levers = CM.computeLevers(klass, char.level, gearTier, { str: char.str, agi: char.agi, int: char.int, def: char.def })
   const pHP = char.gameMaxHp + gearHp
+  const pDef = chooseDefense(boss.power, DIE.weapon, levers, boss.anchorS, levers.scale) // 1× por config
   let win = 0
-  for (let i = 0; i < n; i++) if (fight(levers, pHP, boss) === 'win') win++
+  for (let i = 0; i < n; i++) if (fight(levers, pHP, boss, pDef) === 'win') win++
   return { wr: win / n, gearTier, levers, pHP }
 }
 // Binary-search do hpMult p/ a classe de referência vencer ~TARGET_WIN no gear-ALVO.
 function solveHpMult(dg, race, klass) {
   const targetRung = RUNGS[targetRungIndex(dg)]
-  let lo = 1.0, hi = 12.0
-  for (let it = 0; it < 22; it++) {
+  let lo = 1.0, hi = 14.0
+  for (let it = 0; it < 16; it++) {
     const mid = (lo + hi) / 2
     const boss = makeBoss(dg, race, klass, mid)
-    const { wr } = winRate(dg, race, klass, targetRung, boss, 1500)
+    const { wr } = winRate(dg, race, klass, targetRung, boss, 700)
     // mais HP no boss = menos win do jogador → se win alto, subir hi... (monotônico decrescente em hpMult)
     if (wr > TARGET_WIN) lo = mid; else hi = mid
   }

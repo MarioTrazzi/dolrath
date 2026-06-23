@@ -562,7 +562,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     const monsterEncounter = sc.isMain || (!sc.isBoss && Math.random() < MINOR_MONSTER_CHANCE)
     if (monsterEncounter) {
       const ev = dungeon.events.find(e => e.kind === 'monster')!
-      const scaled = scaleMonster(pickMonster(dungeon), dungeon, lvl, sc)
+      const scaled = scaleMonster(pickMonster(dungeon), dungeon, lvl, sc, combatClass)
       setNodeEvents(prev => ({ ...prev, [atIdx]: { kind: 'monster', emoji: scaled.emoji } }))
       pushLog(`${ev.icon} ${ev.title} ${scaled.emoji} ${scaled.name} apareceu!`)
       return {
@@ -1477,7 +1477,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                         <h2 className="text-3xl font-black text-white leading-none">{dungeon.boss.name}</h2>
                         <p className="text-sm text-error/90 font-bold uppercase tracking-wider mt-1 mb-5">{dungeon.boss.title}</p>
                         <button
-                          onClick={() => startCombat(scaleMonster(dungeon.boss, dungeon, character.level, { tier: dungeon.rooms, isMain: true, isBoss: true }))}
+                          onClick={() => startCombat(scaleMonster(dungeon.boss, dungeon, character.level, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass))}
                           className="w-full py-4 rounded-lg font-black text-white text-lg inline-flex items-center justify-center gap-2 transition-transform active:scale-[0.98] hover:scale-[1.02]"
                           style={{ background: 'linear-gradient(90deg, #e94560, #b91c1c)', boxShadow: '0 0 28px rgba(233,69,96,0.5)' }}
                         >
@@ -1523,7 +1523,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                 <button
                   onClick={
                     atBoss
-                      ? () => startCombat(scaleMonster(dungeon.boss, dungeon, character.level, { tier: dungeon.rooms, isMain: true, isBoss: true }))
+                      ? () => startCombat(scaleMonster(dungeon.boss, dungeon, character.level, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass))
                       : advance
                   }
                   disabled={exploreRolling || moving || !!eventCard}

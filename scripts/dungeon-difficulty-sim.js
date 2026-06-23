@@ -3,60 +3,62 @@
 // DOLRATH — Simulador de DIFICULDADE de masmorra (PvE) — MODELO ENXUTO
 //
 // Reescrito sobre o código REAL (server/combatModel.js): usa os MESMOS levers e
-// resolveHit do DungeonRun.tsx. Espelha a derivação do componente:
-//   • jogador: computeLevers(classe, nível, gearTier, attrs)  — gear conta via TIER,
-//     atributos da criação via TILT; HP da run = pool do jogo (80 + str·2 + def·4 + gearHP).
-//   • monstro (classe desconhecida): levers de fallback (power=ataque, armor=defesa,
-//     hp=maxHp, K=K50·S), igual ao monsterLevers() do DungeonRun.
+// resolveHit do DungeonRun.tsx.
 //
-// Pergunta: o personagem no levelReq fecha o BOSS sem gear / comum +0 / +15 / PRI?
-// gear PRECISA contar — alvo: sem gear o jogador apanha; com +15/PRI vence confortável.
+// 🎯 REDESIGN (2026-06-22): o boss é ANCORADO no poder enxuto do jogador no
+// levelReq com o GEAR-ALVO da masmorra. Em vez de números-base arbitrários
+// (que estouravam no enxuto), o boss = levers do jogador em
+//   computeLevers(classe, levelReq, gearTier_alvo, attrs)
+// multiplicados por BPOW/BARM/BHP. Isso:
+//   • encarna "a dungeon escala com os stats do personagem";
+//   • auto-escala entre masmorras (o boss é sempre relativo a quem deveria estar lá);
+//   • torna o GATE DE GEAR explícito: com o gear-alvo vence ~70%, um tier abaixo apanha.
+//
+// Escada de gear-alvo (Mario, 2026-06-22) — +1 tier de aprimoramento por masmorra:
+//   Floresta → incomum PRI | Caverna → raro DUO | Pântano → épico TRI | Ruínas → lendário TET
+//   (PEN reservado p/ uma 5ª masmorra futura.)
 //
 // Uso:
 //   node scripts/dungeon-difficulty-sim.js
 //   CLASS=mage RACE=elfo node scripts/dungeon-difficulty-sim.js
-//   FIGHTS=4000 node scripts/dungeon-difficulty-sim.js
+//   BPOW=1.0 BARM=1.0 BHP=2.2 node scripts/dungeon-difficulty-sim.js   # tunar o boss
 // ============================================================
 
 const CM = require('../server/combatModel')
 
 const FIGHTS = Number(process.env.FIGHTS) || 3000
-const rnd = (n) => 1 + Math.floor(Math.random() * n)
 
-// ---- Escala de monstro (dungeonAdventures.ts) ----
-// 🔧 BOSS_HP_MULT/POW recalibrados via env p/ a ESCALA ENXUTA (o boss antigo, HP×1.8
-//    de números grandes, era pro modelo subtrativo). Busca: env BHP / BPOW.
-const LEVEL_POWER_STEP = 0.04
-const TIER_POWER_STEP = process.env.TPS !== undefined ? Number(process.env.TPS) : 0.6
-const BOSS_HP_MULT = process.env.BHP !== undefined ? Number(process.env.BHP) : 1.8
-const BOSS_POWER_MULT = process.env.BPOW !== undefined ? Number(process.env.BPOW) : 1.8
-function scaleBoss(boss, dungeon, charLevel) {
-  const tier = dungeon.rooms
-  const tierFactor = 1 + (tier - 1) * TIER_POWER_STEP
-  const lvlFactor = 1 + Math.max(0, charLevel - dungeon.levelReq) * LEVEL_POWER_STEP
-  const power = dungeon.difficulty * tierFactor * BOSS_POWER_MULT * lvlFactor
-  const level = Math.round(dungeon.levelReq + (tier - 1) * 3 + 4)
-  const hp = Math.floor(boss.baseHp * power * BOSS_HP_MULT)
-  return {
-    level, hp, maxHp: hp,
-    attack: Math.floor(boss.baseAttack * power),
-    defense: Math.floor(boss.baseDefense * power),
-    isBoss: true, hasSpecial: true,
-  }
-}
-// Levers do monstro — IDÊNTICO a monsterLevers() do DungeonRun.tsx.
-function monsterLevers(m) {
-  const S = m.level / CM.MAX_LEVEL_REF + 0.5
-  return { power: m.attack, armor: m.defense, hp: m.maxHp, evade: 0.06, K: CM.K50 * S, scale: S }
-}
+// ---- Multiplicadores do boss sobre o "espelho" do jogador no gate ----
+// boss = levers do jogador (classe, levelReq, gearTier_alvo) × estes fatores.
+// 1.0/1.0/1.0 seria um espelho perfeito (luta 50/50). Acima de 1 o boss é mais forte.
+const BOSS_POW_MULT = process.env.BPOW !== undefined ? Number(process.env.BPOW) : 0.9
+const BOSS_ARM_MULT = process.env.BARM !== undefined ? Number(process.env.BARM) : 0.8
+// HP do boss = HP do jogador no gate × bossHpMult. Taper leve por masmorra: o piso de
+// NÍVEL no S domina o late-game (gear pesa menos), então a banda de gear estreita —
+// baixar o HP nas masmorras tardias compensa pra manter o ALVO num win ~63%. Override global via BHP.
 
-// ---- Dungeons (dungeonAdventures.ts) ----
+// Enhancement (espelha enhancementSystem.ts)
+const PRI = 16, DUO = 17, TRI = 18, TET = 19, PEN = 20
+
+// ---- Dungeons + GEAR-ALVO pro boss (rarity × enhancement) ----
 const DUNGEONS = [
-  { id: 'floresta', rooms: 3, levelReq: 1,  difficulty: 1.0,  boss: { baseHp: 110, baseAttack: 12, baseDefense: 7 } },
-  { id: 'caverna',  rooms: 4, levelReq: 10, difficulty: 1.15, boss: { baseHp: 130, baseAttack: 14, baseDefense: 9 } },
-  { id: 'pantano',  rooms: 4, levelReq: 25, difficulty: 1.3,  boss: { baseHp: 150, baseAttack: 16, baseDefense: 10 } },
-  { id: 'ruinas',   rooms: 5, levelReq: 40, difficulty: 1.45, boss: { baseHp: 180, baseAttack: 18, baseDefense: 12 } },
+  { id: 'floresta', rooms: 3, levelReq: 1,  difficulty: 1.0,  bossHpMult: 1.48, target: { rarity: 'UNCOMMON',  enh: PRI }, targetLabel: 'incomum PRI' },
+  { id: 'caverna',  rooms: 4, levelReq: 10, difficulty: 1.15, bossHpMult: 1.42, target: { rarity: 'RARE',      enh: DUO }, targetLabel: 'raro DUO' },
+  { id: 'pantano',  rooms: 4, levelReq: 25, difficulty: 1.3,  bossHpMult: 1.40, target: { rarity: 'EPIC',      enh: TRI }, targetLabel: 'épico TRI' },
+  { id: 'ruinas',   rooms: 5, levelReq: 40, difficulty: 1.45, bossHpMult: 1.37, target: { rarity: 'LEGENDARY', enh: TET }, targetLabel: 'lendário TET' },
 ]
+
+// ---- Escada de gear (rungs) p/ contar a história do gate ----
+// Cada masmorra testa: sem gear · um tier abaixo · ALVO · um tier acima.
+const RUNGS = [
+  { label: 'comum +15',     rarity: 'COMMON',    enh: 15 },
+  { label: 'incomum PRI',   rarity: 'UNCOMMON',  enh: PRI },
+  { label: 'raro DUO',      rarity: 'RARE',      enh: DUO },
+  { label: 'épico TRI',     rarity: 'EPIC',      enh: TRI },
+  { label: 'lendário TET',  rarity: 'LEGENDARY', enh: TET },
+  { label: 'lendário PEN',  rarity: 'LEGENDARY', enh: PEN },
+]
+const targetRungIndex = (dg) => RUNGS.findIndex(r => r.rarity === dg.target.rarity && r.enh === dg.target.enh)
 
 // ---- Personagem (criação 18 pts, cap 10/stat; +1/nível; + raça/classe) ----
 const RACES = { humano:{str:2,agi:2,int:2,def:2}, draconiano:{str:3,agi:0,int:0,def:5}, metamorfo:{str:0,agi:5,int:0,def:3}, elfo:{str:0,agi:3,int:4,def:2} }
@@ -80,50 +82,86 @@ function buildChar(race, klass, level) {
   return { str, agi, int, def, level, klass, gameMaxHp: 80 + str * 2 + def * 4 }
 }
 
-// ---- Gear: vira gearTier (raridade×aprimoramento) + HP de peças. ----
-// ⚠️ GEAR_FLOOR=0.25 no modelo: "todo mundo é ≥25% gearado". Gear COMUM (tier ~0.1)
-// fica ABAIXO do piso → não muda nada (o piso domina). Só gear RARO+ (tier >0.25)
-// conta. Por isso testamos uma faixa de RARIDADES, não enhancement de comum.
-const SET_HP = [8, 18, 8, 0, 8, 0] // hp por peça (6 slots ofensivos+defensivos)
+// ---- Gear → gearTier (raridade×aprimoramento) + HP de peças ----
+const SET_HP = [8, 18, 8, 0, 8, 0]
 const ENH_MULT = (enh) => (enh <= 0 ? 1 : enh <= 15 ? 1 + enh * 0.08 : 2.5)
 function gearFor(rarity, enh) {
   if (!rarity) return { gearTier: 0, gearHp: 0 }
-  const pieces = SET_HP.map(() => ({ rarity, enhancementLevel: enh }))
+  const pieces = Array.from({ length: CM.NOMINAL_SLOTS }, () => ({ rarity, enhancementLevel: enh }))
   const gearTier = CM.deriveGearTier(pieces)
   const gearHp = Math.floor(SET_HP.reduce((s, h) => s + h, 0) * ENH_MULT(enh))
   return { gearTier, gearHp }
 }
-const GEARS = [
-  { label: 'sem gear', rarity: null, enh: 0 },
-  { label: 'comum +15', rarity: 'COMMON', enh: 15 },
-  { label: 'raro +15', rarity: 'RARE', enh: 15 },
-  { label: 'épico PRI', rarity: 'EPIC', enh: 16 },
-  { label: 'lendário IV', rarity: 'LEGENDARY', enh: 19 },
-]
 
 // ============================================================
-// COMBATE — fight Monte Carlo espelhando o fluxo do DungeonRun:
-//  • jogador ataca com a ARMA (weapon, powerMult 1.0); monstro reage 50% esquiva / 50% bloqueio.
-//  • monstro ataca (boss: basic/weapon/special); jogador reage racional: bloqueia
-//    (ou esquiva se a evasão dele for alta).
-//  • especial do jogador exige transformação → ignorado no baseline (conservador).
+// BOSS = MONSTRO NEUTRO escalado pelo poder enxuto do GATE (não espelha a classe do
+// jogador — isso amplificaria a identidade e quebraria o equilíbrio entre classes).
+// Perfil neutro ≈ média dos 4 PROFILEs do nv50 BiS; escala por S = powerScale(levelReq,
+// gearTier_alvo). Assim toda classe enfrenta o MESMO boss e o equilíbrio vem do modelo
+// (validado no PvP). Mitigação K = K50·S (mesma constante do gate).
 // ============================================================
-function fight(pLevers, pHP, monster) {
-  const mLev = monsterLevers(monster)
-  let php = pHP, mhp = monster.maxHp
+// O boss é NEUTRO e IDÊNTICO p/ todas as classes — senão a identidade de classe vaza
+// (mago enfrentaria um boss com poder de mago = bursta o próprio mago). Ancora HP/poder
+// na MÉDIA dos levers das 4 classes no gate (classe-independente), que já carrega os
+// componentes FLAT (HP base 80 + tilt) — escala certo em todo nível, ao contrário de
+// MON×S puro. Armadura neutra (média dos PROFILEs × S). K = K50·(nível_boss/50+0.5),
+// IGUAL ao monsterLevers() do DungeonRun. Equilíbrio entre classes = mérito do modelo.
+const MON_ARMOR = 96 // média dos PROFILEs (neutra)
+const ALL_KLASS = ['warrior', 'rogue', 'mage', 'monk']
+function neutralAnchor(dg, race) {
+  const { gearTier, gearHp } = gearFor(dg.target.rarity, dg.target.enh)
+  let powerSum = 0, hpSum = 0
+  for (const k of ALL_KLASS) {
+    const c = buildChar(race, k, dg.levelReq)
+    const lv = CM.computeLevers(k, dg.levelReq, gearTier, { str: c.str, agi: c.agi, int: c.int, def: c.def })
+    powerSum += lv.power
+    hpSum += c.gameMaxHp + gearHp
+  }
+  return { power: powerSum / ALL_KLASS.length, hp: hpSum / ALL_KLASS.length, gearTier }
+}
+function makeBoss(dg, race, _klass, hpMultOverride) {
+  const a = neutralAnchor(dg, race)
+  const S = CM.powerScale(dg.levelReq, a.gearTier)
+  const hpMult = hpMultOverride !== undefined ? hpMultOverride
+    : process.env.BHP !== undefined ? Number(process.env.BHP) : dg.bossHpMult
+  const bossLevel = Math.round(dg.levelReq + (dg.rooms - 1) * 3 + 4)
+  return {
+    power: a.power * BOSS_POW_MULT,
+    armor: MON_ARMOR * S * BOSS_ARM_MULT,
+    K: CM.K50 * (bossLevel / CM.MAX_LEVEL_REF + 0.5),
+    evade: 0.06,
+    hp: Math.floor(a.hp * hpMult),
+    anchorTier: a.gearTier, anchorS: S, bossLevel,
+  }
+}
+
+// ============================================================
+// COMBATE — Monte Carlo espelhando o fluxo do DungeonRun.
+// Fluxo FIEL ao DungeonRun.tsx:
+//  • jogador ataca SEMPRE com a arma (weapon, 1.0); o MONSTRO reage 50/50 dodge/defend.
+//  • monstro ataca com mix de boss (basic .35 / weapon .35 / special .30); o JOGADOR
+//    reage RACIONALMENTE por valor esperado (o que um bom jogador faz — bloquear mitiga
+//    todo golpe ×2.5; esquivar é tudo-ou-nada, falha ainda mitiga pela armadura normal).
+//  • combate NÃO gasta stamina (orçamento diário); transformação ignorada (conservador).
+// ============================================================
+function chooseDefense(armor, K, evade) {
+  const dodgeF = (1 - evade) * (1 - CM.damageReduction(armor, K))
+  const blockF = 1 - CM.damageReduction(armor * CM.BLOCK_ARMOR_MULT, K)
+  return blockF <= dodgeF ? 'block' : 'dodge'
+}
+function fight(pLevers, pHP, boss) {
+  let php = pHP, mhp = boss.hp
+  const pDef = chooseDefense(pLevers.armor, pLevers.K, pLevers.evade) // jogador racional (fixo)
   let playerTurn = Math.random() < 0.5
   for (let t = 0; t < 400 && php > 0 && mhp > 0; t++) {
     if (playerTurn) {
-      const def = Math.random() < 0.5 ? 'dodge' : 'block'
-      const r = CM.resolveHit({ power: pLevers.power * CM.ATTACKS.weapon.powerMult }, mLev, { defense: def })
+      const mDef = Math.random() < 0.5 ? 'dodge' : 'block' // monstro reage 50/50 (= jogo)
+      const r = CM.resolveHit({ power: pLevers.power * CM.ATTACKS.weapon.powerMult }, boss, { defense: mDef })
       mhp -= r.dodged ? 0 : r.damage
     } else {
-      // boss escolhe o tipo de golpe
       const x = Math.random()
       const kind = x < 0.35 ? 'basic' : x < 0.7 ? 'weapon' : 'special'
-      // jogador racional: esquiva se evasão alta (>0.2), senão bloqueia
-      const def = pLevers.evade > 0.2 ? 'dodge' : 'block'
-      const r = CM.resolveHit({ power: mLev.power * CM.ATTACKS[kind].powerMult }, { armor: pLevers.armor, K: pLevers.K, evade: pLevers.evade }, { defense: def })
+      const r = CM.resolveHit({ power: boss.power * CM.ATTACKS[kind].powerMult }, { armor: pLevers.armor, K: pLevers.K, evade: pLevers.evade }, { defense: pDef })
       php -= r.dodged ? 0 : r.damage
     }
     playerTurn = !playerTurn
@@ -133,26 +171,66 @@ function fight(pLevers, pHP, monster) {
 
 const CLASS = process.env.CLASS || 'warrior'
 const RACE = process.env.RACE || 'draconiano'
+const CLASSES_ALL = ['warrior', 'rogue', 'mage', 'monk']
+const TARGET_WIN = Number(process.env.TARGET_WIN) || 0.65 // win% alvo no gear-ALVO
+const SOLVE = process.env.SOLVE !== '0' // por padrão resolve o hpMult; SOLVE=0 usa o fixo
 
-console.log(`\n${'='.repeat(80)}`)
-console.log(`  DOLRATH — DIFICULDADE DA DUNGEON (boss) — MODELO ENXUTO  |  ${RACE}/${CLASS}  |  ${FIGHTS} lutas`)
-console.log(`  gear conta via TIER (raridade×aprimoramento) + HP de peças. Alvo: sem gear apanha; +15/PRI vence.`)
-console.log('='.repeat(80))
+// win% de uma classe/rung contra um boss dado.
+function winRate(dg, race, klass, rung, boss, n = FIGHTS) {
+  const char = buildChar(race, klass, dg.levelReq)
+  const { gearTier, gearHp } = gearFor(rung.rarity, rung.enh)
+  const levers = CM.computeLevers(klass, char.level, gearTier, { str: char.str, agi: char.agi, int: char.int, def: char.def })
+  const pHP = char.gameMaxHp + gearHp
+  let win = 0
+  for (let i = 0; i < n; i++) if (fight(levers, pHP, boss) === 'win') win++
+  return { wr: win / n, gearTier, levers, pHP }
+}
+// Binary-search do hpMult p/ a classe de referência vencer ~TARGET_WIN no gear-ALVO.
+function solveHpMult(dg, race, klass) {
+  const targetRung = RUNGS[targetRungIndex(dg)]
+  let lo = 1.0, hi = 12.0
+  for (let it = 0; it < 22; it++) {
+    const mid = (lo + hi) / 2
+    const boss = makeBoss(dg, race, klass, mid)
+    const { wr } = winRate(dg, race, klass, targetRung, boss, 1500)
+    // mais HP no boss = menos win do jogador → se win alto, subir hi... (monotônico decrescente em hpMult)
+    if (wr > TARGET_WIN) lo = mid; else hi = mid
+  }
+  return (lo + hi) / 2
+}
 
+const verdictOf = (wr) => wr >= 85 ? '✅ fácil' : wr >= 60 ? '🟢 vence' : wr >= 40 ? '⚠️ no fio' : '❌ apanha'
+
+console.log(`\n${'='.repeat(94)}`)
+console.log(`  DOLRATH — DIFICULDADE DA DUNGEON — boss NORMALIZADO POR CLASSE (single-player)  |  ${FIGHTS} lutas`)
+console.log(`  boss: HP/poder ancorados na média das classes no gate; armadura neutra; K por nível.`)
+console.log(`  hpMult resolvido POR CLASSE p/ vencer ~${(TARGET_WIN*100)|0}% no gear-ALVO | mults [pow ${BOSS_POW_MULT} arm ${BOSS_ARM_MULT}]`)
+console.log('='.repeat(94))
+
+// Tabela final p/ o port: hpMult[dungeon][classe]
+const table = {}
 for (const dg of DUNGEONS) {
-  const char = buildChar(RACE, CLASS, dg.levelReq)
-  const boss = scaleBoss(dg.boss, dg, dg.levelReq)
-  console.log(`\n── ${dg.id.toUpperCase()} (lvlReq ${dg.levelReq}, ${dg.rooms} salas) ──`)
-  console.log(`   boss: HP ${boss.hp}  atk ${boss.attack}  def ${boss.defense} (nv ${boss.level})  | char: STR ${char.str} AGI ${char.agi} INT ${char.int} DEF ${char.def}`)
-  for (const g of GEARS) {
-    const { gearTier, gearHp } = gearFor(g.rarity, g.enh)
-    const levers = CM.computeLevers(char.klass, char.level, gearTier, { str: char.str, agi: char.agi, int: char.int, def: char.def })
-    const pHP = char.gameMaxHp + gearHp
-    let win = 0, loss = 0, timeout = 0
-    for (let i = 0; i < FIGHTS; i++) { const r = fight(levers, pHP, boss); if (r === 'win') win++; else if (r === 'loss') loss++; else timeout++ }
-    const wr = (100 * win) / FIGHTS
-    const verdict = wr >= 85 ? '✅ fácil' : wr >= 60 ? '🟢 vence' : wr >= 40 ? '⚠️ no fio' : '❌ apanha'
-    console.log(`   ${g.label.padEnd(10)} tier ${gearTier.toFixed(2)} | power ${levers.power.toFixed(0).padStart(4)} armor ${levers.armor.toFixed(0).padStart(3)} HP ${String(pHP).padStart(4)} | win ${wr.toFixed(1).padStart(5)}%  ${verdict}`)
+  const ti = targetRungIndex(dg)
+  table[dg.id] = {}
+  console.log(`\n── ${dg.id.toUpperCase()} (lvlReq ${dg.levelReq}, ${dg.rooms} salas) — alvo: ${dg.targetLabel} ──`)
+  for (const klass of CLASSES_ALL) {
+    const hpMult = SOLVE ? solveHpMult(dg, RACE, klass) : (process.env.BHP !== undefined ? Number(process.env.BHP) : dg.bossHpMult)
+    table[dg.id][klass] = hpMult
+    const boss = makeBoss(dg, RACE, klass, hpMult)
+    // gate: tier-abaixo · ALVO · tier-acima (compacto, por classe)
+    const cells = [ti - 1, ti, ti + 1].filter(i => i >= 0 && i < RUNGS.length).map(i => {
+      const { wr } = winRate(dg, RACE, klass, RUNGS[i], boss)
+      const tag = i === ti ? `[${RUNGS[i].label} ${(wr*100).toFixed(0)}%◀]` : `${RUNGS[i].label.split(' ')[1]||RUNGS[i].label} ${(wr*100).toFixed(0)}%`
+      return tag
+    })
+    console.log(`   ${klass.padEnd(8)} hpMult ${hpMult.toFixed(2)} | ${cells.join('  ·  ')}`)
   }
 }
-console.log(`\n${'='.repeat(80)}\n`)
+
+console.log(`\n${'='.repeat(94)}`)
+console.log('  TABELA hpMult[masmorra][classe] (p/ portar no scaleMonster):')
+console.log(`  ${'masmorra'.padEnd(10)} ${CLASSES_ALL.map(k => k.padStart(8)).join('')}`)
+for (const dg of DUNGEONS) {
+  console.log(`  ${dg.id.padEnd(10)} ${CLASSES_ALL.map(k => table[dg.id][k].toFixed(2).padStart(8)).join('')}`)
+}
+console.log('='.repeat(94) + '\n')

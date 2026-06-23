@@ -6,9 +6,6 @@ import Image from 'next/image';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { Search, Filter, X } from 'lucide-react';
-import { ethers } from 'ethers';
-import { decodeContractCustomErrorMessage, getWalletTxErrorMessage } from '@/lib/walletErrors';
-import { getPolygonFeeOverrides } from '@/lib/gasFees';
 import BazaarBackdrop from '@/components/store/BazaarBackdrop';
 import ItemCardBackdrop from '@/components/store/ItemCardBackdrop';
 import RepairBench from '@/components/store/RepairBench';
@@ -298,220 +295,6 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handlePurchase = async (itemId: string, quantity: number = 1) => {
-    // Cada unidade é uma NFT distinta (1 pagamento + 1 mint por item — o
-    // purchaseId on-chain é único por tx de pagamento). Então compramos em
-    // sequência, repetindo o fluxo completo N vezes num só clique.
-    const qty = Math.max(1, Math.min(99, Math.floor(quantity || 1)));
-    const progressId = `purchase-${itemId}`;
-    let purchased = 0;
-    setLoading(true);
-    try {
-      const eth = (window as any)?.ethereum;
-      if (!eth) {
-        toast.error('MetaMask não encontrada');
-        return;
-      }
-
-      const cfgRes = await fetch(`/api/store/purchase-config?itemId=${encodeURIComponent(itemId)}`, {
-        cache: 'no-store',
-      });
-      const cfgJson = await cfgRes.json();
-      if (!cfgRes.ok) {
-        throw new Error(cfgJson?.error || 'Falha ao carregar config da compra');
-      }
-
-      const {
-        chainId,
-        goldContractAddress,
-        treasuryAddress,
-        itemNftContractAddress,
-        item,
-      } = cfgJson as {
-        chainId: number;
-        goldContractAddress: string;
-        treasuryAddress: string;
-        itemNftContractAddress: string;
-        item: { id: string; name: string; goldPrice: number };
-      };
-
-      const provider = new ethers.BrowserProvider(eth);
-      await provider.send('eth_requestAccounts', []);
-      const network = await provider.getNetwork();
-      if (Number(network.chainId) !== Number(chainId)) {
-        toast.error(`Troque a rede para chainId ${chainId} na MetaMask`);
-        return;
-      }
-
-      const signer = await provider.getSigner();
-      const from = await signer.getAddress();
-
-      const erc20Abi = [
-        'function decimals() view returns (uint8)',
-        'function balanceOf(address) view returns (uint256)',
-        'function transfer(address to, uint256 value) returns (bool)',
-      ] as const;
-
-      const gold = new ethers.Contract(goldContractAddress, erc20Abi, signer);
-      const decimals = Number(await gold.decimals());
-      const costWei = ethers.parseUnits(String(item.goldPrice), decimals);
-      const totalCostWei = costWei * BigInt(qty);
-      const balanceWei = (await gold.balanceOf(from)) as bigint;
-
-      if (balanceWei < totalCostWei) {
-        toast.error(
-          `💰 GOLD insuficiente on-chain! Você precisa de ${item.goldPrice * qty} GOLD para ${qty} unidade(s).`
-        );
-        return;
-      }
-
-      const itemNftAbi = [
-        'function mintWithSig(address to, bytes32 purchaseId, bytes32 itemKey, uint256 paidGold, string tokenURI, uint256 deadline, bytes signature) returns (uint256)',
-      ] as const;
-      const itemNft = new ethers.Contract(itemNftContractAddress, itemNftAbi, signer);
-
-      for (let n = 0; n < qty; n++) {
-        const label = qty > 1 ? ` (${n + 1}/${qty})` : '';
-        toast.loading(`Pagando${label}…`, { id: progressId });
-
-        const feeOverrides = await getPolygonFeeOverrides(provider);
-        const payTx = await gold.transfer(treasuryAddress, costWei, feeOverrides);
-        const payReceipt = await payTx.wait();
-        if (!payReceipt || payReceipt.status !== 1) {
-          throw new Error('Pagamento falhou');
-        }
-
-        const intentRes = await fetch('/api/store/purchase-intent', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ itemId, paymentTxHash: payTx.hash }),
-        });
-        const intentJson = await intentRes.json();
-        if (!intentRes.ok) {
-          throw new Error(intentJson?.error || 'Falha ao criar intent de mint');
-        }
-
-        const mintArgs = intentJson.mint as {
-          to: string;
-          purchaseId: string;
-          itemKey: string;
-          paidGold: string;
-          tokenURI: string;
-          deadline: string;
-          signature: string;
-        };
-
-        toast.loading(`Mintando NFT${label}…`, { id: progressId });
-
-        // Preflight: MetaMask/RPC can return opaque -32603 on send. estimateGas helps surface the real revert.
-        let gasLimit: bigint | undefined = undefined;
-        try {
-          const est = (await itemNft.mintWithSig.estimateGas(
-            mintArgs.to,
-            mintArgs.purchaseId,
-            mintArgs.itemKey,
-            BigInt(mintArgs.paidGold),
-            mintArgs.tokenURI,
-            BigInt(mintArgs.deadline),
-            mintArgs.signature
-          )) as bigint;
-          gasLimit = (est * 12n) / 10n;
-        } catch (preErr: any) {
-          const decoded = decodeContractCustomErrorMessage({
-            contractInterface: itemNft.interface,
-            err: preErr,
-            messagesByName: {
-              OnlyRecipient: 'Carteira conectada não confere com o destinatário do mint.',
-              AlreadyMinted: 'Essa compra já foi usada para mintar (purchaseId já utilizado).',
-            },
-          });
-          if (decoded) throw new Error(decoded);
-
-          throw new Error(getWalletTxErrorMessage(preErr));
-        }
-
-        const mintTx = await itemNft.mintWithSig(
-          mintArgs.to,
-          mintArgs.purchaseId,
-          mintArgs.itemKey,
-          BigInt(mintArgs.paidGold),
-          mintArgs.tokenURI,
-          BigInt(mintArgs.deadline),
-          mintArgs.signature,
-          { ...feeOverrides, ...(gasLimit ? { gasLimit } : {}) }
-        );
-        const mintReceipt = await mintTx.wait();
-        if (!mintReceipt || mintReceipt.status !== 1) {
-          throw new Error('Mint falhou');
-        }
-
-        // Confirm can fail briefly if RPC/indexing is laggy. Retry a few times.
-        let confirmJson: any = null;
-        let lastConfirmErr: any = null;
-        for (let attempt = 0; attempt < 5; attempt++) {
-          const confirmRes = await fetch('/api/store/purchase-confirm', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ itemId, paymentTxHash: payTx.hash, mintTxHash: mintTx.hash }),
-          });
-          confirmJson = await confirmRes.json();
-          if (confirmRes.ok) {
-            lastConfirmErr = null;
-            break;
-          }
-
-          lastConfirmErr = new Error(confirmJson?.error || 'Falha ao confirmar compra');
-          const msg = String(confirmJson?.error || '')
-          const shouldRetry = msg.includes('ainda não encontrada') || msg.includes('Aguarde')
-          if (!shouldRetry) break;
-          await new Promise((r) => setTimeout(r, 1000));
-        }
-
-        if (lastConfirmErr) throw lastConfirmErr;
-
-        purchased++;
-      }
-
-      // O item cai no inventário global. Para já poder equipar/reparar, movemos
-      // automaticamente as unidades compradas para o personagem selecionado.
-      let tail = '';
-      if (selectedCharacter && purchased > 0) {
-        try {
-          toast.loading('Enviando ao personagem…', { id: progressId });
-          const tRes = await fetch(`/api/character/${selectedCharacter}/transfer-item`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ itemId, quantity: purchased }),
-          });
-          if (tRes.ok) {
-            tail = ' e enviado(s) ao personagem';
-            setInventoryRefreshKey((k) => k + 1);
-          } else {
-            const err = await tRes.json().catch(() => ({}));
-            tail = ` (no inventário global — transferência falhou: ${err?.error || 'erro'})`;
-          }
-        } catch {
-          tail = ' (no inventário global — falha ao transferir ao personagem)';
-        }
-      } else if (purchased > 0) {
-        tail = ' (no inventário global — selecione um personagem para usar)';
-      }
-
-      fetchUserInventory();
-      toast.success(
-        `🛒 ${purchased} item(ns) comprado(s)${tail}! (${item.goldPrice * purchased} GOLD)`,
-        { id: progressId, duration: 3500 }
-      );
-    } catch (error) {
-      console.error('Error purchasing item:', error);
-      const base = error instanceof Error ? error.message : getWalletTxErrorMessage(error, '💥 Erro inesperado na compra')
-      const message = purchased > 0 ? `Comprado(s) ${purchased} antes do erro: ${base}` : base
-      if (purchased > 0) fetchUserInventory();
-      toast.error(message, { id: progressId, duration: 4000 });
-    }
-    setLoading(false);
   };
 
   const handleTransferToCharacter = async (itemId: string) => {
@@ -998,25 +781,16 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                       </div>
 
                       <button
-                        onClick={() => handlePurchase(item.id, getQty(item.id))}
-                        disabled={loading}
+                        onClick={() => handleBuyWithBalance(item.id, getQty(item.id))}
+                        disabled={loading || (goldBalance ?? 0) < item.goldPrice * getQty(item.id)}
+                        title={(goldBalance ?? 0) < item.goldPrice * getQty(item.id) ? 'Saldo GOLD insuficiente' : 'Paga com seu saldo GOLD'}
                         className="w-full px-4 py-2.5 rounded-xl font-black text-sm text-white transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                         style={{
                           background: `linear-gradient(90deg, ${visual.accent}cc, ${visual.accent}77)`,
                           boxShadow: `0 4px 20px ${visual.accentSoft}`,
                         }}
                       >
-                        🛒 Comprar{getQty(item.id) > 1 ? ` ${getQty(item.id)}×` : ''} <span className="opacity-80 text-xs">(on-chain)</span>
-                      </button>
-
-                      <button
-                        onClick={() => handleBuyWithBalance(item.id, getQty(item.id))}
-                        disabled={loading || (goldBalance ?? 0) < item.goldPrice * getQty(item.id)}
-                        title={(goldBalance ?? 0) < item.goldPrice * getQty(item.id) ? 'Saldo GOLD insuficiente' : 'Paga com seu saldo GOLD, sem MetaMask'}
-                        className="w-full px-4 py-2.5 rounded-xl font-black text-sm text-amber-50 transition-all hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed border border-amber-400/40"
-                        style={{ background: 'linear-gradient(90deg, rgba(245,158,11,0.85), rgba(180,83,9,0.6))' }}
-                      >
-                        💰 Comprar com saldo{getQty(item.id) > 1 ? ` ${getQty(item.id)}×` : ''} ({item.goldPrice * getQty(item.id)} 🪙)
+                        🛒 Comprar{getQty(item.id) > 1 ? ` ${getQty(item.id)}×` : ''} ({item.goldPrice * getQty(item.id)} 🪙)
                       </button>
 
                       {ownedQuantity > 0 && selectedCharacter && (

@@ -37,8 +37,8 @@ import {
   transformLevers,
   deriveGearTier,
   normalizeCombatClass,
-  resolveHit,
-  DICE_SIDES,
+  contestedOutcome,
+  PVE_DIE,
   K50,
   MAX_LEVEL_REF,
   type Levers,
@@ -111,13 +111,33 @@ type DefenseKind = 'dodge' | 'defend'
 //  - weapon (Arma): o ataque primário da sua arma (powerMult cheio).
 //  - special (Especial): burst — só LIBERADO transformado (igual ao PvP).
 // (powerMults espelham combatModel.ATTACKS: 0.72 / 1.0 / 1.5)
+// DISPUTA DE DADOS (combatModel.contestedOutcome): cada ataque rola um dado próprio
+// (básico d8 / arma d12 / especial d20 — ver PVE_DIE). MP: a arma é um golpe canalizado
+// (8 MP) e o especial é a SKILL da arma (18 MP); o básico é o fallback sem custo. Sem
+// regen passivo no combate — o MP volta de consumíveis/espólios.
 const ATTACKS: Record<
   AttackKind,
-  { label: string; icon: string; powerMult: number; requiresTransform: boolean }
+  { label: string; icon: string; powerMult: number; requiresTransform: boolean; mp: number }
 > = {
-  basic: { label: 'Ataque Básico', icon: '👊', powerMult: 0.72, requiresTransform: false },
-  weapon: { label: 'Ataque da Arma', icon: '⚔️', powerMult: 1.0, requiresTransform: false },
-  special: { label: 'Especial', icon: '✨', powerMult: 1.5, requiresTransform: true },
+  basic: { label: 'Ataque Básico', icon: '👊', powerMult: 0.72, requiresTransform: false, mp: 0 },
+  weapon: { label: 'Ataque da Arma', icon: '⚔️', powerMult: 1.0, requiresTransform: false, mp: 8 },
+  special: { label: 'Especial', icon: '✨', powerMult: 1.5, requiresTransform: true, mp: 18 },
+}
+
+// Especial = SKILL da ARMA equipada (nome por categoria; detecta pelo nome do item).
+function weaponSkillName(equipment: any[]): string {
+  const w = (equipment || []).find((e: any) => {
+    const slot = String(e?.slot || '').toLowerCase()
+    return slot === 'weapon' || slot === 'mainhand' || slot === 'main_hand'
+  })
+  const n = String(w?.item?.name || w?.name || '').toLowerCase()
+  if (/manopla|punho|cestus/.test(n)) return 'Punho do Trovão'
+  if (/garra|presa|lâmina das|lamina das/.test(n)) return 'Garras Selvagens'
+  if (/adaga|punhal|presas/.test(n)) return 'Dança das Lâminas'
+  if (/arco/.test(n)) return 'Flecha Perfurante'
+  if (/cajado|bordão|bordao|orbe/.test(n)) return /orbe/.test(n) ? 'Pulso Arcano' : 'Explosão Arcana'
+  if (/espada|lâmina|lamina|aço|aco/.test(n)) return 'Talho Brutal'
+  return 'Especial'
 }
 
 // Custo de stamina por TIPO de nó ao avançar na trilha (exploração).
@@ -236,21 +256,26 @@ interface Outcome {
   crit: boolean
 }
 
-// Resolve UM golpe pelo MODELO ENXUTO (resolveHit). `power` = poder efetivo já com o
-// powerMult do ataque; `defender` = levers do defensor (armadura/K/evasão). Reusa o
-// dado d12 já rolado para a animação (forcedRoll). Esquiva (dodge) zera pela evasão;
-// defender (block) amplifica a armadura; mitigação proporcional (DR = arm/(arm+K)).
+// Resolve UM golpe pela DISPUTA DE DADOS (combatModel.contestedOutcome). `atkRoll`/`defRoll`
+// = os dados JÁ rolados para a animação (mesmo dado do ataque, `sides`); `power` = poder
+// efetivo já com o powerMult; `atkScale`/`defScale` = escalas de poder (gear+nível) que
+// entram no ACERTO. Esquiva vence → 0; bloqueio vence → golpe aparado; senão dano ∝ margem.
 function computeOutcome(
-  roll: number,
+  atkRoll: number,
+  defRoll: number,
+  sides: number,
   defenseChoice: DefenseKind,
   power: number,
-  defender: { armor: number; K: number; evade: number }
+  defender: { armor: number; K: number; evade: number },
+  atkScale: number,
+  defScale: number
 ): Outcome {
-  const r = resolveHit({ power }, defender, {
+  const r = contestedOutcome({
+    power, sides, atkRoll, defRoll,
     defense: defenseChoice === 'defend' ? 'block' : 'dodge',
-    forcedRoll: roll,
+    defender, atkScale, defScale,
   })
-  return { hit: !r.dodged, damage: r.dodged ? 0 : r.damage, crit: r.crit }
+  return { hit: !r.avoided, damage: r.avoided ? 0 : r.damage, crit: r.crit }
 }
 
 export default function DungeonRun({ dungeon, character, onExit }: DungeonRunProps) {
@@ -484,6 +509,8 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const effMaxHp = character.maxHp + gear.hp
   // Poder efetivo de um ataque = poder do lever × multiplicador do tipo.
   const playerPowerFor = (kind: AttackKind) => playerLevers.power * ATTACKS[kind].powerMult
+  // O ESPECIAL é a skill da ARMA equipada (nome por categoria).
+  const specialName = useMemo(() => weaponSkillName(character.equipment), [character.equipment])
 
   // ---------- Lutadores para a arena ----------
   const playerFighter: FighterView = useMemo(() => ({
@@ -724,8 +751,9 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   // Levers do MONSTRO (classe desconhecida → fallback): poder/armadura dos stats
   // escalados, K pelo nível. Espelha o derive do socket-server e o dungeon-sim.
   const monsterLevers = (m: ScaledMonster): Levers => {
-    const S = m.level / MAX_LEVEL_REF + 0.5
-    return { power: m.attack, armor: m.defense, hp: m.maxHp, evade: 0.06, K: K50 * S, scale: S }
+    const S = m.level / MAX_LEVEL_REF + 0.5 // K pela escala do NÍVEL (= sim/socket)
+    // scale (p/ a disputa de dados) = a escala de PODER do monstro (gear+nível âncora).
+    return { power: m.attack, armor: m.defense, hp: m.maxHp, evade: 0.06, K: K50 * S, scale: m.scale ?? S }
   }
   // Poder efetivo do golpe do monstro = poder do lever × multiplicador do tipo.
   const monsterPowerFor = (m: ScaledMonster, kind: AttackKind) => monsterLevers(m).power * ATTACKS[kind].powerMult
@@ -762,6 +790,10 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       showBanner('🔒', 'O Especial só pode ser usado transformado!')
       return
     }
+    if (mp < ATTACKS[kind].mp) {
+      showBanner('🔵', `MP insuficiente para ${ATTACKS[kind].label}! (${ATTACKS[kind].mp}🔵)`)
+      return
+    }
     setPendingAttack(kind)
     setPanelResult(null)
     setHasRolled(false)
@@ -772,13 +804,14 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     const m = monsterRef.current
     if (!m || hasRolled || !pendingAttack) return
     setHasRolled(true)
-    // d12 = a sorte do modelo enxuto (o mesmo dado p/ qualquer ataque).
-    const atk = mkResult(DICE_SIDES, 0)
+    // DISPUTA DE DADOS: cada ataque rola o SEU dado (básico d8 / arma d12 / especial d20).
+    const sides = PVE_DIE[pendingAttack]
+    const atk = mkResult(sides, 0)
     setPanelResult(atk)
 
-    // Monstro escolhe a reação e rola o dado (animação; a esquiva usa a evasão do lever).
+    // Monstro reage e rola o MESMO dado (maior vence; evasão/escala entram na margem).
     const mDefChoice: DefenseKind = Math.random() < 0.5 ? 'dodge' : 'defend'
-    const def = mkResult(DICE_SIDES, 0)
+    const def = mkResult(sides, 0)
     later(() => setDiceResults(prev => ({ ...prev, [MONSTER_ID]: def })), 1700)
     later(() => resolvePlayerAttack(atk, def, mDefChoice), 3000)
   }
@@ -790,14 +823,22 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     setStage('busy')
     setPanelResult(null)
     setHasRolled(false)
+    const kindUsed = pendingAttack
     setPendingAttack(null)
 
-    const outcome = computeOutcome(atk.roll, mDefChoice, playerPowerFor(pendingAttack), monsterLevers(m))
+    // Custo de MP do ataque (arma/especial) — sem regen passivo no combate.
+    if (atkDef.mp > 0) setMp(prev => Math.max(0, prev - atkDef.mp))
+
+    const mLev = monsterLevers(m)
+    const outcome = computeOutcome(
+      atk.roll, def.roll, PVE_DIE[kindUsed], mDefChoice,
+      playerPowerFor(kindUsed), mLev, playerLevers.scale, mLev.scale,
+    )
     pushBattleEvent({
       kind: 'resolve',
       attackerId: character.id,
       defenderId: MONSTER_ID,
-      action: pendingAttack,
+      action: kindUsed,
       defenseAction: mDefChoice,
       hit: outcome.hit,
       damage: outcome.damage,
@@ -889,12 +930,12 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     const m = monsterRef.current
     if (!m || hasRolled || !monsterPlan || !defenseChoice) return
     setHasRolled(true)
-    // Reação do jogador (animação); a esquiva usa a evasão do lever do jogador.
-    const def = mkResult(DICE_SIDES, 0)
+    // DISPUTA DE DADOS: o golpe do monstro define o dado (básico d8 / arma d12 / especial d20).
+    const sides = PVE_DIE[monsterPlan]
+    const def = mkResult(sides, 0)
     setPanelResult(def)
 
-    // d12 do monstro = a sorte do golpe dele.
-    const atk = mkResult(DICE_SIDES, 0)
+    const atk = mkResult(sides, 0)
     later(() => setDiceResults(prev => ({ ...prev, [MONSTER_ID]: atk })), 1700)
     later(() => resolveMonsterAttack(atk, def), 3000)
   }
@@ -906,9 +947,13 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     setPanelResult(null)
     setHasRolled(false)
 
-    const outcome = computeOutcome(atk.roll, defenseChoice, monsterPowerFor(m, monsterPlan), {
-      armor: playerLevers.armor, K: playerLevers.K, evade: playerLevers.evade,
-    })
+    const mLev = monsterLevers(m)
+    const outcome = computeOutcome(
+      atk.roll, def.roll, PVE_DIE[monsterPlan], defenseChoice,
+      monsterPowerFor(m, monsterPlan),
+      { armor: playerLevers.armor, K: playerLevers.K, evade: playerLevers.evade },
+      mLev.scale, playerLevers.scale,
+    )
     pushBattleEvent({
       kind: 'resolve',
       attackerId: MONSTER_ID,
@@ -1042,22 +1087,25 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     }
     if (stage === 'playerRoll' && pendingAttack) {
       const atk = ATTACKS[pendingAttack]
+      const sides = PVE_DIE[pendingAttack]
+      const label = pendingAttack === 'special' ? `${atk.icon} ${specialName}` : `${atk.icon} ${atk.label}`
       return {
         visible: true,
-        diceType: DICE_SIDES,
+        diceType: sides,
         hasRolled,
-        label: `${atk.icon} ${atk.label} — role o d${DICE_SIDES}!`,
+        label: `${label} — role o d${sides}!`,
         onRoll: handlePlayerAttackRoll,
         myResult: panelResult,
         waitingForOpponent: false,
       }
     }
     if (stage === 'defenseRoll' && monsterPlan) {
+      const sides = PVE_DIE[monsterPlan]
       return {
         visible: true,
-        diceType: DICE_SIDES,
+        diceType: sides,
         hasRolled,
-        label: `🛡️ Defenda-se! Role o d${DICE_SIDES}`,
+        label: `🛡️ Defenda-se! Role o d${sides}`,
         onRoll: handleDefenseRoll,
         myResult: panelResult,
         waitingForOpponent: false,
@@ -1581,8 +1629,10 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                 <div className="flex flex-wrap items-center justify-center gap-2">
                   {(Object.keys(ATTACKS) as AttackKind[]).map(kind => {
                     const atk = ATTACKS[kind]
-                    // Especial só liberado transformado (igual ao PvP).
-                    const locked = atk.requiresTransform && !transform
+                    // Especial só liberado transformado (igual ao PvP) e exige MP.
+                    const locked = (atk.requiresTransform && !transform) || mp < atk.mp
+                    const noMp = mp < atk.mp
+                    const name = kind === 'special' ? specialName : atk.label
                     return (
                       <button
                         key={kind}
@@ -1596,9 +1646,9 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                             : 'bg-gradient-to-r from-purple-700 to-fuchsia-600 hover:scale-105'
                         }`}
                       >
-                        {locked ? '🔒' : atk.icon} {atk.label}
+                        {locked && atk.requiresTransform && !transform ? '🔒' : atk.icon} {name}
                         <span className="block text-[9px] opacity-80 font-normal">
-                          d{DICE_SIDES}{atk.requiresTransform ? (transform ? '' : ' • transforme-se') : ''}
+                          d{PVE_DIE[kind]}{atk.mp > 0 ? ` • ${atk.mp}🔵${noMp ? ' (sem MP)' : ''}` : ''}{atk.requiresTransform && !transform ? ' • transforme-se' : ''}
                         </span>
                       </button>
                     )

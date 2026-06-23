@@ -150,28 +150,12 @@ function makeBoss(dg, race, _klass, hpMultOverride) {
 // Transformação modelada: duty-cycle (ativa TR_ON turnos, cd TR_OFF), ×1.25 nos levers e
 // libera o ESPECIAL (d20). Boss tunado p/ que MESMO transformado precise do gear-alvo.
 // ============================================================
-const DIE = { basic: 8, weapon: 12, special: 20 }
-const HIT_MIN = 0.6, HIT_SLOPE = 1.5, CRIT_MULT = 1.9, CRIT_MARGIN = 0.5
-const DODGE_EDGE = 1.0   // peso da evasão (lever) na margem da esquiva
-const BLOCK_EDGE = 0.10  // chance-base de "defesa perfeita" ao bloquear
+const DIE = CM.PVE_DIE // {basic:8, weapon:12, special:20} — fonte única em combatModel
 const TR_ON = 4, TR_OFF = 6 // duty-cycle da transformação (~40% uptime)
 
-const ACC_W = process.env.ACC_W !== undefined ? Number(process.env.ACC_W) : 1.6 // peso da VANTAGEM DE ESCALA (gear+nível) no acerto (0=gate mole, 4=binário)
-const rollN = (sides) => (1 + Math.floor(Math.random() * sides) - 0.5) / sides
-// acc = (escala do atacante − escala do defensor)·ACC_W → gear melhor ACERTA mais (afia o
-// gate); num espelho as escalas se cancelam → luta de igual continua ~50/50.
+// Disputa de dados — delega à FONTE ÚNICA (CM.contestedOutcome), idêntica à do jogo.
 function contestedHit(power, sides, defender, choice, atkScale = 0, defScale = 0) {
-  const edge = (choice === 'dodge' ? defender.evade * DODGE_EDGE : BLOCK_EDGE) - (atkScale - defScale) * ACC_W
-  const margin = rollN(sides) - (rollN(sides) + edge)
-  if (margin < 0) {
-    if (choice === 'dodge') return 0
-    const dr = CM.damageReduction(defender.armor * CM.BLOCK_ARMOR_MULT, defender.K)
-    return Math.max(1, Math.round(power * 0.15 * (1 - dr)))
-  }
-  let mult = HIT_MIN + margin * HIT_SLOPE
-  if (margin >= CRIT_MARGIN) mult = Math.max(mult, CRIT_MULT)
-  const dr = choice === 'block' ? CM.damageReduction(defender.armor * CM.BLOCK_ARMOR_MULT, defender.K) : 0
-  return Math.max(1, Math.round(power * mult * (1 - dr)))
+  return CM.contestedOutcome({ power, sides, defender, defense: choice, atkScale, defScale }).damage
 }
 // Defesa racional do jogador: MC rápido — escolhe dodge/block de menor dano esperado.
 function chooseDefense(attackerPower, sides, defender, atkScale, defScale) {

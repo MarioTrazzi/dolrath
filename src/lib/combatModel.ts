@@ -323,3 +323,67 @@ export function resolveHit(
   const damage = Math.max(1, Math.round(raw * (1 - damageReduction(effArmor, defender.K))))
   return { damage, roll, crit, dodged: false, blocked: block }
 }
+
+// ============================================================
+// DISPUTA DE DADOS (PvE — masmorra). Atacante e defensor rolam o MESMO dado do ataque
+// (PVE_DIE: básico d8 / arma d12 / especial d20). margem = na − (nd + edge), na,nd
+// normalizados (0,1) e edge = avoid_da_defesa − vantagem_de_escala·ACC_W:
+//   • margem < 0 → defesa vence: esquiva = 0; bloqueio = golpe aparado (dano mínimo).
+//   • margem ≥ 0 → acerta: dano = poder × mult(margem) × (1−DR); margem ≥ CRIT_MARGIN = crítico.
+// A vantagem de ESCALA (gear+nível) entra no ACERTO → gear melhor acerta mais (afia o gate);
+// num espelho as escalas se cancelam → luta de igual ~50/50. NÃO mexe no resolveHit do PvP.
+// ============================================================
+export const PVE_DIE: Record<AttackType, number> = { basic: 8, weapon: 12, special: 20 }
+export const PVE_HIT_MIN = 0.6
+export const PVE_HIT_SLOPE = 1.5
+export const PVE_CRIT_MULT = 1.9
+export const PVE_CRIT_MARGIN = 0.5
+export const PVE_DODGE_EDGE = 1.0
+export const PVE_BLOCK_EDGE = 0.10
+export const PVE_ACC_W = 1.6
+
+export interface ContestedOpts {
+  power: number
+  sides: number
+  defense: 'dodge' | 'block'
+  defender: { armor: number; K: number; evade: number }
+  atkScale?: number
+  defScale?: number
+  /** rolagens forçadas (a UI anima e injeta os dados); senão sorteia */
+  atkRoll?: number
+  defRoll?: number
+  rng?: () => number
+}
+export interface ContestedResult {
+  damage: number
+  avoided: boolean
+  blocked: boolean
+  crit: boolean
+  margin: number
+  roll: number
+  defRoll: number
+}
+
+/** Resolve UM golpe da masmorra pela DISPUTA DE DADOS (ver bloco acima). */
+export function contestedOutcome(opts: ContestedOpts): ContestedResult {
+  const rng = opts.rng ?? Math.random
+  const sides = opts.sides || PVE_DIE.weapon
+  const ra = opts.atkRoll ?? 1 + Math.floor(rng() * sides)
+  const rd = opts.defRoll ?? 1 + Math.floor(rng() * sides)
+  const na = (ra - 0.5) / sides
+  const nd = (rd - 0.5) / sides
+  const choice = opts.defense === 'dodge' ? 'dodge' : 'block'
+  const avoid = choice === 'dodge' ? (opts.defender.evade || 0) * PVE_DODGE_EDGE : PVE_BLOCK_EDGE
+  const edge = avoid - ((opts.atkScale || 0) - (opts.defScale || 0)) * PVE_ACC_W
+  const margin = na - (nd + edge)
+  if (margin < 0) {
+    if (choice === 'dodge') return { damage: 0, avoided: true, blocked: false, crit: false, margin, roll: ra, defRoll: rd }
+    const dr = damageReduction(opts.defender.armor * BLOCK_ARMOR_MULT, opts.defender.K)
+    return { damage: Math.max(1, Math.round(opts.power * 0.15 * (1 - dr))), avoided: false, blocked: true, crit: false, margin, roll: ra, defRoll: rd }
+  }
+  let mult = PVE_HIT_MIN + margin * PVE_HIT_SLOPE
+  const crit = margin >= PVE_CRIT_MARGIN
+  if (crit) mult = Math.max(mult, PVE_CRIT_MULT)
+  const dr = choice === 'block' ? damageReduction(opts.defender.armor * BLOCK_ARMOR_MULT, opts.defender.K) : 0
+  return { damage: Math.max(1, Math.round(opts.power * mult * (1 - dr))), avoided: false, blocked: choice === 'block', crit, margin, roll: ra, defRoll: rd }
+}

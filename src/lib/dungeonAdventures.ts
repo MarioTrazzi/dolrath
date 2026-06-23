@@ -57,6 +57,9 @@ export interface DungeonDef {
   minorNodes: number
   /** Nível recomendado para entrar (gating de progressão) */
   levelReq: number
+  /** Nível-TOPO do band: onde o boss é vencido com o gear-alvo (boss ancora aqui, fixo).
+   *  Floresta 1→10, Caverna 10→25, Pântano 25→40, Ruínas 40→50. */
+  clearLevel: number
   /** Multiplicador de dificuldade (escala monstros e recompensas) */
   difficulty: number
   difficultyStars: number
@@ -87,6 +90,7 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     rooms: 3,
     minorNodes: 2,
     levelReq: 1,
+    clearLevel: 10,
     difficulty: 1.0,
     difficultyStars: 1,
     accent: '#34d399',
@@ -150,6 +154,7 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     rooms: 4,
     minorNodes: 2,
     levelReq: 10,
+    clearLevel: 25,
     difficulty: 1.15,
     difficultyStars: 2,
     accent: '#22d3ee',
@@ -214,6 +219,7 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     rooms: 4,
     minorNodes: 3,
     levelReq: 25,
+    clearLevel: 40,
     difficulty: 1.3,
     difficultyStars: 3,
     accent: '#a3e635',
@@ -277,6 +283,7 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     rooms: 5,
     minorNodes: 3,
     levelReq: 40,
+    clearLevel: 50,
     difficulty: 1.45,
     difficultyStars: 4,
     accent: '#c084fc',
@@ -359,19 +366,22 @@ export interface ScaledMonster {
   goldReward: number
   xpReward: number
   isBoss: boolean
+  /** escala de poder enxuto (S) do monstro — alimenta o ACC_W da disputa de dados (acerto). */
+  scale: number
 }
 
 // ============================================================
-// TUNING DE DIFICULDADE — MODELO ENXUTO (validado em scripts/dungeon-difficulty-sim.js).
+// TUNING DE DIFICULDADE — DISPUTA DE DADOS + BANDS DE NÍVEL (validado em
+// scripts/dungeon-difficulty-sim.js; combate em combatModel.contestedOutcome).
 //
-// O BOSS é o GATE de gear: ancorado no poder enxuto do "jogador típico" no gate (média
-// das 4 classes em computeLevers no nível + gearTier-ALVO da masmorra) e NORMALIZADO POR
-// CLASSE — como o PvE é single-player, o boss já escala por personagem, então normalizar
-// por classe é invisível e dá paridade (senão o PvE premia tank e o mago apanha crônico).
-// Cada classe vence ~65% com o gear-ALVO. Escada de gear-alvo (+1 tier de aprimoramento):
-//   Floresta→incomum PRI · Caverna→raro DUO · Pântano→épico TRI · Ruínas→lendário TET.
-// (PEN reservado p/ uma 5ª masmorra futura.) As salas/nós (trash) são uma FRAÇÃO do boss
-// — limpáveis com o gear da masmorra anterior; o boss é que exige o tier novo.
+// Cada masmorra é a JORNADA do levelReq até o clearLevel (band). O BOSS ancora no
+// clearLevel FIXO (não no nível do jogador) → under-leveled trava, over-leveled vira farm.
+// Boss = GATE de gear, NORMALIZADO POR CLASSE (PvE single-player) p/ cada classe vencer
+// ~65% no gear-ALVO (Floresta PRI · Caverna DUO · Pântano TRI · Ruínas TET).
+// As SALAS/NÓS são uma RAMPA: os primeiros (2 menores + 1ª principal) são vencíveis por
+// PELADO no levelReq; cada degrau sobe o nível/gear esperado até a última sala (perto do
+// boss). As salas gateiam o NÍVEL; o boss gateia o GEAR. hpMult maior aqui (≈4-9) que no
+// modelo antigo porque a disputa de dados esquiva ~50% → lutas mais longas.
 // ============================================================
 const BOSS_POW_MULT = 0.9    // poder do boss = âncora.power × isto
 const BOSS_ARM_MULT = 0.8    // armadura do boss = MON_ARMOR × S × isto
@@ -380,15 +390,16 @@ const TIER_POWER_STEP = 0.6  // p/ recompensas (gold/xp) por sala — não afeta
 
 // HP do boss = âncora.hp × BOSS_HP_MULT[masmorra][classe] (resolvido no sim p/ ~65% no gear-alvo).
 const BOSS_HP_MULT: Record<DungeonId, Record<CombatClass, number>> = {
-  floresta: { warrior: 2.45, rogue: 1.64, mage: 1.75, monk: 2.06 },
-  caverna:  { warrior: 2.15, rogue: 1.42, mage: 1.44, monk: 1.82 },
-  pantano:  { warrior: 2.02, rogue: 1.30, mage: 1.24, monk: 1.69 },
-  ruinas:   { warrior: 1.96, rogue: 1.26, mage: 1.13, monk: 1.62 },
+  floresta: { warrior: 4.14, rogue: 3.73, mage: 2.79, monk: 3.33 },
+  caverna:  { warrior: 4.85, rogue: 5.16, mage: 3.11, monk: 3.97 },
+  pantano:  { warrior: 5.87, rogue: 7.09, mage: 3.93, monk: 5.01 },
+  ruinas:   { warrior: 6.99, rogue: 8.88, mage: 4.91, monk: 5.93 },
 }
-// Trash gentil: poder/HP/armadura como FRAÇÃO do boss neutro (não normalizado por classe).
-const TRASH_HP_FRAC = { main: 0.45, minor: 0.26 }
-const TRASH_POW_FRAC = { main: 0.6, minor: 0.42 }
-const TRASH_ARM_FRAC = { main: 0.8, minor: 0.6 }
+// Rampa das salas/nós: o HP-mult cresce ao longo do band (1ª sala fácil → última perto do
+// boss). Nó menor = fração extra mais fraca. (Boss usa a tabela acima.)
+const ROOM_HP_LO = 1.4, ROOM_HP_HI = 3.0
+const MINOR_HP_FAC = 0.7, MINOR_STR_FAC = 0.78
+const GEAR_TIER_FLOOR = 0.25 // piso de gear "pelado" (= GEAR_FLOOR do modelo)
 
 // Gear-ALVO (raridade × aprimoramento) por masmorra → tier + HP sintético (espelha o sim).
 const TARGET_GEAR: Record<DungeonId, { rarity: string; enh: number }> = {
@@ -434,20 +445,19 @@ const refGearHp = (enh: number) => Math.floor(REF_SET_HP * (enh <= 0 ? 1 : enh <
 const targetGearTierOf = (t: { rarity: string; enh: number }) =>
   deriveGearTier(Array.from({ length: 9 }, () => ({ rarity: t.rarity, enhancementLevel: t.enh })))
 
-// Âncora NEUTRA (classe-independente): média do poder/HP das 4 classes no gate.
-function neutralAnchor(dungeon: DungeonDef, level: number) {
-  const t = TARGET_GEAR[dungeon.id]
-  const gt = targetGearTierOf(t)
-  const gHp = refGearHp(t.enh)
+// Âncora NEUTRA (classe-independente) em (nível, gearTier, gearHp) arbitrários: média do
+// poder/HP das 4 classes de referência. Carrega os componentes FLAT (HP base 80 + tilt).
+function anchorAt(level: number, gearTier: number, gearHp: number) {
   let powerSum = 0, hpSum = 0
   for (const k of REF_CLASSES) {
     const a = refAttrs(k, level)
-    powerSum += computeLevers(k, level, gt, a).power
-    hpSum += 80 + a.str * 2 + a.def * 4 + gHp
+    powerSum += computeLevers(k, level, gearTier, a).power
+    hpSum += 80 + a.str * 2 + a.def * 4 + gearHp
   }
-  return { power: powerSum / REF_CLASSES.length, hp: hpSum / REF_CLASSES.length, gearTier: gt }
+  return { power: powerSum / REF_CLASSES.length, hp: hpSum / REF_CLASSES.length }
 }
 const meanBy = <T,>(arr: T[], f: (x: T) => number) => arr.reduce((s, x) => s + f(x), 0) / arr.length
+const lerp = (a: number, b: number, p: number) => a + (b - a) * Math.max(0, Math.min(1, p))
 
 export interface NodeScaling {
   /** 1..rooms — qual sala principal (nós menores herdam o tier da próxima sala) */
@@ -457,43 +467,60 @@ export interface NodeScaling {
   isBoss?: boolean
 }
 
+// Progresso do nó no BAND [0,1]: 1ª sala perto de 0, última perto de 1; boss = 1.
+function nodeProgress(s: NodeScaling, rooms: number): number {
+  if (s.isBoss) return 1
+  const base = s.tier / (rooms + 1)
+  return s.isMain ? base : Math.max(0.04, base - 0.5 / (rooms + 1)) // menor = antes da sala
+}
+
 export function scaleMonster(
   def: DungeonMonsterDef,
   dungeon: DungeonDef,
-  characterLevel: number,
+  _characterLevel: number,
   s: NodeScaling,
   combatClass: CombatClass = 'warrior'
 ): ScaledMonster {
-  // O boss acompanha o NÍVEL do jogador (gear é o gate, não o nível) — nunca abaixo do gate.
-  const L = Math.max(dungeon.levelReq, characterLevel)
-  const anchor = neutralAnchor(dungeon, L)
-  const S = powerScale(L, anchor.gearTier)
-  const monLevel = Math.max(1, Math.round(L + (s.tier - 1) * 3 + (s.isBoss ? 4 : s.isMain ? 1 : 0)))
+  const tg = TARGET_GEAR[dungeon.id]
+  const targetTier = targetGearTierOf(tg)
+  const targetHp = refGearHp(tg.enh)
 
-  let attack: number, defense: number, hp: number
+  let level: number, gearTier: number, gearHp: number, hpMult: number, strFac: number
   if (s.isBoss) {
-    attack = anchor.power * BOSS_POW_MULT
-    defense = MON_ARMOR * S * BOSS_ARM_MULT
-    hp = anchor.hp * (BOSS_HP_MULT[dungeon.id]?.[combatClass] ?? 2.0)
+    // Boss ancora no TOPO do band (fixo) com o gear-ALVO; HP normalizado por classe.
+    level = dungeon.clearLevel
+    gearTier = targetTier
+    gearHp = targetHp
+    hpMult = BOSS_HP_MULT[dungeon.id]?.[combatClass] ?? 4.0
+    strFac = 1
   } else {
-    // Trash = fração do boss neutro, preservando a IDENTIDADE relativa do monstro
-    // (Lobo ≠ Javali) via razão dos stats-base sobre a média da masmorra.
-    const node = s.isMain ? 'main' : 'minor'
-    const ms = dungeon.monsters
-    const rHp = def.baseHp / meanBy(ms, m => m.baseHp)
-    const rAtk = def.baseAttack / meanBy(ms, m => m.baseAttack)
-    const rDef = def.baseDefense / meanBy(ms, m => m.baseDefense)
-    attack = anchor.power * BOSS_POW_MULT * TRASH_POW_FRAC[node] * rAtk
-    defense = MON_ARMOR * S * BOSS_ARM_MULT * TRASH_ARM_FRAC[node] * rDef
-    hp = anchor.hp * TRASH_HP_FRAC[node] * rHp
+    // RAMPA: nível/gear esperados interpolam do levelReq (pelado) ao clearLevel (gear-alvo).
+    const p = nodeProgress(s, dungeon.rooms)
+    level = Math.round(lerp(dungeon.levelReq, dungeon.clearLevel, p))
+    gearTier = lerp(GEAR_TIER_FLOOR, targetTier, p)
+    gearHp = Math.floor(lerp(0, targetHp, p))
+    hpMult = lerp(ROOM_HP_LO, ROOM_HP_HI, p) * (s.isMain ? 1 : MINOR_HP_FAC)
+    strFac = s.isMain ? 1 : MINOR_STR_FAC
   }
-  attack = Math.max(1, Math.floor(attack))
-  defense = Math.max(0, Math.floor(defense))
-  hp = Math.max(1, Math.floor(hp))
+
+  const anchor = anchorAt(level, gearTier, gearHp)
+  const S = powerScale(level, gearTier)
+  // nível do monstro: boss = clearLevel+2 (= bossLevel do sim, p/ K); salas = seu nível-rampa.
+  const monLevel = Math.max(1, s.isBoss ? dungeon.clearLevel + 2 : level)
+
+  // Identidade relativa do monstro (Lobo ≠ Javali) via razão dos stats-base sobre a média.
+  const ms = dungeon.monsters
+  const rHp = s.isBoss ? 1 : def.baseHp / meanBy(ms, m => m.baseHp)
+  const rAtk = s.isBoss ? 1 : def.baseAttack / meanBy(ms, m => m.baseAttack)
+  const rDef = s.isBoss ? 1 : def.baseDefense / meanBy(ms, m => m.baseDefense)
+
+  const attack = Math.max(1, Math.floor(anchor.power * BOSS_POW_MULT * strFac * rAtk))
+  const defense = Math.max(0, Math.floor(MON_ARMOR * S * BOSS_ARM_MULT * strFac * rDef))
+  const hp = Math.max(1, Math.floor(anchor.hp * hpMult * rHp))
 
   const bossTitle = s.isBoss && 'title' in def ? ` • ${(def as DungeonBossDef).title}` : ''
-  // Quem tem ataque especial: o boss e as salas PRINCIPAIS mais próximas dele (cresce com
-  // a dificuldade). Nós menores ("fraquinhos") nunca têm especial.
+  // Especial: o boss e as salas PRINCIPAIS mais próximas dele (cresce com a dificuldade);
+  // nós menores nunca têm.
   const specialFromTier = dungeon.rooms - (dungeon.difficultyStars - 1)
   const hasSpecial = !!s.isBoss || (!!s.isMain && s.tier >= specialFromTier)
   // Recompensas (gold/xp) seguem dificuldade × tier da sala (independem do combate).
@@ -514,6 +541,7 @@ export function scaleMonster(
     goldReward: Math.floor((s.isBoss ? 150 + Math.random() * 150 : s.isMain ? 25 + Math.random() * 25 : 6 + Math.random() * 10) * d * tierFactor),
     xpReward: Math.floor((s.isBoss ? 150 + Math.random() * 100 : s.isMain ? 35 + Math.random() * 25 : 12 + Math.random() * 12) * d * tierFactor),
     isBoss: !!s.isBoss,
+    scale: S,
   }
 }
 

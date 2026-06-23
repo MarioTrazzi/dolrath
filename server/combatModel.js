@@ -169,6 +169,41 @@ function resolveHit(attacker, defender, opts) {
   return { damage, roll, crit, dodged: false, blocked: block }
 }
 
+// ============================================================
+// DISPUTA DE DADOS (PvE — masmorra). Atacante e defensor rolam o MESMO dado do ataque
+// (PVE_DIE: básico d8 / arma d12 / especial d20). margem = na − (nd + edge), com
+// na,nd normalizados (0,1) e edge = avoid_da_defesa − vantagem_de_escala·ACC_W.
+//   • margem < 0 → defesa vence: esquiva = 0; bloqueio = golpe aparado (dano mínimo).
+//   • margem ≥ 0 → acerta: dano = poder × mult(margem) × (1−DR); margem ≥ CRIT_MARGIN = crítico.
+// A vantagem de ESCALA (gear+nível) entra no acerto → gear melhor acerta mais (afia o gate);
+// num espelho as escalas se cancelam → luta de igual ~50/50. NÃO mexe no resolveHit do PvP.
+// ============================================================
+const PVE_DIE = { basic: 8, weapon: 12, special: 20 }
+const PVE_HIT_MIN = 0.6, PVE_HIT_SLOPE = 1.5, PVE_CRIT_MULT = 1.9, PVE_CRIT_MARGIN = 0.5
+const PVE_DODGE_EDGE = 1.0, PVE_BLOCK_EDGE = 0.10, PVE_ACC_W = 1.6
+function contestedOutcome(opts) {
+  const rng = opts.rng || Math.random
+  const sides = opts.sides || PVE_DIE.weapon
+  const ra = opts.atkRoll != null ? opts.atkRoll : 1 + Math.floor(rng() * sides)
+  const rd = opts.defRoll != null ? opts.defRoll : 1 + Math.floor(rng() * sides)
+  const na = (ra - 0.5) / sides, nd = (rd - 0.5) / sides
+  const def = opts.defender || {}
+  const choice = opts.defense === 'dodge' ? 'dodge' : 'block'
+  const avoid = choice === 'dodge' ? (def.evade || 0) * PVE_DODGE_EDGE : PVE_BLOCK_EDGE
+  const edge = avoid - ((opts.atkScale || 0) - (opts.defScale || 0)) * PVE_ACC_W
+  const margin = na - (nd + edge)
+  if (margin < 0) {
+    if (choice === 'dodge') return { damage: 0, avoided: true, blocked: false, crit: false, margin, roll: ra, defRoll: rd }
+    const dr = damageReduction((def.armor || 0) * BLOCK_ARMOR_MULT, def.K)
+    return { damage: Math.max(1, Math.round(opts.power * 0.15 * (1 - dr))), avoided: false, blocked: true, crit: false, margin, roll: ra, defRoll: rd }
+  }
+  let mult = PVE_HIT_MIN + margin * PVE_HIT_SLOPE
+  const crit = margin >= PVE_CRIT_MARGIN
+  if (crit) mult = Math.max(mult, PVE_CRIT_MULT)
+  const dr = choice === 'block' ? damageReduction((def.armor || 0) * BLOCK_ARMOR_MULT, def.K) : 0
+  return { damage: Math.max(1, Math.round(opts.power * mult * (1 - dr))), avoided: false, blocked: choice === 'block', crit, margin, roll: ra, defRoll: rd }
+}
+
 module.exports = {
   PROFILE, DICE_SIDES, LUCK_LO, LUCK_HI, CRIT_MULT, K50,
   WEIGHT_LEVEL, WEIGHT_GEAR, GEAR_FLOOR, MAX_LEVEL_REF, DODGE_STAMINA_COST, BLOCK_ARMOR_MULT,
@@ -177,4 +212,5 @@ module.exports = {
   RARITY_WEIGHT, NOMINAL_SLOTS, enhanceTierFactor, deriveGearTier,
   ATTACKS, attackPower, chooseAttack,
   ATTR_TILT, applyAttrTilt, normalizeCombatClass,
+  PVE_DIE, PVE_ACC_W, contestedOutcome,
 }

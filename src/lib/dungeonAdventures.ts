@@ -390,10 +390,10 @@ const TIER_POWER_STEP = 0.6  // p/ recompensas (gold/xp) por sala — não afeta
 
 // HP do boss = âncora.hp × BOSS_HP_MULT[masmorra][classe] (resolvido no sim p/ ~65% no gear-alvo).
 const BOSS_HP_MULT: Record<DungeonId, Record<CombatClass, number>> = {
-  floresta: { warrior: 4.14, rogue: 3.73, mage: 2.79, monk: 3.33 },
-  caverna:  { warrior: 4.85, rogue: 5.16, mage: 3.11, monk: 3.97 },
-  pantano:  { warrior: 5.87, rogue: 7.09, mage: 3.93, monk: 5.01 },
-  ruinas:   { warrior: 6.99, rogue: 8.88, mage: 4.91, monk: 5.93 },
+  floresta: { warrior: 4.70, rogue: 2.85, mage: 3.32, monk: 3.88 },
+  caverna:  { warrior: 5.35, rogue: 3.54, mage: 3.44, monk: 4.53 },
+  pantano:  { warrior: 6.20, rogue: 4.45, mage: 4.15, monk: 5.50 },
+  ruinas:   { warrior: 7.58, rogue: 5.47, mage: 5.01, monk: 6.28 },
 }
 // Rampa das salas/nós: o HP-mult cresce ao longo do band (1ª sala fácil → última perto do
 // boss). Nó menor = fração extra mais fraca. (Boss usa a tabela acima.)

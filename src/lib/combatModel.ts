@@ -328,8 +328,10 @@ export function resolveHit(
 // DISPUTA DE DADOS (PvE — masmorra). Atacante e defensor rolam o MESMO dado do ataque
 // (PVE_DIE: básico d8 / arma d12 / especial d20). margem = na − (nd + edge), na,nd
 // normalizados (0,1) e edge = avoid_da_defesa − vantagem_de_escala·ACC_W:
-//   • margem < 0 → defesa vence: esquiva = arranhão (raspão); bloqueio = golpe aparado.
-//   • margem ≥ 0 → acerta: dano = poder × mult(margem) × (1−DR); margem ≥ CRIT_MARGIN = crítico.
+//   • esquiva: ESPELHO do crítico. margem ≤ −CRIT_MARGIN → esquiva COMPLETA (dano 0);
+//     qualquer outra margem = dano normal (vermelho), sem tier de "raspão".
+//   • bloqueio: margem < 0 → golpe aparado (mitigado); margem ≥ 0 → dano × (1−DR).
+//   • margem ≥ CRIT_MARGIN = crítico (amplifica). Crit e esquiva são as duas pontas simétricas.
 // A vantagem de ESCALA (gear+nível) entra no ACERTO → gear melhor acerta mais (afia o gate);
 // num espelho as escalas se cancelam → luta de igual ~50/50. NÃO mexe no resolveHit do PvP.
 // ============================================================
@@ -341,9 +343,12 @@ export const PVE_CRIT_MARGIN = 0.5
 export const PVE_DODGE_EDGE = 1.0
 export const PVE_BLOCK_EDGE = 0.10
 export const PVE_ACC_W = 1.6
-// Esquiva que VENCE a disputa não zera mais: deixa um arranhão (corte de raspão).
-// Fração do poder do golpe aplicada como dano residual (sem mitigação de armadura).
-export const PVE_GRAZE_MULT = 0.12
+// Esquiva COMPLETA (dano 0) só quando a margem do defensor é tão extrema quanto a de
+// um crítico — espelho de PVE_CRIT_MARGIN no lado negativo.
+export const PVE_DODGE_MARGIN = PVE_CRIT_MARGIN
+// Piso do multiplicador de dano na esquiva: a ponta baixa da banda normal (golpe que
+// quase foi esquivado ainda entra como dano normal pequeno, em vermelho — sem label).
+export const PVE_GLANCE_MULT = 0.12
 
 export interface ContestedOpts {
   power: number
@@ -359,10 +364,9 @@ export interface ContestedOpts {
 }
 export interface ContestedResult {
   damage: number
+  /** esquiva COMPLETA: margem ≤ −PVE_DODGE_MARGIN → dano 0 (espelho do crítico) */
   avoided: boolean
   blocked: boolean
-  /** esquiva venceu o dado, mas o golpe ainda pegou de raspão (arranhão) */
-  grazed: boolean
   crit: boolean
   margin: number
   roll: number
@@ -391,17 +395,23 @@ export function contestedOutcome(opts: ContestedOpts): ContestedResult {
   const E = edge * sides
   const atkBonus = E < 0 ? Math.round(-E) : 0
   const defBonus = E > 0 ? Math.round(E) : 0
-  if (margin < 0) {
-    if (choice === 'dodge') {
-      // Esquiva VENCE, mas não zera: arranhão (corte de raspão), sem mitigação de armadura.
-      return { damage: Math.max(1, Math.round(opts.power * PVE_GRAZE_MULT)), avoided: false, blocked: false, grazed: true, crit: false, margin, roll: ra, defRoll: rd, atkBonus, defBonus }
+  const crit = margin >= PVE_CRIT_MARGIN
+  if (choice === 'dodge') {
+    // ESPELHO do crítico: só zera no extremo (margem ≤ −PVE_DODGE_MARGIN). O resto é
+    // dano normal (vermelho), escalando pela margem com piso de "de raspão" — sem mitigação.
+    if (margin <= -PVE_DODGE_MARGIN) {
+      return { damage: 0, avoided: true, blocked: false, crit: false, margin, roll: ra, defRoll: rd, atkBonus, defBonus }
     }
-    const dr = damageReduction(opts.defender.armor * BLOCK_ARMOR_MULT, opts.defender.K)
-    return { damage: Math.max(1, Math.round(opts.power * 0.15 * (1 - dr))), avoided: false, blocked: true, grazed: false, crit: false, margin, roll: ra, defRoll: rd, atkBonus, defBonus }
+    let mult = Math.max(PVE_GLANCE_MULT, PVE_HIT_MIN + margin * PVE_HIT_SLOPE)
+    if (crit) mult = Math.max(mult, PVE_CRIT_MULT)
+    return { damage: Math.max(1, Math.round(opts.power * mult)), avoided: false, blocked: false, crit, margin, roll: ra, defRoll: rd, atkBonus, defBonus }
+  }
+  // Bloqueio: margem < 0 → golpe aparado (mitigado); senão dano normal mitigado por armadura.
+  const dr = damageReduction(opts.defender.armor * BLOCK_ARMOR_MULT, opts.defender.K)
+  if (margin < 0) {
+    return { damage: Math.max(1, Math.round(opts.power * 0.15 * (1 - dr))), avoided: false, blocked: true, crit: false, margin, roll: ra, defRoll: rd, atkBonus, defBonus }
   }
   let mult = PVE_HIT_MIN + margin * PVE_HIT_SLOPE
-  const crit = margin >= PVE_CRIT_MARGIN
   if (crit) mult = Math.max(mult, PVE_CRIT_MULT)
-  const dr = choice === 'block' ? damageReduction(opts.defender.armor * BLOCK_ARMOR_MULT, opts.defender.K) : 0
-  return { damage: Math.max(1, Math.round(opts.power * mult * (1 - dr))), avoided: false, blocked: choice === 'block', grazed: false, crit, margin, roll: ra, defRoll: rd, atkBonus, defBonus }
+  return { damage: Math.max(1, Math.round(opts.power * mult * (1 - dr))), avoided: false, blocked: true, crit, margin, roll: ra, defRoll: rd, atkBonus, defBonus }
 }

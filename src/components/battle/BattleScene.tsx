@@ -71,8 +71,6 @@ export interface BattleEvent {
   hit?: boolean
   damage?: number
   isCritical?: boolean
-  /** esquiva venceu o dado mas o golpe pegou de raspão (arranhão) — dano reduzido */
-  grazed?: boolean
   // Para kind === 'item'
   actorId?: string
   itemName?: string
@@ -524,12 +522,7 @@ export default function BattleScene({
             later(() => setDefendingSide(null), 700)
           }
 
-          if (event.grazed) {
-            // Esquiva que pegou de raspão: leve desvio + dano reduzido em ciano.
-            setDodgingSide(defSide)
-            later(() => setDodgingSide(null), 350)
-            pushText(defSide, `raspão -${event.damage}`, 'text-cyan-300', false)
-          } else if (event.isCritical) {
+          if (event.isCritical) {
             pushText(defSide, 'CRÍTICO!', 'text-yellow-300', true)
             later(() => pushText(defSide, `-${event.damage}`, 'text-yellow-300', true), 150)
           } else {

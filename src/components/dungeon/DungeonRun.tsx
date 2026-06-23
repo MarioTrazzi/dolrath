@@ -257,8 +257,6 @@ interface Outcome {
   hit: boolean
   damage: number
   crit: boolean
-  /** esquiva venceu o dado, mas o golpe pegou de raspão (arranhão) */
-  grazed: boolean
   /** dados e bônus exibíveis (estilo RiPG) para o log de combate */
   sides: number
   atkRoll: number
@@ -270,7 +268,7 @@ interface Outcome {
 // Resolve UM golpe pela DISPUTA DE DADOS (combatModel.contestedOutcome). `atkRoll`/`defRoll`
 // = os dados JÁ rolados para a animação (mesmo dado do ataque, `sides`); `power` = poder
 // efetivo já com o powerMult; `atkScale`/`defScale` = escalas de poder (gear+nível) que
-// entram no ACERTO. Esquiva vence → arranhão; bloqueio vence → golpe aparado; senão dano ∝ margem.
+// entram no ACERTO. Esquiva COMPLETA (espelho do crítico) só no extremo; bloqueio vence → golpe aparado; senão dano ∝ margem.
 function computeOutcome(
   atkRoll: number,
   defRoll: number,
@@ -287,7 +285,7 @@ function computeOutcome(
     defender, atkScale, defScale,
   })
   return {
-    hit: !r.avoided, damage: r.damage, crit: r.crit, grazed: r.grazed,
+    hit: !r.avoided, damage: r.damage, crit: r.crit,
     sides, atkRoll: r.roll, defRoll: r.defRoll, atkBonus: r.atkBonus, defBonus: r.defBonus,
   }
 }
@@ -880,7 +878,6 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       hit: outcome.hit,
       damage: outcome.damage,
       isCritical: outcome.crit,
-      grazed: outcome.grazed,
     })
 
     later(() => setDiceResults({}), 1500)
@@ -891,7 +888,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       `${diceLine(atkDef.icon, outcome.sides, outcome.atkRoll, outcome.atkBonus, '(perícia)')}  vs  ` +
       `${diceLine(m.emoji, outcome.sides, outcome.defRoll, outcome.defBonus, defTag)}`
     )
-    if (outcome.grazed) pushLog(`💨 ${m.name} desvia — corte de raspão: ${outcome.damage} de dano`)
+    if (!outcome.hit) pushLog(`💨 ${m.name} esquiva o golpe por completo!`)
     else if (outcome.crit) pushLog(`💥 Acerto CRÍTICO! ${outcome.damage} de dano em ${m.name}`)
     else pushLog(`${atkDef.icon} Acerto: ${outcome.damage} de dano em ${m.name}`)
 
@@ -1016,7 +1013,6 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       hit: outcome.hit,
       damage: outcome.damage,
       isCritical: outcome.crit,
-      grazed: outcome.grazed,
     })
 
     const myDefense = defenseChoice
@@ -1030,7 +1026,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       `${diceLine(m.emoji, outcome.sides, outcome.atkRoll, outcome.atkBonus, '(fúria)')}  vs  ` +
       `${diceLine('🛡️', outcome.sides, outcome.defRoll, outcome.defBonus, defTag)}`
     )
-    if (outcome.grazed) pushLog(`💢 Você desvia, mas leva um corte de raspão: ${outcome.damage} de dano`)
+    if (!outcome.hit) pushLog(`💨 Você esquiva o golpe por completo! (0 de dano)`)
     else if (outcome.crit) pushLog(`💥 ${m.name} acerta em cheio! ${outcome.damage} de dano em você`)
     else pushLog(`🩸 ${m.name} causou ${outcome.damage} de dano em você`)
 
@@ -1233,34 +1229,39 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
             </div>
           </div>
 
-          <div className="hidden sm:flex flex-col gap-0.5">
-            <ResourceBar icon="❤️" value={hp} max={effMaxHp} gradient="from-red-600 to-rose-400" />
-            <ResourceBar icon="🔮" value={mp} max={character.maxMp} gradient="from-blue-600 to-cyan-400" />
-            <ResourceBar icon="⚡" value={stamina} max={character.maxStamina} gradient="from-yellow-600 to-amber-300" />
-          </div>
+          {/* Stats do topo: só na trilha. Em combate a arena já mostra o HP dos lutadores. */}
+          {phase !== 'combat' && (
+            <div className="hidden sm:flex flex-col gap-0.5">
+              <ResourceBar icon="❤️" value={hp} max={effMaxHp} gradient="from-red-600 to-rose-400" />
+              <ResourceBar icon="🔮" value={mp} max={character.maxMp} gradient="from-blue-600 to-cyan-400" />
+              <ResourceBar icon="⚡" value={stamina} max={character.maxStamina} gradient="from-yellow-600 to-amber-300" />
+            </div>
+          )}
 
           <div className="flex items-center gap-2.5">
             <div className="text-right text-[10px] text-white/80 leading-tight">
               <div>💰 {totals.gold}</div>
               <div>⭐ {totals.xp} XP</div>
             </div>
-            {phase === 'explore' && (
+            {(phase === 'explore' || phase === 'combat') && (
               <button
                 onClick={() => finishRun(false)}
                 className="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-bold transition-colors"
-                title="Sair da masmorra (mantém recompensas)"
+                title={phase === 'combat' ? 'Abandonar a batalha e sair (mantém recompensas)' : 'Sair da masmorra (mantém recompensas)'}
               >
-                🚪 Sair
+                🚪 {phase === 'combat' ? 'Fugir' : 'Sair'}
               </button>
             )}
           </div>
         </div>
 
-        {/* Barras de recurso no mobile */}
-        <div className="sm:hidden flex-shrink-0 flex items-center justify-center gap-3 px-3 py-1.5 bg-black/40 border-b border-white/10">
-          <ResourceBar icon="❤️" value={hp} max={character.maxHp} gradient="from-red-600 to-rose-400" />
-          <ResourceBar icon="⚡" value={stamina} max={character.maxStamina} gradient="from-yellow-600 to-amber-300" />
-        </div>
+        {/* Barras de recurso no mobile — só na trilha; em combate a arena mostra o HP. */}
+        {phase !== 'combat' && (
+          <div className="sm:hidden flex-shrink-0 flex items-center justify-center gap-3 px-3 py-1.5 bg-black/40 border-b border-white/10">
+            <ResourceBar icon="❤️" value={hp} max={character.maxHp} gradient="from-red-600 to-rose-400" />
+            <ResourceBar icon="⚡" value={stamina} max={character.maxStamina} gradient="from-yellow-600 to-amber-300" />
+          </div>
+        )}
 
         {/* ---------- Banner central ---------- */}
         <div className="absolute top-20 inset-x-0 flex justify-center z-40 pointer-events-none px-4">
@@ -1802,7 +1803,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                     className="px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all shadow-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:scale-105"
                   >
                     🌪️ Esquivar
-                    <span className="block text-[9px] opacity-80 font-normal">grátis • só raspão se ganhar</span>
+                    <span className="block text-[9px] opacity-80 font-normal">grátis • zera no lance extremo</span>
                   </button>
                   <button
                     onClick={() => choosePlayerDefense('defend')}

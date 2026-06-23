@@ -328,7 +328,7 @@ export function resolveHit(
 // DISPUTA DE DADOS (PvE — masmorra). Atacante e defensor rolam o MESMO dado do ataque
 // (PVE_DIE: básico d8 / arma d12 / especial d20). margem = na − (nd + edge), na,nd
 // normalizados (0,1) e edge = avoid_da_defesa − vantagem_de_escala·ACC_W:
-//   • margem < 0 → defesa vence: esquiva = 0; bloqueio = golpe aparado (dano mínimo).
+//   • margem < 0 → defesa vence: esquiva = arranhão (raspão); bloqueio = golpe aparado.
 //   • margem ≥ 0 → acerta: dano = poder × mult(margem) × (1−DR); margem ≥ CRIT_MARGIN = crítico.
 // A vantagem de ESCALA (gear+nível) entra no ACERTO → gear melhor acerta mais (afia o gate);
 // num espelho as escalas se cancelam → luta de igual ~50/50. NÃO mexe no resolveHit do PvP.
@@ -341,6 +341,9 @@ export const PVE_CRIT_MARGIN = 0.5
 export const PVE_DODGE_EDGE = 1.0
 export const PVE_BLOCK_EDGE = 0.10
 export const PVE_ACC_W = 1.6
+// Esquiva que VENCE a disputa não zera mais: deixa um arranhão (corte de raspão).
+// Fração do poder do golpe aplicada como dano residual (sem mitigação de armadura).
+export const PVE_GRAZE_MULT = 0.12
 
 export interface ContestedOpts {
   power: number
@@ -358,10 +361,16 @@ export interface ContestedResult {
   damage: number
   avoided: boolean
   blocked: boolean
+  /** esquiva venceu o dado, mas o golpe ainda pegou de raspão (arranhão) */
+  grazed: boolean
   crit: boolean
   margin: number
   roll: number
   defRoll: number
+  /** bônus exibível do ATACANTE (vantagem de escala convertida em pontos do dado) */
+  atkBonus: number
+  /** bônus exibível do DEFENSOR (esquiva/defesa + vantagem de escala) em pontos do dado */
+  defBonus: number
 }
 
 /** Resolve UM golpe da masmorra pela DISPUTA DE DADOS (ver bloco acima). */
@@ -376,14 +385,23 @@ export function contestedOutcome(opts: ContestedOpts): ContestedResult {
   const avoid = choice === 'dodge' ? (opts.defender.evade || 0) * PVE_DODGE_EDGE : PVE_BLOCK_EDGE
   const edge = avoid - ((opts.atkScale || 0) - (opts.defScale || 0)) * PVE_ACC_W
   const margin = na - (nd + edge)
+  // Bônus exibíveis (estilo RiPG): converte o `edge` em pontos no mesmo dado. edge>0
+  // favorece o defensor (vira bônus dele); edge<0 = vantagem do atacante (bônus dele).
+  // Assim a comparação roll+bônus dos dois lados reflete o sinal da margem.
+  const E = edge * sides
+  const atkBonus = E < 0 ? Math.round(-E) : 0
+  const defBonus = E > 0 ? Math.round(E) : 0
   if (margin < 0) {
-    if (choice === 'dodge') return { damage: 0, avoided: true, blocked: false, crit: false, margin, roll: ra, defRoll: rd }
+    if (choice === 'dodge') {
+      // Esquiva VENCE, mas não zera: arranhão (corte de raspão), sem mitigação de armadura.
+      return { damage: Math.max(1, Math.round(opts.power * PVE_GRAZE_MULT)), avoided: false, blocked: false, grazed: true, crit: false, margin, roll: ra, defRoll: rd, atkBonus, defBonus }
+    }
     const dr = damageReduction(opts.defender.armor * BLOCK_ARMOR_MULT, opts.defender.K)
-    return { damage: Math.max(1, Math.round(opts.power * 0.15 * (1 - dr))), avoided: false, blocked: true, crit: false, margin, roll: ra, defRoll: rd }
+    return { damage: Math.max(1, Math.round(opts.power * 0.15 * (1 - dr))), avoided: false, blocked: true, grazed: false, crit: false, margin, roll: ra, defRoll: rd, atkBonus, defBonus }
   }
   let mult = PVE_HIT_MIN + margin * PVE_HIT_SLOPE
   const crit = margin >= PVE_CRIT_MARGIN
   if (crit) mult = Math.max(mult, PVE_CRIT_MULT)
   const dr = choice === 'block' ? damageReduction(opts.defender.armor * BLOCK_ARMOR_MULT, opts.defender.K) : 0
-  return { damage: Math.max(1, Math.round(opts.power * mult * (1 - dr))), avoided: false, blocked: choice === 'block', crit, margin, roll: ra, defRoll: rd }
+  return { damage: Math.max(1, Math.round(opts.power * mult * (1 - dr))), avoided: false, blocked: choice === 'block', grazed: false, crit, margin, roll: ra, defRoll: rd, atkBonus, defBonus }
 }

@@ -148,6 +148,9 @@ const BOSS_STEP_COST = 6  // aproximar-se do covil
 // Chance de encontrar monstro num nó MENOR (sala principal é sempre monstro).
 const MINOR_MONSTER_CHANCE = 0.4
 
+// Custo de stamina ao DEFENDER no combate (esquiva e soco são grátis).
+const DEFEND_STAMINA_COST = 1
+
 // Falas de transição do Mestre entre as salas (genéricas, tom de RPG)
 const TRANSITIONS = [
   'Você respira fundo e segue trilha adentro.',
@@ -254,12 +257,20 @@ interface Outcome {
   hit: boolean
   damage: number
   crit: boolean
+  /** esquiva venceu o dado, mas o golpe pegou de raspão (arranhão) */
+  grazed: boolean
+  /** dados e bônus exibíveis (estilo RiPG) para o log de combate */
+  sides: number
+  atkRoll: number
+  defRoll: number
+  atkBonus: number
+  defBonus: number
 }
 
 // Resolve UM golpe pela DISPUTA DE DADOS (combatModel.contestedOutcome). `atkRoll`/`defRoll`
 // = os dados JÁ rolados para a animação (mesmo dado do ataque, `sides`); `power` = poder
 // efetivo já com o powerMult; `atkScale`/`defScale` = escalas de poder (gear+nível) que
-// entram no ACERTO. Esquiva vence → 0; bloqueio vence → golpe aparado; senão dano ∝ margem.
+// entram no ACERTO. Esquiva vence → arranhão; bloqueio vence → golpe aparado; senão dano ∝ margem.
 function computeOutcome(
   atkRoll: number,
   defRoll: number,
@@ -275,7 +286,17 @@ function computeOutcome(
     defense: defenseChoice === 'defend' ? 'block' : 'dodge',
     defender, atkScale, defScale,
   })
-  return { hit: !r.avoided, damage: r.avoided ? 0 : r.damage, crit: r.crit }
+  return {
+    hit: !r.avoided, damage: r.damage, crit: r.crit, grazed: r.grazed,
+    sides, atkRoll: r.roll, defRoll: r.defRoll, atkBonus: r.atkBonus, defBonus: r.defBonus,
+  }
+}
+
+// Monta a linha de dado estilo RiPG: "⚔️ d12 = 9 +3 (esquiva) = 12"
+function diceLine(label: string, sides: number, roll: number, bonus: number, tag: string): string {
+  return bonus > 0
+    ? `${label} d${sides} = ${roll} +${bonus} ${tag} = ${roll + bonus}`
+    : `${label} d${sides} = ${roll} = ${roll}`
 }
 
 export default function DungeonRun({ dungeon, character, onExit }: DungeonRunProps) {
@@ -509,8 +530,20 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const effMaxHp = character.maxHp + gear.hp
   // Poder efetivo de um ataque = poder do lever × multiplicador do tipo.
   const playerPowerFor = (kind: AttackKind) => playerLevers.power * ATTACKS[kind].powerMult
-  // O ESPECIAL é a skill da ARMA equipada (nome por categoria).
-  const specialName = useMemo(() => weaponSkillName(character.equipment), [character.equipment])
+  // Tem arma de mão equipada? (sem arma: some o "Ataque da Arma"; luta-se no soco)
+  const hasWeapon = useMemo(
+    () => (character.equipment || []).some((e: any) => {
+      const slot = String(e?.slot || '').toLowerCase()
+      return slot === 'weapon' || slot === 'mainhand' || slot === 'main_hand'
+    }),
+    [character.equipment]
+  )
+  // O ESPECIAL é a skill da ARMA equipada (nome por categoria). SEM arma ele vem da
+  // TRANSFORMAÇÃO (golpe da fera), então recebe um nome equivalente.
+  const specialName = useMemo(
+    () => (hasWeapon ? weaponSkillName(character.equipment) : 'Fúria Selvagem'),
+    [hasWeapon, character.equipment]
+  )
 
   // ---------- Lutadores para a arena ----------
   const playerFighter: FighterView = useMemo(() => ({
@@ -535,15 +568,17 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       (transform && character.transformationImages?.[transform.type]) ||
       character.transformationImage ||
       null,
-    // Levers do modelo enxuto; os deltas são o ganho da transformação (×TRANSFORM_SCALE).
+    // ATK = poder ofensivo, DEF = armadura (ambos do lever; deltas = ganho da transformação),
+    // STR = atributo de força distribuído (não muda na transformação).
     combatStats: {
       ad: Math.round(playerLevers.power),
-      ap: Math.round(playerLevers.power),
-      dp: Math.round(playerLevers.armor),
+      ap: Math.round(playerLevers.armor),
+      dp: Math.max(0, Math.round(character.str ?? 0)),
       adDelta: Math.round(playerLevers.power - baseLevers.power),
-      apDelta: Math.round(playerLevers.power - baseLevers.power),
-      dpDelta: Math.round(playerLevers.armor - baseLevers.armor),
+      apDelta: Math.round(playerLevers.armor - baseLevers.armor),
+      dpDelta: 0,
     },
+    combatStatLabels: { ad: 'ATK', ap: 'DEF', dp: 'STR' },
   }), [character, hp, mp, stamina, transform, effMaxHp, playerLevers, baseLevers])
 
   const monsterFighter: FighterView | null = useMemo(() => monster ? {
@@ -560,11 +595,13 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     stamina: 0,
     maxStamina: 0,
     isAlive: monster.hp > 0,
+    // Monstro não tem atributo STR: card mostra só ATK (ataque) e DEF (defesa).
     combatStats: {
       ad: Math.floor(monster.attack + monster.level / 2),
-      ap: monster.hasSpecial ? Math.floor(monster.magicPower + monster.level / 2) : undefined,
-      dp: monster.defense,
+      ap: monster.defense,
+      dp: undefined,
     },
+    combatStatLabels: { ad: 'ATK', ap: 'DEF' },
   } : null, [monster, dungeon.name])
 
   // ============================================================
@@ -843,20 +880,26 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       hit: outcome.hit,
       damage: outcome.damage,
       isCritical: outcome.crit,
+      grazed: outcome.grazed,
     })
 
     later(() => setDiceResults({}), 1500)
 
-    if (outcome.hit) {
-      const newHp = Math.max(0, m.hp - outcome.damage)
-      later(() => setMonster(prev => (prev ? { ...prev, hp: newHp } : prev)), 500)
-      pushLog(`${atkDef.icon} Você causou ${outcome.damage} de dano${outcome.crit ? ' CRÍTICO' : ''} em ${m.name}!`)
-      if (newHp <= 0) {
-        later(() => handleCombatVictory(m), 1600)
-        return
-      }
-    } else {
-      pushLog(`💨 ${m.name} esquivou do seu ataque!`)
+    // Log estilo RiPG: a conta dos dois dados + a linha que justifica o dano.
+    const defTag = mDefChoice === 'dodge' ? '(esquiva)' : '(defesa)'
+    pushLog(
+      `${diceLine(atkDef.icon, outcome.sides, outcome.atkRoll, outcome.atkBonus, '(perícia)')}  vs  ` +
+      `${diceLine(m.emoji, outcome.sides, outcome.defRoll, outcome.defBonus, defTag)}`
+    )
+    if (outcome.grazed) pushLog(`💨 ${m.name} desvia — corte de raspão: ${outcome.damage} de dano`)
+    else if (outcome.crit) pushLog(`💥 Acerto CRÍTICO! ${outcome.damage} de dano em ${m.name}`)
+    else pushLog(`${atkDef.icon} Acerto: ${outcome.damage} de dano em ${m.name}`)
+
+    const newHp = Math.max(0, m.hp - outcome.damage)
+    later(() => setMonster(prev => (prev ? { ...prev, hp: newHp } : prev)), 500)
+    if (newHp <= 0) {
+      later(() => handleCombatVictory(m), 1600)
+      return
     }
     tickPlayerTurn()
     later(() => monsterTelegraph(), 2000)
@@ -919,7 +962,17 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     }
   }
 
+  // Esquivar é de graça (aposta no dado); Defender custa 1 stamina (mitiga sempre, então
+  // não pode ser spammado). Soco/esquiva grátis empurram os recursos pros golpes de MP.
   const choosePlayerDefense = (choice: DefenseKind) => {
+    if (choice === 'defend') {
+      if (stamina < DEFEND_STAMINA_COST) {
+        showBanner('😮‍💨', `Sem stamina para Defender (precisa de ${DEFEND_STAMINA_COST}⚡)`)
+        return
+      }
+      setStamina(prev => Math.max(0, prev - DEFEND_STAMINA_COST))
+      persistStamina(DEFEND_STAMINA_COST)
+    }
     setDefenseChoice(choice)
     setPanelResult(null)
     setHasRolled(false)
@@ -963,26 +1016,33 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       hit: outcome.hit,
       damage: outcome.damage,
       isCritical: outcome.crit,
+      grazed: outcome.grazed,
     })
 
+    const myDefense = defenseChoice
     setMonsterPlan(null)
     setDefenseChoice(null)
     later(() => setDiceResults({}), 1500)
 
-    if (outcome.hit) {
-      const newHp = Math.max(0, hpRef.current - outcome.damage)
-      later(() => setHp(newHp), 500)
-      pushLog(`${m.emoji} ${m.name} causou ${outcome.damage} de dano${outcome.crit ? ' CRÍTICO' : ''} em você!`)
-      if (newHp <= 0) {
-        later(() => {
-          setCombatEnded(true)
-          setWinnerId(MONSTER_ID)
-          later(() => handleDefeat(), 2200)
-        }, 1400)
-        return
-      }
-    } else {
-      pushLog(`💨 Você esquivou do ataque de ${m.name}!`)
+    // Log estilo RiPG (monstro ataca, você defende).
+    const defTag = myDefense === 'dodge' ? '(esquiva)' : '(defesa)'
+    pushLog(
+      `${diceLine(m.emoji, outcome.sides, outcome.atkRoll, outcome.atkBonus, '(fúria)')}  vs  ` +
+      `${diceLine('🛡️', outcome.sides, outcome.defRoll, outcome.defBonus, defTag)}`
+    )
+    if (outcome.grazed) pushLog(`💢 Você desvia, mas leva um corte de raspão: ${outcome.damage} de dano`)
+    else if (outcome.crit) pushLog(`💥 ${m.name} acerta em cheio! ${outcome.damage} de dano em você`)
+    else pushLog(`🩸 ${m.name} causou ${outcome.damage} de dano em você`)
+
+    const newHp = Math.max(0, hpRef.current - outcome.damage)
+    later(() => setHp(newHp), 500)
+    if (newHp <= 0) {
+      later(() => {
+        setCombatEnded(true)
+        setWinnerId(MONSTER_ID)
+        later(() => handleDefeat(), 2200)
+      }, 1400)
+      return
     }
     later(() => {
       setCurrentTurnId(character.id)
@@ -1618,6 +1678,14 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
               backdrop={<DungeonBackdrop theme={dungeon.id} />}
             />
 
+            {/* Log de combate (estilo RiPG): mostra a conta dos dados e o dano resultante */}
+            <div className="flex-shrink-0 bg-black/60 border-t border-white/5 px-3 sm:px-6 py-1.5">
+              <div className="mx-auto max-w-2xl h-[46px] overflow-y-auto flex flex-col justify-end gap-0.5 font-mono text-[10px] leading-tight text-white/65">
+                {log.slice(-4).map((line, i) => (
+                  <div key={`${log.length}-${i}`} className="break-words last:text-white/90">{line}</div>
+                ))}
+              </div>
+            </div>
 
             {/* Barra de ações do combate */}
             <div className="flex-shrink-0 bg-black/70 backdrop-blur-md border-t border-white/10 px-3 sm:px-6 py-3 min-h-[88px] flex items-center justify-center">
@@ -1627,7 +1695,11 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                 </div>
               ) : stage === 'playerSelect' ? (
                 <div className="flex flex-wrap items-center justify-center gap-2">
-                  {(Object.keys(ATTACKS) as AttackKind[]).map(kind => {
+                  {(Object.keys(ATTACKS) as AttackKind[])
+                    // Sem arma equipada não há "Ataque da Arma" (luta-se no soco); o Especial
+                    // continua, pois vem da transformação (golpe da fera).
+                    .filter(kind => kind !== 'weapon' || hasWeapon)
+                    .map(kind => {
                     const atk = ATTACKS[kind]
                     // Especial só liberado transformado (igual ao PvP) e exige MP.
                     const locked = (atk.requiresTransform && !transform) || mp < atk.mp
@@ -1730,14 +1802,15 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                     className="px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all shadow-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:scale-105"
                   >
                     🌪️ Esquivar
-                    <span className="block text-[9px] opacity-80 font-normal">anula se ganhar a rolagem</span>
+                    <span className="block text-[9px] opacity-80 font-normal">grátis • só raspão se ganhar</span>
                   </button>
                   <button
                     onClick={() => choosePlayerDefense('defend')}
-                    className="px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all shadow-lg bg-gradient-to-r from-emerald-600 to-green-600 hover:scale-105"
+                    disabled={stamina < DEFEND_STAMINA_COST}
+                    className="px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all shadow-lg bg-gradient-to-r from-emerald-600 to-green-600 hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
                   >
                     🛡️ Defender
-                    <span className="block text-[9px] opacity-80 font-normal">reduz o dano recebido</span>
+                    <span className="block text-[9px] opacity-80 font-normal">{DEFEND_STAMINA_COST}⚡ • reduz sempre</span>
                   </button>
                 </div>
               ) : stage === 'initiative' || stage === 'playerRoll' || stage === 'defenseRoll' ? (

@@ -52,11 +52,13 @@ export interface FighterView {
   combatStats?: {
     ad: number
     ap?: number
-    dp: number
+    dp?: number
     adDelta?: number
     apDelta?: number
     dpDelta?: number
   }
+  /** Rótulos por-lutador dos 3 pills (default PWR/ARM/HP do PvP). Ex.: dungeon usa ATK/DEF/STR. */
+  combatStatLabels?: { ad: string; ap?: string; dp?: string }
 }
 
 export interface BattleEvent {
@@ -69,6 +71,8 @@ export interface BattleEvent {
   hit?: boolean
   damage?: number
   isCritical?: boolean
+  /** esquiva venceu o dado mas o golpe pegou de raspão (arranhão) — dano reduzido */
+  grazed?: boolean
   // Para kind === 'item'
   actorId?: string
   itemName?: string
@@ -328,26 +332,29 @@ function FighterFigure({
             <StatBar value={fighter.stamina} max={fighter.maxStamina} gradient="from-yellow-600 to-amber-300" icon="⚡" />
           </div>
 
-          {/* PODER / ARMADURA / HP (modelo enxuto) — bônus da transformação entre parênteses */}
-          {fighter.combatStats && (
-            <div className="mt-1 flex flex-wrap items-baseline justify-center gap-x-1.5 gap-y-0.5 text-[9px] sm:text-[10px] leading-none">
-              {[
-                { label: 'PWR', val: fighter.combatStats.ad, delta: fighter.combatStats.adDelta, color: '#e8a07a' },
-                ...(fighter.combatStats.ap != null
-                  ? [{ label: 'ARM', val: fighter.combatStats.ap, delta: fighter.combatStats.apDelta, color: '#c08ae8' }]
-                  : []),
-                { label: 'HP', val: fighter.combatStats.dp, delta: fighter.combatStats.dpDelta, color: '#7ab6e8' },
-              ].map((s) => (
-                <span key={s.label} className="flex items-baseline gap-0.5">
-                  <span className="font-bold" style={{ color: s.color }}>{s.label}</span>
-                  <span className="font-bold text-white">{s.val}</span>
-                  {s.delta ? (
-                    <span className="font-bold text-emerald-400">({s.delta > 0 ? '+' : ''}{s.delta})</span>
-                  ) : null}
-                </span>
-              ))}
-            </div>
-          )}
+          {/* Pills de combate (modelo enxuto) — rótulos por-lutador; bônus da transformação entre parênteses */}
+          {fighter.combatStats && (() => {
+            const cs = fighter.combatStats
+            const L = fighter.combatStatLabels ?? { ad: 'PWR', ap: 'ARM', dp: 'HP' }
+            const pills = [
+              cs.ad != null ? { label: L.ad, val: cs.ad, delta: cs.adDelta, color: '#e8a07a' } : null,
+              cs.ap != null ? { label: L.ap ?? 'ARM', val: cs.ap, delta: cs.apDelta, color: '#c08ae8' } : null,
+              cs.dp != null ? { label: L.dp ?? 'HP', val: cs.dp, delta: cs.dpDelta, color: '#7ab6e8' } : null,
+            ].filter(Boolean) as { label: string; val: number; delta?: number; color: string }[]
+            return (
+              <div className="mt-1 flex flex-wrap items-baseline justify-center gap-x-1.5 gap-y-0.5 text-[9px] sm:text-[10px] leading-none">
+                {pills.map((s) => (
+                  <span key={s.label} className="flex items-baseline gap-0.5">
+                    <span className="font-bold" style={{ color: s.color }}>{s.label}</span>
+                    <span className="font-bold text-white">{s.val}</span>
+                    {s.delta ? (
+                      <span className="font-bold text-emerald-400">({s.delta > 0 ? '+' : ''}{s.delta})</span>
+                    ) : null}
+                  </span>
+                ))}
+              </div>
+            )
+          })()}
         </div>
 
         {/* Resultado do dado (mini-dado girando) */}
@@ -517,7 +524,12 @@ export default function BattleScene({
             later(() => setDefendingSide(null), 700)
           }
 
-          if (event.isCritical) {
+          if (event.grazed) {
+            // Esquiva que pegou de raspão: leve desvio + dano reduzido em ciano.
+            setDodgingSide(defSide)
+            later(() => setDodgingSide(null), 350)
+            pushText(defSide, `raspão -${event.damage}`, 'text-cyan-300', false)
+          } else if (event.isCritical) {
             pushText(defSide, 'CRÍTICO!', 'text-yellow-300', true)
             later(() => pushText(defSide, `-${event.damage}`, 'text-yellow-300', true), 150)
           } else {

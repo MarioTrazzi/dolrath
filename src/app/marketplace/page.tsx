@@ -2,10 +2,43 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
+import Image from 'next/image'
 import toast from 'react-hot-toast'
 import { ethers } from 'ethers'
 import { getPolygonFeeOverrides } from '@/lib/gasFees'
 import { getWalletTxErrorMessage } from '@/lib/walletErrors'
+import { resolveImageUrl } from '@/lib/imageUrl'
+import { getItemVisual, getItemTypeLabel } from '@/lib/itemVisuals'
+
+// Miniatura do item: imagem (Cloudinary/URL) ou fallback com emoji/categoria.
+function ItemThumb({ image, type, enhancement }: { image?: string | null; type: string; enhancement?: number }) {
+  const url = resolveImageUrl(image ?? null)
+  const visual = getItemVisual(type)
+  return (
+    <div
+      className="relative w-14 h-14 shrink-0 rounded-lg overflow-hidden ring-1 ring-white/10 flex items-center justify-center"
+      style={{ background: `${visual.accent}22` }}
+    >
+      {url ? (
+        <Image
+          src={url}
+          alt=""
+          fill
+          sizes="56px"
+          className="object-cover"
+          unoptimized={!/^https?:\/\//i.test(url)}
+        />
+      ) : (
+        <span className="text-2xl">{visual.emoji}</span>
+      )}
+      {enhancement && enhancement > 0 ? (
+        <span className="absolute bottom-0 right-0 text-[10px] font-black px-1 rounded-tl-md bg-amber-500 text-black">
+          +{enhancement}
+        </span>
+      ) : null}
+    </div>
+  )
+}
 
 // ABIs mínimos para os fluxos on-chain do marketplace.
 const ERC20_ABI = [
@@ -34,11 +67,11 @@ interface Listing {
   seller: string
   tokenId: string
   priceGold: { raw: string; formatted: string }
-  item: { id: string; name: string; type: string; level: number; goldPrice: number; enhancementLevel?: number; mintSource?: string } | null
+  item: { id: string; name: string; type: string; level: number; goldPrice: number; image?: string | null; enhancementLevel?: number; mintSource?: string } | null
   dbOwner: { userId: string; walletAddress: string | null } | null
 }
 interface Character { id: string; name: string }
-interface InvRow { id: string; quantity: number; enhancementLevel: number; item: { id: string; name: string; type: string; goldPrice: number } }
+interface InvRow { id: string; quantity: number; enhancementLevel: number; item: { id: string; name: string; type: string; goldPrice: number; image?: string | null } }
 
 async function getSigner(expectedChainId: number) {
   const eth = (window as any)?.ethereum
@@ -236,9 +269,11 @@ export default function MarketplacePage() {
           <div className="grid gap-2 sm:grid-cols-2">
             {inventory.map((row) => (
               <div key={row.id} className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/50 p-3">
+                <ItemThumb image={row.item.image} type={row.item.type} enhancement={row.enhancementLevel} />
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-white truncate">
-                    {row.item.name}{row.enhancementLevel > 0 ? ` +${row.enhancementLevel}` : ''}
+                    {row.item.name}
+                    {row.enhancementLevel > 0 ? <span className="text-amber-300"> +{row.enhancementLevel}</span> : null}
                   </div>
                   <div className="text-xs text-textsec">valor base {row.item.goldPrice} 🪙</div>
                 </div>
@@ -272,12 +307,17 @@ export default function MarketplacePage() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {listings.map((l) => (
               <div key={l.listingId} className="rounded-2xl border border-white/10 bg-slate-900/50 p-4 flex flex-col gap-2">
-                <div className="font-bold text-white">
-                  {l.item?.name ?? `Token #${l.tokenId}`}
-                  {l.item?.enhancementLevel ? <span className="text-amber-300"> +{l.item.enhancementLevel}</span> : null}
-                </div>
-                <div className="text-xs text-textsec">
-                  {l.item ? `${l.item.type} • Nv.${l.item.level}` : 'Item fora do catálogo'}
+                <div className="flex items-center gap-3">
+                  <ItemThumb image={l.item?.image} type={l.item?.type ?? ''} enhancement={l.item?.enhancementLevel} />
+                  <div className="min-w-0">
+                    <div className="font-bold text-white truncate">
+                      {l.item?.name ?? `Token #${l.tokenId}`}
+                      {l.item?.enhancementLevel ? <span className="text-amber-300"> +{l.item.enhancementLevel}</span> : null}
+                    </div>
+                    <div className="text-xs text-textsec">
+                      {l.item ? `${getItemTypeLabel(l.item.type)} • Nv.${l.item.level}` : 'Item fora do catálogo'}
+                    </div>
+                  </div>
                 </div>
                 <div className="text-amber-300 font-black mt-auto">{l.priceGold.formatted} {config?.gold.symbol || 'GOLD'}</div>
                 <button

@@ -85,7 +85,10 @@ interface PriceFilter {
 export default function ShopView({ kind }: { kind: ShopKind }) {
   const config = SHOP_CONFIG[kind];
   const { data: session } = useSession();
-  const { goldBalance, refreshGoldBalance } = useGold();
+  const { refreshGoldBalance } = useGold();
+  // Saldo GOLD OFF-CHAIN (User.goldBalance) — é ESTE que a loja gasta. O useGold()
+  // mostra o saldo ON-CHAIN (tokens já reivindicados), que não serve para comprar.
+  const [offchainGold, setOffchainGold] = useState<number | null>(null);
   const [items, setItems] = useState<StoreItem[]>([]);
   const [characters, setCharacters] = useState<Character[]>([]);
   const [selectedCharacter, setSelectedCharacter] = useState<string>('');
@@ -207,7 +210,19 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
   useEffect(() => {
     fetchCharacters();
     fetchUserInventory();
+    fetchOffchainGold();
   }, []);
+
+  // Saldo off-chain (User.goldBalance) — fonte de verdade do que a loja gasta.
+  const fetchOffchainGold = async () => {
+    try {
+      const res = await fetch('/api/gold/status');
+      if (!res.ok) return;
+      const data = await res.json();
+      const n = Number(data?.offchainBalance ?? 0);
+      setOffchainGold(Number.isFinite(n) ? n : 0);
+    } catch { /* silencioso */ }
+  };
 
   // Recarrega a vitrine sempre que o personagem ativo (ou o toggle) muda,
   // filtrando pela raça do personagem por padrão.
@@ -287,6 +302,8 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
         return;
       }
       toast.success(data?.message || 'Compra concluída!');
+      if (typeof data?.goldBalance === 'number') setOffchainGold(data.goldBalance);
+      else fetchOffchainGold();
       refreshGoldBalance();
       setInventoryRefreshKey((k) => k + 1);
       fetchUserInventory();
@@ -632,6 +649,10 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                 ))}
               </select>
 
+              <span className="text-sm font-semibold text-amber-300 bg-amber-500/10 border border-amber-400/30 rounded-lg px-3 py-2">
+                Saldo: {offchainGold === null ? '…' : offchainGold} 🪙
+              </span>
+
               {/* Toggle de filtro por raça e level */}
               <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer select-none">
                 <input
@@ -782,8 +803,8 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
 
                       <button
                         onClick={() => handleBuyWithBalance(item.id, getQty(item.id))}
-                        disabled={loading || (goldBalance ?? 0) < item.goldPrice * getQty(item.id)}
-                        title={(goldBalance ?? 0) < item.goldPrice * getQty(item.id) ? 'Saldo GOLD insuficiente' : 'Paga com seu saldo GOLD'}
+                        disabled={loading || (offchainGold ?? 0) < item.goldPrice * getQty(item.id)}
+                        title={(offchainGold ?? 0) < item.goldPrice * getQty(item.id) ? 'Saldo GOLD insuficiente' : 'Paga com seu saldo GOLD'}
                         className="w-full px-4 py-2.5 rounded-xl font-black text-sm text-white transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                         style={{
                           background: `linear-gradient(90deg, ${visual.accent}cc, ${visual.accent}77)`,

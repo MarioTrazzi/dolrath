@@ -14,9 +14,48 @@ import { motion, useScroll, useTransform, useReducedMotion } from 'framer-motion
 import {
   Dices, Swords, Shield, Coins, Wallet, Play, Sparkles, ArrowRight, Menu, X,
   Github, Twitter, MessageCircle, Scroll, Wand2, Target, Axe, DoorOpen,
-  AlertTriangle, Zap,
+  AlertTriangle, Zap, Gem,
 } from 'lucide-react'
 import { Button, Card, GlassCard, Badge, StatBar, SectionHeading, D20, DiceChip, Reveal } from './ui'
+import { itemImagePath } from '@/lib/itemCatalog'
+
+// ============================================================
+// Gear / raridade — molduras e tiles de equipamento reais
+// As imagens vivem em /items/<slug>.webp (mesmas do jogo).
+// Tier romano por raridade: I·Comum II·Incomum III·Raro IV·Épico V·Lendário
+// ============================================================
+
+type RarityKey = 'COMMON' | 'UNCOMMON' | 'RARE' | 'EPIC' | 'LEGENDARY'
+
+const RARITY_FRAME: Record<RarityKey, { ring: string; glow: string; text: string; tier: string; label: string }> = {
+  COMMON:    { ring: 'border-zinc-400/50',    glow: 'rgba(161,161,170,0.35)', text: 'text-zinc-300',    tier: 'I',   label: 'Comum' },
+  UNCOMMON:  { ring: 'border-emerald-400/60', glow: 'rgba(52,211,153,0.45)',  text: 'text-emerald-300', tier: 'II',  label: 'Incomum' },
+  RARE:      { ring: 'border-sky-400/60',     glow: 'rgba(56,189,248,0.5)',   text: 'text-sky-300',     tier: 'III', label: 'Raro' },
+  EPIC:      { ring: 'border-fuchsia-400/70', glow: 'rgba(232,121,249,0.55)', text: 'text-fuchsia-300', tier: 'IV',  label: 'Épico' },
+  LEGENDARY: { ring: 'border-amber-400/70',   glow: 'rgba(251,191,36,0.6)',   text: 'text-amber-300',   tier: 'V',   label: 'Lendário' },
+}
+
+interface GearPiece { name: string; rarity: RarityKey }
+
+// Tile de item com moldura por raridade (reaproveita /items/<slug>.webp do jogo).
+function GearTile({ piece, size = 'sm', className = '' }: { piece: GearPiece; size?: 'sm' | 'lg'; className?: string }) {
+  const r = RARITY_FRAME[piece.rarity]
+  const box = size === 'lg' ? 'w-16 h-16 sm:w-[4.5rem] sm:h-[4.5rem]' : 'w-10 h-10 sm:w-12 sm:h-12'
+  return (
+    <div
+      className={`relative shrink-0 rounded-xl border ${r.ring} overflow-hidden bg-black/50 ${box} ${className}`}
+      style={{ boxShadow: `0 0 14px ${r.glow}` }}
+      title={`${piece.name} · ${r.label} (${r.tier})`}
+    >
+      {/* asset estático /items/<slug>.webp — img simples (sem next/image) */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={itemImagePath(piece.name)} alt={piece.name} loading="lazy" className="w-full h-full object-cover" />
+      <span className={`absolute bottom-0 right-0.5 font-combat text-[9px] font-bold ${r.text}`} style={{ textShadow: '0 1px 2px rgba(0,0,0,0.9)' }}>
+        {r.tier}
+      </span>
+    </div>
+  )
+}
 
 // ============================================================
 // Céu enluarado (fundo do hero / CTA)
@@ -273,60 +312,61 @@ function Features() {
 // ============================================================
 
 function Fighter({
-  name, level, emoji, hp, hpMax, mp, mpMax, sta, staMax, gear, reverse = false, hit = false,
+  name, klass, level, portrait, hp, hpMax, mp, mpMax, sta, staMax, weapon, armor, reverse = false, hit = false,
 }: {
-  name: string; level: number; emoji: string
+  name: string; klass: string; level: number; portrait: string
   hp: number; hpMax: number; mp: number; mpMax: number; sta: number; staMax: number
-  gear: string[]; reverse?: boolean; hit?: boolean
+  weapon: GearPiece; armor: GearPiece[]; reverse?: boolean; hit?: boolean
 }) {
+  const wr = RARITY_FRAME[weapon.rarity]
   return (
-    <div className={`flex flex-col gap-3 ${reverse ? 'items-end' : 'items-start'}`}>
-      <div className="flex items-center gap-2">
+    <div className={`flex flex-col gap-2.5 ${reverse ? 'items-end' : 'items-start'}`}>
+      <div className={`flex items-center gap-2 ${reverse ? 'flex-row-reverse' : ''}`}>
         <span className="font-semibold text-white">{name}</span>
-        <span className="font-combat text-xs text-textsec">Nv. {level}</span>
+        <span className="font-combat text-[11px] text-textsec">{klass} · Nv. {level}</span>
       </div>
-      {/* arte do personagem — placeholder */}
-      <div className="relative">
-        <motion.div
-          animate={hit ? { x: reverse ? [0, 10, -6, 0] : [0, -10, 6, 0] } : {}}
-          transition={{ duration: 0.45 }}
-          className="w-24 h-28 sm:w-28 sm:h-32 rounded-2xl border border-white/10 flex items-center justify-center text-5xl sm:text-6xl"
+      {/* retrato do herói + arma principal (tier IV) em destaque */}
+      <motion.div
+        animate={hit ? { x: reverse ? [0, 10, -6, 0] : [0, -10, 6, 0] } : {}}
+        transition={{ duration: 0.45 }}
+        className={`relative flex items-end gap-2.5 ${reverse ? 'flex-row-reverse' : ''}`}
+      >
+        <div
+          className="relative w-[4.5rem] h-24 sm:w-24 sm:h-28 rounded-2xl border border-white/10 flex items-center justify-center text-5xl sm:text-6xl"
           style={{
             background: 'linear-gradient(180deg, rgba(22,33,62,0.9), rgba(15,15,35,0.95))',
-            boxShadow: hit ? '0 0 24px rgba(231,76,60,0.45)' : '0 0 24px rgba(147,51,234,0.18)',
+            boxShadow: hit ? '0 0 24px rgba(231,76,60,0.45)' : `0 0 22px ${wr.glow}`,
           }}
           aria-hidden="true"
         >
-          {emoji}
-        </motion.div>
-        {/* pedestal */}
-        <div
-          className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-28 sm:w-32 h-4 rounded-[50%] blur-[2px]"
-          style={{ background: 'rgba(0,0,0,0.5)' }}
-          aria-hidden="true"
-        />
-        {hit && (
-          <span
-            className="absolute -top-3 left-1/2 -translate-x-1/2 font-combat font-bold text-xl text-error"
-            style={{ animation: 'float-damage 1.6s ease-out forwards', textShadow: '0 0 12px rgba(231,76,60,0.8)' }}
-          >
-            −24
-          </span>
-        )}
+          {portrait}
+          <div
+            className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-24 sm:w-28 h-4 rounded-[50%] blur-[2px]"
+            style={{ background: 'rgba(0,0,0,0.5)' }}
+          />
+          {hit && (
+            <span
+              className="absolute -top-3 left-1/2 -translate-x-1/2 font-combat font-bold text-xl text-error"
+              style={{ animation: 'float-damage 1.6s ease-out forwards', textShadow: '0 0 12px rgba(231,76,60,0.8)' }}
+            >
+              −24
+            </span>
+          )}
+        </div>
+        <GearTile piece={weapon} size="lg" />
+      </motion.div>
+      <span className={`font-combat text-[11px] font-semibold ${wr.text} max-w-[11rem] truncate ${reverse ? 'text-right' : ''}`}>
+        {weapon.name}
+      </span>
+      {/* armadura equipada (tiers II e III) */}
+      <div className={`flex gap-1.5 ${reverse ? 'flex-row-reverse' : ''}`} aria-label={`Equipamento de ${name}`}>
+        {armor.map((g) => <GearTile key={g.name} piece={g} />)}
       </div>
-      <div className="w-40 sm:w-48 flex flex-col gap-1.5 mt-2">
+      <div className="w-40 sm:w-48 flex flex-col gap-1.5 mt-1">
         <StatBar kind="hp" value={hp} max={hpMax} />
         <StatBar kind="mp" value={mp} max={mpMax} />
         <StatBar kind="stamina" value={sta} max={staMax} />
       </div>
-      {/* equipamentos */}
-      <ul className={`flex flex-col gap-1 ${reverse ? 'items-end' : 'items-start'}`} aria-label={`Equipamentos de ${name}`}>
-        {gear.map((g) => (
-          <li key={g} className="text-[11px] font-combat text-textsec/90 px-2 py-0.5 rounded border border-white/10 bg-white/5">
-            {g}
-          </li>
-        ))}
-      </ul>
     </div>
   )
 }
@@ -415,28 +455,109 @@ function ArenaSection({ glow }: { glow: number }) {
                   <span className="font-combat text-xs text-textsec">TURNO 07</span>
                   <Badge tone="error" className="font-combat">CRÍTICO ×2!</Badge>
                 </div>
-                <div className="flex justify-between items-end gap-4">
+                <div className="flex justify-between items-end gap-3 sm:gap-4">
                   <Fighter
-                    name="Kaelen" level={12} emoji="🧝"
-                    hp={86} hpMax={100} mp={42} mpMax={60} sta={70} staMax={80}
-                    gear={['Lâmina Lunar +3', 'Couraça Élfica', 'Anel de Agilidade']}
+                    name="Sylariel" klass="Maga" level={18} portrait="🧝"
+                    hp={78} hpMax={90} mp={58} mpMax={72} sta={46} staMax={64}
+                    weapon={{ name: 'Cajado da Aurora Arcana', rarity: 'EPIC' }}
+                    armor={[
+                      { name: 'Vestes do Bosque Celeste', rarity: 'RARE' },
+                      { name: 'Coif de Malha', rarity: 'UNCOMMON' },
+                      { name: 'Luvas de Malha', rarity: 'UNCOMMON' },
+                      { name: 'Anel de Cristal Pulsante', rarity: 'RARE' },
+                    ]}
                   />
-                  <div className="flex flex-col items-center gap-3 pb-16 shrink-0">
+                  <div className="flex flex-col items-center gap-3 pb-20 shrink-0">
                     <DiceChip sides={20} value={18} rolling={phase === 'rolling'} />
                     <span className="font-combat text-[10px] text-textsec/70 text-center">
-                      18 + FOR 6<br />vs DEF 13
+                      18 + INT 7<br />vs DEF 13
                     </span>
                   </div>
                   <Fighter
                     reverse hit={hit}
-                    name="Gor'Mak" level={11} emoji="👹"
-                    hp={hit ? 34 : 58} hpMax={110} mp={20} mpMax={30} sta={44} staMax={90}
-                    gear={['Machado Bruto', 'Pele de Troll', 'Totem de Fúria']}
+                    name="Gorrak" klass="Guerreiro" level={19} portrait="👹"
+                    hp={hit ? 40 : 72} hpMax={110} mp={18} mpMax={30} sta={58} staMax={86}
+                    weapon={{ name: 'Esmagador de Gorthak', rarity: 'LEGENDARY' }}
+                    armor={[
+                      { name: 'Couraça de Escamas Ígneas', rarity: 'RARE' },
+                      { name: 'Elmo do Sentinela', rarity: 'UNCOMMON' },
+                      { name: 'Manoplas do Sentinela', rarity: 'UNCOMMON' },
+                      { name: 'Grevas de Aço', rarity: 'UNCOMMON' },
+                    ]}
                   />
                 </div>
               </div>
             </GlassCard>
           </Reveal>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ============================================================
+// Relíquias — vitrine de loot épico & lendário (imagens reais do jogo)
+// ============================================================
+
+const RELICS: { piece: GearPiece; tag: string }[] = [
+  { piece: { name: 'Égide de Gorthak', rarity: 'LEGENDARY' }, tag: 'Armadura pesada' },
+  { piece: { name: 'Esmagador de Gorthak', rarity: 'LEGENDARY' }, tag: 'Machado' },
+  { piece: { name: 'Manto de Vol\'theris', rarity: 'LEGENDARY' }, tag: 'Veste arcana' },
+  { piece: { name: 'Lâmina de Krax-thar', rarity: 'LEGENDARY' }, tag: 'Espada' },
+  { piece: { name: 'Arco de Sylariel', rarity: 'LEGENDARY' }, tag: 'Arco' },
+  { piece: { name: 'Égide do Dragão Ancião', rarity: 'EPIC' }, tag: 'Armadura pesada' },
+  { piece: { name: 'Cajado da Aurora Arcana', rarity: 'EPIC' }, tag: 'Cajado' },
+  { piece: { name: 'Couraça de Escamas Ígneas', rarity: 'RARE' }, tag: 'Armadura pesada' },
+]
+
+function RelicCard({ piece, tag }: { piece: GearPiece; tag: string }) {
+  const r = RARITY_FRAME[piece.rarity]
+  return (
+    <div
+      className={`group relative flex flex-col overflow-hidden rounded-2xl border ${r.ring} bg-surface/40`}
+      style={{ boxShadow: `0 0 22px ${r.glow}` }}
+    >
+      <div className="relative aspect-square overflow-hidden bg-black/50">
+        {/* asset estático /items/<slug>.webp — img simples (sem next/image) */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={itemImagePath(piece.name)}
+          alt={piece.name}
+          loading="lazy"
+          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+        />
+        <span className={`absolute left-2 top-2 inline-flex items-center gap-1 rounded-full border ${r.ring} bg-black/60 px-2 py-0.5 text-[10px] font-bold ${r.text}`}>
+          {r.label} · {r.tier}
+        </span>
+      </div>
+      <div className="flex flex-col gap-0.5 p-3">
+        <h3 className={`text-sm font-bold leading-tight ${r.text}`}>{piece.name}</h3>
+        <span className="font-combat text-[11px] text-textsec">{tag}</span>
+      </div>
+    </div>
+  )
+}
+
+function RelicsSection() {
+  return (
+    <section id="reliquias" className="relative py-24">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 flex flex-col gap-12">
+        <SectionHeading
+          eyebrow="Loot dos chefes"
+          title="Relíquias forjadas em Dolrath"
+          sub="Armaduras e armas épicas e lendárias caem dos chefes de masmorra e das aventuras semanais — cada peça é um NFT seu, pronto para equipar ou negociar no marketplace."
+        />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+          {RELICS.map((rel, i) => (
+            <Reveal key={rel.piece.name} delay={i * 60}>
+              <RelicCard piece={rel.piece} tag={rel.tag} />
+            </Reveal>
+          ))}
+        </div>
+        <div className="flex justify-center">
+          <Badge tone="primary" icon={<Gem size={14} />} className="text-sm px-4 py-1.5">
+            Épico (IV) e Lendário (V) só de chefe
+          </Badge>
         </div>
       </div>
     </section>
@@ -658,6 +779,7 @@ export default function DolrathLanding() {
         <Hero primaryHref={primaryHref} glow={glow} starCount={starCount} spinDice={spinDice} />
         <Features />
         <ArenaSection glow={glow} />
+        <RelicsSection />
         <RacesSection />
         <HowSection />
         <FinalCTA primaryHref={primaryHref} glow={glow} />

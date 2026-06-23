@@ -22,8 +22,6 @@ import {
   NodeScaling,
   NodeLoot,
   ScaledMonster,
-  pickMonster,
-  rollNodeLoot,
   scaleMonster,
 } from '@/lib/dungeonAdventures'
 import {
@@ -175,6 +173,34 @@ interface Banner {
   text: string
 }
 
+// Respostas das rotas servidor-autoritativas (/api/dungeon/run/*).
+interface StepResponse {
+  type: 'find' | 'monster' | 'boss'
+  roll?: number
+  monster?: ScaledMonster
+  loot?: NodeLoot
+  gold?: number
+  cursor?: number
+  stamina?: number
+  pendingCombat?: boolean
+  error?: string
+}
+interface CombatGrant {
+  gold: number
+  killGold: number
+  lootGold: number
+  xp: number
+  loot: NodeLoot
+}
+interface CombatResponse {
+  granted?: CombatGrant
+  finished?: boolean
+  bossDefeated?: boolean
+  leveledUp?: boolean
+  newLevel?: number
+  error?: string
+}
+
 // Efeito restaurador de um consumível a partir dos stats do catálogo.
 function consumableEffect(stats: any): { hp: number; mp: number } {
   const s = stats || {}
@@ -313,7 +339,6 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const totalsRef = useRef(totals)
   totalsRef.current = totals
   const [levelUpMsg, setLevelUpMsg] = useState<string | null>(null)
-  const [xpSaved, setXpSaved] = useState(false)
 
   // ---------- Mapa de exploração (trilha de nós) ----------
   // entrada → (nós menores + sala principal) × salas → covil do boss.
@@ -375,6 +400,14 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   // d20 de sorte do nó atual (define a qualidade do loot pós-combate)
   const lootRollRef = useRef(12)
 
+  // ---------- Sessão SERVIDOR-AUTORITATIVA ----------
+  // O servidor é dono do RNG e do crédito de gold/xp/loot. O cliente guarda só
+  // o runId e o monstro que o servidor rolou para o nó atual (para o combate).
+  const runIdRef = useRef<string | null>(null)
+  const [runReady, setRunReady] = useState(false)
+  const serverMonsterRef = useRef<ScaledMonster | null>(null)
+  const startedRef = useRef(false)
+
   // ---------- Transformação (local, por combate) ----------
   const transformForms = useMemo(() => getRaceTransformations(character.race), [character.race])
   const [transform, setTransform] = useState<{ type: TransformationType; turns: number } | null>(null)
@@ -435,34 +468,44 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       .catch(() => {})
   }, [character.id])
 
-  const persistReward = useCallback((gold: number, itemName?: string, itemDescription?: string, rarity?: string) => {
-    if (gold <= 0 && !itemName) return
-    fetch('/api/inventory/add-exploration-reward', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        characterId: character.id,
-        itemName: itemName || null,
-        itemDescription: itemDescription || null,
-        rarity: rarity || null,
-        gold: gold || 0,
-      }),
-    }).catch(() => {})
-  }, [character.id])
+  // Abre a sessão no servidor (uma vez). O servidor valida posse + gating e
+  // passa a ser dono do RNG/recompensas. Sem runId, a exploração fica travada.
+  useEffect(() => {
+    if (startedRef.current) return
+    startedRef.current = true
+    ;(async () => {
+      try {
+        const res = await fetch('/api/dungeon/run/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ characterId: character.id, dungeonId: dungeon.id }),
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          showBanner('🚫', data?.error || 'Não foi possível entrar na masmorra')
+          return
+        }
+        runIdRef.current = data.runId
+        if (typeof data.stamina === 'number') setStamina(data.stamina)
+        setRunReady(true)
+      } catch {
+        showBanner('⚠️', 'Sem conexão com o servidor')
+      }
+    })()
+  }, [character.id, dungeon.id, showBanner])
 
-  // Aplica o resultado do loot por sorte: ouro + drops (já persistindo no inventário).
-  const applyLoot = useCallback((loot: NodeLoot) => {
+  // Exibe (sem persistir) o espólio que o SERVIDOR já creditou: ouro + drops.
+  const showLoot = useCallback((loot: NodeLoot) => {
     if (loot.gold > 0) {
       setTotals(prev => ({ ...prev, gold: prev.gold + loot.gold }))
-      persistReward(loot.gold)
       pushFloat(`+${loot.gold} 💰`, '#f39c12')
     }
     for (const d of loot.drops) {
-      setTotals(prev => ({ ...prev, items: [...prev.items, d.name] }))
-      persistReward(0, d.name, `Achado em ${dungeon.name}`, d.rarity)
-      pushLog(`${d.emoji} ${d.name}`)
+      const label = d.enhancement ? `${d.name} +${d.enhancement}` : d.name
+      setTotals(prev => ({ ...prev, items: [...prev.items, label] }))
+      pushLog(`${d.emoji} ${label}`)
     }
-  }, [persistReward, pushFloat, pushLog, dungeon.name])
+  }, [pushFloat, pushLog])
 
   // Carrega os consumíveis restauradores (HP/MP) do inventário do personagem.
   const loadConsumables = useCallback(async () => {
@@ -484,21 +527,6 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   }, [character.id])
 
   useEffect(() => { loadConsumables() }, [loadConsumables])
-
-  const persistXp = useCallback(async (xp: number) => {
-    if (xp <= 0) return null
-    try {
-      const res = await fetch(`/api/character/${character.id}/add-xp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ xp }),
-      })
-      if (!res.ok) return null
-      return await res.json()
-    } catch {
-      return null
-    }
-  }, [character.id])
 
   // ---------- Levers de combate (MODELO ENXUTO) ----------
   // Gear conta via TIER (raridade × aprimoramento → escala de poder); atributos da
@@ -614,17 +642,16 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     return 'locked'
   }
 
-  // Resolve um nó: sala principal = monstro garantido; nó menor = chance de
-  // monstro, senão um ACHADO cuja qualidade é definida pela sorte do d20.
-  const buildAndApplyEvent = (roll: number, atIdx: number): ResolvedEvent => {
+  // Monta o card do nó a partir do que o SERVIDOR resolveu (monstro já rolado,
+  // ou achado já creditado). Nenhum RNG ou crédito acontece aqui no cliente.
+  const applyServerEvent = (data: StepResponse, atIdx: number): ResolvedEvent => {
     const sc = scalingAt(atIdx)
-    const lvl = character.level
-    lootRollRef.current = roll // sorte usada também no loot pós-combate
+    lootRollRef.current = data.roll ?? 12
 
-    const monsterEncounter = sc.isMain || (!sc.isBoss && Math.random() < MINOR_MONSTER_CHANCE)
-    if (monsterEncounter) {
+    if (data.type === 'monster' && data.monster) {
       const ev = dungeon.events.find(e => e.kind === 'monster')!
-      const scaled = scaleMonster(pickMonster(dungeon), dungeon, lvl, sc, combatClass)
+      const scaled = data.monster
+      serverMonsterRef.current = scaled
       setNodeEvents(prev => ({ ...prev, [atIdx]: { kind: 'monster', emoji: scaled.emoji } }))
       pushLog(`${ev.icon} ${ev.title} ${scaled.emoji} ${scaled.name} apareceu!`)
       return {
@@ -635,12 +662,13 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       }
     }
 
-    // Nó de achado — o d20 define a sorte do loot.
-    const loot = rollNodeLoot(dungeon, roll, sc.isMain ? 'main' : 'minor', lvl)
-    applyLoot(loot)
+    // Achado — o servidor já creditou ouro/itens; aqui só exibimos.
+    const loot: NodeLoot = data.loot ?? { gold: 0, drops: [] }
+    showLoot(loot)
 
     const hasGear = loot.drops.some(d => d.kind === 'item' || d.kind === 'stone')
     const anyDrop = loot.drops.length > 0 || loot.gold > 0
+    const roll = data.roll ?? 12
     const tier = roll <= 5 ? 'low' : roll <= 13 ? 'mid' : 'high'
     const icon = hasGear ? '🌟' : anyDrop ? '✨' : '🍃'
     const title = hasGear ? 'Grande achado!' : anyDrop ? 'Um bom achado' : 'Nada de útil...'
@@ -662,21 +690,40 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     return { def, text, effects }
   }
 
-  // Botão principal: o token caminha para o próximo nó.
-  const advance = () => {
+  // Botão principal: pede o próximo nó ao SERVIDOR (ele cobra stamina, rola o
+  // d20 e decide monstro/achado/boss), depois anima o resultado recebido.
+  const advance = async () => {
     if (phase !== 'explore' || exploreRolling || moving || eventCard || atBoss) return
+    if (!runReady || !runIdRef.current) return
     const dest = tokenIdx + 1
-    const cost = stepCost(dest)
 
-    if (stamina < cost) {
-      showBanner('😮‍💨', `Stamina insuficiente (precisa de ${cost}⚡) — ela reseta amanhã`)
+    setExploreRolling(true)
+    let data: StepResponse
+    try {
+      const res = await fetch('/api/dungeon/run/step', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ runId: runIdRef.current }),
+      })
+      data = await res.json()
+      if (!res.ok) {
+        setExploreRolling(false)
+        if (res.status === 400) showBanner('😮‍💨', `${data?.error || 'Stamina insuficiente'} — ela reseta amanhã`)
+        else showBanner('⚠️', data?.error || 'Falha ao avançar')
+        return
+      }
+    } catch {
+      setExploreRolling(false)
+      showBanner('⚠️', 'Sem conexão com o servidor')
       return
     }
 
-    // Último passo: chega ao covil do boss (sem rolagem).
-    if (dest === LAST) {
-      setStamina(prev => Math.max(0, prev - cost))
-      persistStamina(cost)
+    if (typeof data.stamina === 'number') setStamina(data.stamina)
+
+    // Covil do boss: o monstro do boss veio do servidor (sem rolagem de d20).
+    if (data.type === 'boss') {
+      setExploreRolling(false)
+      if (data.monster) serverMonsterRef.current = data.monster
       setMoving(true)
       setTokenIdx(dest)
       setNarration('A trilha desemboca no covil. O ar treme... algo antigo se ergue.')
@@ -686,20 +733,16 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       return
     }
 
-    // Nó de evento (menor ou sala principal): rola o d20, anda e revela.
-    setStamina(prev => Math.max(0, prev - cost))
-    persistStamina(cost)
-    setExploreRolling(true)
+    // Nó de evento: anima o d20 que o SERVIDOR rolou e revela.
     setExploreResult(null)
-
-    const result = mkResult(20, 0)
+    const result: DiceResult = { sides: 20, roll: data.roll ?? 12, modifier: 0, total: data.roll ?? 12 }
     later(() => setExploreResult(result), 700)
     later(() => {
       setExploreRolling(false)
       setExploreResult(null)
       setMoving(true)
       setTokenIdx(dest)
-      const resolved = buildAndApplyEvent(result.roll, dest)
+      const resolved = applyServerEvent(data, dest)
       later(() => setMoving(false), 850)
       later(() => setEventCard(resolved), 650)
     }, 2200)
@@ -1047,23 +1090,39 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   }
 
   // ---------- Fim de combate ----------
-  const handleCombatVictory = (m: ScaledMonster) => {
+  // VITÓRIA: o SERVIDOR credita gold do abate + espólio + XP (e avança o cursor).
+  // O cliente só reporta o desfecho e EXIBE o que o servidor devolveu.
+  const handleCombatVictory = async (m: ScaledMonster) => {
     setCombatEnded(true)
     setWinnerId(character.id)
-    setTotals(prev => ({ ...prev, gold: prev.gold + m.goldReward, xp: prev.xp + m.xpReward, kills: prev.kills + 1 }))
-    persistReward(m.goldReward)
-    pushLog(`🏆 Você derrotou ${m.emoji} ${m.name}! +${m.goldReward} 💰 +${m.xpReward} XP`)
 
-    // Espólio do monstro: rolado pela sorte do nó (boss = sorte máxima e mais drops).
-    const nodeKind = m.isBoss ? 'boss' : trailPoints[tokenIdx]?.kind === 'main' ? 'main' : 'minor'
-    const lootRoll = m.isBoss ? 20 : lootRollRef.current
-    const loot = rollNodeLoot(dungeon, lootRoll, nodeKind, character.level)
+    let grant: CombatGrant | null = null
+    let leveledUp = false
+    try {
+      const res = await fetch('/api/dungeon/run/combat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ runId: runIdRef.current, outcome: 'win' }),
+      })
+      const data: CombatResponse = await res.json()
+      if (res.ok) {
+        grant = data.granted ?? null
+        leveledUp = !!data.leveledUp
+        if (leveledUp) setLevelUpMsg('🎉 Você subiu de nível!')
+      }
+    } catch {
+      /* sem conexão: exibe os valores do monstro como fallback visual */
+    }
 
-    // Aplicar loot e guardar para exibição no dialog
-    applyLoot(loot)
+    const killGold = grant?.killGold ?? m.goldReward
+    const xp = grant?.xp ?? m.xpReward
+    const loot: NodeLoot = grant?.loot ?? { gold: 0, drops: [] }
+
+    setTotals(prev => ({ ...prev, gold: prev.gold + killGold, xp: prev.xp + xp, kills: prev.kills + 1 }))
+    pushLog(`🏆 Você derrotou ${m.emoji} ${m.name}! +${killGold} 💰 +${xp} XP`)
+    showLoot(loot)
 
     later(() => {
-      // Fecha o combate e volta para exploração
       setMonster(null)
       setCombatEnded(false)
       if (m.isBoss) {
@@ -1074,15 +1133,13 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
           ? 'A trilha termina adiante. Você sente um olhar antigo cravado em você...'
           : TRANSITIONS[tokenIdx % TRANSITIONS.length])
 
-        // Montar um card visual com TUDO que a vitória rendeu DEPOIS que o
-        // combate fechou: XP, ouro (recompensa do abate + ouro do espólio) e drops.
-        const totalGold = m.goldReward + loot.gold
+        const totalGold = killGold + loot.gold
         const hasGear = loot.drops.some(d => d.kind === 'item' || d.kind === 'stone')
 
         const effects: string[] = []
-        if (m.xpReward > 0) effects.push(`+${m.xpReward} ⭐ XP`)
+        if (xp > 0) effects.push(`+${xp} ⭐ XP`)
         if (totalGold > 0) effects.push(`+${totalGold} 💰`)
-        for (const d of loot.drops) effects.push(`${d.emoji} ${d.name}`)
+        for (const d of loot.drops) effects.push(`${d.emoji} ${d.enhancement ? `${d.name} +${d.enhancement}` : d.name}`)
 
         const def: DungeonEventDef = {
           kind: hasGear ? 'item' : 'gold',
@@ -1099,23 +1156,27 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     }, 2800)
   }
 
+  // DERROTA: avisa o servidor (encerra a run). XP dos abates já foi creditado por kill.
   const handleDefeat = () => {
     setPhase('defeat')
-    // Sem penalidade: o XP acumulado é salvo INTEGRALMENTE (gear/itens já foram salvos na hora).
-    if (!xpSaved && totalsRef.current.xp > 0) {
-      setXpSaved(true)
-      persistXp(totalsRef.current.xp)
+    if (runIdRef.current) {
+      fetch('/api/dungeon/run/combat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ runId: runIdRef.current, outcome: 'lose' }),
+      }).catch(() => {})
     }
   }
 
   const finishRun = async (bossDefeated: boolean) => {
     setPhase('summary')
-    if (!xpSaved && totalsRef.current.xp > 0) {
-      setXpSaved(true)
-      const result = await persistXp(totalsRef.current.xp)
-      if (result?.leveledUp) {
-        setLevelUpMsg(result.message || '🎉 Você subiu de nível!')
-      }
+    // Sair no meio (sem boss): encerra a sessão no servidor.
+    if (!bossDefeated && runIdRef.current) {
+      fetch('/api/dungeon/run/abandon', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ runId: runIdRef.current }),
+      }).catch(() => {})
     }
     if (bossDefeated) {
       pushLog(`👑 ${dungeon.name} conquistada!`)
@@ -1123,6 +1184,14 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   }
 
   const exitRun = () => {
+    // Garante o encerramento da sessão no servidor ao sair.
+    if (runIdRef.current) {
+      fetch('/api/dungeon/run/abandon', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ runId: runIdRef.current }),
+      }).catch(() => {})
+    }
     // HP e MP voltam ao cheio entre runs — só a stamina (orçamento diário) é consumida.
     onExit({ hp: effMaxHp, mp: character.maxMp, stamina })
   }
@@ -1586,7 +1655,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                         <h2 className="text-3xl font-black text-white leading-none">{dungeon.boss.name}</h2>
                         <p className="text-sm text-error/90 font-bold uppercase tracking-wider mt-1 mb-5">{dungeon.boss.title}</p>
                         <button
-                          onClick={() => startCombat(scaleMonster(dungeon.boss, dungeon, character.level, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass))}
+                          onClick={() => startCombat(serverMonsterRef.current ?? scaleMonster(dungeon.boss, dungeon, character.level, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass))}
                           className="w-full py-4 rounded-lg font-black text-white text-lg inline-flex items-center justify-center gap-2 transition-transform active:scale-[0.98] hover:scale-[1.02]"
                           style={{ background: 'linear-gradient(90deg, #e94560, #b91c1c)', boxShadow: '0 0 28px rgba(233,69,96,0.5)' }}
                         >
@@ -1632,7 +1701,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                 <button
                   onClick={
                     atBoss
-                      ? () => startCombat(scaleMonster(dungeon.boss, dungeon, character.level, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass))
+                      ? () => startCombat(serverMonsterRef.current ?? scaleMonster(dungeon.boss, dungeon, character.level, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass))
                       : advance
                   }
                   disabled={exploreRolling || moving || !!eventCard}

@@ -5,7 +5,7 @@
 // - Usado pela experiência nova de masmorras (DungeonRun + BattleScene)
 // ============================================================
 
-import { getDungeonDrops, getDungeonConsumables } from './itemCatalog'
+import { getDungeonConsumables, rollEquipmentDrop, type Rarity } from './itemCatalog'
 import { pickIngredient } from './alchemy'
 import { STONE_NAMES } from './enhancementSystem'
 import { computeLevers, powerScale, deriveGearTier, type CombatClass } from './combatModel'
@@ -579,6 +579,8 @@ export interface LootDrop {
   kind: LootKind
   rarity?: string
   emoji: string
+  /** Equipamento já aprimorado ao cair (ex.: floresta dropa +4..+7). */
+  enhancement?: number
 }
 export interface NodeLoot {
   gold: number
@@ -623,7 +625,55 @@ const NODE_LOOT_MULT: Record<LootNodeKind, { all: number; stone: number; gold: n
 const pickFrom = <T>(arr: T[]): T | undefined => (arr.length ? arr[Math.floor(Math.random() * arr.length)] : undefined)
 const rarityOf = (x: { rarity: unknown }) => String(x.rarity).toUpperCase()
 
-export function rollNodeLoot(dungeon: DungeonDef, roll: number, nodeKind: LootNodeKind, level: number): NodeLoot {
+// 🎁 Raridade de EQUIPAMENTO por masmorra: o que cai em nó normal vs. no chefe.
+// Regra: nó normal NUNCA dropa a raridade-âncora da masmorra; o chefe é quem a libera.
+// Floresta (1ª): nó = comum/incomum; chefe = também raro.
+const DUNGEON_GEAR_RARITY: Record<DungeonId, { node: Rarity[]; boss: Rarity[] }> = {
+  floresta: { node: ['COMMON', 'UNCOMMON'], boss: ['RARE'] },
+  caverna:  { node: ['UNCOMMON', 'RARE'],   boss: ['RARE', 'EPIC'] },
+  pantano:  { node: ['RARE'],               boss: ['EPIC'] },
+  ruinas:   { node: ['RARE', 'EPIC'],       boss: ['EPIC', 'LEGENDARY'] },
+}
+
+// Chance de cair UM equipamento (arma/armadura/acessório) num nó normal, por tier de
+// sorte do d20. Propositalmente baixo: arma/armadura é "achado de sorte" — precisa de
+// sorte na rolagem (tier) E sorte aqui. O chefe segue com chance própria (cfg).
+const NODE_GEAR_CHANCE: Record<LuckTier, number> = { low: 0.05, mid: 0.15, high: 0.30 }
+
+// Quando um equipamento cai num nó, esta é a chance de ele ser INCOMUM de OUTRA classe
+// (item que o personagem atual não equipa) — incentivo a criar/treinar outro herói.
+const CROSS_CLASS_CHANCE = 0.2
+
+// Aprimoramento JÁ embutido no drop, por masmorra. A floresta entrega itens +4..+7
+// (o +7 é raro). null = item cai +0.
+const DUNGEON_DROP_ENH: Record<DungeonId, { min: number; max: number } | null> = {
+  floresta: { min: 4, max: 7 },
+  caverna:  null,
+  pantano:  null,
+  ruinas:   null,
+}
+
+// Sorteia o aprimoramento embutido: pesa para o piso, +max é raro; sorte alta empurra um degrau.
+function rollDropEnhancement(dungeonId: DungeonId, tier: LuckTier): number {
+  const band = DUNGEON_DROP_ENH[dungeonId]
+  if (!band) return 0
+  const r = Math.random()
+  let lvl = band.min
+  if (r > 0.55) lvl = band.min + 1
+  if (r > 0.80) lvl = band.min + 2
+  if (r > 0.94) lvl = band.max
+  if (tier === 'high') lvl = Math.max(lvl, band.min + 1) // sorte alta garante 1 acima do piso
+  return Math.min(band.max, lvl)
+}
+
+export function rollNodeLoot(
+  dungeon: DungeonDef,
+  roll: number,
+  nodeKind: LootNodeKind,
+  level: number,
+  race?: string | null,
+  charClass?: string | null,
+): NodeLoot {
   // roll é o d20 da exploração que determina a qualidade (tier) dos drops
   // RARE e EPIC só aparecem em BOSS
   const tier = luckTier(roll)
@@ -654,36 +704,41 @@ export function rollNodeLoot(dungeon: DungeonDef, roll: number, nodeKind: LootNo
     if (c) drops.push({ name: c.name, kind: 'consumable', rarity: rarityOf(c), emoji: '🧪' })
   }
 
-  // equipamento: COMMON
-  if (Math.random() < cfg.pItemCommon * mult.all) {
-    const all = getDungeonDrops(dungeon.id)
-    const pool = all.filter(i => rarityOf(i) === 'COMMON')
-    const i = pickFrom(pool.length ? pool : all)
-    if (i) drops.push({ name: i.name, kind: 'item', rarity: rarityOf(i), emoji: '📦' })
-  }
-  // equipamento: UNCOMMON
-  if (Math.random() < cfg.pItemUncommon * mult.all) {
-    const all = getDungeonDrops(dungeon.id)
-    const pool = all.filter(i => rarityOf(i) === 'UNCOMMON')
-    const i = pickFrom(pool)
-    if (i) drops.push({ name: i.name, kind: 'item', rarity: rarityOf(i), emoji: '📦' })
+  // 🎁 EQUIPAMENTO: sorteado por ELEGIBILIDADE (classe + raça + nível), nunca um
+  // item aleatório de nível alto. Arma/armadura é "achado de sorte": chance baixa,
+  // gateada pelo tier do d20. O peso de raridade faz COMUM dominar; o item cai já
+  // aprimorado (floresta: +4..+7). Às vezes vem um INCOMUM de OUTRA classe (teaser).
+  const gearRarity = DUNGEON_GEAR_RARITY[dungeon.id]
+  const pushGear = (i: { name: string; rarity: unknown } | null | undefined) => {
+    if (i) drops.push({
+      name: i.name, kind: 'item', rarity: rarityOf(i), emoji: '📦',
+      enhancement: rollDropEnhancement(dungeon.id, tier),
+    })
   }
 
-  // Itens RARE e EPIC só em BOSS
-  if (isBoss) {
-    // equipamento: RARE (só boss)
-    if (Math.random() < cfg.pItemRare * mult.all) {
-      const all = getDungeonDrops(dungeon.id)
-      const pool = all.filter(i => rarityOf(i) === 'RARE')
-      const i = pickFrom(pool)
-      if (i) drops.push({ name: i.name, kind: 'item', rarity: rarityOf(i), emoji: '📦' })
+  if (Math.random() < NODE_GEAR_CHANCE[tier] * mult.all) {
+    if (Math.random() < CROSS_CLASS_CHANCE) {
+      // Incomum de outra classe; se nada elegível (ex.: nível baixo), volta ao próprio.
+      pushGear(
+        rollEquipmentDrop(dungeon.id, level, race, charClass, ['UNCOMMON'], { mode: 'foreign' })
+        ?? rollEquipmentDrop(dungeon.id, level, race, charClass, gearRarity.node, { mode: 'own' })
+      )
+    } else {
+      pushGear(rollEquipmentDrop(dungeon.id, level, race, charClass, gearRarity.node, { mode: 'own' }))
     }
-    // equipamento: EPIC (só boss)
-    if (Math.random() < cfg.pItemEpic * mult.all) {
-      const all = getDungeonDrops(dungeon.id)
-      const pool = all.filter(i => rarityOf(i) === 'EPIC')
-      const i = pickFrom(pool)
-      if (i) drops.push({ name: i.name, kind: 'item', rarity: rarityOf(i), emoji: '📦' })
+  }
+
+  // Gear de raridade superior só em BOSS
+  if (isBoss) {
+    // gear de chefe: chance = soma das chances raro+épico
+    const pBossGear = (cfg.pItemRare + cfg.pItemEpic) * mult.all
+    if (Math.random() < pBossGear) {
+      // Tenta a raridade boa do chefe; se o jogador está subnivelado para ela
+      // (nada elegível), cai para a raridade do nó — chefe nunca volta de mãos vazias.
+      pushGear(
+        rollEquipmentDrop(dungeon.id, level, race, charClass, gearRarity.boss, { mode: 'own' })
+        ?? rollEquipmentDrop(dungeon.id, level, race, charClass, gearRarity.node, { mode: 'own' })
+      )
     }
     // poção raro/épica PRONTA (alternativa ao craft) — chance baixa, só boss
     if (Math.random() < cfg.pItemRare * mult.all) {

@@ -15,6 +15,7 @@ import RepairBench from '@/components/store/RepairBench';
 import AlchemyBench from '@/components/store/AlchemyBench';
 import { getItemVisual, getItemTypeLabel, getItemCategory } from '@/lib/itemVisuals';
 import { formatItemStats } from '@/lib/itemStats';
+import { useGold } from '@/components/providers/GoldProvider';
 
 // Configuração de cada "loja NPC". O ferreiro vende equipamento (armas/armaduras
 // e acessórios) e tem a bancada de reparo; o alquimista vende consumíveis.
@@ -87,6 +88,7 @@ interface PriceFilter {
 export default function ShopView({ kind }: { kind: ShopKind }) {
   const config = SHOP_CONFIG[kind];
   const { data: session } = useSession();
+  const { goldBalance, refreshGoldBalance } = useGold();
   const [items, setItems] = useState<StoreItem[]>([]);
   const [characters, setCharacters] = useState<Character[]>([]);
   const [selectedCharacter, setSelectedCharacter] = useState<string>('');
@@ -263,6 +265,38 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
       }
     } catch (error) {
       console.error('Error fetching user inventory:', error);
+    }
+  };
+
+  // 💰 Compra paga com GOLD OFF-CHAIN (saldo a reivindicar) — sem MetaMask e sem
+  // NFT. O item vira linha normal de inventário; a NFT só nasce ao listar no
+  // marketplace (lazy mint). É o SINK que queima goldBalance antes do claim.
+  const handleBuyWithBalance = async (itemId: string, quantity: number = 1) => {
+    if (!selectedCharacter) {
+      toast.error('Selecione um personagem para receber o item.');
+      return;
+    }
+    const qty = Math.max(1, Math.min(99, Math.floor(quantity || 1)));
+    setLoading(true);
+    try {
+      const res = await fetch('/api/store/purchase-offchain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemId, characterId: selectedCharacter, quantity: qty }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data?.error || 'Falha na compra');
+        return;
+      }
+      toast.success(data?.message || 'Compra concluída!');
+      refreshGoldBalance();
+      setInventoryRefreshKey((k) => k + 1);
+      fetchUserInventory();
+    } catch {
+      toast.error('Erro de conexão na compra');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -972,7 +1006,17 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                           boxShadow: `0 4px 20px ${visual.accentSoft}`,
                         }}
                       >
-                        🛒 Comprar{getQty(item.id) > 1 ? ` ${getQty(item.id)}×` : ''}
+                        🛒 Comprar{getQty(item.id) > 1 ? ` ${getQty(item.id)}×` : ''} <span className="opacity-80 text-xs">(on-chain)</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleBuyWithBalance(item.id, getQty(item.id))}
+                        disabled={loading || (goldBalance ?? 0) < item.goldPrice * getQty(item.id)}
+                        title={(goldBalance ?? 0) < item.goldPrice * getQty(item.id) ? 'Saldo GOLD insuficiente' : 'Paga com seu saldo GOLD, sem MetaMask'}
+                        className="w-full px-4 py-2.5 rounded-xl font-black text-sm text-amber-50 transition-all hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed border border-amber-400/40"
+                        style={{ background: 'linear-gradient(90deg, rgba(245,158,11,0.85), rgba(180,83,9,0.6))' }}
+                      >
+                        💰 Comprar com saldo{getQty(item.id) > 1 ? ` ${getQty(item.id)}×` : ''} ({item.goldPrice * getQty(item.id)} 🪙)
                       </button>
 
                       {ownedQuantity > 0 && selectedCharacter && (

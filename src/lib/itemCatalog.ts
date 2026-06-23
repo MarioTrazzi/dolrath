@@ -311,6 +311,76 @@ export const ITEM_CATALOG: CatalogItem[] = [
   },
 
   // ============================================================
+  // 🏪 LOJA — ANÉIS (acessório básico; 4 builds + superiores). Base comum/incomum
+  //   que também alimenta o espólio de masmorra (drop por elegibilidade).
+  // ============================================================
+  {
+    name: 'Anel de Cobre', description: 'Aro simples de cobre batido; firma o punho do lutador iniciante.',
+    type: 'RING', level: 1, rarity: 'COMMON', goldPrice: 90, source: 'shop', build: 'brute', dungeons: [],
+    stats: { str: 4, hp: 6 },
+  },
+  {
+    name: 'Anel do Batedor', description: 'Aro leve e sem peso, não atrapalha o saque rápido da lâmina.',
+    type: 'RING', level: 1, rarity: 'COMMON', goldPrice: 90, source: 'shop', build: 'agile', dungeons: [],
+    stats: { agi: 4, hp: 4 },
+  },
+  {
+    name: 'Anel de Quartzo', description: 'Pedra bruta que guarda uma fagulha de mana para o aprendiz.',
+    type: 'RING', level: 1, rarity: 'COMMON', goldPrice: 90, source: 'shop', build: 'arcane', dungeons: [],
+    stats: { int: 4, mp: 8 },
+  },
+  {
+    name: 'Anel do Sentinela', description: 'Ferro grosso e sólido que reforça a guarda na linha de frente.',
+    type: 'RING', level: 2, rarity: 'COMMON', goldPrice: 95, source: 'shop', build: 'guardian', dungeons: [],
+    stats: { def: 3, hp: 6 },
+  },
+  {
+    name: 'Anel do Duelista', description: 'Gema afiada lapidada em pontas; premia reflexos e contra-ataques.',
+    type: 'RING', level: 7, rarity: 'UNCOMMON', goldPrice: 360, source: 'shop', build: 'agile', dungeons: [],
+    stats: { agi: 9, hp: 8 },
+  },
+  {
+    name: 'Anel do Brutamontes', description: 'Aro maciço de aço fundido que concentra a força bruta em cada golpe.',
+    type: 'RING', level: 7, rarity: 'UNCOMMON', goldPrice: 360, source: 'shop', build: 'brute', dungeons: [],
+    stats: { str: 9, hp: 10 },
+  },
+
+  // ============================================================
+  // 🏪 LOJA — COLARES (acessório básico; 4 builds + superiores). Mesma ideia dos
+  //   anéis: base comum/incomum que também cai como espólio de masmorra.
+  // ============================================================
+  {
+    name: 'Colar de Osso', description: 'Dente de fera num cordão de couro; talismã dos destemidos.',
+    type: 'NECKLACE', level: 1, rarity: 'COMMON', goldPrice: 90, source: 'shop', build: 'brute', dungeons: [],
+    stats: { str: 3, hp: 10 },
+  },
+  {
+    name: 'Colar do Viajante', description: 'Pingente leve de estanho que acompanha o passo ágil pela estrada.',
+    type: 'NECKLACE', level: 1, rarity: 'COMMON', goldPrice: 90, source: 'shop', build: 'agile', dungeons: [],
+    stats: { agi: 3, hp: 8 },
+  },
+  {
+    name: 'Pingente de Cristal', description: 'Lasca cristalina translúcida que conserva um eco de mana.',
+    type: 'NECKLACE', level: 1, rarity: 'COMMON', goldPrice: 90, source: 'shop', build: 'arcane', dungeons: [],
+    stats: { int: 3, mp: 10 },
+  },
+  {
+    name: 'Amuleto de Ferro', description: 'Placa redonda de ferro gravada com um brasão simples de proteção.',
+    type: 'NECKLACE', level: 2, rarity: 'COMMON', goldPrice: 95, source: 'shop', build: 'guardian', dungeons: [],
+    stats: { def: 3, hp: 8 },
+  },
+  {
+    name: 'Gargantilha de Aço', description: 'Elos de aço temperado que blindam o pescoço exposto na batalha.',
+    type: 'NECKLACE', level: 7, rarity: 'UNCOMMON', goldPrice: 360, source: 'shop', build: 'guardian', dungeons: [],
+    stats: { def: 6, hp: 22 },
+  },
+  {
+    name: 'Colar do Conjurador', description: 'Fios de prata trançados em torno de uma gema que amplia a reserva arcana.',
+    type: 'NECKLACE', level: 7, rarity: 'UNCOMMON', goldPrice: 360, source: 'shop', build: 'arcane', dungeons: [],
+    stats: { int: 6, mp: 22 },
+  },
+
+  // ============================================================
   // 🗝️ MASMORRAS — GEAR DE RAÇA (4 tipos por raça: Raro→Lendário)
   //   Raros caem no chão; ÉPICO e LENDÁRIO só de CHEFE de masmorra.
   //   Masmorras: floresta(1★) · caverna(2★) · pantano(3★) · ruinas(4★)
@@ -984,6 +1054,60 @@ export function rollDungeonDrop(
     // Itens exclusivos de chefe só caem quando o chefe é derrotado.
     if (item.source === 'dungeon_boss' && !fromBoss) return false;
     return true;
+  });
+
+  if (eligible.length === 0) return null;
+
+  const totalWeight = eligible.reduce((sum, i) => sum + RARITY_DROP_WEIGHT[i.rarity], 0);
+  let pick = rng() * totalWeight;
+  for (const item of eligible) {
+    pick -= RARITY_DROP_WEIGHT[item.rarity];
+    if (pick < 0) return item;
+  }
+  return eligible[eligible.length - 1];
+}
+
+/**
+ * Sorteia um EQUIPAMENTO de espólio de masmorra que o personagem realmente
+ * pode usar. Diferente de {@link rollDungeonDrop}, monta o pool por
+ * ELEGIBILIDADE (classe + raça + nível) e por uma lista de raridades permitidas,
+ * para que itens COMUNS/INCOMUNS de fato caiam (a base comum/incomum vem dos
+ * itens-base da loja; o gear próprio da masmorra é RARO+).
+ *
+ *  - `rarities`: raridades liberadas para este sorteio (ex.: nó normal só
+ *    COMMON/UNCOMMON; chefe libera RARE).
+ *  - filtra por nível (item.level <= nível + folga) e por equipabilidade real
+ *    (tipo de arma/peso da classe + exclusividade de raça).
+ *  - pesa por raridade (COMMON domina), então o comum sai bem mais que o incomum.
+ *
+ * Retorna null se nada elegível.
+ */
+export function rollEquipmentDrop(
+  dungeonId: string,
+  characterLevel: number,
+  race: string | null | undefined,
+  charClass: string | null | undefined,
+  rarities: Rarity[],
+  opts: { mode?: 'own' | 'foreign' } = {},
+  rng: () => number = Math.random,
+): CatalogItem | null {
+  const allow = new Set(rarities);
+  const levelCap = characterLevel + 2; // folga pequena: drop útil para o nível atual
+  const mode = opts.mode ?? 'own';
+
+  const eligible = ITEM_CATALOG.filter((item) => {
+    if (!allow.has(item.rarity)) return false;
+    // Pool = gear próprio desta masmorra + itens-base da loja (fonte dos comuns/incomuns).
+    const inDungeon = item.dungeons.includes(dungeonId);
+    const isShopBase = item.source === 'shop';
+    if (!inDungeon && !isShopBase) return false;
+    if (item.level > levelCap) return false;
+    if (mode === 'foreign') {
+      // Espólio "de outra classe": item que ESTA classe NÃO equipa (incentivo a
+      // criar outro personagem). Ignora raça (o teaser pode ser de outra raça).
+      return !canClassEquip(charClass, item.type).ok;
+    }
+    return canEquip(race, charClass, item.type, item.raceRestriction).ok;
   });
 
   if (eligible.length === 0) return null;

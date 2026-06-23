@@ -119,6 +119,7 @@ model User {
   characters    Character[]
   inventory     UserInventory[]
   itemNfts      ItemNft[]
+  dungeonRuns   DungeonRun[]
 }
 
 model UserInventory {
@@ -181,6 +182,7 @@ model Character {
   equipment     CharacterEquipment[]
   inventory     CharacterInventory[]
   history       CharacterHistory[]
+  dungeonRuns   DungeonRun[]
 
   // On-chain payment for creation (testnet: fixed DOL fee; mainnet: will be oracle-priced)
   creationTxHash String?         @unique
@@ -314,4 +316,32 @@ model CharacterHistory {
   @@index([characterId])
   @@index([createdAt])
   @@index([activityType])
+}
+
+// 🏰 Sessão de masmorra SERVIDOR-AUTORITATIVA.
+// O servidor é dono do RNG (d20, loot, stats do monstro), da progressão (cursor)
+// e do crédito de gold/xp. O cliente só envia AÇÕES (avancei, venci o combate);
+// nunca o valor da recompensa. Substitui o faucet client-authoritative que
+// permitia mintar gold arbitrário via add-exploration-reward.
+model DungeonRun {
+  id          String    @id @default(cuid())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  characterId String
+  dungeonId   String
+  status      String    @default("active") // active | finished | defeated | abandoned
+  cursor      Int       @default(0)         // índice do último nó RESOLVIDO (0 = entrada)
+  nodeCount   Int                           // total de nós da trilha (inclui o boss)
+  goldEarned  Int       @default(0)
+  xpEarned    Int       @default(0)
+  // Combate pendente: { nodeIdx, kind, lootRoll, monster } rolado pelo servidor,
+  // aguardando o desfecho (win/lose) reportado pelo cliente.
+  pending     Json?     @db.JsonB
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([characterId])
+  @@index([characterId, status])
 }

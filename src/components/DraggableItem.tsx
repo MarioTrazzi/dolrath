@@ -86,7 +86,7 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, quantity
           {showEnhancement && (
             <span
               style={{
-                position: 'absolute', right: 3, bottom: 1, fontSize: '10px', fontWeight: 700,
+                position: 'absolute', right: 6, bottom: 1, fontSize: '10px', fontWeight: 700,
                 color: '#f1d79a', textShadow: '0 1px 2px #000',
               }}
             >

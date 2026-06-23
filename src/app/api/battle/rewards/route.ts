@@ -146,20 +146,14 @@ function calculateBattleRewards(
 }
 
 export async function POST(request: NextRequest) {
-  // Verificar se é uma chamada interna do servidor (sem autenticação)
-  const userAgent = request.headers.get('user-agent');
-  const isInternalCall = userAgent?.includes('node-fetch') || userAgent?.includes('undici');
-  
-  let userId = null;
-  
-  // Se não é chamada interna, verificar autenticação
-  if (!isInternalCall) {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    userId = session.user.id;
+  // 🔒 Faucet de GOLD: SEMPRE exige sessão autenticada. O antigo "isInternalCall"
+  // por user-agent (node-fetch/undici) era forjável e permitia creditar gold a
+  // qualquer winnerId sem login — removido. Esta rota não tem chamador interno.
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  const userId = session.user.id;
 
   try {
     const battleResult: BattleResult = await request.json();
@@ -179,8 +173,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Characters not found' }, { status: 404 });
     }
 
-    // Verificar autorização apenas se não é chamada interna
-    if (!isInternalCall && userId && winner.userId !== userId && loser.userId !== userId) {
+    // O usuário autenticado precisa ser dono de um dos participantes da luta.
+    if (winner.userId !== userId && loser.userId !== userId) {
       return NextResponse.json({ error: 'Unauthorized for these characters' }, { status: 403 });
     }
 

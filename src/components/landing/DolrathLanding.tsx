@@ -1394,11 +1394,14 @@ function AlchemyDemo() {
   const accent = '#34d399'
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border-2 border-emerald-500/40 bg-gradient-to-br from-emerald-950/40 to-purple-950/30 p-5">
+    <div className="relative flex h-full flex-col overflow-hidden rounded-2xl border-2 border-emerald-500/40 bg-gradient-to-br from-emerald-950/40 to-purple-950/30 p-5">
       <h3 className="mb-1 text-xl font-black text-emerald-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">⚗️ Triângulo de Transmutação</h3>
       <p className="mb-4 text-sm text-white/55">A alquimista junta 3 ingredientes nos vértices; se formarem uma receita, a poção surge no centro e vai pro inventário.</p>
 
-      <div className="relative mx-auto" style={{ width: '100%', maxWidth: 320, aspectRatio: '1 / 0.92' }}>
+      {/* flex-1 + centralizado: o triângulo cresce com a sobra de altura,
+          até casar com a bancada de reparo ao lado (mesma linha do grid). */}
+      <div className="relative flex flex-1 w-full items-center justify-center">
+      <div className="relative w-full" style={{ maxWidth: 320, aspectRatio: '1 / 0.92' }}>
         <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 92" preserveAspectRatio="none" aria-hidden="true">
           <polygon
             points={`${ALCH_PTS.top.x},${ALCH_PTS.top.y} ${ALCH_PTS.left.x},${ALCH_PTS.left.y} ${ALCH_PTS.right.x},${ALCH_PTS.right.y}`}
@@ -1470,6 +1473,7 @@ function AlchemyDemo() {
           </AnimatePresence>
         </div>
       </div>
+      </div>
 
       <div className="mt-4 min-h-[1.5rem] text-center text-sm">
         {crafted ? (
@@ -1492,8 +1496,8 @@ function CraftingSection() {
           sub="Na loja, o ferreiro restaura a durabilidade das suas peças e a alquimista combina ingredientes do loot em poções de combate. Tudo com os mesmos ingredientes que caem nas masmorras."
         />
         <div className="grid items-stretch gap-8 lg:grid-cols-2">
-          <Reveal><RepairDemo /></Reveal>
-          <Reveal delay={120}><AlchemyDemo /></Reveal>
+          <Reveal className="h-full"><RepairDemo /></Reveal>
+          <Reveal delay={120} className="h-full"><AlchemyDemo /></Reveal>
         </div>
       </div>
     </section>

@@ -48,6 +48,14 @@ export const TYPE_STYLE: Record<string, string> = {
   BELT: 'A belt/girdle: a wide waist belt with a prominent engraved metal buckle and hanging straps or pouches, laid out horizontally.',
   CONSUMABLE: 'A consumable: a glass potion vial or alchemical flask with a glowing liquid and a corked or sealed top.',
   ENHANCEMENT_STONE: 'An enhancement stone (Black Desert "black stone" vibe): a single dark, polished obsidian-black stone fragment, faceted and floating, with glowing runic cracks of arcane energy running through it. A runic sigil is etched on its face. NO vial, NO bottle, NO liquid.',
+  // Espólios de alquimia: matéria-prima crua, NÃO a poção pronta.
+  INGREDIENT: 'A raw alchemy reagent shown as a loose apothecary component (herb, root, mushroom, flower, crystal, bone dust, vial of raw essence, monster blood, feather...) resting on the dark backdrop — a natural crafting ingredient, NOT a finished labeled potion.',
+  // Materiais de forja: insumo bruto de ferreiro, NÃO a arma/armadura pronta.
+  MATERIAL: 'A raw blacksmith crafting material shown as a loose forge resource (tanned leather hide, iron ingot, heavy metal block, light metal billet, flexible bow-wood, living tree sap, raw uncut crystal, hardened gem shards...) on the dark backdrop — a smithing reagent, NOT a finished weapon or armor.',
+  // Estilhaço de pedra negra: lasca pequena da black stone, claramente um FRAGMENTO.
+  STONE_SHARD: 'A shard of black enhancement stone: a small, sharp broken sliver of polished obsidian-black stone with glowing runic cracks and a tiny etched sigil, faceted and floating — clearly a FRAGMENT/CHIP, not a whole stone. NO vial, NO bottle, NO liquid.',
+  // Estilhaço de memória: fragmento de cristal translúcido com uma forma fantasma dentro.
+  MEMORY_SHARD: 'A glowing translucent memory fragment: a faceted crystal-glass shard holding a faint ghostly after-image of an ancient weapon and armor swirling inside, pale ethereal blue-white light and drifting motes — a relic of remembered forms. NO vial, NO bottle, NO liquid.',
 };
 
 // Per-rarity treatment — escalates ornamentation and magical aura.

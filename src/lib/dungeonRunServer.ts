@@ -22,7 +22,7 @@ import {
   type LootNodeKind,
 } from './dungeonAdventures'
 import { normalizeCombatClass, type CombatClass } from './combatModel'
-import { getCatalogItemByName, getConsumableByName, getIngredientByName, getForgeMaterialByName } from './itemCatalog'
+import { getCatalogItemByName, getConsumableByName, getIngredientByName, getForgeMaterialByName, itemImagePath } from './itemCatalog'
 
 // Custo de stamina por TIPO de nó (espelha DungeonRun.tsx: MINOR/MAIN/BOSS_STEP_COST).
 export const STEP_COST = { minor: 4, main: 8, boss: 6 } as const
@@ -214,6 +214,7 @@ async function addDropToInventoryTx(
           name: ingredient.name,
           description: ingredient.description,
           type: 'CONSUMABLE',
+          image: itemImagePath(ingredient.name),
           level: 1,
           goldPrice: ingredient.goldValue,
           stats: {
@@ -230,6 +231,7 @@ async function addDropToInventoryTx(
           name: material.name,
           description: material.description,
           type: 'CONSUMABLE',
+          image: itemImagePath(material.name),
           level: 1,
           goldPrice: material.goldValue,
           stats: {

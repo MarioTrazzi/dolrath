@@ -265,5 +265,77 @@
   },
   "Pedra Negra Mágica Concentrada (Armadura)": {
     "file": "/items/pedra-negra-magica-concentrada-armadura.webp"
+  },
+  "Água Pura": {
+    "file": "/items/agua-pura.webp"
+  },
+  "Erva Medicinal": {
+    "file": "/items/erva-medicinal.webp"
+  },
+  "Flor de Mana": {
+    "file": "/items/flor-de-mana.webp"
+  },
+  "Raiz Vigorosa": {
+    "file": "/items/raiz-vigorosa.webp"
+  },
+  "Cogumelo Lunar": {
+    "file": "/items/cogumelo-lunar.webp"
+  },
+  "Seiva Ancestral": {
+    "file": "/items/seiva-ancestral.webp"
+  },
+  "Pó de Osso": {
+    "file": "/items/po-de-osso.webp"
+  },
+  "Cristal de Mana": {
+    "file": "/items/cristal-de-mana.webp"
+  },
+  "Glândula de Veneno": {
+    "file": "/items/glandula-de-veneno.webp"
+  },
+  "Sangue de Monstro": {
+    "file": "/items/sangue-de-monstro.webp"
+  },
+  "Lótus Negra": {
+    "file": "/items/lotus-negra.webp"
+  },
+  "Pena de Fênix": {
+    "file": "/items/pena-de-fenix.webp"
+  },
+  "Essência Cristalina": {
+    "file": "/items/essencia-cristalina.webp"
+  },
+  "Couro": {
+    "file": "/items/couro.webp"
+  },
+  "Ferro": {
+    "file": "/items/ferro.webp"
+  },
+  "Estilhaço de Pedra Negra (Arma)": {
+    "file": "/items/estilhaco-de-pedra-negra-arma.webp"
+  },
+  "Estilhaço de Pedra Negra (Armadura)": {
+    "file": "/items/estilhaco-de-pedra-negra-armadura.webp"
+  },
+  "Ferro Pesado": {
+    "file": "/items/ferro-pesado.webp"
+  },
+  "Metal Leve": {
+    "file": "/items/metal-leve.webp"
+  },
+  "Madeira Flexível": {
+    "file": "/items/madeira-flexivel.webp"
+  },
+  "Seiva de Ent": {
+    "file": "/items/seiva-de-ent.webp"
+  },
+  "Cristal Bruto": {
+    "file": "/items/cristal-bruto.webp"
+  },
+  "Fragmentos de Joias": {
+    "file": "/items/fragmentos-de-joias.webp"
+  },
+  "Estilhaço de Memória": {
+    "file": "/items/estilhaco-de-memoria.webp"
   }
 }

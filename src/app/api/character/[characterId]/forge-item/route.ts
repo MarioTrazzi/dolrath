@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
 import { ItemType } from '@prisma/client'
 import { getForgeRecipeById, getForgeOutputCatalogItem } from '@/lib/forge'
+import { itemImagePath } from '@/lib/itemCatalog'
 import { STONE_NAMES } from '@/lib/enhancementSystem'
 import { addHistoryEntry } from '@/lib/characterHistory'
 
@@ -128,6 +129,7 @@ export async function POST(
               name: catalogItem.name,
               description: catalogItem.description,
               type: catalogItem.type as ItemType,
+              image: itemImagePath(catalogItem.name),
               level: catalogItem.level,
               goldPrice: catalogItem.goldPrice,
               stats: {
@@ -155,6 +157,7 @@ export async function POST(
               name: recipe.outputName,
               description: 'Pedra de aprimoramento refinada na forja.',
               type: 'CONSUMABLE',
+              image: itemImagePath(recipe.outputName),
               level: meta.level,
               goldPrice: meta.goldPrice,
               stats: {

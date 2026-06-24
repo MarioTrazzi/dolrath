@@ -17,8 +17,17 @@
 import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
 
-import { ITEM_CATALOG, CONSUMABLE_CATALOG, itemImageSlug } from '../src/lib/itemCatalog'
+import { ITEM_CATALOG, CONSUMABLE_CATALOG, INGREDIENT_CATALOG, FORGE_MATERIAL_CATALOG, itemImageSlug } from '../src/lib/itemCatalog'
 import { buildItemImagePrompt } from '../src/lib/itemImagePrompt'
+
+// Pseudo-tipo de arte para cada material de forja (só muda o PROMPT; no DB são
+// CONSUMABLE). Estilhaços de pedra = lasca da black stone; memória = fragmento
+// fantasma; o resto = matéria-prima bruta de ferreiro.
+function forgeMaterialArtType(name: string): string {
+  if (name === 'Estilhaço de Memória') return 'MEMORY_SHARD'
+  if (name.startsWith('Estilhaço de Pedra Negra')) return 'STONE_SHARD'
+  return 'MATERIAL'
+}
 
 // ---------- .env (manual, sem depender de dotenv) ----------
 function loadEnv() {
@@ -46,6 +55,8 @@ const valOf = (f: string) => {
 const DRY = has('--dry-run')
 const FORCE = has('--force')
 const ONLY = valOf('--only')
+// Filtra por pseudo-tipo de arte (ex.: --types INGREDIENT,MATERIAL,STONE_SHARD,MEMORY_SHARD).
+const TYPES = valOf('--types')?.split(',').map((t) => t.trim()).filter(Boolean)
 const LIMIT = valOf('--limit') ? parseInt(valOf('--limit')!, 10) : Infinity
 
 // ---------- config ----------
@@ -131,6 +142,14 @@ const subjects: Subject[] = [
     name: c.name, description: c.description, type: 'CONSUMABLE', rarity: c.rarity,
     adventureBoss: c.adventureBoss,
   })),
+  // Ingredientes de alquimia (espólios de craft) — matéria-prima, não poção.
+  ...INGREDIENT_CATALOG.map((i) => ({
+    name: i.name, description: i.description, type: 'INGREDIENT', rarity: i.rarity,
+  })),
+  // Materiais de forja (couro/ferro/especiais + estilhaços + memória).
+  ...FORGE_MATERIAL_CATALOG.map((m) => ({
+    name: m.name, description: m.description, type: forgeMaterialArtType(m.name), rarity: m.rarity,
+  })),
   // Consumíveis legados que vivem só no seed-battle-consumables.ts (nomes que
   // não estão no CONSUMABLE_CATALOG) — gerados para não deixar refs quebradas.
   { name: 'Poção de Mana Grande', description: 'Restaura 50 MP instantaneamente em combate.', type: 'CONSUMABLE', rarity: 'COMMON' as any },
@@ -170,6 +189,7 @@ async function main() {
   let made = 0
   for (const s of subjects) {
     if (ONLY && s.name !== ONLY) continue
+    if (TYPES && !TYPES.includes(s.type)) continue
     if (made >= LIMIT) break
 
     const slug = itemImageSlug(s.name)

@@ -10,11 +10,11 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
-import { motion, useScroll, useTransform, useReducedMotion } from 'framer-motion'
+import { motion, AnimatePresence, useScroll, useTransform, useReducedMotion } from 'framer-motion'
 import {
   Dices, Swords, Shield, Coins, Wallet, Play, Sparkles, ArrowRight, Menu, X,
   Github, Twitter, MessageCircle, Scroll, Wand2, Target, Axe,
-  AlertTriangle, Zap, Gem,
+  AlertTriangle, Zap, Gem, RefreshCw,
 } from 'lucide-react'
 import { Button, Card, GlassCard, Badge, StatBar, SectionHeading, D20, DiceChip, Reveal } from './ui'
 import { itemImagePath } from '@/lib/itemCatalog'
@@ -50,9 +50,6 @@ function GearTile({ piece, size = 'sm', className = '' }: { piece: GearPiece; si
       {/* asset estático /items/<slug>.webp — img simples (sem next/image) */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={itemImagePath(piece.name)} alt={piece.name} loading="lazy" className="w-full h-full object-cover" />
-      <span className={`absolute bottom-0 right-0.5 font-combat text-[9px] font-bold ${r.text}`} style={{ textShadow: '0 1px 2px rgba(0,0,0,0.9)' }}>
-        {r.tier}
-      </span>
     </div>
   )
 }
@@ -235,8 +232,8 @@ function Hero({ primaryHref, glow, starCount, spinDice }: {
             </Reveal>
             <Reveal delay={200}>
               <p className="text-lg text-textsec max-w-xl text-pretty">
-                Crie um personagem que é seu de verdade, equipe-o até os dentes e
-                desça às masmorras. Combate tático por turnos: desperte sua forma —
+                Crie um personagem que é seu de verdade, aprimore seu gear e busque
+                tesouros épicos. Combate tático por turnos: desperte sua forma —
                 Dragão, Celestial e mais — e deixe cada rolagem de dado mudar a batalha.
               </p>
             </Reveal>
@@ -583,7 +580,7 @@ function RelicCard({ piece, tag }: { piece: GearPiece; tag: string }) {
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
         />
         <span className={`absolute left-2 top-2 inline-flex items-center gap-1 rounded-full border ${r.ring} bg-black/60 px-2 py-0.5 text-[10px] font-bold ${r.text}`}>
-          {r.label} · {r.tier}
+          {r.label}
         </span>
       </div>
       <div className="flex flex-col gap-0.5 p-3">
@@ -612,7 +609,7 @@ function RelicsSection() {
         </div>
         <div className="flex justify-center">
           <Badge tone="primary" icon={<Gem size={14} />} className="text-sm px-4 py-1.5">
-            Épico (IV) e Lendário (V) só de chefe
+            Épico e Lendário só de chefe
           </Badge>
         </div>
       </div>
@@ -624,13 +621,23 @@ function RelicsSection() {
 // Raças & Classes
 // ============================================================
 
-// Transformação por raça — espelha RACE_TRANSFORMATIONS do jogo (transformationSystem.ts)
-const RACES = [
-  { emoji: '👤', name: 'Humano', lore: 'Versáteis e ambiciosos — prosperam em qualquer masmorra.', form: '✨ Sétimo Sentido' },
-  { emoji: '👹', name: 'Orc', lore: 'Força bruta forjada em guerra. Bater primeiro é doutrina.', form: null },
-  { emoji: '🧝', name: 'Elfo', lore: 'Séculos de precisão. A flecha já partiu antes de você piscar.', form: '🌟 Celestial' },
-  { emoji: '🐲', name: 'Draconiano', lore: 'Sangue antigo de dragão correndo em veias mortais.', form: '🐉 Dragão' },
-  { emoji: '🌓', name: 'Metamorfo', lore: 'Nenhuma forma é definitiva — escolhe a fera para cada luta.', form: '🐺🐻🦅 Lobo · Urso · Águia' },
+// Cards de raça com NFT real (base ⇄ forma transformada). Espelha
+// RACE_TRANSFORMATIONS / TRANSFORMATION_GLOW do jogo (transformationSystem.ts).
+interface RaceCard {
+  name: string
+  base: string
+  transformed: string
+  formEmoji: string
+  form: string
+  glow: string
+  lore: string
+}
+
+const RACE_CARDS: RaceCard[] = [
+  { name: 'Humano', base: '/humanopvp.png', transformed: '/humano_transformed.png', formEmoji: '✨', form: 'Sétimo Sentido', glow: '#e2e8f0', lore: 'Versáteis e ambiciosos — prosperam em qualquer masmorra.' },
+  { name: 'Elfo', base: '/elfopvp.png', transformed: '/elfo_transformed.png', formEmoji: '🌟', form: 'Celestial', glow: '#fbbf24', lore: 'Séculos de precisão. A flecha já partiu antes de você piscar.' },
+  { name: 'Draconiano', base: '/dracopvp.png', transformed: '/draco_transformed.png', formEmoji: '🐉', form: 'Dragão', glow: '#ef4444', lore: 'Sangue antigo de dragão correndo em veias mortais.' },
+  { name: 'Metamorfo', base: '/metamorfo_pvp.png', transformed: '/metamorfo_transformed.png', formEmoji: '🐺', form: 'Lobo · Urso · Águia', glow: '#93c5fd', lore: 'Nenhuma forma é definitiva — escolhe a fera para cada luta.' },
 ]
 
 const CLASSES = [
@@ -639,6 +646,82 @@ const CLASSES = [
   { Icon: Target, name: 'Arqueiro', lore: 'Crítico e velocidade. Termina lutas antes de começarem.' },
 ]
 
+// Card de NFT que faz flip (base ⇄ transformada) ao clicar no canto inferior
+// direito — mesma interação da ficha do personagem (rotateY + ícone RefreshCw).
+function RaceFlipCard({ card }: { card: RaceCard }) {
+  const reduce = useReducedMotion()
+  const [flipped, setFlipped] = useState(false)
+  const img = flipped ? card.transformed : card.base
+  const toggle = () => setFlipped((f) => !f)
+  return (
+    <div
+      className="group relative flex flex-col overflow-hidden rounded-2xl border bg-surface/40 transition-shadow duration-500"
+      style={{
+        borderColor: flipped ? `${card.glow}99` : 'rgba(255,255,255,0.1)',
+        boxShadow: flipped ? `0 0 28px ${card.glow}55` : '0 0 14px rgba(0,0,0,0.4)',
+      }}
+    >
+      <div
+        className="relative aspect-[3/4] overflow-hidden bg-black/60 cursor-pointer select-none"
+        style={{ perspective: 900 }}
+        onClick={toggle}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle() } }}
+        aria-label={`Alternar entre ${card.name} e a forma ${card.form}`}
+        title="Clique para despertar a transformação"
+      >
+        <AnimatePresence mode="wait" initial={false}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <motion.img
+            key={img}
+            src={img}
+            alt={`${card.name}${flipped ? ` — ${card.form}` : ''}`}
+            loading="lazy"
+            initial={reduce ? false : { rotateY: -90, opacity: 0 }}
+            animate={reduce ? { opacity: 1 } : { rotateY: 0, opacity: 1 }}
+            exit={reduce ? { opacity: 0 } : { rotateY: 90, opacity: 0 }}
+            transition={{ duration: 0.3, ease: 'easeInOut' }}
+            className="absolute inset-0 h-full w-full object-cover object-top"
+            style={{ backfaceVisibility: 'hidden' }}
+          />
+        </AnimatePresence>
+        {/* aura ao despertar a forma */}
+        <span
+          className="pointer-events-none absolute inset-0 transition-opacity duration-500"
+          style={{
+            opacity: flipped ? 1 : 0,
+            boxShadow: `inset 0 0 44px ${card.glow}`,
+            background: `radial-gradient(circle at 50% 26%, ${card.glow}22, transparent 70%)`,
+          }}
+        />
+        {/* selo da forma atual */}
+        <span
+          className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full border bg-black/60 px-2 py-0.5 text-[10px] font-bold backdrop-blur-sm transition-colors"
+          style={{ borderColor: flipped ? card.glow : 'rgba(255,255,255,0.15)', color: flipped ? card.glow : '#cbd5e1' }}
+        >
+          {flipped ? `${card.formEmoji} ${card.form}` : card.name}
+        </span>
+        {/* botão de flip no canto inferior direito */}
+        <span
+          className="absolute bottom-2 right-2 flex h-8 w-8 items-center justify-center rounded-full border bg-black/65 backdrop-blur-sm transition-transform group-hover:scale-110"
+          style={{ borderColor: `${card.glow}99` }}
+          aria-hidden="true"
+        >
+          <RefreshCw size={15} style={{ color: card.glow }} className={flipped ? 'rotate-180 transition-transform' : 'transition-transform'} />
+        </span>
+      </div>
+      <div className="flex flex-col gap-0.5 p-3">
+        <h3 className="text-sm font-bold leading-tight text-white">{card.name}</h3>
+        <p className="text-[11px] text-textsec leading-relaxed">{card.lore}</p>
+        <span className="font-combat text-[10px] text-primary/90 pt-0.5">
+          Forma: {card.formEmoji} {card.form}
+        </span>
+      </div>
+    </div>
+  )
+}
+
 function RacesSection() {
   return (
     <section id="racas" className="relative py-24 bg-secondary/40">
@@ -646,21 +729,19 @@ function RacesSection() {
         <SectionHeading
           eyebrow="Raças, Classes & Transformações"
           title="Quem você será quando a lua subir?"
-          sub="Cinco raças e três classes para combinar. Cada raça desperta uma transformação de combate — temporária, custa MP e Stamina, e muda seus atributos enquanto libera habilidades especiais."
+          sub="Cada herói é um NFT que você cria de verdade. Clique no canto inferior direito do card para despertar a transformação de combate da raça — temporária, custa MP e Stamina, muda seus atributos e libera habilidades especiais."
         />
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-          {RACES.map((r, i) => (
-            <Reveal key={r.name} delay={i * 60}>
-              <GlassCard hover className="p-5 h-full flex flex-col gap-2 text-center items-center">
-                <span className="text-4xl" aria-hidden="true">{r.emoji}</span>
-                <h3 className="font-semibold text-white">{r.name}</h3>
-                <p className="text-xs text-textsec leading-relaxed">{r.lore}</p>
-                <span className="mt-auto pt-1 font-combat text-[10px] text-primary/90">
-                  {r.form ? `Forma: ${r.form}` : 'Sem transformação'}
-                </span>
-              </GlassCard>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+          {RACE_CARDS.map((card, i) => (
+            <Reveal key={card.name} delay={i * 70}>
+              <RaceFlipCard card={card} />
             </Reveal>
           ))}
+        </div>
+        <div className="flex justify-center">
+          <Badge tone="neutral" icon={<Swords size={14} />} className="text-sm px-4 py-1.5">
+            + Orc — fúria pura, sem transformação
+          </Badge>
         </div>
         <div className="grid sm:grid-cols-3 gap-4 max-w-4xl mx-auto w-full">
           {CLASSES.map((c, i) => (

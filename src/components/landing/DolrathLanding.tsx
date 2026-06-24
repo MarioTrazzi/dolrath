@@ -209,8 +209,8 @@ function Navbar({ primaryHref }: { primaryHref: string }) {
 // Hero
 // ============================================================
 
-function Hero({ primaryHref, glow, starCount, spinDice }: {
-  primaryHref: string; glow: number; starCount: number; spinDice: boolean
+function Hero({ primaryHref, spinDice }: {
+  primaryHref: string; spinDice: boolean
 }) {
   const reduce = useReducedMotion()
   const spin = spinDice && !reduce
@@ -227,7 +227,6 @@ function Hero({ primaryHref, glow, starCount, spinDice }: {
       {/* Scrims: escurece a faixa esquerda (texto) e funde no fundo da seção. */}
       <div className="absolute inset-0 bg-gradient-to-r from-background via-background/85 to-background/25" />
       <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-background/30" />
-      <ArenaSky starCount={starCount} glow={glow} moon={false} />
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 w-full">
         <div className="grid lg:grid-cols-[1.2fr_0.8fr] items-center gap-12">
           <div className="flex flex-col items-start gap-6 max-w-2xl">
@@ -938,17 +937,18 @@ function EnhancementDemo() {
       <div className="mb-4 grid grid-cols-2 gap-3">
         <div className="rounded-lg border border-white/10 bg-black/40 p-3 text-center">
           <div className="text-xs uppercase tracking-wide text-gray-500">Chance de sucesso</div>
-          <div className="mt-1 text-2xl font-bold text-yellow-400">42.0%</div>
+          <div className="mt-1 text-2xl font-bold text-yellow-400">24.0%</div>
         </div>
         <div className="rounded-lg border border-white/10 bg-black/40 p-3 text-center">
           <div className="text-xs uppercase tracking-wide text-gray-500">Failstacks</div>
-          <div className="mt-1 text-2xl font-bold text-purple-400">🔥 7</div>
+          <div className="mt-1 text-2xl font-bold text-purple-400">🔥 41</div>
         </div>
       </div>
 
-      {/* Barra de aprimoramento (carrega → brilha) */}
-      {phase !== 'ready' && (
-        <div className="relative mb-4">
+      {/* Barra de aprimoramento (carrega → brilha). Altura reservada (min-h)
+          para o card não mudar de tamanho entre as fases e empurrar a landing. */}
+      <div className="relative mb-4 min-h-[5.5rem]">
+        {phase !== 'ready' && (
           <div className="relative z-20">
             <div className="mb-1 text-center text-sm font-semibold">
               {phase === 'charging' ? (
@@ -986,12 +986,44 @@ function EnhancementDemo() {
               </motion.div>
             )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Botão (decorativo, espelha o diálogo) */}
       <div className="w-full rounded-lg bg-gradient-to-r from-amber-600 to-amber-500 py-3 text-center text-lg font-bold text-black shadow-lg shadow-amber-900/50">
         ⚒️ Aprimorar
+      </div>
+    </div>
+  )
+}
+
+// Materiais de aprimoramento da ARMA exibidos abaixo do demo (espelham o
+// catálogo: Pedra Negra básica sobe +1..+15; a Concentrada sobe os níveis
+// romanos PRI→PEN e empilha failstacks para os saltos finais como o TET).
+const ENHANCE_STONES = [
+  { name: 'Pedra Negra (Arma)', note: 'Sobe a arma de +1 a +15' },
+  { name: 'Pedra Negra Mágica Concentrada (Arma)', note: 'Saltos I→V (PRI→PEN) e acumula failstacks' },
+] as const
+
+function EnhancementStones() {
+  return (
+    <div className="w-full max-w-md rounded-xl border border-amber-500/20 bg-black/30 p-4">
+      <p className="mb-3 text-center text-xs uppercase tracking-wide text-gray-500">
+        Materiais para forjar a arma
+      </p>
+      <div className="grid grid-cols-2 gap-3">
+        {ENHANCE_STONES.map((s) => (
+          <div key={s.name} className="flex items-center gap-3 rounded-lg border border-white/10 bg-black/40 p-2.5">
+            <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-amber-500/40 bg-black/40">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={itemImagePath(s.name)} alt={s.name} loading="lazy" className="h-full w-full object-cover" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs font-semibold text-amber-200">{s.name}</div>
+              <div className="text-[11px] leading-tight text-white/50">{s.note}</div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -1007,8 +1039,9 @@ function EnhancementSection() {
           sub="Aprimoramento estilo Black Desert: cada tentativa acumula failstacks e arrisca a durabilidade. A barra carrega, e no fim — brilho dourado de sucesso ou a falha. No combate da masmorra o +N vira atributos reais."
         />
         <div className="grid items-center gap-10 lg:grid-cols-2">
-          <Reveal className="flex justify-center">
+          <Reveal className="flex flex-col items-center gap-4">
             <EnhancementDemo />
+            <EnhancementStones />
           </Reveal>
           <Reveal delay={120} className="grid gap-4 sm:grid-cols-2">
             {([
@@ -1051,14 +1084,14 @@ function RepairDemo() {
   return (
     <div className="relative overflow-hidden rounded-2xl border-2 border-amber-500/40 bg-gradient-to-br from-amber-950/40 to-black/50 p-5">
       <h3 className="mb-1 text-xl font-black text-amber-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">🔧 Bancada de Reparo</h3>
-      <p className="mb-5 text-sm text-white/55">O ferreiro restaura a durabilidade queimando uma cópia nível 0 da peça — +10 por cópia, ou 100% de uma vez.</p>
+      <p className="mb-5 text-sm text-white/55">Em itens comuns e incomuns, o ferreiro restaura a durabilidade queimando uma cópia nível 0 da peça — +10 por cópia, ou 100% de uma vez. Relíquias mais raras seguem outro caminho.</p>
 
       {/* dois slots da forja: item + cópia */}
       <div className="mb-4 flex items-center justify-center gap-4">
         <div className="flex flex-col items-center gap-1">
           <div className="h-20 w-20 overflow-hidden rounded-xl border-2 border-amber-500/60 bg-black/40">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={itemImagePath('Égide do Dragão Ancião')} alt="" className="h-full w-full object-cover" loading="lazy" />
+            <img src={itemImagePath('Armadura de Couro Batido')} alt="" className="h-full w-full object-cover" loading="lazy" />
           </div>
           <span className="text-[10px] text-white/50">item</span>
         </div>
@@ -1066,7 +1099,7 @@ function RepairDemo() {
         <div className="flex flex-col items-center gap-1">
           <div className="relative h-20 w-20 overflow-hidden rounded-xl border-2 border-dashed border-amber-500/60 bg-black/40">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={itemImagePath('Égide do Dragão Ancião')} alt="" className="h-full w-full object-cover grayscale" loading="lazy" />
+            <img src={itemImagePath('Armadura de Couro Batido')} alt="" className="h-full w-full object-cover grayscale" loading="lazy" />
             <span className="absolute bottom-0.5 right-1 rounded bg-black/70 px-1.5 text-xs font-bold text-amber-300">x1</span>
           </div>
           <span className="text-[10px] text-white/50">cópia nível 0</span>
@@ -1417,7 +1450,7 @@ function FinalCTA({ primaryHref, glow }: { primaryHref: string; glow: number }) 
       <img
         src="/boss-ancia-da-mata.webp"
         alt="Anciã da Mata, a Guardiã Corrompida — chefe da Floresta Sombria"
-        className="pointer-events-none select-none absolute right-0 top-1/2 -translate-y-1/2 h-[125%] w-auto max-w-none opacity-40 hidden md:block [mask-image:linear-gradient(to_left,black_30%,transparent)]"
+        className="pointer-events-none select-none absolute right-0 top-1/2 -translate-y-1/2 h-[125%] w-auto max-w-none opacity-65 hidden md:block [mask-image:linear-gradient(to_left,black_55%,transparent)]"
       />
       <div className="relative mx-auto max-w-3xl px-4 sm:px-6 flex flex-col items-center gap-7 text-center">
         <D20 size={72} value={20} />
@@ -1511,7 +1544,6 @@ export default function DolrathLanding() {
   // Entrada no app: logado vai ao dashboard, senão ao login (espelha a home antiga)
   const primaryHref = session ? '/dashboard' : '/auth/login'
   const glow = 1
-  const starCount = 40
   const spinDice = true
 
   return (
@@ -1524,7 +1556,7 @@ export default function DolrathLanding() {
       </a>
       <Navbar primaryHref={primaryHref} />
       <main id="conteudo">
-        <Hero primaryHref={primaryHref} glow={glow} starCount={starCount} spinDice={spinDice} />
+        <Hero primaryHref={primaryHref} spinDice={spinDice} />
         <Features />
         <ArenaSection glow={glow} />
         <DungeonsSection />

@@ -1292,10 +1292,12 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     if (stage === 'playerRoll' && !hasRolled) return fire(handlePlayerAttackRoll, 550)
 
     if (stage === 'playerDefense') return fire(() => {
-      // Defender (mitiga sempre) só quando MUITO ferido (HP < 40%) e há stamina — senão
-      // Esquivar (grátis). Antes defendia a 50% e drenava stamina demais.
+      // Defender (mitiga sempre, custa 1⚡) só quando MUITO ferido (HP < 40%) E ainda há
+      // stamina sobrando (≥ 40% do máximo). Abaixo disso, sempre Esquivar (grátis) para
+      // preservar a stamina da run. Senão, Esquivar.
       const hurt = hpRef.current < effMaxHp * 0.4
-      choosePlayerDefense(hurt && stamina >= DEFEND_STAMINA_COST ? 'defend' : 'dodge')
+      const hasStamina = stamina >= character.maxStamina * 0.4 && stamina >= DEFEND_STAMINA_COST
+      choosePlayerDefense(hurt && hasStamina ? 'defend' : 'dodge')
     }, 650)
 
     if (stage === 'defenseRoll' && !hasRolled) return fire(handleDefenseRoll, 550)

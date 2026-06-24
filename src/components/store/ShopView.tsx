@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
@@ -86,9 +86,10 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
   const config = SHOP_CONFIG[kind];
   const { data: session } = useSession();
   const { refreshGoldBalance } = useGold();
-  // Saldo GOLD OFF-CHAIN (User.goldBalance) — é ESTE que a loja gasta. O useGold()
-  // mostra o saldo ON-CHAIN (tokens já reivindicados), que não serve para comprar.
-  const [offchainGold, setOffchainGold] = useState<number | null>(null);
+  // Carteira do PERSONAGEM selecionado (Character.gold) — é ESTE saldo que a loja
+  // gasta no modelo do banco. Para usar o gold do banco, o jogador saca em
+  // /inventory. O useGold() mostra o on-chain (claimado), que não compra. [[bank]]
+  const [characterGold, setCharacterGold] = useState<number | null>(null);
   const [items, setItems] = useState<StoreItem[]>([]);
   const [characters, setCharacters] = useState<Character[]>([]);
   const [selectedCharacter, setSelectedCharacter] = useState<string>('');
@@ -210,19 +211,21 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
   useEffect(() => {
     fetchCharacters();
     fetchUserInventory();
-    fetchOffchainGold();
   }, []);
 
-  // Saldo off-chain (User.goldBalance) — fonte de verdade do que a loja gasta.
-  const fetchOffchainGold = async () => {
+  // Carteira do personagem selecionado (Character.gold) — o que a loja gasta.
+  const fetchCharacterGold = useCallback(async (characterId: string) => {
+    if (!characterId) { setCharacterGold(null); return; }
     try {
-      const res = await fetch('/api/gold/status');
+      const res = await fetch('/api/bank/status');
       if (!res.ok) return;
       const data = await res.json();
-      const n = Number(data?.offchainBalance ?? 0);
-      setOffchainGold(Number.isFinite(n) ? n : 0);
+      const c = (Array.isArray(data?.characters) ? data.characters : []).find((x: any) => x.id === characterId);
+      setCharacterGold(c ? Number(c.gold ?? 0) : 0);
     } catch { /* silencioso */ }
-  };
+  }, []);
+
+  useEffect(() => { fetchCharacterGold(selectedCharacter); }, [selectedCharacter, fetchCharacterGold]);
 
   // Recarrega a vitrine sempre que o personagem ativo (ou o toggle) muda,
   // filtrando pela raça do personagem por padrão.
@@ -302,8 +305,8 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
         return;
       }
       toast.success(data?.message || 'Compra concluída!');
-      if (typeof data?.goldBalance === 'number') setOffchainGold(data.goldBalance);
-      else fetchOffchainGold();
+      if (typeof data?.characterGold === 'number') setCharacterGold(data.characterGold);
+      else fetchCharacterGold(selectedCharacter);
       refreshGoldBalance();
       setInventoryRefreshKey((k) => k + 1);
       fetchUserInventory();
@@ -650,7 +653,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
               </select>
 
               <span className="text-sm font-semibold text-amber-300 bg-amber-500/10 border border-amber-400/30 rounded-lg px-3 py-2">
-                Saldo: {offchainGold === null ? '…' : offchainGold} 🪙
+                Carteira: {characterGold === null ? '…' : characterGold} 🪙
               </span>
 
               {/* Toggle de filtro por raça e level */}
@@ -803,8 +806,8 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
 
                       <button
                         onClick={() => handleBuyWithBalance(item.id, getQty(item.id))}
-                        disabled={loading || (offchainGold ?? 0) < item.goldPrice * getQty(item.id)}
-                        title={(offchainGold ?? 0) < item.goldPrice * getQty(item.id) ? 'Saldo GOLD insuficiente' : 'Paga com seu saldo GOLD'}
+                        disabled={loading || (characterGold ?? 0) < item.goldPrice * getQty(item.id)}
+                        title={(characterGold ?? 0) < item.goldPrice * getQty(item.id) ? 'Saldo do personagem insuficiente — saque do banco em /inventário' : 'Paga com a carteira do personagem'}
                         className="w-full px-4 py-2.5 rounded-xl font-black text-sm text-white transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                         style={{
                           background: `linear-gradient(90deg, ${visual.accent}cc, ${visual.accent}77)`,

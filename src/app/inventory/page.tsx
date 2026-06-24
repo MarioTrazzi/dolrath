@@ -9,6 +9,7 @@ import EnhancementDialog from '@/components/EnhancementDialog';
 import VaultBackdrop from '@/components/inventory/VaultBackdrop';
 import { DraggableItem } from '@/components/DraggableItem';
 import { CharacterItemGrid } from '@/components/inventory/CharacterItemGrid';
+import BankPanel from '@/components/inventory/BankPanel';
 
 interface Item {
   id: string;
@@ -407,6 +408,9 @@ export default function InventoryPage() {
           </h1>
           <p className="text-text-secondary">Gerencie seus itens e equipamentos</p>
         </div>
+
+        {/* 🏦 Banco: poupança da conta + carteira de cada personagem */}
+        <BankPanel />
 
         {/* Character Selection */}
         {characters.length > 0 && (

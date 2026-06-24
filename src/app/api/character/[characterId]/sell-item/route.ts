@@ -51,7 +51,9 @@ export async function POST(
     const goldEarned = unitPrice * qty
     const displayName = getDisplayName(inventoryItem.item.name, inventoryItem.enhancementLevel)
 
-    const updatedUser = await prisma.$transaction(async (tx) => {
+    // O gold da venda vai pra CARTEIRA DO PERSONAGEM (Character.gold). Para dar
+    // claim, o jogador deposita no banco em /inventory. [[bank — Opção B]]
+    const updatedChar = await prisma.$transaction(async (tx) => {
       if (inventoryItem.quantity > qty) {
         await tx.characterInventory.update({
           where: { id: inventoryItem.id },
@@ -62,13 +64,13 @@ export async function POST(
       }
 
       if (goldEarned > 0) {
-        return tx.user.update({
-          where: { id: session.user.id },
-          data: { goldBalance: { increment: goldEarned } },
-          select: { goldBalance: true },
+        return tx.character.update({
+          where: { id: params.characterId },
+          data: { gold: { increment: goldEarned } },
+          select: { gold: true },
         })
       }
-      return tx.user.findUnique({ where: { id: session.user.id }, select: { goldBalance: true } })
+      return tx.character.findUnique({ where: { id: params.characterId }, select: { gold: true } })
     })
 
     try {
@@ -87,7 +89,7 @@ export async function POST(
       success: true,
       sold: qty,
       goldEarned,
-      goldBalance: updatedUser?.goldBalance ?? null,
+      characterGold: updatedChar?.gold ?? null,
       message: `💰 Vendeu ${qty}x ${displayName} por ${goldEarned} gold!`,
     })
   } catch (error) {

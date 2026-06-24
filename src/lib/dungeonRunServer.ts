@@ -132,16 +132,23 @@ async function dungeonGoldCreditedToday(tx: Prisma.TransactionClient, userId: st
   return agg._sum.goldEarned ?? 0
 }
 
-// Credita ouro no goldBalance respeitando o teto diário; devolve o quanto foi
-// REALMENTE creditado (pode ser menos que o pedido, ou 0 se o teto já estourou).
-async function creditCappedGoldTx(tx: Prisma.TransactionClient, userId: string, amount: number): Promise<number> {
+// Credita ouro na CARTEIRA DO PERSONAGEM (Character.gold — "dinheiro na mão"),
+// respeitando o teto diário POR USUÁRIO. Devolve quanto foi realmente creditado
+// (pode ser menos, ou 0 se o teto estourou). O personagem leva o gold pra loja;
+// para dar claim, deposita no banco (User.goldBalance). [[bank model — Opção B]]
+async function creditCappedGoldTx(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  characterId: string,
+  amount: number,
+): Promise<number> {
   const want = Math.max(0, Math.floor(amount))
   if (want <= 0) return 0
   const creditedToday = await dungeonGoldCreditedToday(tx, userId)
   const remaining = Math.max(0, dungeonDailyGoldCap() - creditedToday)
   const give = Math.min(want, remaining)
   if (give > 0) {
-    await tx.user.update({ where: { id: userId }, data: { goldBalance: { increment: give } } })
+    await tx.character.update({ where: { id: characterId }, data: { gold: { increment: give } } })
   }
   return give
 }
@@ -255,17 +262,22 @@ export async function applyLootTx(
   characterId: string,
   loot: NodeLoot,
 ): Promise<number> {
-  // Ouro respeita o teto diário; os drops (itens) sempre entram.
-  const credited = await creditCappedGoldTx(tx, userId, loot.gold)
+  // Ouro vai pra carteira do personagem (com teto diário); drops (itens) sempre entram.
+  const credited = await creditCappedGoldTx(tx, userId, characterId, loot.gold)
   for (const d of loot.drops) {
     await addDropToInventoryTx(tx, characterId, { name: d.name, rarity: d.rarity, enhancement: d.enhancement })
   }
   return credited
 }
 
-// Credita ouro avulso (recompensa de abate do monstro), respeitando o teto diário.
-export async function creditGoldTx(tx: Prisma.TransactionClient, userId: string, gold: number): Promise<number> {
-  return creditCappedGoldTx(tx, userId, gold)
+// Credita ouro avulso (recompensa de abate do monstro) na carteira do personagem.
+export async function creditGoldTx(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  characterId: string,
+  gold: number,
+): Promise<number> {
+  return creditCappedGoldTx(tx, userId, characterId, gold)
 }
 
 // Serializa o monstro para o cliente animar (mesma forma do ScaledMonster).

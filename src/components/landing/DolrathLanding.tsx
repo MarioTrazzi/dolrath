@@ -922,9 +922,11 @@ function DungeonsSection() {
           title="Oito terras perigosas. Quatro já abertas."
           sub="Escolha uma masmorra e siga a trilha: role o d20 a cada nó, enfrente salas com monstros e chegue ao boss. Cada masmorra é um band de níveis — da Floresta (Nv.1) à Cidadela de Dolrath (Nv.100). Mais quatro estão em construção."
         />
-        <div className="grid items-start gap-10 lg:grid-cols-[1fr_0.8fr]">
-          {/* cards menores — mesma identidade do jogo; clicar troca o mapa */}
-          <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid items-start gap-10 lg:items-stretch lg:grid-cols-[1fr_0.8fr]">
+          {/* cards menores — mesma identidade do jogo; clicar troca o mapa.
+              lg:h-full + lg:auto-rows-fr fazem a grade crescer até a altura
+              do mapa ao lado, distribuindo o espaço extra entre as 4 linhas. */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:h-full lg:auto-rows-fr">
             {DUNGEON_CARDS.map((d, i) => {
               const sel = i === active
               return (
@@ -932,7 +934,7 @@ function DungeonsSection() {
                   key={d.id}
                   onClick={() => setActive(i)}
                   aria-pressed={sel}
-                  className="relative overflow-hidden rounded-2xl border-2 p-4 text-left transition-all hover:scale-[1.02]"
+                  className="relative flex h-full flex-col justify-between overflow-hidden rounded-2xl border-2 p-5 text-left transition-all hover:scale-[1.02]"
                   style={{
                     borderColor: sel ? d.accent : `${d.accent}44`,
                     background: `linear-gradient(150deg, ${d.accent}22, rgba(12,12,28,0.85))`,
@@ -948,8 +950,10 @@ function DungeonsSection() {
                       <div className="mt-0.5 text-[10px] text-white/55">{d.rooms} salas + 👑</div>
                     </div>
                   </div>
-                  <h3 className="mt-2 text-base font-black text-white">{d.name}</h3>
-                  <p className="text-[11px] italic text-white/60">{d.tagline}</p>
+                  <div>
+                    <h3 className="mt-2 text-base font-black text-white">{d.name}</h3>
+                    <p className="text-[11px] italic text-white/60">{d.tagline}</p>
+                  </div>
                   <div className="mt-2 flex items-center justify-between">
                     <span className="font-combat text-[10px]" style={{ color: d.accent }}>👑 {d.boss}</span>
                     <span className="font-combat text-[10px] text-white/50">Nv. {d.levelReq}+</span>
@@ -963,7 +967,7 @@ function DungeonsSection() {
               <div
                 key={d.id}
                 aria-disabled="true"
-                className="relative cursor-not-allowed overflow-hidden rounded-2xl border-2 border-dashed p-4 text-left opacity-70 grayscale-[0.35]"
+                className="relative flex h-full cursor-not-allowed flex-col justify-between overflow-hidden rounded-2xl border-2 border-dashed p-5 text-left opacity-70 grayscale-[0.35]"
                 style={{
                   borderColor: `${d.accent}55`,
                   background: `linear-gradient(150deg, ${d.accent}14, rgba(12,12,28,0.9))`,
@@ -978,8 +982,10 @@ function DungeonsSection() {
                     <Lock size={9} /> Em breve
                   </span>
                 </div>
-                <h3 className="mt-2 text-base font-black text-white/85">{d.name}</h3>
-                <p className="text-[11px] italic text-white/45">{d.tagline}</p>
+                <div>
+                  <h3 className="mt-2 text-base font-black text-white/85">{d.name}</h3>
+                  <p className="text-[11px] italic text-white/45">{d.tagline}</p>
+                </div>
                 <div className="mt-2 flex items-center justify-between">
                   <span className="font-combat text-[10px] text-white/40">👑 {d.boss}</span>
                   <span className="font-combat text-[10px]" style={{ color: d.accent }}>Nv. {d.levelReq}+</span>
@@ -1109,6 +1115,11 @@ function EnhancementDemo() {
   }, [phase, reduce])
 
   const success = phase === 'success'
+  // Ao bater o sucesso (III→IV·TET), o failstack zera e a chance despenca pra
+  // 1% — a próxima tentativa real seria pro salto V·PEN, o mais difícil do jogo.
+  // No próximo run o loop volta ao estado inicial (24%/41) e recomeça a escalada.
+  const chance = success ? 1.0 : 24.0
+  const failstacks = success ? 0 : 41
 
   return (
     <div className="w-full max-w-md rounded-xl border border-amber-500/30 bg-gradient-to-b from-gray-900 to-gray-950 p-6 shadow-2xl shadow-amber-900/30">
@@ -1149,15 +1160,18 @@ function EnhancementDemo() {
         </div>
       </div>
 
-      {/* Chance + failstacks */}
+      {/* Chance + failstacks — zeram/despencam no instante do sucesso (próximo
+          salto seria V·PEN); o run seguinte volta ao estado inicial. */}
       <div className="mb-4 grid grid-cols-2 gap-3">
         <div className="rounded-lg border border-white/10 bg-black/40 p-3 text-center">
           <div className="text-xs uppercase tracking-wide text-gray-500">Chance de sucesso</div>
-          <div className="mt-1 text-2xl font-bold text-yellow-400">24.0%</div>
+          <div className={`mt-1 text-2xl font-bold ${success ? 'text-red-400' : 'text-yellow-400'}`}>{chance.toFixed(1)}%</div>
+          <div className="mt-0.5 h-3 text-[10px] text-red-300/70">{success ? 'próx.: V · PEN' : ' '}</div>
         </div>
         <div className="rounded-lg border border-white/10 bg-black/40 p-3 text-center">
           <div className="text-xs uppercase tracking-wide text-gray-500">Failstacks</div>
-          <div className="mt-1 text-2xl font-bold text-purple-400">🔥 41</div>
+          <div className={`mt-1 text-2xl font-bold ${success ? 'text-gray-500' : 'text-purple-400'}`}>🔥 {failstacks}</div>
+          <div className="mt-0.5 h-3 text-[10px] text-white/40">{success ? 'zerado no sucesso' : ' '}</div>
         </div>
       </div>
 
@@ -1213,37 +1227,13 @@ function EnhancementDemo() {
   )
 }
 
-// Materiais de aprimoramento da ARMA exibidos abaixo do demo (espelham o
-// catálogo: Pedra Negra básica sobe +1..+15; a Concentrada sobe os níveis
-// romanos PRI→PEN e empilha failstacks para os saltos finais como o TET).
+// Materiais de aprimoramento da ARMA — jogados pra lateral, como mais dois
+// cards no mesmo grid (e padrão visual) dos cards de explicação ao lado do
+// dialog, em vez de um painel separado embaixo do demo.
 const ENHANCE_STONES = [
   { name: 'Pedra Negra (Arma)', note: 'Sobe a arma de +1 a +15' },
   { name: 'Pedra Negra Mágica Concentrada (Arma)', note: 'Saltos I→V (PRI→PEN) e acumula failstacks' },
 ] as const
-
-function EnhancementStones() {
-  return (
-    <div className="w-full max-w-md rounded-xl border border-amber-500/20 bg-black/30 p-4">
-      <p className="mb-3 text-center text-xs uppercase tracking-wide text-gray-500">
-        Materiais para forjar a arma
-      </p>
-      <div className="grid grid-cols-2 gap-3">
-        {ENHANCE_STONES.map((s) => (
-          <div key={s.name} className="flex items-center gap-3 rounded-lg border border-white/10 bg-black/40 p-2.5">
-            <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-amber-500/40 bg-black/40">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={itemImagePath(s.name)} alt={s.name} loading="lazy" className="h-full w-full object-cover" />
-            </div>
-            <div className="min-w-0">
-              <div className="text-xs font-semibold text-amber-200">{s.name}</div>
-              <div className="text-[11px] leading-tight text-white/50">{s.note}</div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
 
 function EnhancementSection() {
   return (
@@ -1255,9 +1245,8 @@ function EnhancementSection() {
           sub="Aprimoramento estilo Black Desert: cada tentativa acumula failstacks e arrisca a durabilidade. A barra carrega, e no fim — brilho dourado de sucesso ou a falha. No combate da masmorra o +N vira atributos reais."
         />
         <div className="grid items-center gap-10 lg:grid-cols-2">
-          <Reveal className="flex flex-col items-center gap-4">
+          <Reveal className="flex justify-center">
             <EnhancementDemo />
-            <EnhancementStones />
           </Reveal>
           <Reveal delay={120} className="grid gap-4 sm:grid-cols-2">
             {([
@@ -1270,6 +1259,17 @@ function EnhancementSection() {
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/15 text-amber-300"><Ic size={20} /></span>
                 <h3 className="text-sm font-semibold text-white">{t}</h3>
                 <p className="text-xs leading-relaxed text-textsec">{dsc}</p>
+              </GlassCard>
+            ))}
+            {/* materiais de forja — mesmo card/tamanho dos quatro acima, só com a arte do item no lugar do ícone */}
+            {ENHANCE_STONES.map((s) => (
+              <GlassCard key={s.name} className="flex flex-col gap-2 p-5">
+                <span className="h-10 w-10 overflow-hidden rounded-xl border border-amber-500/30 bg-black/40">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={itemImagePath(s.name)} alt={s.name} loading="lazy" className="h-full w-full object-cover" />
+                </span>
+                <h3 className="text-sm font-semibold text-white">{s.name}</h3>
+                <p className="text-xs leading-relaxed text-textsec">{s.note}</p>
               </GlassCard>
             ))}
           </Reveal>
@@ -1305,9 +1305,10 @@ function RepairDemo() {
       {/* dois slots da forja: item + cópia */}
       <div className="mb-4 flex items-center justify-center gap-4">
         <div className="flex flex-col items-center gap-1">
-          <div className="h-20 w-20 overflow-hidden rounded-xl border-2 border-amber-500/60 bg-black/40">
+          <div className="relative h-20 w-20 overflow-hidden rounded-xl border-2 border-amber-500/60 bg-black/40">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={itemImagePath('Armadura de Couro Batido')} alt="" className="h-full w-full object-cover" loading="lazy" />
+            <span className="absolute bottom-0.5 right-1 rounded bg-black/80 px-1 text-xs font-black" style={{ color: '#f1d79a', textShadow: '0 1px 2px #000' }}>+15</span>
           </div>
           <span className="text-[10px] text-white/50">item</span>
         </div>
@@ -1316,7 +1317,7 @@ function RepairDemo() {
           <div className="relative h-20 w-20 overflow-hidden rounded-xl border-2 border-dashed border-amber-500/60 bg-black/40">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={itemImagePath('Armadura de Couro Batido')} alt="" className="h-full w-full object-cover grayscale" loading="lazy" />
-            <span className="absolute bottom-0.5 right-1 rounded bg-black/70 px-1.5 text-xs font-bold text-amber-300">x1</span>
+            <span className="absolute bottom-0.5 right-1 rounded bg-black/70 px-1.5 text-xs font-bold text-amber-300">x8</span>
           </div>
           <span className="text-[10px] text-white/50">cópia nível 0</span>
         </div>
@@ -1338,11 +1339,36 @@ function RepairDemo() {
       </div>
 
       <div className="mt-5 w-full rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 py-2.5 text-center text-sm font-black text-white">
-        ⚒️ Reparar 100% (1 cópia)
+        ⚒️ Reparar 100% (8 cópias)
+      </div>
+
+      {/* inventário do personagem — espelha a grade real da bancada; só preenche
+          o card até a altura do Triângulo de Transmutação ao lado */}
+      <div className="mt-6 border-t border-amber-500/20 pt-4">
+        <span className="mb-2 block text-[11px] font-semibold text-amber-200/70">Inventário do personagem</span>
+        <div className="flex flex-wrap justify-center gap-2">
+          {REPAIR_INVENTORY_FILLER.map((piece, i) => (
+            <GearTile key={piece.name} piece={piece} className={i === 3 ? 'ring-2 ring-amber-400 ring-offset-2 ring-offset-black/50' : ''} />
+          ))}
+        </div>
       </div>
     </div>
   )
 }
+
+// Itens decorativos pra preencher a grade do inventário acima da bancada
+// (a peça em reparo, "Armadura de Couro Batido", aparece destacada).
+const REPAIR_INVENTORY_FILLER: GearPiece[] = [
+  { name: 'Espada de Recruta', rarity: 'COMMON' },
+  { name: 'Gibão de Couro', rarity: 'COMMON' },
+  { name: 'Capuz de Couro', rarity: 'COMMON' },
+  { name: 'Armadura de Couro Batido', rarity: 'UNCOMMON' },
+  { name: 'Coif de Malha', rarity: 'UNCOMMON' },
+  { name: 'Luvas de Malha', rarity: 'UNCOMMON' },
+  { name: 'Botas de Malha', rarity: 'UNCOMMON' },
+  { name: 'Couraça de Escamas Ígneas', rarity: 'RARE' },
+  { name: 'Cajado da Aurora Arcana', rarity: 'EPIC' },
+]
 
 // — Alquimista: 3 ingredientes caem nos vértices → poção surge no centro —
 const ALCH_PTS = { top: { x: 50, y: 16 }, left: { x: 18, y: 82 }, right: { x: 82, y: 82 }, center: { x: 50, y: 58 } }

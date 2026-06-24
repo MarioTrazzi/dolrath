@@ -395,9 +395,11 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const [battleEvent, setBattleEvent] = useState<BattleEvent | null>(null)
   const [combatEnded, setCombatEnded] = useState(false)
   const [winnerId, setWinnerId] = useState<string | null>(null)
-  // Combate AUTOMÁTICO: um "piloto" joga os turnos por você. Persiste durante toda a
-  // run — ligou uma vez, todas as lutas seguem no automático (a exploração continua manual).
+  // RUN AUTOMÁTICA: um "piloto" toca a expedição inteira — anda na trilha, confirma
+  // loot/eventos e joga os combates. Persiste até ser desligado.
   const [auto, setAuto] = useState(false)
+  // O piloto pode usar poções de HP/MP automaticamente (switch; ligado por padrão).
+  const [autoConsumables, setAutoConsumables] = useState(true)
   const [lootCard, setLootCard] = useState<ResolvedEvent | null>(null)
   const battleEventCounter = useRef(0)
   // d20 de sorte do nó atual (define a qualidade do loot pós-combate)
@@ -1265,31 +1267,93 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     if (stage === 'initiative' && !hasRolled) return fire(handleInitiativeRoll, 600)
 
     if (stage === 'playerSelect') return fire(() => {
-      // 1) Cura de emergência: HP baixo + poção de vida no inventário.
-      if (hpRef.current <= effMaxHp * 0.35 && hpRef.current < effMaxHp) {
-        const potion = consumables.find(c => c.hp > 0 && c.qty > 0)
-        if (potion) { useConsumable(potion); return }
+      // Consumíveis automáticos (se o switch estiver ligado):
+      if (autoConsumables) {
+        // 1) Cura de emergência: HP baixo + poção de vida no inventário.
+        if (hpRef.current <= effMaxHp * 0.35 && hpRef.current < effMaxHp) {
+          const potion = consumables.find(c => c.hp > 0 && c.qty > 0)
+          if (potion) { useConsumable(potion); return }
+        }
+        // 2) Repõe MP quando nem o golpe da arma cabe — habilita ataques mais fortes.
+        if (mp < ATTACKS.weapon.mp && mp < character.maxMp) {
+          const mPotion = consumables.find(c => c.mp > 0 && c.qty > 0)
+          if (mPotion) { useConsumable(mPotion); return }
+        }
       }
-      // 2) Transforma para liberar o Especial (raça com forma, fora de recarga e com MP).
+      // 3) Transforma para liberar o Especial (raça com forma, fora de recarga e com MP).
       if (!transform && transformCd === 0 && transformForms.length > 0) {
         const cfg = TRANSFORMATION_CONFIG[transformForms[0]]
         if (cfg && mp >= cfg.cost.mp) { activateTransform(transformForms[0]); return }
       }
-      // 3) Ataca com o melhor golpe pagável.
+      // 4) Ataca com o melhor golpe pagável.
       choosePlayerAttack(autoPickAttack())
     }, 650)
 
     if (stage === 'playerRoll' && !hasRolled) return fire(handlePlayerAttackRoll, 550)
 
     if (stage === 'playerDefense') return fire(() => {
-      // Ferido + com stamina → Defender (mitiga sempre); senão Esquivar (grátis, poupa stamina).
-      const hurt = hpRef.current <= effMaxHp * 0.5
+      // Defender (mitiga sempre) só quando MUITO ferido (HP < 40%) e há stamina — senão
+      // Esquivar (grátis). Antes defendia a 50% e drenava stamina demais.
+      const hurt = hpRef.current < effMaxHp * 0.4
       choosePlayerDefense(hurt && stamina >= DEFEND_STAMINA_COST ? 'defend' : 'dodge')
     }, 650)
 
     if (stage === 'defenseRoll' && !hasRolled) return fire(handleDefenseRoll, 550)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auto, phase, stage, hasRolled, combatEnded, mp, stamina, transform, transformCd, consumables, effMaxHp])
+  }, [auto, autoConsumables, phase, stage, hasRolled, combatEnded, mp, stamina, transform, transformCd, consumables, effMaxHp])
+
+  // Piloto de EXPLORAÇÃO: anda na trilha, confirma loot/eventos e entra nos combates.
+  // Para com segurança quando falta stamina (evita laço de avanços negados).
+  useEffect(() => {
+    if (!auto || phase !== 'explore') return
+    if (moving || exploreRolling) return
+    let cancelled = false
+    const fire = (fn: () => void, ms: number) => {
+      const t = setTimeout(() => { if (!cancelled) fn() }, ms)
+      return () => { cancelled = true; clearTimeout(t) }
+    }
+
+    // 1) Espólio da vitória aberto → confirmar.
+    if (lootCard) return fire(() => setLootCard(null), 1000)
+    // 2) Card de evento aberto → lutar (monstro) ou seguir (achado).
+    if (eventCard) {
+      return fire(() => {
+        if (eventCard.monster) startCombat(eventCard.monster)
+        else dismissEvent()
+      }, 1000)
+    }
+    // 3) Covil do boss → enfrentar.
+    if (atBoss) {
+      return fire(() => startCombat(
+        serverMonsterRef.current ??
+        scaleMonster(dungeon.boss, dungeon, character.level, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass)
+      ), 1100)
+    }
+    if (!runReady) return
+
+    // 4) Reabastece HP/MP com poções FORA de combate (não gasta turno) antes de avançar —
+    // entra no próximo combate o mais cheio possível. Uma poção por vez; o efeito re-dispara
+    // até encher (>= 90%) ou acabarem as poções. Só com o switch de consumíveis ligado.
+    if (autoConsumables) {
+      if (hp < effMaxHp * 0.9) {
+        const potion = consumables.find(c => c.hp > 0 && c.qty > 0)
+        if (potion) return fire(() => useConsumable(potion), 450)
+      }
+      if (mp < character.maxMp * 0.9) {
+        const mPotion = consumables.find(c => c.mp > 0 && c.qty > 0)
+        if (mPotion) return fire(() => useConsumable(mPotion), 450)
+      }
+    }
+
+    // 5) Seguir a trilha — mas só se a stamina cobre o próximo passo.
+    if (stamina < stepCost(tokenIdx + 1)) {
+      setAuto(false)
+      showBanner('😮‍💨', 'Stamina insuficiente — piloto desligado. Ela reseta amanhã.', 3200)
+      return
+    }
+    return fire(advance, 800)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auto, autoConsumables, phase, moving, exploreRolling, lootCard, eventCard, atBoss, tokenIdx, runReady, stamina, hp, mp, consumables])
 
   // ============================================================
   // RENDER
@@ -1737,6 +1801,36 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
               className="flex-shrink-0 px-4 pt-1 pb-4 z-20"
               style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
             >
+              {/* Piloto automático: toca a run inteira + switch de poções */}
+              <div className="mx-auto max-w-md mb-2 flex items-center gap-2">
+                <button
+                  onClick={() => setAuto(a => !a)}
+                  title={auto ? 'Desligar o piloto automático' : 'Jogar a expedição inteira no automático (anda, coleta e luta)'}
+                  className={`flex-1 h-9 rounded-xl text-xs font-black inline-flex items-center justify-center gap-1.5 border transition-colors ${
+                    auto
+                      ? 'bg-blue-600/90 border-blue-300/60 text-white shadow-lg shadow-blue-900/40'
+                      : 'bg-white/5 border-white/15 text-white/70 hover:text-white hover:border-white/30'
+                  }`}
+                >
+                  {auto ? '⚡ Automático LIGADO' : '⚡ Jogar automático'}
+                </button>
+                {auto && (
+                  <button
+                    onClick={() => setAutoConsumables(v => !v)}
+                    title={autoConsumables ? 'O piloto usa poções de HP/MP — clique para desligar' : 'O piloto NÃO usa poções — clique para ligar'}
+                    className={`shrink-0 h-9 px-3 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 border transition-colors ${
+                      autoConsumables
+                        ? 'bg-emerald-600/85 border-emerald-300/60 text-white'
+                        : 'bg-white/5 border-white/15 text-white/50 hover:text-white'
+                    }`}
+                  >
+                    🧪 Poções
+                    <span className={`inline-flex w-7 h-4 rounded-full items-center px-0.5 transition-colors ${autoConsumables ? 'bg-white/90 justify-end' : 'bg-white/20 justify-start'}`}>
+                      <span className={`w-3 h-3 rounded-full ${autoConsumables ? 'bg-emerald-600' : 'bg-white/70'}`} />
+                    </span>
+                  </button>
+                )}
+              </div>
               <div className="mx-auto max-w-md flex items-center gap-2.5">
                 <button
                   onClick={() => finishRun(false)}
@@ -1820,19 +1914,34 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
 
             {/* Barra de ações do combate */}
             <div className="relative flex-shrink-0 bg-black/70 backdrop-blur-md border-t border-white/10 px-3 sm:px-6 py-3 min-h-[88px] flex items-center justify-center">
-              {/* Toggle do piloto automático — liga/desliga a qualquer momento */}
+              {/* Toggle do piloto automático (+ switch de poções) — liga/desliga a qualquer momento */}
               {!combatEnded && (
-                <button
-                  onClick={() => setAuto(a => !a)}
-                  title={auto ? 'Desligar o piloto automático' : 'Ligar o piloto automático (joga os turnos por você)'}
-                  className={`absolute right-2 top-2 z-10 px-2.5 py-1 rounded-full text-[10px] font-black border transition-colors ${
-                    auto
-                      ? 'bg-blue-600/90 border-blue-300/60 text-white shadow-lg shadow-blue-900/50'
-                      : 'bg-white/5 border-white/15 text-white/60 hover:text-white hover:border-white/30'
-                  }`}
-                >
-                  {auto ? '⚡ Auto ON' : '⚡ Auto'}
-                </button>
+                <div className="absolute right-2 top-2 z-10 flex items-center gap-1.5">
+                  {auto && (
+                    <button
+                      onClick={() => setAutoConsumables(v => !v)}
+                      title={autoConsumables ? 'O piloto usa poções de HP/MP — clique para desligar' : 'O piloto NÃO usa poções — clique para ligar'}
+                      className={`px-2 py-1 rounded-full text-[10px] font-black border transition-colors ${
+                        autoConsumables
+                          ? 'bg-emerald-600/85 border-emerald-300/60 text-white'
+                          : 'bg-white/5 border-white/15 text-white/50 hover:text-white'
+                      }`}
+                    >
+                      🧪 {autoConsumables ? 'ON' : 'OFF'}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setAuto(a => !a)}
+                    title={auto ? 'Desligar o piloto automático' : 'Ligar o piloto automático (joga os turnos por você)'}
+                    className={`px-2.5 py-1 rounded-full text-[10px] font-black border transition-colors ${
+                      auto
+                        ? 'bg-blue-600/90 border-blue-300/60 text-white shadow-lg shadow-blue-900/50'
+                        : 'bg-white/5 border-white/15 text-white/60 hover:text-white hover:border-white/30'
+                    }`}
+                  >
+                    {auto ? '⚡ Auto ON' : '⚡ Auto'}
+                  </button>
+                </div>
               )}
               {combatEnded ? (
                 <div className="text-white/70 text-sm font-bold animate-pulse">

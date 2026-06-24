@@ -706,25 +706,27 @@ function smoothPath(pts: { x: number; y: number }[]): string {
 const RUN_RARITY_COLOR: Record<string, string> = {
   COMMON: '#cbd5e1', UNCOMMON: '#4ade80', RARE: '#60a5fa', EPIC: '#c084fc', LEGENDARY: '#fbbf24',
 }
-// Cor do d20 pelo tier de sorte (≤5 baixa · ≤13 média · ≥14 alta) — igual a luckTier.
-const rollColor = (roll: number) => (roll <= 5 ? '#f87171' : roll <= 13 ? '#cbd5e1' : '#4ade80')
+const RUN_RARITY_RANK: Record<string, number> = { COMMON: 1, UNCOMMON: 2, RARE: 3, EPIC: 4, LEGENDARY: 5 }
+const RUN_RARITY_PT: Record<string, string> = { COMMON: 'COMUM', UNCOMMON: 'INCOMUM', RARE: 'RARO', EPIC: 'ÉPICO', LEGENDARY: 'LENDÁRIO' }
 
-// Ícone de uma peça de loot, colorido pela raridade (+N se for equipamento).
-function LootChip({ drop }: { drop: RunDrop }) {
-  const c = RUN_RARITY_COLOR[drop.rarity] ?? '#cbd5e1'
+// Linha de XP/gold + nomes do espólio (texto colorido por raridade) — sem ícones.
+function LootLines({ node }: { node: RunNode }) {
   return (
-    <span
-      className="relative flex h-6 w-6 items-center justify-center rounded-md border text-[12px]"
-      style={{ borderColor: `${c}99`, background: `${c}1f`, boxShadow: `0 0 6px ${c}55` }}
-      title={`${drop.name}${drop.enh ? ` +${drop.enh}` : ''}`}
-    >
-      {drop.emoji}
-      {drop.enh > 0 && (
-        <span className="absolute -bottom-1 -right-1 rounded px-0.5 text-[8px] font-black leading-none" style={{ background: c, color: '#0b0b1a' }}>
-          +{drop.enh}
+    <>
+      <span className="font-combat text-[10px] font-bold tabular-nums">
+        {node.xp > 0 && <span className="text-sky-300">+{node.xp} XP </span>}
+        <span className="text-amber-300">+{node.gold} gold</span>
+      </span>
+      {node.drops.map((d, i) => (
+        <span
+          key={i}
+          className="font-combat text-[9px] font-semibold leading-tight"
+          style={{ color: RUN_RARITY_COLOR[d.rarity] ?? '#cbd5e1', textShadow: '0 1px 2px #000' }}
+        >
+          {d.name}{d.enh > 0 ? ` +${d.enh}` : ''}
         </span>
-      )}
-    </span>
+      ))}
+    </>
   )
 }
 
@@ -746,7 +748,8 @@ function MiniDungeonMap({ dungeon }: { dungeon: DungeonCard }) {
   useEffect(() => { setStep(0) }, [dungeon.id])
   useEffect(() => {
     if (reduce) { setStep(pts.length - 1); return }
-    const id = setInterval(() => setStep((s) => (s + 1) % (pts.length + 2)), 1100)
+    // +6 ticks "parado" no boss → o espólio do chefe fica em destaque alguns segundos a mais.
+    const id = setInterval(() => setStep((s) => (s + 1) % (pts.length + 6)), 1100)
     return () => clearInterval(id)
   }, [pts.length, reduce])
   const cur = Math.min(step, pts.length - 1)
@@ -754,6 +757,12 @@ function MiniDungeonMap({ dungeon }: { dungeon: DungeonCard }) {
   const node: RunNode | null = cur >= 1 ? run[cur - 1] ?? null : null
   const accXp = cur >= 1 ? prefix.xp[cur - 1] ?? 0 : 0
   const accGold = cur >= 1 ? prefix.gold[cur - 1] ?? 0 : 0
+  // Espólio de DESTAQUE do chefe: equipamento raro+ (mostra a ARTE real do item,
+  // ampliada e com brilho, p/ evidenciar que o boss dropa itens > raro).
+  const bossSpotlight: RunDrop[] =
+    node && node.kind === 'boss'
+      ? node.drops.filter((d) => d.kind === 'item' && (RUN_RARITY_RANK[d.rarity] ?? 0) >= 3)
+      : []
   const bgPath = smoothPath(pts)
   const litPath = smoothPath(pts.slice(0, cur + 1))
   return (
@@ -828,45 +837,82 @@ function MiniDungeonMap({ dungeon }: { dungeon: DungeonCard }) {
         </motion.div>
       </div>
 
-      {/* Painel de loot do nó atual — atualiza a cada passo do herói */}
-      <div className="absolute inset-x-2 bottom-2">
-        <AnimatePresence mode="wait">
-          {node && (
-            <motion.div
-              key={cur}
-              initial={reduce ? false : { opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={reduce ? undefined : { opacity: 0, y: -8 }}
-              transition={{ duration: 0.3 }}
-              className="rounded-xl border bg-black/70 px-2.5 py-2 backdrop-blur-md"
-              style={{ borderColor: `${dungeon.accent}44` }}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex min-w-0 items-center gap-1.5">
+      {/* Destaque do espólio do CHEFE — arte real do item raro/épico/lendário,
+          ampliada e com brilho pulsante, permanecendo alguns segundos. */}
+      <AnimatePresence>
+        {bossSpotlight.length > 0 && (
+          <motion.div
+            key="boss-spotlight"
+            initial={reduce ? false : { opacity: 0, scale: 0.7, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={reduce ? undefined : { opacity: 0, scale: 0.9 }}
+            transition={{ duration: 0.45, ease: [0.34, 1.56, 0.64, 1] }}
+            className="absolute left-1/2 top-[42%] z-20 flex -translate-x-1/2 -translate-y-1/2 items-end justify-center gap-3"
+          >
+            {bossSpotlight.slice(0, 2).map((d, i) => {
+              const c = RUN_RARITY_COLOR[d.rarity] ?? '#cbd5e1'
+              return (
+                <div key={i} className="flex flex-col items-center gap-1">
                   <span
-                    className="flex h-5 min-w-5 items-center justify-center rounded-md border px-1 font-combat text-[10px] font-black tabular-nums"
-                    style={{ borderColor: `${rollColor(node.roll)}99`, color: rollColor(node.roll), background: `${rollColor(node.roll)}1a` }}
+                    className="rounded-full border px-2 py-0.5 font-combat text-[9px] font-black uppercase tracking-wider"
+                    style={{ borderColor: c, color: c, background: `${c}1f`, textShadow: `0 0 8px ${c}` }}
                   >
-                    🎲{node.roll}
+                    {RUN_RARITY_PT[d.rarity] ?? d.rarity}
                   </span>
-                  <span className="truncate font-combat text-[10px] text-white/80">
-                    {node.kind === 'boss' ? '👑 ' : ''}{node.mon ? `${node.emoji ?? ''} ${node.mon}` : '✦ Achado'}
-                  </span>
+                  <motion.div
+                    animate={reduce ? {} : { boxShadow: [`0 0 12px ${c}88`, `0 0 30px ${c}`, `0 0 12px ${c}88`] }}
+                    transition={reduce ? {} : { repeat: Infinity, duration: 1.6, ease: 'easeInOut' }}
+                    className="relative h-16 w-16 overflow-hidden rounded-xl border-2"
+                    style={{ borderColor: c, background: 'rgba(0,0,0,0.6)' }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={itemImagePath(d.name)} alt={d.name} loading="lazy" className="h-full w-full object-cover" />
+                    {d.enh > 0 && (
+                      <span className="absolute bottom-0 right-0 rounded-tl px-1 text-[9px] font-black leading-tight" style={{ background: c, color: '#0b0b1a' }}>
+                        +{d.enh}
+                      </span>
+                    )}
+                  </motion.div>
                 </div>
-                <div className="flex shrink-0 items-center gap-1.5 font-combat text-[10px] font-bold tabular-nums">
-                  {node.xp > 0 && <span className="text-sky-300">+{node.xp} XP</span>}
-                  <span className="text-amber-300">+{node.gold}💰</span>
-                </div>
-              </div>
-              {node.drops.length > 0 && (
-                <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                  {node.drops.slice(0, 6).map((d, i) => <LootChip key={i} drop={d} />)}
-                </div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+              )
+            })}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Espólio AO LADO do nó atual (não-boss): só XP/gold + nomes do loot.
+          Nó à direita da trilha → texto à direita; à esquerda → à esquerda. */}
+      {node && node.kind !== 'boss' && (
+        <div className="absolute z-20 pointer-events-none" style={{ left: `${token.x}%`, top: `${token.y}%` }}>
+          <motion.div
+            key={cur}
+            initial={reduce ? false : { opacity: 0, x: token.x < 50 ? 8 : -8 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.25 }}
+            style={{ y: '-50%' }}
+            className={`absolute top-1/2 flex w-max max-w-[150px] flex-col gap-0.5 rounded-lg bg-black/55 px-2 py-1 backdrop-blur-sm ${
+              token.x < 50 ? 'right-4 items-end text-right' : 'left-4 items-start text-left'
+            }`}
+          >
+            <LootLines node={node} />
+          </motion.div>
+        </div>
+      )}
+
+      {/* No boss, os nomes + XP/gold ficam centralizados sob o destaque da arte. */}
+      {node && node.kind === 'boss' && (
+        <div className="absolute inset-x-0 top-[63%] z-20 flex justify-center px-4">
+          <motion.div
+            key={`boss-loot-${cur}`}
+            initial={reduce ? false : { opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: reduce ? 0 : 0.2 }}
+            className="flex max-w-[88%] flex-col items-center gap-0.5 rounded-lg bg-black/55 px-2.5 py-1 text-center backdrop-blur-sm"
+          >
+            <LootLines node={node} />
+          </motion.div>
+        </div>
+      )}
     </div>
   )
 }

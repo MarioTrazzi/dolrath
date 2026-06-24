@@ -534,9 +534,9 @@ export const DUNGEON_RUNS: Record<DungeonRunId, RunNode[]> = {
           "enh": 0
         },
         {
-          "name": "Botas de Malha",
+          "name": "Colar do Veio Dourado",
           "emoji": "📦",
-          "rarity": "UNCOMMON",
+          "rarity": "RARE",
           "kind": "item",
           "enh": 0
         },

@@ -69,7 +69,7 @@ export const DUNGEON_RUNS: Record<DungeonRunId, RunNode[]> = {
           "emoji": "📦",
           "rarity": "COMMON",
           "kind": "item",
-          "enh": 5
+          "enh": 0
         }
       ]
     },
@@ -151,7 +151,7 @@ export const DUNGEON_RUNS: Record<DungeonRunId, RunNode[]> = {
           "emoji": "📦",
           "rarity": "COMMON",
           "kind": "item",
-          "enh": 5
+          "enh": 0
         }
       ]
     },
@@ -199,7 +199,7 @@ export const DUNGEON_RUNS: Record<DungeonRunId, RunNode[]> = {
           "emoji": "📦",
           "rarity": "UNCOMMON",
           "kind": "item",
-          "enh": 4
+          "enh": 0
         }
       ]
     },
@@ -254,7 +254,7 @@ export const DUNGEON_RUNS: Record<DungeonRunId, RunNode[]> = {
           "emoji": "📦",
           "rarity": "RARE",
           "kind": "item",
-          "enh": 6
+          "enh": 0
         },
         {
           "name": "Pedra Negra (Armadura)",

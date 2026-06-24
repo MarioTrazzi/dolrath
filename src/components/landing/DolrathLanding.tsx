@@ -744,14 +744,18 @@ function MiniDungeonMap({ dungeon }: { dungeon: DungeonCard }) {
     for (const n of run) { ax += n.xp; ag += n.gold; xp.push(ax); gold.push(ag) }
     return { xp, gold }
   }, [run])
-  const [step, setStep] = useState(0)
-  useEffect(() => { setStep(0) }, [dungeon.id])
+  // A Floresta (1ª, curta) anda do começo; as demais já começam adiantadas, com
+  // apenas ~4 nós antes do boss — assim a espera pelo drop do chefe não é longa.
+  const startStep = dungeon.id === 'floresta' ? 0 : Math.max(0, pts.length - 6)
+  const [step, setStep] = useState(startStep)
+  useEffect(() => { setStep(startStep) }, [startStep])
   useEffect(() => {
     if (reduce) { setStep(pts.length - 1); return }
-    // +6 ticks "parado" no boss → o espólio do chefe fica em destaque alguns segundos a mais.
-    const id = setInterval(() => setStep((s) => (s + 1) % (pts.length + 6)), 1100)
+    // +6 ticks "parado" no boss → o espólio do chefe fica em destaque alguns segundos a mais;
+    // ao terminar, volta ao ponto inicial (startStep), não ao começo da trilha.
+    const id = setInterval(() => setStep((s) => (s + 1 >= pts.length + 6 ? startStep : s + 1)), 1100)
     return () => clearInterval(id)
-  }, [pts.length, reduce])
+  }, [pts.length, reduce, startStep])
   const cur = Math.min(step, pts.length - 1)
   const token = pts[cur]
   const node: RunNode | null = cur >= 1 ? run[cur - 1] ?? null : null

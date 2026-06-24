@@ -644,6 +644,10 @@ const NODE_GEAR_CHANCE: Record<LuckTier, number> = { low: 0.05, mid: 0.15, high:
 // (item que o personagem atual não equipa) — incentivo a criar/treinar outro herói.
 const CROSS_CLASS_CHANCE = 0.2
 
+// Acessórios (anel/colar/cinto) NUNCA caem aprimorados — começam no tier base.
+// Só armas/armaduras podem vir com +N embutido.
+const ACCESSORY_TYPES = new Set(['RING', 'NECKLACE', 'BELT'])
+
 // Aprimoramento JÁ embutido no drop, por masmorra. A floresta entrega itens +4..+7
 // (o +7 é raro). null = item cai +0.
 const DUNGEON_DROP_ENH: Record<DungeonId, { min: number; max: number } | null> = {
@@ -709,10 +713,11 @@ export function rollNodeLoot(
   // gateada pelo tier do d20. O peso de raridade faz COMUM dominar; o item cai já
   // aprimorado (floresta: +4..+7). Às vezes vem um INCOMUM de OUTRA classe (teaser).
   const gearRarity = DUNGEON_GEAR_RARITY[dungeon.id]
-  const pushGear = (i: { name: string; rarity: unknown } | null | undefined) => {
+  const pushGear = (i: { name: string; rarity: unknown; type?: string } | null | undefined) => {
     if (i) drops.push({
       name: i.name, kind: 'item', rarity: rarityOf(i), emoji: '📦',
-      enhancement: rollDropEnhancement(dungeon.id, tier),
+      // acessório não vem aprimorado; só arma/armadura ganha o +N da masmorra.
+      enhancement: ACCESSORY_TYPES.has(String(i.type)) ? 0 : rollDropEnhancement(dungeon.id, tier),
     })
   }
 

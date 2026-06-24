@@ -143,10 +143,13 @@ export function Badge({
 // ---------- StatBar (HP / MP / Stamina) ----------
 type StatKind = 'hp' | 'mp' | 'stamina'
 
+// Cores LITERAIS (hex). Importante: não usar var(--x) aqui — o componente
+// concatena alpha (ex.: `${color}99`), e `var(--success)99` é CSS inválido,
+// o que fazia as barras de HP/STA renderizarem VAZIAS.
 const STAT_KINDS: Record<StatKind, { color: string; name: string }> = {
-  hp: { color: 'var(--success)', name: 'HP' },
+  hp: { color: '#2ecc71', name: 'HP' },
   mp: { color: '#3b82f6', name: 'MP' },
-  stamina: { color: 'var(--warning)', name: 'STA' },
+  stamina: { color: '#f39c12', name: 'STA' },
 }
 
 export function StatBar({

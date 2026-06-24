@@ -837,49 +837,6 @@ function MiniDungeonMap({ dungeon }: { dungeon: DungeonCard }) {
         </motion.div>
       </div>
 
-      {/* Destaque do espólio do CHEFE — arte real do item raro/épico/lendário,
-          ampliada e com brilho pulsante, permanecendo alguns segundos. */}
-      <AnimatePresence>
-        {bossSpotlight.length > 0 && (
-          <motion.div
-            key="boss-spotlight"
-            initial={reduce ? false : { opacity: 0, scale: 0.7, y: 8 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={reduce ? undefined : { opacity: 0, scale: 0.9 }}
-            transition={{ duration: 0.45, ease: [0.34, 1.56, 0.64, 1] }}
-            className="absolute left-1/2 top-[42%] z-20 flex -translate-x-1/2 -translate-y-1/2 items-end justify-center gap-3"
-          >
-            {bossSpotlight.slice(0, 2).map((d, i) => {
-              const c = RUN_RARITY_COLOR[d.rarity] ?? '#cbd5e1'
-              return (
-                <div key={i} className="flex flex-col items-center gap-1">
-                  <span
-                    className="rounded-full border px-2 py-0.5 font-combat text-[9px] font-black uppercase tracking-wider"
-                    style={{ borderColor: c, color: c, background: `${c}1f`, textShadow: `0 0 8px ${c}` }}
-                  >
-                    {RUN_RARITY_PT[d.rarity] ?? d.rarity}
-                  </span>
-                  <motion.div
-                    animate={reduce ? {} : { boxShadow: [`0 0 12px ${c}88`, `0 0 30px ${c}`, `0 0 12px ${c}88`] }}
-                    transition={reduce ? {} : { repeat: Infinity, duration: 1.6, ease: 'easeInOut' }}
-                    className="relative h-16 w-16 overflow-hidden rounded-xl border-2"
-                    style={{ borderColor: c, background: 'rgba(0,0,0,0.6)' }}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={itemImagePath(d.name)} alt={d.name} loading="lazy" className="h-full w-full object-cover" />
-                    {d.enh > 0 && (
-                      <span className="absolute bottom-0 right-0 rounded-tl px-1 text-[9px] font-black leading-tight" style={{ background: c, color: '#0b0b1a' }}>
-                        +{d.enh}
-                      </span>
-                    )}
-                  </motion.div>
-                </div>
-              )
-            })}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Espólio AO LADO do nó atual (não-boss): só XP/gold + nomes do loot.
           Nó à direita da trilha → texto à direita; à esquerda → à esquerda. */}
       {node && node.kind !== 'boss' && (
@@ -899,17 +856,50 @@ function MiniDungeonMap({ dungeon }: { dungeon: DungeonCard }) {
         </div>
       )}
 
-      {/* No boss, os nomes + XP/gold ficam centralizados sob o destaque da arte. */}
+      {/* No boss: a ARTE do item raro/épico/lendário aparece à ESQUERDA do nó
+          (junto a ele) e os nomes/recompensa ficam ao lado do ícone. */}
       {node && node.kind === 'boss' && (
-        <div className="absolute inset-x-0 top-[63%] z-20 flex justify-center px-4">
+        <div className="absolute z-20 pointer-events-none" style={{ left: `${token.x}%`, top: `${token.y}%` }}>
           <motion.div
-            key={`boss-loot-${cur}`}
-            initial={reduce ? false : { opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: reduce ? 0 : 0.2 }}
-            className="flex max-w-[88%] flex-col items-center gap-0.5 rounded-lg bg-black/55 px-2.5 py-1 text-center backdrop-blur-sm"
+            key={`boss-${cur}`}
+            initial={reduce ? false : { opacity: 0, x: 10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4, ease: [0.34, 1.56, 0.64, 1] }}
+            style={{ y: '-40%' }}
+            className="absolute right-5 top-1/2 flex items-center gap-2"
           >
-            <LootLines node={node} />
+            {/* nomes + XP/gold à esquerda do ícone */}
+            <div className="flex max-w-[130px] flex-col items-end gap-0.5 rounded-lg bg-black/55 px-2 py-1 text-right backdrop-blur-sm">
+              <LootLines node={node} />
+            </div>
+            {/* ícone(s) da peça raro+ junto ao nó do boss */}
+            {bossSpotlight.slice(0, 2).map((d, i) => {
+              const c = RUN_RARITY_COLOR[d.rarity] ?? '#cbd5e1'
+              return (
+                <div key={i} className="flex flex-col items-center gap-1">
+                  <span
+                    className="rounded-full border px-1.5 py-0.5 font-combat text-[8px] font-black uppercase tracking-wider"
+                    style={{ borderColor: c, color: c, background: `${c}1f`, textShadow: `0 0 8px ${c}` }}
+                  >
+                    {RUN_RARITY_PT[d.rarity] ?? d.rarity}
+                  </span>
+                  <motion.div
+                    animate={reduce ? {} : { boxShadow: [`0 0 12px ${c}88`, `0 0 28px ${c}`, `0 0 12px ${c}88`] }}
+                    transition={reduce ? {} : { repeat: Infinity, duration: 1.6, ease: 'easeInOut' }}
+                    className="relative h-14 w-14 overflow-hidden rounded-xl border-2"
+                    style={{ borderColor: c, background: 'rgba(0,0,0,0.6)' }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={itemImagePath(d.name)} alt={d.name} loading="lazy" className="h-full w-full object-cover" />
+                    {d.enh > 0 && (
+                      <span className="absolute bottom-0 right-0 rounded-tl px-1 text-[9px] font-black leading-tight" style={{ background: c, color: '#0b0b1a' }}>
+                        +{d.enh}
+                      </span>
+                    )}
+                  </motion.div>
+                </div>
+              )
+            })}
           </motion.div>
         </div>
       )}

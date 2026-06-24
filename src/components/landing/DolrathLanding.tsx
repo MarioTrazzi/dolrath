@@ -212,24 +212,29 @@ function Navbar({ primaryHref }: { primaryHref: string }) {
 // Ciclo do fundo do hero: a cena normal "desperta" para a forma Celestial
 // (elfo irradiando aura dourada + Anciã da Mata com aura verde) por alguns
 // segundos, com relâmpagos, e depois volta ao normal — em loop.
-type HeroPhase = 'normal' | 'awaken'
-
 function useHeroAwaken(enabled: boolean) {
-  const [phase, setPhase] = useState<HeroPhase>('normal')
+  const [awaken, setAwaken] = useState(false)
+  const [strobe, setStrobe] = useState(false) // saída em estroboscópio (transição rápida)
   const [bolt, setBolt] = useState(0) // muda a cada relâmpago p/ re-disparar a animação
   useEffect(() => {
     if (!enabled) return
     let alive = true
     const timers: ReturnType<typeof setTimeout>[] = []
-    const flash = (delay: number) => timers.push(setTimeout(() => alive && setBolt((b) => b + 1), delay))
+    const at = (delay: number, fn: () => void) => timers.push(setTimeout(() => alive && fn(), delay))
+    const flash = (delay: number) => at(delay, () => setBolt((b) => b + 1))
     const loop = () => {
       if (!alive) return
-      // salva de relâmpagos anunciando a transformação
+      // entrada: salva de relâmpagos -> forma celestial (cross-fade suave)
+      setStrobe(false)
       flash(0); flash(140); flash(320)
-      timers.push(setTimeout(() => alive && setPhase('awaken'), 220))
-      // mantém a forma celestial por ~4.5s, com mais um estalo no meio
-      flash(2600)
-      timers.push(setTimeout(() => alive && setPhase('normal'), 4700))
+      at(220, () => setAwaken(true))
+      // saída: o SEGUNDO relâmpago encerra a transformação em estroboscópio.
+      // pisca p/ a forma normal, brilha de volta na celestial e fixa no normal.
+      at(4500, () => setStrobe(true))
+      flash(4520); at(4540, () => setAwaken(false)) // 1º flash: pisca p/ a forma anterior
+      at(4680, () => setAwaken(true))               // brilha de volta na celestial
+      flash(4880); at(4900, () => setAwaken(false)) // 2º flash: brilha e fixa no normal
+      at(5120, () => setStrobe(false))
     }
     const id = setInterval(loop, 9000)
     const kickoff = setTimeout(loop, 2600)
@@ -240,7 +245,7 @@ function useHeroAwaken(enabled: boolean) {
       timers.forEach(clearTimeout)
     }
   }, [enabled])
-  return { awaken: phase === 'awaken', bolt }
+  return { awaken, strobe, bolt }
 }
 
 function Hero({ primaryHref, spinDice }: {
@@ -248,7 +253,8 @@ function Hero({ primaryHref, spinDice }: {
 }) {
   const reduce = useReducedMotion()
   const spin = spinDice && !reduce
-  const { awaken, bolt } = useHeroAwaken(!reduce)
+  const { awaken, strobe, bolt } = useHeroAwaken(!reduce)
+  const fadeMs = strobe ? 90 : 700 // estroboscópio na saída x cross-fade suave na entrada
   return (
     <section className="relative min-h-screen flex items-center pt-28 pb-20 overflow-hidden">
       {/* Arte cinematográfica: herói avançando pela Floresta Sombria com a
@@ -265,15 +271,16 @@ function Hero({ primaryHref, spinDice }: {
         src="/hero-masmorra-floresta-celestial.webp"
         alt=""
         aria-hidden="true"
-        className="absolute inset-0 h-full w-full object-cover object-center transition-opacity duration-700 ease-out"
-        style={{ opacity: awaken ? 1 : 0 }}
+        className="absolute inset-0 h-full w-full object-cover object-center"
+        style={{ opacity: awaken ? 1 : 0, transition: `opacity ${fadeMs}ms ease-out` }}
       />
       {/* Brilho celestial dourado que pulsa enquanto a forma está desperta */}
       <div
         aria-hidden="true"
-        className="absolute inset-0 pointer-events-none transition-opacity duration-700 mix-blend-screen"
+        className="absolute inset-0 pointer-events-none mix-blend-screen"
         style={{
           opacity: awaken ? 1 : 0,
+          transition: `opacity ${fadeMs}ms ease-out`,
           background:
             'radial-gradient(45% 60% at 24% 55%, rgba(251,191,36,0.28), transparent 70%), radial-gradient(40% 55% at 76% 45%, rgba(74,222,128,0.16), transparent 72%)',
           animation: awaken ? 'hero-aura-pulse 2.2s ease-in-out infinite' : 'none',

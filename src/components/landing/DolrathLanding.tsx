@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { Button, Card, GlassCard, Badge, StatBar, SectionHeading, D20, DiceChip, Reveal } from './ui'
 import { itemImagePath } from '@/lib/itemCatalog'
+import { DUNGEON_RUNS, type DungeonRunId, type RunNode, type RunDrop } from './dungeonRuns'
 
 // ============================================================
 // Gear / raridade — molduras e tiles de equipamento reais
@@ -701,19 +702,58 @@ function smoothPath(pts: { x: number; y: number }[]): string {
   return d
 }
 
+// Cor por raridade do drop (espelha as molduras do jogo).
+const RUN_RARITY_COLOR: Record<string, string> = {
+  COMMON: '#cbd5e1', UNCOMMON: '#4ade80', RARE: '#60a5fa', EPIC: '#c084fc', LEGENDARY: '#fbbf24',
+}
+// Cor do d20 pelo tier de sorte (≤5 baixa · ≤13 média · ≥14 alta) — igual a luckTier.
+const rollColor = (roll: number) => (roll <= 5 ? '#f87171' : roll <= 13 ? '#cbd5e1' : '#4ade80')
+
+// Ícone de uma peça de loot, colorido pela raridade (+N se for equipamento).
+function LootChip({ drop }: { drop: RunDrop }) {
+  const c = RUN_RARITY_COLOR[drop.rarity] ?? '#cbd5e1'
+  return (
+    <span
+      className="relative flex h-6 w-6 items-center justify-center rounded-md border text-[12px]"
+      style={{ borderColor: `${c}99`, background: `${c}1f`, boxShadow: `0 0 6px ${c}55` }}
+      title={`${drop.name}${drop.enh ? ` +${drop.enh}` : ''}`}
+    >
+      {drop.emoji}
+      {drop.enh > 0 && (
+        <span className="absolute -bottom-1 -right-1 rounded px-0.5 text-[8px] font-black leading-none" style={{ background: c, color: '#0b0b1a' }}>
+          +{drop.enh}
+        </span>
+      )}
+    </span>
+  )
+}
+
 // Mapa em miniatura com o token do herói caminhando de nó em nó (loop).
+// Cada passo revela o espólio REAL daquele nó (DUNGEON_RUNS, gerado pelo sim) e
+// acumula XP/gold no HUD do canto superior direito.
 function MiniDungeonMap({ dungeon }: { dungeon: DungeonCard }) {
   const reduce = useReducedMotion()
   const pts = useMemo(() => buildTrail(dungeon.rooms, dungeon.minor), [dungeon.rooms, dungeon.minor])
+  const run: RunNode[] = useMemo(() => DUNGEON_RUNS[dungeon.id as DungeonRunId] ?? [], [dungeon.id])
+  // Prefixos de XP/gold: pts[0] é a entrada (sem loot); run[i] = pts[i+1].
+  const prefix = useMemo(() => {
+    const xp: number[] = []; const gold: number[] = []
+    let ax = 0; let ag = 0
+    for (const n of run) { ax += n.xp; ag += n.gold; xp.push(ax); gold.push(ag) }
+    return { xp, gold }
+  }, [run])
   const [step, setStep] = useState(0)
   useEffect(() => { setStep(0) }, [dungeon.id])
   useEffect(() => {
     if (reduce) { setStep(pts.length - 1); return }
-    const id = setInterval(() => setStep((s) => (s + 1) % (pts.length + 2)), 850)
+    const id = setInterval(() => setStep((s) => (s + 1) % (pts.length + 2)), 1100)
     return () => clearInterval(id)
   }, [pts.length, reduce])
   const cur = Math.min(step, pts.length - 1)
   const token = pts[cur]
+  const node: RunNode | null = cur >= 1 ? run[cur - 1] ?? null : null
+  const accXp = cur >= 1 ? prefix.xp[cur - 1] ?? 0 : 0
+  const accGold = cur >= 1 ? prefix.gold[cur - 1] ?? 0 : 0
   const bgPath = smoothPath(pts)
   const litPath = smoothPath(pts.slice(0, cur + 1))
   return (
@@ -758,11 +798,75 @@ function MiniDungeonMap({ dungeon }: { dungeon: DungeonCard }) {
           🧝
         </span>
       </motion.div>
+
       <div className="absolute left-2 top-2 flex items-center gap-1.5">
         <span className="text-base">{dungeon.emoji}</span>
         <span className="font-combat text-[11px] font-bold text-white/90" style={{ textShadow: '0 1px 3px #000' }}>{dungeon.name}</span>
       </div>
-      <div className="absolute bottom-2 right-2 font-combat text-[10px] text-white/60">{dungeon.rooms} salas + 👑</div>
+
+      {/* HUD acumulado (canto superior direito): XP + gold ganhos até aqui */}
+      <div className="absolute right-2 top-2 flex flex-col items-end gap-1">
+        <motion.div
+          key={`xp-${accXp}`}
+          initial={reduce ? false : { scale: 0.85 }}
+          animate={{ scale: 1 }}
+          transition={{ duration: 0.25 }}
+          className="flex items-center gap-1 rounded-full border border-sky-400/40 bg-black/65 px-2 py-0.5 backdrop-blur-sm"
+        >
+          <Sparkles size={10} className="text-sky-300" />
+          <span className="font-combat text-[11px] font-bold text-sky-200 tabular-nums">{accXp} XP</span>
+        </motion.div>
+        <motion.div
+          key={`gold-${accGold}`}
+          initial={reduce ? false : { scale: 0.85 }}
+          animate={{ scale: 1 }}
+          transition={{ duration: 0.25 }}
+          className="flex items-center gap-1 rounded-full border border-amber-400/40 bg-black/65 px-2 py-0.5 backdrop-blur-sm"
+        >
+          <Coins size={10} className="text-amber-300" />
+          <span className="font-combat text-[11px] font-bold text-amber-200 tabular-nums">{accGold}</span>
+        </motion.div>
+      </div>
+
+      {/* Painel de loot do nó atual — atualiza a cada passo do herói */}
+      <div className="absolute inset-x-2 bottom-2">
+        <AnimatePresence mode="wait">
+          {node && (
+            <motion.div
+              key={cur}
+              initial={reduce ? false : { opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reduce ? undefined : { opacity: 0, y: -8 }}
+              transition={{ duration: 0.3 }}
+              className="rounded-xl border bg-black/70 px-2.5 py-2 backdrop-blur-md"
+              style={{ borderColor: `${dungeon.accent}44` }}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <span
+                    className="flex h-5 min-w-5 items-center justify-center rounded-md border px-1 font-combat text-[10px] font-black tabular-nums"
+                    style={{ borderColor: `${rollColor(node.roll)}99`, color: rollColor(node.roll), background: `${rollColor(node.roll)}1a` }}
+                  >
+                    🎲{node.roll}
+                  </span>
+                  <span className="truncate font-combat text-[10px] text-white/80">
+                    {node.kind === 'boss' ? '👑 ' : ''}{node.mon ? `${node.emoji ?? ''} ${node.mon}` : '✦ Achado'}
+                  </span>
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5 font-combat text-[10px] font-bold tabular-nums">
+                  {node.xp > 0 && <span className="text-sky-300">+{node.xp} XP</span>}
+                  <span className="text-amber-300">+{node.gold}💰</span>
+                </div>
+              </div>
+              {node.drops.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                  {node.drops.slice(0, 6).map((d, i) => <LootChip key={i} drop={d} />)}
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   )
 }
@@ -847,7 +951,7 @@ function DungeonsSection() {
           <div className="flex flex-col gap-3">
             <MiniDungeonMap dungeon={dungeon} />
             <p className="text-center font-combat text-[11px] text-textsec/70">
-              🚪 entrada · ⚔️ salas principais (monstro + loot) · 👑 boss — o herói avança nó a nó
+              🚪 entrada · ⚔️ salas (monstro + loot) · 👑 boss — o d20 define o espólio; XP e ouro somam no canto
             </p>
           </div>
         </div>

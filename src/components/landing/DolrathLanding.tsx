@@ -1480,6 +1480,7 @@ function CraftingSection() {
 // RACE_TRANSFORMATIONS / TRANSFORMATION_GLOW do jogo (transformationSystem.ts).
 interface RaceCard {
   name: string
+  klass: string
   base: string
   transformed: string
   formEmoji: string
@@ -1489,10 +1490,10 @@ interface RaceCard {
 }
 
 const RACE_CARDS: RaceCard[] = [
-  { name: 'Humano', base: '/humanopvp.png', transformed: '/humano_transformed.png', formEmoji: '✨', form: 'Sétimo Sentido', glow: '#e2e8f0', lore: 'Versáteis e ambiciosos — prosperam em qualquer masmorra.' },
-  { name: 'Elfo', base: '/elfopvp.png', transformed: '/elfo_transformed.png', formEmoji: '🌟', form: 'Celestial', glow: '#fbbf24', lore: 'Séculos de precisão. A flecha já partiu antes de você piscar.' },
-  { name: 'Draconiano', base: '/dracopvp.png', transformed: '/draco_transformed.png', formEmoji: '🐉', form: 'Dragão', glow: '#ef4444', lore: 'Sangue antigo de dragão correndo em veias mortais.' },
-  { name: 'Metamorfo', base: '/metamorfo_pvp.png', transformed: '/metamorfo_transformed.png', formEmoji: '🐺', form: 'Lobo · Urso · Águia', glow: '#93c5fd', lore: 'Nenhuma forma é definitiva — escolhe a fera para cada luta.' },
+  { name: 'Humano', klass: 'Mago', base: '/humanopvp.png', transformed: '/humano_transformed.png', formEmoji: '✨', form: 'Sétimo Sentido', glow: '#e2e8f0', lore: 'Versáteis e ambiciosos — prosperam em qualquer masmorra.' },
+  { name: 'Elfo', klass: 'Ladino', base: '/elfopvp.png', transformed: '/elfo_transformed.png', formEmoji: '🌟', form: 'Celestial', glow: '#fbbf24', lore: 'Séculos de precisão. A flecha já partiu antes de você piscar.' },
+  { name: 'Draconiano', klass: 'Guerreiro', base: '/dracopvp.png', transformed: '/draco_transformed.png', formEmoji: '🐉', form: 'Dragão', glow: '#ef4444', lore: 'Sangue antigo de dragão correndo em veias mortais.' },
+  { name: 'Metamorfo', klass: 'Monge', base: '/metamorfo_pvp.png', transformed: '/metamorfo_transformed.png', formEmoji: '🐺', form: 'Lobo · Urso · Águia', glow: '#93c5fd', lore: 'Nenhuma forma é definitiva — escolhe a fera para cada luta.' },
 ]
 
 // Classes reais do jogo (gameData.ts → CLASSES)
@@ -1569,7 +1570,9 @@ function RaceFlipCard({ card }: { card: RaceCard }) {
         </span>
       </div>
       <div className="flex flex-col gap-0.5 p-3">
-        <h3 className="text-sm font-bold leading-tight text-white">{card.name}</h3>
+        <h3 className="text-sm font-bold leading-tight text-white">
+          {card.name} <span className="font-normal text-textsec">· {card.klass}</span>
+        </h3>
         <p className="text-[11px] text-textsec leading-relaxed">{card.lore}</p>
         <span className="font-combat text-[10px] text-primary/90 pt-0.5">
           Forma: {card.formEmoji} {card.form}

@@ -1347,8 +1347,12 @@ function RepairDemo() {
       <div className="mt-6 border-t border-amber-500/20 pt-4">
         <span className="mb-2 block text-[11px] font-semibold text-amber-200/70">Inventário do personagem</span>
         <div className="flex flex-wrap justify-center gap-2">
-          {REPAIR_INVENTORY_FILLER.map((piece, i) => (
-            <GearTile key={piece.name} piece={piece} className={i === 3 ? 'ring-2 ring-amber-400 ring-offset-2 ring-offset-black/50' : ''} />
+          {REPAIR_INVENTORY_FILLER.map((piece) => (
+            <GearTile
+              key={piece.name}
+              piece={piece}
+              className={piece.name === 'Armadura de Couro Batido' ? 'ring-2 ring-amber-400 ring-offset-2 ring-offset-black/50' : ''}
+            />
           ))}
         </div>
       </div>
@@ -1360,8 +1364,6 @@ function RepairDemo() {
 // (a peça em reparo, "Armadura de Couro Batido", aparece destacada).
 const REPAIR_INVENTORY_FILLER: GearPiece[] = [
   { name: 'Espada de Recruta', rarity: 'COMMON' },
-  { name: 'Gibão de Couro', rarity: 'COMMON' },
-  { name: 'Capuz de Couro', rarity: 'COMMON' },
   { name: 'Armadura de Couro Batido', rarity: 'UNCOMMON' },
   { name: 'Coif de Malha', rarity: 'UNCOMMON' },
   { name: 'Luvas de Malha', rarity: 'UNCOMMON' },

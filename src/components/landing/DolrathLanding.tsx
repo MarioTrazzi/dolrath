@@ -215,8 +215,19 @@ function Hero({ primaryHref, glow, starCount, spinDice }: {
   const reduce = useReducedMotion()
   const spin = spinDice && !reduce
   return (
-    <section className="relative min-h-screen flex items-center pt-28 pb-20">
-      <ArenaSky starCount={starCount} glow={glow} />
+    <section className="relative min-h-screen flex items-center pt-28 pb-20 overflow-hidden">
+      {/* Arte cinematográfica: herói avançando pela Floresta Sombria com a
+          Anciã da Mata (chefe) emergindo da névoa ao fundo. */}
+      <img
+        src="/hero-masmorra-floresta.webp"
+        alt=""
+        aria-hidden="true"
+        className="absolute inset-0 h-full w-full object-cover object-center"
+      />
+      {/* Scrims: escurece a faixa esquerda (texto) e funde no fundo da seção. */}
+      <div className="absolute inset-0 bg-gradient-to-r from-background via-background/85 to-background/25" />
+      <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-background/30" />
+      <ArenaSky starCount={starCount} glow={glow} moon={false} />
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 w-full">
         <div className="grid lg:grid-cols-[1.2fr_0.8fr] items-center gap-12">
           <div className="flex flex-col items-start gap-6 max-w-2xl">
@@ -1402,6 +1413,12 @@ function FinalCTA({ primaryHref, glow }: { primaryHref: string; glow: number }) 
   return (
     <section className="relative py-28 overflow-hidden">
       <ArenaSky starCount={24} glow={glow} parallax={false} moon={false} />
+      {/* A Anciã da Mata espreitando atrás do chamado final. */}
+      <img
+        src="/boss-ancia-da-mata.webp"
+        alt="Anciã da Mata, a Guardiã Corrompida — chefe da Floresta Sombria"
+        className="pointer-events-none select-none absolute right-0 top-1/2 -translate-y-1/2 h-[125%] w-auto max-w-none opacity-40 hidden md:block [mask-image:linear-gradient(to_left,black_30%,transparent)]"
+      />
       <div className="relative mx-auto max-w-3xl px-4 sm:px-6 flex flex-col items-center gap-7 text-center">
         <D20 size={72} value={20} />
         <h2 className="text-3xl md:text-5xl font-bold text-balance leading-tight">

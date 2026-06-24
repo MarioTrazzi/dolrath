@@ -224,12 +224,9 @@ function Hero({ primaryHref, spinDice }: {
         aria-hidden="true"
         className="absolute inset-0 h-full w-full object-cover object-center"
       />
-      {/* Scrims: escurece a faixa esquerda (texto) e funde no fundo da seção. */}
-      <div className="absolute inset-0 bg-gradient-to-r from-background via-background/85 to-background/25" />
-      <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-background/30" />
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 w-full">
         <div className="grid lg:grid-cols-[1.2fr_0.8fr] items-center gap-12">
-          <div className="flex flex-col items-start gap-6 max-w-2xl">
+          <div className="flex flex-col items-start gap-6 max-w-2xl [text-shadow:0_2px_16px_rgba(0,0,0,0.85)]">
             <Reveal delay={0}>
               <Badge tone="primary" icon={<Sparkles size={14} />}>RPG on-chain · NFT</Badge>
             </Reveal>

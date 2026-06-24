@@ -40,6 +40,27 @@ function ItemThumb({ image, type, enhancement }: { image?: string | null; type: 
   )
 }
 
+// Miniatura de personagem: avatar (Cloudinary/URL) ou fallback com emoji.
+function CharThumb({ avatar }: { avatar?: string | null }) {
+  const url = resolveImageUrl(avatar ?? null)
+  return (
+    <div className="relative w-14 h-14 shrink-0 rounded-lg overflow-hidden ring-1 ring-white/10 flex items-center justify-center bg-indigo-500/20">
+      {url ? (
+        <Image
+          src={url}
+          alt=""
+          fill
+          sizes="56px"
+          className="object-cover"
+          unoptimized={!/^https?:\/\//i.test(url)}
+        />
+      ) : (
+        <span className="text-2xl">🧙</span>
+      )}
+    </div>
+  )
+}
+
 // ABIs mínimos para os fluxos on-chain do marketplace.
 const ERC20_ABI = [
   'function approve(address spender, uint256 value) returns (bool)',
@@ -53,6 +74,16 @@ const ITEMS_ABI = [
 const MARKET_ABI = [
   'function createListing(uint256 tokenId, uint256 priceGold) returns (uint256)',
   'function buy(uint256 listingId)',
+] as const
+// Mercado de PERSONAGENS (escrow de NFT por DOL).
+const CHAR_MARKET_ABI = [
+  'function createListing(uint256 tokenId, uint256 priceDol) returns (uint256)',
+  'function buy(uint256 listingId)',
+  'function cancelListing(uint256 listingId)',
+] as const
+const CHAR_NFT_ABI = [
+  'function setApprovalForAll(address operator, bool approved)',
+  'function isApprovedForAll(address owner, address operator) view returns (bool)',
 ] as const
 
 interface MarketConfig {
@@ -72,6 +103,23 @@ interface Listing {
 }
 interface Character { id: string; name: string }
 interface InvRow { id: string; quantity: number; enhancementLevel: number; item: { id: string; name: string; type: string; goldPrice: number; image?: string | null } }
+
+interface CharMarketConfig {
+  chainId: number
+  marketContractAddress: string
+  dolTokenAddress: string
+  characterNftContractAddress: string
+  dol: { decimals: number; symbol: string }
+}
+interface CharListing {
+  listingId: string
+  seller: string
+  tokenId: string
+  priceDol: { raw: string; formatted: string }
+  character: { id: string; name: string; race: string; class: string; level: number; avatar?: string | null } | null
+  dbOwner: { userId: string; walletAddress: string | null } | null
+}
+interface MyCharacter { id: string; name: string; race: string; class: string; level: number; avatar?: string | null; nftTokenId?: string | null }
 
 async function getSigner(expectedChainId: number) {
   const eth = (window as any)?.ethereum
@@ -97,6 +145,16 @@ export default function MarketplacePage() {
   const [selectedChar, setSelectedChar] = useState('')
   const [inventory, setInventory] = useState<InvRow[]>([])
   const [prices, setPrices] = useState<Record<string, string>>({})
+
+  // Aba ativa: itens (GOLD) ou personagens (DOL)
+  const [tab, setTab] = useState<'items' | 'characters'>('items')
+
+  // Mercado de personagens
+  const [charConfig, setCharConfig] = useState<CharMarketConfig | null>(null)
+  const [charListings, setCharListings] = useState<CharListing[]>([])
+  const [loadingCharList, setLoadingCharList] = useState(true)
+  const [myCharacters, setMyCharacters] = useState<MyCharacter[]>([])
+  const [charPrices, setCharPrices] = useState<Record<string, string>>({})
 
   const loadConfigAndListings = useCallback(async () => {
     setLoadingList(true)
@@ -139,8 +197,152 @@ export default function MarketplacePage() {
     } catch { /* silencioso */ }
   }, [])
 
+  // ---- Mercado de personagens (DOL) ----
+  const loadCharMarket = useCallback(async () => {
+    setLoadingCharList(true)
+    try {
+      const [cfgRes, lstRes] = await Promise.all([
+        fetch('/api/character-market/config'),
+        fetch('/api/character-market/listings'),
+      ])
+      if (cfgRes.ok) setCharConfig(await cfgRes.json())
+      const lst = await lstRes.json()
+      if (lstRes.ok) setCharListings(lst.listings || [])
+      else toast.error(lst?.error || 'Falha ao carregar o mercado de personagens')
+    } catch {
+      toast.error('Falha ao carregar o mercado de personagens')
+    } finally {
+      setLoadingCharList(false)
+    }
+  }, [])
+
+  const loadMyCharacters = useCallback(async () => {
+    try {
+      const res = await fetch('/api/character')
+      if (!res.ok) return
+      const data = await res.json()
+      const list: MyCharacter[] = (Array.isArray(data) ? data : []).map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        race: c.race,
+        class: c.class,
+        level: c.level,
+        avatar: c.avatar ?? null,
+        nftTokenId: c.nftTokenId != null ? String(c.nftTokenId) : null,
+      }))
+      setMyCharacters(list)
+    } catch { /* silencioso */ }
+  }, [])
+
   useEffect(() => { loadConfigAndListings(); loadCharacters() }, [loadConfigAndListings, loadCharacters])
   useEffect(() => { if (selectedChar) loadInventory(selectedChar) }, [selectedChar, loadInventory])
+  useEffect(() => { if (tab === 'characters') { loadCharMarket(); loadMyCharacters() } }, [tab, loadCharMarket, loadMyCharacters])
+
+  // Vender personagem: valida (NFT + vazio) → approve NFT → createListing(priceDol)
+  const handleSellCharacter = async (c: MyCharacter) => {
+    const priceStr = (charPrices[c.id] || '').trim()
+    const priceNum = Number(priceStr)
+    if (!Number.isFinite(priceNum) || priceNum <= 0) {
+      toast.error('Defina um preço em DOL maior que zero.')
+      return
+    }
+    setBusy(true)
+    const id = `sell-char-${c.id}`
+    try {
+      toast.loading('Verificando o personagem…', { id })
+      const checkRes = await fetch('/api/character-market/list-check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ characterId: c.id }),
+      })
+      const check = await checkRes.json()
+      if (!checkRes.ok) {
+        toast.error(check?.error || 'Não foi possível listar este personagem', { id })
+        return
+      }
+
+      const { provider, signer } = await getSigner(check.chainId)
+      const fees = await getPolygonFeeOverrides(provider)
+      const nft = new ethers.Contract(check.characterNftContractAddress, CHAR_NFT_ABI, signer)
+
+      const approved = await (nft as any).isApprovedForAll(check.to, check.marketContractAddress)
+      if (!approved) {
+        toast.loading('Autorizando o mercado…', { id })
+        await (await nft.setApprovalForAll(check.marketContractAddress, true, fees)).wait()
+      }
+
+      const market = new ethers.Contract(check.marketContractAddress, CHAR_MARKET_ABI, signer)
+      const priceWei = ethers.parseUnits(String(priceNum), check.dol.decimals)
+      toast.loading('Publicando a listagem…', { id })
+      await (await market.createListing(BigInt(check.tokenId), priceWei, fees)).wait()
+
+      toast.success(`Personagem listado por ${priceNum} ${check.dol.symbol}!`, { id })
+      setCharPrices((p) => ({ ...p, [c.id]: '' }))
+      loadCharMarket()
+      loadMyCharacters()
+    } catch (e) {
+      toast.error(getWalletTxErrorMessage(e) || 'Falha ao listar o personagem', { id })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Comprar personagem: approve DOL → market.buy → confirm (transfere a posse)
+  const handleBuyCharacter = async (l: CharListing) => {
+    if (!charConfig) return
+    setBusy(true)
+    const id = `buy-char-${l.listingId}`
+    try {
+      const { provider, signer } = await getSigner(charConfig.chainId)
+      const fees = await getPolygonFeeOverrides(provider)
+      const dol = new ethers.Contract(charConfig.dolTokenAddress, ERC20_ABI, signer)
+      toast.loading(`Aprovando ${charConfig.dol.symbol}…`, { id })
+      await (await dol.approve(charConfig.marketContractAddress, BigInt(l.priceDol.raw), fees)).wait()
+      const market = new ethers.Contract(charConfig.marketContractAddress, CHAR_MARKET_ABI, signer)
+      toast.loading('Comprando…', { id })
+      const tx = await market.buy(BigInt(l.listingId), fees)
+      await tx.wait()
+      toast.loading('Registrando a transferência…', { id })
+      const confRes = await fetch('/api/character-market/purchase-confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ txHash: tx.hash, listingId: l.listingId }),
+      })
+      const conf = await confRes.json()
+      if (!confRes.ok) {
+        toast.error(conf?.error || 'Compra feita on-chain, mas falha ao registrar. Tente confirmar de novo.', { id })
+        return
+      }
+      toast.success('Personagem comprado! Agora é seu.', { id })
+      loadCharMarket()
+      loadMyCharacters()
+    } catch (e) {
+      toast.error(getWalletTxErrorMessage(e) || 'Falha na compra', { id })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Cancelar a própria listagem: devolve a NFT do escrow para a carteira do vendedor
+  const handleCancelCharListing = async (l: CharListing) => {
+    if (!charConfig) return
+    setBusy(true)
+    const id = `cancel-char-${l.listingId}`
+    try {
+      const { provider, signer } = await getSigner(charConfig.chainId)
+      const fees = await getPolygonFeeOverrides(provider)
+      const market = new ethers.Contract(charConfig.marketContractAddress, CHAR_MARKET_ABI, signer)
+      toast.loading('Cancelando a listagem…', { id })
+      await (await market.cancelListing(BigInt(l.listingId), fees)).wait()
+      toast.success('Listagem cancelada. O personagem voltou para você.', { id })
+      loadCharMarket()
+      loadMyCharacters()
+    } catch (e) {
+      toast.error(getWalletTxErrorMessage(e) || 'Falha ao cancelar', { id })
+    } finally {
+      setBusy(false)
+    }
+  }
 
   // ---- Comprar (wallet: approve GOLD + market.buy) ----
   const handleBuy = async (l: Listing) => {
@@ -245,11 +447,29 @@ export default function MarketplacePage() {
       <header>
         <h1 className="text-3xl font-black text-amber-300">🏪 Mercado</h1>
         <p className="text-textsec text-sm mt-1">
-          Compre e venda equipamentos entre jogadores. Itens ganhos só viram NFT quando você os lista (lazy-mint) —
-          você paga apenas o gás.
+          {tab === 'items'
+            ? 'Compre e venda equipamentos entre jogadores em GOLD. Itens ganhos só viram NFT quando você os lista (lazy-mint) — você paga apenas o gás.'
+            : 'Compre e venda personagens entre jogadores em DOL. A NFT vai só com o nível e os atributos — esvazie o inventário antes de listar.'}
         </p>
       </header>
 
+      {/* ABAS */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setTab('items')}
+          className={`px-4 py-2 rounded-xl text-sm font-bold border ${tab === 'items' ? 'bg-amber-700/70 border-amber-400/40 text-amber-50' : 'bg-slate-900/50 border-white/10 text-textsec'}`}
+        >
+          ⚔️ Itens
+        </button>
+        <button
+          onClick={() => setTab('characters')}
+          className={`px-4 py-2 rounded-xl text-sm font-bold border ${tab === 'characters' ? 'bg-indigo-700/70 border-indigo-400/40 text-indigo-50' : 'bg-slate-900/50 border-white/10 text-textsec'}`}
+        >
+          🧙 Personagens
+        </button>
+      </div>
+
+      {tab === 'items' && (<>
       {/* VENDER */}
       <section className="rounded-2xl border border-amber-400/20 bg-black/30 p-5">
         <h2 className="text-xl font-bold text-amber-200 mb-3">Vender um item</h2>
@@ -333,6 +553,98 @@ export default function MarketplacePage() {
           </div>
         )}
       </section>
+      </>)}
+
+      {tab === 'characters' && (<>
+      {/* VENDER PERSONAGEM */}
+      <section className="rounded-2xl border border-indigo-400/20 bg-black/30 p-5">
+        <h2 className="text-xl font-bold text-indigo-200 mb-1">Vender um personagem</h2>
+        <p className="text-textsec text-xs mb-4">
+          A NFT vai só com o nível e os atributos. Desequipe e mande todos os itens para o inventário global antes de listar.
+        </p>
+        {myCharacters.length === 0 ? (
+          <p className="text-textsec text-sm">Você não tem personagens.</p>
+        ) : (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {myCharacters.map((c) => (
+              <div key={c.id} className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/50 p-3">
+                <CharThumb avatar={c.avatar} />
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-white truncate">{c.name}</div>
+                  <div className="text-xs text-textsec capitalize">{c.race} • {c.class} • Nv.{c.level}</div>
+                  {!c.nftTokenId ? (
+                    <div className="text-[11px] text-amber-300/80">Ainda não é NFT — registre on-chain antes de vender</div>
+                  ) : null}
+                </div>
+                <input
+                  type="number" min={1} placeholder="DOL"
+                  value={charPrices[c.id] || ''}
+                  onChange={(e) => setCharPrices((p) => ({ ...p, [c.id]: e.target.value }))}
+                  className="w-24 bg-slate-950 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white"
+                />
+                <button
+                  onClick={() => handleSellCharacter(c)}
+                  disabled={busy || !c.nftTokenId}
+                  className="px-3 py-1.5 rounded-lg text-sm font-bold text-indigo-50 bg-indigo-700/70 border border-indigo-400/40 disabled:opacity-40"
+                  title={!c.nftTokenId ? 'Registre o personagem on-chain primeiro' : ''}
+                >
+                  Listar
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* COMPRAR PERSONAGEM */}
+      <section>
+        <h2 className="text-xl font-bold text-indigo-200 mb-3">À venda</h2>
+        {loadingCharList ? (
+          <p className="text-textsec text-sm">Carregando personagens…</p>
+        ) : charListings.length === 0 ? (
+          <p className="text-textsec text-sm">Nenhum personagem à venda no momento.</p>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {charListings.map((l) => {
+              const mine = l.dbOwner?.userId === session.user?.id
+              return (
+                <div key={l.listingId} className="rounded-2xl border border-white/10 bg-slate-900/50 p-4 flex flex-col gap-2">
+                  <div className="flex items-center gap-3">
+                    <CharThumb avatar={l.character?.avatar} />
+                    <div className="min-w-0">
+                      <div className="font-bold text-white truncate">
+                        {l.character?.name ?? `Personagem #${l.tokenId}`}
+                      </div>
+                      <div className="text-xs text-textsec capitalize">
+                        {l.character ? `${l.character.race} • ${l.character.class} • Nv.${l.character.level}` : 'Fora do banco'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-indigo-300 font-black mt-auto">{l.priceDol.formatted} {charConfig?.dol.symbol || 'DOL'}</div>
+                  {mine ? (
+                    <button
+                      onClick={() => handleCancelCharListing(l)}
+                      disabled={busy}
+                      className="px-3 py-2 rounded-lg text-sm font-bold text-white bg-rose-800/70 border border-rose-400/30 disabled:opacity-40"
+                    >
+                      Cancelar listagem
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleBuyCharacter(l)}
+                      disabled={busy}
+                      className="px-3 py-2 rounded-lg text-sm font-bold text-white bg-emerald-700/70 border border-emerald-400/30 disabled:opacity-40"
+                    >
+                      💎 Comprar
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </section>
+      </>)}
     </div>
   )
 }

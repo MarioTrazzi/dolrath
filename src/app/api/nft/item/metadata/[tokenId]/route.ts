@@ -17,7 +17,7 @@ function toBigIntTokenId(raw: string): bigint | null {
 }
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: { tokenId: string } }
 ) {
   const tokenId = toBigIntTokenId(params.tokenId)
@@ -45,6 +45,7 @@ export async function GET(
     select: {
       tokenId: true,
       paidGoldWei: true,
+      enhancementLevel: true,
       item: {
         select: {
           id: true,
@@ -64,8 +65,13 @@ export async function GET(
     return NextResponse.json({ error: 'Item NFT not found' }, { status: 404 })
   }
 
+  const origin =
+    (process.env.NEXTAUTH_URL || '').trim().replace(/\/+$/, '') || new URL(req.url).origin
+
   const { metadata } = buildItemNftMetadata({
     tokenId: nft.tokenId as bigint,
+    origin,
+    enhancementLevel: typeof nft.enhancementLevel === 'number' ? nft.enhancementLevel : 0,
     item: nft.item,
     paidGoldWei: typeof nft.paidGoldWei === 'string' ? nft.paidGoldWei : null,
   })

@@ -89,8 +89,14 @@ export async function POST(req: Request) {
     })
     const itemKey = computeItemKey(inv.itemId)
 
-    // tokenURI com o aprimoramento congelado nos atributos (+N fica visível).
+    // Origem absoluta p/ a imagem da NFT (data: URI on-chain não tem origem).
+    const origin =
+      (process.env.NEXTAUTH_URL || '').trim().replace(/\/+$/, '') || new URL(req.url).origin
+
+    // tokenURI com o aprimoramento congelado (+N fica visível no nome/atributos).
     const { tokenURI } = buildItemNftTokenUri({
+      origin,
+      enhancementLevel: inv.enhancementLevel,
       item: {
         id: inv.item.id,
         name: inv.item.name,

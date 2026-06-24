@@ -85,7 +85,13 @@ export async function POST(req: Request) {
     const purchaseId = computePurchaseId({ paymentTxHash, itemId, to: walletAddress })
     const itemKey = computeItemKey(itemId)
 
+    // Origem absoluta p/ a imagem da NFT (data: URI on-chain não tem origem).
+    const origin =
+      (process.env.NEXTAUTH_URL || '').trim().replace(/\/+$/, '') || new URL(req.url).origin
+
     const { tokenURI } = buildItemNftTokenUri({
+      origin,
+      enhancementLevel: (item.stats as any)?.enhancementLevel ?? 0,
       item: {
         id: item.id,
         name: item.name,

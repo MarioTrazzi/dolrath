@@ -395,6 +395,9 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const [battleEvent, setBattleEvent] = useState<BattleEvent | null>(null)
   const [combatEnded, setCombatEnded] = useState(false)
   const [winnerId, setWinnerId] = useState<string | null>(null)
+  // Combate AUTOMÁTICO: um "piloto" joga os turnos por você. Persiste durante toda a
+  // run — ligou uma vez, todas as lutas seguem no automático (a exploração continua manual).
+  const [auto, setAuto] = useState(false)
   const [lootCard, setLootCard] = useState<ResolvedEvent | null>(null)
   const battleEventCounter = useRef(0)
   // d20 de sorte do nó atual (define a qualidade do loot pós-combate)
@@ -1240,6 +1243,54 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, stage, hasRolled, panelResult, pendingAttack, monsterPlan, stamina, mp])
 
+  // ---------- Piloto automático ----------
+  // Melhor golpe PAGÁVEL agora: especial (se transformado + MP) > arma (se tem arma + MP) > básico.
+  const autoPickAttack = (): AttackKind => {
+    if (transform && mp >= ATTACKS.special.mp) return 'special'
+    if (hasWeapon && mp >= ATTACKS.weapon.mp) return 'weapon'
+    return 'basic'
+  }
+
+  // Lê o estágio da máquina de estados do combate e dispara a MESMA ação que o jogador
+  // faria. Cada etapa muda o stage (ou hasRolled), então o efeito reage à próxima sem
+  // disparo duplo. Pequenos atrasos mantêm as animações visíveis.
+  useEffect(() => {
+    if (!auto || phase !== 'combat' || combatEnded) return
+    let cancelled = false
+    const fire = (fn: () => void, ms: number) => {
+      const t = setTimeout(() => { if (!cancelled) fn() }, ms)
+      return () => { cancelled = true; clearTimeout(t) }
+    }
+
+    if (stage === 'initiative' && !hasRolled) return fire(handleInitiativeRoll, 600)
+
+    if (stage === 'playerSelect') return fire(() => {
+      // 1) Cura de emergência: HP baixo + poção de vida no inventário.
+      if (hpRef.current <= effMaxHp * 0.35 && hpRef.current < effMaxHp) {
+        const potion = consumables.find(c => c.hp > 0 && c.qty > 0)
+        if (potion) { useConsumable(potion); return }
+      }
+      // 2) Transforma para liberar o Especial (raça com forma, fora de recarga e com MP).
+      if (!transform && transformCd === 0 && transformForms.length > 0) {
+        const cfg = TRANSFORMATION_CONFIG[transformForms[0]]
+        if (cfg && mp >= cfg.cost.mp) { activateTransform(transformForms[0]); return }
+      }
+      // 3) Ataca com o melhor golpe pagável.
+      choosePlayerAttack(autoPickAttack())
+    }, 650)
+
+    if (stage === 'playerRoll' && !hasRolled) return fire(handlePlayerAttackRoll, 550)
+
+    if (stage === 'playerDefense') return fire(() => {
+      // Ferido + com stamina → Defender (mitiga sempre); senão Esquivar (grátis, poupa stamina).
+      const hurt = hpRef.current <= effMaxHp * 0.5
+      choosePlayerDefense(hurt && stamina >= DEFEND_STAMINA_COST ? 'defend' : 'dodge')
+    }, 650)
+
+    if (stage === 'defenseRoll' && !hasRolled) return fire(handleDefenseRoll, 550)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auto, phase, stage, hasRolled, combatEnded, mp, stamina, transform, transformCd, consumables, effMaxHp])
+
   // ============================================================
   // RENDER
   // ============================================================
@@ -1596,13 +1647,23 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                       )}
 
                       {eventCard.monster ? (
-                        <button
-                          onClick={() => startCombat(eventCard.monster!)}
-                          className="w-full py-3.5 rounded-lg font-black text-white text-lg transition-transform active:scale-[0.98] hover:scale-[1.02] inline-flex items-center justify-center gap-2"
-                          style={{ background: 'linear-gradient(90deg, #e74c3c, #b91c1c)', boxShadow: '0 0 24px rgba(231,76,60,0.45)' }}
-                        >
-                          ⚔️ Lutar!
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => startCombat(eventCard.monster!)}
+                            className="flex-1 py-3.5 rounded-lg font-black text-white text-lg transition-transform active:scale-[0.98] hover:scale-[1.02] inline-flex items-center justify-center gap-2"
+                            style={{ background: 'linear-gradient(90deg, #e74c3c, #b91c1c)', boxShadow: '0 0 24px rgba(231,76,60,0.45)' }}
+                          >
+                            ⚔️ Lutar!
+                          </button>
+                          <button
+                            onClick={() => { setAuto(true); startCombat(eventCard.monster!) }}
+                            title="Resolver a luta no automático (o piloto joga os turnos por você)"
+                            className="shrink-0 px-4 py-3.5 rounded-lg font-black text-white text-sm transition-transform active:scale-[0.98] hover:scale-[1.02] inline-flex items-center justify-center gap-1.5"
+                            style={{ background: 'linear-gradient(90deg, #3b82f6, #1d4ed8)', boxShadow: '0 0 24px rgba(59,130,246,0.4)' }}
+                          >
+                            ⚡ Auto
+                          </button>
+                        </div>
                       ) : (
                         <button
                           onClick={dismissEvent}
@@ -1758,7 +1819,21 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
             </div>
 
             {/* Barra de ações do combate */}
-            <div className="flex-shrink-0 bg-black/70 backdrop-blur-md border-t border-white/10 px-3 sm:px-6 py-3 min-h-[88px] flex items-center justify-center">
+            <div className="relative flex-shrink-0 bg-black/70 backdrop-blur-md border-t border-white/10 px-3 sm:px-6 py-3 min-h-[88px] flex items-center justify-center">
+              {/* Toggle do piloto automático — liga/desliga a qualquer momento */}
+              {!combatEnded && (
+                <button
+                  onClick={() => setAuto(a => !a)}
+                  title={auto ? 'Desligar o piloto automático' : 'Ligar o piloto automático (joga os turnos por você)'}
+                  className={`absolute right-2 top-2 z-10 px-2.5 py-1 rounded-full text-[10px] font-black border transition-colors ${
+                    auto
+                      ? 'bg-blue-600/90 border-blue-300/60 text-white shadow-lg shadow-blue-900/50'
+                      : 'bg-white/5 border-white/15 text-white/60 hover:text-white hover:border-white/30'
+                  }`}
+                >
+                  {auto ? '⚡ Auto ON' : '⚡ Auto'}
+                </button>
+              )}
               {combatEnded ? (
                 <div className="text-white/70 text-sm font-bold animate-pulse">
                   {winnerId === character.id ? '🏆 Vitória! Coletando recompensas...' : '💀 Derrotado...'}

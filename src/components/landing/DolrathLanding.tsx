@@ -14,7 +14,7 @@ import { motion, AnimatePresence, useScroll, useTransform, useReducedMotion } fr
 import {
   Dices, Swords, Shield, Coins, Wallet, Play, Sparkles, ArrowRight, Menu, X,
   Github, Twitter, MessageCircle, Scroll, Wand2, VenetianMask, Hand, Axe,
-  AlertTriangle, Zap, Gem, RefreshCw, Palette,
+  AlertTriangle, Zap, Gem, RefreshCw, Palette, Crown, Skull,
 } from 'lucide-react'
 import { Button, Card, GlassCard, Badge, StatBar, SectionHeading, D20, DiceChip, Reveal } from './ui'
 import { itemImagePath } from '@/lib/itemCatalog'
@@ -141,7 +141,7 @@ function ArenaSky({
 const NAV_LINKS = [
   { label: 'Jogar', href: '#arena' },
   { label: 'Personagens', href: '#racas' },
-  { label: 'Masmorras', href: '#destaques' },
+  { label: 'Masmorras', href: '#masmorras' },
   { label: 'Marketplace', href: '#como-funciona' },
   { label: 'Docs', href: '/doc' },
 ]
@@ -276,7 +276,7 @@ function Hero({ primaryHref, glow, starCount, spinDice }: {
 // ============================================================
 
 const FEATURES = [
-  { Icon: Dices, title: 'Combate por turnos com dados', desc: 'O dado multiplica seus atributos: quanto melhor a build, mais a sorte rende. Estratégia decide quem fica de pé.' },
+  { Icon: Swords, title: 'Batalhas PvP por turnos', desc: 'Duele com outros jogadores: o dado multiplica seus atributos e a build decide quem fica de pé. Estratégia, não sorte cega.' },
   { Icon: Sparkles, title: 'Transformações de combate', desc: 'Desperte o Dragão, o Celestial ou as feras do Metamorfo no meio da luta — buffs temporários e habilidades especiais.' },
   { Icon: Shield, title: 'Personagens NFT seus de verdade', desc: 'Heróis ERC-721 na sua carteira. Venda, troque ou guarde — ninguém pode tirá-los de você.' },
   { Icon: Coins, title: 'Masmorras, ouro & marketplace', desc: 'Caia em masmorras por recompensas crescentes, ganhe ouro e negocie relíquias no mercado entre jogadores.' },
@@ -441,9 +441,9 @@ function ArenaSection({ glow }: { glow: number }) {
           <div className="flex flex-col gap-6 order-2 lg:order-1">
             <SectionHeading
               align="left"
-              eyebrow="Arena de combate"
+              eyebrow="Batalhas PvP · Arena"
               title="Cada turno é uma cena. Cada dado, uma decisão."
-              sub="Dois heróis frente a frente sob o céu enluarado, equipamentos à mostra. Desperte sua forma de combate, escolha a ação e o dado gira — multiplicando seus atributos e explodindo na tela: dano crítico, esquivas e transformações."
+              sub="Desafie outros jogadores na arena: dois heróis frente a frente, equipamentos à mostra. Desperte sua forma de combate, escolha a ação e o dado gira — multiplicando seus atributos e explodindo na tela: dano crítico, esquivas e transformações."
             />
             <ul className="flex flex-col gap-3">
               {([
@@ -542,6 +542,186 @@ function ArenaSection({ glow }: { glow: number }) {
               </div>
             </GlassCard>
           </Reveal>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ============================================================
+// Masmorras — cards reais (menores) + mapa com o herói andando nó a nó
+// Espelha DUNGEON_LIST e buildTrailPoints (DungeonMap) do jogo.
+// ============================================================
+
+interface DungeonCard {
+  id: string; name: string; emoji: string; tagline: string
+  stars: number; rooms: number; minor: number; levelReq: number
+  accent: string; boss: string
+}
+
+const DUNGEON_CARDS: DungeonCard[] = [
+  { id: 'floresta', name: 'Floresta Sombria', emoji: '🌲', tagline: 'Trilhas vivas sob a luz da lua', stars: 1, rooms: 3, minor: 2, levelReq: 1, accent: '#34d399', boss: 'Anciã da Mata' },
+  { id: 'caverna', name: 'Caverna de Cristal', emoji: '💎', tagline: 'Túneis que brilham no escuro', stars: 2, rooms: 4, minor: 2, levelReq: 10, accent: '#22d3ee', boss: 'Wyrm Cristalino' },
+  { id: 'pantano', name: 'Pântano Maldito', emoji: '🐊', tagline: 'Névoa, lodo e luzes que mentem', stars: 3, rooms: 4, minor: 3, levelReq: 25, accent: '#a3e635', boss: 'Hidra do Pântano' },
+  { id: 'ruinas', name: 'Ruínas Arcanas', emoji: '🏛️', tagline: 'Um império morto que ainda sonha', stars: 4, rooms: 5, minor: 3, levelReq: 40, accent: '#c084fc', boss: 'Lich Imperador' },
+]
+
+type TrailKind = 'start' | 'minor' | 'main' | 'boss'
+interface TrailPoint { x: number; y: number; kind: TrailKind }
+
+// Mesma lógica de buildTrailPoints do jogo: trilha serpenteante (base → topo),
+// entrada → (n nós menores + 1 sala principal) × salas → boss.
+function buildTrail(rooms: number, minor: number): TrailPoint[] {
+  const seq: TrailKind[] = ['start']
+  for (let t = 1; t <= rooms; t++) {
+    for (let m = 0; m < minor; m++) seq.push('minor')
+    seq.push('main')
+  }
+  seq.push('boss')
+  const last = seq.length - 1
+  return seq.map((kind, i) => {
+    const t = last > 0 ? i / last : 0
+    const y = 92 - t * 80 // 92% (base) → 12% (topo)
+    const x = i === 0 || i === last ? 50 : i % 2 === 1 ? 26 : 74
+    return { x, y, kind }
+  })
+}
+
+// Mapa em miniatura com o token do herói caminhando de nó em nó (loop).
+function MiniDungeonMap({ dungeon }: { dungeon: DungeonCard }) {
+  const reduce = useReducedMotion()
+  const pts = useMemo(() => buildTrail(dungeon.rooms, dungeon.minor), [dungeon.rooms, dungeon.minor])
+  const [step, setStep] = useState(0)
+  useEffect(() => { setStep(0) }, [dungeon.id])
+  useEffect(() => {
+    if (reduce) { setStep(pts.length - 1); return }
+    const id = setInterval(() => setStep((s) => (s + 1) % (pts.length + 2)), 850)
+    return () => clearInterval(id)
+  }, [pts.length, reduce])
+  const cur = Math.min(step, pts.length - 1)
+  const token = pts[cur]
+  const bgPath = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
+  const litPath = pts.slice(0, cur + 1).map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
+  return (
+    <div
+      className="relative w-full overflow-hidden rounded-2xl border"
+      style={{
+        aspectRatio: '3 / 4',
+        borderColor: `${dungeon.accent}55`,
+        background: `radial-gradient(120% 80% at 50% 100%, ${dungeon.accent}22, rgba(10,10,25,0.92) 62%)`,
+      }}
+    >
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" aria-hidden="true">
+        <path d={bgPath} fill="none" stroke={`${dungeon.accent}40`} strokeWidth={1.4} strokeDasharray="3 3" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+        <path d={litPath} fill="none" stroke={dungeon.accent} strokeWidth={1.8} strokeLinecap="round" vectorEffect="non-scaling-stroke" style={{ filter: `drop-shadow(0 0 3px ${dungeon.accent})` }} />
+      </svg>
+      {pts.map((p, i) => {
+        const visited = i <= cur
+        const sz = p.kind === 'boss' ? 30 : p.kind === 'main' ? 24 : p.kind === 'start' ? 20 : 13
+        return (
+          <div
+            key={i}
+            className="absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border text-[11px] transition-all duration-500"
+            style={{
+              left: `${p.x}%`, top: `${p.y}%`, width: sz, height: sz,
+              borderColor: visited ? dungeon.accent : 'rgba(255,255,255,0.18)',
+              background: visited ? `${dungeon.accent}33` : 'rgba(0,0,0,0.5)',
+              boxShadow: visited ? `0 0 10px ${dungeon.accent}88` : 'none',
+            }}
+          >
+            {p.kind === 'boss' ? '👑' : p.kind === 'main' ? '⚔️' : p.kind === 'start' ? '🚪' : ''}
+          </div>
+        )
+      })}
+      <motion.div
+        className="absolute z-10 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center"
+        initial={false}
+        animate={{ left: `${token.x}%`, top: `${token.y}%` }}
+        transition={{ duration: 0.55, ease: 'easeInOut' }}
+        style={{ left: `${token.x}%`, top: `${token.y}%` }}
+      >
+        <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-black/70 text-[13px]" style={{ boxShadow: `0 0 14px ${dungeon.accent}` }}>
+          🧝
+        </span>
+      </motion.div>
+      <div className="absolute left-2 top-2 flex items-center gap-1.5">
+        <span className="text-base">{dungeon.emoji}</span>
+        <span className="font-combat text-[11px] font-bold text-white/90" style={{ textShadow: '0 1px 3px #000' }}>{dungeon.name}</span>
+      </div>
+      <div className="absolute bottom-2 right-2 font-combat text-[10px] text-white/60">{dungeon.rooms} salas + 👑</div>
+    </div>
+  )
+}
+
+function DungeonsSection() {
+  const [active, setActive] = useState(0)
+  const dungeon = DUNGEON_CARDS[active]
+  return (
+    <section id="masmorras" className="relative py-24 bg-secondary/40">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 flex flex-col gap-12">
+        <SectionHeading
+          eyebrow="Masmorras"
+          title="Quatro terras perigosas. Um boss em cada uma."
+          sub="Escolha uma masmorra e siga a trilha: role o d20 a cada nó, enfrente salas com monstros e chegue ao boss. Cada masmorra é um band de níveis — da Floresta (Nv.1) às Ruínas Arcanas (Nv.40+)."
+        />
+        <div className="grid items-start gap-10 lg:grid-cols-[1fr_0.8fr]">
+          {/* cards menores — mesma identidade do jogo; clicar troca o mapa */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            {DUNGEON_CARDS.map((d, i) => {
+              const sel = i === active
+              return (
+                <button
+                  key={d.id}
+                  onClick={() => setActive(i)}
+                  aria-pressed={sel}
+                  className="relative overflow-hidden rounded-2xl border-2 p-4 text-left transition-all hover:scale-[1.02]"
+                  style={{
+                    borderColor: sel ? d.accent : `${d.accent}44`,
+                    background: `linear-gradient(150deg, ${d.accent}22, rgba(12,12,28,0.85))`,
+                    boxShadow: sel ? `0 0 22px ${d.accent}55` : 'none',
+                  }}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="text-3xl drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]">{d.emoji}</div>
+                    <div className="text-right">
+                      <div className="text-xs tracking-tighter text-amber-400">
+                        {'★'.repeat(d.stars)}<span className="text-white/25">{'★'.repeat(4 - d.stars)}</span>
+                      </div>
+                      <div className="mt-0.5 text-[10px] text-white/55">{d.rooms} salas + 👑</div>
+                    </div>
+                  </div>
+                  <h3 className="mt-2 text-base font-black text-white">{d.name}</h3>
+                  <p className="text-[11px] italic text-white/60">{d.tagline}</p>
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="font-combat text-[10px]" style={{ color: d.accent }}>👑 {d.boss}</span>
+                    <span className="font-combat text-[10px] text-white/50">Nv. {d.levelReq}+</span>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+          {/* mapa + animação do token */}
+          <div className="flex flex-col gap-3">
+            <MiniDungeonMap dungeon={dungeon} />
+            <p className="text-center font-combat text-[11px] text-textsec/70">
+              🚪 entrada · ⚔️ salas principais (monstro + loot) · 👑 boss — o herói avança nó a nó
+            </p>
+          </div>
+        </div>
+        {/* como a masmorra funciona */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {([
+            [Zap, 'Stamina é seu orçamento do dia', 'Reseta amanhã e só é gasta avançando na trilha — o combate não consome stamina.'],
+            [Skull, 'Morrer não tem penalidade', 'Você nunca perde XP, ouro ou itens ao cair ou sair. Cada tentativa te deixa mais forte.'],
+            [Shield, 'Gear e aprimoramento contam', 'No combate da masmorra o equipamento e o +N viram atributos reais — leve sua melhor build.'],
+            [Crown, 'Boss no fim da trilha', 'Salas principais garantem monstro e melhor espólio; o boss ancora o topo do band de níveis.'],
+          ] as const).map(([Ic, t, dsc]) => (
+            <GlassCard key={t} className="flex flex-col gap-2 p-5">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/30 bg-primary/15 text-primary"><Ic size={20} /></span>
+              <h3 className="text-sm font-semibold text-white">{t}</h3>
+              <p className="text-xs leading-relaxed text-textsec">{dsc}</p>
+            </GlassCard>
+          ))}
         </div>
       </div>
     </section>
@@ -915,6 +1095,7 @@ export default function DolrathLanding() {
         <Hero primaryHref={primaryHref} glow={glow} starCount={starCount} spinDice={spinDice} />
         <Features />
         <ArenaSection glow={glow} />
+        <DungeonsSection />
         <RelicsSection />
         <RacesSection />
         <HowSection />

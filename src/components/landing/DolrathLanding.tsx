@@ -13,8 +13,8 @@ import { useSession } from 'next-auth/react'
 import { motion, AnimatePresence, useScroll, useTransform, useReducedMotion } from 'framer-motion'
 import {
   Dices, Swords, Shield, Coins, Wallet, Play, Sparkles, ArrowRight, Menu, X,
-  Github, Twitter, MessageCircle, Scroll, Wand2, Target, Axe,
-  AlertTriangle, Zap, Gem, RefreshCw,
+  Github, Twitter, MessageCircle, Scroll, Wand2, VenetianMask, Hand, Axe,
+  AlertTriangle, Zap, Gem, RefreshCw, Palette,
 } from 'lucide-react'
 import { Button, Card, GlassCard, Badge, StatBar, SectionHeading, D20, DiceChip, Reveal } from './ui'
 import { itemImagePath } from '@/lib/itemCatalog'
@@ -640,10 +640,12 @@ const RACE_CARDS: RaceCard[] = [
   { name: 'Metamorfo', base: '/metamorfo_pvp.png', transformed: '/metamorfo_transformed.png', formEmoji: '🐺', form: 'Lobo · Urso · Águia', glow: '#93c5fd', lore: 'Nenhuma forma é definitiva — escolhe a fera para cada luta.' },
 ]
 
+// Classes reais do jogo (gameData.ts → CLASSES)
 const CLASSES = [
   { Icon: Axe, name: 'Guerreiro', lore: 'Linha de frente. Aço, resistência e dano sustentado.' },
+  { Icon: VenetianMask, name: 'Ladino', lore: 'Ataques rápidos e furtivos: esquiva, precisão e o golpe pelas costas.' },
   { Icon: Wand2, name: 'Mago', lore: 'Verga a mana ao seu favor — frágil, devastador.' },
-  { Icon: Target, name: 'Arqueiro', lore: 'Crítico e velocidade. Termina lutas antes de começarem.' },
+  { Icon: Hand, name: 'Monge', lore: 'Lutador desarmado: o próprio corpo é a arma. Ágil e resiliente.' },
 ]
 
 // Card de NFT que faz flip (base ⇄ transformada) ao clicar no canto inferior
@@ -729,7 +731,7 @@ function RacesSection() {
         <SectionHeading
           eyebrow="Raças, Classes & Transformações"
           title="Quem você será quando a lua subir?"
-          sub="Cada herói é um NFT que você cria de verdade. Clique no canto inferior direito do card para despertar a transformação de combate da raça — temporária, custa MP e Stamina, muda seus atributos e libera habilidades especiais."
+          sub="Cada herói é um NFT único: sua arte é gerada exclusivamente por IA a partir do prompt que você escreve. Clique no canto inferior direito do card para despertar a transformação de combate da raça — temporária, custa MP e Stamina, muda seus atributos e libera habilidades especiais."
         />
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
           {RACE_CARDS.map((card, i) => (
@@ -739,11 +741,11 @@ function RacesSection() {
           ))}
         </div>
         <div className="flex justify-center">
-          <Badge tone="neutral" icon={<Swords size={14} />} className="text-sm px-4 py-1.5">
-            + Orc — fúria pura, sem transformação
+          <Badge tone="primary" icon={<Palette size={14} />} className="text-sm px-4 py-1.5">
+            Arte exclusiva — cada NFT é gerada por IA a partir do seu prompt
           </Badge>
         </div>
-        <div className="grid sm:grid-cols-3 gap-4 max-w-4xl mx-auto w-full">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 max-w-4xl mx-auto w-full">
           {CLASSES.map((c, i) => (
             <Reveal key={c.name} delay={i * 80}>
               <Card className="h-full flex flex-col gap-3">

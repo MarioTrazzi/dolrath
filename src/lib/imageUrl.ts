@@ -39,6 +39,20 @@ function isLikelyUrl(value: string): boolean {
 }
 
 /**
+ * Torna uma URL absoluta. Caminhos same-origin (ex.: "/items/x.webp") são
+ * relativos e NÃO carregam quando o JSON da NFT é lido fora do site (data: URI
+ * on-chain ou carteira/marketplace). Prefixa a origem quando o caminho começa
+ * com "/". URLs já absolutas (http/data/ipfs/cloudinary) passam intactas.
+ */
+export function absolutizeUrl(url?: string | null, origin?: string | null): string | null {
+  if (!url) return url ?? null
+  if (!url.startsWith('/')) return url
+  const base = String(origin || '').trim().replace(/\/+$/, '')
+  if (!base) return url
+  return `${base}${url}`
+}
+
+/**
  * Resolves an image reference into a wallet-friendly URL.
  *
  * Accepts:

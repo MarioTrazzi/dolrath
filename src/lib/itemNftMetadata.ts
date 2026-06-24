@@ -1,4 +1,4 @@
-import { resolveImageUrl } from '@/lib/imageUrl'
+import { resolveImageUrl, absolutizeUrl } from '@/lib/imageUrl'
 
 function base64EncodeUtf8(input: string): string {
   return Buffer.from(input, 'utf8').toString('base64')
@@ -30,17 +30,6 @@ function safeNumber(value: unknown, fallback: number): number {
   if (typeof value === 'number' && Number.isFinite(value)) return value
   if (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value))) return Number(value)
   return fallback
-}
-
-// Torna a imagem absoluta. Caminhos same-origin (ex.: "/items/x.webp") são
-// relativos e NÃO carregam quando o JSON é embutido on-chain (data: URI não tem
-// origem). Carteiras/marketplaces precisam de URL absoluta.
-function absolutizeUrl(url: string | null, origin?: string | null): string | null {
-  if (!url) return url
-  if (!url.startsWith('/')) return url
-  const base = String(origin || '').trim().replace(/\/+$/, '')
-  if (!base) return url
-  return `${base}${url}`
 }
 
 // Chaves de stats que já viram atributos canônicos (evita duplicar no flatten).

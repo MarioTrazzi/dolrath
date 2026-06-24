@@ -5,7 +5,6 @@ import { verifyGoldTransferTx } from '@/lib/goldPayments'
 import { computeItemKey, computePurchaseId, signItemMintRequest } from '@/lib/itemNftSigning'
 import { Contract, parseUnits } from 'ethers'
 import { getGoldProvider, getGoldContractAddress } from '@/lib/goldOnchain'
-import { buildItemNftTokenUri } from '@/lib/itemNftMetadata'
 
 const ERC20_DECIMALS_ABI = ['function decimals() view returns (uint8)'] as const
 
@@ -85,25 +84,10 @@ export async function POST(req: Request) {
     const purchaseId = computePurchaseId({ paymentTxHash, itemId, to: walletAddress })
     const itemKey = computeItemKey(itemId)
 
-    // Origem absoluta p/ a imagem da NFT (data: URI on-chain não tem origem).
-    const origin =
-      (process.env.NEXTAUTH_URL || '').trim().replace(/\/+$/, '') || new URL(req.url).origin
-
-    const { tokenURI } = buildItemNftTokenUri({
-      origin,
-      enhancementLevel: (item.stats as any)?.enhancementLevel ?? 0,
-      item: {
-        id: item.id,
-        name: item.name,
-        description: item.description,
-        image: (item as any).image,
-        type: item.type,
-        subtype: item.subtype,
-        level: item.level,
-        stats: item.stats,
-      },
-      paidGoldWei: paidGold.toString(),
-    })
+    // tokenURI VAZIO de propósito: o contrato cai em baseURI + tokenId e a
+    // metadata é servida AO VIVO por /api/nft/item/metadata/<tokenId>. Requer
+    // ITEM_NFT_BASE_URI setado no contrato.
+    const tokenURI = ''
 
     const nowSec = Math.floor(Date.now() / 1000)
     const deadline = BigInt(nowSec + 15 * 60)

@@ -3,7 +3,6 @@ import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { Contract, parseUnits } from 'ethers'
 import { computeItemKey, computePurchaseId, signItemMintRequest } from '@/lib/itemNftSigning'
-import { buildItemNftTokenUri } from '@/lib/itemNftMetadata'
 import { getGoldContractAddress, getGoldProvider } from '@/lib/goldOnchain'
 import { getItemMarketChainId, getItemMarketContractAddress } from '@/lib/itemMarketOnchain'
 
@@ -89,26 +88,10 @@ export async function POST(req: Request) {
     })
     const itemKey = computeItemKey(inv.itemId)
 
-    // Origem absoluta p/ a imagem da NFT (data: URI on-chain não tem origem).
-    const origin =
-      (process.env.NEXTAUTH_URL || '').trim().replace(/\/+$/, '') || new URL(req.url).origin
-
-    // tokenURI com o aprimoramento congelado (+N fica visível no nome/atributos).
-    const { tokenURI } = buildItemNftTokenUri({
-      origin,
-      enhancementLevel: inv.enhancementLevel,
-      item: {
-        id: inv.item.id,
-        name: inv.item.name,
-        description: inv.item.description,
-        image: (inv.item as any).image,
-        type: inv.item.type,
-        subtype: inv.item.subtype,
-        level: inv.item.level,
-        stats: { ...((inv.item.stats as any) || {}), enhancementLevel: inv.enhancementLevel },
-      },
-      paidGoldWei: paidGold.toString(),
-    })
+    // tokenURI VAZIO de propósito: o contrato cai em baseURI + tokenId e a
+    // metadata é servida AO VIVO por /api/nft/item/metadata/<tokenId>, refletindo
+    // imagem e aprimoramento atuais. Requer ITEM_NFT_BASE_URI setado no contrato.
+    const tokenURI = ''
 
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 15 * 60)
     const signed = await signItemMintRequest({ to: walletAddress, purchaseId, itemKey, paidGold, tokenURI, deadline })

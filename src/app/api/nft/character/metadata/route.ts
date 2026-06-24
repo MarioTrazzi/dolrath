@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { buildCharacterNftMetadata } from '@/lib/characterNftMetadata'
+import { getLevelInfo } from '@/lib/experienceSystem'
+
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 function toNumber(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value
@@ -43,6 +47,7 @@ export async function GET(req: Request) {
       race: true,
       class: true,
       level: true,
+      experience: true,
       avatar: true,
       attributes: true,
       baseStats: true,
@@ -61,14 +66,22 @@ export async function GET(req: Request) {
     return extractStatsFromCharacterAttributes((character as any).baseStats)
   })()
 
+  // Nível AO VIVO a partir do XP (a coluna level pode estar defasada). É isso
+  // que faz o herói "evoluir" na NFT conforme ganha experiência.
+  const liveLevel = getLevelInfo(character.experience).level || character.level || 1
+
+  const origin =
+    (process.env.NEXTAUTH_URL || '').trim().replace(/\/+$/, '') || new URL(req.url).origin
+
   const { metadata } = buildCharacterNftMetadata({
     name: character.name,
     raceId: String(character.race),
     classId: String(character.class),
     avatarUrl: character.avatar,
     stats,
-    level: character.level,
+    level: liveLevel,
     mintNonce: nonce,
+    origin,
   })
 
   // This tokenURI points to a dynamic endpoint; avoid caching so level/stats updates

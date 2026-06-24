@@ -1,5 +1,5 @@
 import { getRaceById, getClassById } from '@/lib/gameData'
-import { resolveImageUrl } from '@/lib/imageUrl'
+import { resolveImageUrl, absolutizeUrl } from '@/lib/imageUrl'
 
 function base64EncodeUtf8(input: string): string {
   return Buffer.from(input, 'utf8').toString('base64')
@@ -56,6 +56,7 @@ export function buildCharacterNftMetadata(params: {
   stats: { str: number; agi: number; int: number; def: number }
   level?: number
   mintNonce?: string | null
+  origin?: string | null
 }) {
   const race = getRaceById(params.raceId)
   const cls = getClassById(params.classId)
@@ -112,7 +113,7 @@ export function buildCharacterNftMetadata(params: {
   </g>
 </svg>`
 
-  const resolvedAvatar = resolveImageUrl(params.avatarUrl)
+  const resolvedAvatar = absolutizeUrl(resolveImageUrl(params.avatarUrl), params.origin)
 
   const metadata = {
     name: title,

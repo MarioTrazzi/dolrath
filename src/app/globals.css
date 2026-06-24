@@ -158,9 +158,25 @@
   100% { opacity: 0; transform: translateY(-44px) scale(0.95); }
 }
 
+/* Hero — despertar da forma Celestial (relâmpago + pulso de aura) */
+@keyframes hero-lightning {
+  0%   { opacity: 0; }
+  8%   { opacity: 0.95; }
+  18%  { opacity: 0.15; }
+  30%  { opacity: 0.8; }
+  100% { opacity: 0; }
+}
+
+@keyframes hero-aura-pulse {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .arena-sky span,
-  [style*="float-damage"] {
+  [style*="float-damage"],
+  [style*="hero-lightning"],
+  [style*="hero-aura-pulse"] {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }

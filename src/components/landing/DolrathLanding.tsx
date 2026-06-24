@@ -209,11 +209,46 @@ function Navbar({ primaryHref }: { primaryHref: string }) {
 // Hero
 // ============================================================
 
+// Ciclo do fundo do hero: a cena normal "desperta" para a forma Celestial
+// (elfo irradiando aura dourada + Anciã da Mata com aura verde) por alguns
+// segundos, com relâmpagos, e depois volta ao normal — em loop.
+type HeroPhase = 'normal' | 'awaken'
+
+function useHeroAwaken(enabled: boolean) {
+  const [phase, setPhase] = useState<HeroPhase>('normal')
+  const [bolt, setBolt] = useState(0) // muda a cada relâmpago p/ re-disparar a animação
+  useEffect(() => {
+    if (!enabled) return
+    let alive = true
+    const timers: ReturnType<typeof setTimeout>[] = []
+    const flash = (delay: number) => timers.push(setTimeout(() => alive && setBolt((b) => b + 1), delay))
+    const loop = () => {
+      if (!alive) return
+      // salva de relâmpagos anunciando a transformação
+      flash(0); flash(140); flash(320)
+      timers.push(setTimeout(() => alive && setPhase('awaken'), 220))
+      // mantém a forma celestial por ~4.5s, com mais um estalo no meio
+      flash(2600)
+      timers.push(setTimeout(() => alive && setPhase('normal'), 4700))
+    }
+    const id = setInterval(loop, 9000)
+    const kickoff = setTimeout(loop, 2600)
+    return () => {
+      alive = false
+      clearInterval(id)
+      clearTimeout(kickoff)
+      timers.forEach(clearTimeout)
+    }
+  }, [enabled])
+  return { awaken: phase === 'awaken', bolt }
+}
+
 function Hero({ primaryHref, spinDice }: {
   primaryHref: string; spinDice: boolean
 }) {
   const reduce = useReducedMotion()
   const spin = spinDice && !reduce
+  const { awaken, bolt } = useHeroAwaken(!reduce)
   return (
     <section className="relative min-h-screen flex items-center pt-28 pb-20 overflow-hidden">
       {/* Arte cinematográfica: herói avançando pela Floresta Sombria com a
@@ -224,6 +259,39 @@ function Hero({ primaryHref, spinDice }: {
         aria-hidden="true"
         className="absolute inset-0 h-full w-full object-cover object-center"
       />
+      {/* Forma Celestial: mesma cena com o elfo desperto (aura dourada) e o
+          chefe com aura verde — entra em cross-fade durante o "awaken". */}
+      <img
+        src="/hero-masmorra-floresta-celestial.webp"
+        alt=""
+        aria-hidden="true"
+        className="absolute inset-0 h-full w-full object-cover object-center transition-opacity duration-700 ease-out"
+        style={{ opacity: awaken ? 1 : 0 }}
+      />
+      {/* Brilho celestial dourado que pulsa enquanto a forma está desperta */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 pointer-events-none transition-opacity duration-700 mix-blend-screen"
+        style={{
+          opacity: awaken ? 1 : 0,
+          background:
+            'radial-gradient(45% 60% at 24% 55%, rgba(251,191,36,0.28), transparent 70%), radial-gradient(40% 55% at 76% 45%, rgba(74,222,128,0.16), transparent 72%)',
+          animation: awaken ? 'hero-aura-pulse 2.2s ease-in-out infinite' : 'none',
+        }}
+      />
+      {/* Relâmpago: clarão branco-azulado curto, re-disparado a cada estalo */}
+      {bolt > 0 && (
+        <div
+          key={bolt}
+          aria-hidden="true"
+          className="absolute inset-0 pointer-events-none mix-blend-screen"
+          style={{
+            background:
+              'linear-gradient(180deg, rgba(226,232,240,0.9), rgba(148,163,255,0.35) 40%, transparent 75%)',
+            animation: 'hero-lightning 0.55s ease-out forwards',
+          }}
+        />
+      )}
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 w-full">
         <div className="grid lg:grid-cols-[1.2fr_0.8fr] items-center gap-12">
           <div className="flex flex-col items-start gap-6 max-w-2xl [text-shadow:0_2px_16px_rgba(0,0,0,0.85)]">

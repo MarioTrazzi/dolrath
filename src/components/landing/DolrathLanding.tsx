@@ -13,7 +13,7 @@ import { useSession } from 'next-auth/react'
 import { motion, useScroll, useTransform, useReducedMotion } from 'framer-motion'
 import {
   Dices, Swords, Shield, Coins, Wallet, Play, Sparkles, ArrowRight, Menu, X,
-  Github, Twitter, MessageCircle, Scroll, Wand2, Target, Axe, DoorOpen,
+  Github, Twitter, MessageCircle, Scroll, Wand2, Target, Axe,
   AlertTriangle, Zap, Gem,
 } from 'lucide-react'
 import { Button, Card, GlassCard, Badge, StatBar, SectionHeading, D20, DiceChip, Reveal } from './ui'
@@ -236,8 +236,8 @@ function Hero({ primaryHref, glow, starCount, spinDice }: {
             <Reveal delay={200}>
               <p className="text-lg text-textsec max-w-xl text-pretty">
                 Crie um personagem que é seu de verdade, equipe-o até os dentes e
-                desça às masmorras. Combate tático por turnos onde cada rolagem de
-                dado pode mudar a batalha.
+                desça às masmorras. Combate tático por turnos: desperte sua forma —
+                Dragão, Celestial e mais — e deixe cada rolagem de dado mudar a batalha.
               </p>
             </Reveal>
             <Reveal delay={300} className="flex flex-wrap items-center gap-4">
@@ -279,10 +279,10 @@ function Hero({ primaryHref, glow, starCount, spinDice }: {
 // ============================================================
 
 const FEATURES = [
-  { Icon: Dices, title: 'Combate por turnos com dados', desc: 'Cada ataque é uma rolagem. Estratégia, atributos e um pouco de sorte decidem quem fica de pé.' },
+  { Icon: Dices, title: 'Combate por turnos com dados', desc: 'O dado multiplica seus atributos: quanto melhor a build, mais a sorte rende. Estratégia decide quem fica de pé.' },
+  { Icon: Sparkles, title: 'Transformações de combate', desc: 'Desperte o Dragão, o Celestial ou as feras do Metamorfo no meio da luta — buffs temporários e habilidades especiais.' },
   { Icon: Shield, title: 'Personagens NFT seus de verdade', desc: 'Heróis ERC-721 na sua carteira. Venda, troque ou guarde — ninguém pode tirá-los de você.' },
-  { Icon: DoorOpen, title: 'Masmorras & modo treino', desc: 'Explore masmorras com recompensas crescentes ou afie sua build contra monstros sem risco.' },
-  { Icon: Coins, title: 'Ouro & marketplace', desc: 'Ganhe ouro em batalha e negocie armas, armaduras e relíquias no mercado entre jogadores.' },
+  { Icon: Coins, title: 'Masmorras, ouro & marketplace', desc: 'Caia em masmorras por recompensas crescentes, ganhe ouro e negocie relíquias no mercado entre jogadores.' },
 ]
 
 function Features() {
@@ -312,41 +312,62 @@ function Features() {
 // ============================================================
 
 function Fighter({
-  name, klass, level, portrait, hp, hpMax, mp, mpMax, sta, staMax, weapon, armor, reverse = false, hit = false,
+  name, klass, level, baseImg, transformImg, transformLabel, baseGlow, auraGlow,
+  hp, hpMax, mp, mpMax, sta, staMax, weapon, armor, reverse = false, hit = false, transformed = false,
 }: {
-  name: string; klass: string; level: number; portrait: string
+  name: string; klass: string; level: number
+  baseImg: string; transformImg: string; transformLabel: string
+  baseGlow: string; auraGlow: string
   hp: number; hpMax: number; mp: number; mpMax: number; sta: number; staMax: number
-  weapon: GearPiece; armor: GearPiece[]; reverse?: boolean; hit?: boolean
+  weapon: GearPiece; armor: GearPiece[]; reverse?: boolean; hit?: boolean; transformed?: boolean
 }) {
   const wr = RARITY_FRAME[weapon.rarity]
+  const glow = transformed ? auraGlow : baseGlow
   return (
     <div className={`flex flex-col gap-2.5 ${reverse ? 'items-end' : 'items-start'}`}>
       <div className={`flex items-center gap-2 ${reverse ? 'flex-row-reverse' : ''}`}>
         <span className="font-semibold text-white">{name}</span>
         <span className="font-combat text-[11px] text-textsec">{klass} · Nv. {level}</span>
       </div>
-      {/* retrato do herói + arma principal (tier IV) em destaque */}
+      {/* retrato real do herói + arma principal — faz cross-fade para a forma transformada */}
       <motion.div
         animate={hit ? { x: reverse ? [0, 10, -6, 0] : [0, -10, 6, 0] } : {}}
         transition={{ duration: 0.45 }}
         className={`relative flex items-end gap-2.5 ${reverse ? 'flex-row-reverse' : ''}`}
       >
         <div
-          className="relative w-[4.5rem] h-24 sm:w-24 sm:h-28 rounded-2xl border border-white/10 flex items-center justify-center text-5xl sm:text-6xl"
+          className="relative w-20 h-28 sm:w-28 sm:h-36 rounded-2xl border overflow-hidden"
           style={{
-            background: 'linear-gradient(180deg, rgba(22,33,62,0.9), rgba(15,15,35,0.95))',
-            boxShadow: hit ? '0 0 24px rgba(231,76,60,0.45)' : `0 0 22px ${wr.glow}`,
+            borderColor: transformed ? glow : 'rgba(255,255,255,0.12)',
+            boxShadow: hit ? '0 0 26px rgba(231,76,60,0.5)' : `0 0 ${transformed ? 36 : 18}px ${glow}`,
+            transition: 'box-shadow 0.6s ease, border-color 0.6s ease',
           }}
           aria-hidden="true"
         >
-          {portrait}
-          <div
-            className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-24 sm:w-28 h-4 rounded-[50%] blur-[2px]"
-            style={{ background: 'rgba(0,0,0,0.5)' }}
+          {/* forma base */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={baseImg} alt="" loading="lazy"
+            className={`absolute inset-0 w-full h-full object-cover object-top transition-opacity duration-700 ${transformed ? 'opacity-0' : 'opacity-100'}`}
+          />
+          {/* forma transformada */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={transformImg} alt="" loading="lazy"
+            className={`absolute inset-0 w-full h-full object-cover object-top transition-opacity duration-700 ${transformed ? 'opacity-100' : 'opacity-0'}`}
+          />
+          {/* aura ao despertar a forma */}
+          <span
+            className="absolute inset-0 pointer-events-none transition-opacity duration-700"
+            style={{
+              opacity: transformed ? 1 : 0,
+              boxShadow: `inset 0 0 32px ${glow}`,
+              background: `radial-gradient(circle at 50% 28%, ${glow}, transparent 72%)`,
+            }}
           />
           {hit && (
             <span
-              className="absolute -top-3 left-1/2 -translate-x-1/2 font-combat font-bold text-xl text-error"
+              className="absolute -top-3 left-1/2 -translate-x-1/2 z-10 font-combat font-bold text-xl text-error"
               style={{ animation: 'float-damage 1.6s ease-out forwards', textShadow: '0 0 12px rgba(231,76,60,0.8)' }}
             >
               −24
@@ -355,6 +376,18 @@ function Fighter({
         </div>
         <GearTile piece={weapon} size="lg" />
       </motion.div>
+      {/* selo da transformação (aparece ao despertar a forma) */}
+      <div className={`h-5 ${reverse ? 'self-end' : 'self-start'}`}>
+        <motion.span
+          initial={false}
+          animate={{ opacity: transformed ? 1 : 0, y: transformed ? 0 : 5, scale: transformed ? 1 : 0.9 }}
+          transition={{ duration: 0.4 }}
+          className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold backdrop-blur-sm"
+          style={{ borderColor: auraGlow, color: auraGlow, background: 'rgba(0,0,0,0.55)' }}
+        >
+          {transformLabel}
+        </motion.span>
+      </div>
       <span className={`font-combat text-[11px] font-semibold ${wr.text} max-w-[11rem] truncate ${reverse ? 'text-right' : ''}`}>
         {weapon.name}
       </span>
@@ -371,19 +404,24 @@ function Fighter({
   )
 }
 
+// Ciclo da cena: forma base → desperta a transformação → dado gira → golpe → volta
+type ArenaPhase = 'idle' | 'transform' | 'rolling' | 'hit'
+
 function ArenaSection({ glow }: { glow: number }) {
-  const [phase, setPhase] = useState<'idle' | 'rolling' | 'hit'>('idle')
+  const [phase, setPhase] = useState<ArenaPhase>('idle')
   useEffect(() => {
     let alive = true
     const timers: ReturnType<typeof setTimeout>[] = []
     const loop = () => {
       if (!alive) return
-      setPhase('rolling')
-      timers.push(setTimeout(() => alive && setPhase('hit'), 1400))
-      timers.push(setTimeout(() => alive && setPhase('idle'), 3200))
+      setPhase('idle')
+      timers.push(setTimeout(() => alive && setPhase('transform'), 1600))
+      timers.push(setTimeout(() => alive && setPhase('rolling'), 3200))
+      timers.push(setTimeout(() => alive && setPhase('hit'), 4600))
+      timers.push(setTimeout(() => alive && setPhase('idle'), 6400))
     }
     loop()
-    const id = setInterval(loop, 5600)
+    const id = setInterval(loop, 7400)
     return () => {
       alive = false
       clearInterval(id)
@@ -391,6 +429,14 @@ function ArenaSection({ glow }: { glow: number }) {
     }
   }, [])
   const hit = phase === 'hit'
+  // depois de despertar, a forma transformada permanece até a cena reiniciar
+  const transformed = phase === 'transform' || phase === 'rolling' || phase === 'hit'
+  const statusBadge =
+    phase === 'transform'
+      ? { tone: 'primary' as const, text: 'TRANSFORMAÇÃO!' }
+      : hit
+        ? { tone: 'error' as const, text: 'CRÍTICO ×2!' }
+        : { tone: 'neutral' as const, text: 'ATRIBUTOS × SORTE' }
   return (
     <section id="arena" className="relative py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
@@ -400,13 +446,14 @@ function ArenaSection({ glow }: { glow: number }) {
               align="left"
               eyebrow="Arena de combate"
               title="Cada turno é uma cena. Cada dado, uma decisão."
-              sub="Os dois lutadores frente a frente sob o céu enluarado, equipamentos à mostra. Você escolhe a ação, o dado gira — e o resultado explode na tela: dano flutuante, esquivas, críticos."
+              sub="Dois heróis frente a frente sob o céu enluarado, equipamentos à mostra. Desperte sua forma de combate, escolha a ação e o dado gira — multiplicando seus atributos e explodindo na tela: dano crítico, esquivas e transformações."
             />
             <ul className="flex flex-col gap-3">
               {([
-                [Dices, 'Rolagens d20 visíveis — nada acontece escondido'],
-                [Zap, 'Atributos que importam: Força, Agilidade, Crítico, Velocidade'],
-                [Shield, 'PvP ranqueado ou modo treino contra monstros, sem risco'],
+                [Dices, 'O dado multiplica seus atributos — nada acontece escondido'],
+                [Sparkles, 'Transformações: Dragão, Celestial, Lobo, Urso ou Águia no meio da luta'],
+                [Zap, 'Cada ação custa MP e Stamina — gerencie seus recursos por turno'],
+                [Shield, 'PvP entre jogadores ou modo treino contra monstros, sem risco'],
               ] as const).map(([Ic, txt]) => (
                 <li key={txt} className="flex items-start gap-3 text-sm text-textsec">
                   <span className="mt-0.5 text-primary shrink-0"><Ic size={18} /></span>
@@ -453,13 +500,18 @@ function ArenaSection({ glow }: { glow: number }) {
               <div className="relative">
                 <div className="flex items-center justify-between mb-6">
                   <span className="font-combat text-xs text-textsec">TURNO 07</span>
-                  <Badge tone="error" className="font-combat">CRÍTICO ×2!</Badge>
+                  <Badge tone={statusBadge.tone} className="font-combat">{statusBadge.text}</Badge>
                 </div>
                 <div className="flex justify-between items-end gap-3 sm:gap-4">
+                  {/* Elfa → forma Celestial (dourada) */}
                   <Fighter
-                    name="Sylariel" klass="Maga" level={18} portrait="🧝"
+                    transformed={transformed}
+                    name="Sylariel" klass="Arqueira · Elfa" level={18}
+                    baseImg="/elfopvp.png" transformImg="/elfo_transformed.png"
+                    transformLabel="🌟 Celestial"
+                    baseGlow="rgba(148,163,184,0.35)" auraGlow="rgba(251,191,36,0.55)"
                     hp={78} hpMax={90} mp={58} mpMax={72} sta={46} staMax={64}
-                    weapon={{ name: 'Cajado da Aurora Arcana', rarity: 'EPIC' }}
+                    weapon={{ name: 'Arco de Sylariel', rarity: 'LEGENDARY' }}
                     armor={[
                       { name: 'Vestes do Bosque Celeste', rarity: 'RARE' },
                       { name: 'Coif de Malha', rarity: 'UNCOMMON' },
@@ -467,17 +519,21 @@ function ArenaSection({ glow }: { glow: number }) {
                       { name: 'Anel de Cristal Pulsante', rarity: 'RARE' },
                     ]}
                   />
-                  <div className="flex flex-col items-center gap-3 pb-20 shrink-0">
+                  <div className="flex flex-col items-center gap-3 pb-24 shrink-0">
                     <DiceChip sides={20} value={18} rolling={phase === 'rolling'} />
                     <span className="font-combat text-[10px] text-textsec/70 text-center">
-                      18 + INT 7<br />vs DEF 13
+                      d20 × AGI<br />vs DEF
                     </span>
                   </div>
+                  {/* Draconiano → forma Dragão (fogo) */}
                   <Fighter
-                    reverse hit={hit}
-                    name="Gorrak" klass="Guerreiro" level={19} portrait="👹"
+                    reverse hit={hit} transformed={transformed}
+                    name="Gorrak" klass="Guerreiro · Draconiano" level={19}
+                    baseImg="/dracopvp.png" transformImg="/draco_transformed.png"
+                    transformLabel="🐉 Dragão"
+                    baseGlow="rgba(148,163,184,0.35)" auraGlow="rgba(239,68,68,0.55)"
                     hp={hit ? 40 : 72} hpMax={110} mp={18} mpMax={30} sta={58} staMax={86}
-                    weapon={{ name: 'Esmagador de Gorthak', rarity: 'LEGENDARY' }}
+                    weapon={{ name: 'Lâmina de Krax-thar', rarity: 'LEGENDARY' }}
                     armor={[
                       { name: 'Couraça de Escamas Ígneas', rarity: 'RARE' },
                       { name: 'Elmo do Sentinela', rarity: 'UNCOMMON' },
@@ -568,12 +624,13 @@ function RelicsSection() {
 // Raças & Classes
 // ============================================================
 
+// Transformação por raça — espelha RACE_TRANSFORMATIONS do jogo (transformationSystem.ts)
 const RACES = [
-  { emoji: '👤', name: 'Humano', lore: 'Versáteis e ambiciosos — prosperam em qualquer masmorra.' },
-  { emoji: '👹', name: 'Orc', lore: 'Força bruta forjada em guerra. Bater primeiro é doutrina.' },
-  { emoji: '🧝', name: 'Elfo', lore: 'Séculos de precisão. A flecha já partiu antes de você piscar.' },
-  { emoji: '🐲', name: 'Draconiano', lore: 'Sangue antigo de dragão correndo em veias mortais.' },
-  { emoji: '🌓', name: 'Metamorfo', lore: 'Nenhuma forma é definitiva: dragão, lobo, urso ou águia.' },
+  { emoji: '👤', name: 'Humano', lore: 'Versáteis e ambiciosos — prosperam em qualquer masmorra.', form: '✨ Sétimo Sentido' },
+  { emoji: '👹', name: 'Orc', lore: 'Força bruta forjada em guerra. Bater primeiro é doutrina.', form: null },
+  { emoji: '🧝', name: 'Elfo', lore: 'Séculos de precisão. A flecha já partiu antes de você piscar.', form: '🌟 Celestial' },
+  { emoji: '🐲', name: 'Draconiano', lore: 'Sangue antigo de dragão correndo em veias mortais.', form: '🐉 Dragão' },
+  { emoji: '🌓', name: 'Metamorfo', lore: 'Nenhuma forma é definitiva — escolhe a fera para cada luta.', form: '🐺🐻🦅 Lobo · Urso · Águia' },
 ]
 
 const CLASSES = [
@@ -582,16 +639,14 @@ const CLASSES = [
   { Icon: Target, name: 'Arqueiro', lore: 'Crítico e velocidade. Termina lutas antes de começarem.' },
 ]
 
-const TRANSFORMS = ['🐉 Dragão', '🐺 Lobo', '🐻 Urso', '🦅 Águia']
-
 function RacesSection() {
   return (
     <section id="racas" className="relative py-24 bg-secondary/40">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 flex flex-col gap-12">
         <SectionHeading
-          eyebrow="Raças & Classes"
+          eyebrow="Raças, Classes & Transformações"
           title="Quem você será quando a lua subir?"
-          sub="Cinco raças, três classes e quatro transformações — combine atributos e forje uma build só sua."
+          sub="Cinco raças e três classes para combinar. Cada raça desperta uma transformação de combate — temporária, custa MP e Stamina, e muda seus atributos enquanto libera habilidades especiais."
         />
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
           {RACES.map((r, i) => (
@@ -600,6 +655,9 @@ function RacesSection() {
                 <span className="text-4xl" aria-hidden="true">{r.emoji}</span>
                 <h3 className="font-semibold text-white">{r.name}</h3>
                 <p className="text-xs text-textsec leading-relaxed">{r.lore}</p>
+                <span className="mt-auto pt-1 font-combat text-[10px] text-primary/90">
+                  {r.form ? `Forma: ${r.form}` : 'Sem transformação'}
+                </span>
               </GlassCard>
             </Reveal>
           ))}
@@ -615,11 +673,6 @@ function RacesSection() {
                 <p className="text-xs text-textsec leading-relaxed">{c.lore}</p>
               </Card>
             </Reveal>
-          ))}
-        </div>
-        <div className="flex flex-wrap justify-center gap-3">
-          {TRANSFORMS.map((t) => (
-            <Badge key={t} tone="neutral" className="text-sm px-4 py-1.5">{t}</Badge>
           ))}
         </div>
       </div>

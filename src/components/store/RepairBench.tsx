@@ -179,16 +179,39 @@ export default function RepairBench({
       .reduce((sum, inv) => sum + inv.quantity, 0);
   }, [inventory, selected]);
 
+  // Raridade decide a fonte de reparo: comum/incomum = cópia nível-0;
+  // rara/épica/lendária = Estilhaço de Memória (só de chefe).
+  const itemRarity = selected
+    ? String((selected.item.stats as Record<string, unknown> | null)?.rarity ?? '').toUpperCase()
+    : '';
+  const usesMemoryShard = ['RARE', 'EPIC', 'LEGENDARY'].includes(itemRarity);
+
+  const memoryShardsAvailable = useMemo(
+    () =>
+      inventory
+        .filter((inv) => inv.item.name === 'Estilhaço de Memória')
+        .reduce((sum, inv) => sum + inv.quantity, 0),
+    [inventory]
+  );
+
+  // Unidades disponíveis/necessárias para reparar (cópias OU estilhaços de memória).
+  const repairUnitsAvailable = usesMemoryShard ? memoryShardsAvailable : copiesAvailable;
+  const repairMatLabel = usesMemoryShard ? 'Estilhaço de Memória' : 'cópia nível 0';
+
   const missing = selected ? selected.maxDurability - selected.durability : 0;
-  const copiesNeeded = Math.ceil(missing / REPAIR_PER_DUPLICATE);
+  const repairUnitsNeeded = Math.ceil(missing / REPAIR_PER_DUPLICATE);
   const durabilityPct = selected
     ? Math.round((selected.durability / selected.maxDurability) * 100)
     : 0;
 
   const handleRepair = async (mode: 'single' | 'full') => {
     if (!selected || !selectedCharacterId) return;
-    if (copiesAvailable < 1) {
-      toast.error(`Você precisa de uma cópia de ${selected.item.name} para reparar.`);
+    if (repairUnitsAvailable < 1) {
+      toast.error(
+        usesMemoryShard
+          ? `Você precisa de um Estilhaço de Memória (de chefe) para reparar ${selected.item.name}.`
+          : `Você precisa de uma cópia de ${selected.item.name} para reparar.`
+      );
       return;
     }
     setBusy(true);
@@ -543,15 +566,17 @@ export default function RepairBench({
 
                     <span className="text-3xl text-amber-400">＋</span>
 
-                    {/* Slot: cópia consumida */}
+                    {/* Slot: material consumido (cópia ou Estilhaço de Memória) */}
                     <div className="flex flex-col items-center gap-1">
                       <div
                         className={`w-20 h-20 rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden relative ${
-                          copiesAvailable > 0 ? 'bg-black/40' : 'bg-black/20 opacity-50'
+                          repairUnitsAvailable > 0 ? 'bg-black/40' : 'bg-black/20 opacity-50'
                         }`}
-                        style={{ borderColor: copiesAvailable > 0 ? '#f59e0b99' : '#ffffff33' }}
+                        style={{ borderColor: repairUnitsAvailable > 0 ? '#f59e0b99' : '#ffffff33' }}
                       >
-                        {copiesAvailable > 0 && selectedImage ? (
+                        {usesMemoryShard ? (
+                          <span className={`text-3xl ${repairUnitsAvailable > 0 ? '' : 'grayscale'}`}>🧠</span>
+                        ) : repairUnitsAvailable > 0 && selectedImage ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={selectedImage}
@@ -562,21 +587,28 @@ export default function RepairBench({
                         ) : (
                           <span className="text-3xl grayscale">{visual?.emoji ?? '🗡️'}</span>
                         )}
-                        {copiesAvailable > 0 && (
+                        {repairUnitsAvailable > 0 && (
                           <span className="absolute bottom-0.5 right-1 text-xs font-bold bg-black/70 text-amber-300 px-1.5 rounded">
-                            x{copiesAvailable}
+                            x{repairUnitsAvailable}
                           </span>
                         )}
                       </div>
-                      <span className="text-[10px] text-white/50">cópia nível 0</span>
+                      <span className="text-[10px] text-white/50">{repairMatLabel}</span>
                     </div>
                   </div>
 
+                  {usesMemoryShard && (
+                    <p className="text-[11px] text-amber-200/70 mb-2 text-center">
+                      Peça {itemRarity === 'RARE' ? 'rara' : itemRarity === 'EPIC' ? 'épica' : 'lendária'} — reparada com Estilhaço de Memória (de chefe), não com cópias.
+                    </p>
+                  )}
+
                   <p className="text-xs text-white/50 mb-3 text-center">
                     Faltam <span className="text-amber-300">{missing}</span> — precisa de{' '}
-                    <span className="text-amber-300">{copiesNeeded}</span> cópia{copiesNeeded > 1 ? 's' : ''}, você tem{' '}
-                    <span className={copiesAvailable >= copiesNeeded ? 'text-emerald-300' : 'text-red-300'}>
-                      {copiesAvailable}
+                    <span className="text-amber-300">{repairUnitsNeeded}</span> {repairMatLabel}
+                    {repairUnitsNeeded > 1 ? 's' : ''}, você tem{' '}
+                    <span className={repairUnitsAvailable >= repairUnitsNeeded ? 'text-emerald-300' : 'text-red-300'}>
+                      {repairUnitsAvailable}
                     </span>
                     .
                   </p>
@@ -584,17 +616,17 @@ export default function RepairBench({
                   <div className="flex gap-3">
                     <button
                       onClick={() => handleRepair('single')}
-                      disabled={busy || copiesAvailable < 1}
+                      disabled={busy || repairUnitsAvailable < 1}
                       className="flex-1 px-4 py-2.5 rounded-xl font-bold text-sm text-white bg-amber-600/80 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
-                      🔧 Reparar +{REPAIR_PER_DUPLICATE} (1 cópia)
+                      🔧 Reparar +{REPAIR_PER_DUPLICATE} (1 {repairMatLabel})
                     </button>
                     <button
                       onClick={() => handleRepair('full')}
-                      disabled={busy || copiesAvailable < 1}
+                      disabled={busy || repairUnitsAvailable < 1}
                       className="flex-1 px-4 py-2.5 rounded-xl font-black text-sm text-white bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
-                      ⚒️ Reparar 100% ({Math.min(copiesNeeded, copiesAvailable)} cópia{Math.min(copiesNeeded, copiesAvailable) > 1 ? 's' : ''})
+                      ⚒️ Reparar 100% ({Math.min(repairUnitsNeeded, repairUnitsAvailable)} un.)
                     </button>
                   </div>
                 </div>

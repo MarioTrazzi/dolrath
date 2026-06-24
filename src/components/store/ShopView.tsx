@@ -10,6 +10,7 @@ import BazaarBackdrop from '@/components/store/BazaarBackdrop';
 import ItemCardBackdrop from '@/components/store/ItemCardBackdrop';
 import RepairBench from '@/components/store/RepairBench';
 import AlchemyBench from '@/components/store/AlchemyBench';
+import ForgeBench from '@/components/store/ForgeBench';
 import { getItemVisual, getItemTypeLabel, getItemCategory } from '@/lib/itemVisuals';
 import { formatItemStats } from '@/lib/itemStats';
 import { useGold } from '@/components/providers/GoldProvider';
@@ -36,7 +37,7 @@ const SHOP_CONFIG: Record<
     subtitle: 'Forje, compre e repare armas, armaduras e equipamentos!',
     showItem: (type) => getItemCategory(type) !== 'consumable',
     hasRepairBench: true,
-    hasCraftingBench: false,
+    hasCraftingBench: true,
     emptyEmoji: '⚒️',
     emptyLabel: 'A forja está fria',
   },
@@ -439,15 +440,24 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
           </div>
         )}
 
-        {/* Bancada de alquimia (somente a alquimista) */}
+        {/* Bancada de craft: alquimia (alquimista) ou forja (ferreiro) */}
         {config.hasCraftingBench && (
           <div className="mb-8">
-            <AlchemyBench
-              characters={characters}
-              characterId={selectedCharacter || undefined}
-              refreshSignal={inventoryRefreshKey}
-              onCrafted={() => setInventoryRefreshKey((k) => k + 1)}
-            />
+            {kind === 'alchemist' ? (
+              <AlchemyBench
+                characters={characters}
+                characterId={selectedCharacter || undefined}
+                refreshSignal={inventoryRefreshKey}
+                onCrafted={() => setInventoryRefreshKey((k) => k + 1)}
+              />
+            ) : (
+              <ForgeBench
+                characters={characters}
+                characterId={selectedCharacter || undefined}
+                refreshSignal={inventoryRefreshKey}
+                onCrafted={() => setInventoryRefreshKey((k) => k + 1)}
+              />
+            )}
           </div>
         )}
 

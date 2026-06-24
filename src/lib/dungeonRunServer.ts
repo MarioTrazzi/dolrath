@@ -22,7 +22,7 @@ import {
   type LootNodeKind,
 } from './dungeonAdventures'
 import { normalizeCombatClass, type CombatClass } from './combatModel'
-import { getCatalogItemByName, getConsumableByName, getIngredientByName } from './itemCatalog'
+import { getCatalogItemByName, getConsumableByName, getIngredientByName, getForgeMaterialByName } from './itemCatalog'
 
 // Custo de stamina por TIPO de nó (espelha DungeonRun.tsx: MINOR/MAIN/BOSS_STEP_COST).
 export const STEP_COST = { minor: 4, main: 8, boss: 6 } as const
@@ -178,6 +178,7 @@ async function addDropToInventoryTx(
     const catalogItem = getCatalogItemByName(itemName)
     const consumable = catalogItem ? undefined : getConsumableByName(itemName)
     const ingredient = catalogItem || consumable ? undefined : getIngredientByName(itemName)
+    const material = catalogItem || consumable || ingredient ? undefined : getForgeMaterialByName(itemName)
     if (catalogItem) {
       existingItem = await tx.item.create({
         data: {
@@ -220,6 +221,22 @@ async function addDropToInventoryTx(
             rarity: ingredient.rarity,
             emoji: ingredient.emoji,
             sellPrice: Math.floor(ingredient.goldValue * 0.6),
+          },
+        },
+      })
+    } else if (material) {
+      existingItem = await tx.item.create({
+        data: {
+          name: material.name,
+          description: material.description,
+          type: 'CONSUMABLE',
+          level: 1,
+          goldPrice: material.goldValue,
+          stats: {
+            kind: 'material',
+            rarity: material.rarity,
+            emoji: material.emoji,
+            sellPrice: Math.floor(material.goldValue * 0.6),
           },
         },
       })

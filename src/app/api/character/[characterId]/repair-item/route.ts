@@ -3,10 +3,17 @@ import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
 import { addHistoryEntry } from '@/lib/characterHistory'
 import { REPAIR_PER_DUPLICATE, getDisplayName } from '@/lib/enhancementSystem'
+import { getCatalogItemByName } from '@/lib/itemCatalog'
 
-// Repara a durabilidade de um item consumindo cópias base dele (estilo BDO).
-// mode 'single' (padrão): consome 1 cópia (+REPAIR_PER_DUPLICATE de durabilidade).
-// mode 'full': consome o máximo de cópias necessárias/disponíveis para reparar 100%.
+// Reparo de alto nível: peças RARAS/ÉPICAS/LENDÁRIAS quase nunca têm cópias, então
+// são reparadas com Estilhaço de Memória (só de chefe), +10 de durabilidade cada.
+const MEMORY_SHARD_NAME = 'Estilhaço de Memória'
+const HIGH_RARITIES = new Set(['RARE', 'EPIC', 'LEGENDARY'])
+
+// Repara a durabilidade de um item consumindo cópias base dele (estilo BDO) — ou
+// Estilhaço de Memória se a peça for rara+.
+// mode 'single' (padrão): consome 1 unidade (+REPAIR_PER_DUPLICATE de durabilidade).
+// mode 'full': consome o máximo necessário/disponível para reparar 100%.
 export async function POST(
   request: NextRequest,
   { params }: { params: { characterId: string } }
@@ -43,51 +50,73 @@ export async function POST(
       return NextResponse.json({ error: 'O item já está com durabilidade máxima' }, { status: 400 })
     }
 
-    // Procurar cópias base (nível 0) do mesmo item para consumir.
-    const duplicates = await prisma.characterInventory.findMany({
-      where: {
-        characterId: params.characterId,
-        itemId: inventoryItem.itemId,
-        enhancementLevel: 0,
-        quantity: { gte: 1 },
-        id: { not: inventoryItem.id },
-      },
-      orderBy: { quantity: 'asc' },
-    })
+    // Raridade decide a fonte de reparo: comum/incomum = cópia nível-0;
+    // rara/épica/lendária = Estilhaço de Memória (cópias são raras demais).
+    const rarity = String(
+      (inventoryItem.item.stats as Record<string, unknown> | null)?.rarity ??
+      getCatalogItemByName(inventoryItem.item.name)?.rarity ??
+      'COMMON'
+    ).toUpperCase()
+    const useMemoryShard = HIGH_RARITIES.has(rarity)
 
-    const totalCopies = duplicates.reduce((sum, d) => sum + d.quantity, 0)
-    if (totalCopies < 1) {
+    // Stacks da fonte de reparo (cópias do item OU estilhaços de memória).
+    const sources = useMemoryShard
+      ? (await prisma.characterInventory.findMany({
+          where: {
+            characterId: params.characterId,
+            item: { name: MEMORY_SHARD_NAME, type: 'CONSUMABLE' },
+            quantity: { gte: 1 },
+          },
+          orderBy: { quantity: 'asc' },
+        })).map((s) => ({ id: s.id, quantity: s.quantity }))
+      : (await prisma.characterInventory.findMany({
+          where: {
+            characterId: params.characterId,
+            itemId: inventoryItem.itemId,
+            enhancementLevel: 0,
+            quantity: { gte: 1 },
+            id: { not: inventoryItem.id },
+          },
+          orderBy: { quantity: 'asc' },
+        })).map((d) => ({ id: d.id, quantity: d.quantity }))
+
+    const totalUnits = sources.reduce((sum, s) => sum + s.quantity, 0)
+    if (totalUnits < 1) {
       return NextResponse.json(
-        { error: `É necessária uma cópia de ${inventoryItem.item.name} para reparar.` },
+        {
+          error: useMemoryShard
+            ? `É necessário um ${MEMORY_SHARD_NAME} (de chefe de masmorra) para reparar ${inventoryItem.item.name}.`
+            : `É necessária uma cópia de ${inventoryItem.item.name} para reparar.`,
+        },
         { status: 400 }
       )
     }
 
-    // Quantas cópias gastar.
+    // Quantas unidades gastar (cada uma vale REPAIR_PER_DUPLICATE de durabilidade).
     const missing = inventoryItem.maxDurability - inventoryItem.durability
-    const copiesNeeded = Math.ceil(missing / REPAIR_PER_DUPLICATE)
-    const copiesToUse =
-      mode === 'full' ? Math.min(copiesNeeded, totalCopies) : 1
+    const unitsNeeded = Math.ceil(missing / REPAIR_PER_DUPLICATE)
+    const unitsToUse = mode === 'full' ? Math.min(unitsNeeded, totalUnits) : 1
 
     const newDurability = Math.min(
       inventoryItem.maxDurability,
-      inventoryItem.durability + copiesToUse * REPAIR_PER_DUPLICATE
+      inventoryItem.durability + unitsToUse * REPAIR_PER_DUPLICATE
     )
     const gained = newDurability - inventoryItem.durability
+    const unitLabel = useMemoryShard ? 'Estilhaço de Memória' : 'cópia'
 
     await prisma.$transaction(async (tx) => {
-      // Consome `copiesToUse` cópias percorrendo os stacks disponíveis.
-      let remaining = copiesToUse
-      for (const dup of duplicates) {
+      // Consome `unitsToUse` unidades percorrendo os stacks disponíveis.
+      let remaining = unitsToUse
+      for (const s of sources) {
         if (remaining <= 0) break
-        const take = Math.min(dup.quantity, remaining)
-        if (dup.quantity > take) {
+        const take = Math.min(s.quantity, remaining)
+        if (s.quantity > take) {
           await tx.characterInventory.update({
-            where: { id: dup.id },
+            where: { id: s.id },
             data: { quantity: { decrement: take } },
           })
         } else {
-          await tx.characterInventory.delete({ where: { id: dup.id } })
+          await tx.characterInventory.delete({ where: { id: s.id } })
         }
         remaining -= take
       }
@@ -101,7 +130,7 @@ export async function POST(
       await addHistoryEntry({
         characterId: params.characterId,
         activityType: 'ITEM_REPAIRED',
-        description: `🔧 ${getDisplayName(inventoryItem.item.name, inventoryItem.enhancementLevel)} reparado (+${gained} durabilidade, ${copiesToUse} cópia${copiesToUse > 1 ? 's' : ''}).`,
+        description: `🔧 ${getDisplayName(inventoryItem.item.name, inventoryItem.enhancementLevel)} reparado (+${gained} durabilidade, ${unitsToUse} ${unitLabel}${unitsToUse > 1 ? 's' : ''}).`,
         itemId: inventoryItem.itemId,
       })
     } catch (historyError) {
@@ -112,10 +141,11 @@ export async function POST(
       success: true,
       durability: newDurability,
       maxDurability: inventoryItem.maxDurability,
-      copiesUsed: copiesToUse,
-      copiesRemaining: totalCopies - copiesToUse,
+      usedMemoryShard: useMemoryShard,
+      copiesUsed: unitsToUse,
+      copiesRemaining: totalUnits - unitsToUse,
       fullyRepaired: newDurability >= inventoryItem.maxDurability,
-      message: `🔧 Item reparado! Durabilidade: ${newDurability}/${inventoryItem.maxDurability} (${copiesToUse} cópia${copiesToUse > 1 ? 's' : ''} usada${copiesToUse > 1 ? 's' : ''})`,
+      message: `🔧 Item reparado! Durabilidade: ${newDurability}/${inventoryItem.maxDurability} (${unitsToUse} ${unitLabel}${unitsToUse > 1 ? 's' : ''} usada${unitsToUse > 1 ? 's' : ''})`,
     })
   } catch (error) {
     console.error('Error repairing item:', error)

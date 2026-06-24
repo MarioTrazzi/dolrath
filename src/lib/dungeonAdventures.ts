@@ -5,7 +5,7 @@
 // - Usado pela experiência nova de masmorras (DungeonRun + BattleScene)
 // ============================================================
 
-import { getDungeonConsumables, rollEquipmentDrop, type Rarity } from './itemCatalog'
+import { getDungeonConsumables, rollEquipmentDrop, getCommonForgeMaterials, type Rarity } from './itemCatalog'
 import { pickIngredient } from './alchemy'
 import { STONE_NAMES } from './enhancementSystem'
 import { computeLevers, powerScale, deriveGearTier, type CombatClass } from './combatModel'
@@ -573,7 +573,11 @@ export function luckTier(roll: number): LuckTier {
   return 'high'
 }
 
-export type LootKind = 'ingredient' | 'consumable' | 'item' | 'stone'
+export type LootKind = 'ingredient' | 'consumable' | 'item' | 'stone' | 'material'
+
+// Estilhaço de Memória (reparo de raro+): chance nas salas normais (fora da Floresta);
+// no chefe cai SEMPRE. mult.all ainda escala por tipo de nó.
+const MEMORY_SHARD_NODE_CHANCE = 0.06
 export interface LootDrop {
   name: string
   kind: LootKind
@@ -699,6 +703,22 @@ export function rollNodeLoot(
       : (['COMMON', 'UNCOMMON'] as const)
     const ing = pickIngredient([...rarities])
     if (ing) drops.push({ name: ing.name, kind: 'ingredient', rarity: rarityOf(ing), emoji: ing.emoji })
+  }
+  // material de forja (couro/ferro/estilhaços/especiais de arma). Cai em exploração e
+  // luta; chão dá só COMUM, sorte mid/high libera o Ferro (INCOMUM).
+  if (Math.random() < cfg.pMaterial * mult.all) {
+    const pool = getCommonForgeMaterials().filter(
+      (m) => m.rarity === 'COMMON' || (tier !== 'low' && m.rarity === 'UNCOMMON'),
+    )
+    const mat = pickFrom(pool)
+    if (mat) drops.push({ name: mat.name, kind: 'material', rarity: rarityOf(mat), emoji: mat.emoji })
+  }
+  // Estilhaço de Memória (repara raro/épico/lendário): SEMPRE no chefe; nas salas
+  // normais é chance — e na Floresta só o chefe dropa (nada nas salas).
+  if (isBoss) {
+    drops.push({ name: 'Estilhaço de Memória', kind: 'material', rarity: 'RARE', emoji: '🧠' })
+  } else if (dungeon.id !== 'floresta' && Math.random() < MEMORY_SHARD_NODE_CHANCE * mult.all) {
+    drops.push({ name: 'Estilhaço de Memória', kind: 'material', rarity: 'RARE', emoji: '🧠' })
   }
   // consumível de masmorra
   if (Math.random() < cfg.pConsumable * mult.all) {

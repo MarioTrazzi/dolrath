@@ -15,6 +15,7 @@ import {
   Dices, Swords, Shield, Coins, Wallet, Play, Sparkles, ArrowRight, Menu, X,
   Github, Twitter, MessageCircle, Scroll, Wand2, VenetianMask, Hand, Axe,
   AlertTriangle, Zap, Gem, RefreshCw, Palette, Crown, Skull,
+  Lock, Hammer,
 } from 'lucide-react'
 import { Button, Card, GlassCard, Badge, StatBar, SectionHeading, D20, DiceChip, Reveal } from './ui'
 import { itemImagePath } from '@/lib/itemCatalog'
@@ -142,6 +143,7 @@ const NAV_LINKS = [
   { label: 'Jogar', href: '#arena' },
   { label: 'Personagens', href: '#racas' },
   { label: 'Masmorras', href: '#masmorras' },
+  { label: 'Forja', href: '#aprimoramento' },
   { label: 'Marketplace', href: '#como-funciona' },
   { label: 'Docs', href: '/doc' },
 ]
@@ -566,6 +568,16 @@ const DUNGEON_CARDS: DungeonCard[] = [
   { id: 'ruinas', name: 'Ruínas Arcanas', emoji: '🏛️', tagline: 'Um império morto que ainda sonha', stars: 4, rooms: 5, minor: 3, levelReq: 40, accent: '#c084fc', boss: 'Lich Imperador' },
 ]
 
+// Masmorras em construção — apenas vitrine (não clicáveis). A última (Cidadela
+// de Dolrath, Nv.100) usa vermelho como o destino final do end-game.
+interface SoonDungeon { id: string; name: string; emoji: string; tagline: string; levelReq: number; accent: string; boss: string }
+const SOON_DUNGEONS: SoonDungeon[] = [
+  { id: 'abismo', name: 'Abismo Gélido', emoji: '❄️', tagline: 'Onde a luz congela antes de chegar', levelReq: 55, accent: '#60a5fa', boss: 'Leviatã de Gelo' },
+  { id: 'caldeira', name: 'Caldeira Ígnea', emoji: '🌋', tagline: 'Forjas onde os deuses morreram', levelReq: 70, accent: '#fb923c', boss: 'Senhor das Brasas' },
+  { id: 'necropole', name: 'Necrópole Eterna', emoji: '☠️', tagline: 'Os mortos não esquecem seus nomes', levelReq: 85, accent: '#a78bfa', boss: 'Rei Cadáver' },
+  { id: 'cidadela', name: 'Cidadela de Dolrath', emoji: '👹', tagline: 'O trono que dá nome ao mundo', levelReq: 100, accent: '#ef4444', boss: 'Dolrath, o Primeiro' },
+]
+
 type TrailKind = 'start' | 'minor' | 'main' | 'boss'
 interface TrailPoint { x: number; y: number; kind: TrailKind }
 
@@ -587,6 +599,26 @@ function buildTrail(rooms: number, minor: number): TrailPoint[] {
   })
 }
 
+// Caminho SVG suave (Catmull-Rom → Bézier) — mesma curva do DungeonMap do jogo,
+// para a trilha serpentear com curvas macias em vez de retas de nó a nó.
+function smoothPath(pts: { x: number; y: number }[]): string {
+  if (pts.length < 2) return ''
+  const p = pts.map((q) => [q.x, q.y] as const)
+  let d = `M ${p[0][0]} ${p[0][1]}`
+  for (let i = 0; i < p.length - 1; i++) {
+    const p0 = p[i - 1] || p[i]
+    const p1 = p[i]
+    const p2 = p[i + 1]
+    const p3 = p[i + 2] || p2
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6
+    const c1y = p1[1] + (p2[1] - p0[1]) / 6
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6
+    const c2y = p2[1] - (p3[1] - p1[1]) / 6
+    d += ` C ${c1x} ${c1y} ${c2x} ${c2y} ${p2[0]} ${p2[1]}`
+  }
+  return d
+}
+
 // Mapa em miniatura com o token do herói caminhando de nó em nó (loop).
 function MiniDungeonMap({ dungeon }: { dungeon: DungeonCard }) {
   const reduce = useReducedMotion()
@@ -600,8 +632,8 @@ function MiniDungeonMap({ dungeon }: { dungeon: DungeonCard }) {
   }, [pts.length, reduce])
   const cur = Math.min(step, pts.length - 1)
   const token = pts[cur]
-  const bgPath = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
-  const litPath = pts.slice(0, cur + 1).map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
+  const bgPath = smoothPath(pts)
+  const litPath = smoothPath(pts.slice(0, cur + 1))
   return (
     <div
       className="relative w-full overflow-hidden rounded-2xl border"
@@ -661,8 +693,8 @@ function DungeonsSection() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 flex flex-col gap-12">
         <SectionHeading
           eyebrow="Masmorras"
-          title="Quatro terras perigosas. Um boss em cada uma."
-          sub="Escolha uma masmorra e siga a trilha: role o d20 a cada nó, enfrente salas com monstros e chegue ao boss. Cada masmorra é um band de níveis — da Floresta (Nv.1) às Ruínas Arcanas (Nv.40+)."
+          title="Oito terras perigosas. Quatro já abertas."
+          sub="Escolha uma masmorra e siga a trilha: role o d20 a cada nó, enfrente salas com monstros e chegue ao boss. Cada masmorra é um band de níveis — da Floresta (Nv.1) à Cidadela de Dolrath (Nv.100). Mais quatro estão em construção."
         />
         <div className="grid items-start gap-10 lg:grid-cols-[1fr_0.8fr]">
           {/* cards menores — mesma identidade do jogo; clicar troca o mapa */}
@@ -699,6 +731,35 @@ function DungeonsSection() {
                 </button>
               )
             })}
+
+            {/* masmorras em construção — vitrine, não clicáveis */}
+            {SOON_DUNGEONS.map((d) => (
+              <div
+                key={d.id}
+                aria-disabled="true"
+                className="relative cursor-not-allowed overflow-hidden rounded-2xl border-2 border-dashed p-4 text-left opacity-70 grayscale-[0.35]"
+                style={{
+                  borderColor: `${d.accent}55`,
+                  background: `linear-gradient(150deg, ${d.accent}14, rgba(12,12,28,0.9))`,
+                }}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="text-3xl drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]">{d.emoji}</div>
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide"
+                    style={{ borderColor: `${d.accent}66`, color: d.accent, background: `${d.accent}1a` }}
+                  >
+                    <Lock size={9} /> Em breve
+                  </span>
+                </div>
+                <h3 className="mt-2 text-base font-black text-white/85">{d.name}</h3>
+                <p className="text-[11px] italic text-white/45">{d.tagline}</p>
+                <div className="mt-2 flex items-center justify-between">
+                  <span className="font-combat text-[10px] text-white/40">👑 {d.boss}</span>
+                  <span className="font-combat text-[10px]" style={{ color: d.accent }}>Nv. {d.levelReq}+</span>
+                </div>
+              </div>
+            ))}
           </div>
           {/* mapa + animação do token */}
           <div className="flex flex-col gap-3">
@@ -791,6 +852,360 @@ function RelicsSection() {
           <Badge tone="primary" icon={<Gem size={14} />} className="text-sm px-4 py-1.5">
             Épico e Lendário só de chefe
           </Badge>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ============================================================
+// Aprimoramento — demo auto-rodando do diálogo estilo BDO:
+// um item ÉPICO sobe de +III → +IV (barra carrega, brilho dourado).
+// Espelha EnhancementDialog.tsx (forja, failstacks, chance, sucesso).
+// ============================================================
+
+const ENHANCE_ITEM: GearPiece = { name: 'Cajado da Aurora Arcana', rarity: 'EPIC' }
+const CHARGE_MS = 1500
+
+function EnhancementDemo() {
+  const reduce = useReducedMotion()
+  // ready → charging → success → (loop)
+  const [phase, setPhase] = useState<'ready' | 'charging' | 'success'>('ready')
+  const [run, setRun] = useState(0)
+
+  useEffect(() => {
+    if (reduce) { setPhase('success'); return }
+    let t: ReturnType<typeof setTimeout>
+    if (phase === 'ready') t = setTimeout(() => setPhase('charging'), 1900)
+    else if (phase === 'charging') t = setTimeout(() => setPhase('success'), CHARGE_MS)
+    else t = setTimeout(() => { setRun((r) => r + 1); setPhase('ready') }, 2600)
+    return () => clearTimeout(t)
+  }, [phase, reduce])
+
+  const success = phase === 'success'
+
+  return (
+    <div className="w-full max-w-md rounded-xl border border-amber-500/30 bg-gradient-to-b from-gray-900 to-gray-950 p-6 shadow-2xl shadow-amber-900/30">
+      {/* Cabeçalho */}
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-xl font-bold text-amber-400">⚒️ Aprimoramento</h3>
+        <span className="rounded-lg px-2 py-1 text-gray-500">✕</span>
+      </div>
+
+      {/* Item + progressão de nível */}
+      <div className="mb-4 flex flex-col items-center gap-3 rounded-lg border border-white/10 bg-black/40 p-4 text-center">
+        <div className="relative">
+          <GearTile piece={ENHANCE_ITEM} size="lg" />
+          {/* selo do nível atual no canto, estilo jogo */}
+          <span
+            className="absolute -bottom-1 right-0 rounded-md bg-black/80 px-1.5 text-sm font-black"
+            style={{ color: '#f1d79a', textShadow: '0 1px 2px #000' }}
+          >
+            {success ? 'IV' : 'III'}
+          </span>
+          <AnimatePresence>
+            {success && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.4 }}
+                animate={{ opacity: [0, 1, 0], scale: [0.4, 1.6, 2.2] }}
+                transition={{ duration: 1 }}
+                className="pointer-events-none absolute -inset-6"
+                style={{ background: 'radial-gradient(circle, rgba(253,224,71,0.9) 0%, rgba(245,158,11,0.35) 40%, transparent 70%)' }}
+              />
+            )}
+          </AnimatePresence>
+        </div>
+        <div className="text-base font-semibold text-cyan-300">{ENHANCE_ITEM.name}</div>
+        <div className="flex items-center justify-center gap-3 text-2xl font-bold">
+          <span className="text-gray-400">III</span>
+          <span className="text-amber-400">→</span>
+          <span className="text-amber-300">IV</span>
+        </div>
+      </div>
+
+      {/* Chance + failstacks */}
+      <div className="mb-4 grid grid-cols-2 gap-3">
+        <div className="rounded-lg border border-white/10 bg-black/40 p-3 text-center">
+          <div className="text-xs uppercase tracking-wide text-gray-500">Chance de sucesso</div>
+          <div className="mt-1 text-2xl font-bold text-yellow-400">42.0%</div>
+        </div>
+        <div className="rounded-lg border border-white/10 bg-black/40 p-3 text-center">
+          <div className="text-xs uppercase tracking-wide text-gray-500">Failstacks</div>
+          <div className="mt-1 text-2xl font-bold text-purple-400">🔥 7</div>
+        </div>
+      </div>
+
+      {/* Barra de aprimoramento (carrega → brilha) */}
+      {phase !== 'ready' && (
+        <div className="relative mb-4">
+          <div className="relative z-20">
+            <div className="mb-1 text-center text-sm font-semibold">
+              {phase === 'charging' ? (
+                <motion.span animate={{ opacity: [0.5, 1, 0.5] }} transition={{ repeat: Infinity, duration: 0.7 }} className="text-amber-300">
+                  ⚒️ Forjando...
+                </motion.span>
+              ) : (
+                <span className="text-yellow-300">✨ SUCESSO!</span>
+              )}
+            </div>
+            <div
+              className={`relative h-7 overflow-hidden rounded-full border bg-gray-900 ${
+                success ? 'border-yellow-300/70 shadow-[0_0_25px_rgba(253,224,71,0.8)]' : 'border-amber-500/40'
+              }`}
+            >
+              <motion.div
+                key={run}
+                initial={{ width: '0%' }}
+                animate={{ width: '100%' }}
+                transition={{ duration: CHARGE_MS / 1000, ease: [0.45, 0, 0.55, 1] }}
+                className={`h-full ${success ? 'bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-300' : 'bg-gradient-to-r from-amber-700 via-amber-500 to-amber-400'}`}
+              />
+              {phase === 'charging' && (
+                <motion.div
+                  initial={{ x: '-120%' }}
+                  animate={{ x: '500%' }}
+                  transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
+                  className="absolute inset-y-0 left-0 w-1/4 bg-gradient-to-r from-transparent via-white/50 to-transparent"
+                />
+              )}
+            </div>
+            {success && (
+              <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="mt-2 text-center text-sm font-bold text-green-300">
+                Aprimoramento bem-sucedido! Agora é +IV.
+              </motion.div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Botão (decorativo, espelha o diálogo) */}
+      <div className="w-full rounded-lg bg-gradient-to-r from-amber-600 to-amber-500 py-3 text-center text-lg font-bold text-black shadow-lg shadow-amber-900/50">
+        ⚒️ Aprimorar
+      </div>
+    </div>
+  )
+}
+
+function EnhancementSection() {
+  return (
+    <section id="aprimoramento" className="relative py-24 bg-secondary/40">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 flex flex-col gap-12">
+        <SectionHeading
+          eyebrow="Forja & Aprimoramento"
+          title="Suba seu equipamento de +I a +V"
+          sub="Aprimoramento estilo Black Desert: cada tentativa acumula failstacks e arrisca a durabilidade. A barra carrega, e no fim — brilho dourado de sucesso ou a falha. No combate da masmorra o +N vira atributos reais."
+        />
+        <div className="grid items-center gap-10 lg:grid-cols-2">
+          <Reveal className="flex justify-center">
+            <EnhancementDemo />
+          </Reveal>
+          <Reveal delay={120} className="grid gap-4 sm:grid-cols-2">
+            {([
+              [Hammer, 'Failstacks acumulam', 'Cada falha aumenta a chance da próxima tentativa — o risco vira progresso.'],
+              [Gem, 'Material por tentativa', 'Use uma pedra de aprimoramento ou uma cópia do próprio item para tentar subir +N.'],
+              [Shield, 'O +N vira atributo', 'Na masmorra o nível de aprimoramento é convertido em stats reais — leve sua melhor build.'],
+              [AlertTriangle, 'Risco real', 'Em níveis altos, falhar pode reduzir a durabilidade ou rebaixar a peça.'],
+            ] as const).map(([Ic, t, dsc]) => (
+              <GlassCard key={t} className="flex flex-col gap-2 p-5">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/15 text-amber-300"><Ic size={20} /></span>
+                <h3 className="text-sm font-semibold text-white">{t}</h3>
+                <p className="text-xs leading-relaxed text-textsec">{dsc}</p>
+              </GlassCard>
+            ))}
+          </Reveal>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ============================================================
+// Bancadas — Ferreiro (reparo) + Alquimista (transmutação).
+// Espelha RepairBench.tsx e AlchemyBench.tsx (durabilidade que
+// reenche; triângulo com 3 ingredientes → poção no centro).
+// ============================================================
+
+// — Ferreiro: durabilidade desgastada que reenche queimando uma cópia —
+function RepairDemo() {
+  const reduce = useReducedMotion()
+  const [full, setFull] = useState(false)
+  useEffect(() => {
+    if (reduce) { setFull(true); return }
+    const id = setInterval(() => setFull((f) => !f), 2200)
+    return () => clearInterval(id)
+  }, [reduce])
+  const pct = full ? 100 : 24
+  const barColor = full ? 'bg-emerald-500' : 'bg-red-500'
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl border-2 border-amber-500/40 bg-gradient-to-br from-amber-950/40 to-black/50 p-5">
+      <h3 className="mb-1 text-xl font-black text-amber-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">🔧 Bancada de Reparo</h3>
+      <p className="mb-5 text-sm text-white/55">O ferreiro restaura a durabilidade queimando uma cópia nível 0 da peça — +10 por cópia, ou 100% de uma vez.</p>
+
+      {/* dois slots da forja: item + cópia */}
+      <div className="mb-4 flex items-center justify-center gap-4">
+        <div className="flex flex-col items-center gap-1">
+          <div className="h-20 w-20 overflow-hidden rounded-xl border-2 border-amber-500/60 bg-black/40">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={itemImagePath('Égide do Dragão Ancião')} alt="" className="h-full w-full object-cover" loading="lazy" />
+          </div>
+          <span className="text-[10px] text-white/50">item</span>
+        </div>
+        <span className="text-3xl text-amber-400">＋</span>
+        <div className="flex flex-col items-center gap-1">
+          <div className="relative h-20 w-20 overflow-hidden rounded-xl border-2 border-dashed border-amber-500/60 bg-black/40">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={itemImagePath('Égide do Dragão Ancião')} alt="" className="h-full w-full object-cover grayscale" loading="lazy" />
+            <span className="absolute bottom-0.5 right-1 rounded bg-black/70 px-1.5 text-xs font-bold text-amber-300">x1</span>
+          </div>
+          <span className="text-[10px] text-white/50">cópia nível 0</span>
+        </div>
+      </div>
+
+      {/* barra de durabilidade reenchendo */}
+      <div className="mb-2 flex justify-between text-xs text-white/60">
+        <span>Durabilidade</span>
+        <motion.span key={String(full)} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+          {full ? '120/120 (100%)' : '29/120 (24%)'}
+        </motion.span>
+      </div>
+      <div className="h-2.5 w-full overflow-hidden rounded-full bg-black/50">
+        <motion.div
+          className={`h-full rounded-full ${barColor}`}
+          animate={{ width: `${pct}%` }}
+          transition={{ duration: 0.9, ease: 'easeOut' }}
+        />
+      </div>
+
+      <div className="mt-5 w-full rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 py-2.5 text-center text-sm font-black text-white">
+        ⚒️ Reparar 100% (1 cópia)
+      </div>
+    </div>
+  )
+}
+
+// — Alquimista: 3 ingredientes caem nos vértices → poção surge no centro —
+const ALCH_PTS = { top: { x: 50, y: 16 }, left: { x: 18, y: 82 }, right: { x: 82, y: 82 }, center: { x: 50, y: 58 } }
+const ALCH_INGREDIENTS = [
+  { emoji: '🌿', accent: '#34d399', pos: ALCH_PTS.top },
+  { emoji: '🍄', accent: '#e879f9', pos: ALCH_PTS.left },
+  { emoji: '💧', accent: '#38bdf8', pos: ALCH_PTS.right },
+]
+
+function AlchemyDemo() {
+  const reduce = useReducedMotion()
+  // 0..3 = ingredientes colocados; 4 = poção criada; depois reseta
+  const [step, setStep] = useState(0)
+  useEffect(() => {
+    if (reduce) { setStep(4); return }
+    const id = setInterval(() => setStep((s) => (s + 1) % 6), 850)
+    return () => clearInterval(id)
+  }, [reduce])
+  const placed = Math.min(step, 3)
+  const crafted = step >= 4
+  const accent = '#34d399'
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl border-2 border-emerald-500/40 bg-gradient-to-br from-emerald-950/40 to-purple-950/30 p-5">
+      <h3 className="mb-1 text-xl font-black text-emerald-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">⚗️ Triângulo de Transmutação</h3>
+      <p className="mb-4 text-sm text-white/55">A alquimista junta 3 ingredientes nos vértices; se formarem uma receita, a poção surge no centro e vai pro inventário.</p>
+
+      <div className="relative mx-auto" style={{ width: '100%', maxWidth: 320, aspectRatio: '1 / 0.92' }}>
+        <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 92" preserveAspectRatio="none" aria-hidden="true">
+          <polygon
+            points={`${ALCH_PTS.top.x},${ALCH_PTS.top.y} ${ALCH_PTS.left.x},${ALCH_PTS.left.y} ${ALCH_PTS.right.x},${ALCH_PTS.right.y}`}
+            fill="none"
+            stroke={crafted ? accent : 'rgba(52,211,153,0.35)'}
+            strokeWidth={1.2}
+            strokeDasharray={crafted ? undefined : '4 4'}
+            vectorEffect="non-scaling-stroke"
+            style={{ filter: crafted ? `drop-shadow(0 0 6px ${accent})` : undefined }}
+          />
+        </svg>
+
+        {/* vértices */}
+        {ALCH_INGREDIENTS.map((ing, i) => {
+          const on = i < placed
+          return (
+            <div
+              key={i}
+              className="absolute flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-2xl border-2 transition-all duration-300"
+              style={{
+                left: `${ing.pos.x}%`, top: `${ing.pos.y}%`,
+                borderColor: on ? ing.accent : '#ffffff33',
+                borderStyle: on ? 'solid' : 'dashed',
+                background: 'radial-gradient(circle at 50% 35%, rgba(16,40,32,0.9), rgba(5,8,10,0.95))',
+                boxShadow: on ? `0 0 14px ${ing.accent}99` : 'inset 0 0 8px rgba(0,0,0,0.6)',
+              }}
+            >
+              {on ? <span className="text-2xl drop-shadow-[0_2px_3px_rgba(0,0,0,0.9)]">{ing.emoji}</span> : <span className="text-xl text-white/25">＋</span>}
+            </div>
+          )
+        })}
+
+        {/* resultado no centro */}
+        <div
+          className="absolute grid h-16 w-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 transition-all duration-300"
+          style={{
+            left: `${ALCH_PTS.center.x}%`, top: `${ALCH_PTS.center.y}%`,
+            borderColor: crafted ? accent : '#ffffff22',
+            background: 'radial-gradient(circle at 50% 35%, rgba(20,50,40,0.95), rgba(4,6,8,0.98))',
+            boxShadow: crafted ? `0 0 26px ${accent}` : 'inset 0 0 12px rgba(0,0,0,0.7)',
+          }}
+        >
+          <AnimatePresence mode="wait">
+            {crafted ? (
+              <motion.span
+                key="potion"
+                initial={{ scale: 0, rotate: -30 }}
+                animate={{ scale: 1, rotate: 0 }}
+                exit={{ scale: 0 }}
+                transition={{ type: 'spring', stiffness: 240, damping: 14 }}
+                className="text-4xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]"
+              >
+                🧪
+              </motion.span>
+            ) : (
+              <span key="q" className="text-2xl text-white/20">?</span>
+            )}
+          </AnimatePresence>
+          <AnimatePresence>
+            {crafted && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.4 }}
+                animate={{ opacity: [0, 0.9, 0], scale: [0.4, 1.5, 2.1] }}
+                transition={{ duration: 1 }}
+                className="pointer-events-none absolute -inset-4"
+                style={{ background: `radial-gradient(circle, ${accent}cc 0%, ${accent}44 40%, transparent 70%)` }}
+              />
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+
+      <div className="mt-4 min-h-[1.5rem] text-center text-sm">
+        {crafted ? (
+          <span className="font-bold text-emerald-300">✨ Poção de Cura Maior criada!</span>
+        ) : (
+          <span className="text-white/50">Vértices preenchidos: <span className="font-semibold text-white">{placed}/3</span></span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function CraftingSection() {
+  return (
+    <section id="bancadas" className="relative py-24">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 flex flex-col gap-12">
+        <SectionHeading
+          eyebrow="Ferreiro & Alquimista"
+          title="Repare, transmute, mantenha sua build"
+          sub="Na loja, o ferreiro restaura a durabilidade das suas peças e a alquimista combina ingredientes do loot em poções de combate. Tudo com os mesmos ingredientes que caem nas masmorras."
+        />
+        <div className="grid items-stretch gap-8 lg:grid-cols-2">
+          <Reveal><RepairDemo /></Reveal>
+          <Reveal delay={120}><AlchemyDemo /></Reveal>
         </div>
       </div>
     </section>
@@ -1097,6 +1512,8 @@ export default function DolrathLanding() {
         <ArenaSection glow={glow} />
         <DungeonsSection />
         <RelicsSection />
+        <EnhancementSection />
+        <CraftingSection />
         <RacesSection />
         <HowSection />
         <FinalCTA primaryHref={primaryHref} glow={glow} />

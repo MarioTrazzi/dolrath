@@ -35,12 +35,14 @@ export async function POST(req: Request) {
     const totalCost = unitPrice * qty
 
     const result = await prisma.$transaction(async (tx) => {
-      const user = await tx.user.findUnique({ where: { id: userId }, select: { goldBalance: true } })
-      if (!user || user.goldBalance < totalCost) {
-        throw new Error(`GOLD insuficiente: precisa de ${totalCost} 🪙.`)
+      // Paga com a CARTEIRA DO PERSONAGEM (Character.gold — "dinheiro na mão").
+      // Para usar o gold do banco, o jogador saca antes em /inventory. [[bank — Opção B]]
+      const charGold = await tx.character.findUnique({ where: { id: characterId }, select: { gold: true } })
+      if (!charGold || charGold.gold < totalCost) {
+        throw new Error(`GOLD insuficiente na carteira do personagem: precisa de ${totalCost} 🪙.`)
       }
 
-      await tx.user.update({ where: { id: userId }, data: { goldBalance: { decrement: totalCost } } })
+      await tx.character.update({ where: { id: characterId }, data: { gold: { decrement: totalCost } } })
 
       const isConsumable = item.type === 'CONSUMABLE'
       if (isConsumable) {
@@ -60,15 +62,15 @@ export async function POST(req: Request) {
         }
       }
 
-      const updated = await tx.user.findUnique({ where: { id: userId }, select: { goldBalance: true } })
-      return { goldBalance: updated?.goldBalance ?? 0 }
+      const updated = await tx.character.findUnique({ where: { id: characterId }, select: { gold: true } })
+      return { characterGold: updated?.gold ?? 0 }
     })
 
     return NextResponse.json({
       success: true,
       added: qty,
       cost: totalCost,
-      goldBalance: result.goldBalance,
+      characterGold: result.characterGold,
       message: `🛒 Comprou ${qty}× ${item.name} por ${totalCost} GOLD.`,
     })
   } catch (error) {

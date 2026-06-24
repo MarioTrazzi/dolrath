@@ -44,13 +44,14 @@ export async function POST(
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Gold (taxa da alquimista)
-      const user = await tx.user.findUnique({
-        where: { id: userId },
-        select: { goldBalance: true },
+      // 1. Gold (taxa da alquimista) — paga com a CARTEIRA DO PERSONAGEM
+      // (Character.gold). Banco é só pra claim/transferência. [[bank — Opção B]]
+      const charGold = await tx.character.findUnique({
+        where: { id: character.id },
+        select: { gold: true },
       })
-      if (!user || user.goldBalance < recipe.goldCost) {
-        throw new Error(`GOLD insuficiente: precisa de ${recipe.goldCost} 🪙.`)
+      if (!charGold || charGold.gold < recipe.goldCost) {
+        throw new Error(`GOLD insuficiente na carteira do personagem: precisa de ${recipe.goldCost} 🪙.`)
       }
 
       // 2. Ingredientes — busca todas as linhas de cada ingrediente do personagem
@@ -100,10 +101,10 @@ export async function POST(
         }
       }
 
-      // 4. Debita o gold
-      await tx.user.update({
-        where: { id: userId },
-        data: { goldBalance: { decrement: recipe.goldCost } },
+      // 4. Debita o gold da carteira do personagem
+      await tx.character.update({
+        where: { id: character.id },
+        data: { gold: { decrement: recipe.goldCost } },
       })
 
       // 5. Acha/cria o Item da poção (mesma lógica de add-exploration-reward)
@@ -141,11 +142,11 @@ export async function POST(
         })
       }
 
-      const updatedUser = await tx.user.findUnique({
-        where: { id: userId },
-        select: { goldBalance: true },
+      const updatedChar = await tx.character.findUnique({
+        where: { id: character.id },
+        select: { gold: true },
       })
-      return { potionItemId: potionItem.id, goldBalance: updatedUser?.goldBalance ?? null }
+      return { potionItemId: potionItem.id, characterGold: updatedChar?.gold ?? null }
     })
 
     try {
@@ -162,7 +163,7 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      goldBalance: result.goldBalance,
+      characterGold: result.characterGold,
       message: `⚗️ ${recipe.outputName} criada com sucesso!`,
     })
   } catch (error) {

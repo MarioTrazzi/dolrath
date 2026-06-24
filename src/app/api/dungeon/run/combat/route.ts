@@ -65,7 +65,7 @@ export async function POST(req: Request) {
     const loot = rollCombatLoot(dungeon, charForRun, pending)
 
     const credited = await prisma.$transaction(async (tx) => {
-      const killGold = await creditGoldTx(tx, userId, monster.goldReward)
+      const killGold = await creditGoldTx(tx, userId, character.id, monster.goldReward)
       const lootGold = await applyLootTx(tx, userId, character.id, loot)
       await tx.dungeonRun.update({
         where: { id: run.id },

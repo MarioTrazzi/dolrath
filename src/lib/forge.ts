@@ -192,6 +192,24 @@ export function getForgeRecipeById(id: string): ForgeRecipe | undefined {
   return RECIPE_BY_ID.get(id);
 }
 
+// Chave canônica da combinação de materiais (nome:qtd, ordenada) — para o modo
+// "montar na mesa": o jogador arrasta materiais até a combinação casar com uma receita.
+function materialsKey(mats: ForgeMaterialReq[]): string {
+  return mats
+    .filter((m) => m.quantity > 0)
+    .map((m) => `${m.name}:${m.quantity}`)
+    .sort()
+    .join('|');
+}
+
+const RECIPE_BY_MATERIALS = new Map(FORGE_RECIPES.map((r) => [materialsKey(r.materials), r]));
+
+/** Acha a receita cuja lista de materiais bate EXATAMENTE com a colocada na mesa. */
+export function findForgeRecipeByMaterials(mats: ForgeMaterialReq[]): ForgeRecipe | undefined {
+  const key = materialsKey(mats);
+  return key ? RECIPE_BY_MATERIALS.get(key) : undefined;
+}
+
 const FORGE_GROUP_ORDER: { group: ForgeRecipe['group']; rarities: Rarity[] }[] = [
   { group: 'armor', rarities: ['COMMON', 'UNCOMMON'] },
   { group: 'weapon', rarities: ['COMMON', 'UNCOMMON'] },

@@ -4,9 +4,11 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Info } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { forgeRecipesByGroup, forgeMaterialEmoji, getForgeOutputCatalogItem, type ForgeRecipe } from '@/lib/forge';
+import { forgeRecipesByGroup, forgeMaterialEmoji, getForgeOutputCatalogItem, findForgeRecipeByMaterials, type ForgeRecipe } from '@/lib/forge';
 import { getItemVisual } from '@/lib/itemVisuals';
 import { itemImagePath, type Rarity } from '@/lib/itemCatalog';
+
+const DRAG_MIME = 'text/forge-material';
 
 // Miniatura do item: usa a arte /items/<slug>.webp e cai no emoji se a imagem falhar.
 function ItemThumb({ name, emoji, className = 'text-2xl' }: { name: string; emoji: string; className?: string }) {
@@ -65,7 +67,6 @@ interface InventoryItem {
   item: { name: string; type: string; stats?: Record<string, unknown> | null };
 }
 
-// Posição do popover de hover (coordenadas de viewport, fixed).
 interface HoverInfo {
   id: string;
   top: number;
@@ -89,13 +90,14 @@ export default function ForgeBench({
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loadingInv, setLoadingInv] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [selectedRecipeId, setSelectedRecipeId] = useState<string>('');
   const [recipesOpen, setRecipesOpen] = useState(false);
   const [hover, setHover] = useState<HoverInfo | null>(null);
-  // Portal só após montar no cliente (modal/popover saem do container com
-  // backdrop-blur + overflow-hidden, que senão recortaria os elementos fixed).
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+
+  // Materiais colocados na bigorna: nome → quantidade.
+  const [placed, setPlaced] = useState<Record<string, number>>({});
+  const [dragOver, setDragOver] = useState(false);
 
   useEffect(() => {
     if (!controlled && !internalCharacterId && characters.length > 0) {
@@ -121,9 +123,9 @@ export default function ForgeBench({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCharacterId, refreshSignal, fetchInventory]);
 
-  // Limpa a mesa ao trocar de personagem.
+  // Esvazia a bigorna ao trocar de personagem.
   useEffect(() => {
-    setSelectedRecipeId('');
+    setPlaced({});
   }, [selectedCharacterId]);
 
   // Insumos do inventário (materiais + pedras): nome → quantidade total.
@@ -137,8 +139,7 @@ export default function ForgeBench({
     return map;
   }, [inventory]);
 
-  // Só os itens FORJÁVEIS do inventário (materiais + pedras de aprimoramento), pra
-  // exibir na mesa — exclui poções e outros consumíveis.
+  // Só os itens FORJÁVEIS (materiais + pedras de aprimoramento) — arrastáveis pra mesa.
   const forgeStock = useMemo(() => {
     const map = new Map<string, number>();
     for (const inv of inventory) {
@@ -151,26 +152,50 @@ export default function ForgeBench({
 
   const groups = useMemo(() => forgeRecipesByGroup(), []);
   const allRecipes = useMemo(() => groups.flatMap((g) => g.recipes), [groups]);
-  const selected = useMemo(
-    () => allRecipes.find((r) => r.id === selectedRecipeId) ?? null,
-    [allRecipes, selectedRecipeId]
-  );
 
   const have = useCallback((name: string) => matCounts.get(name) ?? 0, [matCounts]);
+
+  // Lista de materiais na bigorna e a receita que ela forma (combinação exata).
+  const placedList = useMemo(
+    () => Object.entries(placed).filter(([, c]) => c > 0).map(([name, count]) => ({ name, quantity: count })),
+    [placed]
+  );
+  const matched = useMemo(() => findForgeRecipeByMaterials(placedList), [placedList]);
+  const availableOf = useCallback((name: string) => have(name) - (placed[name] ?? 0), [have, placed]);
+
+  const addMaterial = useCallback((name: string) => {
+    setPlaced((p) => {
+      const cur = p[name] ?? 0;
+      if (have(name) - cur <= 0) return p; // não coloca mais do que tem
+      return { ...p, [name]: cur + 1 };
+    });
+  }, [have]);
+
+  const removeMaterial = (name: string) => {
+    setPlaced((p) => {
+      const cur = p[name] ?? 0;
+      if (cur <= 1) {
+        const next = { ...p };
+        delete next[name];
+        return next;
+      }
+      return { ...p, [name]: cur - 1 };
+    });
+  };
+
   const canForgeRecipe = useCallback(
     (r: ForgeRecipe) => r.materials.every((m) => have(m.name) >= m.quantity),
     [have]
   );
-  const canForge = selected ? canForgeRecipe(selected) : false;
 
   const handleForge = async () => {
-    if (!selected || !selectedCharacterId) return;
+    if (!matched || !selectedCharacterId) return;
     setBusy(true);
     try {
       const res = await fetch(`/api/character/${selectedCharacterId}/forge-item`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recipeId: selected.id }),
+        body: JSON.stringify({ recipeId: matched.id }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -178,6 +203,7 @@ export default function ForgeBench({
         return;
       }
       toast.success(json.message || '⚒️ Forjado!');
+      setPlaced({});
       await fetchInventory(selectedCharacterId);
       onCrafted?.();
     } catch {
@@ -187,15 +213,17 @@ export default function ForgeBench({
     }
   };
 
-  // Carrega a receita na mesa (com os materiais "inseridos") e fecha o modal.
+  // Atalho do livro: clicar numa receita pronta já enche a bigorna com os materiais dela.
   const loadRecipe = (r: ForgeRecipe) => {
     if (!canForgeRecipe(r)) return;
-    setSelectedRecipeId(r.id);
+    const next: Record<string, number> = {};
+    for (const m of r.materials) next[m.name] = m.quantity;
+    setPlaced(next);
     setRecipesOpen(false);
     setHover(null);
   };
 
-  const selectedUi = selected ? RARITY_UI[selected.rarity] : RARITY_UI.COMMON;
+  const matchedUi = matched ? RARITY_UI[matched.rarity] : null;
   const hoverRecipe = hover ? allRecipes.find((r) => r.id === hover.id) ?? null : null;
 
   return (
@@ -231,103 +259,138 @@ export default function ForgeBench({
         <div className="text-white/50 text-sm py-8 text-center">Carregando materiais…</div>
       ) : (
         <>
-          {/* 🔨 A BIGORNA — receita carregada com os materiais "inseridos" */}
+          {/* 🔨 A BIGORNA — zona de drop: arraste materiais até formar uma receita */}
           <div
-            className="rounded-xl border p-4 mb-4"
-            style={{ borderColor: selected ? selectedUi.ring + '88' : '#ffffff14', background: 'rgba(0,0,0,0.3)' }}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragOver(false);
+              const name = e.dataTransfer.getData(DRAG_MIME);
+              if (name) addMaterial(name);
+            }}
+            className="rounded-xl border-2 border-dashed p-4 mb-4 transition-colors"
+            style={{
+              borderColor: dragOver ? '#f59e0b' : matchedUi ? matchedUi.ring + 'aa' : '#ffffff22',
+              background: dragOver ? 'rgba(245,158,11,0.08)' : 'rgba(0,0,0,0.3)',
+            }}
           >
-            {!selected ? (
+            {placedList.length === 0 ? (
               <div className="py-6 text-center text-sm text-white/45">
-                A bigorna está vazia. Abra <strong className="text-orange-300">📖 Receitas</strong> e escolha o que forjar —
-                os materiais entram aqui automaticamente.
+                Arraste (ou clique) os materiais de baixo até a bigorna. Quando a combinação formar uma
+                receita, o item aparece aqui pra forjar.
               </div>
             ) : (
               <>
-                <div className="flex items-center gap-3 mb-3">
+                {/* Materiais na bigorna */}
+                <div className="flex flex-wrap justify-center gap-2 mb-3">
+                  {placedList.map(({ name, quantity }) => (
+                    <div
+                      key={name}
+                      className="flex flex-col items-center gap-1 rounded-lg border border-orange-500/40 bg-black/40 p-1.5 w-[72px]"
+                      title={name}
+                    >
+                      <span className="relative block w-10 h-10 overflow-hidden rounded grid place-items-center">
+                        <ItemThumb name={name} emoji={matEmoji(name)} className="text-xl" />
+                        <span className="absolute -top-1 -right-1 rounded-full bg-orange-600 text-white text-[10px] font-black px-1.5 leading-tight">{quantity}</span>
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => removeMaterial(name)}
+                          className="grid h-5 w-5 place-items-center rounded bg-white/10 text-white/80 hover:bg-white/20 text-xs"
+                          title="Tirar 1"
+                        >－</button>
+                        <button
+                          onClick={() => addMaterial(name)}
+                          disabled={availableOf(name) <= 0}
+                          className="grid h-5 w-5 place-items-center rounded bg-white/10 text-white/80 hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed text-xs"
+                          title="Pôr mais 1"
+                        >＋</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Resultado da combinação */}
+                {matched && matchedUi ? (
                   <div
-                    className="w-14 h-14 shrink-0 grid place-items-center rounded-xl border-2 overflow-hidden"
-                    style={{ borderColor: selectedUi.ring, boxShadow: `0 0 16px ${selectedUi.glow}` }}
+                    className="flex items-center gap-3 rounded-lg border p-2 mb-3"
+                    style={{ borderColor: matchedUi.ring, boxShadow: `0 0 14px ${matchedUi.glow}` }}
                   >
-                    <ItemThumb name={selected.outputName} emoji={outputEmoji(selected)} className="text-3xl" />
+                    <div className="w-12 h-12 shrink-0 grid place-items-center rounded-lg border-2 overflow-hidden" style={{ borderColor: matchedUi.ring }}>
+                      <ItemThumb name={matched.outputName} emoji={outputEmoji(matched)} className="text-2xl" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] uppercase tracking-wide text-white/40">vai forjar</p>
+                      <p className={`font-black text-sm leading-tight truncate ${matchedUi.text}`}>{matched.outputName}</p>
+                      <p className="text-xs text-amber-300">taxa {matched.goldCost} 🪙</p>
+                    </div>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <h3 className={`font-black text-base leading-tight truncate ${selectedUi.text}`}>{selected.outputName}</h3>
-                    <p className="text-xs text-amber-300">taxa do ferreiro {selected.goldCost} 🪙</p>
-                  </div>
+                ) : (
+                  <p className="text-center text-xs text-white/45 mb-3">
+                    Combinação ainda não forma uma receita — ajuste os materiais.
+                  </p>
+                )}
+
+                <div className="flex gap-2">
                   <button
-                    onClick={() => setSelectedRecipeId('')}
-                    disabled={busy}
-                    className="text-xs text-white/40 hover:text-white/80 transition-colors disabled:opacity-30"
-                    title="Esvaziar a bigorna"
+                    onClick={handleForge}
+                    disabled={busy || !matched || !selectedCharacterId}
+                    className="flex-1 px-4 py-2.5 rounded-xl font-black text-sm text-white transition-all hover:scale-[1.02] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 bg-gradient-to-r from-orange-600 to-amber-500"
                   >
-                    ✕ limpar
+                    {busy ? 'Forjando…' : matched ? `⚒️ Forjar e pagar ${matched.goldCost} 🪙` : '⚒️ Sem receita'}
+                  </button>
+                  <button
+                    onClick={() => setPlaced({})}
+                    disabled={busy}
+                    className="px-3 py-2.5 rounded-xl text-sm text-white/70 bg-white/10 hover:bg-white/15 disabled:opacity-30 transition-colors"
+                  >
+                    Limpar
                   </button>
                 </div>
-
-                {/* Materiais inseridos na mesa */}
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {selected.materials.map((m) => {
-                    const enough = have(m.name) >= m.quantity;
-                    return (
-                      <div
-                        key={m.name}
-                        className="relative flex flex-col items-center gap-0.5 rounded-lg border p-1.5 w-[68px]"
-                        style={{ borderColor: enough ? '#34d39966' : '#ef444466', background: 'rgba(0,0,0,0.35)' }}
-                        title={`${m.name} — você tem ${have(m.name)}, precisa de ${m.quantity}`}
-                      >
-                        <span className="block w-9 h-9 overflow-hidden rounded grid place-items-center">
-                          <ItemThumb name={m.name} emoji={matEmoji(m.name)} className="text-xl" />
-                        </span>
-                        <span className={`text-[10px] font-bold ${enough ? 'text-emerald-300' : 'text-red-300'}`}>
-                          {have(m.name)}/{m.quantity}
-                        </span>
-                        <span className="absolute -top-1.5 -right-1.5 rounded-full bg-orange-600 text-white text-[10px] font-black px-1.5 leading-tight">
-                          {m.quantity}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <button
-                  onClick={handleForge}
-                  disabled={busy || !canForge || !selectedCharacterId}
-                  className="w-full px-4 py-2.5 rounded-xl font-black text-sm text-white transition-all hover:scale-[1.02] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 bg-gradient-to-r from-orange-600 to-amber-500"
-                >
-                  {busy ? 'Forjando…' : canForge ? `⚒️ Forjar e pagar ${selected.goldCost} 🪙` : 'Materiais insuficientes'}
-                </button>
               </>
             )}
           </div>
 
-          {/* 🎒 Materiais forjáveis do personagem */}
-          <label className="block text-xs font-semibold text-orange-200/80 mb-2">Seus materiais</label>
+          {/* 🎒 Materiais forjáveis — arraste ou clique para colocar na bigorna */}
+          <label className="block text-xs font-semibold text-orange-200/80 mb-2">
+            Seus materiais — arraste ou clique para colocar na mesa
+          </label>
           {forgeStock.length === 0 ? (
             <div className="text-white/40 text-xs py-4 text-center rounded-lg border border-white/5 bg-black/20">
-              🎒 Nenhum material. Explore masmorras para coletar couro, ferro e estilhaços.
+              🎒 Nenhum material. Explore masmorras para coletar couro, ferro, estilhaços e pedras.
             </div>
           ) : (
             <div
               className="grid gap-2 overflow-y-auto pr-1"
-              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(58px, 1fr))', maxHeight: 160 }}
+              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(58px, 1fr))', maxHeight: 180 }}
             >
-              {forgeStock.map(({ name, count }) => (
-                <div
-                  key={name}
-                  title={`${name} — ${count}`}
-                  className="relative flex flex-col items-center gap-0.5 rounded-lg border border-white/10 bg-black/30 p-1.5"
-                >
-                  <span className="block w-8 h-8 overflow-hidden rounded grid place-items-center">
-                    <ItemThumb name={name} emoji={matEmoji(name)} className="text-lg" />
-                  </span>
-                  <span className="absolute top-0.5 right-1 text-[10px] font-black text-white" style={{ textShadow: '0 1px 2px #000' }}>
-                    {count}
-                  </span>
-                </div>
-              ))}
+              {forgeStock.map(({ name, count }) => {
+                const avail = availableOf(name);
+                return (
+                  <button
+                    key={name}
+                    draggable={avail > 0}
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData(DRAG_MIME, name);
+                      e.dataTransfer.effectAllowed = 'copy';
+                    }}
+                    onClick={() => addMaterial(name)}
+                    disabled={avail <= 0}
+                    title={`${name} — ${avail} disponível${avail === 1 ? '' : 's'} de ${count}`}
+                    className="relative flex flex-col items-center gap-0.5 rounded-lg border border-white/10 bg-black/30 p-1.5 transition-transform enabled:cursor-grab enabled:hover:scale-[1.05] enabled:active:cursor-grabbing disabled:opacity-35 disabled:cursor-not-allowed"
+                  >
+                    <span className="block w-8 h-8 overflow-hidden rounded grid place-items-center pointer-events-none">
+                      <ItemThumb name={name} emoji={matEmoji(name)} className="text-lg" />
+                    </span>
+                    <span className="absolute top-0.5 right-1 text-[10px] font-black text-white" style={{ textShadow: '0 1px 2px #000' }}>
+                      {avail}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           )}
-
         </>
       )}
 
@@ -348,8 +411,8 @@ export default function ForgeBench({
               <button onClick={() => { setRecipesOpen(false); setHover(null); }} className="text-white/50 hover:text-white text-lg">✕</button>
             </div>
             <p className="text-xs text-white/50 mb-4">
-              Passe o mouse para ver os materiais; receitas <span className="text-emerald-300">prontas</span> ficam acesas —
-              clique para mandar pra mesa e só pagar o gold.
+              Passe o mouse para ver os materiais (em vermelho os que faltam). Receitas <span className="text-emerald-300">prontas</span> ficam acesas —
+              clique para já montar na bigorna; ou arraste os materiais você mesmo.
             </p>
 
             <div className="space-y-4">
@@ -425,7 +488,7 @@ export default function ForgeBench({
           </div>
           <p className="mt-2 text-[10px] text-amber-300">taxa {hoverRecipe.goldCost} 🪙</p>
           <p className={`mt-1 text-[10px] font-semibold ${canForgeRecipe(hoverRecipe) ? 'text-emerald-300' : 'text-white/40'}`}>
-            {canForgeRecipe(hoverRecipe) ? '✓ clique para mandar pra mesa' : 'colete os materiais que faltam'}
+            {canForgeRecipe(hoverRecipe) ? '✓ clique para montar na bigorna' : 'colete os materiais que faltam'}
           </p>
         </div>
       )}

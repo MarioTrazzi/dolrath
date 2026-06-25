@@ -258,12 +258,12 @@ export const ITEM_CATALOG: CatalogItem[] = [
   {
     name: 'Manoplas do Discípulo', description: 'Couro envolto em ferro nos nós dos dedos; o primeiro passo da via marcial.',
     type: 'GAUNTLET', level: 1, rarity: 'COMMON', goldPrice: 100, source: 'shop', build: 'agile', dungeons: [],
-    stats: { agi: 9, hp: 4 },
+    stats: { agi: 14, def: 1, hp: 4 },
   },
   {
     name: 'Punhos de Aço', description: 'Cestus reforçado com placas; cada golpe carrega o peso do aço.',
     type: 'GAUNTLET', level: 6, rarity: 'UNCOMMON', goldPrice: 430, source: 'shop', build: 'agile', dungeons: [],
-    stats: { agi: 17, hp: 8 },
+    stats: { agi: 26, def: 3, hp: 8 },
   },
   {
     name: 'Orbe de Cristal', description: 'Esfera de quartzo que flutua na mão livre do conjurador, ampliando o foco.',
@@ -534,17 +534,17 @@ export const ITEM_CATALOG: CatalogItem[] = [
   {
     name: 'Manoplas da Fera', description: 'Couro curtido com presas incrustadas; cada soco rosna como o predador que as forjou.',
     type: 'GAUNTLET', level: 13, rarity: 'RARE', goldPrice: 1450, source: 'dungeon', dungeons: ['caverna'],
-    stats: { agi: 30, hp: 12 },
+    stats: { agi: 44, def: 4, hp: 12 },
   },
   {
     name: 'Punhos do Mestre Marcial', description: 'Disciplina de mil treinos cristalizada em aço; a velocidade vira sequência.',
     type: 'GAUNTLET', level: 22, rarity: 'EPIC', goldPrice: 3300, source: 'dungeon_boss', dungeons: ['pantano'],
-    stats: { agi: 40, hp: 18, specialEffect: 'Rajada de golpes em sequência' },
+    stats: { agi: 60, def: 5, hp: 18, specialEffect: 'Rajada de golpes em sequência' },
   },
   {
     name: 'Punhos do Dragão Interior', description: 'Despertam o cosmo do portador; o golpe atravessa carne e armadura.',
     type: 'GAUNTLET', level: 29, rarity: 'LEGENDARY', goldPrice: 9300, source: 'dungeon_boss', dungeons: ['ruinas'],
-    stats: { str: 6, agi: 60, specialEffect: 'Golpes encadeados ignoram parte da defesa' },
+    stats: { str: 6, agi: 86, def: 6, specialEffect: 'Golpes encadeados ignoram parte da defesa' },
   },
 
   // --- ORBES (offhand do Mago) ---

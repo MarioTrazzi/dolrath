@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Users, Sword, Plus, RefreshCw, Crown, Clock, X, Shield } from 'lucide-react'
 import ArenaBackdrop from '@/components/combat/ArenaBackdrop'
+import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider'
 
 interface CombatRoom {
   id: string
@@ -64,6 +65,8 @@ interface Player {
 
 export default function CombatLobbyPage() {
   const router = useRouter()
+  // Herói ATIVO global (navbar): a arena PvP usa sempre o personagem selecionado.
+  const { activeCharacterId } = useActiveCharacter()
   const [isLoading, setIsLoading] = useState(true)
   const [characters, setCharacters] = useState<Player[]>([])
   const [selectedCharacter, setSelectedCharacter] = useState<Player | null>(null)
@@ -78,6 +81,13 @@ export default function CombatLobbyPage() {
   useEffect(() => {
     checkAuthAndLoadData()
   }, [])
+
+  // Sincroniza a seleção com o herói ativo do contexto (navbar), quando existir.
+  useEffect(() => {
+    if (characters.length === 0) return
+    const match = characters.find((c) => c.id === activeCharacterId)
+    if (match) setSelectedCharacter(match)
+  }, [activeCharacterId, characters])
 
   useEffect(() => {
     if (!isLoading) {
@@ -411,29 +421,7 @@ export default function CombatLobbyPage() {
               <p className="text-white/60 mt-2 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">Escolha uma sala ou crie a sua própria arena!</p>
             </div>
             <div className="text-left md:text-right">
-              {/* Seleção de Personagem */}
-              {characters.length > 0 && (
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-white/60 mb-2">
-                    Escolha seu personagem:
-                  </label>
-                  <select
-                    value={selectedCharacter?.id || ''}
-                    onChange={(e) => {
-                      const character = characters.find(c => c.id === e.target.value)
-                      setSelectedCharacter(character || null)
-                    }}
-                    className="block w-full px-4 py-2.5 rounded-xl bg-black/60 border border-white/20 text-white text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-500/50"
-                  >
-                    {characters.map((char) => (
-                      <option key={char.id} value={char.id} className="bg-stone-900 text-white">
-                        {char.name} (Level {char.level}) - {char.race} {char.class}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
+              {/* Personagem ativo (definido na navbar — sem seletor aqui) */}
               {selectedCharacter && (
                 <div className="inline-flex flex-col items-start md:items-end bg-black/40 border border-white/10 rounded-xl px-4 py-2.5">
                   <div className="font-bold text-lg drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">{selectedCharacter.name}</div>

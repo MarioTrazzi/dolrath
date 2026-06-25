@@ -113,6 +113,13 @@ export async function POST(
       }
     }
 
+    // Exclusão mútua "mão a mão" 🥊: manopla (arma do Monge) e luva ocupam as
+    // mesmas mãos — nunca acumulam. Equipar uma devolve a outra ao inventário.
+    //   • equipar MANOPLA  → desequipa a luva.
+    //   • equipar LUVA     → desequipa as manoplas (principal + offhand de punhos).
+    const equippingType = characterInventoryItem.item.type as string;
+    const GLOVE_TYPES = ['LIGHT_GLOVES', 'MEDIUM_GLOVES', 'HEAVY_GLOVES'];
+
     // Tudo que muda estado roda em transação: devolve item trocado ao inventário,
     // remove o item equipado do inventário e cria o registro de equipamento.
     const newEquipment = await prisma.$transaction(async (tx) => {
@@ -129,6 +136,28 @@ export async function POST(
           existingEquipment.enhancementLevel,
         );
         console.log(`Unequipped existing item from ${finalSlotType} back to inventory`);
+      }
+
+      // Resolve a exclusão mútua manopla ↔ luva (slots diferentes das mãos).
+      let mutexRows: { id: string; itemId: string; enhancementLevel: number }[] = [];
+      if (equippingType === 'GAUNTLET') {
+        // Manopla nas mãos → tira qualquer luva equipada.
+        mutexRows = await tx.characterEquipment.findMany({
+          where: { characterId: params.characterId, slot: 'GLOVES' },
+        });
+      } else if (GLOVE_TYPES.includes(equippingType)) {
+        // Luva nas mãos → tira manoplas (arma e/ou offhand de punhos), preservando
+        // qualquer outra arma/secundária que não seja manopla.
+        const handRows = await tx.characterEquipment.findMany({
+          where: { characterId: params.characterId, slot: { in: ['WEAPON', 'SHIELD'] } },
+          include: { item: true },
+        });
+        mutexRows = handRows.filter((row) => row.item.type === 'GAUNTLET');
+      }
+      for (const row of mutexRows) {
+        await tx.characterEquipment.delete({ where: { id: row.id } });
+        await restoreItemToInventory(tx, params.characterId, row.itemId, row.enhancementLevel);
+        console.log(`Mutex hands: unequipped ${row.itemId} back to inventory`);
       }
 
       // O item equipado sai do inventário.

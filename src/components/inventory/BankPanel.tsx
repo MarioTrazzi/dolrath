@@ -8,7 +8,10 @@ interface CharWallet { id: string; name: string; class: string; gold: number }
 // 🏦 Banco: poupança da CONTA (User.goldBalance, claimável) + carteira de cada
 // personagem (Character.gold, usada nas compras). Sacar leva do banco pro herói;
 // depositar devolve pro banco (necessário para dar claim). [[bank — Opção B]]
-export default function BankPanel() {
+//
+// `characterId` (opcional): quando informado, o painel opera SÓ sobre o herói
+// ativo — sabe-se de quem é o ouro, então mostramos apenas sacar/depositar dele.
+export default function BankPanel({ characterId }: { characterId?: string | null }) {
   const [bankGold, setBankGold] = useState<number | null>(null)
   const [chars, setChars] = useState<CharWallet[]>([])
   const [amounts, setAmounts] = useState<Record<string, string>>({})
@@ -70,11 +73,14 @@ export default function BankPanel() {
         serve para <b>comprar</b> no ferreiro/alquimista. Saque para gastar; deposite para reivindicar.
       </p>
 
-      {chars.length === 0 ? (
+      {(() => {
+        // Com herói ativo definido, opera só sobre ele; senão, lista todos (fallback).
+        const visibleChars = characterId ? chars.filter((c) => c.id === characterId) : chars
+        return visibleChars.length === 0 ? (
         <p className="text-sm text-text-secondary">Nenhum personagem.</p>
       ) : (
         <div className="space-y-2">
-          {chars.map((c) => (
+          {visibleChars.map((c) => (
             <div key={c.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-white/10 bg-slate-900/50 p-3">
               <div className="flex-1 min-w-[140px]">
                 <div className="font-semibold text-white">{c.name} <span className="text-xs text-text-secondary">({c.class})</span></div>
@@ -105,7 +111,8 @@ export default function BankPanel() {
             </div>
           ))}
         </div>
-      )}
+      )
+      })()}
     </div>
   )
 }

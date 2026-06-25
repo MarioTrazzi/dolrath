@@ -14,6 +14,7 @@ import ForgeBench from '@/components/store/ForgeBench';
 import { getItemVisual, getItemTypeLabel, getItemCategory } from '@/lib/itemVisuals';
 import { formatItemStats } from '@/lib/itemStats';
 import { useGold } from '@/components/providers/GoldProvider';
+import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider';
 
 // Configuração de cada "loja NPC". O ferreiro vende equipamento (armas/armaduras
 // e acessórios) e tem a bancada de reparo; o alquimista vende consumíveis.
@@ -90,10 +91,14 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
   // Carteira do PERSONAGEM selecionado (Character.gold) — é ESTE saldo que a loja
   // gasta no modelo do banco. Para usar o gold do banco, o jogador saca em
   // /inventory. O useGold() mostra o on-chain (claimado), que não compra. [[bank]]
+  // Personagem ATIVO global (navbar). A loja compra/equipa SEMPRE neste herói —
+  // sem seletor próprio. `characters`/`selectedCharacter` derivam do contexto
+  // para preservar o resto da lógica original sem reescrevê-la.
+  const { characters: ctxCharacters, activeCharacterId } = useActiveCharacter();
+  const characters = ctxCharacters as unknown as Character[];
+  const selectedCharacter = activeCharacterId ?? '';
   const [characterGold, setCharacterGold] = useState<number | null>(null);
   const [items, setItems] = useState<StoreItem[]>([]);
-  const [characters, setCharacters] = useState<Character[]>([]);
-  const [selectedCharacter, setSelectedCharacter] = useState<string>('');
   const [userInventory, setUserInventory] = useState<UserInventoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [itemsLoading, setItemsLoading] = useState(true);
@@ -210,7 +215,6 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
   }, [items, searchQuery, selectedType, priceFilter, levelFilter, sortBy, sortOrder, config, showAll, activeLevel]);
 
   useEffect(() => {
-    fetchCharacters();
     fetchUserInventory();
   }, []);
 
@@ -254,21 +258,6 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
       console.error('Error fetching items:', error);
     } finally {
       setItemsLoading(false);
-    }
-  };
-
-  const fetchCharacters = async () => {
-    try {
-      const response = await fetch('/api/character/me');
-      if (response.ok) {
-        const data = await response.json();
-        setCharacters(Array.isArray(data) ? data : [data]);
-        if (data.length > 0) {
-          setSelectedCharacter(data[0].id);
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching characters:', error);
     }
   };
 
@@ -650,25 +639,14 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
           )}
         </div>
         
-        {/* Character Selection */}
-        {characters.length > 0 && (
+        {/* Personagem ativo (sem seletor — definido na navbar) + carteira */}
+        {activeCharacter && (
           <div className="mb-6">
-            <label className="block text-sm font-medium mb-2 text-text-secondary">
-              Selecionar Personagem:
-            </label>
             <div className="flex flex-wrap items-center gap-4">
-              <select
-                value={selectedCharacter}
-                onChange={(e) => setSelectedCharacter(e.target.value)}
-                className="px-4 py-2 bg-surface/50 border border-white/20 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="">Selecione um personagem</option>
-                {characters.map((character) => (
-                  <option key={character.id} value={character.id}>
-                    {character.name} ({character.class})
-                  </option>
-                ))}
-              </select>
+              <span className="text-sm font-semibold text-white bg-surface/50 border border-white/15 rounded-lg px-3 py-2">
+                ⚔️ {activeCharacter.name}
+                <span className="ml-1 text-text-secondary capitalize">({activeClass})</span>
+              </span>
 
               <span className="text-sm font-semibold text-amber-300 bg-amber-500/10 border border-amber-400/30 rounded-lg px-3 py-2">
                 Carteira: {characterGold === null ? '…' : characterGold} 🪙

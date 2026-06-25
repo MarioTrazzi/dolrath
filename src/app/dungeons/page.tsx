@@ -7,10 +7,13 @@ import { motion } from 'framer-motion'
 import DungeonRun, { DungeonCharacter } from '@/components/dungeon/DungeonRun'
 import DungeonBackdrop from '@/components/dungeon/DungeonBackdrop'
 import { DUNGEON_LIST, DungeonDef } from '@/lib/dungeonAdventures'
+import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider'
 
 export default function DungeonsPage() {
   const { data: session } = useSession()
   const router = useRouter()
+  // Herói ATIVO global (navbar): a masmorra usa sempre o personagem selecionado.
+  const { activeCharacterId } = useActiveCharacter()
   const [characters, setCharacters] = useState<DungeonCharacter[]>([])
   const [selectedCharacter, setSelectedCharacter] = useState<DungeonCharacter | null>(null)
   const [activeDungeon, setActiveDungeon] = useState<DungeonDef | null>(null)
@@ -74,9 +77,6 @@ export default function DungeonsPage() {
         )
 
         setCharacters(charactersWithDetails)
-        if (charactersWithDetails.length > 0) {
-          setSelectedCharacter(charactersWithDetails[0])
-        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Erro desconhecido')
       } finally {
@@ -86,6 +86,16 @@ export default function DungeonsPage() {
 
     fetchCharacters()
   }, [session, router])
+
+  // Mantém o personagem do contexto (navbar) como o selecionado da masmorra.
+  useEffect(() => {
+    if (characters.length === 0) return
+    setSelectedCharacter((prev) => {
+      const match = characters.find((c) => c.id === activeCharacterId) || characters[0]
+      // Preserva o objeto local (com hp/mp atualizados pós-run) se o id não mudou.
+      return prev && prev.id === match.id ? prev : match
+    })
+  }, [activeCharacterId, characters])
 
   // Ao sair da masmorra, sincroniza os recursos locais do personagem
   const handleRunExit = (updates: { hp: number; mp: number; stamina: number }) => {
@@ -138,24 +148,14 @@ export default function DungeonsPage() {
           </p>
         </div>
 
-        {/* Seletor de personagem */}
+        {/* Personagem ativo (definido na navbar — sem seletor aqui) */}
         <div className="mb-6 flex flex-col sm:flex-row items-center justify-center gap-3">
-          {characters.length > 0 ? (
+          {selectedCharacter ? (
             <>
-              <select
-                value={selectedCharacter?.id || ''}
-                onChange={(e) => {
-                  const character = characters.find(c => c.id === e.target.value)
-                  setSelectedCharacter(character || null)
-                }}
-                className="px-4 py-2.5 rounded-xl bg-black/60 border border-white/20 text-white text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-500/50"
-              >
-                {characters.map((char) => (
-                  <option key={char.id} value={char.id}>
-                    {char.name} (Nv.{char.level}) — {char.race} {char.class}
-                  </option>
-                ))}
-              </select>
+              <div className="px-4 py-2.5 rounded-xl bg-black/60 border border-white/20 text-white text-sm font-bold">
+                {selectedCharacter.name} <span className="text-white/60">(Nv.{selectedCharacter.level})</span>
+                <span className="text-white/60 capitalize"> — {selectedCharacter.race} {selectedCharacter.class}</span>
+              </div>
               {selectedCharacter && (
                 <div className="flex items-center gap-3 text-xs text-white/70 bg-black/40 border border-white/10 rounded-xl px-4 py-2.5">
                   <span>❤️ {selectedCharacter.hp}/{selectedCharacter.maxHp}</span>

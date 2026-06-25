@@ -2,13 +2,17 @@
 
 import { useSession, signOut } from 'next-auth/react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Coins, Wallet } from 'lucide-react'
+import { Coins, Wallet, ChevronDown } from 'lucide-react'
 import { ethers } from 'ethers'
 import toast from 'react-hot-toast'
 import { getWalletTxErrorMessage } from '@/lib/walletErrors'
+import { resolveImageUrl } from '@/lib/imageUrl'
+import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider'
+import { CharacterSwitcherDialog } from '@/components/character/CharacterSwitcherDialog'
 
 export function Navbar() {
   const { data: session, update } = useSession()
@@ -25,8 +29,11 @@ export function Navbar() {
 
   const [isLinkingWallet, setIsLinkingWallet] = useState(false)
 
-  // Personagem ativo (primeiro de /api/character/me, mesma convenção do inventário/loja)
-  const [activeCharacterId, setActiveCharacterId] = useState<string | null>(null)
+  // Personagem ATIVO global (fonte única: ActiveCharacterProvider). A foto-avatar
+  // na navbar abre o diálogo de troca; o herói escolhido vale em todo o app.
+  const { activeCharacter, activeCharacterId } = useActiveCharacter()
+  const [switcherOpen, setSwitcherOpen] = useState(false)
+  const activeAvatarUrl = resolveImageUrl(activeCharacter?.avatar ?? null)
 
   const walletAddress = session?.user?.walletAddress
 
@@ -158,28 +165,6 @@ export function Navbar() {
       .finally(() => setGoldLoading(false))
   }, [session, walletAddress])
 
-  // Busca o personagem ativo para o link "Personagem".
-  useEffect(() => {
-    if (!session) {
-      setActiveCharacterId(null)
-      return
-    }
-    let cancelled = false
-    fetch('/api/character/me')
-      .then(async (res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (cancelled) return
-        const list = Array.isArray(data) ? data : data ? [data] : []
-        setActiveCharacterId(list.length > 0 ? String(list[0].id) : null)
-      })
-      .catch(() => {
-        if (!cancelled) setActiveCharacterId(null)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [session])
-
   // "Personagem" leva à ficha do personagem ativo; sem personagem, à criação.
   const fichaHref = activeCharacterId ? `/character/${activeCharacterId}` : '/character/create'
 
@@ -199,11 +184,43 @@ export function Navbar() {
     <header className="fixed top-0 inset-x-0 z-50">
       <nav className="mx-auto max-w-7xl px-4 sm:px-6" aria-label="Navegação principal">
         <div className="mt-3 flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-secondary/70 backdrop-blur-xl px-4 sm:px-6 py-3 shadow-2xl shadow-black/20">
-          {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 font-bold text-lg tracking-tight text-white shrink-0">
-            <span aria-hidden="true">⚔️</span>
-            <span>Dolrath</span>
-          </Link>
+          {/* Logo + foto-avatar do herói ativo (abre o seletor de personagem) */}
+          <div className="flex items-center gap-2 shrink-0">
+            {session ? (
+              <button
+                type="button"
+                onClick={() => setSwitcherOpen(true)}
+                title={activeCharacter ? `Trocar herói (ativo: ${activeCharacter.name})` : 'Escolher herói'}
+                aria-label="Trocar personagem ativo"
+                className="group relative flex items-center"
+              >
+                <span className="relative block h-9 w-9 overflow-hidden rounded-full ring-2 ring-primary/60 transition-all group-hover:ring-primary">
+                  {activeAvatarUrl ? (
+                    <Image
+                      src={activeAvatarUrl}
+                      alt={activeCharacter?.name ?? ''}
+                      fill
+                      sizes="36px"
+                      className="object-cover"
+                      unoptimized={!/^https?:\/\//i.test(activeAvatarUrl)}
+                    />
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center bg-indigo-500/30 text-lg" aria-hidden="true">
+                      ⚔️
+                    </span>
+                  )}
+                </span>
+                <span className="absolute -bottom-0.5 -right-0.5 rounded-full bg-secondary p-0.5">
+                  <ChevronDown className="h-3 w-3 text-white/80" />
+                </span>
+              </button>
+            ) : (
+              <span aria-hidden="true" className="text-lg">⚔️</span>
+            )}
+            <Link href="/" className="font-bold text-lg tracking-tight text-white">
+              Dolrath
+            </Link>
+          </div>
 
           {/* Navigation Links - Desktop */}
           <div className="hidden lg:flex items-center gap-1">
@@ -393,6 +410,9 @@ export function Navbar() {
         )}
       </AnimatePresence>
       </nav>
+
+      {/* Diálogo de troca de herói (carrossel de personagens) */}
+      <CharacterSwitcherDialog open={switcherOpen} onClose={() => setSwitcherOpen(false)} />
     </header>
   )
 }

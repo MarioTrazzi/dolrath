@@ -10,6 +10,7 @@ import VaultBackdrop from '@/components/inventory/VaultBackdrop';
 import { DraggableItem } from '@/components/DraggableItem';
 import { CharacterItemGrid } from '@/components/inventory/CharacterItemGrid';
 import BankPanel from '@/components/inventory/BankPanel';
+import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider';
 
 interface Item {
   id: string;
@@ -37,12 +38,6 @@ interface CharacterInventoryItem {
   item: Item;
 }
 
-interface Character {
-  id: string;
-  name: string;
-  class: string;
-}
-
 interface EquippedItem {
   id: string;
   slot: string;
@@ -51,23 +46,27 @@ interface EquippedItem {
 
 export default function InventoryPage() {
   const { data: session } = useSession();
+  // Personagem ATIVO global: o inventário sempre mostra o herói selecionado na
+  // navbar — sem seletor próprio nesta página.
+  const { activeCharacter, activeCharacterId } = useActiveCharacter();
+  const selectedCharacter = activeCharacterId ?? '';
   const [userInventory, setUserInventory] = useState<UserInventoryItem[]>([]);
   const [characterInventory, setCharacterInventory] = useState<CharacterInventoryItem[]>([]);
   const [equippedItems, setEquippedItems] = useState<EquippedItem[]>([]);
-  const [characters, setCharacters] = useState<Character[]>([]);
-  const [selectedCharacter, setSelectedCharacter] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [enhanceTarget, setEnhanceTarget] = useState<{ inventoryId: string; itemName: string } | null>(null);
 
   useEffect(() => {
     fetchUserInventory();
-    fetchCharacters();
   }, []);
 
   useEffect(() => {
     if (selectedCharacter) {
       fetchCharacterInventory(selectedCharacter);
       fetchEquippedItems(selectedCharacter);
+    } else {
+      setCharacterInventory([]);
+      setEquippedItems([]);
     }
   }, [selectedCharacter]);
 
@@ -80,21 +79,6 @@ export default function InventoryPage() {
       }
     } catch (error) {
       console.error('Error fetching user inventory:', error);
-    }
-  };
-
-  const fetchCharacters = async () => {
-    try {
-      const response = await fetch('/api/character/me');
-      if (response.ok) {
-        const data = await response.json();
-        setCharacters(Array.isArray(data) ? data : [data]);
-        if (data.length > 0) {
-          setSelectedCharacter(data[0].id);
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching characters:', error);
     }
   };
 
@@ -409,28 +393,8 @@ export default function InventoryPage() {
           <p className="text-text-secondary">Gerencie seus itens e equipamentos</p>
         </div>
 
-        {/* 🏦 Banco: poupança da conta + carteira de cada personagem */}
-        <BankPanel />
-
-        {/* Character Selection */}
-        {characters.length > 0 && (
-          <div className="mb-6">
-            <label className="block text-sm font-medium mb-2 text-text-secondary">
-              Selecionar Personagem:
-            </label>
-            <select
-              value={selectedCharacter}
-              onChange={(e) => setSelectedCharacter(e.target.value)}
-              className="px-4 py-2 bg-surface/50 border border-white/20 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              {characters.map((character) => (
-                <option key={character.id} value={character.id}>
-                  {character.name} ({character.class})
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
+        {/* 🏦 Banco: poupança da conta + carteira do personagem ativo */}
+        <BankPanel characterId={activeCharacterId} />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* User Global Inventory */}
@@ -481,9 +445,7 @@ export default function InventoryPage() {
           <div className="bg-surface/50 border border-white/20 rounded-lg p-6 shadow-lg">
             <h2 className="text-xl font-semibold mb-4 text-text-primary flex items-center gap-2">
               ⚔️ Inventário do Personagem
-              {selectedCharacter && characters.find(c => c.id === selectedCharacter) && 
-                <span className="text-primary">- {characters.find(c => c.id === selectedCharacter)?.name}</span>
-              }
+              {activeCharacter && <span className="text-primary">- {activeCharacter.name}</span>}
             </h2>
             <p className="text-sm text-text-secondary mb-4">
               Itens específicos deste personagem que podem ser equipados

@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import { AuthProvider } from '@/components/providers/AuthProvider'
 import { DragAndDropProvider } from '@/components/providers/DragAndDropProvider'
 import { GoldProvider } from '@/components/providers/GoldProvider'
+import { ActiveCharacterProvider } from '@/components/providers/ActiveCharacterProvider'
 import { AppShell } from '@/components/layout/AppShell'
 import { Toaster } from 'react-hot-toast'
 
@@ -21,9 +22,11 @@ export default function RootLayout({
       <body className="bg-background text-text-primary min-h-screen font-primary">
         <AuthProvider>
           <GoldProvider>
-            <DragAndDropProvider>
-              <AppShell>{children}</AppShell>
-            </DragAndDropProvider>
+            <ActiveCharacterProvider>
+              <DragAndDropProvider>
+                <AppShell>{children}</AppShell>
+              </DragAndDropProvider>
+            </ActiveCharacterProvider>
           </GoldProvider>
         </AuthProvider>
         <Toaster

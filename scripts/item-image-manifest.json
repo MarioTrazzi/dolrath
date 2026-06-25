@@ -337,5 +337,128 @@
   },
   "Estilhaço de Memória": {
     "file": "/items/estilhaco-de-memoria.webp"
+  },
+  "Arco Curto": {
+    "file": "/items/arco-curto.webp"
+  },
+  "Punhal do Caçador": {
+    "file": "/items/punhal-do-cacador.webp"
+  },
+  "Manoplas do Discípulo": {
+    "file": "/items/manoplas-do-discipulo.webp"
+  },
+  "Punhos de Aço": {
+    "file": "/items/punhos-de-aco.webp"
+  },
+  "Orbe de Cristal": {
+    "file": "/items/orbe-de-cristal.webp"
+  },
+  "Orbe Rúnico": {
+    "file": "/items/orbe-runico.webp"
+  },
+  "Cinturão de Couro": {
+    "file": "/items/cinturao-de-couro.webp"
+  },
+  "Faixa Ágil": {
+    "file": "/items/faixa-agil.webp"
+  },
+  "Cinta de Mana": {
+    "file": "/items/cinta-de-mana.webp"
+  },
+  "Cinturão de Força": {
+    "file": "/items/cinturao-de-forca.webp"
+  },
+  "Cinturão Reforçado": {
+    "file": "/items/cinturao-reforcado.webp"
+  },
+  "Faixa do Conjurador": {
+    "file": "/items/faixa-do-conjurador.webp"
+  },
+  "Anel de Cobre": {
+    "file": "/items/anel-de-cobre.webp"
+  },
+  "Anel do Batedor": {
+    "file": "/items/anel-do-batedor.webp"
+  },
+  "Anel de Quartzo": {
+    "file": "/items/anel-de-quartzo.webp"
+  },
+  "Anel do Sentinela": {
+    "file": "/items/anel-do-sentinela.webp"
+  },
+  "Anel do Duelista": {
+    "file": "/items/anel-do-duelista.webp"
+  },
+  "Anel do Brutamontes": {
+    "file": "/items/anel-do-brutamontes.webp"
+  },
+  "Colar de Osso": {
+    "file": "/items/colar-de-osso.webp"
+  },
+  "Colar do Viajante": {
+    "file": "/items/colar-do-viajante.webp"
+  },
+  "Pingente de Cristal": {
+    "file": "/items/pingente-de-cristal.webp"
+  },
+  "Amuleto de Ferro": {
+    "file": "/items/amuleto-de-ferro.webp"
+  },
+  "Gargantilha de Aço": {
+    "file": "/items/gargantilha-de-aco.webp"
+  },
+  "Colar do Conjurador": {
+    "file": "/items/colar-do-conjurador.webp"
+  },
+  "Manoplas da Fera": {
+    "file": "/items/manoplas-da-fera.webp"
+  },
+  "Punhos do Mestre Marcial": {
+    "file": "/items/punhos-do-mestre-marcial.webp"
+  },
+  "Punhos do Dragão Interior": {
+    "file": "/items/punhos-do-dragao-interior.webp"
+  },
+  "Orbe da Mata Espectral": {
+    "file": "/items/orbe-da-mata-espectral.webp"
+  },
+  "Orbe da Tempestade Arcana": {
+    "file": "/items/orbe-da-tempestade-arcana.webp"
+  },
+  "Coração de Mana Eterno": {
+    "file": "/items/coracao-de-mana-eterno.webp"
+  },
+  "Cinto da Mata Viva": {
+    "file": "/items/cinto-da-mata-viva.webp"
+  },
+  "Cinta de Cristal Pulsante": {
+    "file": "/items/cinta-de-cristal-pulsante.webp"
+  },
+  "Cinturão do Colosso": {
+    "file": "/items/cinturao-do-colosso.webp"
+  },
+  "Faixa do Destino": {
+    "file": "/items/faixa-do-destino.webp"
+  },
+  "Escudo do Guardião": {
+    "file": "/items/escudo-do-guardiao.webp"
+  },
+  "Égide do Baluarte": {
+    "file": "/items/egide-do-baluarte.webp"
+  },
+  "Muralha Viva": {
+    "file": "/items/muralha-viva.webp"
+  },
+  "Cajado do Bosque Antigo": {
+    "file": "/items/cajado-do-bosque-antigo.webp"
+  },
+  "Lâmina do Carrasco": {
+    "file": "/items/lamina-do-carrasco.webp"
+  },
+  "Presas Gêmeas": {
+    "file": "/items/presas-gemeas.webp"
+  },
+  "Arco da Tormenta": {
+    "file": "/items/arco-da-tormenta.webp"
   }
 }

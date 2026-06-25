@@ -1373,12 +1373,24 @@ const REPAIR_INVENTORY_FILLER: GearPiece[] = [
 ]
 
 // — Alquimista: 3 ingredientes caem nos vértices → poção surge no centro —
+// Receita real (alchemy.ts): Erva Medicinal + Flor de Mana + Seiva Ancestral = Elixir Menor.
 const ALCH_PTS = { top: { x: 50, y: 16 }, left: { x: 18, y: 82 }, right: { x: 82, y: 82 }, center: { x: 50, y: 58 } }
 const ALCH_INGREDIENTS = [
-  { emoji: '🌿', accent: '#34d399', pos: ALCH_PTS.top },
-  { emoji: '🍄', accent: '#e879f9', pos: ALCH_PTS.left },
-  { emoji: '💧', accent: '#38bdf8', pos: ALCH_PTS.right },
+  { name: 'Erva Medicinal', emoji: '🌿', accent: '#34d399', pos: ALCH_PTS.top },
+  { name: 'Flor de Mana', emoji: '💠', accent: '#38bdf8', pos: ALCH_PTS.left },
+  { name: 'Seiva Ancestral', emoji: '🩸', accent: '#e879f9', pos: ALCH_PTS.right },
 ]
+const ALCH_RESULT = 'Elixir Menor'
+
+// Ícone do item com a arte real (/items/<slug>.webp) e fallback de emoji.
+function AlchThumb({ name, emoji, className }: { name: string; emoji: string; className?: string }) {
+  const [failed, setFailed] = useState(false)
+  if (failed) return <span className={className}>{emoji}</span>
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={itemImagePath(name)} alt={name} onError={() => setFailed(true)} className="h-full w-full object-cover" loading="lazy" />
+  )
+}
 
 function AlchemyDemo() {
   const reduce = useReducedMotion()
@@ -1429,7 +1441,11 @@ function AlchemyDemo() {
                 boxShadow: on ? `0 0 14px ${ing.accent}99` : 'inset 0 0 8px rgba(0,0,0,0.6)',
               }}
             >
-              {on ? <span className="text-2xl drop-shadow-[0_2px_3px_rgba(0,0,0,0.9)]">{ing.emoji}</span> : <span className="text-xl text-white/25">＋</span>}
+              {on ? (
+                <span className="grid h-full w-full place-items-center overflow-hidden rounded-2xl drop-shadow-[0_2px_3px_rgba(0,0,0,0.9)]">
+                  <AlchThumb name={ing.name} emoji={ing.emoji} className="text-2xl" />
+                </span>
+              ) : <span className="text-xl text-white/25">＋</span>}
             </div>
           )
         })}
@@ -1452,9 +1468,9 @@ function AlchemyDemo() {
                 animate={{ scale: 1, rotate: 0 }}
                 exit={{ scale: 0 }}
                 transition={{ type: 'spring', stiffness: 240, damping: 14 }}
-                className="text-4xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]"
+                className="grid h-full w-full place-items-center overflow-hidden rounded-full drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]"
               >
-                🧪
+                <AlchThumb name={ALCH_RESULT} emoji="🧪" className="text-4xl" />
               </motion.span>
             ) : (
               <span key="q" className="text-2xl text-white/20">?</span>

@@ -4,7 +4,23 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { forgeRecipesByGroup, forgeMaterialEmoji, getForgeOutputCatalogItem, type ForgeRecipe } from '@/lib/forge';
 import { getItemVisual } from '@/lib/itemVisuals';
-import { type Rarity } from '@/lib/itemCatalog';
+import { itemImagePath, type Rarity } from '@/lib/itemCatalog';
+
+// Miniatura do item: usa a arte /items/<slug>.webp e cai no emoji se a imagem falhar.
+function ItemThumb({ name, emoji, className = 'text-2xl' }: { name: string; emoji: string; className?: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <span className={className}>{emoji}</span>;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={itemImagePath(name)}
+      alt={name}
+      onError={() => setFailed(true)}
+      className="w-full h-full object-cover"
+      referrerPolicy="no-referrer"
+    />
+  );
+}
 
 const RARITY_UI: Record<Rarity, { text: string; ring: string; glow: string }> = {
   COMMON: { text: 'text-zinc-300', ring: '#a1a1aa', glow: 'rgba(161,161,170,0.6)' },
@@ -189,7 +205,9 @@ export default function ForgeBench({
                           boxShadow: isSel ? `0 0 12px ${ui.glow}` : undefined,
                         }}
                       >
-                        <span className="text-2xl shrink-0">{outputEmoji(r)}</span>
+                        <span className="block w-9 h-9 shrink-0 overflow-hidden rounded-md grid place-items-center">
+                          <ItemThumb name={r.outputName} emoji={outputEmoji(r)} className="text-2xl" />
+                        </span>
                         <span className="min-w-0">
                           <span className={`block text-[11px] font-bold leading-tight truncate ${ui.text}`}>{r.outputName}</span>
                           <span className={`block text-[10px] leading-tight ${ok ? 'text-emerald-300/80' : 'text-white/35'}`}>
@@ -214,10 +232,10 @@ export default function ForgeBench({
               <div className="rounded-xl border p-4" style={{ borderColor: selectedUi.ring + '66', background: 'rgba(0,0,0,0.3)' }}>
                 <div className="flex items-center gap-3 mb-4">
                   <div
-                    className="w-16 h-16 shrink-0 grid place-items-center rounded-xl border-2"
+                    className="w-16 h-16 shrink-0 grid place-items-center rounded-xl border-2 overflow-hidden"
                     style={{ borderColor: selectedUi.ring, boxShadow: `0 0 16px ${selectedUi.glow}` }}
                   >
-                    <span className="text-4xl">{outputEmoji(selected)}</span>
+                    <ItemThumb name={selected.outputName} emoji={outputEmoji(selected)} className="text-4xl" />
                   </div>
                   <div className="min-w-0">
                     <h3 className={`font-black text-lg truncate ${selectedUi.text}`}>{selected.outputName}</h3>
@@ -237,7 +255,9 @@ export default function ForgeBench({
                         style={{ background: enough ? 'rgba(16,185,129,0.10)' : 'rgba(239,68,68,0.10)' }}
                       >
                         <span className="flex items-center gap-2 min-w-0">
-                          <span className="text-lg shrink-0">{matEmoji(m.name)}</span>
+                          <span className="block w-7 h-7 shrink-0 overflow-hidden rounded grid place-items-center">
+                            <ItemThumb name={m.name} emoji={matEmoji(m.name)} className="text-lg" />
+                          </span>
                           <span className="text-xs text-white/80 truncate">{m.name}</span>
                         </span>
                         <span className={`text-xs font-bold shrink-0 ${enough ? 'text-emerald-300' : 'text-red-300'}`}>

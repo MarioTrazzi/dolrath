@@ -1,11 +1,13 @@
 'use client';
 
+import { useState } from 'react';
 import { useDrag } from 'react-dnd';
 import ItemIcon from './ItemIcon';
 import { Item } from '@/types/item';
 import { ItemTooltip } from './ItemTooltip';
 import { EquipmentSlotType } from '@prisma/client';
 import { resolveImageUrl } from '@/lib/imageUrl';
+import { itemImagePath } from '@/lib/itemCatalog';
 import { getLevelLabel } from '@/lib/enhancementSystem';
 
 interface DraggableItemProps {
@@ -31,7 +33,11 @@ interface DraggableItemProps {
 }
 
 export function DraggableItem({ item, isEquipped, enhancementLevel = 0, quantity = 1, inventoryId, onEquip, onUnequip, onConsume, onEnhance, onTransfer, onSendToGlobal, characterId, compact, accent }: DraggableItemProps) {
-  const itemImage = resolveImageUrl(item.image);
+  // Imagem do item: banco (item.image) → asset estático por nome (/items/<slug>.webp)
+  // → ícone genérico só se a arte 404 (ex.: item sem webp). Cobre registros antigos
+  // (ingredientes/materiais) criados antes de gravarmos image no banco.
+  const [imgError, setImgError] = useState(false);
+  const itemImage = imgError ? null : (resolveImageUrl(item.image) ?? (item.name ? itemImagePath(item.name) : null));
   const showEnhancement = enhancementLevel > 0;
   const showQuantity = quantity > 1;
   const [{ isDragging }, drag] = useDrag({
@@ -76,6 +82,7 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, quantity
               <img
                 src={itemImage}
                 alt={item.name}
+                onError={() => setImgError(true)}
                 className="w-full h-full object-cover group-hover:scale-110 transition-transform"
                 referrerPolicy="no-referrer"
               />
@@ -139,6 +146,7 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, quantity
             <img
               src={itemImage}
               alt={item.name}
+              onError={() => setImgError(true)}
               className="w-full h-full object-cover group-hover:scale-110 transition-transform"
               referrerPolicy="no-referrer"
             />

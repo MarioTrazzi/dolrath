@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { getItemVisual, getItemTypeLabel, getItemCategory } from '@/lib/itemVisuals';
+import { itemImagePath } from '@/lib/itemCatalog';
 import { getDisplayName, getLevelLabel } from '@/lib/enhancementSystem';
 import { formatItemStats } from '@/lib/itemStats';
 import { resolveImageUrl } from '@/lib/imageUrl';
@@ -575,7 +576,13 @@ export default function RepairBench({
                         style={{ borderColor: repairUnitsAvailable > 0 ? '#f59e0b99' : '#ffffff33' }}
                       >
                         {usesMemoryShard ? (
-                          <span className={`text-3xl ${repairUnitsAvailable > 0 ? '' : 'grayscale'}`}>🧠</span>
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={itemImagePath('Estilhaço de Memória')}
+                            alt="Estilhaço de Memória"
+                            className={`w-full h-full object-cover ${repairUnitsAvailable > 0 ? '' : 'grayscale'}`}
+                            referrerPolicy="no-referrer"
+                          />
                         ) : repairUnitsAvailable > 0 && selectedImage ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img

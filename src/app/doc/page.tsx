@@ -18,10 +18,10 @@ import Link from 'next/link'
 import { races as RACES_SRC, pointSystem } from '@/lib/characterCreationData'
 import { CLASSES } from '@/lib/gameData'
 import { TRANSFORMATION_CONFIG } from '@/lib/transformationSystem'
-import { ITEM_CATALOG, CONSUMABLE_CATALOG, INGREDIENT_CATALOG, RARITY_DROP_WEIGHT, getIngredientByName, itemImagePath, type CatalogItem } from '@/lib/itemCatalog'
+import { ITEM_CATALOG, CONSUMABLE_CATALOG, INGREDIENT_CATALOG, FORGE_MATERIAL_CATALOG, RARITY_DROP_WEIGHT, getIngredientByName, itemImagePath, type CatalogItem } from '@/lib/itemCatalog'
 import { POTION_RECIPES } from '@/lib/alchemy'
+import { FORGE_RECIPES } from '@/lib/forge'
 import { DUNGEON_LIST } from '@/lib/dungeonAdventures'
-import { MATERIALS } from '@/lib/dungeonData'
 import { getXPForNextLevel } from '@/lib/experienceSystem'
 import { getBaseChance, getStatMultiplier, PRI, DUO, TRI, TET, PEN, SAFE_ENHANCE_MAX } from '@/lib/enhancementSystem'
 import { STAMINA_COSTS, STAMINA_PROGRESSION } from '@/lib/staminaSystem'
@@ -706,7 +706,7 @@ boss: +2 níveis, recompensa maior`}</Formula>
 
               {/* ⚒️ Pedras de aprimoramento */}
               <h3 className="pt-4 text-lg font-semibold text-white">⚒️ Pedras de Aprimoramento</h3>
-              <p className="text-sm">Obtidas em masmorras (luta com monstros / exploração) — não vendidas na loja. 10 pedras menores forjam 1 concentrada (sessão de crafting em breve). Detalhes do sistema na seção <a href="#enhancement" className="text-primary hover:underline">Aprimoramento</a>.</p>
+              <p className="text-sm">Obtidas em masmorras (luta com monstros / exploração) — não vendidas na loja. 10 pedras menores forjam 1 concentrada na Mesa de Forja. Detalhes do sistema na seção <a href="#enhancement" className="text-primary hover:underline">Aprimoramento</a>.</p>
               <ItemGallery>
                 {ENHANCEMENT_STONES.map((s) => (
                   <ItemArtCard key={s.name} name={s.name} type="ENHANCEMENT_STONE" rarity={s.rarity} meta={`🗝️ Masmorra · ${s.use}`} />
@@ -747,35 +747,39 @@ até +${SAFE_ENHANCE_MAX}: chance = 100% (seguro)`}</Formula>
             </Section>
 
             {/* Crafting */}
-            <Section id="crafting" kicker="Economia" title="Materiais & Crafting">
-              <p>Materiais alimentam receitas de crafting (com taxa de sucesso) e o aprimoramento. Cada material tem valor em token. <Tag>fonte: dungeonData.ts (MATERIALS) · materialSystem.ts</Tag></p>
+            <Section id="crafting" kicker="Economia" title="Forja & Alquimia">
+              <p>O <strong className="text-white">Ferreiro</strong> tem a <strong className="text-white">Mesa de Forja</strong> (forjar equipamento + refinar pedra) e a <strong className="text-white">Bancada de Reparo</strong>; a <strong className="text-white">Alquimista</strong> destila poções. Materiais e ingredientes caem em masmorras — <strong className="text-white">exploração e luta</strong>. <Tag tone="ok">fonte: forge.ts · alchemy.ts</Tag></p>
+
+              {/* ⚒️ Forja (fonte: forge.ts) */}
+              <h3 className="pt-2 text-lg font-semibold text-white">⚒️ Forja (Ferreiro)</h3>
+              <p className="text-sm">
+                Forja peças <Pill rarity="COMMON" /> / <Pill rarity="UNCOMMON" /> a partir de materiais: <strong className="text-white">só couro</strong> = comum, <strong className="text-white">couro + ferro</strong> = incomum, e cada arma usa seu material especial (Ferro Pesado, Seiva de Ent…). O <strong className="text-white">Estilhaço de Pedra Negra</strong> liga toda receita e também refina: <strong className="text-white">10 estilhaços → 1 Pedra Negra</strong> e <strong className="text-white">10 Pedras → 1 Concentrada</strong>. O <strong className="text-white">Estilhaço de Memória</strong> (só de chefe) repara peças raras, épicas e lendárias (+10 durabilidade cada).
+              </p>
+
+              <h4 className="pt-2 text-sm font-semibold text-textsec uppercase tracking-wide">Materiais de forja</h4>
+              <ItemGallery>
+                {[...FORGE_MATERIAL_CATALOG]
+                  .sort((a, b) => RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity))
+                  .map((m) => (
+                    <ItemArtCard
+                      key={m.name} name={m.name} type="Material" rarity={m.rarity}
+                      meta={m.source === 'dungeon_boss' ? '👑 Só chefe' : '🗝️ Masmorra'}
+                    />
+                  ))}
+              </ItemGallery>
+
+              <h4 className="pt-2 text-sm font-semibold text-textsec uppercase tracking-wide">Receitas de forja</h4>
               <Table
-                head={['Material', 'Raridade', 'Tipo', 'Valor']}
-                rows={[...MATERIALS]
-                  .sort((a, b) => RARITY_ORDER.indexOf(String(a.rarity).toUpperCase() as RarityKey) - RARITY_ORDER.indexOf(String(b.rarity).toUpperCase() as RarityKey))
-                  .map((m) => {
-                    const rk = String(m.rarity).toUpperCase() as RarityKey
-                    return [
-                      <span key={m.id} className={`font-semibold ${RARITY[rk]?.text ?? 'text-white'}`}>{m.name}</span>,
-                      <Pill key="r" rarity={rk} />,
-                      <span key="t" className="text-xs">{m.type}</span>,
-                      <span key="v" className="text-amber-300">{m.tokenValue}</span>,
-                    ]
-                  })}
+                head={['Resultado', 'Raridade', 'Materiais', 'Taxa']}
+                rows={FORGE_RECIPES.map((r) => [
+                  <span key={r.id} className={`font-semibold ${RARITY[r.rarity].text}`}>
+                    {r.kind === 'stone' ? '🪨' : '⚒️'} {r.outputName}
+                  </span>,
+                  <Pill key="r" rarity={r.rarity} />,
+                  <span key="m" className="text-xs">{r.materials.map((m) => `${m.quantity}× ${m.name}`).join(' · ')}</span>,
+                  <span key="c" className="text-amber-300">{r.goldCost} 🪙</span>,
+                ])}
               />
-              <Card>
-                <h3 className="font-semibold text-white">Receitas (amostra)</h3>
-                <Table
-                  head={['Receita', 'Resultado', 'Nv', 'Custo', 'Sucesso']}
-                  rows={[
-                    ['Espada de Ferro Aprimorada', <span key="a" className="text-emerald-300">Incomum</span>, 10, '50', '80%'],
-                    ['Adaga de Prata', <span key="b" className="text-sky-300">Raro</span>, 15, '100', '70%'],
-                    ['Espada de Mithril', <span key="d" className="text-fuchsia-300">Épico</span>, 40, '500', '50%'],
-                    ['Lâmina Lendária', <span key="e" className="text-amber-300">Lendário</span>, 80, '5000', '20%'],
-                  ]}
-                />
-                <p className="mt-2 text-xs text-textsec">Falha no craft devolve metade dos materiais.</p>
-              </Card>
 
               {/* ⚗️ Alquimia & Poções — livro de receitas (fonte: alchemy.ts) */}
               <h3 className="pt-4 text-lg font-semibold text-white">⚗️ Alquimia &amp; Poções</h3>
@@ -787,16 +791,16 @@ até +${SAFE_ENHANCE_MAX}: chance = 100% (seguro)`}</Formula>
               </p>
 
               <h4 className="pt-2 text-sm font-semibold text-textsec uppercase tracking-wide">Ingredientes</h4>
-              <Table
-                head={['Ingrediente', 'Raridade', 'Onde dropa']}
-                rows={[...INGREDIENT_CATALOG]
+              <ItemGallery>
+                {[...INGREDIENT_CATALOG]
                   .sort((a, b) => RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity))
-                  .map((ing) => [
-                    <span key={ing.name} className={`font-semibold ${RARITY[ing.rarity].text}`}>{ing.emoji} {ing.name}</span>,
-                    <Pill key="r" rarity={ing.rarity} />,
-                    <span key="s" className="text-xs">{ing.source === 'dungeon_boss' ? '👑 Chefe' : '🗝️ Chão de masmorra'}</span>,
-                  ])}
-              />
+                  .map((ing) => (
+                    <ItemArtCard
+                      key={ing.name} name={ing.name} type="Ingrediente" rarity={ing.rarity}
+                      meta={ing.source === 'dungeon_boss' ? '👑 Chefe' : '🗝️ Chão de masmorra'}
+                    />
+                  ))}
+              </ItemGallery>
 
               <h4 className="pt-2 text-sm font-semibold text-textsec uppercase tracking-wide">Receitas</h4>
               <Table

@@ -3,7 +3,23 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { findRecipeByIngredients } from '@/lib/alchemy';
-import { getIngredientByName, type Rarity } from '@/lib/itemCatalog';
+import { getIngredientByName, itemImagePath, type Rarity } from '@/lib/itemCatalog';
+
+// Miniatura do item: usa a arte /items/<slug>.webp e cai no emoji se a imagem falhar.
+function ItemThumb({ name, emoji, className = 'text-2xl' }: { name: string; emoji: string; className?: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <span className={className}>{emoji}</span>;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={itemImagePath(name)}
+      alt={name}
+      onError={() => setFailed(true)}
+      className="w-full h-full object-cover"
+      referrerPolicy="no-referrer"
+    />
+  );
+}
 
 // Cores por raridade (espelha o /doc).
 const RARITY_UI: Record<Rarity, { text: string; ring: string; glow: string }> = {
@@ -181,7 +197,9 @@ export default function AlchemyBench({
         }}
       >
         {name ? (
-          <span className="text-3xl drop-shadow-[0_2px_3px_rgba(0,0,0,0.9)]">{info?.emoji ?? '•'}</span>
+          <span className="block w-[88%] h-[88%] overflow-hidden rounded-xl drop-shadow-[0_2px_3px_rgba(0,0,0,0.9)] grid place-items-center">
+            <ItemThumb name={name} emoji={info?.emoji ?? '•'} className="text-3xl" />
+          </span>
         ) : (
           <span className="text-2xl text-white/30">＋</span>
         )}
@@ -254,7 +272,9 @@ export default function AlchemyBench({
               title={matchedRecipe ? matchedRecipe.outputName : 'Combinação ainda incompleta'}
             >
               {matchedRecipe ? (
-                <span className="text-4xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] animate-pulse">🧪</span>
+                <span className="block w-[86%] h-[86%] overflow-hidden rounded-full drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] grid place-items-center animate-pulse">
+                  <ItemThumb name={matchedRecipe.outputName} emoji="🧪" className="text-4xl" />
+                </span>
               ) : (
                 <span className="text-3xl text-white/20">?</span>
               )}
@@ -324,7 +344,9 @@ export default function AlchemyBench({
                       className="relative flex flex-col items-center gap-1 rounded-lg border p-2 transition-transform hover:scale-[1.03] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
                       style={{ borderColor: ui.ring + '66', background: 'rgba(0,0,0,0.3)' }}
                     >
-                      <span className="text-2xl">{info!.emoji}</span>
+                      <span className="block w-10 h-10 overflow-hidden rounded-md grid place-items-center">
+                        <ItemThumb name={name} emoji={info!.emoji} />
+                      </span>
                       <span className={`text-[10px] font-semibold leading-tight text-center ${ui.text}`}>{name}</span>
                       <span className="absolute top-0.5 right-1 text-[11px] font-black text-white"
                         style={{ textShadow: '0 1px 2px #000' }}>

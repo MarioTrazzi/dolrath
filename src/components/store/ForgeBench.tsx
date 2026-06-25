@@ -375,8 +375,8 @@ export default function ForgeBench({
             </div>
           ) : (
             <div
-              className="grid gap-2 overflow-y-auto pr-1"
-              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(58px, 1fr))', maxHeight: 180 }}
+              className="grid gap-2 overflow-y-auto pr-1 [&::-webkit-scrollbar]:hidden"
+              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(58px, 1fr))', maxHeight: 180, scrollbarWidth: 'none' }}
             >
               {forgeStock.map(({ name, count }) => {
                 const avail = availableOf(name);

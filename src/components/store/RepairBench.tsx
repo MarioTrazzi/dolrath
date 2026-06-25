@@ -323,7 +323,7 @@ export default function RepairBench({
   const selectedStats = selected ? formatItemStats(selected.item.stats ?? undefined, selected.item.type) : [];
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border-2 border-amber-500/40 bg-gradient-to-br from-amber-950/40 to-black/50 p-5 backdrop-blur-sm">
+    <div className="relative h-full overflow-hidden rounded-2xl border-2 border-amber-500/40 bg-gradient-to-br from-amber-950/40 to-black/50 p-5 backdrop-blur-sm">
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
         <h2 className="text-2xl font-black text-amber-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
           🔧 Bancada de Reparo

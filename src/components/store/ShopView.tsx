@@ -429,36 +429,44 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
           <p className="text-text-secondary">{config.subtitle}</p>
         </div>
 
-        {/* Bancada de reparo (somente o ferreiro) */}
-        {config.hasRepairBench && (
-          <div className="mb-8">
+        {/* Ferreiro: Reparo + Mesa de Forja lado a lado (mesma altura). */}
+        {kind === 'blacksmith' && config.hasRepairBench ? (
+          <div className="mb-8 grid items-stretch gap-6 lg:grid-cols-2">
             <RepairBench
               characters={characters}
               characterId={selectedCharacter || undefined}
               refreshSignal={inventoryRefreshKey}
             />
+            <ForgeBench
+              characters={characters}
+              characterId={selectedCharacter || undefined}
+              refreshSignal={inventoryRefreshKey}
+              onCrafted={() => setInventoryRefreshKey((k) => k + 1)}
+            />
           </div>
-        )}
-
-        {/* Bancada de craft: alquimia (alquimista) ou forja (ferreiro) */}
-        {config.hasCraftingBench && (
-          <div className="mb-8">
-            {kind === 'alchemist' ? (
-              <AlchemyBench
-                characters={characters}
-                characterId={selectedCharacter || undefined}
-                refreshSignal={inventoryRefreshKey}
-                onCrafted={() => setInventoryRefreshKey((k) => k + 1)}
-              />
-            ) : (
-              <ForgeBench
-                characters={characters}
-                characterId={selectedCharacter || undefined}
-                refreshSignal={inventoryRefreshKey}
-                onCrafted={() => setInventoryRefreshKey((k) => k + 1)}
-              />
+        ) : (
+          <>
+            {config.hasRepairBench && (
+              <div className="mb-8">
+                <RepairBench
+                  characters={characters}
+                  characterId={selectedCharacter || undefined}
+                  refreshSignal={inventoryRefreshKey}
+                />
+              </div>
             )}
-          </div>
+            {/* Bancada de alquimia (somente a alquimista). */}
+            {config.hasCraftingBench && (
+              <div className="mb-8">
+                <AlchemyBench
+                  characters={characters}
+                  characterId={selectedCharacter || undefined}
+                  refreshSignal={inventoryRefreshKey}
+                  onCrafted={() => setInventoryRefreshKey((k) => k + 1)}
+                />
+              </div>
+            )}
+          </>
         )}
 
         {/* Barra de Busca */}

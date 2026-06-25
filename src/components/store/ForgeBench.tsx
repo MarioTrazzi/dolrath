@@ -255,7 +255,8 @@ export default function ForgeBench({
         )}
       </div>
 
-      {loadingInv ? (
+      {/* Só mostra "carregando" no 1º load; refetches (após forjar) são silenciosos. */}
+      {loadingInv && inventory.length === 0 ? (
         <div className="text-white/50 text-sm py-8 text-center">Carregando materiais…</div>
       ) : (
         <>
@@ -277,8 +278,15 @@ export default function ForgeBench({
           >
             {placedList.length === 0 ? (
               <div className="py-6 text-center text-sm text-white/45">
-                Arraste (ou clique) os materiais de baixo até a bigorna. Quando a combinação formar uma
-                receita, o item aparece aqui pra forjar.
+                Arraste (ou clique) os materiais de baixo até a bigorna. Quando a combinação formar uma{' '}
+                <button
+                  type="button"
+                  onClick={() => setRecipesOpen(true)}
+                  className="font-semibold text-orange-300 underline underline-offset-2 hover:text-orange-200"
+                >
+                  receita
+                </button>
+                , o item aparece aqui pra forjar.
               </div>
             ) : (
               <>
@@ -287,12 +295,12 @@ export default function ForgeBench({
                   {placedList.map(({ name, quantity }) => (
                     <div
                       key={name}
-                      className="flex flex-col items-center gap-1 rounded-lg border border-orange-500/40 bg-black/40 p-1.5 w-[72px]"
+                      className="relative flex flex-col items-center gap-1 rounded-lg border border-orange-500/40 bg-black/40 p-1.5 w-[72px]"
                       title={name}
                     >
-                      <span className="relative block w-10 h-10 overflow-hidden rounded grid place-items-center">
+                      <span className="absolute -top-1.5 -right-1.5 z-10 rounded-full bg-orange-600 text-white text-[10px] font-black px-1.5 leading-tight shadow-md ring-1 ring-black/40">{quantity}</span>
+                      <span className="block w-10 h-10 overflow-hidden rounded grid place-items-center">
                         <ItemThumb name={name} emoji={matEmoji(name)} className="text-xl" />
-                        <span className="absolute -top-1 -right-1 rounded-full bg-orange-600 text-white text-[10px] font-black px-1.5 leading-tight">{quantity}</span>
                       </span>
                       <div className="flex items-center gap-1">
                         <button
@@ -314,14 +322,19 @@ export default function ForgeBench({
                 {/* Resultado da combinação */}
                 {matched && matchedUi ? (
                   <div
-                    className="flex items-center gap-3 rounded-lg border p-2 mb-3"
+                    className="relative overflow-hidden flex items-center gap-3 rounded-lg border p-2 mb-3"
                     style={{ borderColor: matchedUi.ring, boxShadow: `0 0 14px ${matchedUi.glow}` }}
                   >
-                    <div className="w-12 h-12 shrink-0 grid place-items-center rounded-lg border-2 overflow-hidden" style={{ borderColor: matchedUi.ring }}>
+                    {/* Barra de "forjando" — preenche o card enquanto a requisição roda (estilo aprimoramento). */}
+                    <div
+                      className="absolute inset-y-0 left-0 z-0 transition-[width] duration-700 ease-out"
+                      style={{ width: busy ? '100%' : '0%', background: `linear-gradient(90deg, ${matchedUi.glow}, transparent)` }}
+                    />
+                    <div className="relative z-10 w-12 h-12 shrink-0 grid place-items-center rounded-lg border-2 overflow-hidden" style={{ borderColor: matchedUi.ring }}>
                       <ItemThumb name={matched.outputName} emoji={outputEmoji(matched)} className="text-2xl" />
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[10px] uppercase tracking-wide text-white/40">vai forjar</p>
+                    <div className="relative z-10 min-w-0 flex-1">
+                      <p className="text-[10px] uppercase tracking-wide text-white/40">{busy ? 'forjando…' : 'vai forjar'}</p>
                       <p className={`font-black text-sm leading-tight truncate ${matchedUi.text}`}>{matched.outputName}</p>
                       <p className="text-xs text-amber-300">taxa {matched.goldCost} 🪙</p>
                     </div>
@@ -403,7 +416,8 @@ export default function ForgeBench({
           onClick={() => { setRecipesOpen(false); setHover(null); }}
         >
           <div
-            className="relative w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border-2 border-orange-500/40 bg-gradient-to-br from-zinc-950 to-orange-950/40 p-5"
+            className="relative w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border-2 border-orange-500/40 bg-gradient-to-br from-zinc-950 to-orange-950/40 p-5 [&::-webkit-scrollbar]:hidden"
+            style={{ scrollbarWidth: 'none' }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-3">

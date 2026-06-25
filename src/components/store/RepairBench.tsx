@@ -349,7 +349,7 @@ export default function RepairBench({
         ao ferreiro por metade do preço.
       </p>
 
-      {loadingInv ? (
+      {loadingInv && inventory.length === 0 ? (
         <div className="text-white/50 text-sm py-8 text-center">Carregando inventário…</div>
       ) : equipment.length === 0 ? (
         <div className="text-white/50 text-sm py-8 text-center">

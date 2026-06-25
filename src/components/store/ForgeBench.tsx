@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { Info } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { forgeRecipesByGroup, forgeMaterialEmoji, getForgeOutputCatalogItem, type ForgeRecipe } from '@/lib/forge';
 import { getItemVisual } from '@/lib/itemVisuals';
@@ -200,9 +201,19 @@ export default function ForgeBench({
   return (
     <div className="relative flex h-full flex-col overflow-hidden rounded-2xl border-2 border-orange-500/40 bg-gradient-to-br from-orange-950/40 to-zinc-950/50 p-5 backdrop-blur-sm">
       <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
-        <h2 className="text-2xl font-black text-orange-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
-          ⚒️ Mesa de Forja
-        </h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-2xl font-black text-orange-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+            ⚒️ Mesa de Forja
+          </h2>
+          <button
+            onClick={() => setRecipesOpen(true)}
+            title="Livro de receitas"
+            aria-label="Receitas da forja"
+            className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-orange-500/40 text-orange-300 hover:bg-orange-900/60 transition-colors"
+          >
+            <Info size={15} />
+          </button>
+        </div>
         {!controlled && characters.length > 1 && (
           <select
             value={selectedCharacterId}
@@ -317,13 +328,6 @@ export default function ForgeBench({
             </div>
           )}
 
-          {/* 📖 Botão de receitas (no rodapé) */}
-          <button
-            onClick={() => setRecipesOpen(true)}
-            className="mt-auto w-full px-4 py-2.5 rounded-xl font-bold text-sm text-orange-100 bg-orange-900/40 hover:bg-orange-900/70 border border-orange-500/30 transition-colors"
-          >
-            📖 Receitas
-          </button>
         </>
       )}
 
@@ -360,7 +364,6 @@ export default function ForgeBench({
                         <button
                           key={r.id}
                           type="button"
-                          disabled={!ok}
                           onClick={() => loadRecipe(r)}
                           onMouseEnter={(e) => {
                             const rect = e.currentTarget.getBoundingClientRect();
@@ -368,7 +371,7 @@ export default function ForgeBench({
                             setHover({ id: r.id, top: rect.top, left });
                           }}
                           onMouseLeave={() => setHover((h) => (h?.id === r.id ? null : h))}
-                          className="flex items-center gap-2 rounded-lg border p-2 text-left transition-transform enabled:hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-45"
+                          className={`flex items-center gap-2 rounded-lg border p-2 text-left transition-transform ${ok ? 'cursor-pointer hover:scale-[1.02]' : 'cursor-not-allowed opacity-45'}`}
                           style={{
                             borderColor: ok ? ui.ring : ui.ring + '40',
                             background: 'rgba(0,0,0,0.35)',

@@ -3,9 +3,9 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import Image from 'next/image';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
-import { Search, Filter, X } from 'lucide-react';
+import { Search, Filter, X, ShoppingCart, Trash2 } from 'lucide-react';
 import BazaarBackdrop from '@/components/store/BazaarBackdrop';
 import ItemCardBackdrop from '@/components/store/ItemCardBackdrop';
 import RepairBench from '@/components/store/RepairBench';
@@ -108,6 +108,94 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
   const getQty = (id: string) => Math.max(1, quantities[id] ?? 1);
   const setQty = (id: string, value: number) =>
     setQuantities((prev) => ({ ...prev, [id]: Math.max(1, Math.min(99, Math.floor(value || 1))) }));
+
+  // 🛒 Carrinho de compras: o jogador junta itens e fecha tudo de uma vez no
+  // dialog de checkout. Guardamos um snapshot do item (preço/nome/imagem) para
+  // o carrinho sobreviver à troca de filtros/loja que recarrega `items`.
+  const [cart, setCart] = useState<Record<string, { item: StoreItem; quantity: number }>>({});
+  const [cartOpen, setCartOpen] = useState(false);
+  const [checkingOut, setCheckingOut] = useState(false);
+  const cartEntries = useMemo(() => Object.values(cart), [cart]);
+  const cartCount = useMemo(() => cartEntries.reduce((s, e) => s + e.quantity, 0), [cartEntries]);
+  const cartTotal = useMemo(
+    () => cartEntries.reduce((s, e) => s + e.item.goldPrice * e.quantity, 0),
+    [cartEntries]
+  );
+
+  const addToCart = (item: StoreItem, qty: number) => {
+    const add = Math.max(1, Math.min(99, Math.floor(qty || 1)));
+    setCart((prev) => {
+      const existing = prev[item.id];
+      const nextQty = Math.min(99, (existing?.quantity ?? 0) + add);
+      return { ...prev, [item.id]: { item, quantity: nextQty } };
+    });
+    toast.success(`🛒 ${add}× ${item.name} no carrinho`);
+  };
+
+  const setCartQty = (itemId: string, value: number) =>
+    setCart((prev) => {
+      if (!prev[itemId]) return prev;
+      const q = Math.max(1, Math.min(99, Math.floor(value || 1)));
+      return { ...prev, [itemId]: { ...prev[itemId], quantity: q } };
+    });
+
+  const removeFromCart = (itemId: string) =>
+    setCart((prev) => {
+      const next = { ...prev };
+      delete next[itemId];
+      return next;
+    });
+
+  const clearCart = () => setCart({});
+
+  // Fecha o carrinho inteiro num laço de compras (o endpoint é por-item e
+  // servidor-autoritativo no preço). Continua mesmo se uma linha falhar.
+  const handleCheckout = async () => {
+    if (!selectedCharacter) {
+      toast.error('Selecione um personagem para receber os itens.');
+      return;
+    }
+    if (cartEntries.length === 0) return;
+    if ((characterGold ?? 0) < cartTotal) {
+      toast.error('Saldo do personagem insuficiente — saque do banco em /inventário.');
+      return;
+    }
+    setCheckingOut(true);
+    let purchased = 0;
+    let failed = 0;
+    let lastGold: number | null = null;
+    for (const entry of cartEntries) {
+      try {
+        const res = await fetch('/api/store/purchase-offchain', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ itemId: entry.item.id, characterId: selectedCharacter, quantity: entry.quantity }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          failed++;
+          toast.error(`${entry.item.name}: ${data?.error || 'falha na compra'}`);
+          continue;
+        }
+        purchased++;
+        if (typeof data?.characterGold === 'number') lastGold = data.characterGold;
+      } catch {
+        failed++;
+        toast.error(`${entry.item.name}: erro de conexão`);
+      }
+    }
+    if (lastGold !== null) setCharacterGold(lastGold);
+    else fetchCharacterGold(selectedCharacter);
+    refreshGoldBalance();
+    setInventoryRefreshKey((k) => k + 1);
+    fetchUserInventory();
+    if (purchased > 0) {
+      toast.success(`✅ ${purchased} ${purchased === 1 ? 'item comprado' : 'itens comprados'}!`);
+      clearCart();
+      if (failed === 0) setCartOpen(false);
+    }
+    setCheckingOut(false);
+  };
   // Sinaliza à Bancada de Reparo que o inventário do personagem mudou (compra/transferência).
   const [inventoryRefreshKey, setInventoryRefreshKey] = useState(0);
   // Filtro por raça e level do personagem ativo (ligado por padrão).
@@ -270,40 +358,6 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
       }
     } catch (error) {
       console.error('Error fetching user inventory:', error);
-    }
-  };
-
-  // 💰 Compra paga com GOLD OFF-CHAIN (saldo a reivindicar) — sem MetaMask e sem
-  // NFT. O item vira linha normal de inventário; a NFT só nasce ao listar no
-  // marketplace (lazy mint). É o SINK que queima goldBalance antes do claim.
-  const handleBuyWithBalance = async (itemId: string, quantity: number = 1) => {
-    if (!selectedCharacter) {
-      toast.error('Selecione um personagem para receber o item.');
-      return;
-    }
-    const qty = Math.max(1, Math.min(99, Math.floor(quantity || 1)));
-    setLoading(true);
-    try {
-      const res = await fetch('/api/store/purchase-offchain', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemId, characterId: selectedCharacter, quantity: qty }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data?.error || 'Falha na compra');
-        return;
-      }
-      toast.success(data?.message || 'Compra concluída!');
-      if (typeof data?.characterGold === 'number') setCharacterGold(data.characterGold);
-      else fetchCharacterGold(selectedCharacter);
-      refreshGoldBalance();
-      setInventoryRefreshKey((k) => k + 1);
-      fetchUserInventory();
-    } catch {
-      toast.error('Erro de conexão na compra');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -801,17 +855,22 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                       </div>
 
                       <button
-                        onClick={() => handleBuyWithBalance(item.id, getQty(item.id))}
-                        disabled={loading || (characterGold ?? 0) < item.goldPrice * getQty(item.id)}
-                        title={(characterGold ?? 0) < item.goldPrice * getQty(item.id) ? 'Saldo do personagem insuficiente — saque do banco em /inventário' : 'Paga com a carteira do personagem'}
+                        onClick={() => addToCart(item, getQty(item.id))}
+                        disabled={loading}
+                        title="Adiciona ao carrinho — feche tudo no checkout"
                         className="w-full px-4 py-2.5 rounded-xl font-black text-sm text-white transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                         style={{
                           background: `linear-gradient(90deg, ${visual.accent}cc, ${visual.accent}77)`,
                           boxShadow: `0 4px 20px ${visual.accentSoft}`,
                         }}
                       >
-                        🛒 Comprar{getQty(item.id) > 1 ? ` ${getQty(item.id)}×` : ''} ({item.goldPrice * getQty(item.id)} 🪙)
+                        🛒 Adicionar{getQty(item.id) > 1 ? ` ${getQty(item.id)}×` : ''} ({item.goldPrice * getQty(item.id)} 🪙)
                       </button>
+                      {cart[item.id] && (
+                        <div className="text-xs text-center text-amber-300/90">
+                          No carrinho: {cart[item.id].quantity}
+                        </div>
+                      )}
 
                       {ownedQuantity > 0 && selectedCharacter && (
                         <button
@@ -861,6 +920,182 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
           </div>
         )}
       </div>
+
+      {/* 🛒 Botão flutuante do carrinho — aparece quando há itens. */}
+      <AnimatePresence>
+        {cartCount > 0 && (
+          <motion.button
+            initial={{ opacity: 0, y: 40, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 40, scale: 0.9 }}
+            onClick={() => setCartOpen(true)}
+            className="fixed bottom-6 right-6 z-30 flex items-center gap-3 px-5 py-3 rounded-2xl font-black text-white shadow-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:scale-105 transition-transform"
+          >
+            <span className="relative">
+              <ShoppingCart className="w-6 h-6" />
+              <span className="absolute -top-2 -right-2 min-w-[1.25rem] h-5 px-1 flex items-center justify-center rounded-full bg-red-600 text-[11px] leading-none">
+                {cartCount}
+              </span>
+            </span>
+            <span className="text-sm">{cartTotal} 🪙</span>
+          </motion.button>
+        )}
+      </AnimatePresence>
+
+      {/* Dialog de checkout */}
+      <AnimatePresence>
+        {cartOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+            onClick={() => !checkingOut && setCartOpen(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-lg max-h-[85vh] flex flex-col rounded-2xl border border-white/15 bg-[#15151f] shadow-2xl overflow-hidden"
+            >
+              {/* Cabeçalho */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
+                <h2 className="flex items-center gap-2 text-lg font-black text-white">
+                  <ShoppingCart className="w-5 h-5 text-amber-400" />
+                  Carrinho
+                  <span className="text-sm font-semibold text-text-secondary">({cartCount})</span>
+                </h2>
+                <button
+                  onClick={() => !checkingOut && setCartOpen(false)}
+                  className="text-text-secondary hover:text-white transition-colors"
+                  aria-label="Fechar"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Lista de itens */}
+              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+                {cartEntries.length === 0 ? (
+                  <div className="text-center py-10 text-text-secondary">Seu carrinho está vazio.</div>
+                ) : (
+                  cartEntries.map(({ item, quantity }) => {
+                    const visual = getItemVisual(item.type);
+                    return (
+                      <div
+                        key={item.id}
+                        className="flex items-center gap-3 p-2.5 rounded-xl bg-surface/40 border border-white/10"
+                      >
+                        <div className="w-12 h-12 shrink-0 rounded-lg overflow-hidden bg-black/40 ring-1 ring-white/10 relative flex items-center justify-center text-xl">
+                          {item.image ? (
+                            <Image
+                              src={item.image}
+                              alt={item.name}
+                              fill
+                              className="object-cover"
+                              unoptimized={Boolean(item.image && !/^https?:\/\//i.test(item.image))}
+                            />
+                          ) : (
+                            <span>{visual.emoji}</span>
+                          )}
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="font-bold text-sm text-white truncate">{item.name}</div>
+                          <div className="text-xs text-amber-400">{item.goldPrice} 🪙 / un.</div>
+                        </div>
+
+                        {/* Quantidade */}
+                        <div className="flex items-center rounded-lg overflow-hidden border border-white/20">
+                          <button
+                            type="button"
+                            onClick={() => setCartQty(item.id, quantity - 1)}
+                            disabled={checkingOut || quantity <= 1}
+                            className="px-2 py-1 text-white bg-black/30 hover:bg-black/50 disabled:opacity-40 transition-colors"
+                          >
+                            −
+                          </button>
+                          <input
+                            type="number"
+                            min={1}
+                            max={99}
+                            value={quantity}
+                            disabled={checkingOut}
+                            onChange={(e) => setCartQty(item.id, parseInt(e.target.value, 10))}
+                            className="w-10 text-center bg-black/20 text-white text-sm py-1 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setCartQty(item.id, quantity + 1)}
+                            disabled={checkingOut || quantity >= 99}
+                            className="px-2 py-1 text-white bg-black/30 hover:bg-black/50 disabled:opacity-40 transition-colors"
+                          >
+                            +
+                          </button>
+                        </div>
+
+                        <div className="w-16 text-right text-sm font-bold text-amber-300">
+                          {item.goldPrice * quantity} 🪙
+                        </div>
+
+                        <button
+                          onClick={() => removeFromCart(item.id)}
+                          disabled={checkingOut}
+                          className="text-text-secondary hover:text-red-400 transition-colors disabled:opacity-40"
+                          aria-label="Remover"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Rodapé com total e ações */}
+              <div className="px-5 py-4 border-t border-white/10 space-y-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-text-secondary">Carteira do personagem</span>
+                  <span className="font-semibold text-amber-300">
+                    {characterGold === null ? '…' : characterGold} 🪙
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-black text-white">Total</span>
+                  <span className="text-xl font-black text-amber-400">{cartTotal} 🪙</span>
+                </div>
+                {characterGold !== null && cartTotal > characterGold && (
+                  <div className="text-xs text-red-400">
+                    Saldo insuficiente — saque do banco em /inventário.
+                  </div>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={clearCart}
+                    disabled={checkingOut || cartEntries.length === 0}
+                    className="px-4 py-2.5 rounded-xl text-sm font-bold text-red-400 bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 transition-colors disabled:opacity-40"
+                  >
+                    Limpar
+                  </button>
+                  <button
+                    onClick={handleCheckout}
+                    disabled={
+                      checkingOut ||
+                      cartEntries.length === 0 ||
+                      !selectedCharacter ||
+                      (characterGold ?? 0) < cartTotal
+                    }
+                    className="flex-1 px-4 py-2.5 rounded-xl text-sm font-black text-white bg-gradient-to-r from-amber-500 to-amber-600 hover:scale-[1.02] transition-transform disabled:opacity-50 disabled:hover:scale-100"
+                  >
+                    {checkingOut ? 'Finalizando…' : `Finalizar compra (${cartTotal} 🪙)`}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

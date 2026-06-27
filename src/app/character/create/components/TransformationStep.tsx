@@ -11,6 +11,14 @@ import {
 } from '@/lib/transformationSystem';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { GenerationProgress } from './GenerationProgress';
+
+// Mensagens de loading enquanto a IA gera a arte da transformação.
+const TRANSFORMATION_STEPS = [
+  'Coletando e ajustando o prompt para a lore de Dolrath…',
+  'Revelando a forma de combate do seu herói…',
+  'Finalizando…',
+];
 
 export function TransformationStep() {
   const {
@@ -267,6 +275,9 @@ export function TransformationStep() {
           )}
         </div>
       </div>
+
+      {/* Loading com etapas enquanto a IA gera a transformação */}
+      <GenerationProgress active={isGenerating} steps={TRANSFORMATION_STEPS} stepDurationMs={6000} />
     </div>
   );
 }

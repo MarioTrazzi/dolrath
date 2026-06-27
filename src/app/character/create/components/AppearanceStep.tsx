@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Wand2, RefreshCw, Download, Upload, Check } from 'lucide-react';
 import { generateCharacterImage } from '@/lib/openai';
 import { ImageUpload } from './ImageUpload';
+import { GenerationProgress } from './GenerationProgress';
 import { useCharacterCreationStore } from '@/lib/stores/characterCreationStore';
 import { cn } from '@/lib/utils';
 import { isCloudinaryUploadConfigured, uploadImageToCloudinary } from '@/lib/cloudinaryUpload';
@@ -209,7 +210,19 @@ export function AppearanceStep() {
           />
         </div>
       </div>
-      
+
+      {/* Loading com etapas enquanto a IA gera as 3 imagens */}
+      <GenerationProgress
+        active={isGenerating}
+        steps={[
+          'Coletando e ajustando o prompt para a lore de Dolrath…',
+          'Criando a 1ª de 3 imagens para você escolher…',
+          'Criando a 2ª de 3 imagens…',
+          'Criando a 3ª e última imagem…',
+          'Finalizando…',
+        ]}
+      />
+
       {/* Generated Images Gallery */}
       <AnimatePresence>
         {generatedImages.length > 0 && (

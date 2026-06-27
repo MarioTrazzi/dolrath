@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
-import { Coins, Wallet } from 'lucide-react'
+import { Coins, Wallet, Mail } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { ethers } from 'ethers'
 import { decodeContractCustomErrorMessage, getWalletTxErrorMessage } from '@/lib/walletErrors'
@@ -40,7 +40,7 @@ const GOLD_CLAIM_ABI = [
 ] as const
 
 export default function WalletPage() {
-  const { data: session, status } = useSession()
+  const { data: session, status, update } = useSession()
 
   const [goldStatus, setGoldStatus] = useState<GoldStatus | null>(null)
   const [goldOnchain, setGoldOnchain] = useState<TokenBalance | null>(null)
@@ -49,7 +49,11 @@ export default function WalletPage() {
   const [loading, setLoading] = useState(false)
   const [claiming, setClaiming] = useState(false)
 
+  const [email, setEmail] = useState('')
+  const [savingEmail, setSavingEmail] = useState(false)
+
   const walletAddress = (session?.user as any)?.walletAddress as string | undefined
+  const currentEmail = (session?.user as any)?.email as string | undefined
 
   const canClaim = useMemo(() => {
     if (!goldStatus) return false
@@ -192,6 +196,34 @@ export default function WalletPage() {
     }
   }
 
+  const handleSaveEmail = async () => {
+    const trimmed = email.trim()
+    if (!trimmed) {
+      toast.error('Digite um email')
+      return
+    }
+
+    setSavingEmail(true)
+    try {
+      const res = await fetch('/api/profile/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: trimmed }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        throw new Error(json?.error || 'Falha ao salvar email')
+      }
+      await update?.()
+      setEmail('')
+      toast.success('Email salvo! Você receberá novidades do Dolrath.')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Falha ao salvar email')
+    } finally {
+      setSavingEmail(false)
+    }
+  }
+
   if (status === 'loading') {
     return (
       <div className="max-w-3xl mx-auto px-4 pt-24">
@@ -303,6 +335,43 @@ export default function WalletPage() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Optional: add an email later (newsletter / account recovery) */}
+        <div className="bg-surface/50 border border-white/10 rounded-xl p-5">
+          <div className="flex items-center gap-2 text-text-primary font-semibold">
+            <Mail className="w-4 h-4 text-primary" />
+            Receber novidades
+          </div>
+
+          {currentEmail ? (
+            <p className="text-text-secondary text-sm mt-2">
+              Email cadastrado: <span className="text-text-primary">{currentEmail}</span>
+            </p>
+          ) : (
+            <>
+              <p className="text-text-secondary text-sm mt-1">
+                Opcional. Adicione um email para receber novidades do Dolrath e poder
+                recuperar sua conta.
+              </p>
+              <div className="mt-3 flex flex-col sm:flex-row gap-3">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="seu@email.com"
+                  className="flex-1 bg-background/50 border border-white/20 rounded-lg px-3 py-2 text-text-primary placeholder:text-text-secondary focus:outline-none focus:border-primary"
+                />
+                <button
+                  onClick={handleSaveEmail}
+                  disabled={savingEmail}
+                  className="bg-gradient-to-r from-primary to-primary-dark text-white px-4 py-2 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {savingEmail ? 'Salvando…' : 'Salvar'}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

@@ -4,7 +4,7 @@ import { useSession, signOut } from 'next-auth/react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Coins, Wallet, ChevronDown } from 'lucide-react'
 import { ethers } from 'ethers'
@@ -18,14 +18,6 @@ export function Navbar() {
   const { data: session, update } = useSession()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const router = useRouter()
-
-  const [dolLoading, setDolLoading] = useState(false)
-  const [dolBalance, setDolBalance] = useState<string | null>(null)
-  const [dolSymbol, setDolSymbol] = useState<string | null>(null)
-
-  const [goldLoading, setGoldLoading] = useState(false)
-  const [goldBalance, setGoldBalance] = useState<string | null>(null)
-  const [goldSymbol, setGoldSymbol] = useState<string | null>(null)
 
   const [isLinkingWallet, setIsLinkingWallet] = useState(false)
 
@@ -98,72 +90,9 @@ export function Navbar() {
     }
   }
 
-  useEffect(() => {
-    if (!session) {
-      setDolLoading(false)
-      setDolBalance(null)
-      setDolSymbol(null)
-
-      setGoldLoading(false)
-      setGoldBalance(null)
-      setGoldSymbol(null)
-      return
-    }
-
-    if (!walletAddress) {
-      setDolLoading(false)
-      setDolBalance(null)
-      setDolSymbol(null)
-
-      setGoldLoading(false)
-      setGoldBalance(null)
-      setGoldSymbol(null)
-      return
-    }
-
-    setDolLoading(true)
-    fetch('/api/wallet/dol-balance')
-      .then(async (res) => {
-        const json = await res.json()
-        if (!res.ok) {
-          throw new Error(json?.error || 'Falha ao buscar saldo on-chain')
-        }
-        if (json?.walletLinked && typeof json?.formatted === 'string') {
-          setDolBalance(json.formatted)
-          setDolSymbol(typeof json?.symbol === 'string' ? json.symbol : 'DOL')
-        } else {
-          setDolBalance(null)
-          setDolSymbol(null)
-        }
-      })
-      .catch(() => {
-        setDolBalance(null)
-        setDolSymbol('DOL')
-      })
-      .finally(() => setDolLoading(false))
-  }, [session, walletAddress])
-
-  useEffect(() => {
-    setGoldLoading(true)
-    fetch('/api/wallet/gold-balance', { cache: 'no-store' })
-      .then(async (res) => {
-        const json = await res.json()
-        if (!res.ok) throw new Error(json?.error || 'Falha ao buscar saldo on-chain')
-
-        if (json?.walletLinked && typeof json?.formatted === 'string') {
-          setGoldBalance(json.formatted)
-          setGoldSymbol(typeof json?.symbol === 'string' ? json.symbol : 'GOLD')
-        } else {
-          setGoldBalance(null)
-          setGoldSymbol('GOLD')
-        }
-      })
-      .catch(() => {
-        setGoldBalance(null)
-        setGoldSymbol('GOLD')
-      })
-      .finally(() => setGoldLoading(false))
-  }, [session, walletAddress])
+  // Gold do INVENTÁRIO do personagem ativo (in-game). O saldo on-chain
+  // (DOL/GOLD em carteira) e o claim ficam na página /wallet.
+  const inventoryGold = typeof activeCharacter?.gold === 'number' ? activeCharacter.gold : null
 
   // "Personagem" leva à ficha do personagem ativo; sem personagem, à criação.
   const fichaHref = activeCharacterId ? `/character/${activeCharacterId}` : '/character/create'
@@ -240,35 +169,15 @@ export function Navbar() {
           <div className="hidden lg:flex items-center gap-2">
             {session ? (
               <>
-                {/* DOL (on-chain) Display */}
+                {/* GOLD do inventário do herói ativo — clique abre a Wallet (DOL/GOLD em carteira + claim) */}
                 <Link
                   href="/wallet"
                   className="flex items-center gap-1.5 px-3 py-2 bg-white/5 rounded-lg border border-yellow-500/30 hover:border-primary transition-all"
-                  title="Abrir Wallet"
+                  title="Abrir Wallet (saldo on-chain e claim)"
                 >
                   <Coins className="w-4 h-4 text-yellow-500" />
                   <span className="text-yellow-400 font-semibold font-combat text-sm">
-                    {walletAddress
-                      ? dolLoading
-                        ? '...'
-                        : `${dolBalance ?? 0} ${dolSymbol || 'DOL'}`
-                      : `— ${dolSymbol || 'DOL'}`}
-                  </span>
-                </Link>
-
-                {/* GOLD (on-chain) Display */}
-                <Link
-                  href="/wallet"
-                  className="flex items-center gap-1.5 px-3 py-2 bg-white/5 rounded-lg border border-yellow-500/30 hover:border-primary transition-all"
-                  title="Abrir Wallet"
-                >
-                  <Coins className="w-4 h-4 text-yellow-500" />
-                  <span className="text-yellow-400 font-semibold font-combat text-sm">
-                    {walletAddress
-                      ? goldLoading
-                        ? '...'
-                        : `${goldBalance ?? 0} ${goldSymbol || 'GOLD'}`
-                      : `— ${goldSymbol || 'GOLD'}`}
+                    {inventoryGold !== null ? `${inventoryGold.toLocaleString('pt-BR')} GOLD` : '— GOLD'}
                   </span>
                 </Link>
 
@@ -350,21 +259,10 @@ export function Navbar() {
                     <div className="flex items-center gap-2">
                       <Coins className="w-4 h-4 text-yellow-500" />
                       <span className="text-yellow-400 font-semibold font-combat text-sm">
-                        {walletAddress
-                          ? dolLoading
-                            ? '...'
-                            : `${dolBalance ?? 0} ${dolSymbol || 'DOL'}`
-                          : `— ${dolSymbol || 'DOL'}`}
+                        {inventoryGold !== null ? `${inventoryGold.toLocaleString('pt-BR')} GOLD` : '— GOLD'}
                       </span>
                     </div>
-
-                    <div className="text-yellow-400 font-semibold font-combat text-sm">
-                      {walletAddress
-                        ? goldLoading
-                          ? '...'
-                          : `${goldBalance ?? 0} ${goldSymbol || 'GOLD'}`
-                        : `— ${goldSymbol || 'GOLD'}`}
-                    </div>
+                    <span className="text-textsec text-xs">Wallet →</span>
                   </Link>
 
                   {!walletAddress && (

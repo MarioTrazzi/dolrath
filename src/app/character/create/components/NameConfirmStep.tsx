@@ -21,6 +21,15 @@ export function NameConfirmStep() {
 
   const [nftDialogOpen, setNftDialogOpen] = useState(false);
   const [nftDialogLoading, setNftDialogLoading] = useState(false);
+  const [nftFlipped, setNftFlipped] = useState(false);
+
+  // Imagem de transformação para o flip do card (forma escolhida; para metamorfo,
+  // a primeira forma disponível).
+  const previewTransformationImage =
+    transformationImage ||
+    (chosenTransformation ? transformationImages?.[chosenTransformation] : null) ||
+    (transformationImages ? Object.values(transformationImages).find(Boolean) ?? null : null) ||
+    null;
   const [nftData, setNftData] = useState<null | {
     chainId: number;
     contractAddress: string;
@@ -328,6 +337,7 @@ export function NameConfirmStep() {
 
       // 4) Dialog: load from the NFT tokenURI (not from DB)
       let mintedMetadata: any = null;
+      setNftFlipped(false);
       setNftDialogOpen(true);
       setNftDialogLoading(true);
       try {
@@ -484,16 +494,80 @@ export function NameConfirmStep() {
             ) : nftData ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-background/40 border border-white/10 rounded-lg p-4">
-                  <div className="text-xs text-text-secondary mb-2">Imagem (NFT)</div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-xs text-text-secondary">
+                      {nftFlipped ? 'Transformação' : 'Imagem (NFT)'}
+                    </div>
+                    {previewTransformationImage && (
+                      <button
+                        type="button"
+                        onClick={() => setNftFlipped((f) => !f)}
+                        className="text-xs flex items-center gap-1 text-primary hover:underline"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        {nftFlipped ? 'Ver forma base' : 'Ver transformação'}
+                      </button>
+                    )}
+                  </div>
+
                   {nftData.metadata?.image ? (
-                    <Image
-                      src={nftData.metadata.image}
-                      alt={nftData.metadata?.name || 'NFT'}
-                      width={800}
-                      height={800}
-                      unoptimized
-                      className="w-full h-auto rounded-lg border border-white/10"
-                    />
+                    previewTransformationImage ? (
+                      // Card com flip 3D: frente = NFT base, verso = transformação.
+                      <div
+                        className="relative w-full aspect-square cursor-pointer select-none"
+                        style={{ perspective: 1200 }}
+                        onClick={() => setNftFlipped((f) => !f)}
+                        title="Clique para ver a transformação"
+                      >
+                        <motion.div
+                          className="relative w-full h-full"
+                          style={{ transformStyle: 'preserve-3d' }}
+                          animate={{ rotateY: nftFlipped ? 180 : 0 }}
+                          transition={{ duration: 0.6, ease: 'easeInOut' }}
+                        >
+                          {/* Frente: imagem base (NFT) */}
+                          <div
+                            className="absolute inset-0"
+                            style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
+                          >
+                            <Image
+                              src={nftData.metadata.image}
+                              alt={nftData.metadata?.name || 'NFT'}
+                              width={800}
+                              height={800}
+                              unoptimized
+                              className="w-full h-full object-cover rounded-lg border border-white/10"
+                            />
+                          </div>
+                          {/* Verso: transformação */}
+                          <div
+                            className="absolute inset-0"
+                            style={{
+                              backfaceVisibility: 'hidden',
+                              WebkitBackfaceVisibility: 'hidden',
+                              transform: 'rotateY(180deg)',
+                            }}
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={previewTransformationImage}
+                              alt="Transformação"
+                              className="w-full h-full object-cover rounded-lg border border-primary/40"
+                              style={{ boxShadow: '0 0 24px 2px rgba(124,58,237,0.45)' }}
+                            />
+                          </div>
+                        </motion.div>
+                      </div>
+                    ) : (
+                      <Image
+                        src={nftData.metadata.image}
+                        alt={nftData.metadata?.name || 'NFT'}
+                        width={800}
+                        height={800}
+                        unoptimized
+                        className="w-full h-auto rounded-lg border border-white/10"
+                      />
+                    )
                   ) : (
                     <div className="text-text-secondary">Sem imagem na metadata.</div>
                   )}

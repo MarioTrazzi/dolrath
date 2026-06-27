@@ -84,6 +84,28 @@ export function ActiveCharacterProvider({ children }: { children: ReactNode }) {
     }
   }, [session, fetchCharacters])
 
+  // Personagem criado em outra parte da app (fluxo de criação dispara
+  // `dolrath:character-created`): recarrega a lista e já marca o recém-criado
+  // como ativo, para ele aparecer na navbar na hora — sem refresh manual.
+  useEffect(() => {
+    const onCreated = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { characterId?: string } | undefined
+      const newId = detail?.characterId ? String(detail.characterId) : null
+      if (newId) {
+        // Grava antes do fetch: o efeito de reconciliação escolhe o id salvo
+        // assim que a lista atualizar.
+        try {
+          if (typeof window !== 'undefined') window.localStorage.setItem(STORAGE_KEY, newId)
+        } catch {
+          /* localStorage indisponível — segue, cai no primeiro da lista */
+        }
+      }
+      fetchCharacters()
+    }
+    window.addEventListener('dolrath:character-created', onCreated as EventListener)
+    return () => window.removeEventListener('dolrath:character-created', onCreated as EventListener)
+  }, [fetchCharacters])
+
   // Reconcilia o id ativo sempre que a lista muda: mantém a escolha salva se
   // ainda existir; senão cai no primeiro personagem.
   useEffect(() => {

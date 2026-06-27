@@ -2,6 +2,7 @@ import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { NextResponse } from 'next/server';
 import { getLevelInfo } from '@/lib/experienceSystem';
+import { regenAndPersist } from '@/lib/staminaServer';
 
 function serializeBigInt(value: unknown): unknown {
   if (typeof value === 'bigint') return value.toString();
@@ -22,14 +23,18 @@ export async function GET() {
   }
 
   try {
-    const characters = await prisma.character.findMany({
+    const rawCharacters = await prisma.character.findMany({
       where: { userId: session.user.id },
       orderBy: { createdAt: 'asc' },
     });
 
-    if (!characters || characters.length === 0) {
+    if (!rawCharacters || rawCharacters.length === 0) {
       return NextResponse.json([]);
     }
+
+    // Aplica o regen passivo (e persiste) antes de servir: a stamina mostrada
+    // nasce viva e a âncora fica em dia para os próximos cálculos.
+    const characters = await Promise.all(rawCharacters.map(regenAndPersist));
 
     // Processar cada personagem para calcular nível correto e usar stats reais do banco
     const processedCharacters = characters.map(character => {

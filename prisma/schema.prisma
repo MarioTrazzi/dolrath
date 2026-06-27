@@ -163,6 +163,9 @@ model Character {
   // Sistema de stamina
   stamina       Int             @default(100)
   maxStamina    Int             @default(100)
+  // Âncora do regen passivo: marca o último gasto de stamina. Regen só começa
+  // 15 min depois deste instante, então acumula +2 a cada 15 min (lazy, sem cron).
+  staminaUpdatedAt DateTime     @default(now())
 
   // ⚒️ SISTEMA DE APRIMORAMENTO (estilo BDO)
   failstacks    Int             @default(0)

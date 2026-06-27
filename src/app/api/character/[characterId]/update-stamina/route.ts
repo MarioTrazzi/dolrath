@@ -1,6 +1,7 @@
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { computeStaminaRegen } from '@/lib/staminaSystem'
 
 export async function POST(
   req: Request,
@@ -51,14 +52,18 @@ export async function POST(
       )
     }
 
+    // Aplica o regen passivo acumulado antes de cobrar (a stamina viva pode ser
+    // maior que a salva no banco).
+    const { stamina: liveStamina } = computeStaminaRegen(character)
+
     // Verificar se tem stamina suficiente
-    console.log(`Checking stamina: ${character.stamina} >= ${staminaCost}?`)
-    if (character.stamina < staminaCost) {
-      console.log(`❌ Insufficient stamina: has ${character.stamina}, needs ${staminaCost}`)
+    console.log(`Checking stamina: ${liveStamina} >= ${staminaCost}?`)
+    if (liveStamina < staminaCost) {
+      console.log(`❌ Insufficient stamina: has ${liveStamina}, needs ${staminaCost}`)
       return NextResponse.json(
-        { 
+        {
           error: 'Stamina insuficiente',
-          current: character.stamina,
+          current: liveStamina,
           required: staminaCost,
           maxStamina: character.maxStamina
         },
@@ -66,13 +71,12 @@ export async function POST(
       )
     }
 
-    // Atualizar stamina
+    // Atualizar stamina. Gastar zera o cronômetro de 15 min (âncora = agora).
     const updatedCharacter = await prisma.character.update({
       where: { id: characterId },
       data: {
-        stamina: {
-          decrement: staminaCost
-        }
+        stamina: liveStamina - staminaCost,
+        staminaUpdatedAt: new Date(),
       }
     })
 

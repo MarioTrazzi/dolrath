@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { buildTrail, getDungeon } from '@/lib/dungeonRunServer'
+import { regenAndPersist } from '@/lib/staminaServer'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,10 +27,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Masmorra inválida' }, { status: 400 })
     }
 
-    const character = await prisma.character.findFirst({ where: { id: characterId, userId } })
-    if (!character) {
+    const rawCharacter = await prisma.character.findFirst({ where: { id: characterId, userId } })
+    if (!rawCharacter) {
       return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
     }
+    // Stamina viva ao abrir a sessão (regen passivo aplicado e persistido).
+    const character = await regenAndPersist(rawCharacter)
 
     // Gating de progressão: nível mínimo da masmorra.
     if (character.level < dungeon.levelReq) {

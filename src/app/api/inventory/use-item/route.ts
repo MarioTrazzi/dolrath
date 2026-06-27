@@ -1,6 +1,7 @@
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { computeStaminaRegen } from '@/lib/staminaSystem'
 
 export async function POST(req: Request) {
   const session = await auth()
@@ -97,9 +98,12 @@ export async function POST(req: Request) {
       case 'poção de stamina':
       case 'stamina potion':
         const staminaRestore = 50 // Restaura 50 stamina
-        const newStamina = Math.min(character.maxStamina, character.stamina + staminaRestore)
+        // Soma sobre a stamina viva (regen passivo já aplicado) e reancora o regen.
+        const liveStamina = computeStaminaRegen(character).stamina
+        const newStamina = Math.min(character.maxStamina, liveStamina + staminaRestore)
         updateData.stamina = newStamina
-        effectMessage = `Stamina restaurada! +${newStamina - character.stamina} stamina (${newStamina}/${character.maxStamina})`
+        updateData.staminaUpdatedAt = new Date()
+        effectMessage = `Stamina restaurada! +${newStamina - liveStamina} stamina (${newStamina}/${character.maxStamina})`
         break
 
       case 'poção de vida':

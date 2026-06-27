@@ -259,7 +259,7 @@ const RESOLVED = [
 const ROADMAP = [
   { title: 'Aventuras semanais (PvE) — implementação', body: 'Gear dos 4 chefes semanais já catalogado (Krax-thar, Vol\'theris, Gorthak, Sylariel). Falta implementar o modo em si: rotação por sábado (semana 1–4), encontro do chefe e a tabela de drop exclusiva (source adventure_boss).' },
   { title: 'Alinhar fonte de stats no servidor', body: 'A criação usa characterCreationData.ts (mais nova, rebalanceada), mas o servidor (api/character/route.ts) ainda computa stats por gameData.ts. Consolidar numa fonte única após a bateria de testes.' },
-  { title: 'Balancear stamina + regeneração', body: 'Proposta: regenerar 2 stamina a cada 15 min. Precisa de bateria de testes para medir se o gasto por atividade está alto ou baixo. Limpar também o bloco STAMINA_COSTS duplicado.' },
+  { title: 'Afinar custos de stamina', body: 'Regen passivo implementado (+2/15s após 15 min sem gastar). Falta a bateria de testes para medir se o gasto por atividade está alto ou baixo e calibrar os custos.' },
   { title: 'IA: geração de imagens (Anthropic)', body: 'Migrar para chave Anthropic própria e gerar imagens de personagem no MESMO estilo, adicionando apenas as características que o player escolher. Melhorar o prompt para consistência.' },
   { title: 'Recompensas PvP pendentes', body: 'Implementar win streak, primeira vitória do dia, persistência em banco e UI de recompensas (hoje marcados como TODO).' },
 ]
@@ -820,8 +820,7 @@ até +${SAFE_ENHANCE_MAX}: chance = 100% (seguro)`}</Formula>
 
             {/* Stamina */}
             <Section id="stamina" kicker="Economia de tempo" title="Stamina">
-              <div className="flex items-center gap-2"><Todo /><span className="text-sm text-orange-300">Em estudo — balanceamento e regeneração ainda serão lapidados.</span></div>
-              <p>Stamina limita atividades por dia (monetização ética, sem pay-to-win). Proposta em avaliação: <strong className="text-white">regenerar 2 stamina a cada 15 min</strong>, pendente de uma bateria de testes para medir o gasto real por atividade.</p>
+              <p>Stamina limita atividades por dia (monetização ética, sem pay-to-win). <strong className="text-white">Regeneração passiva:</strong> após <strong className="text-white">15 minutos sem gastar stamina</strong>, ela volta <strong className="text-white">+2 a cada 15 segundos</strong> até encher. Qualquer gasto reinicia a espera de 15 min. O valor ainda será afinado com uma bateria de testes do gasto por atividade.</p>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Card>
                   <h3 className="font-semibold text-white">Custos por atividade</h3>

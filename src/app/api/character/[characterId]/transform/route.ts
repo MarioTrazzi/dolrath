@@ -12,6 +12,7 @@ import {
   TRANSFORMATION_CONFIG,
   getRaceTransformations
 } from '@/lib/transformationSystem'
+import { computeStaminaRegen } from '@/lib/staminaSystem'
 
 export async function POST(
   req: NextRequest,
@@ -46,6 +47,9 @@ export async function POST(
       return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
     }
 
+    // Aplica o regen passivo acumulado antes de checar/cobrar o custo da forma.
+    character.stamina = computeStaminaRegen(character).stamina
+
     // Verificar se pode transformar
     const validationResult = canTransform(character, transformationType as TransformationType)
     if (!validationResult.canTransform) {
@@ -72,6 +76,7 @@ export async function POST(
         mp: transformedCharacter.mp,
         maxMp: transformedCharacter.maxMp, // mpPool amplia a reserva durante a forma
         stamina: transformedCharacter.stamina,
+        staminaUpdatedAt: new Date(), // transformar gasta stamina: reinicia a espera do regen
 
         // Atualizar baseStats que agora contém os stats modificados
         baseStats: transformedCharacter.baseStats

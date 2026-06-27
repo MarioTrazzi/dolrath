@@ -20,7 +20,8 @@ export async function POST(
     const updatedCharacter = await prisma.character.update({
       where: { id: characterId },
       data: {
-        stamina: 100 // Resetar para stamina máxima
+        stamina: 100, // Resetar para stamina máxima
+        staminaUpdatedAt: new Date(),
       }
     })
 

@@ -128,6 +128,7 @@ export async function POST(request: NextRequest, { params }: { params: { charact
         maxMp: newMp,
         stamina: newStamina,
         maxStamina: newStamina,
+        staminaUpdatedAt: new Date(),
         availablePoints: availablePoints - totalPointsToSpend,
         baseStats: {
           // Stats distribuídos + bônus

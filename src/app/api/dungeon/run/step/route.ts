@@ -10,6 +10,7 @@ import {
   STEP_COST,
   type RunPending,
 } from '@/lib/dungeonRunServer'
+import { computeStaminaRegen } from '@/lib/staminaSystem'
 
 export const dynamic = 'force-dynamic'
 
@@ -59,12 +60,16 @@ export async function POST(req: Request) {
     if (!character) return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
 
     const cost = node.kind === 'main' ? STEP_COST.main : node.kind === 'boss' ? STEP_COST.boss : STEP_COST.minor
-    if (character.stamina < cost) {
+    // Stamina viva (com regen passivo acumulado). Avançar zera o cronômetro de
+    // 15 min: cada nó grava stamina = liveStamina - cost e âncora = agora.
+    const { stamina: liveStamina } = computeStaminaRegen(character)
+    if (liveStamina < cost) {
       return NextResponse.json(
-        { error: 'Stamina insuficiente', current: character.stamina, required: cost },
+        { error: 'Stamina insuficiente', current: liveStamina, required: cost },
         { status: 400 }
       )
     }
+    const staminaSpend = { stamina: liveStamina - cost, staminaUpdatedAt: new Date() }
 
     const charForRun = { id: character.id, level: character.level, race: character.race, class: character.class }
 
@@ -72,7 +77,7 @@ export async function POST(req: Request) {
     if (node.kind === 'boss') {
       const pending = resolveBossNode(dungeon, charForRun, nextIdx)
       const updated = await prisma.$transaction(async (tx) => {
-        const c = await tx.character.update({ where: { id: character.id }, data: { stamina: { decrement: cost } } })
+        const c = await tx.character.update({ where: { id: character.id }, data: staminaSpend })
         await tx.dungeonRun.update({ where: { id: run.id }, data: { pending: pending as unknown as object } })
         return c
       })
@@ -84,7 +89,7 @@ export async function POST(req: Request) {
 
     if (resolved.type === 'monster') {
       const updated = await prisma.$transaction(async (tx) => {
-        const c = await tx.character.update({ where: { id: character.id }, data: { stamina: { decrement: cost } } })
+        const c = await tx.character.update({ where: { id: character.id }, data: staminaSpend })
         await tx.dungeonRun.update({ where: { id: run.id }, data: { pending: resolved.pending as unknown as object } })
         return c
       })
@@ -93,7 +98,7 @@ export async function POST(req: Request) {
 
     // ACHADO: credita gold+itens e avança o cursor numa transação.
     const out = await prisma.$transaction(async (tx) => {
-      const c = await tx.character.update({ where: { id: character.id }, data: { stamina: { decrement: cost } } })
+      const c = await tx.character.update({ where: { id: character.id }, data: staminaSpend })
       const gold = await applyLootTx(tx, userId, character.id, resolved.loot)
       await tx.dungeonRun.update({
         where: { id: run.id },

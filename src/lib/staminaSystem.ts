@@ -1,24 +1,11 @@
 /**
- * // � CUSTOS DE STAMINA POR ATIVIDADE
-export const STAMINA_COSTS = {
-  // ⚔️ Combates PvP - custos baixos para permitir 10 lutas diárias
-  pvp: {
-    light_attack: 1,   // Ataque leve
-    heavy_attack: 2,   // Ataque pesado
-    special_attack: 4, // Ataque especial
-    dodge: 1,          // Esquivar
-    defend: 3,         // Defender (mais caro para incentivar ação)
-    use_item: 0,       // Usar item
-    basic: 15,         // Custo base para entrada em combate (1 luta = ~15 stamina total)
-    ranked: 25,        // Lutas ranqueadas
-    tournament: 40     // Torneios especiais
-  },MA DE STAMINA - Templo de Stamina
- * 
+ * ⚡ SISTEMA DE STAMINA — Templo de Stamina
+ *
  * Sistema balanceado de monetização ética que oferece conveniência
  * sem criar pay-to-win. Base em análise de dados de engagement.
  */
 
-// � CUSTOS DE STAMINA POR ATIVIDADE
+// 💪 CUSTOS DE STAMINA POR ATIVIDADE
 export const STAMINA_COSTS = {
   // ⚔️ Combates PvP
   pvp: {
@@ -45,6 +32,71 @@ export const STAMINA_COSTS = {
   }
 }
 
+// 🔄 REGEN PASSIVO DE STAMINA
+// Regra: nada regenera enquanto se gasta stamina. Passados `idleDelaySeconds`
+// sem nenhum gasto, a stamina volta `amountPerTick` a cada `tickSeconds`, até
+// encher. Qualquer gasto reseta a âncora (staminaUpdatedAt = agora), zerando a
+// espera. Cálculo lazy: derivado de (stamina, staminaUpdatedAt, agora) — sem cron.
+export const STAMINA_REGEN = {
+  amountPerTick: 2,            // +2 de stamina por tick
+  tickSeconds: 15 * 60,       // a cada 15 minutos (~+192/dia, alinhado ao dailyRegen)
+  idleDelaySeconds: 15 * 60,  // só começa após 15 min sem gastar
+}
+
+export interface StaminaState {
+  stamina: number
+  maxStamina: number
+  staminaUpdatedAt: Date | string | number
+}
+
+export interface StaminaRegenResult {
+  stamina: number
+  staminaUpdatedAt: Date
+  gained: number
+}
+
+/**
+ * Aplica o regen passivo a um estado de stamina. Função PURA (sem I/O): roda
+ * igual no servidor (fonte da verdade, persiste) e no cliente (tick visual).
+ *
+ * A âncora retornada é avançada apenas pelos segundos de regen já consumidos
+ * (múltiplos de tickSeconds), preservando o offset de 15 min já "queimado":
+ * recalcular a partir dela rende exatamente o mesmo valor, sem dupla contagem.
+ */
+export function computeStaminaRegen(state: StaminaState, now: Date = new Date()): StaminaRegenResult {
+  const { stamina, maxStamina } = state
+  const anchor = new Date(state.staminaUpdatedAt)
+  const { amountPerTick, tickSeconds, idleDelaySeconds } = STAMINA_REGEN
+
+  // Já cheio: mantém a âncora fresca para não acumular tempo à toa.
+  if (stamina >= maxStamina) {
+    return { stamina: maxStamina, staminaUpdatedAt: now, gained: 0 }
+  }
+
+  const idleSeconds = (now.getTime() - anchor.getTime()) / 1000
+  if (idleSeconds < idleDelaySeconds) {
+    return { stamina, staminaUpdatedAt: anchor, gained: 0 }
+  }
+
+  const regenSeconds = idleSeconds - idleDelaySeconds
+  const ticks = Math.floor(regenSeconds / tickSeconds)
+  if (ticks <= 0) {
+    return { stamina, staminaUpdatedAt: anchor, gained: 0 }
+  }
+
+  const gained = ticks * amountPerTick
+  const newStamina = Math.min(maxStamina, stamina + gained)
+
+  // Encheu: zera a espera com âncora = agora (sobra de tempo é descartada).
+  if (newStamina >= maxStamina) {
+    return { stamina: maxStamina, staminaUpdatedAt: now, gained: maxStamina - stamina }
+  }
+
+  // Avança a âncora só pelos ticks consumidos, mantendo o offset de idle baked-in.
+  const advancedAnchor = new Date(anchor.getTime() + ticks * tickSeconds * 1000)
+  return { stamina: newStamina, staminaUpdatedAt: advancedAnchor, gained: newStamina - stamina }
+}
+
 // 📊 PROGRESSÃO DE STAMINA POR LEVEL
 export const STAMINA_PROGRESSION = {
   // Novatos (Level 1-5): Foco em aprender
@@ -58,7 +110,7 @@ export const STAMINA_PROGRESSION = {
   // Intermediários (Level 6-15): Engajamento
   intermediate: {
     baseStamina: 250,
-    dailyRegen: 200,     // Regenera 80% por dia  
+    dailyRegen: 200,     // Regenera 80% por dia
     activitiesPerDay: 12,
     description: "Mais stamina conforme evolui"
   },
@@ -86,7 +138,7 @@ export const STAMINA_PREMIUM = {
       description: '+50 stamina - 2h cooldown'
     },
     {
-      id: 'medium_potion', 
+      id: 'medium_potion',
       name: 'Poção Média',
       stamina: 100,
       price_usd: 1.99,
@@ -96,7 +148,7 @@ export const STAMINA_PREMIUM = {
     },
     {
       id: 'large_potion',
-      name: 'Poção Grande', 
+      name: 'Poção Grande',
       stamina: 200,
       price_usd: 3.99,
       price_gems: 350,
@@ -158,7 +210,7 @@ export function calculateStaminaForLevel(level: number): number {
   const baseStamina = 200
   const levelBonus = level * 10
   const agiBonus = 0 // Será calculado no character factory
-  
+
   return baseStamina + levelBonus + agiBonus
 }
 
@@ -177,12 +229,12 @@ export function getStaminaCost(activity: string, options?: { actionType?: string
   }
 
   const [category, type] = activity.split('_')
-  
-  if (STAMINA_COSTS[category as keyof typeof STAMINA_COSTS] && 
+
+  if (STAMINA_COSTS[category as keyof typeof STAMINA_COSTS] &&
       STAMINA_COSTS[category as keyof typeof STAMINA_COSTS][type as keyof typeof STAMINA_COSTS[keyof typeof STAMINA_COSTS]]) {
     return STAMINA_COSTS[category as keyof typeof STAMINA_COSTS][type as keyof typeof STAMINA_COSTS[keyof typeof STAMINA_COSTS]]
   }
-  
+
   // Fallback para atividades não mapeadas
   return 1 // Reduzido para 1
 }
@@ -195,15 +247,15 @@ export function canAffordActivity(currentStamina: number, activity: string): boo
 export function getRecommendedActivities(stamina: number): string[] {
   const activities = []
   let remainingStamina = stamina
-  
+
   // Priorizar atividades por eficiência de diversão
   const priorities = [
     'pvp_basic',      // 22 stamina - alta diversão
-    'dungeon_normal', // 25 stamina - boa recompensa  
+    'dungeon_normal', // 25 stamina - boa recompensa
     'training',       // 15 stamina - progressão
     'exploration'     // 20 stamina - descoberta
   ]
-  
+
   for (const activity of priorities) {
     const cost = getStaminaCost(activity)
     while (remainingStamina >= cost) {
@@ -211,7 +263,7 @@ export function getRecommendedActivities(stamina: number): string[] {
       remainingStamina -= cost
     }
   }
-  
+
   return activities
 }
 
@@ -225,10 +277,10 @@ export const ANALYTICS_TRACKING = {
     'daily_stamina_usage',        // Total usado por dia
     'peak_stamina_usage_time'     // Horário de maior uso
   ],
-  
+
   kpis: [
     'average_daily_stamina_usage',
-    'stamina_depletion_frequency', 
+    'stamina_depletion_frequency',
     'f2p_to_premium_conversion_rate',
     'premium_user_retention_rate',
     'average_revenue_per_stamina_user'
@@ -237,9 +289,11 @@ export const ANALYTICS_TRACKING = {
 
 export default {
   STAMINA_COSTS,
-  STAMINA_PROGRESSION, 
+  STAMINA_REGEN,
+  STAMINA_PROGRESSION,
   STAMINA_PREMIUM,
   USAGE_SCENARIOS,
+  computeStaminaRegen,
   calculateStaminaForLevel,
   getStaminaCost,
   canAffordActivity,

@@ -5,6 +5,7 @@ import { Contract, ethers } from 'ethers'
 import { getCharacterNftContractAddress, getCharacterNftProvider } from '@/lib/characterNftOnchain'
 import { DOLRATH_CHARACTERS_ABI } from '@/lib/characterNftSigning'
 import { getLevelInfo } from '@/lib/experienceSystem'
+import { computeStaminaRegen } from '@/lib/staminaSystem'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -249,7 +250,12 @@ export async function GET() {
       maxHp: c.maxHp || baseStats.maxHp || 100,
       mp: c.mp || baseStats.mp || 50,
       maxMp: c.maxMp || baseStats.maxMp || 50,
-      stamina: c.stamina || baseStats.stamina || 100,
+      // Stamina viva para exibição (regen passivo aplicado sem tocar no banco).
+      stamina: computeStaminaRegen({
+        stamina: c.stamina || baseStats.stamina || 100,
+        maxStamina: c.maxStamina || baseStats.maxStamina || 100,
+        staminaUpdatedAt: c.staminaUpdatedAt,
+      }).stamina,
       maxStamina: c.maxStamina || baseStats.maxStamina || 100,
     })
   }

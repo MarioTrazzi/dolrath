@@ -312,7 +312,7 @@ function aggregateDrops(runs: RunRec[]) {
       if (!seen.has(key)) { a.runsWith++; seen.add(key) }
     }
   }
-  return [...map.values()]
+  return Array.from(map.values())
 }
 
 const RARITY_ORDER = ['LEGENDARY', 'EPIC', 'RARE', 'UNCOMMON', 'COMMON', '—']

@@ -13,7 +13,9 @@ export default function DungeonsPage() {
   const { data: session } = useSession()
   const router = useRouter()
   // Herói ATIVO global (navbar): a masmorra usa sempre o personagem selecionado.
-  const { activeCharacterId } = useActiveCharacter()
+  // `refresh` recarrega /api/character/me — usado ao voltar de uma run para
+  // atualizar o gold (e demais recursos) que a navbar exibe.
+  const { activeCharacterId, refresh: refreshActiveCharacter } = useActiveCharacter()
   const [characters, setCharacters] = useState<DungeonCharacter[]>([])
   const [selectedCharacter, setSelectedCharacter] = useState<DungeonCharacter | null>(null)
   const [activeDungeon, setActiveDungeon] = useState<DungeonDef | null>(null)
@@ -134,6 +136,10 @@ export default function DungeonsPage() {
       setSelectedCharacter(updated)
       setCharacters(prev => prev.map(c => (c.id === updated.id ? updated : c)))
     }
+    // O gold da run já foi creditado no servidor a cada combate/espólio. Ao voltar
+    // ao mapa a navbar reaparece (a run a cobria com fixed inset-0), então recarrega
+    // o personagem ativo para a barra refletir o ouro ganho na hora — sem reload.
+    refreshActiveCharacter()
   }
 
   if (isLoading) {

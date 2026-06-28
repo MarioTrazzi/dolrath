@@ -37,6 +37,8 @@ function getSlotTypeFromItemType(itemType: string): EquipmentSlotType {
       return 'NECKLACE';
     case 'RING':
       return 'RING_1';
+    case 'BELT':
+      return 'BELT';
     default:
       return 'WEAPON';
   }

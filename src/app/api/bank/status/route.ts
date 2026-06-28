@@ -15,7 +15,7 @@ export async function GET() {
   const userId = session.user.id
 
   const [user, characters] = await Promise.all([
-    prisma.user.findUnique({ where: { id: userId }, select: { goldBalance: true } }),
+    prisma.user.findUnique({ where: { id: userId }, select: { goldBalance: true, globalInventorySlots: true } }),
     prisma.character.findMany({
       where: { userId },
       select: { id: true, name: true, class: true, gold: true },
@@ -25,6 +25,7 @@ export async function GET() {
 
   return NextResponse.json({
     bankGold: Number(user?.goldBalance ?? 0),
+    globalInventorySlots: Number(user?.globalInventorySlots ?? 50),
     characters: characters.map((c) => ({ id: c.id, name: c.name, class: c.class, gold: Number(c.gold ?? 0) })),
   })
 }

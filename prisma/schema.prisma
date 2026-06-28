@@ -103,6 +103,8 @@ model User {
   walletLinkNonce String?
   walletLinkNonceExpiresAt DateTime?
   goldBalance   Int       @default(1000)
+  // Slots do Baú Geral da conta (UserInventory). Começa em 50, expansível como o do personagem.
+  globalInventorySlots Int  @default(50)
 
   // Optional on-chain claim flow (GOLD ERC-20): user accrues off-chain, claims on demand.
   goldClaimNonce Int       @default(0)

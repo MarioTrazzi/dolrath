@@ -28,13 +28,16 @@ interface ItemTooltipProps {
   onEnhance?: (inventoryId: string, itemName: string, stoneCategory?: 'WEAPON' | 'ARMOR') => void;
   /** Inventário global: transfere o item para o personagem selecionado. */
   onTransfer?: (itemId: string) => void;
-  /** Inventário do personagem: envia o item de volta ao inventário global. */
-  onSendToGlobal?: (itemId: string) => void;
+  /** Inventário do personagem: envia o item de volta ao inventário global.
+   *  Recebe a quantidade a enviar (1 = uma unidade; stack inteiro no "Enviar tudo"). */
+  onSendToGlobal?: (itemId: string, quantity?: number) => void;
+  /** Quantidade empilhada do item nesta linha de inventário (consumíveis). */
+  quantity?: number;
   characterId?: string;
   children: React.ReactNode;
 }
 
-export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryId, onEquip, onUnequip, onConsume, onEnhance, onTransfer, onSendToGlobal, characterId, children }: ItemTooltipProps) {
+export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryId, onEquip, onUnequip, onConsume, onEnhance, onTransfer, onSendToGlobal, quantity = 1, characterId, children }: ItemTooltipProps) {
   const router = useRouter();
   const [showTooltip, setShowTooltip] = useState(false);
   const [imgError, setImgError] = useState(false);
@@ -103,6 +106,8 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryI
         return 'NECKLACE';
       case 'RING':
         return 'RING_1'; // Sempre tentar RING_1 primeiro, a API vai decidir o slot final
+      case 'BELT':
+        return 'BELT';
       default:
         return 'WEAPON';
     }
@@ -397,11 +402,21 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryI
 
                   {onSendToGlobal && !isEquipped && (
                     <button
-                      onClick={() => { onSendToGlobal(item.id); setShowTooltip(false); }}
+                      onClick={() => { onSendToGlobal(item.id, 1); setShowTooltip(false); }}
                       className={storeButtonClass}
                       style={buttonStyle('#3b82f6', 'rgba(59,130,246,0.35)')}
                     >
                       🌐 Enviar ao Global
+                    </button>
+                  )}
+
+                  {onSendToGlobal && !isEquipped && quantity > 1 && (
+                    <button
+                      onClick={() => { onSendToGlobal(item.id, quantity); setShowTooltip(false); }}
+                      className={storeButtonClass}
+                      style={buttonStyle('#3b82f6', 'rgba(59,130,246,0.35)')}
+                    >
+                      🌐 Enviar tudo (x{quantity})
                     </button>
                   )}
                 </>

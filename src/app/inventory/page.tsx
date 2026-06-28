@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import toast from 'react-hot-toast';
+import { ethers } from 'ethers';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import EnhancementDialog from '@/components/EnhancementDialog';
@@ -10,9 +11,14 @@ import VaultBackdrop from '@/components/inventory/VaultBackdrop';
 import InventoryPanel from '@/components/inventory/InventoryPanel';
 import BankPanel from '@/components/inventory/BankPanel';
 import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider';
+import { getWalletTxErrorMessage } from '@/lib/walletErrors';
+import { getPolygonFeeOverrides } from '@/lib/gasFees';
 
-// Baú global começa com 50 espaços. (Liberar mais slots no global fica para depois.)
-const GLOBAL_SLOTS = 50;
+// Baú Geral começa com 50 espaços (User.globalInventorySlots), expansível como o do personagem.
+const GLOBAL_SLOTS_DEFAULT = 50;
+// Expansão (espelha o personagem): +5 slots por 1000 GOLD on-chain.
+const EXPAND_SLOTS = 5;
+const EXPAND_COST_GOLD = 1000;
 
 interface Item {
   id: string;
@@ -50,7 +56,7 @@ export default function InventoryPage() {
   const { data: session } = useSession();
   // Personagem ATIVO global: o inventário sempre mostra o herói selecionado na
   // navbar — sem seletor próprio nesta página.
-  const { activeCharacter, activeCharacterId } = useActiveCharacter();
+  const { activeCharacter, activeCharacterId, refresh: refreshActiveCharacter } = useActiveCharacter();
   const selectedCharacter = activeCharacterId ?? '';
   const [userInventory, setUserInventory] = useState<UserInventoryItem[]>([]);
   const [characterInventory, setCharacterInventory] = useState<CharacterInventoryItem[]>([]);
@@ -59,6 +65,11 @@ export default function InventoryPage() {
   const [enhanceTarget, setEnhanceTarget] = useState<{ inventoryId: string; itemName: string; category?: 'WEAPON' | 'ARMOR' } | null>(null);
   // Gold da poupança da conta (User.goldBalance), exibido na barra de moedas do baú global.
   const [bankGold, setBankGold] = useState<number | null>(null);
+  // Slots do Baú Geral (User.globalInventorySlots) — expansível como o do personagem.
+  const [globalSlots, setGlobalSlots] = useState<number>(GLOBAL_SLOTS_DEFAULT);
+  // Flags de "expandindo…" para desabilitar o botão durante o pagamento on-chain.
+  const [expandingChar, setExpandingChar] = useState(false);
+  const [expandingGlobal, setExpandingGlobal] = useState(false);
 
   useEffect(() => {
     fetchUserInventory();
@@ -93,6 +104,7 @@ export default function InventoryPage() {
       if (response.ok) {
         const data = await response.json();
         setBankGold(Number(data?.bankGold ?? 0));
+        setGlobalSlots(Number(data?.globalInventorySlots ?? GLOBAL_SLOTS_DEFAULT));
       }
     } catch (error) {
       console.error('Error fetching bank gold:', error);
@@ -163,7 +175,7 @@ export default function InventoryPage() {
     setLoading(false);
   };
 
-  const handleTransferToGlobal = async (itemId: string) => {
+  const handleTransferToGlobal = async (itemId: string, quantity: number = 1) => {
     if (!selectedCharacter) {
       toast.error('⚠️ Selecione um personagem primeiro', {
         duration: 3000,
@@ -186,14 +198,18 @@ export default function InventoryPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ itemId, quantity: 1 }),
+        body: JSON.stringify({ itemId, quantity }),
       });
 
       if (response.ok) {
         // Refresh both inventories
         fetchUserInventory();
         fetchCharacterInventory(selectedCharacter);
-        toast.success('🌐 Item transferido para o inventário global!', {
+        toast.success(
+          quantity > 1
+            ? `🌐 ${quantity}x transferidos para o inventário global!`
+            : '🌐 Item transferido para o inventário global!',
+          {
           duration: 3000,
         });
       } else {
@@ -209,6 +225,142 @@ export default function InventoryPage() {
       });
     }
     setLoading(false);
+  };
+
+  // 💳 Pagamento on-chain de GOLD para a treasury (mesmo fluxo do expand da ficha).
+  // Retorna o txHash em sucesso, ou null se faltar carteira / rede / saldo / o
+  // usuário cancelar (já exibe o toast apropriado). Não lança.
+  const payGoldOnChain = async (totalCostGold: number): Promise<string | null> => {
+    const eth = (window as any)?.ethereum;
+    if (!eth) {
+      toast.error('MetaMask não encontrada');
+      return null;
+    }
+
+    const cfgRes = await fetch('/api/gold/spend-config', { cache: 'no-store' });
+    const cfgJson = await cfgRes.json();
+    if (!cfgRes.ok) {
+      throw new Error(cfgJson?.error || 'Falha ao carregar config do GOLD');
+    }
+
+    const { contractAddress, chainId, treasuryAddress } = cfgJson as {
+      contractAddress: string;
+      chainId: number;
+      treasuryAddress: string;
+    };
+
+    const provider = new ethers.BrowserProvider(eth);
+    await provider.send('eth_requestAccounts', []);
+
+    const network = await provider.getNetwork();
+    if (Number(network.chainId) !== Number(chainId)) {
+      toast.error(`Troque a rede para chainId ${chainId} na MetaMask`);
+      return null;
+    }
+
+    const signer = await provider.getSigner();
+    const from = await signer.getAddress();
+
+    const erc20Abi = [
+      'function decimals() view returns (uint8)',
+      'function balanceOf(address) view returns (uint256)',
+      'function transfer(address to, uint256 value) returns (bool)',
+    ] as const;
+
+    const gold = new ethers.Contract(contractAddress, erc20Abi, signer);
+    const decimals = Number(await gold.decimals());
+    const costWei = ethers.parseUnits(String(totalCostGold), decimals);
+    const balanceWei = (await gold.balanceOf(from)) as bigint;
+
+    if (balanceWei < costWei) {
+      toast.error(`💰 GOLD insuficiente on-chain! Você precisa de ${totalCostGold} GOLD.`);
+      return null;
+    }
+
+    const payTx = await gold.transfer(treasuryAddress, costWei, await getPolygonFeeOverrides(provider));
+    toast.success('Pagamento enviado! Aguardando confirmação…');
+    const payReceipt = await payTx.wait();
+    if (!payReceipt || payReceipt.status !== 1) {
+      throw new Error('Pagamento falhou');
+    }
+    return payTx.hash as string;
+  };
+
+  // Confirma a expansão no servidor com retry — RPCs podem demorar a propagar o tx.
+  const confirmExpansion = async (url: string, txHash: string): Promise<Response | null> => {
+    let response: Response | null = null;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slots: EXPAND_SLOTS, txHash }),
+      });
+      if (response.ok) break;
+
+      let lastError: any = null;
+      try { lastError = await response.json(); } catch { lastError = null; }
+      const msg = String(lastError?.error || '').toLowerCase();
+      const looksLikePropagation = msg.includes('ainda não encontrada') || msg.includes('not found');
+      if (!looksLikePropagation) break;
+      await new Promise((r) => setTimeout(r, 1200));
+    }
+    return response;
+  };
+
+  const handleExpandCharacterInventory = async () => {
+    if (!selectedCharacter) {
+      toast.error('⚠️ Selecione um personagem primeiro');
+      return;
+    }
+    setExpandingChar(true);
+    try {
+      const txHash = await payGoldOnChain(EXPAND_COST_GOLD);
+      if (!txHash) return;
+
+      const response = await confirmExpansion(
+        `/api/character/${selectedCharacter}/expand-inventory`,
+        txHash
+      );
+      if (response?.ok) {
+        toast.success(`📦 +${EXPAND_SLOTS} slots no personagem! (${EXPAND_COST_GOLD} GOLD)`);
+        refreshActiveCharacter();
+      } else {
+        const error = await response?.json().catch(() => null);
+        toast.error(`❌ ${error?.error || 'Falha ao confirmar expansão'}`);
+      }
+    } catch (error) {
+      console.error('Error expanding character inventory:', error);
+      toast.error(getWalletTxErrorMessage(error, '💥 Erro inesperado ao expandir inventário'));
+    } finally {
+      setExpandingChar(false);
+    }
+  };
+
+  const handleExpandGlobalInventory = async () => {
+    setExpandingGlobal(true);
+    try {
+      const txHash = await payGoldOnChain(EXPAND_COST_GOLD);
+      if (!txHash) return;
+
+      const response = await confirmExpansion('/api/user/expand-global-inventory', txHash);
+      if (response?.ok) {
+        const data = await response.json().catch(() => null);
+        if (typeof data?.globalInventorySlots === 'number') {
+          setGlobalSlots(data.globalInventorySlots);
+        } else {
+          fetchBankGold();
+        }
+        toast.success(`🌐 +${EXPAND_SLOTS} slots no Baú Geral! (${EXPAND_COST_GOLD} GOLD)`);
+      } else {
+        const error = await response?.json().catch(() => null);
+        toast.error(`❌ ${error?.error || 'Falha ao confirmar expansão'}`);
+      }
+    } catch (error) {
+      console.error('Error expanding global inventory:', error);
+      toast.error(getWalletTxErrorMessage(error, '💥 Erro inesperado ao expandir Baú Geral'));
+    } finally {
+      setExpandingGlobal(false);
+    }
   };
 
   const handleEquipItem = async (itemId: string) => {
@@ -258,6 +410,8 @@ export default function InventoryPage() {
           return 'NECKLACE';
         case 'RING':
           return 'RING_1';
+        case 'BELT':
+          return 'BELT';
         default:
           return 'WEAPON';
       }
@@ -430,7 +584,10 @@ export default function InventoryPage() {
             onUnequip={(itemId) => handleUnequipItem(itemId)}
             onConsume={(itemId) => handleConsumeItem(itemId)}
             onEnhance={(invId, name, category) => setEnhanceTarget({ inventoryId: invId, itemName: name, category })}
-            onSendToGlobal={(itemId) => handleTransferToGlobal(itemId)}
+            onSendToGlobal={(itemId, quantity) => handleTransferToGlobal(itemId, quantity)}
+            onExpand={selectedCharacter ? handleExpandCharacterInventory : undefined}
+            expanding={expandingChar}
+            expandTitle={`Expandir +${EXPAND_SLOTS} slots (custo: ${EXPAND_COST_GOLD} GOLD)`}
             goldText={typeof activeCharacter?.gold === 'number' ? activeCharacter.gold.toLocaleString('pt-BR') : '0'}
           />
 
@@ -438,11 +595,14 @@ export default function InventoryPage() {
           <InventoryPanel
             title="Baú Geral"
             items={userInventory as any}
-            totalSlots={GLOBAL_SLOTS}
+            totalSlots={globalSlots}
             accent="#3b82f6"
             characterId={selectedCharacter}
             slotLabel="Slots do Baú"
             onTransfer={(itemId) => handleTransferToCharacter(itemId)}
+            onExpand={handleExpandGlobalInventory}
+            expanding={expandingGlobal}
+            expandTitle={`Expandir +${EXPAND_SLOTS} slots (custo: ${EXPAND_COST_GOLD} GOLD)`}
             goldText={bankGold != null ? bankGold.toLocaleString('pt-BR') : '0'}
           />
         </div>

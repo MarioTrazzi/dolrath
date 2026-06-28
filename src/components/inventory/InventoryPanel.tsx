@@ -21,7 +21,7 @@ interface InventoryPanelProps {
   onUnequip?: (itemId: string) => void;
   onConsume?: (itemId: string) => void;
   onEnhance?: (inventoryId: string, itemName: string, stoneCategory?: 'WEAPON' | 'ARMOR') => void;
-  onSendToGlobal?: (itemId: string) => void;
+  onSendToGlobal?: (itemId: string, quantity?: number) => void;
   onTransfer?: (itemId: string) => void;
   /** Rótulo do rodapé de slots (ex.: "Slots do Inventário"). */
   slotLabel?: string;

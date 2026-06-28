@@ -24,7 +24,7 @@ interface DraggableItemProps {
   onConsume?: (itemId: string) => void;
   onEnhance?: (inventoryId: string, itemName: string, stoneCategory?: 'WEAPON' | 'ARMOR') => void;
   onTransfer?: (itemId: string) => void;
-  onSendToGlobal?: (itemId: string) => void;
+  onSendToGlobal?: (itemId: string, quantity?: number) => void;
   characterId?: string;
   /** Modo compacto estilo Black Desert: slot pequeno, fundo escuro */
   compact?: boolean;
@@ -54,6 +54,7 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, quantity
         item={item}
         isEquipped={isEquipped}
         enhancementLevel={enhancementLevel}
+        quantity={quantity}
         inventoryId={inventoryId}
         onEquip={onEquip}
         onUnequip={onUnequip}
@@ -130,6 +131,7 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, quantity
       onEnhance={onEnhance}
       onTransfer={onTransfer}
       onSendToGlobal={onSendToGlobal}
+      quantity={quantity}
       characterId={characterId}
     >
       <div

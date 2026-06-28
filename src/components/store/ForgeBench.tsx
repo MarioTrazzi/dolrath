@@ -6,25 +6,11 @@ import { Info } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { forgeRecipesByGroup, forgeMaterialEmoji, getForgeOutputCatalogItem, findForgeRecipeByMaterials, type ForgeRecipe } from '@/lib/forge';
 import { getItemVisual } from '@/lib/itemVisuals';
-import { itemImagePath, isMaterialItem, type Rarity } from '@/lib/itemCatalog';
+import { isMaterialItem, type Rarity } from '@/lib/itemCatalog';
+// Miniatura com card de detalhe ao passar o mouse (ver TODO ícone grande).
+import { CraftItemThumb as ItemThumb } from './CraftItemThumb';
 
 const DRAG_MIME = 'text/forge-material';
-
-// Miniatura do item: usa a arte /items/<slug>.webp e cai no emoji se a imagem falhar.
-function ItemThumb({ name, emoji, className = 'text-2xl' }: { name: string; emoji: string; className?: string }) {
-  const [failed, setFailed] = useState(false);
-  if (failed) return <span className={className}>{emoji}</span>;
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={itemImagePath(name)}
-      alt={name}
-      onError={() => setFailed(true)}
-      className="w-full h-full object-cover"
-      referrerPolicy="no-referrer"
-    />
-  );
-}
 
 const RARITY_UI: Record<Rarity, { text: string; ring: string; glow: string }> = {
   COMMON: { text: 'text-zinc-300', ring: '#a1a1aa', glow: 'rgba(161,161,170,0.6)' },

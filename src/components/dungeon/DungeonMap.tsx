@@ -440,7 +440,8 @@ export function DiceOverlay({
             transition={{ type: 'spring', stiffness: 200, damping: 14 }}
             className="flex flex-col items-center gap-3"
           >
-            <AnimatedDie sides={20} size={130} mode={rolling ? 'rolling' : 'idle'} result={result} />
+            {/* Giro mais curto (≈metade) que o combate — o resultado da exploração crava rápido. */}
+            <AnimatedDie sides={20} size={130} mode={rolling ? 'rolling' : 'idle'} result={result} minSpinMs={500} />
             <span className="text-xs uppercase tracking-[0.25em] text-textsec font-bold">
               Rolando o destino...
             </span>

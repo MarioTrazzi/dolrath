@@ -83,11 +83,13 @@ interface AnimatedDieProps {
   result?: DieResult | null
   onClick?: () => void
   disabled?: boolean
+  /** Giro mínimo (ms) antes do dado cravar o resultado. Default = combate (1100). */
+  minSpinMs?: number
 }
 
 const MIN_SPIN_MS = 1100
 
-export function AnimatedDie({ sides, size = 80, mode, result, onClick, disabled }: AnimatedDieProps) {
+export function AnimatedDie({ sides, size = 80, mode, result, onClick, disabled, minSpinMs = MIN_SPIN_MS }: AnimatedDieProps) {
   const theme = DICE_THEME[sides] || DICE_THEME[6]
   const [displayNum, setDisplayNum] = useState<number | string>(`d${sides}`)
   const [revealed, setRevealed] = useState(false)
@@ -113,7 +115,7 @@ export function AnimatedDie({ sides, size = 80, mode, result, onClick, disabled 
     // Revelar quando o resultado chegou E o giro mínimo passou
     const tryReveal = setInterval(() => {
       const elapsed = Date.now() - (spinStart.current || 0)
-      if (result && elapsed >= MIN_SPIN_MS) {
+      if (result && elapsed >= minSpinMs) {
         clearInterval(shuffle)
         clearInterval(tryReveal)
         setDisplayNum(result.roll)
@@ -126,7 +128,7 @@ export function AnimatedDie({ sides, size = 80, mode, result, onClick, disabled 
       clearInterval(tryReveal)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, result, revealed, sides])
+  }, [mode, result, revealed, sides, minSpinMs])
 
   const isMax = revealed && result?.roll === sides
   const numberSize = revealed || mode === 'rolling' ? size * 0.34 : size * 0.26

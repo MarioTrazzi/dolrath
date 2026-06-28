@@ -15,19 +15,28 @@ import {
   scaleMonster,
   pickMonster,
   rollNodeLoot,
+  luckTier,
   type DungeonId,
   type DungeonDef,
   type ScaledMonster,
   type NodeLoot,
   type LootNodeKind,
+  type LuckTier,
 } from './dungeonAdventures'
 import { normalizeCombatClass, type CombatClass } from './combatModel'
 import { getCatalogItemByName, getConsumableByName, getIngredientByName, getForgeMaterialByName, itemImagePath } from './itemCatalog'
 
 // Custo de stamina por TIPO de nó (espelha DungeonRun.tsx: MINOR/MAIN/BOSS_STEP_COST).
 export const STEP_COST = { minor: 4, main: 8, boss: 6 } as const
-// Chance de encontrar monstro num nó MENOR (sala principal é sempre monstro).
-const MINOR_MONSTER_CHANCE = 0.4
+// Chance de encontrar monstro num nó MENOR, INVERSAMENTE proporcional ao d20: rolagem
+// baixa = perigo (quase sempre monstro), rolagem alta = sorte (raramente monstro, mas se
+// a luta acontece o espólio é excelente — a qualidade do loot usa o MESMO roll, então
+// tier 'high' = drops 'high'). Salas principais são sempre monstro (guardiãs).
+const MINOR_MONSTER_CHANCE_BY_TIER: Record<LuckTier, number> = {
+  low: 0.9,  // d20 1–5  → quase certo
+  mid: 0.5,  // d20 6–13 → meio a meio
+  high: 0.1, // d20 14–20 → raro, mas a recompensa é ótima
+}
 
 export type NodeKind = 'start' | 'minor' | 'main' | 'boss'
 export interface TrailNode { kind: NodeKind; tier: number }
@@ -78,7 +87,7 @@ export function resolveExploreNode(
   const isMain = node.kind === 'main'
   const scaling = { tier: node.tier, isMain, isBoss: false }
 
-  const monsterEncounter = isMain || Math.random() < MINOR_MONSTER_CHANCE
+  const monsterEncounter = isMain || Math.random() < MINOR_MONSTER_CHANCE_BY_TIER[luckTier(roll)]
   if (monsterEncounter) {
     const monster = scaleMonster(pickMonster(dungeon), dungeon, character.level, scaling, klass)
     return { type: 'monster', roll, pending: { nodeIdx, kind: isMain ? 'main' : 'minor', lootRoll: roll, monster } }

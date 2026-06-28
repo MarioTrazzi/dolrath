@@ -30,6 +30,7 @@ import {
   type TransformationType,
 } from '@/lib/transformationSystem'
 import { applyEnhancementToStats } from '@/lib/enhancementSystem'
+import { itemImagePath } from '@/lib/itemCatalog'
 import {
   computeLevers,
   transformLevers,
@@ -163,7 +164,7 @@ const MONSTER_ID = 'dungeon-monster'
 interface ResolvedEvent {
   def: DungeonEventDef
   text: string
-  effects: string[]
+  effects: EffectChip[]
   monster?: ScaledMonster
 }
 
@@ -221,6 +222,65 @@ interface DungeonConsumable {
   mp: number
   qty: number
   icon: string
+}
+
+// Item coletado durante a run (guarda o nome para a arte real /items/<slug>.webp).
+interface RunItem {
+  name: string
+  emoji: string
+  label: string
+}
+
+// Chip de efeito exibido nos cards de evento/espólio: ou um número de stat (ouro/XP),
+// ou um item — que renderiza o ÍCONE de jogo real (não o emoji-placeholder).
+type EffectChip =
+  | { kind: 'stat'; text: string }
+  | { kind: 'item'; name: string; emoji: string; label: string }
+
+// Miniatura do item: usa a arte /items/<slug>.webp e cai no emoji se a imagem falhar
+// (mesmo padrão da forja/alquimia). Substitui os emojis-placeholder (📦/🧪/⚒️/...) dos drops.
+function ItemThumb({ name, emoji, className = 'text-base' }: { name: string; emoji: string; className?: string }) {
+  const [failed, setFailed] = useState(false)
+  if (failed) return <span className={className}>{emoji}</span>
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={itemImagePath(name)}
+      alt={name}
+      onError={() => setFailed(true)}
+      className="w-full h-full object-contain"
+      referrerPolicy="no-referrer"
+    />
+  )
+}
+
+// Lista de chips de efeito (ouro/XP como texto; itens com ícone real de jogo).
+function EffectChipList({ effects }: { effects: EffectChip[] }) {
+  if (effects.length === 0) return null
+  return (
+    <div className="flex flex-wrap justify-center gap-2 mb-5">
+      {effects.map((fx, i) => (
+        <motion.span
+          key={i}
+          initial={{ opacity: 0, y: 10, scale: 0.8 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ delay: 0.2 + i * 0.12, type: 'spring', stiffness: 300, damping: 18 }}
+          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-sm font-bold font-combat bg-white/10 border-white/20 text-white"
+        >
+          {fx.kind === 'item' ? (
+            <>
+              <span className="w-5 h-5 inline-flex items-center justify-center shrink-0">
+                <ItemThumb name={fx.name} emoji={fx.emoji} />
+              </span>
+              {fx.label}
+            </>
+          ) : (
+            fx.text
+          )}
+        </motion.span>
+      ))}
+    </div>
+  )
 }
 
 function rollDie(sides: number): number {
@@ -335,7 +395,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   // ---------- Estado geral da run ----------
   const [phase, setPhase] = useState<RunPhase>('explore')
   const [log, setLog] = useState<string[]>([dungeon.enterText])
-  const [totals, setTotals] = useState({ gold: 0, xp: 0, kills: 0, items: [] as string[] })
+  const [totals, setTotals] = useState({ gold: 0, xp: 0, kills: 0, items: [] as RunItem[] })
   const totalsRef = useRef(totals)
   totalsRef.current = totals
   const [levelUpMsg, setLevelUpMsg] = useState<string | null>(null)
@@ -400,6 +460,12 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const [auto, setAuto] = useState(false)
   // O piloto pode usar poções de HP/MP automaticamente (switch; ligado por padrão).
   const [autoConsumables, setAutoConsumables] = useState(true)
+  // MODO POUPAR STAMINA: o piloto luta SÓ no ataque básico + esquiva (nunca Defender, a
+  // única ação de combate que custa stamina) — para guardar o orçamento diário p/ runs
+  // manuais ou PvP. Desligado por padrão.
+  const [staminaSaver, setStaminaSaver] = useState(false)
+  // Diálogo de confirmação ao sair: PAUSA a run (o piloto não age enquanto aberto).
+  const [exitConfirm, setExitConfirm] = useState(false)
   const [lootCard, setLootCard] = useState<ResolvedEvent | null>(null)
   const battleEventCounter = useRef(0)
   // d20 de sorte do nó atual (define a qualidade do loot pós-combate)
@@ -507,7 +573,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     }
     for (const d of loot.drops) {
       const label = d.enhancement ? `${d.name} +${d.enhancement}` : d.name
-      setTotals(prev => ({ ...prev, items: [...prev.items, label] }))
+      setTotals(prev => ({ ...prev, items: [...prev.items, { name: d.name, emoji: d.emoji, label }] }))
       pushLog(`${d.emoji} ${label}`)
     }
   }, [pushFloat, pushLog])
@@ -662,7 +728,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       return {
         def: ev,
         text: sc.isMain ? `Guardião da sala: ${ev.description}` : ev.description,
-        effects: [`${scaled.emoji} ${scaled.name} • Nv.${scaled.level}`],
+        effects: [{ kind: 'stat', text: `${scaled.emoji} ${scaled.name} • Nv.${scaled.level}` }],
         monster: scaled,
       }
     }
@@ -687,9 +753,9 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     const revealKind: DungeonEventKind = hasGear ? 'item' : anyDrop ? 'gold' : 'nothing'
     setNodeEvents(prev => ({ ...prev, [atIdx]: { kind: revealKind, emoji: icon } }))
 
-    const effects: string[] = []
-    if (loot.gold > 0) effects.push(`+${loot.gold} 💰`)
-    for (const d of loot.drops) effects.push(`${d.emoji} ${d.name}`)
+    const effects: EffectChip[] = []
+    if (loot.gold > 0) effects.push({ kind: 'stat', text: `+${loot.gold} 💰` })
+    for (const d of loot.drops) effects.push({ kind: 'item', name: d.name, emoji: d.emoji, label: d.name })
 
     const def: DungeonEventDef = { kind: revealKind, min: 0, max: 0, icon, title, description: text }
     return { def, text, effects }
@@ -738,10 +804,11 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       return
     }
 
-    // Nó de evento: anima o d20 que o SERVIDOR rolou e revela.
+    // Nó de evento: anima o d20 que o SERVIDOR rolou e revela. Tempos ≈ METADE do
+    // anterior (resultado em 350ms, encerra em 1100ms) — o d20 crava bem mais rápido.
     setExploreResult(null)
     const result: DiceResult = { sides: 20, roll: data.roll ?? 12, modifier: 0, total: data.roll ?? 12 }
-    later(() => setExploreResult(result), 700)
+    later(() => setExploreResult(result), 350)
     later(() => {
       setExploreRolling(false)
       setExploreResult(null)
@@ -750,7 +817,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       const resolved = applyServerEvent(data, dest)
       later(() => setMoving(false), 850)
       later(() => setEventCard(resolved), 650)
-    }, 2200)
+    }, 1100)
   }
 
   // Fecha o card de evento e o Mestre narra a transição.
@@ -1141,10 +1208,15 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
         const totalGold = killGold + loot.gold
         const hasGear = loot.drops.some(d => d.kind === 'item' || d.kind === 'stone')
 
-        const effects: string[] = []
-        if (xp > 0) effects.push(`+${xp} ⭐ XP`)
-        if (totalGold > 0) effects.push(`+${totalGold} 💰`)
-        for (const d of loot.drops) effects.push(`${d.emoji} ${d.enhancement ? `${d.name} +${d.enhancement}` : d.name}`)
+        const effects: EffectChip[] = []
+        if (xp > 0) effects.push({ kind: 'stat', text: `+${xp} ⭐ XP` })
+        if (totalGold > 0) effects.push({ kind: 'stat', text: `+${totalGold} 💰` })
+        for (const d of loot.drops) effects.push({
+          kind: 'item',
+          name: d.name,
+          emoji: d.emoji,
+          label: d.enhancement ? `${d.name} +${d.enhancement}` : d.name,
+        })
 
         const def: DungeonEventDef = {
           kind: hasGear ? 'item' : 'gold',
@@ -1257,7 +1329,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   // faria. Cada etapa muda o stage (ou hasRolled), então o efeito reage à próxima sem
   // disparo duplo. Pequenos atrasos mantêm as animações visíveis.
   useEffect(() => {
-    if (!auto || phase !== 'combat' || combatEnded) return
+    if (!auto || phase !== 'combat' || combatEnded || exitConfirm) return
     let cancelled = false
     const fire = (fn: () => void, ms: number) => {
       const t = setTimeout(() => { if (!cancelled) fn() }, ms)
@@ -1275,11 +1347,14 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
           if (potion) { useConsumable(potion); return }
         }
         // 2) Repõe MP quando nem o golpe da arma cabe — habilita ataques mais fortes.
-        if (mp < ATTACKS.weapon.mp && mp < character.maxMp) {
+        // (POUPAR STAMINA luta só no básico, sem MP — não reabastece MP nesse modo.)
+        if (!staminaSaver && mp < ATTACKS.weapon.mp && mp < character.maxMp) {
           const mPotion = consumables.find(c => c.mp > 0 && c.qty > 0)
           if (mPotion) { useConsumable(mPotion); return }
         }
       }
+      // POUPAR STAMINA: só ataque básico (sem transformação/Especial). Senão:
+      if (staminaSaver) { choosePlayerAttack('basic'); return }
       // 3) Transforma para liberar o Especial (raça com forma, fora de recarga e com MP).
       if (!transform && transformCd === 0 && transformForms.length > 0) {
         const cfg = TRANSFORMATION_CONFIG[transformForms[0]]
@@ -1292,6 +1367,8 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     if (stage === 'playerRoll' && !hasRolled) return fire(handlePlayerAttackRoll, 550)
 
     if (stage === 'playerDefense') return fire(() => {
+      // POUPAR STAMINA: sempre Esquivar (grátis) — nunca Defender (custa 1⚡).
+      if (staminaSaver) { choosePlayerDefense('dodge'); return }
       // Defender (mitiga sempre, custa 1⚡) só quando MUITO ferido (HP < 40%) E ainda há
       // stamina sobrando (≥ 40% do máximo). Abaixo disso, sempre Esquivar (grátis) para
       // preservar a stamina da run. Senão, Esquivar.
@@ -1302,12 +1379,12 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
 
     if (stage === 'defenseRoll' && !hasRolled) return fire(handleDefenseRoll, 550)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auto, autoConsumables, phase, stage, hasRolled, combatEnded, mp, stamina, transform, transformCd, consumables, effMaxHp])
+  }, [auto, autoConsumables, staminaSaver, exitConfirm, phase, stage, hasRolled, combatEnded, mp, stamina, transform, transformCd, consumables, effMaxHp])
 
   // Piloto de EXPLORAÇÃO: anda na trilha, confirma loot/eventos e entra nos combates.
   // Para com segurança quando falta stamina (evita laço de avanços negados).
   useEffect(() => {
-    if (!auto || phase !== 'explore') return
+    if (!auto || phase !== 'explore' || exitConfirm) return
     if (moving || exploreRolling) return
     let cancelled = false
     const fire = (fn: () => void, ms: number) => {
@@ -1355,7 +1432,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     }
     return fire(advance, 800)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auto, autoConsumables, phase, moving, exploreRolling, lootCard, eventCard, atBoss, tokenIdx, runReady, stamina, hp, mp, consumables])
+  }, [auto, autoConsumables, exitConfirm, phase, moving, exploreRolling, lootCard, eventCard, atBoss, tokenIdx, runReady, stamina, hp, mp, consumables])
 
   // ============================================================
   // RENDER
@@ -1431,7 +1508,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
             </div>
             {(phase === 'explore' || phase === 'combat') && (
               <button
-                onClick={() => finishRun(false)}
+                onClick={() => setExitConfirm(true)}
                 className="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-bold transition-colors"
                 title={phase === 'combat' ? 'Abandonar a batalha e sair (mantém recompensas)' : 'Sair da masmorra (mantém recompensas)'}
               >
@@ -1534,6 +1611,93 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
           </div>
         )}
 
+        {/* ---------- Confirmação de saída (PAUSA a run + log de espólio) ---------- */}
+        <AnimatePresence>
+          {exitConfirm && (
+            <motion.div
+              key="exit-confirm"
+              className="absolute inset-0 z-[60] grid place-items-center px-5"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              {/* backdrop opaco: esconde a batalha/trilha enquanto o jogador decide */}
+              <div className="absolute inset-0 bg-black/85 backdrop-blur-md" />
+              <motion.div
+                initial={{ scale: 0.85, y: 24, opacity: 0 }}
+                animate={{ scale: 1, y: 0, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 260, damping: 20 }}
+                className="relative w-full max-w-sm rounded-2xl p-5 sm:p-6 text-center"
+                style={{
+                  background: 'linear-gradient(180deg, rgba(30,30,63,0.96), rgba(15,15,35,0.98))',
+                  border: `1px solid ${dungeon.accentSoft}`,
+                  boxShadow: `0 24px 60px -12px ${dungeon.accentSoft}`,
+                }}
+              >
+                <div className="text-4xl mb-2">🚪</div>
+                <h3 className="text-xl font-black text-white mb-1">
+                  {phase === 'combat' ? 'Fugir da batalha?' : 'Sair da masmorra?'}
+                </h3>
+                <p className="text-xs text-textsec leading-snug mb-4">
+                  A run será encerrada. Tudo que você já ganhou está salvo — a stamina reseta amanhã.
+                </p>
+
+                {/* Log do espólio da run até agora (ouro/XP + itens com ícone real) */}
+                <div className="rounded-xl border border-white/10 bg-black/40 p-3 mb-4 text-left">
+                  <div className="flex items-center justify-between text-[11px] font-bold mb-2">
+                    <span className="text-amber-300">💰 {totals.gold}</span>
+                    <span className="text-purple-300">⭐ {totals.xp} XP</span>
+                    <span className="text-red-300">⚔️ {totals.kills}</span>
+                  </div>
+                  <div className="text-[10px] uppercase tracking-wider text-textsec/70 font-bold mb-1.5">
+                    Espólio coletado {totals.items.length > 0 ? `(${totals.items.length})` : ''}
+                  </div>
+                  {totals.items.length === 0 ? (
+                    <p className="text-textsec/70 text-xs py-2 text-center">Nenhum item coletado ainda.</p>
+                  ) : (
+                    <div className="max-h-40 overflow-y-auto space-y-1 pr-1">
+                      {(() => {
+                        const agg = new Map<string, { name: string; emoji: string; label: string; qty: number }>()
+                        for (const it of totals.items) {
+                          const cur = agg.get(it.label)
+                          if (cur) cur.qty += 1
+                          else agg.set(it.label, { ...it, qty: 1 })
+                        }
+                        return Array.from(agg.values()).map((it, i) => (
+                          <div key={`${it.label}-${i}`} className="flex items-center gap-2 rounded-lg bg-white/5 px-2 py-1.5">
+                            <span className="w-6 h-6 inline-flex items-center justify-center shrink-0">
+                              <ItemThumb name={it.name} emoji={it.emoji} className="text-lg" />
+                            </span>
+                            <span className="text-white text-xs font-bold truncate flex-1">{it.label}</span>
+                            {it.qty > 1 && <span className="text-textsec text-[11px] font-mono shrink-0">×{it.qty}</span>}
+                          </div>
+                        ))
+                      })()}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setExitConfirm(false)}
+                    className="flex-1 py-3 rounded-lg font-bold text-white text-sm bg-white/10 hover:bg-white/20 border border-white/20 transition-colors active:scale-[0.98]"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => { setExitConfirm(false); finishRun(false) }}
+                    className="flex-1 py-3 rounded-lg font-black text-white text-sm transition-transform active:scale-[0.98] hover:scale-[1.02]"
+                    style={{ background: 'linear-gradient(90deg, #e94560, #b91c1c)', boxShadow: '0 0 20px rgba(233,69,96,0.4)' }}
+                  >
+                    🚪 {phase === 'combat' ? 'Fugir' : 'Sair'}
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* ============================================================ */}
         {/* FASE: EXPLORAÇÃO */}
         {/* ============================================================ */}
@@ -1622,21 +1786,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                       <h3 className="text-2xl font-black mb-1.5" style={{ color: dungeon.accent }}>{lootCard.def.title}</h3>
                       {lootCard.text && <p className="text-sm text-textsec leading-snug mb-4">{lootCard.text}</p>}
 
-                      {lootCard.effects.length > 0 && (
-                        <div className="flex flex-wrap justify-center gap-2 mb-5">
-                          {lootCard.effects.map((fx, i) => (
-                            <motion.span
-                              key={fx}
-                              initial={{ opacity: 0, y: 10, scale: 0.8 }}
-                              animate={{ opacity: 1, y: 0, scale: 1 }}
-                              transition={{ delay: 0.2 + i * 0.12, type: 'spring', stiffness: 300, damping: 18 }}
-                              className="inline-flex items-center gap-1 px-3 py-1 rounded-full border text-sm font-bold font-combat bg-white/10 border-white/20 text-white"
-                            >
-                              {fx}
-                            </motion.span>
-                          ))}
-                        </div>
-                      )}
+                      <EffectChipList effects={lootCard.effects} />
 
                       <button
                         onClick={() => setLootCard(null)}
@@ -1696,21 +1846,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                       <h3 className="text-2xl font-black mb-1.5" style={{ color: dungeon.accent }}>{eventCard.def.title}</h3>
                       {eventCard.text && <p className="text-sm text-textsec leading-snug mb-4">{eventCard.text}</p>}
 
-                      {eventCard.effects.length > 0 && (
-                        <div className="flex flex-wrap justify-center gap-2 mb-5">
-                          {eventCard.effects.map((fx, i) => (
-                            <motion.span
-                              key={fx}
-                              initial={{ opacity: 0, y: 10, scale: 0.8 }}
-                              animate={{ opacity: 1, y: 0, scale: 1 }}
-                              transition={{ delay: 0.2 + i * 0.12, type: 'spring', stiffness: 300, damping: 18 }}
-                              className="inline-flex items-center gap-1 px-3 py-1 rounded-full border text-sm font-bold font-combat bg-white/10 border-white/20 text-white"
-                            >
-                              {fx}
-                            </motion.span>
-                          ))}
-                        </div>
-                      )}
+                      <EffectChipList effects={eventCard.effects} />
 
                       {eventCard.monster ? (
                         <div className="flex gap-2">
@@ -1832,10 +1968,26 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                     </span>
                   </button>
                 )}
+                {auto && (
+                  <button
+                    onClick={() => setStaminaSaver(v => !v)}
+                    title={staminaSaver ? 'Poupar stamina LIGADO: o piloto luta só com ataque básico + esquiva (não gasta stamina defendendo)' : 'Poupar stamina: o piloto luta só no básico + esquiva, guardando stamina para runs manuais ou PvP'}
+                    className={`shrink-0 h-9 px-3 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 border transition-colors ${
+                      staminaSaver
+                        ? 'bg-amber-600/85 border-amber-300/60 text-white'
+                        : 'bg-white/5 border-white/15 text-white/50 hover:text-white'
+                    }`}
+                  >
+                    ⚡ Poupar
+                    <span className={`inline-flex w-7 h-4 rounded-full items-center px-0.5 transition-colors ${staminaSaver ? 'bg-white/90 justify-end' : 'bg-white/20 justify-start'}`}>
+                      <span className={`w-3 h-3 rounded-full ${staminaSaver ? 'bg-amber-600' : 'bg-white/70'}`} />
+                    </span>
+                  </button>
+                )}
               </div>
               <div className="mx-auto max-w-md flex items-center gap-2.5">
                 <button
-                  onClick={() => finishRun(false)}
+                  onClick={() => setExitConfirm(true)}
                   disabled={exploreRolling || moving}
                   title="Sair da masmorra (mantém recompensas)"
                   className="shrink-0 w-12 h-[52px] grid place-items-center rounded-xl border border-white/10 bg-black/50 backdrop-blur-xl text-textsec hover:text-white hover:border-white/25 transition-colors active:scale-95 disabled:opacity-40"
@@ -1930,6 +2082,19 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                       }`}
                     >
                       🧪 {autoConsumables ? 'ON' : 'OFF'}
+                    </button>
+                  )}
+                  {auto && (
+                    <button
+                      onClick={() => setStaminaSaver(v => !v)}
+                      title={staminaSaver ? 'Poupar stamina LIGADO: só ataque básico + esquiva (não defende)' : 'Poupar stamina: luta só no básico + esquiva, sem gastar stamina defendendo'}
+                      className={`px-2 py-1 rounded-full text-[10px] font-black border transition-colors ${
+                        staminaSaver
+                          ? 'bg-amber-600/85 border-amber-300/60 text-white'
+                          : 'bg-white/5 border-white/15 text-white/50 hover:text-white'
+                      }`}
+                    >
+                      ⚡ {staminaSaver ? 'ON' : 'OFF'}
                     </button>
                   )}
                   <button
@@ -2120,8 +2285,11 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
               {totals.items.length > 0 && (
                 <div className="flex flex-wrap justify-center gap-1.5 mb-4">
                   {totals.items.map((item, i) => (
-                    <span key={`${item}-${i}`} className="px-2.5 py-1 rounded-full bg-white/10 border border-white/20 text-white text-[10px] font-bold">
-                      📦 {item}
+                    <span key={`${item.label}-${i}`} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/10 border border-white/20 text-white text-[10px] font-bold">
+                      <span className="w-4 h-4 inline-flex items-center justify-center shrink-0">
+                        <ItemThumb name={item.name} emoji={item.emoji} className="text-xs" />
+                      </span>
+                      {item.label}
                     </span>
                   ))}
                 </div>

@@ -1523,10 +1523,12 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
             <div className="text-right text-[10px] text-white/80 leading-tight">
               {/* Ouro: só o farmado NESTA run (deixa claro quanto rendeu a masmorra). */}
               <div title="Ouro farmado nesta masmorra">💰 {totals.gold}</div>
-              {/* XP: a do personagem JÁ somada à ganha na run (poupa espaço no mapa). */}
-              <div title={`XP do personagem${totals.xp > 0 ? ` (+${totals.xp} nesta run)` : ''}`}>
+              {/* XP: a do personagem (já somada à da run) sobre a do próximo nível —
+                  mostra quanto falta p/ subir. Ex.: 1452/3000 XP. */}
+              <div title={`Progresso de XP para o próximo nível${totals.xp > 0 ? ` (+${totals.xp} nesta run)` : ''}`}>
                 ⭐ {(character.experience ?? 0) + totals.xp}
-                {totals.xp > 0 && <span className="text-purple-300"> +{totals.xp}</span>} XP
+                {character.nextLevelExperience ? `/${character.nextLevelExperience}` : ''} XP
+                {totals.xp > 0 && <span className="text-purple-300"> +{totals.xp}</span>}
               </div>
             </div>
             {(phase === 'explore' || phase === 'combat') && (

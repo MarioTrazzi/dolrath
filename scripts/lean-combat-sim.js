@@ -87,13 +87,14 @@ const T = {
   evade: process.env.TILT_EVADE !== undefined ? Number(process.env.TILT_EVADE) : CM.ATTR_TILT.evade,
   evadeCap: CM.ATTR_TILT.evadeCap,
 }
-function tiltLevers(base, attrs) {
+function tiltLevers(base, attrs, cls) {
   if (!attrs) return base
   const str = Math.max(0, attrs.str || 0), agi = Math.max(0, attrs.agi || 0)
   const int = Math.max(0, attrs.int || 0), def = Math.max(0, attrs.def || 0)
+  const w = (cls && CM.ATTR_POWER_WEIGHT[cls]) || { str: 1, int: 1, agi: 1 }
   return {
     ...base,
-    power: base.power + (str + int) * T.power + agi * T.powerAgi,
+    power: base.power + (str * w.str + int * w.int) * T.power + agi * w.agi * T.powerAgi,
     armor: base.armor + def * T.armor,
     hp: base.hp + def * T.hp,
     evade: Math.min(T.evadeCap, base.evade + agi * T.evade),
@@ -142,7 +143,7 @@ function winRate(LP, LQ, n = FIGHTS) {
 
 function classLevers(klass, { transformed = false, withTilt = true } = {}) {
   const attrs = withTilt ? classAttrs(klass, LEVEL) : null
-  let lv = tiltLevers(CM.computeLevers(klass, LEVEL, GEAR), attrs)
+  let lv = tiltLevers(CM.computeLevers(klass, LEVEL, GEAR), attrs, klass)
   if (transformed) lv = CM.transformLevers(lv)
   return lv
 }

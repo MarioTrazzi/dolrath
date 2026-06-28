@@ -98,13 +98,15 @@ function effAgi(agi) {
 //      (base fraca) → forma mais forte;
 //  (5) metamorfo = 3 formas especializadas (sua identidade), ~iguais no total.
 // ============================================================
+// v12 "B modesto": PISO 1.20 nos centrais (str/agi/int/hp/attack) p/ todo stat subir
+// visível; assinatura mais alta; DEF segue baixa (não inflar RES→mago vive).
 const TF_CONFIG = {
-  dragon:    { strength: 1.15, agility: 1.22, intelligence: 1.25, defense: 1.03, hp: 1.19, mpPool: 1.26, duration: 4, cooldown: 3, mp: 15 }, // draconiano
-  seventh_sense: { strength: 1.17, agility: 1.23, intelligence: 1.27, defense: 1.02, hp: 1.21, mpPool: 1.28, duration: 4, cooldown: 3, mp: 12 }, // humano: 7º Sentido (universal)
-  celestial: { strength: 1.16, agility: 1.24, intelligence: 1.34, defense: 1.02, hp: 1.22, mpPool: 1.40, duration: 4, cooldown: 3, mp: 12 }, // elfo: Forma Celestial (base fraca → forma forte arcana)
-  wolf:      { strength: 1.15, agility: 1.32, intelligence: 1.22, defense: 1.03, hp: 1.17, mpPool: 1.22, duration: 4, cooldown: 3, mp: 10 }, // metamorfo: striker
-  bear:      { strength: 1.20, agility: 1.14, intelligence: 1.20, defense: 1.07, hp: 1.28, mpPool: 1.22, duration: 4, cooldown: 3, mp: 10 }, // metamorfo: tank
-  eagle:     { strength: 1.12, agility: 1.28, intelligence: 1.33, defense: 1.00, hp: 1.16, mpPool: 1.32, duration: 4, cooldown: 3, mp: 10 }, // metamorfo: caster
+  dragon:    { strength: 1.20, agility: 1.22, intelligence: 1.25, defense: 1.03, hp: 1.20, mpPool: 1.26, duration: 4, cooldown: 3, mp: 15 }, // draconiano
+  seventh_sense: { strength: 1.20, agility: 1.23, intelligence: 1.27, defense: 1.02, hp: 1.21, mpPool: 1.28, duration: 4, cooldown: 3, mp: 12 }, // humano: 7º Sentido (universal)
+  celestial: { strength: 1.20, agility: 1.24, intelligence: 1.34, defense: 1.02, hp: 1.22, mpPool: 1.40, duration: 4, cooldown: 3, mp: 12 }, // elfo: Forma Celestial (base fraca → forma forte arcana)
+  wolf:      { strength: 1.20, agility: 1.32, intelligence: 1.22, defense: 1.03, hp: 1.20, mpPool: 1.22, duration: 4, cooldown: 3, mp: 10 }, // metamorfo: striker
+  bear:      { strength: 1.22, agility: 1.20, intelligence: 1.20, defense: 1.07, hp: 1.28, mpPool: 1.22, duration: 4, cooldown: 3, mp: 10 }, // metamorfo: tank
+  eagle:     { strength: 1.20, agility: 1.28, intelligence: 1.33, defense: 1.00, hp: 1.20, mpPool: 1.32, duration: 4, cooldown: 3, mp: 10 }, // metamorfo: caster
 }
 const TRANSFORM = Boolean(process.env.TRANSFORM)
 const FORM = process.env.FORM || 'auto'
@@ -184,9 +186,10 @@ function buildCharacter(race, klass, level) {
   const bonus = (k) => Math.floor((rb[k] || 0) / 10) + Math.floor((cb[k] || 0) / 10)
 
   const FLAT = Number(process.env.FLATBASE) || 0 // piso inato em TODOS os stats
-  let str = d.str + bonus('strength') + FLAT
-  let agi = d.agi + bonus('dexterity') + FLAT
-  let int = d.int + bonus('intelligence') + FLAT
+  // Piso de 8 em str/agi/int (espelha characterStats.ts + rotas): sem atributo ZERO.
+  let str = Math.max(8, d.str + bonus('strength') + FLAT)
+  let agi = Math.max(8, d.agi + bonus('dexterity') + FLAT)
+  let int = Math.max(8, d.int + bonus('intelligence') + FLAT)
   let def = d.def + bonus('constitution') + FLAT
 
   // 🎽 GEAR no PvP (GEAR=1): soma o set BiS lendário +IV (TET ×4) por classe,

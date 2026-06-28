@@ -233,9 +233,12 @@ export async function POST(req: Request) {
     const classDef = Math.floor((classData.bonuses.constitution || 0) / 10)
 
     // 🔥 STATS FINAIS = DISTRIBUIÇÃO + BÔNUS RACIAL + BÔNUS DE CLASSE
-    const finalStr = distributedStr + raceStr + classStr
-    const finalAgi = distributedAgi + raceAgi + classAgi  
-    const finalInt = distributedInt + raceInt + classInt
+    // Piso de 8 em str/agi/int: nenhum personagem fica com atributo ZERO, então a
+    // transformação sempre multiplica algo e o poder unificado (str+int) nunca morre.
+    // DEF sem piso (RES baixa mantém o mago matável).
+    const finalStr = Math.max(8, distributedStr + raceStr + classStr)
+    const finalAgi = Math.max(8, distributedAgi + raceAgi + classAgi)
+    const finalInt = Math.max(8, distributedInt + raceInt + classInt)
     const finalDef = distributedDef + raceDef + classDef
 
     // 🔥 FÓRMULAS BALANCEADAS COM BÔNUS - Todos os stats são úteis

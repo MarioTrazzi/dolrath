@@ -84,10 +84,14 @@ export function computeCreationStats(
   const race = getRaceStatBonuses(raceId)
   const klass = getClassStatBonuses(classId)
 
+  // Piso de 8 nos atributos primários (str/agi/int): nenhum personagem fica com
+  // atributo ZERO — assim a transformação sempre multiplica algo (ganho visível)
+  // e o "poder unificado" (str+int) nunca fica morto. DEF NÃO tem piso (RES baixa
+  // mantém o mago matável).
   const final: StatFour = {
-    str: base.str + race.str + klass.str,
-    agi: base.agi + race.agi + klass.agi,
-    int: base.int + race.int + klass.int,
+    str: Math.max(8, base.str + race.str + klass.str),
+    agi: Math.max(8, base.agi + race.agi + klass.agi),
+    int: Math.max(8, base.int + race.int + klass.int),
     def: base.def + race.def + klass.def,
   }
 

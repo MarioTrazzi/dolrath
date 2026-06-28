@@ -92,9 +92,11 @@ export async function POST(request: NextRequest, { params }: { params: { charact
     const currentDef = (currentAttrs.distributedDef || 0) + addDef;
 
     // 🔥 STATS FINAIS = DISTRIBUIÇÃO + BÔNUS RACIAIS + BÔNUS DE CLASSE
-    const finalStr = currentStr + raceStr + classStr;
-    const finalAgi = currentAgi + raceAgi + classAgi;
-    const finalInt = currentInt + raceInt + classInt;
+    // Piso de 8 em str/agi/int (sem atributo ZERO → transformação sempre buffa,
+    // poder unificado str+int nunca morre). DEF sem piso (RES baixa = mago matável).
+    const finalStr = Math.max(8, currentStr + raceStr + classStr);
+    const finalAgi = Math.max(8, currentAgi + raceAgi + classAgi);
+    const finalInt = Math.max(8, currentInt + raceInt + classInt);
     const finalDef = currentDef + raceDef + classDef;
     // 🎯 FÓRMULAS UNIFICADAS (validadas via simulação — ver src/lib/combatFormulas.ts)
     // Base por nível garante que mago/assassino escalam HP como o guerreiro

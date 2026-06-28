@@ -57,10 +57,10 @@ export interface Levers {
 
 // === FORMA DAS CLASSES (perfis equilibrados do nv50 BiS lendário IV) ===
 export const PROFILE: Record<CombatClass, ClassProfile> = {
-  warrior: { power: 102, armor: 160, hp: 438, evade: 0.05 }, // tanque
-  rogue: { power: 160, armor: 55, hp: 282, evade: 0.30 },    // glass cannon físico
-  mage: { power: 175, armor: 50, hp: 312, evade: 0.18 },     // glass cannon mágico
-  monk: { power: 132, armor: 120, hp: 316, evade: 0.22 },    // bruiser sustentado
+  warrior: { power: 105, armor: 160, hp: 438, evade: 0.05 }, // tanque (power +3 p/ ofensiva)
+  rogue: { power: 145, armor: 55, hp: 282, evade: 0.30 },    // glass cannon físico (parte do poder migrou p/ escala de AGI)
+  mage: { power: 175, armor: 57, hp: 332, evade: 0.18 },     // glass cannon mágico (armor/hp ↑ p/ sobreviver — mago fraco crônico)
+  monk: { power: 129, armor: 117, hp: 311, evade: 0.22 },    // bruiser sustentado (levemente esfriado)
 }
 
 // === CONSTANTES DO DADO E DA MITIGAÇÃO ===
@@ -192,17 +192,34 @@ export const ATTR_TILT = {
   evadeCap: 0.6,  // teto absoluto de evasão já com o tilt
 }
 
-/** Aplica o tilt dos atributos distribuídos sobre os levers (no-op se attrs ausente). */
-export function applyAttrTilt(levers: Levers, attrs?: Partial<AttrPoints> | null): Levers {
+// Peso do atributo no PODER, por classe (identidade). Cada classe rende cheio (1.0)
+// no seu atributo-chave e menos no "errado": Guerreiro=força (INT off → 0.8),
+// Mago=mente (STR off → 0.8), Monge híbrido equilibrado (1.0/1.0). O Ladino não vive
+// de força nem mente (0.8/0.8) e converte AGI em DANO de verdade (1.6 → ~0.48/pt vs
+// 0.30) — dá sentido a investir em AGI, que antes quase só virava evasão.
+export const ATTR_POWER_WEIGHT: Record<CombatClass, { str: number; int: number; agi: number }> = {
+  warrior: { str: 1.0, int: 0.8, agi: 1.0 },
+  mage:    { str: 0.8, int: 1.0, agi: 1.0 },
+  monk:    { str: 1.0, int: 1.0, agi: 1.0 },
+  rogue:   { str: 0.8, int: 0.8, agi: 1.6 },
+}
+const NEUTRAL_WEIGHT = { str: 1.0, int: 1.0, agi: 1.0 }
+
+/**
+ * Aplica o tilt dos atributos distribuídos sobre os levers (no-op se attrs ausente).
+ * `cls` pondera o poder por classe (ATTR_POWER_WEIGHT); ausente → pesos neutros.
+ */
+export function applyAttrTilt(levers: Levers, attrs?: Partial<AttrPoints> | null, cls?: CombatClass): Levers {
   if (!attrs) return levers
   const str = Math.max(0, Number(attrs.str) || 0)
   const agi = Math.max(0, Number(attrs.agi) || 0)
   const int = Math.max(0, Number(attrs.int) || 0)
   const def = Math.max(0, Number(attrs.def) || 0)
   const t = ATTR_TILT
+  const w = (cls && ATTR_POWER_WEIGHT[cls]) || NEUTRAL_WEIGHT
   return {
     ...levers,
-    power: levers.power + (str + int) * t.power + agi * t.powerAgi,
+    power: levers.power + (str * w.str + int * w.int) * t.power + agi * w.agi * t.powerAgi,
     armor: levers.armor + def * t.armor,
     hp: levers.hp + def * t.hp,
     evade: Math.min(t.evadeCap, levers.evade + agi * t.evade),
@@ -224,7 +241,7 @@ export function computeLevers(cls: CombatClass, level: number, gearTier: number,
     K: K50 * S,
     scale: S,
   }
-  return applyAttrTilt(base, attrs)
+  return applyAttrTilt(base, attrs, cls)
 }
 
 /**

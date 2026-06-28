@@ -74,17 +74,18 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
     cost: { mp: 35, stamina: 40 },
 
     // ⚖️ Rebalanceado (scripts/pvp-race-class-sim.js, teste simétrico das 4 raças):
-    // boost MODESTO e ~uniforme em str/agi/int (preserva equilíbrio de classe),
-    // DEF≈1.0 (não inflar RES → mago vive), +mpPool (caster sustenta).
+    // "B modesto" — PISO de 1.20 nos atributos centrais (str/agi/int/hp/attack) p/ que
+    // TODO stat suba de forma visível (mesmo o atributo descartado), assinatura mais alta,
+    // DEF deliberadamente baixa (não inflar RES → mago vive), +mpPool (caster sustenta).
     // Draconiano tem a base mais forte → forma mais fraca (compensação inversa).
     statModifiers: {
-      strength: 1.15,
+      strength: 1.20,
       defense: 1.03,
-      hp: 1.19,
+      hp: 1.20,
       agility: 1.22,
       intelligence: 1.25,
-      attack: 1.15,
-      critical: 1.10,
+      attack: 1.20,
+      critical: 1.12,
       mpPool: 1.26
     },
     
@@ -127,14 +128,14 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
     cooldown: 5,
     cost: { mp: 20, stamina: 30 },
 
-    // ⚖️ Metamorfo: forma ÁGIL (striker). Especializada porém modesta.
+    // ⚖️ Metamorfo: forma ÁGIL (striker). Piso 1.20 nos centrais; AGI é a assinatura.
     statModifiers: {
       agility: 1.32,
-      strength: 1.15,
-      critical: 1.20,
-      attack: 1.15,
+      strength: 1.20,
+      critical: 1.22,
+      attack: 1.20,
       defense: 1.03,
-      hp: 1.17,
+      hp: 1.20,
       intelligence: 1.22,
       mpPool: 1.22
     },
@@ -177,14 +178,14 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
     cost: { mp: 30, stamina: 40 },
 
     // ⚖️ Metamorfo: forma TANK. DEF moderada (inflar DEF mataria o mago via RES);
-    // a tankeza vem do HP. Especializada porém modesta.
+    // a tankeza vem do HP. Piso 1.20 nos centrais; HP é a assinatura.
     statModifiers: {
-      strength: 1.20,
+      strength: 1.22,
       defense: 1.07,
       hp: 1.28,
-      agility: 1.14,
-      critical: 1.05,
-      attack: 1.20,
+      agility: 1.20,
+      critical: 1.12,
+      attack: 1.22,
       intelligence: 1.20,
       mpPool: 1.22
     },
@@ -226,15 +227,16 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
     cooldown: 5,
     cost: { mp: 20, stamina: 30 },
 
-    // ⚖️ Metamorfo: forma CASTER/crítico (agi+int). Frágil em DEF, sustenta via mpPool.
+    // ⚖️ Metamorfo: forma CASTER/crítico (agi+int). Piso 1.20 nos centrais;
+    // DEF=1.0 é a FRAQUEZA de assinatura (frágil), sustenta via mpPool.
     statModifiers: {
       agility: 1.28,
       intelligence: 1.33,
       critical: 1.25,
-      attack: 1.12,
-      strength: 1.12,
+      attack: 1.20,
+      strength: 1.20,
       defense: 1.00,
-      hp: 1.16,
+      hp: 1.20,
       mpPool: 1.32
     },
     
@@ -277,12 +279,12 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
 
     // ⚖️ Humano: forma UNIVERSAL (str≈agi≈int) — serve qualquer classe, sem fraquezas.
     statModifiers: {
-      strength: 1.17,
+      strength: 1.20,
       defense: 1.02,
       hp: 1.21,
       agility: 1.23,
       intelligence: 1.27,
-      attack: 1.17,
+      attack: 1.20,
       critical: 1.15,
       mpPool: 1.28
     },
@@ -325,13 +327,14 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
     cost: { mp: 25, stamina: 30 },
 
     // ⚖️ Elfo: forma ARCANA (lean INT + mpPool alto). Base élfica é a mais fraca
-    // fisicamente → forma um pouco mais forte (compensação inversa).
+    // fisicamente → forma um pouco mais forte (compensação inversa). Piso 1.20 nos
+    // centrais: agora o STR do elfo sobe de forma visível (era 1.16+floor ≈ +0).
     statModifiers: {
       intelligence: 1.34,
       agility: 1.24,
       critical: 1.20,
-      attack: 1.16,
-      strength: 1.16,
+      attack: 1.20,
+      strength: 1.20,
       defense: 1.02,
       hp: 1.22,
       mpPool: 1.40
@@ -431,12 +434,14 @@ export function applyTransformation(character: any, transformationType: Transfor
   }
 
   // Aplicar multiplicadores
+  // Math.round (não floor): num atributo descartado (ex.: STR do elfo), floor(base*1.2x)
+  // engolia o ganho e exibia +0. round mostra o buff visivelmente.
   const transformedStats: any = {
-    strength: Math.floor(originalStats.strength * config.statModifiers.strength),
-    agility: Math.floor(originalStats.agility * config.statModifiers.agility),
-    intelligence: Math.floor(originalStats.intelligence * config.statModifiers.intelligence),
-    defense: Math.floor(originalStats.defense * config.statModifiers.defense),
-    attack: Math.floor(originalStats.attack * config.statModifiers.attack),
+    strength: Math.round(originalStats.strength * config.statModifiers.strength),
+    agility: Math.round(originalStats.agility * config.statModifiers.agility),
+    intelligence: Math.round(originalStats.intelligence * config.statModifiers.intelligence),
+    defense: Math.round(originalStats.defense * config.statModifiers.defense),
+    attack: Math.round(originalStats.attack * config.statModifiers.attack),
     critical: originalStats.critical * config.statModifiers.critical
   }
 

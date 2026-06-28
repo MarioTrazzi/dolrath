@@ -164,8 +164,8 @@ const TRANSITIONS = [
   'A névoa se abre por um instante, revelando o caminho.',
 ]
 
-// Dicas que giram durante a exploração — empurram o jogador pro loop de preparo
-// (alquimista, ferreiro, aprimoramento) e relembram mecânicas do automático/stamina.
+// Dicas do rodapé — uma é sorteada no início da run e some após ~30s. Empurram o
+// jogador pro loop de preparo (alquimista, ferreiro, aprimoramento) e relembram mecânicas.
 const TIPS: { icon: string; text: string }[] = [
   { icon: '🧪', text: 'Não esqueça de passar na Alquimista e levar algumas poções para a aventura.' },
   { icon: '⚒️', text: 'Compre suas armaduras no Ferreiro e aprimore-as para buscar recompensas maiores nos bosses das masmorras.' },
@@ -426,8 +426,9 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const [tokenIdx, setTokenIdx] = useState(0)
   const [moving, setMoving] = useState(false)
   const [narration, setNarration] = useState(dungeon.enterText)
-  // Dica em rotação (começa numa aleatória e gira a cada ~10s durante a run).
-  const [tipIdx, setTipIdx] = useState(() => Math.floor(Math.random() * TIPS.length))
+  // Uma dica aleatória no começo da run; some sozinha depois de ~30s.
+  const [tipIdx] = useState(() => Math.floor(Math.random() * TIPS.length))
+  const [tipVisible, setTipVisible] = useState(true)
   const [nodeEvents, setNodeEvents] = useState<Record<number, RevealedNode>>({})
   const [floats, setFloats] = useState<{ id: number; label: string; color: string }[]>([])
   // Consumíveis do inventário do personagem (usáveis no mapa e no combate)
@@ -583,10 +584,10 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     })()
   }, [character.id, dungeon.id, showBanner])
 
-  // Gira a dica exibida no rodapé a cada ~10s (enquanto a run está aberta).
+  // Esconde a dica do rodapé depois de ~30s (aparece uma vez no início da run).
   useEffect(() => {
-    const id = setInterval(() => setTipIdx(i => (i + 1) % TIPS.length), 10000)
-    return () => clearInterval(id)
+    const id = setTimeout(() => setTipVisible(false), 30000)
+    return () => clearTimeout(id)
   }, [])
 
   // Exibe (sem persistir) o espólio que o SERVIDOR já creditou: ouro + drops.
@@ -2016,25 +2017,26 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
               className="flex-shrink-0 px-4 pt-1 pb-4 z-20"
               style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
             >
-              {/* Dica rotativa: empurra o jogador pro loop de preparo (alquimista/ferreiro). */}
-              <div className="mx-auto max-w-md mb-2 min-h-[2.25rem] flex items-center justify-center">
-                <AnimatePresence mode="wait">
+              {/* Dica única no início da run (some sozinha após ~30s). */}
+              <AnimatePresence>
+                {tipVisible && (
                   <motion.div
-                    key={tipIdx}
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -5 }}
+                    initial={{ opacity: 0, y: 5, height: 0, marginBottom: 0 }}
+                    animate={{ opacity: 1, y: 0, height: 'auto', marginBottom: 8 }}
+                    exit={{ opacity: 0, y: -5, height: 0, marginBottom: 0 }}
                     transition={{ duration: 0.35 }}
-                    className="flex items-center gap-2 rounded-xl border border-amber-300/15 bg-amber-500/5 px-3 py-1.5 text-left"
+                    className="mx-auto max-w-md flex items-center justify-center overflow-hidden"
                   >
-                    <span className="shrink-0 text-base leading-none">{TIPS[tipIdx].icon}</span>
-                    <span className="text-[11px] leading-snug text-amber-100/80">
-                      <span className="font-bold text-amber-200/90">Dica: </span>
-                      {TIPS[tipIdx].text}
-                    </span>
+                    <div className="flex items-center gap-2 rounded-xl border border-amber-300/15 bg-amber-500/5 px-3 py-1.5 text-left">
+                      <span className="shrink-0 text-base leading-none">{TIPS[tipIdx].icon}</span>
+                      <span className="text-[11px] leading-snug text-amber-100/80">
+                        <span className="font-bold text-amber-200/90">Dica: </span>
+                        {TIPS[tipIdx].text}
+                      </span>
+                    </div>
                   </motion.div>
-                </AnimatePresence>
-              </div>
+                )}
+              </AnimatePresence>
 
               {/* Piloto automático: toca a run inteira + switch de poções */}
               <div className="mx-auto max-w-md mb-2 flex items-center gap-2">

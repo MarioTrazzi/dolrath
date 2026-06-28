@@ -575,9 +575,6 @@ export function luckTier(roll: number): LuckTier {
 
 export type LootKind = 'ingredient' | 'consumable' | 'item' | 'stone' | 'material'
 
-// Estilhaço de Memória (reparo de raro+): chance nas salas normais (fora da Floresta);
-// no chefe cai SEMPRE. mult.all ainda escala por tipo de nó.
-const MEMORY_SHARD_NODE_CHANCE = 0.06
 export interface LootDrop {
   name: string
   kind: LootKind
@@ -596,35 +593,34 @@ export type LootNodeKind = 'minor' | 'main' | 'boss'
 const LUCK_CFG: Record<
   LuckTier,
   {
-    goldBase: number; goldVar: number; pMaterial: number; pConsumable: number; pStone: number;
+    goldBase: number; goldVar: number; pMaterial: number; pConsumable: number; pStone: number; pShard: number;
     // Items: normal (nós principais/menores) + boss (covil)
     pItemCommon: number; pItemUncommon: number;
     pItemRare: number; pItemEpic: number;
   }
 > = {
   low: {
-    goldBase: 4, goldVar: 8, pMaterial: 0.7, pConsumable: 0.18, pStone: 0.06,
+    goldBase: 4, goldVar: 8, pMaterial: 0.7, pConsumable: 0.18, pStone: 0.03, pShard: 0.12,
     pItemCommon: 0.10, pItemUncommon: 0.05,
     pItemRare: 0.02, pItemEpic: 0.01,
   },
   mid: {
-    goldBase: 10, goldVar: 16, pMaterial: 0.5, pConsumable: 0.35, pStone: 0.15,
+    goldBase: 10, goldVar: 16, pMaterial: 0.5, pConsumable: 0.35, pStone: 0.08, pShard: 0.22,
     pItemCommon: 0.25, pItemUncommon: 0.15,
     pItemRare: 0.07, pItemEpic: 0.04,
   },
   high: {
-    goldBase: 18, goldVar: 30, pMaterial: 0.3, pConsumable: 0.45, pStone: 0.26,
+    goldBase: 18, goldVar: 30, pMaterial: 0.3, pConsumable: 0.45, pStone: 0.15, pShard: 0.32,
     pItemCommon: 0.40, pItemUncommon: 0.25,
     pItemRare: 0.15, pItemEpic: 0.07,
   },
 }
 
-// Nó menor dropa menos; pedra concentrada nas salas de monstro (main/boss); sala/boss
-// dão mais ouro. Pedra de aprimoramento deve vir PRINCIPALMENTE de monstro: main e boss
-// (sempre monstro) puxam o multiplicador; o nó menor dá só uma fração.
+// Nó menor dropa menos; pedra mais rara nele; sala/boss dão mais ouro. Pedra de
+// aprimoramento vem PRINCIPALMENTE de monstro (boss 2.5× + main sempre-monstro).
 const NODE_LOOT_MULT: Record<LootNodeKind, { all: number; stone: number; gold: number }> = {
-  minor: { all: 0.8, stone: 0.5, gold: 0.8 },
-  main: { all: 1.0, stone: 1.4, gold: 1.3 },
+  minor: { all: 0.8, stone: 0.4, gold: 0.8 },
+  main: { all: 1.0, stone: 1.0, gold: 1.3 },
   boss: { all: 1.0, stone: 2.5, gold: 2.0 },
 }
 
@@ -715,11 +711,17 @@ export function rollNodeLoot(
     const mat = pickFrom(pool)
     if (mat) drops.push({ name: mat.name, kind: 'material', rarity: rarityOf(mat), emoji: mat.emoji })
   }
-  // Estilhaço de Memória (repara raro/épico/lendário): SEMPRE no chefe; nas salas
-  // normais é chance — e na Floresta só o chefe dropa (nada nas salas).
+  // Estilhaço de Pedra Negra (Arma/Armadura): ligante de TODA receita de forja
+  // (10 viram 1 Pedra Negra). É o material de craft "corrente" — deve ser bem
+  // frequente. Roll dedicado (não some no sorteio uniforme dos outros materiais).
+  if (Math.random() < cfg.pShard * mult.all) {
+    const shard = Math.random() < 0.5
+      ? { name: 'Estilhaço de Pedra Negra (Arma)', emoji: '🔸' }
+      : { name: 'Estilhaço de Pedra Negra (Armadura)', emoji: '🔹' }
+    drops.push({ name: shard.name, kind: 'material', rarity: 'COMMON', emoji: shard.emoji })
+  }
+  // Estilhaço de Memória (repara raro/épico/lendário): SOMENTE no chefe (1 por boss).
   if (isBoss) {
-    drops.push({ name: 'Estilhaço de Memória', kind: 'material', rarity: 'RARE', emoji: '🧠' })
-  } else if (dungeon.id !== 'floresta' && Math.random() < MEMORY_SHARD_NODE_CHANCE * mult.all) {
     drops.push({ name: 'Estilhaço de Memória', kind: 'material', rarity: 'RARE', emoji: '🧠' })
   }
   // consumível de masmorra

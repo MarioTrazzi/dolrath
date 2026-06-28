@@ -96,7 +96,7 @@ export const TRANSFORM_SCALE = 1.25
 export type AttackType = 'basic' | 'weapon' | 'special'
 export const ATTACKS: Record<AttackType, { powerMult: number; stamina: number; requiresTransform: boolean; label: string }> = {
   basic: { powerMult: 0.72, stamina: 1, requiresTransform: false, label: 'Ataque Básico' },
-  weapon: { powerMult: 1.0, stamina: 2, requiresTransform: false, label: 'Ataque da Arma' },
+  weapon: { powerMult: 1.0, stamina: 2, requiresTransform: false, label: 'Golpe' },
   special: { powerMult: 1.5, stamina: 3, requiresTransform: true, label: 'Especial' },
 }
 

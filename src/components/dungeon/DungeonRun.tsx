@@ -124,7 +124,7 @@ const ATTACKS: Record<
   { label: string; icon: string; powerMult: number; requiresTransform: boolean; mp: number }
 > = {
   basic: { label: 'Ataque Básico', icon: '👊', powerMult: 0.72, requiresTransform: false, mp: 0 },
-  weapon: { label: 'Ataque da Arma', icon: '⚔️', powerMult: 1.0, requiresTransform: false, mp: 8 },
+  weapon: { label: 'Golpe', icon: '⚔️', powerMult: 1.0, requiresTransform: false, mp: 8 },
   special: { label: 'Especial', icon: '✨', powerMult: 1.5, requiresTransform: true, mp: 18 },
 }
 
@@ -662,7 +662,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const effMaxHp = character.maxHp + gear.hp
   // Poder efetivo de um ataque = poder do lever × multiplicador do tipo.
   const playerPowerFor = (kind: AttackKind) => playerLevers.power * ATTACKS[kind].powerMult
-  // Tem arma de mão equipada? (sem arma: some o "Ataque da Arma"; luta-se no soco)
+  // Tem arma de mão equipada? (sem arma: some o "Golpe"; luta-se no soco)
   const hasWeapon = useMemo(
     () => (character.equipment || []).some((e: any) => {
       const slot = String(e?.slot || '').toLowerCase()
@@ -2226,7 +2226,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
               ) : stage === 'playerSelect' ? (
                 <div className="flex flex-wrap items-center justify-center gap-2">
                   {(Object.keys(ATTACKS) as AttackKind[])
-                    // Sem arma equipada não há "Ataque da Arma" (luta-se no soco); o Especial
+                    // Sem arma equipada não há "Golpe" (luta-se no soco); o Especial
                     // continua, pois vem da transformação (golpe da fera).
                     .filter(kind => kind !== 'weapon' || hasWeapon)
                     .map(kind => {

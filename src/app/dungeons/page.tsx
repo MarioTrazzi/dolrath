@@ -287,7 +287,7 @@ export default function DungeonsPage() {
         </div>
 
         <p className="text-center text-white/30 text-[11px] mt-6 max-w-2xl mx-auto">
-          ⚡ A stamina é seu orçamento de runs do dia (reseta amanhã) e só é gasta avançando na trilha — o combate não a consome.
+          ⚡ A stamina é seu orçamento de runs e só é gasta avançando na trilha — o combate não a consome. Ela se restaura sozinha: +2 a cada 15 min, após 15 min sem gastar.
           ❤️🔮 HP e MP voltam ao cheio entre runs. Você nunca perde XP, ouro ou itens ao morrer ou sair: cada tentativa te deixa mais forte.
           Salas principais (⚔️) têm monstro garantido e melhor espólio; os nós menores entre elas são mais fáceis.
         </p>

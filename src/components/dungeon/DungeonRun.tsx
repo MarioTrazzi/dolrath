@@ -785,7 +785,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       data = await res.json()
       if (!res.ok) {
         setExploreRolling(false)
-        if (res.status === 400) showBanner('😮‍💨', `${data?.error || 'Stamina insuficiente'} — ela reseta amanhã`)
+        if (res.status === 400) showBanner('😮‍💨', `${data?.error || 'Stamina insuficiente'} — ela volta +2 a cada 15 min ocioso`)
         else showBanner('⚠️', data?.error || 'Falha ao avançar')
         return
       }
@@ -1445,7 +1445,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     // 5) Seguir a trilha — mas só se a stamina cobre o próximo passo.
     if (stamina < stepCost(tokenIdx + 1)) {
       setAuto(false)
-      showBanner('😮‍💨', 'Stamina insuficiente — piloto desligado. Ela reseta amanhã.', 3200)
+      showBanner('😮‍💨', 'Stamina insuficiente — piloto desligado. Ela volta +2 a cada 15 min ocioso.', 3200)
       return
     }
     return fire(advance, 800)
@@ -1666,7 +1666,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                   {phase === 'combat' ? 'Fugir da batalha?' : 'Sair da masmorra?'}
                 </h3>
                 <p className="text-xs text-textsec leading-snug mb-4">
-                  A run será encerrada. Tudo que você já ganhou está salvo — a stamina reseta amanhã.
+                  A run será encerrada. Tudo que você já ganhou está salvo — a stamina se restaura sozinha (+2 a cada 15 min ocioso).
                 </p>
 
                 {/* Log do espólio da run até agora (ouro/XP + itens com ícone real) */}
@@ -2388,7 +2388,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
               <div className="text-6xl mb-3">💀</div>
               <h3 className="text-red-400 font-black text-2xl mb-2">Você caiu...</h3>
               <p className="text-white/60 text-xs mb-4">
-                Sem perdas: tudo que você ganhou foi guardado. Volte mais forte — a stamina reseta amanhã.
+                Você não perde nada: todo o XP, ouro e itens ganhos ficam guardados. Volte mais forte — a stamina se restaura sozinha (+2 a cada 15 min, após 15 min sem gastar).
               </p>
               <div className="text-white/70 text-xs mb-5">
                 💰 {totals.gold} ouro • ⭐ {totals.xp} XP • 📦 {totals.items.length} itens — tudo salvo

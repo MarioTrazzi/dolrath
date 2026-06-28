@@ -53,12 +53,15 @@ export async function GET() {
         level: levelInfo.level,
         levelInfo, // Informações completas de progressão
         // Usar dados reais do banco em vez de recalculados
-        hp: character.hp || baseStats.hp || 100,
-        maxHp: character.maxHp || baseStats.maxHp || 100,
-        mp: character.mp || baseStats.mp || 50,
-        maxMp: character.maxMp || baseStats.maxMp || 50,
-        stamina: character.stamina || baseStats.stamina || 100,
-        maxStamina: character.maxStamina || baseStats.maxStamina || 100,
+        // `??` (não `||`): 0 é um valor VÁLIDO aqui (stamina esgotada, HP de
+        // personagem morto). Com `||` o zero caía no fallback e a barra aparecia
+        // cheia mesmo com o recurso zerado.
+        hp: character.hp ?? baseStats.hp ?? 100,
+        maxHp: character.maxHp ?? baseStats.maxHp ?? 100,
+        mp: character.mp ?? baseStats.mp ?? 50,
+        maxMp: character.maxMp ?? baseStats.maxMp ?? 50,
+        stamina: character.stamina ?? baseStats.stamina ?? 100,
+        maxStamina: character.maxStamina ?? baseStats.maxStamina ?? 100,
       };
     });
 

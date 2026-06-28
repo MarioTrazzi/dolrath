@@ -33,6 +33,31 @@ async function loadContext(characterId: string, userId: string, inventoryId: str
   return { character, inventoryItem, category }
 }
 
+// Conta quantas unidades do material necessário o personagem possui.
+// Para pedras, soma a quantidade de todas as pilhas; para cópias, conta as
+// instâncias base (nível 0) do próprio item.
+async function countMaterial(
+  characterId: string,
+  inventoryItem: { id: string; itemId: string; quantity: number; enhancementLevel: number },
+  material: ReturnType<typeof getRequiredMaterial>,
+): Promise<number> {
+  if (material.kind === 'STONE') {
+    const rows = await prisma.characterInventory.findMany({
+      where: { characterId, item: { name: material.name } },
+      select: { quantity: true },
+    })
+    return rows.reduce((sum, r) => sum + r.quantity, 0)
+  }
+  // DUPLICATE: cópias base (nível 0) do mesmo item, incluindo as da própria pilha.
+  const rows = await prisma.characterInventory.findMany({
+    where: { characterId, itemId: inventoryItem.itemId, enhancementLevel: 0 },
+    select: { id: true, quantity: true },
+  })
+  const total = rows.reduce((sum, r) => sum + r.quantity, 0)
+  // A própria instância selecionada não conta como sua própria cópia.
+  return inventoryItem.enhancementLevel === 0 ? Math.max(0, total - 1) : total
+}
+
 // Procura o material necessário no inventário do personagem.
 // Retorna a linha de onde consumir, ou null se não houver.
 async function findMaterialRow(
@@ -97,6 +122,7 @@ export async function GET(
 
     const material = getRequiredMaterial(category, targetLevel)
     const materialRow = await findMaterialRow(params.characterId, inventoryItem, material)
+    const materialCount = await countMaterial(params.characterId, inventoryItem, material)
     const durabilityCost = getDurabilityLossOnFail(targetLevel)
     const isSafe = getBaseChance(category, targetLevel) >= 1
     const enoughDurability = isSafe || inventoryItem.durability >= durabilityCost
@@ -108,6 +134,11 @@ export async function GET(
       targetLevel,
       targetLabel: getLevelLabel(targetLevel),
       displayName: getDisplayName(inventoryItem.item.name, inventoryItem.enhancementLevel),
+      // Identidade do item, para o cabeçalho e a prévia de stats no diálogo.
+      itemName: inventoryItem.item.name,
+      itemType: inventoryItem.item.type,
+      itemImage: inventoryItem.item.image,
+      itemStats: inventoryItem.item.stats,
       chance: getEnhanceChance(category, targetLevel, character.failstacks),
       failstacks: character.failstacks,
       durability: inventoryItem.durability,
@@ -116,6 +147,7 @@ export async function GET(
         ? { kind: 'STONE', name: material.name }
         : { kind: 'DUPLICATE', name: inventoryItem.item.name },
       materialAvailable: !!materialRow,
+      materialCount,
       enoughDurability,
       canEnhance: !!materialRow && enoughDurability,
       risk: getRiskDescription(category, targetLevel, inventoryItem.enhancementLevel),

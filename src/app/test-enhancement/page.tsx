@@ -30,15 +30,16 @@ interface MockItem {
   copies: number; // cópias extras (material p/ acessórios e reparo)
   stones: number; // pedras disponíveis
   destroyed: boolean;
+  stats: Record<string, number>;
 }
 
 const INITIAL_ITEMS: MockItem[] = [
-  { id: 'sword', name: 'Espada Longa de Ferro', type: 'SWORD', enhancementLevel: 0, durability: 100, maxDurability: 100, copies: 3, stones: 999, destroyed: false },
-  { id: 'sword14', name: 'Lâmina do Crepúsculo', type: 'SWORD', enhancementLevel: 14, durability: 60, maxDurability: 100, copies: 2, stones: 999, destroyed: false },
-  { id: 'armor15', name: 'Couraça do Dragão', type: 'HEAVY_ARMOR', enhancementLevel: 15, durability: 80, maxDurability: 100, copies: 1, stones: 999, destroyed: false },
-  { id: 'armor18', name: 'Elmo Real', type: 'HEAVY_HELMET', enhancementLevel: 18, durability: 40, maxDurability: 100, copies: 0, stones: 999, destroyed: false },
-  { id: 'ring', name: 'Anel de Rubi', type: 'RING', enhancementLevel: 0, durability: 100, maxDurability: 100, copies: 5, stones: 0, destroyed: false },
-  { id: 'neck17', name: 'Colar das Marés', type: 'NECKLACE', enhancementLevel: 17, durability: 100, maxDurability: 100, copies: 2, stones: 0, destroyed: false },
+  { id: 'sword', name: 'Espada Longa de Ferro', type: 'SWORD', enhancementLevel: 0, durability: 100, maxDurability: 100, copies: 3, stones: 999, destroyed: false, stats: { str: 12, agi: 4 } },
+  { id: 'sword14', name: 'Lâmina do Crepúsculo', type: 'SWORD', enhancementLevel: 14, durability: 60, maxDurability: 100, copies: 2, stones: 999, destroyed: false, stats: { str: 28, agi: 9, def: 3 } },
+  { id: 'armor15', name: 'Couraça do Dragão', type: 'HEAVY_ARMOR', enhancementLevel: 15, durability: 80, maxDurability: 100, copies: 1, stones: 999, destroyed: false, stats: { def: 22, hp: 40, con: 6 } },
+  { id: 'armor18', name: 'Elmo Real', type: 'HEAVY_HELMET', enhancementLevel: 18, durability: 40, maxDurability: 100, copies: 0, stones: 999, destroyed: false, stats: { def: 14, hp: 25 } },
+  { id: 'ring', name: 'Anel de Rubi', type: 'RING', enhancementLevel: 0, durability: 100, maxDurability: 100, copies: 5, stones: 0, destroyed: false, stats: { str: 6, int: 6 } },
+  { id: 'neck17', name: 'Colar das Marés', type: 'NECKLACE', enhancementLevel: 17, durability: 100, maxDurability: 100, copies: 2, stones: 0, destroyed: false, stats: { int: 18, mp: 30 } },
 ];
 
 export default function TestEnhancementPage() {
@@ -68,8 +69,8 @@ export default function TestEnhancementPage() {
       };
     }
     const material = getRequiredMaterial(category, targetLevel);
-    const materialAvailable =
-      material.kind === 'STONE' ? item.stones > 0 : item.copies > 0;
+    const materialCount = material.kind === 'STONE' ? item.stones : item.copies;
+    const materialAvailable = materialCount > 0;
     const isSafe = getBaseChance(category, targetLevel) >= 1;
     const enoughDurability =
       category === 'ACCESSORY' || isSafe || item.durability >= getDurabilityLossOnFail(targetLevel);
@@ -80,6 +81,9 @@ export default function TestEnhancementPage() {
       targetLevel,
       targetLabel: getLevelLabel(targetLevel),
       displayName: getDisplayName(item.name, item.enhancementLevel),
+      itemName: item.name,
+      itemType: item.type,
+      itemStats: item.stats,
       chance: getEnhanceChance(category, targetLevel, fsRef.current),
       failstacks: fsRef.current,
       durability: item.durability,
@@ -89,6 +93,7 @@ export default function TestEnhancementPage() {
           ? { kind: 'STONE', name: material.name }
           : { kind: 'DUPLICATE', name: item.name },
       materialAvailable,
+      materialCount,
       enoughDurability,
       canEnhance: materialAvailable && enoughDurability,
       risk: getRiskDescription(category, targetLevel, item.enhancementLevel),

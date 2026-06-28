@@ -20,7 +20,9 @@ interface ItemTooltipProps {
   onEquip?: (itemId: string, slotType: EquipmentSlotType) => void;
   onUnequip?: (itemId: string) => void;
   onConsume?: (itemId: string) => void;
-  onEnhance?: (inventoryId: string, itemName: string) => void;
+  /** Abre o diálogo de aprimoramento. Ao vir de uma Pedra Negra, inventoryId vem
+   *  vazio e `stoneCategory` indica a categoria de gear que a pedra aprimora. */
+  onEnhance?: (inventoryId: string, itemName: string, stoneCategory?: 'WEAPON' | 'ARMOR') => void;
   /** Inventário global: transfere o item para o personagem selecionado. */
   onTransfer?: (itemId: string) => void;
   /** Inventário do personagem: envia o item de volta ao inventário global. */
@@ -170,7 +172,12 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryI
   const showEnhancement = enhancementLevel > 0;
   const isConsumable = item.type === 'CONSUMABLE';
   // Pedra Negra: consumível de aprimoramento. "Consumir" abre o seletor de aprimoramento.
-  const isEnhancementStone = isConsumable && !!(item.stats as any)?.enhancementStone;
+  const stoneKind = (item.stats as any)?.enhancementStone as string | undefined;
+  const isEnhancementStone = isConsumable && !!stoneKind;
+  // Categoria de gear que a pedra aprimora (WEAPON_* → WEAPON, ARMOR_* → ARMOR).
+  const stoneCategory: 'WEAPON' | 'ARMOR' | undefined = stoneKind
+    ? stoneKind.startsWith('WEAPON') ? 'WEAPON' : 'ARMOR'
+    : undefined;
 
   // Estilo de botão da loja: gradiente da cor de destaque + sombra.
   const buttonStyle = (hex: string, soft: string) => ({
@@ -187,9 +194,9 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryI
 
   const handleEnhanceClick = () => {
     if (!onEnhance) return;
-    // Pedra negra → abre o seletor (sem item pré-selecionado).
-    // Item normal → abre já com o item escolhido.
-    if (isEnhancementStone) onEnhance('', '');
+    // Pedra negra → abre o seletor (sem item pré-selecionado), filtrado pela
+    // categoria que a pedra aprimora. Item normal → abre já com o item escolhido.
+    if (isEnhancementStone) onEnhance('', '', stoneCategory);
     else if (inventoryId) onEnhance(inventoryId, item.name);
     setShowTooltip(false);
   };

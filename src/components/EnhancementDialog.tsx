@@ -7,9 +7,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getLevelLabel } from '@/lib/enhancementSystem';
+import { getLevelLabel, applyEnhancementToStats, getGearCategory } from '@/lib/enhancementSystem';
+import { itemStatEntries } from '@/lib/itemStats';
 import ItemIcon from './ItemIcon';
 import { resolveImageUrl } from '@/lib/imageUrl';
+import { itemImagePath } from '@/lib/itemCatalog';
 
 /** Item enhanceável exibido no seletor do diálogo (inventário do personagem). */
 export interface EnhanceablePickerItem {
@@ -27,12 +29,19 @@ export interface EnhanceInfo {
   targetLevel?: number;
   targetLabel?: string;
   displayName: string;
+  // Identidade do item (cabeçalho + prévia de stats)
+  itemName?: string;
+  itemType?: string;
+  itemImage?: string | null;
+  itemStats?: Record<string, any> | null;
   chance?: number;
   failstacks?: number;
   durability?: number;
   maxDurability?: number;
   material?: { kind: 'STONE' | 'DUPLICATE'; name: string };
   materialAvailable?: boolean;
+  /** Quantas unidades do material o personagem possui. */
+  materialCount?: number;
   enoughDurability?: boolean;
   canEnhance?: boolean;
   risk?: string;
@@ -59,6 +68,9 @@ interface EnhancementDialogProps {
   itemName?: string;
   /** Itens enhanceáveis do inventário, exibidos no seletor abaixo. */
   items?: EnhanceablePickerItem[];
+  /** Ao abrir a partir de uma Pedra Negra: filtra o seletor pela categoria de
+   *  gear que a pedra aprimora (WEAPON ou ARMOR). */
+  filterCategory?: 'WEAPON' | 'ARMOR';
   // Permite injetar implementações mock (página de teste / Storybook)
   fetchInfoOverride?: () => Promise<EnhanceInfo>;
   attemptOverride?: () => Promise<EnhanceResult>;
@@ -73,6 +85,7 @@ export default function EnhancementDialog({
   inventoryId,
   itemName,
   items,
+  filterCategory,
   fetchInfoOverride,
   attemptOverride,
   repairOverride,
@@ -87,6 +100,25 @@ export default function EnhancementDialog({
   // Fases da animação estilo BDO: a barra carrega e, ao encher, brilha (sucesso) ou apaga (falha)
   const [phase, setPhase] = useState<'idle' | 'charging' | 'done'>('idle');
   const [chargeId, setChargeId] = useState(0);
+  // Modo instantâneo: pula a animação de forja e revela o resultado de imediato.
+  // Preferência lembrada entre tentativas/sessões.
+  const [instant, setInstant] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setInstant(window.localStorage.getItem('enhanceInstant') === '1');
+    }
+  }, []);
+
+  const toggleInstant = () => {
+    setInstant((v) => {
+      const next = !v;
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('enhanceInstant', next ? '1' : '0');
+      }
+      return next;
+    });
+  };
 
   const CHARGE_MS = 1500;
 
@@ -139,8 +171,9 @@ export default function EnhancementDialog({
     setChargeId((c) => c + 1);
     setPhase('charging');
 
-    // A barra leva CHARGE_MS para encher; o resultado só é revelado ao final
-    const minDelay = new Promise((resolve) => setTimeout(resolve, CHARGE_MS));
+    // A barra leva CHARGE_MS para encher; o resultado só é revelado ao final.
+    // No modo instantâneo o resultado aparece sem espera.
+    const minDelay = new Promise((resolve) => setTimeout(resolve, instant ? 0 : CHARGE_MS));
 
     try {
       let data: EnhanceResult;
@@ -212,6 +245,36 @@ export default function EnhancementDialog({
       : null;
   const isAccessory = info?.category === 'ACCESSORY';
 
+  // Imagem do item para o cabeçalho (banco → asset por nome → ícone genérico).
+  const headerImg = info
+    ? resolveImageUrl(info.itemImage) ?? (info.itemName ? itemImagePath(info.itemName) : null)
+    : null;
+
+  // Prévia "atual → projetado": aplica o multiplicador do nível atual e do nível
+  // alvo aos stats base, para o jogador decidir com informação.
+  const statComparison =
+    info && info.itemStats && !info.maxLevel && info.targetLevel != null
+      ? (() => {
+          const cur = applyEnhancementToStats(info.itemStats, info.currentLevel);
+          const next = applyEnhancementToStats(info.itemStats, info.targetLevel);
+          const curEntries = itemStatEntries(cur, info.itemType);
+          const nextEntries = itemStatEntries(next, info.itemType);
+          const keys = Array.from(
+            new Set([...curEntries, ...nextEntries].map((e) => e.key))
+          );
+          return keys.map((key) => {
+            const c = curEntries.find((e) => e.key === key);
+            const n = nextEntries.find((e) => e.key === key);
+            return {
+              key,
+              label: (c ?? n)!.label,
+              from: c?.value ?? 0,
+              to: n?.value ?? 0,
+            };
+          });
+        })()
+      : [];
+
   // Renderiza num portal no body: o card da bancada (e outros pais) usa
   // backdrop-filter, que cria bloco de contenção para position:fixed e cortaria
   // o diálogo (quebrando a rolagem). No body ele fica sempre na frente de tudo.
@@ -258,16 +321,31 @@ export default function EnhancementDialog({
               {/* Item e progressão de nível (oculto se o item foi destruído) */}
               {!result?.destroyed && (
               <div className="mb-4 rounded-lg border border-white/10 bg-black/40 p-4 text-center">
-                <div
-                  className={`text-lg font-semibold ${
-                    info.currentLevel >= 16
-                      ? 'text-orange-400'
-                      : info.currentLevel > 0
-                        ? 'text-cyan-300'
-                        : 'text-white'
-                  }`}
-                >
-                  {info.displayName}
+                {/* Ícone pequeno + nome + nível atual */}
+                <div className="mb-2 flex items-center justify-center gap-2.5">
+                  <span className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/15 bg-gradient-to-br from-[#1c232b] to-[#0d1116]">
+                    {headerImg ? (
+                      <img src={headerImg} alt={info.itemName || ''} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      <ItemIcon type={(info.itemType as any) || 'SWORD'} size={22} />
+                    )}
+                    {info.currentLevel > 0 && (
+                      <span className="absolute right-0.5 bottom-0 text-[10px] font-black text-[#f1d79a]" style={{ textShadow: '0 1px 2px #000' }}>
+                        {getLevelLabel(info.currentLevel)}
+                      </span>
+                    )}
+                  </span>
+                  <div
+                    className={`text-left text-base font-semibold leading-tight ${
+                      info.currentLevel >= 16
+                        ? 'text-orange-400'
+                        : info.currentLevel > 0
+                          ? 'text-cyan-300'
+                          : 'text-white'
+                    }`}
+                  >
+                    {info.itemName || info.displayName}
+                  </div>
                 </div>
                 {!info.maxLevel && (
                   <div className="mt-2 flex items-center justify-center gap-3 text-2xl font-bold">
@@ -284,6 +362,35 @@ export default function EnhancementDialog({
                   </div>
                 )}
               </div>
+              )}
+
+              {/* Prévia de stats: atual → projetado após o aprimoramento */}
+              {!info.maxLevel && !result?.destroyed && statComparison.length > 0 && (
+                <div className="mb-4 rounded-lg border border-white/10 bg-black/40 p-3">
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Atributos após aprimorar
+                  </div>
+                  <div className="space-y-1.5">
+                    {statComparison.map((s) => {
+                      const delta = s.to - s.from;
+                      return (
+                        <div key={s.key} className="flex items-center justify-between text-sm">
+                          <span className="text-gray-300">{s.label}</span>
+                          <span className="flex items-center gap-2 font-semibold tabular-nums">
+                            <span className="text-gray-400">{s.from}</span>
+                            <span className="text-amber-400">→</span>
+                            <span className="text-emerald-300">{s.to}</span>
+                            {delta !== 0 && (
+                              <span className={`text-xs ${delta > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                ({delta > 0 ? '+' : ''}{delta})
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
 
               {!info.maxLevel && !result?.destroyed && (
@@ -359,11 +466,18 @@ export default function EnhancementDialog({
                         : 'border-red-500/30 bg-red-500/10 text-red-300'
                     }`}
                   >
-                    <span className="font-semibold">Material: </span>
-                    {info.material?.kind === 'DUPLICATE'
-                      ? `1× cópia de ${info.material.name}`
-                      : `1× ${info.material?.name}`}
-                    <span className="ml-2">{info.materialAvailable ? '✓' : '✗ (não possui)'}</span>
+                    <div className="flex items-center justify-between gap-2">
+                      <span>
+                        <span className="font-semibold">Material: </span>
+                        {info.material?.kind === 'DUPLICATE'
+                          ? `1× cópia de ${info.material.name}`
+                          : `1× ${info.material?.name}`}
+                      </span>
+                      {/* Quantidade disponível — diminui a cada uso (refetch pós-tentativa). */}
+                      <span className="shrink-0 rounded-md bg-black/40 px-2 py-0.5 text-xs font-bold">
+                        {info.materialCount ?? (info.materialAvailable ? 1 : 0)}× disponível
+                      </span>
+                    </div>
                   </div>
 
                   {/* Aviso de risco */}
@@ -439,7 +553,7 @@ export default function EnhancementDialog({
                         key={chargeId}
                         initial={{ width: '0%' }}
                         animate={{ width: '100%' }}
-                        transition={{ duration: CHARGE_MS / 1000, ease: [0.45, 0, 0.55, 1] }}
+                        transition={{ duration: instant ? 0 : CHARGE_MS / 1000, ease: [0.45, 0, 0.55, 1] }}
                         className={`h-full ${
                           phase === 'done'
                             ? result?.success
@@ -492,28 +606,53 @@ export default function EnhancementDialog({
 
               {/* Botão de aprimorar */}
               {!info.maxLevel && !(result?.destroyed) && (
-                <button
-                  onClick={handleEnhance}
-                  disabled={attempting || !info.canEnhance}
-                  className={`w-full rounded-lg py-3 text-lg font-bold transition-all ${
-                    attempting
-                      ? 'cursor-wait bg-amber-700/50 text-amber-200'
-                      : info.canEnhance
-                        ? 'bg-gradient-to-r from-amber-600 to-amber-500 text-black shadow-lg shadow-amber-900/50 hover:from-amber-500 hover:to-amber-400'
-                        : 'cursor-not-allowed bg-gray-800 text-gray-500'
-                  }`}
-                >
-                  {attempting ? (
-                    <motion.span
-                      animate={{ opacity: [1, 0.4, 1] }}
-                      transition={{ repeat: Infinity, duration: 0.8 }}
+                <>
+                  {/* Switch: pula a animação de forja e aplica o resultado na hora */}
+                  <div className="mb-3 flex items-center justify-between rounded-lg border border-white/10 bg-black/40 px-3 py-2">
+                    <span className="flex items-center gap-1.5 text-sm text-gray-300">
+                      ⚡ Modo instantâneo
+                      <span className="text-xs text-gray-500">(sem animação)</span>
+                    </span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={instant}
+                      onClick={toggleInstant}
+                      className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+                        instant ? 'bg-amber-500' : 'bg-gray-700'
+                      }`}
                     >
-                      ⚒️ Aprimorando...
-                    </motion.span>
-                  ) : (
-                    '⚒️ Aprimorar'
-                  )}
-                </button>
+                      <span
+                        className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                          instant ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={handleEnhance}
+                    disabled={attempting || !info.canEnhance}
+                    className={`w-full rounded-lg py-3 text-lg font-bold transition-all ${
+                      attempting
+                        ? 'cursor-wait bg-amber-700/50 text-amber-200'
+                        : info.canEnhance
+                          ? 'bg-gradient-to-r from-amber-600 to-amber-500 text-black shadow-lg shadow-amber-900/50 hover:from-amber-500 hover:to-amber-400'
+                          : 'cursor-not-allowed bg-gray-800 text-gray-500'
+                    }`}
+                  >
+                    {attempting && !instant ? (
+                      <motion.span
+                        animate={{ opacity: [1, 0.4, 1] }}
+                        transition={{ repeat: Infinity, duration: 0.8 }}
+                      >
+                        ⚒️ Aprimorando...
+                      </motion.span>
+                    ) : (
+                      '⚒️ Aprimorar'
+                    )}
+                  </button>
+                </>
               )}
 
               {result?.destroyed && (
@@ -533,14 +672,28 @@ export default function EnhancementDialog({
             </div>
           )}
 
-          {/* Seletor: inventário do personagem para escolher o item a aprimorar */}
-          {items && items.length > 0 && (
+          {/* Seletor: inventário do personagem para escolher o item a aprimorar.
+              Vindo de uma Pedra Negra, filtra pela categoria que a pedra aprimora. */}
+          {(() => {
+            const pickable = filterCategory
+              ? (items || []).filter((it) => getGearCategory(it.type) === filterCategory)
+              : items || [];
+            if (pickable.length === 0) {
+              return filterCategory ? (
+                <div className="mt-5 border-t border-white/10 pt-4 text-center text-sm text-gray-400">
+                  Nenhum{filterCategory === 'WEAPON' ? 'a arma' : 'a armadura'} no inventário para esta pedra.
+                </div>
+              ) : null;
+            }
+            return (
             <div className="mt-5 border-t border-white/10 pt-4">
               <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
-                Itens do inventário
+                {filterCategory
+                  ? `Escolha ${filterCategory === 'WEAPON' ? 'a arma' : 'a peça'} para a pedra`
+                  : 'Itens do inventário'}
               </div>
               <div className="grid grid-cols-5 gap-2 sm:grid-cols-6">
-                {items.map((it) => {
+                {pickable.map((it) => {
                   const img = resolveImageUrl(it.image);
                   const isSel = it.id === selectedId;
                   return (
@@ -572,7 +725,8 @@ export default function EnhancementDialog({
                 })}
               </div>
             </div>
-          )}
+            );
+          })()}
         </motion.div>
       </motion.div>
     </AnimatePresence>,

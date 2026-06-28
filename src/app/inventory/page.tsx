@@ -56,7 +56,7 @@ export default function InventoryPage() {
   const [characterInventory, setCharacterInventory] = useState<CharacterInventoryItem[]>([]);
   const [equippedItems, setEquippedItems] = useState<EquippedItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [enhanceTarget, setEnhanceTarget] = useState<{ inventoryId: string; itemName: string } | null>(null);
+  const [enhanceTarget, setEnhanceTarget] = useState<{ inventoryId: string; itemName: string; category?: 'WEAPON' | 'ARMOR' } | null>(null);
   // Gold da poupança da conta (User.goldBalance), exibido na barra de moedas do baú global.
   const [bankGold, setBankGold] = useState<number | null>(null);
 
@@ -429,7 +429,7 @@ export default function InventoryPage() {
             onEquip={(itemId) => handleEquipItem(itemId)}
             onUnequip={(itemId) => handleUnequipItem(itemId)}
             onConsume={(itemId) => handleConsumeItem(itemId)}
-            onEnhance={(invId, name) => setEnhanceTarget({ inventoryId: invId, itemName: name })}
+            onEnhance={(invId, name, category) => setEnhanceTarget({ inventoryId: invId, itemName: name, category })}
             onSendToGlobal={(itemId) => handleTransferToGlobal(itemId)}
             goldText={typeof activeCharacter?.gold === 'number' ? activeCharacter.gold.toLocaleString('pt-BR') : '0'}
           />
@@ -455,6 +455,7 @@ export default function InventoryPage() {
             characterId={selectedCharacter}
             inventoryId={enhanceTarget.inventoryId || undefined}
             itemName={enhanceTarget.itemName}
+            filterCategory={enhanceTarget.category}
             items={characterInventory
               .filter((i) => i.item.type !== 'CONSUMABLE')
               .map((i) => ({

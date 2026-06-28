@@ -47,7 +47,7 @@ export default function CharacterDetailsPage() {
   const [equipment, setEquipment] = useState<any[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [goldOnchainText, setGoldOnchainText] = useState<string>('—');
-  const [enhanceTarget, setEnhanceTarget] = useState<{ inventoryId: string; itemName: string } | null>(null);
+  const [enhanceTarget, setEnhanceTarget] = useState<{ inventoryId: string; itemName: string; category?: 'WEAPON' | 'ARMOR' } | null>(null);
   // Índice da forma exibida na figura central (0 = forma original; demais = transformações).
   const [appearanceIndex, setAppearanceIndex] = useState(0);
 
@@ -935,7 +935,7 @@ export default function CharacterDetailsPage() {
               onEquip={handleEquip}
               onUnequip={handleUnequip}
               onConsume={handleConsume}
-              onEnhance={(invId, name) => setEnhanceTarget({ inventoryId: invId, itemName: name })}
+              onEnhance={(invId, name, category) => setEnhanceTarget({ inventoryId: invId, itemName: name, category })}
               onExpand={handleExpandInventory}
               expanding={expandingSlots}
               expandTitle="Expandir +5 slots (custo: 1000 GOLD)"
@@ -962,6 +962,7 @@ export default function CharacterDetailsPage() {
           characterId={effectiveCharacterId}
           inventoryId={enhanceTarget.inventoryId || undefined}
           itemName={enhanceTarget.itemName}
+          filterCategory={enhanceTarget.category}
           items={inventory
             .filter((i) => i.item.type !== 'CONSUMABLE')
             .map((i) => ({

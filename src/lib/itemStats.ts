@@ -38,3 +38,32 @@ export function formatItemStats(stats: Record<string, any> | null | undefined, t
   }
   return out;
 }
+
+/**
+ * Retorna os stats de um item como pares { label, value } numéricos, na ordem
+ * canônica. Usado para montar a comparação "atual → projetado" no diálogo de
+ * aprimoramento (ver EnhancementDialog). Não inclui stats zerados.
+ */
+export function itemStatEntries(
+  stats: Record<string, any> | null | undefined,
+  type?: string
+): { key: string; label: string; value: number }[] {
+  if (!stats) return [];
+
+  if (type === 'CONSUMABLE') {
+    const out: { key: string; label: string; value: number }[] = [];
+    if (stats.staminaRestore) out.push({ key: 'staminaRestore', label: 'Stamina', value: stats.staminaRestore });
+    if (stats.healthRestore) out.push({ key: 'healthRestore', label: 'HP', value: stats.healthRestore });
+    if (stats.manaRestore) out.push({ key: 'manaRestore', label: 'MP', value: stats.manaRestore });
+    return out;
+  }
+
+  const out: { key: string; label: string; value: number }[] = [];
+  for (const [key, label] of EQUIP_STAT_LABELS) {
+    const value = stats[key];
+    if (typeof value === 'number' && value !== 0) {
+      out.push({ key, label, value });
+    }
+  }
+  return out;
+}

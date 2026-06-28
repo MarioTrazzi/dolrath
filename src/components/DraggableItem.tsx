@@ -22,7 +22,7 @@ interface DraggableItemProps {
   onEquip?: (itemId: string, slotType: EquipmentSlotType) => void;
   onUnequip?: (itemId: string) => void;
   onConsume?: (itemId: string) => void;
-  onEnhance?: (inventoryId: string, itemName: string) => void;
+  onEnhance?: (inventoryId: string, itemName: string, stoneCategory?: 'WEAPON' | 'ARMOR') => void;
   onTransfer?: (itemId: string) => void;
   onSendToGlobal?: (itemId: string) => void;
   characterId?: string;

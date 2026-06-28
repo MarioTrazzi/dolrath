@@ -22,7 +22,7 @@ interface CharacterItemGridProps {
   onEquip?: (itemId: string, slotType: EquipmentSlotType) => void;
   onUnequip?: (itemId: string) => void;
   onConsume?: (itemId: string) => void;
-  onEnhance?: (inventoryId: string, itemName: string) => void;
+  onEnhance?: (inventoryId: string, itemName: string, stoneCategory?: 'WEAPON' | 'ARMOR') => void;
   /** Envia o item de volta ao inventário global (opcional — usado em /inventory). */
   onSendToGlobal?: (itemId: string) => void;
   /** Inventário global: transfere o item para o personagem ativo (opcional). */

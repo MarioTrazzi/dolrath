@@ -161,6 +161,9 @@ export default function DungeonsPage() {
                   <span>❤️ {selectedCharacter.hp}/{selectedCharacter.maxHp}</span>
                   <span>🔮 {selectedCharacter.mp}/{selectedCharacter.maxMp}</span>
                   <span>⚡ {selectedCharacter.stamina}/{selectedCharacter.maxStamina}</span>
+                  {typeof (selectedCharacter as any).experience === 'number' && (
+                    <span>⭐ {(selectedCharacter as any).experience}/{(selectedCharacter as any).nextLevelExperience ?? '?'} XP</span>
+                  )}
                   {(selectedCharacter as any).isAlive === false && (
                     <span className="text-red-400 font-bold">💀 MORTO</span>
                   )}

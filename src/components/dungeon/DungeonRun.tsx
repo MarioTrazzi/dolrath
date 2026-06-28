@@ -38,6 +38,7 @@ import {
   normalizeCombatClass,
   contestedOutcome,
   PVE_DIE,
+  PVE_HIT_MIN,
   K50,
   MAX_LEVEL_REF,
   type Levers,
@@ -53,6 +54,10 @@ export interface DungeonCharacter {
   id: string
   name: string
   level: number
+  /** XP total acumulado do personagem (alimenta o contador de XP no topo da run). */
+  experience?: number
+  /** XP total exigido pelo próximo nível (do experienceSystem, via API de detalhe). */
+  nextLevelExperience?: number
   race: string
   class: string
   avatar?: string | null
@@ -336,7 +341,8 @@ function equipmentPower(equipArray: any[]): { attack: number; defense: number; h
     // vida extra das peças
     hp += num(s.hp)
   }
-  return { attack, defense, hp }
+  // HP é um pool inteiro (o aprimoramento fracionado tornava effMaxHp/hp decimais na barra).
+  return { attack, defense, hp: Math.round(hp) }
 }
 
 interface Outcome {
@@ -960,7 +966,9 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     setPanelResult(atk)
 
     // Monstro reage e rola o MESMO dado (maior vence; evasão/escala entram na margem).
-    const mDefChoice: DefenseKind = Math.random() < 0.5 ? 'dodge' : 'defend'
+    // Defender (bloqueio) é raro: ~20% das vezes; no resto Esquiva. Evita que o monstro
+    // bloqueie demais e deixa o combate mais dinâmico.
+    const mDefChoice: DefenseKind = Math.random() < 0.2 ? 'defend' : 'dodge'
     const def = mkResult(sides, 0)
     later(() => setDiceResults(prev => ({ ...prev, [MONSTER_ID]: def })), 1700)
     later(() => resolvePlayerAttack(atk, def, mDefChoice), 3000)
@@ -1318,8 +1326,16 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   }, [phase, stage, hasRolled, panelResult, pendingAttack, monsterPlan, stamina, mp])
 
   // ---------- Piloto automático ----------
-  // Melhor golpe PAGÁVEL agora: especial (se transformado + MP) > arma (se tem arma + MP) > básico.
+  // Dano "típico" estimado de um golpe (core × multiplicador mediano do acerto). Serve só
+  // para o piloto decidir se vale gastar MP — o dano real ainda sai da disputa de dados.
+  const estDamage = (kind: AttackKind) => playerPowerFor(kind) * PVE_HIT_MIN
+
+  // Melhor golpe PAGÁVEL agora, mas SEM desperdiçar MP num monstro quase morto:
+  // se o soco (grátis) já deve derrubá-lo, soca; se a arma já basta, evita o Especial caro.
   const autoPickAttack = (): AttackKind => {
+    const foeHp = monsterRef.current?.hp ?? Infinity
+    if (foeHp <= estDamage('basic')) return 'basic'
+    if (hasWeapon && mp >= ATTACKS.weapon.mp && foeHp <= estDamage('weapon')) return 'weapon'
     if (transform && mp >= ATTACKS.special.mp) return 'special'
     if (hasWeapon && mp >= ATTACKS.weapon.mp) return 'weapon'
     return 'basic'
@@ -1347,16 +1363,18 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
           if (potion) { useConsumable(potion); return }
         }
         // 2) Repõe MP quando nem o golpe da arma cabe — habilita ataques mais fortes.
-        // (POUPAR STAMINA luta só no básico, sem MP — não reabastece MP nesse modo.)
-        if (!staminaSaver && mp < ATTACKS.weapon.mp && mp < character.maxMp) {
+        if (mp < ATTACKS.weapon.mp && mp < character.maxMp) {
           const mPotion = consumables.find(c => c.mp > 0 && c.qty > 0)
           if (mPotion) { useConsumable(mPotion); return }
         }
       }
-      // POUPAR STAMINA: só ataque básico (sem transformação/Especial). Senão:
-      if (staminaSaver) { choosePlayerAttack('basic'); return }
-      // 3) Transforma para liberar o Especial (raça com forma, fora de recarga e com MP).
-      if (!transform && transformCd === 0 && transformForms.length > 0) {
+      // POUPAR STAMINA não restringe o ATAQUE: transformação, Especial e arma custam só
+      // MP (não stamina), então o piloto segue usando o melhor golpe. A economia de stamina
+      // acontece só na DEFESA (sempre Esquivar, nunca Defender — ver stage 'playerDefense').
+      // 3) Transforma para liberar o Especial — mas só se o monstro vai SOBREVIVER a um
+      //    golpe de arma. Transformar (MP + recarga) num bicho com 2 de vida é desperdício.
+      const foeHp = monsterRef.current?.hp ?? Infinity
+      if (!transform && transformCd === 0 && transformForms.length > 0 && foeHp > estDamage('weapon')) {
         const cfg = TRANSFORMATION_CONFIG[transformForms[0]]
         if (cfg && mp >= cfg.cost.mp) { activateTransform(transformForms[0]); return }
       }
@@ -1441,7 +1459,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const ResourceBar = ({ icon, value, max, gradient }: { icon: string; value: number; max: number; gradient: string }) => (
     <div className="flex items-center gap-1.5">
       <span className="text-xs">{icon}</span>
-      <div className="w-24 sm:w-32 h-2.5 bg-black/60 rounded-full overflow-hidden border border-white/10">
+      <div className="w-16 sm:w-32 h-2.5 bg-black/60 rounded-full overflow-hidden border border-white/10">
         <motion.div
           className={`h-full rounded-full bg-gradient-to-r ${gradient}`}
           initial={false}
@@ -1449,7 +1467,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
           transition={{ type: 'spring', stiffness: 120, damping: 20 }}
         />
       </div>
-      <span className="text-[10px] text-white/80 font-mono w-14">{value}/{max}</span>
+      <span className="text-[10px] text-white/80 font-mono w-11 sm:w-14">{value}/{max}</span>
     </div>
   )
 
@@ -1503,8 +1521,13 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
 
           <div className="flex items-center gap-2.5">
             <div className="text-right text-[10px] text-white/80 leading-tight">
-              <div>💰 {totals.gold}</div>
-              <div>⭐ {totals.xp} XP</div>
+              {/* Ouro: só o farmado NESTA run (deixa claro quanto rendeu a masmorra). */}
+              <div title="Ouro farmado nesta masmorra">💰 {totals.gold}</div>
+              {/* XP: a do personagem JÁ somada à ganha na run (poupa espaço no mapa). */}
+              <div title={`XP do personagem${totals.xp > 0 ? ` (+${totals.xp} nesta run)` : ''}`}>
+                ⭐ {(character.experience ?? 0) + totals.xp}
+                {totals.xp > 0 && <span className="text-purple-300"> +{totals.xp}</span>} XP
+              </div>
             </div>
             {(phase === 'explore' || phase === 'combat') && (
               <button
@@ -1520,8 +1543,9 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
 
         {/* Barras de recurso no mobile — só na trilha; em combate a arena mostra o HP. */}
         {phase !== 'combat' && (
-          <div className="sm:hidden flex-shrink-0 flex items-center justify-center gap-3 px-3 py-1.5 bg-black/40 border-b border-white/10">
+          <div className="sm:hidden flex-shrink-0 flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 px-3 py-1.5 bg-black/40 border-b border-white/10">
             <ResourceBar icon="❤️" value={hp} max={character.maxHp} gradient="from-red-600 to-rose-400" />
+            <ResourceBar icon="🔮" value={mp} max={character.maxMp} gradient="from-blue-600 to-cyan-400" />
             <ResourceBar icon="⚡" value={stamina} max={character.maxStamina} gradient="from-yellow-600 to-amber-300" />
           </div>
         )}
@@ -1931,6 +1955,39 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
               </AnimatePresence>
             </main>
 
+            {/* ---------- LOG DE FARM: itens coletados na run (persiste por node) ---------- */}
+            {/* Diferente dos floats (que somem), aqui o drop de cada node FICA — o jogador */}
+            {/* vê tudo que farmou. Ouro/XP ficam só no topo; aqui são só os itens. */}
+            {totals.items.length > 0 && (
+              <div className="flex-shrink-0 px-4 z-20">
+                <div className="mx-auto max-w-md flex items-center gap-1.5 overflow-x-auto py-1.5">
+                  <span className="shrink-0 text-sm pr-0.5" title="Itens farmados nesta run">🎒</span>
+                  {(() => {
+                    const agg = new Map<string, { name: string; emoji: string; label: string; qty: number }>()
+                    for (const it of totals.items) {
+                      const cur = agg.get(it.label)
+                      if (cur) cur.qty += 1
+                      else agg.set(it.label, { ...it, qty: 1 })
+                    }
+                    return Array.from(agg.values()).map((it, i) => (
+                      <div
+                        key={`${it.label}-${i}`}
+                        title={it.qty > 1 ? `${it.label} ×${it.qty}` : it.label}
+                        className="relative shrink-0 w-8 h-8 rounded-lg bg-white/5 border border-white/10 grid place-items-center"
+                      >
+                        <ItemThumb name={it.name} emoji={it.emoji} className="text-lg" />
+                        {it.qty > 1 && (
+                          <span className="absolute -bottom-1 -right-1 px-0.5 rounded bg-black/85 border border-white/15 text-[8px] font-mono font-bold text-white leading-none">
+                            ×{it.qty}
+                          </span>
+                        )}
+                      </div>
+                    ))
+                  })()}
+                </div>
+              </div>
+            )}
+
             {/* ---------- NARRAÇÃO DO MESTRE ---------- */}
             <MasterNarration text={narration} />
 
@@ -1971,7 +2028,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                 {auto && (
                   <button
                     onClick={() => setStaminaSaver(v => !v)}
-                    title={staminaSaver ? 'Poupar stamina LIGADO: o piloto luta só com ataque básico + esquiva (não gasta stamina defendendo)' : 'Poupar stamina: o piloto luta só no básico + esquiva, guardando stamina para runs manuais ou PvP'}
+                    title={staminaSaver ? 'Poupar stamina LIGADO: o piloto sempre Esquiva (nunca Defende, a única ação que gasta stamina). Transformação e Especiais continuam — eles custam só MP.' : 'Poupar stamina: o piloto sempre Esquiva em vez de Defender, guardando a stamina diária para runs manuais ou PvP. Ataques e transformação seguem normais.'}
                     className={`shrink-0 h-9 px-3 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 border transition-colors ${
                       staminaSaver
                         ? 'bg-amber-600/85 border-amber-300/60 text-white'
@@ -2087,7 +2144,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                   {auto && (
                     <button
                       onClick={() => setStaminaSaver(v => !v)}
-                      title={staminaSaver ? 'Poupar stamina LIGADO: só ataque básico + esquiva (não defende)' : 'Poupar stamina: luta só no básico + esquiva, sem gastar stamina defendendo'}
+                      title={staminaSaver ? 'Poupar stamina LIGADO: sempre Esquiva (nunca Defende). Transformação e Especiais seguem — custam só MP.' : 'Poupar stamina: sempre Esquiva em vez de Defender, sem gastar stamina. Ataques e transformação normais.'}
                       className={`px-2 py-1 rounded-full text-[10px] font-black border transition-colors ${
                         staminaSaver
                           ? 'bg-amber-600/85 border-amber-300/60 text-white'

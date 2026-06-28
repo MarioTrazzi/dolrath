@@ -15,6 +15,15 @@ const EQUIP_STAT_LABELS: [string, string][] = [
 ];
 
 /**
+ * Formata um valor de stat para exibição: até 1 casa decimal, sem o `.0`
+ * supérfluo. Os stats aprimorados são fracionários (2.1, 9.5…) para que cada
+ * nível de aprimoramento mexa visivelmente; os base continuam inteiros.
+ */
+export function formatStatValue(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+/**
  * Retorna os stats de um item como strings prontas para exibir (ex.: "STR: +3").
  * Para consumíveis, mostra os efeitos de restauração.
  */
@@ -33,7 +42,7 @@ export function formatItemStats(stats: Record<string, any> | null | undefined, t
   for (const [key, label] of EQUIP_STAT_LABELS) {
     const value = stats[key];
     if (typeof value === 'number' && value !== 0) {
-      out.push(`${label}: +${value}`);
+      out.push(`${label}: +${formatStatValue(value)}`);
     }
   }
   return out;

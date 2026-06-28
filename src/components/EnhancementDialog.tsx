@@ -8,7 +8,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getLevelLabel, applyEnhancementToStats, getGearCategory } from '@/lib/enhancementSystem';
-import { itemStatEntries } from '@/lib/itemStats';
+import { itemStatEntries, formatStatValue } from '@/lib/itemStats';
 import ItemIcon from './ItemIcon';
 import { resolveImageUrl } from '@/lib/imageUrl';
 import { itemImagePath } from '@/lib/itemCatalog';
@@ -100,26 +100,10 @@ export default function EnhancementDialog({
   // Fases da animação estilo BDO: a barra carrega e, ao encher, brilha (sucesso) ou apaga (falha)
   const [phase, setPhase] = useState<'idle' | 'charging' | 'done'>('idle');
   const [chargeId, setChargeId] = useState(0);
-  // Modo instantâneo: pula a animação de forja e revela o resultado de imediato.
-  // Preferência lembrada entre tentativas/sessões.
-  const [instant, setInstant] = useState(false);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setInstant(window.localStorage.getItem('enhanceInstant') === '1');
-    }
-  }, []);
-
-  const toggleInstant = () => {
-    setInstant((v) => {
-      const next = !v;
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem('enhanceInstant', next ? '1' : '0');
-      }
-      return next;
-    });
-  };
-
+  // A animação de forja sempre roda: de qualquer forma esperamos o servidor
+  // processar a tentativa, então o loading "esconde" essa latência e o resultado
+  // parece instantâneo (sem dar a impressão de servidor lento).
   const CHARGE_MS = 1500;
 
   const fetchInfo = useCallback(async () => {
@@ -172,8 +156,7 @@ export default function EnhancementDialog({
     setPhase('charging');
 
     // A barra leva CHARGE_MS para encher; o resultado só é revelado ao final.
-    // No modo instantâneo o resultado aparece sem espera.
-    const minDelay = new Promise((resolve) => setTimeout(resolve, instant ? 0 : CHARGE_MS));
+    const minDelay = new Promise((resolve) => setTimeout(resolve, CHARGE_MS));
 
     try {
       let data: EnhanceResult;
@@ -318,80 +301,88 @@ export default function EnhancementDialog({
 
           {!loading && info && (
             <>
-              {/* Item e progressão de nível (oculto se o item foi destruído) */}
-              {!result?.destroyed && (
-              <div className="mb-4 rounded-lg border border-white/10 bg-black/40 p-4 text-center">
-                {/* Ícone pequeno + nome + nível atual */}
-                <div className="mb-2 flex items-center justify-center gap-2.5">
-                  <span className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/15 bg-gradient-to-br from-[#1c232b] to-[#0d1116]">
-                    {headerImg ? (
-                      <img src={headerImg} alt={info.itemName || ''} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
-                    ) : (
-                      <ItemIcon type={(info.itemType as any) || 'SWORD'} size={22} />
-                    )}
-                    {info.currentLevel > 0 && (
-                      <span className="absolute right-0.5 bottom-0 text-[10px] font-black text-[#f1d79a]" style={{ textShadow: '0 1px 2px #000' }}>
-                        {getLevelLabel(info.currentLevel)}
-                      </span>
-                    )}
-                  </span>
-                  <div
-                    className={`text-left text-base font-semibold leading-tight ${
-                      info.currentLevel >= 16
-                        ? 'text-orange-400'
-                        : info.currentLevel > 0
-                          ? 'text-cyan-300'
-                          : 'text-white'
-                    }`}
-                  >
-                    {info.itemName || info.displayName}
-                  </div>
-                </div>
-                {!info.maxLevel && (
-                  <div className="mt-2 flex items-center justify-center gap-3 text-2xl font-bold">
-                    <span className="text-gray-400">
-                      {getLevelLabel(info.currentLevel) || 'Base'}
-                    </span>
-                    <span className="text-amber-400">→</span>
-                    <span className="text-amber-300">{info.targetLabel}</span>
-                  </div>
-                )}
-                {info.maxLevel && (
-                  <div className="mt-2 text-sm font-semibold text-orange-400">
-                    🏆 Nível máximo alcançado (V)
-                  </div>
-                )}
-              </div>
-              )}
-
-              {/* Prévia de stats: atual → projetado após o aprimoramento */}
-              {!info.maxLevel && !result?.destroyed && statComparison.length > 0 && (
-                <div className="mb-4 rounded-lg border border-white/10 bg-black/40 p-3">
-                  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Atributos após aprimorar
-                  </div>
-                  <div className="space-y-1.5">
-                    {statComparison.map((s) => {
-                      const delta = s.to - s.from;
-                      return (
-                        <div key={s.key} className="flex items-center justify-between text-sm">
-                          <span className="text-gray-300">{s.label}</span>
-                          <span className="flex items-center gap-2 font-semibold tabular-nums">
-                            <span className="text-gray-400">{s.from}</span>
-                            <span className="text-amber-400">→</span>
-                            <span className="text-emerald-300">{s.to}</span>
-                            {delta !== 0 && (
-                              <span className={`text-xs ${delta > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                ({delta > 0 ? '+' : ''}{delta})
-                              </span>
-                            )}
-                          </span>
+              {/* Card único: arma + progressão à esquerda, prévia de stats à
+                  direita (mesma altura). Oculto se o item foi destruído. */}
+              {!result?.destroyed && (() => {
+                const hasStats = !info.maxLevel && statComparison.length > 0;
+                return (
+                <div className="mb-4 rounded-lg border border-white/10 bg-black/40 p-4">
+                  <div className="flex items-stretch gap-4">
+                    {/* Coluna esquerda: arma + nível atual → alvo */}
+                    <div className={`flex flex-col justify-center text-center ${hasStats ? 'flex-1' : 'w-full'}`}>
+                      <div className="flex items-center justify-center gap-2.5">
+                        <span className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/15 bg-gradient-to-br from-[#1c232b] to-[#0d1116]">
+                          {headerImg ? (
+                            <img src={headerImg} alt={info.itemName || ''} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                          ) : (
+                            <ItemIcon type={(info.itemType as any) || 'SWORD'} size={22} />
+                          )}
+                          {info.currentLevel > 0 && (
+                            <span className="absolute right-0.5 bottom-0 text-[10px] font-black text-[#f1d79a]" style={{ textShadow: '0 1px 2px #000' }}>
+                              {getLevelLabel(info.currentLevel)}
+                            </span>
+                          )}
+                        </span>
+                        <div
+                          className={`text-left text-base font-semibold leading-tight ${
+                            info.currentLevel >= 16
+                              ? 'text-orange-400'
+                              : info.currentLevel > 0
+                                ? 'text-cyan-300'
+                                : 'text-white'
+                          }`}
+                        >
+                          {info.itemName || info.displayName}
                         </div>
-                      );
-                    })}
+                      </div>
+                      {!info.maxLevel && (
+                        <div className="mt-2 flex items-center justify-center gap-2 text-xl font-bold">
+                          <span className="text-gray-400">
+                            {getLevelLabel(info.currentLevel) || 'Base'}
+                          </span>
+                          <span className="text-amber-400">→</span>
+                          <span className="text-amber-300">{info.targetLabel}</span>
+                        </div>
+                      )}
+                      {info.maxLevel && (
+                        <div className="mt-2 text-sm font-semibold text-orange-400">
+                          🏆 Nível máximo alcançado (V)
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Coluna direita: prévia de stats atual → projetado */}
+                    {hasStats && (
+                      <div className="flex-1 border-l border-white/10 pl-4">
+                        <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                          Após aprimorar
+                        </div>
+                        <div className="space-y-1.5">
+                          {statComparison.map((s) => {
+                            const delta = Math.round((s.to - s.from) * 10) / 10;
+                            return (
+                              <div key={s.key} className="flex items-center justify-between gap-2 text-sm">
+                                <span className="text-gray-300">{s.label}</span>
+                                <span className="flex items-center gap-1.5 font-semibold tabular-nums">
+                                  <span className="text-gray-400">{formatStatValue(s.from)}</span>
+                                  <span className="text-amber-400">→</span>
+                                  <span className="text-emerald-300">{formatStatValue(s.to)}</span>
+                                  {delta !== 0 && (
+                                    <span className={`text-xs ${delta > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                      ({delta > 0 ? '+' : ''}{formatStatValue(delta)})
+                                    </span>
+                                  )}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
-              )}
+                );
+              })()}
 
               {!info.maxLevel && !result?.destroyed && (
                 <>
@@ -553,7 +544,7 @@ export default function EnhancementDialog({
                         key={chargeId}
                         initial={{ width: '0%' }}
                         animate={{ width: '100%' }}
-                        transition={{ duration: instant ? 0 : CHARGE_MS / 1000, ease: [0.45, 0, 0.55, 1] }}
+                        transition={{ duration: CHARGE_MS / 1000, ease: [0.45, 0, 0.55, 1] }}
                         className={`h-full ${
                           phase === 'done'
                             ? result?.success
@@ -606,53 +597,28 @@ export default function EnhancementDialog({
 
               {/* Botão de aprimorar */}
               {!info.maxLevel && !(result?.destroyed) && (
-                <>
-                  {/* Switch: pula a animação de forja e aplica o resultado na hora */}
-                  <div className="mb-3 flex items-center justify-between rounded-lg border border-white/10 bg-black/40 px-3 py-2">
-                    <span className="flex items-center gap-1.5 text-sm text-gray-300">
-                      ⚡ Modo instantâneo
-                      <span className="text-xs text-gray-500">(sem animação)</span>
-                    </span>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={instant}
-                      onClick={toggleInstant}
-                      className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-                        instant ? 'bg-amber-500' : 'bg-gray-700'
-                      }`}
+                <button
+                  onClick={handleEnhance}
+                  disabled={attempting || !info.canEnhance}
+                  className={`w-full rounded-lg py-3 text-lg font-bold transition-all ${
+                    attempting
+                      ? 'cursor-wait bg-amber-700/50 text-amber-200'
+                      : info.canEnhance
+                        ? 'bg-gradient-to-r from-amber-600 to-amber-500 text-black shadow-lg shadow-amber-900/50 hover:from-amber-500 hover:to-amber-400'
+                        : 'cursor-not-allowed bg-gray-800 text-gray-500'
+                  }`}
+                >
+                  {attempting ? (
+                    <motion.span
+                      animate={{ opacity: [1, 0.4, 1] }}
+                      transition={{ repeat: Infinity, duration: 0.8 }}
                     >
-                      <span
-                        className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                          instant ? 'translate-x-5' : 'translate-x-0'
-                        }`}
-                      />
-                    </button>
-                  </div>
-
-                  <button
-                    onClick={handleEnhance}
-                    disabled={attempting || !info.canEnhance}
-                    className={`w-full rounded-lg py-3 text-lg font-bold transition-all ${
-                      attempting
-                        ? 'cursor-wait bg-amber-700/50 text-amber-200'
-                        : info.canEnhance
-                          ? 'bg-gradient-to-r from-amber-600 to-amber-500 text-black shadow-lg shadow-amber-900/50 hover:from-amber-500 hover:to-amber-400'
-                          : 'cursor-not-allowed bg-gray-800 text-gray-500'
-                    }`}
-                  >
-                    {attempting && !instant ? (
-                      <motion.span
-                        animate={{ opacity: [1, 0.4, 1] }}
-                        transition={{ repeat: Infinity, duration: 0.8 }}
-                      >
-                        ⚒️ Aprimorando...
-                      </motion.span>
-                    ) : (
-                      '⚒️ Aprimorar'
-                    )}
-                  </button>
-                </>
+                      ⚒️ Aprimorando...
+                    </motion.span>
+                  ) : (
+                    '⚒️ Aprimorar'
+                  )}
+                </button>
               )}
 
               {result?.destroyed && (

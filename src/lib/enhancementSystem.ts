@@ -195,7 +195,10 @@ export function applyEnhancementToStats(stats: Record<string, any> | null | unde
   if (mult === 1) return result;
   for (const key of SCALING_STAT_KEYS) {
     if (typeof result[key] === 'number') {
-      result[key] = Math.round(result[key] * mult);
+      // 1 casa decimal (sem arredondar pra inteiro): assim cada nível MEXE o
+      // stat de forma visível (2.0 → 2.1 → 2.2…) em vez de arredondar 2.1→2 e
+      // dar a impressão de que o aprimoramento não fez nada.
+      result[key] = Math.round(result[key] * mult * 10) / 10;
     }
   }
   return result;

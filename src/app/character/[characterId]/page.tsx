@@ -875,7 +875,7 @@ export default function CharacterDetailsPage() {
                     {a.icon}
                     <div className="flex items-baseline" style={{ gap: 4 }}>
                       <span style={{ fontSize: 14, fontWeight: 700, color: '#d7d2c4' }}>
-                        {a.isPercent ? `${total.toFixed(1)}%` : total}
+                        {a.isPercent ? `${total.toFixed(1)}%` : Math.round(total)}
                       </span>
                       {delta !== 0 && (
                         <span style={{ fontSize: 11, fontWeight: 700, color: positive ? '#86efac' : '#fca5a5' }}>

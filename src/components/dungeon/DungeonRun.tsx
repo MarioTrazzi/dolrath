@@ -748,6 +748,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     level: monster.level,
     race: dungeon.name,
     class: monster.isBoss ? 'Boss' : 'Monstro',
+    avatar: monster.image ?? null,
     avatarEmoji: monster.emoji,
     hp: monster.hp,
     maxHp: monster.maxHp,

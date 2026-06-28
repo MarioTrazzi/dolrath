@@ -15,9 +15,27 @@ export type DungeonId = 'floresta' | 'caverna' | 'pantano' | 'ruinas'
 export interface DungeonMonsterDef {
   name: string
   emoji: string
+  /** Arte do bicho (webp gerado por scripts/generate-monster-images.ts). Quando
+   *  ausente, a UI cai no emoji. */
+  image?: string
   baseHp: number
   baseAttack: number
   baseDefense: number
+}
+
+/** Slug do asset de imagem de um monstro (mesma normalização dos itens). */
+export function monsterImageSlug(name: string): string {
+  return name
+    .normalize('NFD').replace(/[̀-ͯ]/g, '') // remove acentos
+    .toLowerCase()
+    .replace(/['’]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+/** Caminho do asset de imagem de um monstro. */
+export function monsterImagePath(name: string): string {
+  return `/monsters/${monsterImageSlug(name)}.webp`
 }
 
 export interface DungeonBossDef extends DungeonMonsterDef {
@@ -100,12 +118,13 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     exploreHint: 'Role o d20 para se embrenhar na mata',
     enterText: 'Você cruza a fronteira das árvores. A luz da lua mal atravessa a copa...',
     monsters: [
-      { name: 'Lobo Faminto', emoji: '🐺', baseHp: 42, baseAttack: 9, baseDefense: 3 },
-      { name: 'Aranha Gigante', emoji: '🕷️', baseHp: 38, baseAttack: 11, baseDefense: 2 },
-      { name: 'Javali Furioso', emoji: '🐗', baseHp: 55, baseAttack: 8, baseDefense: 5 },
-      { name: 'Ent Corrompido', emoji: '🌳', baseHp: 70, baseAttack: 10, baseDefense: 7 },
+      { name: 'Lobo Faminto', emoji: '🐺', image: '/monsters/lobo-faminto.webp', baseHp: 42, baseAttack: 9, baseDefense: 3 },
+      { name: 'Aranha Gigante', emoji: '🕷️', image: '/monsters/aranha-gigante.webp', baseHp: 38, baseAttack: 11, baseDefense: 2 },
+      { name: 'Javali Furioso', emoji: '🐗', image: '/monsters/javali-furioso.webp', baseHp: 55, baseAttack: 8, baseDefense: 5 },
+      { name: 'Ent Corrompido', emoji: '🌳', image: '/monsters/ent-corrompido.webp', baseHp: 70, baseAttack: 10, baseDefense: 7 },
     ],
-    boss: { name: 'Anciã da Mata', title: 'Guardiã Corrompida', emoji: '🌲', baseHp: 110, baseAttack: 12, baseDefense: 7 },
+    // Arte do boss já existe e é reaproveitada (gerada anteriormente).
+    boss: { name: 'Anciã da Mata', title: 'Guardiã Corrompida', emoji: '🌲', image: '/boss-ancia-da-mata.webp', baseHp: 110, baseAttack: 12, baseDefense: 7 },
     events: [
       {
         kind: 'trap', min: 1, max: 2, icon: '🌿', title: 'Espinhos Venenosos!',
@@ -353,6 +372,8 @@ export interface ScaledMonster {
   id: string
   name: string
   emoji: string
+  /** Arte do bicho (se houver) — a UI usa como avatar no combate. */
+  image?: string
   level: number
   hp: number
   maxHp: number
@@ -530,6 +551,7 @@ export function scaleMonster(
     id: `${s.isBoss ? 'boss' : 'monster'}-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
     name: s.isBoss ? `👑 ${def.name}${bossTitle}` : def.name,
     emoji: def.emoji,
+    image: def.image,
     level: monLevel,
     hp,
     maxHp: hp,

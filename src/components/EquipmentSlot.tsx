@@ -6,8 +6,9 @@ import ItemIcon from './ItemIcon';
 import { ItemTooltip } from './ItemTooltip';
 import { Item } from '@/types/item';
 import { EquipmentSlotType } from '@prisma/client';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { resolveImageUrl } from '@/lib/imageUrl';
+import { itemImagePath } from '@/lib/itemCatalog';
 import { getLevelLabel } from '@/lib/enhancementSystem';
 
 interface EquipmentSlotProps {
@@ -67,7 +68,14 @@ function canEquipInSlot(itemType: string, slotType: EquipmentSlotType): boolean 
 }
 
 export function EquipmentSlot({ type, item, enhancementLevel = 0, onEquip, onUnequip, compact, accent }: EquipmentSlotProps) {
-  const itemImage = item ? resolveImageUrl(item.image) : null;
+  // Imagem: banco (item.image) → asset estático por nome (/items/<slug>.webp) →
+  // ícone genérico só se a arte 404. Espelha DraggableItem/ItemTooltip e cobre
+  // itens criados sem `image` no banco (ex.: acessórios novos), que antes caíam
+  // direto no ícone SVG ao serem equipados.
+  const [imgError, setImgError] = useState(false);
+  const itemImage = item && !imgError
+    ? (resolveImageUrl(item.image) ?? (item.name ? itemImagePath(item.name) : null))
+    : null;
   const showEnhancement = enhancementLevel > 0;
 
   const ref = useRef<HTMLDivElement>(null);
@@ -116,6 +124,7 @@ export function EquipmentSlot({ type, item, enhancementLevel = 0, onEquip, onUne
                 <img
                   src={itemImage}
                   alt={item.name}
+                  onError={() => setImgError(true)}
                   className="w-full h-full object-cover group-hover:scale-110 transition-transform"
                   referrerPolicy="no-referrer"
                 />
@@ -164,6 +173,7 @@ export function EquipmentSlot({ type, item, enhancementLevel = 0, onEquip, onUne
               <img
                 src={itemImage}
                 alt={item.name}
+                onError={() => setImgError(true)}
                 className="w-full h-full object-cover group-hover:scale-110 transition-transform"
                 referrerPolicy="no-referrer"
               />

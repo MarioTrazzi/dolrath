@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
-import { buildTrail, getDungeon } from '@/lib/dungeonRunServer'
+import { buildTrail, getDungeon, isRunLive } from '@/lib/dungeonRunServer'
 import { regenAndPersist } from '@/lib/staminaServer'
 
 export const dynamic = 'force-dynamic'
@@ -44,7 +44,25 @@ export async function POST(req: Request) {
 
     const trail = buildTrail(dungeon)
 
-    // Uma única run ativa por personagem: encerra qualquer anterior como abandonada.
+    // 🔒 Anti-duplicata entre abas: se este herói já tem uma run VIVA (heartbeat
+    // recente em outra aba/janela), bloqueia — não dá pra farmar o mesmo personagem
+    // em paralelo. Runs órfãs (aba caiu) já passaram da janela e são abandonadas abaixo.
+    const existing = await prisma.dungeonRun.findFirst({
+      where: { characterId, status: 'active' },
+      orderBy: { updatedAt: 'desc' },
+    })
+    if (existing && isRunLive(existing)) {
+      return NextResponse.json(
+        {
+          error: 'Este herói já está em uma masmorra em outra aba ou janela. Saia da outra sessão para liberá-lo.',
+          code: 'HERO_IN_USE',
+          dungeonId: existing.dungeonId,
+        },
+        { status: 409 }
+      )
+    }
+
+    // Uma única run ativa por personagem: encerra qualquer anterior (órfã) como abandonada.
     const run = await prisma.$transaction(async (tx) => {
       await tx.dungeonRun.updateMany({
         where: { characterId, status: 'active' },

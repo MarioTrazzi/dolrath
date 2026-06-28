@@ -28,6 +28,16 @@ import { getCatalogItemByName, getConsumableByName, getIngredientByName, getForg
 
 // Custo de stamina por TIPO de nó (espelha DungeonRun.tsx: MINOR/MAIN/BOSS_STEP_COST).
 export const STEP_COST = { minor: 4, main: 8, boss: 6 } as const
+
+// 🔒 LOCK VIVO DA RUN (anti-duplicata entre abas). Enquanto a aba que está jogando
+// manda heartbeat (a cada ~25s; cada /step e /combat também toca updatedAt), a run
+// conta como VIVA e o MESMO herói não pode abrir outra run em outra aba/janela —
+// evita farmar o mesmo personagem em paralelo. Se a aba cair (fechar/crashar), o
+// heartbeat para e o lock expira sozinho após esta janela, liberando o herói.
+export const RUN_LIVE_WINDOW_MS = 60_000
+export function isRunLive(run: { status: string; updatedAt: Date }): boolean {
+  return run.status === 'active' && Date.now() - new Date(run.updatedAt).getTime() < RUN_LIVE_WINDOW_MS
+}
 // Chance de encontrar monstro num nó MENOR, INVERSAMENTE proporcional ao d20: rolagem
 // baixa = perigo (quase sempre monstro), rolagem alta = sorte (raramente monstro, mas se
 // a luta acontece o espólio é excelente — a qualidade do loot usa o MESMO roll, então

@@ -505,6 +505,8 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   // o runId e o monstro que o servidor rolou para o nó atual (para o combate).
   const runIdRef = useRef<string | null>(null)
   const [runReady, setRunReady] = useState(false)
+  // Herói já em uso em outra aba (lock vivo): bloqueia a run com um aviso.
+  const [blocked, setBlocked] = useState<string | null>(null)
   const serverMonsterRef = useRef<ScaledMonster | null>(null)
   const startedRef = useRef(false)
 
@@ -582,6 +584,11 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
         })
         const data = await res.json()
         if (!res.ok) {
+          // Herói já rodando em outra aba/janela: bloqueia com tela dedicada.
+          if (data?.code === 'HERO_IN_USE') {
+            setBlocked(data?.error || 'Este herói já está em uma masmorra em outra aba.')
+            return
+          }
           showBanner('🚫', data?.error || 'Não foi possível entrar na masmorra')
           return
         }
@@ -593,6 +600,28 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       }
     })()
   }, [character.id, dungeon.id, showBanner])
+
+  // 💓 Heartbeat: mantém o lock vivo enquanto a run está aberta. Se o servidor
+  // disser que a run não está mais ativa (assumida/encerrada noutro lugar), bloqueia.
+  useEffect(() => {
+    if (!runReady || !runIdRef.current) return
+    let stop = false
+    const beat = async () => {
+      try {
+        const res = await fetch('/api/dungeon/run/heartbeat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ runId: runIdRef.current }),
+        })
+        const data = await res.json().catch(() => null)
+        if (!stop && data && data.active === false) {
+          setBlocked('Esta run foi encerrada em outra aba ou janela.')
+        }
+      } catch { /* rede instável: tenta no próximo tick */ }
+    }
+    const id = setInterval(beat, 25000)
+    return () => { stop = true; clearInterval(id) }
+  }, [runReady])
 
   // Esconde a dica do rodapé depois de ~30s (aparece uma vez no início da run).
   useEffect(() => {
@@ -1499,6 +1528,34 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       <span className="text-[10px] text-white/80 font-mono w-11 sm:w-14">{value}/{max}</span>
     </div>
   )
+
+  // 🔒 Herói em uso em outra aba: tela de bloqueio (anti-duplicata de run).
+  if (blocked) {
+    return (
+      <div className="fixed inset-0 z-50 overflow-hidden bg-black grid place-items-center px-6">
+        <div className="absolute inset-0 opacity-40"><DungeonBackdrop theme={dungeon.id} /></div>
+        <div
+          className="relative w-full max-w-sm rounded-2xl p-6 text-center"
+          style={{
+            background: 'linear-gradient(180deg, rgba(30,30,63,0.96), rgba(15,15,35,0.98))',
+            border: `1px solid ${dungeon.accentSoft}`,
+            boxShadow: `0 24px 60px -12px ${dungeon.accentSoft}`,
+          }}
+        >
+          <div className="text-5xl mb-3">🔒</div>
+          <h3 className="text-xl font-black text-white mb-2">Herói em uso</h3>
+          <p className="text-sm text-textsec leading-snug mb-5">{blocked}</p>
+          <button
+            onClick={() => onExit({ hp: effMaxHp, mp: character.maxMp, stamina })}
+            className="w-full py-3 rounded-lg font-black text-white text-sm transition-transform active:scale-[0.98] hover:scale-[1.02]"
+            style={{ background: `linear-gradient(90deg, ${dungeon.accent}, ${dungeon.accentSoft})` }}
+          >
+            Voltar
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-black">

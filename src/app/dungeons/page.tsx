@@ -19,6 +19,11 @@ export default function DungeonsPage() {
   const [activeDungeon, setActiveDungeon] = useState<DungeonDef | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Herói já rodando em OUTRA aba/janela (lock vivo no servidor): bloqueia o "Entrar".
+  const [heroInUse, setHeroInUse] = useState(false)
+  // Acabamos de sair da NOSSA run: ignora a detecção por uns segundos (o /abandon é
+  // assíncrono, então o lock ainda pode constar "vivo" e piscaria o bloqueio à toa).
+  const [recentExit, setRecentExit] = useState(false)
 
   useEffect(() => {
     if (!session) {
@@ -97,9 +102,33 @@ export default function DungeonsPage() {
     })
   }, [activeCharacterId, characters])
 
+  // Detecta se o herói selecionado já está rodando em OUTRA aba/janela (lock vivo no
+  // servidor) e bloqueia o "Entrar". Recheca ao trocar de herói e ao focar a aba —
+  // assim, abrir o jogo numa segunda aba detecta a run em andamento na hora.
+  const heroId = selectedCharacter?.id
+  useEffect(() => {
+    if (!heroId || activeDungeon || recentExit) { setHeroInUse(false); return }
+    let cancelled = false
+    const check = async () => {
+      try {
+        const res = await fetch(`/api/dungeon/run/active?characterId=${heroId}`)
+        const data = await res.json().catch(() => null)
+        if (!cancelled) setHeroInUse(!!data?.active)
+      } catch { /* ignora: não bloqueia por falha de rede */ }
+    }
+    check()
+    const onFocus = () => check()
+    window.addEventListener('focus', onFocus)
+    // Recheca periodicamente para liberar o botão quando a outra aba fechar.
+    const id = setInterval(check, 20000)
+    return () => { cancelled = true; window.removeEventListener('focus', onFocus); clearInterval(id) }
+  }, [heroId, activeDungeon, recentExit])
+
   // Ao sair da masmorra, sincroniza os recursos locais do personagem
   const handleRunExit = (updates: { hp: number; mp: number; stamina: number }) => {
     setActiveDungeon(null)
+    setRecentExit(true)
+    setTimeout(() => setRecentExit(false), 4000)
     if (selectedCharacter) {
       const updated = { ...selectedCharacter, ...updates }
       setSelectedCharacter(updated)
@@ -191,6 +220,15 @@ export default function DungeonsPage() {
           </div>
         )}
 
+        {heroInUse && (
+          <div className="bg-amber-950/60 border border-amber-600/50 rounded-xl p-4 mb-6 text-center">
+            <p className="text-amber-300 font-bold text-sm">🔒 Herói em uso em outra aba</p>
+            <p className="text-amber-400/80 text-xs">
+              {selectedCharacter?.name} já está numa masmorra em outra aba/janela. Saia daquela sessão para liberá-lo (libera sozinho ~1 min após fechar).
+            </p>
+          </div>
+        )}
+
         {/* Grid das 4 masmorras */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
           {DUNGEON_LIST.map((dungeon, idx) => (
@@ -262,12 +300,15 @@ export default function DungeonsPage() {
 
                   {(() => {
                     const meetsLevel = !!selectedCharacter && selectedCharacter.level >= dungeon.levelReq
-                    const enter = canEnter && meetsLevel
+                    const enter = canEnter && meetsLevel && !heroInUse
                     return (
                       <button
                         onClick={() => enter && setActiveDungeon(dungeon)}
                         disabled={!enter}
-                        title={!meetsLevel ? `Requer nível ${dungeon.levelReq}` : undefined}
+                        title={
+                          heroInUse ? 'Este herói já está em uma masmorra em outra aba ou janela.'
+                          : !meetsLevel ? `Requer nível ${dungeon.levelReq}` : undefined
+                        }
                         className={`px-5 py-2.5 rounded-xl font-black text-sm text-white shadow-lg transition-all ${
                           enter ? 'hover:scale-105' : 'opacity-50 cursor-not-allowed'
                         }`}
@@ -276,7 +317,8 @@ export default function DungeonsPage() {
                           boxShadow: `0 4px 20px ${dungeon.accentSoft}`,
                         }}
                       >
-                        {canEnter && !meetsLevel ? `🔒 Nv. ${dungeon.levelReq}` : '🚪 Entrar'}
+                        {heroInUse ? '🔒 Em outra aba'
+                          : canEnter && !meetsLevel ? `🔒 Nv. ${dungeon.levelReq}` : '🚪 Entrar'}
                       </button>
                     )
                   })()}

@@ -603,26 +603,28 @@ const LUCK_CFG: Record<
   }
 > = {
   low: {
-    goldBase: 4, goldVar: 8, pMaterial: 0.7, pConsumable: 0.18, pStone: 0.02,
+    goldBase: 4, goldVar: 8, pMaterial: 0.7, pConsumable: 0.18, pStone: 0.06,
     pItemCommon: 0.10, pItemUncommon: 0.05,
     pItemRare: 0.02, pItemEpic: 0.01,
   },
   mid: {
-    goldBase: 10, goldVar: 16, pMaterial: 0.5, pConsumable: 0.35, pStone: 0.05,
+    goldBase: 10, goldVar: 16, pMaterial: 0.5, pConsumable: 0.35, pStone: 0.15,
     pItemCommon: 0.25, pItemUncommon: 0.15,
     pItemRare: 0.07, pItemEpic: 0.04,
   },
   high: {
-    goldBase: 18, goldVar: 30, pMaterial: 0.3, pConsumable: 0.45, pStone: 0.1,
+    goldBase: 18, goldVar: 30, pMaterial: 0.3, pConsumable: 0.45, pStone: 0.26,
     pItemCommon: 0.40, pItemUncommon: 0.25,
     pItemRare: 0.15, pItemEpic: 0.07,
   },
 }
 
-// Nó menor dropa menos; pedra mais rara nele; sala/boss dão mais ouro.
+// Nó menor dropa menos; pedra concentrada nas salas de monstro (main/boss); sala/boss
+// dão mais ouro. Pedra de aprimoramento deve vir PRINCIPALMENTE de monstro: main e boss
+// (sempre monstro) puxam o multiplicador; o nó menor dá só uma fração.
 const NODE_LOOT_MULT: Record<LootNodeKind, { all: number; stone: number; gold: number }> = {
-  minor: { all: 0.8, stone: 0.4, gold: 0.8 },
-  main: { all: 1.0, stone: 1.0, gold: 1.3 },
+  minor: { all: 0.8, stone: 0.5, gold: 0.8 },
+  main: { all: 1.0, stone: 1.4, gold: 1.3 },
   boss: { all: 1.0, stone: 2.5, gold: 2.0 },
 }
 

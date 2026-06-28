@@ -183,6 +183,40 @@ async function addDropToInventoryTx(
   const itemName = drop.name
   let existingItem = await tx.item.findFirst({ where: { name: itemName } })
 
+  // Cura registros legados: ingredientes/materiais criados antes do sistema de craft
+  // (ou reaproveitados por nome) podem não ter `image`/`stats.kind`. Como o Item é
+  // global e reaproveitado por nome, sem isto o card ficava sem imagem e sem o botão
+  // de "Usar na Alquimia/Forja". [[dolrath-alchemy-crafting]]
+  if (existingItem && existingItem.type === 'CONSUMABLE') {
+    const ing = getIngredientByName(itemName)
+    const mat = ing ? undefined : getForgeMaterialByName(itemName)
+    const meta = ing
+      ? { kind: 'ingredient' as const, emoji: ing.emoji, goldValue: ing.goldValue, rarity: ing.rarity }
+      : mat
+      ? { kind: 'material' as const, emoji: mat.emoji, goldValue: mat.goldValue, rarity: mat.rarity }
+      : null
+    if (meta) {
+      const stats = (existingItem.stats as Record<string, any> | null) ?? {}
+      const needsKind = stats.kind !== meta.kind
+      const needsImage = !existingItem.image
+      if (needsKind || needsImage) {
+        existingItem = await tx.item.update({
+          where: { id: existingItem.id },
+          data: {
+            ...(needsImage ? { image: itemImagePath(itemName) } : {}),
+            stats: {
+              ...stats,
+              kind: meta.kind,
+              rarity: stats.rarity ?? meta.rarity,
+              emoji: stats.emoji ?? meta.emoji,
+              sellPrice: stats.sellPrice ?? Math.floor(meta.goldValue * 0.6),
+            },
+          },
+        })
+      }
+    }
+  }
+
   if (!existingItem) {
     const catalogItem = getCatalogItemByName(itemName)
     const consumable = catalogItem ? undefined : getConsumableByName(itemName)

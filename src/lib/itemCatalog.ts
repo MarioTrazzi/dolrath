@@ -948,6 +948,45 @@ export function getCommonForgeMaterials(): ForgeMaterial[] {
   return FORGE_MATERIAL_CATALOG.filter((m) => !m.memoryShard);
 }
 
+// Forma mínima de um Item para classificar craft/transmutação (cliente e servidor).
+// `stats` é frouxo (any) porque vem como Prisma JsonValue, objeto do catálogo, etc.
+type CraftableLike = { name?: string | null; type?: string | null; stats?: any };
+
+/**
+ * Diz se um Item é um INGREDIENTE de alquimia (vértice do triângulo do alquimista).
+ *
+ * `stats.kind === 'ingredient'` é só um cache denormalizado: registros antigos de
+ * Item (criados antes do sistema de ingredientes, ou reaproveitados por nome no
+ * loot) não têm esse campo. Por isso a fonte de verdade é o INGREDIENT_CATALOG —
+ * caímos no nome quando o `kind` falta, para a UI e o craft funcionarem mesmo com
+ * dados legados. [[dolrath-alchemy-crafting]]
+ */
+export function isIngredientItem(item: CraftableLike): boolean {
+  if (!item) return false;
+  if (item.type && item.type !== 'CONSUMABLE') return false;
+  const kind = (item.stats as any)?.kind;
+  if (kind === 'ingredient') return true;
+  if (kind && kind !== 'ingredient') return false; // já classificado como outra coisa
+  return !!item.name && INGREDIENT_BY_NAME.has(item.name);
+}
+
+/**
+ * Diz se um Item é um MATERIAL de forja (insumo da bigorna do ferreiro).
+ * Mesma lógica do ingrediente: `stats.kind === 'material'` é cache; a verdade é o
+ * FORGE_MATERIAL_CATALOG. Pedras de aprimoramento (stats.enhancementStone) NÃO
+ * contam aqui — têm fluxo próprio (aprimoramento/refino).
+ */
+export function isMaterialItem(item: CraftableLike): boolean {
+  if (!item) return false;
+  if (item.type && item.type !== 'CONSUMABLE') return false;
+  const stats = item.stats as any;
+  if (stats?.enhancementStone) return false;
+  const kind = stats?.kind;
+  if (kind === 'material') return true;
+  if (kind && kind !== 'material') return false;
+  return !!item.name && FORGE_MATERIAL_BY_NAME.has(item.name);
+}
+
 export function getItemsForDungeon(dungeonId: string): CatalogItem[] {
   return ITEM_CATALOG.filter((i) => i.dungeons.includes(dungeonId));
 }

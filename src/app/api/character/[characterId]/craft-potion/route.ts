@@ -2,7 +2,7 @@ import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
 import { ConsumableSubtype } from '@prisma/client'
-import { getConsumableByName } from '@/lib/itemCatalog'
+import { getConsumableByName, isIngredientItem } from '@/lib/itemCatalog'
 import { getRecipeById } from '@/lib/alchemy'
 import { addHistoryEntry } from '@/lib/characterHistory'
 
@@ -63,10 +63,9 @@ export async function POST(
         },
         include: { item: true },
       })
-      // Só conta o que está marcado como ingrediente (não poções de mesmo nome).
-      const ingredientRows = rows.filter(
-        (r) => (r.item.stats as any)?.kind === 'ingredient'
-      )
+      // Só conta o que é ingrediente (não poções de mesmo nome). Classifica pelo
+      // catálogo para também aceitar registros antigos sem stats.kind. [[dolrath-alchemy-crafting]]
+      const ingredientRows = rows.filter((r) => isIngredientItem(r.item))
 
       const byName = new Map<string, typeof ingredientRows>()
       for (const r of ingredientRows) {

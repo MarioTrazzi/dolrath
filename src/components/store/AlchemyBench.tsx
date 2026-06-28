@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { findRecipeByIngredients } from '@/lib/alchemy';
-import { getIngredientByName, itemImagePath, type Rarity } from '@/lib/itemCatalog';
+import { getIngredientByName, isIngredientItem, itemImagePath, type Rarity } from '@/lib/itemCatalog';
 
 // Miniatura do item: usa a arte /items/<slug>.webp e cai no emoji se a imagem falhar.
 function ItemThumb({ name, emoji, className = 'text-2xl' }: { name: string; emoji: string; className?: string }) {
@@ -107,7 +107,8 @@ export default function AlchemyBench({
   const ingredientCounts = useMemo(() => {
     const map = new Map<string, number>();
     for (const inv of inventory) {
-      if (inv.item.type === 'CONSUMABLE' && (inv.item.stats as any)?.kind === 'ingredient') {
+      // Inclui registros antigos sem stats.kind (classificados pelo catálogo). [[dolrath-alchemy-crafting]]
+      if (isIngredientItem(inv.item)) {
         map.set(inv.item.name, (map.get(inv.item.name) ?? 0) + inv.quantity);
       }
     }
@@ -138,6 +139,25 @@ export default function AlchemyBench({
     if (idx === -1) return;
     setSlots((prev) => prev.map((s, i) => (i === idx ? name : s)));
   };
+
+  // Vindo do inventário com "⚗️ Usar na Alquimia" (/alchemist?place=<nome>): põe o
+  // ingrediente num vértice assim que ele aparece no inventário e limpa a URL para
+  // não repetir ao recarregar. Aguarda mais ingredientes para fechar a receita.
+  const placedFromUrlRef = useRef(false);
+  useEffect(() => {
+    if (placedFromUrlRef.current || loadingInv) return;
+    const params = new URLSearchParams(window.location.search);
+    const name = params.get('place');
+    if (!name) return;
+    if (getIngredientByName(name) && (ingredientCounts.get(name) ?? 0) > 0) {
+      placeIngredient(name);
+      placedFromUrlRef.current = true;
+      params.delete('place');
+      const qs = params.toString();
+      window.history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadingInv, ingredientCounts]);
 
   const removeSlot = (idx: number) => {
     setSlots((prev) => prev.map((s, i) => (i === idx ? null : s)));

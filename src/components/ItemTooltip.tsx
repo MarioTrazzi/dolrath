@@ -2,13 +2,16 @@
 
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useRouter } from 'next/navigation';
 import { Item } from '@/types/item';
 import { EquipmentSlotType } from '@prisma/client';
 import { getItemVisual, getItemTypeLabel } from '@/lib/itemVisuals';
 import { resolveImageUrl } from '@/lib/imageUrl';
+import { itemImagePath, isIngredientItem, isMaterialItem } from '@/lib/itemCatalog';
 import { applyEnhancementToStats, getLevelLabel } from '@/lib/enhancementSystem';
 import { formatItemStats } from '@/lib/itemStats';
 import ItemCardBackdrop from '@/components/store/ItemCardBackdrop';
+import ItemIcon from '@/components/ItemIcon';
 
 interface ItemTooltipProps {
   item: Item;
@@ -32,7 +35,9 @@ interface ItemTooltipProps {
 }
 
 export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryId, onEquip, onUnequip, onConsume, onEnhance, onTransfer, onSendToGlobal, characterId, children }: ItemTooltipProps) {
+  const router = useRouter();
   const [showTooltip, setShowTooltip] = useState(false);
+  const [imgError, setImgError] = useState(false);
   const [coords, setCoords] = useState<{ top: number; left: number; placement: 'top' | 'bottom' }>({ top: 0, left: 0, placement: 'top' });
   const [mounted, setMounted] = useState(false);
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -168,7 +173,10 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryI
 
   // Identidade visual idêntica à da loja (cor de destaque, chips, cenário).
   const visual = getItemVisual(item.type);
-  const itemImage = resolveImageUrl(item.image);
+  // Imagem do card: banco (item.image) → asset estático por nome (/items/<slug>.webp)
+  // → ícone genérico se a arte 404. Cobre ingredientes/materiais/cintos antigos que
+  // não têm `image` no banco mas têm webp gerado (mesma cadeia do DraggableItem).
+  const itemImage = imgError ? null : (resolveImageUrl(item.image) ?? (item.name ? itemImagePath(item.name) : null));
   const showEnhancement = enhancementLevel > 0;
   const isConsumable = item.type === 'CONSUMABLE';
   // Pedra Negra: consumível de aprimoramento. "Consumir" abre o seletor de aprimoramento.
@@ -178,6 +186,12 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryI
   const stoneCategory: 'WEAPON' | 'ARMOR' | undefined = stoneKind
     ? stoneKind.startsWith('WEAPON') ? 'WEAPON' : 'ARMOR'
     : undefined;
+  // Insumos de craft: ingrediente de alquimia (triângulo do alquimista) e material
+  // de forja (bigorna do ferreiro). "Usar" leva à bancada certa com o item já posto,
+  // em vez de "Consumir" (que não faz nada para estes itens). A classificação cai no
+  // catálogo por nome quando o registro antigo não tem stats.kind. [[dolrath-alchemy-crafting]]
+  const isIngredient = !isEnhancementStone && isIngredientItem(item);
+  const isMaterial = !isEnhancementStone && isMaterialItem(item);
 
   // Estilo de botão da loja: gradiente da cor de destaque + sombra.
   const buttonStyle = (hex: string, soft: string) => ({
@@ -201,10 +215,27 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryI
     setShowTooltip(false);
   };
 
+  // Leva o jogador à bancada de craft com o item já posicionado (?place=<nome>).
+  // O alquimista lê o parâmetro e coloca o ingrediente num vértice do triângulo;
+  // o ferreiro coloca o material na bigorna. Ambos aguardam mais itens da receita.
+  const handleUseInCraft = (path: '/alchemist' | '/blacksmith') => {
+    router.push(`${path}?place=${encodeURIComponent(item.name)}`);
+    setShowTooltip(false);
+  };
+
   const handleAction = () => {
     // Pedra negra: "Consumir" abre o aprimoramento em vez de consumir.
     if (isEnhancementStone) {
       handleEnhanceClick();
+      return;
+    }
+    // Ingrediente de alquimia → alquimista; material de forja → ferreiro.
+    if (isIngredient) {
+      handleUseInCraft('/alchemist');
+      return;
+    }
+    if (isMaterial) {
+      handleUseInCraft('/blacksmith');
       return;
     }
     // Para itens consumíveis, consumir ao invés de equipar
@@ -255,16 +286,19 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryI
 
           {/* Conteúdo */}
           <div className="relative p-4 flex flex-col">
-            {itemImage && (
-              <div className="w-full aspect-square relative mb-3 rounded-xl overflow-hidden bg-black/40 ring-1 ring-white/10">
+            <div className="w-full aspect-square relative mb-3 rounded-xl overflow-hidden bg-black/40 ring-1 ring-white/10 flex items-center justify-center">
+              {itemImage ? (
                 <img
                   src={itemImage}
                   alt={item.name}
+                  onError={() => setImgError(true)}
                   className="w-full h-full object-cover"
                   referrerPolicy="no-referrer"
                 />
-              </div>
-            )}
+              ) : (
+                <ItemIcon type={item.type} size={56} className="text-white/80" />
+              )}
+            </div>
 
             <h3 className="font-black text-lg mb-2 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">{item.name}</h3>
 
@@ -327,6 +361,10 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryI
                     style={
                       isEnhancementStone
                         ? buttonStyle('#f59e0b', 'rgba(245,158,11,0.35)')
+                        : isIngredient
+                        ? buttonStyle('#10b981', 'rgba(16,185,129,0.35)')
+                        : isMaterial
+                        ? buttonStyle('#f97316', 'rgba(249,115,22,0.35)')
                         : isConsumable
                         ? buttonStyle('#22c55e', 'rgba(34,197,94,0.35)')
                         : isEquipped
@@ -336,6 +374,10 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryI
                   >
                     {isEnhancementStone
                       ? '⚒️ Aprimorar'
+                      : isIngredient
+                      ? '⚗️ Usar na Alquimia'
+                      : isMaterial
+                      ? '⚒️ Usar na Forja'
                       : isConsumable
                       ? '🧪 Consumir'
                       : isEquipped

@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Info } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { forgeRecipesByGroup, forgeMaterialEmoji, getForgeOutputCatalogItem, findForgeRecipeByMaterials, type ForgeRecipe } from '@/lib/forge';
 import { getItemVisual } from '@/lib/itemVisuals';
-import { itemImagePath, type Rarity } from '@/lib/itemCatalog';
+import { itemImagePath, isMaterialItem, type Rarity } from '@/lib/itemCatalog';
 
 const DRAG_MIME = 'text/forge-material';
 
@@ -144,7 +144,8 @@ export default function ForgeBench({
     const map = new Map<string, number>();
     for (const inv of inventory) {
       const st = inv.item.stats as Record<string, unknown> | null;
-      const isForge = inv.item.type === 'CONSUMABLE' && (st?.kind === 'material' || st?.enhancementStone);
+      // Material de forja (catálogo, resiliente a registros sem stats.kind) OU pedra de aprimoramento.
+      const isForge = isMaterialItem(inv.item) || (inv.item.type === 'CONSUMABLE' && !!st?.enhancementStone);
       if (isForge) map.set(inv.item.name, (map.get(inv.item.name) ?? 0) + inv.quantity);
     }
     return Array.from(map.entries()).map(([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name));
@@ -170,6 +171,25 @@ export default function ForgeBench({
       return { ...p, [name]: cur + 1 };
     });
   }, [have]);
+
+  // Vindo do inventário com "⚒️ Usar na Forja" (/blacksmith?place=<nome>): põe o
+  // material na bigorna assim que ele aparece no inventário e limpa a URL para não
+  // repetir ao recarregar. Aguarda os demais materiais para fechar a receita.
+  const placedFromUrlRef = useRef(false);
+  useEffect(() => {
+    if (placedFromUrlRef.current || loadingInv) return;
+    const params = new URLSearchParams(window.location.search);
+    const name = params.get('place');
+    if (!name) return;
+    if ((matCounts.get(name) ?? 0) > 0) {
+      addMaterial(name);
+      placedFromUrlRef.current = true;
+      params.delete('place');
+      const qs = params.toString();
+      window.history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadingInv, matCounts]);
 
   const removeMaterial = (name: string) => {
     setPlaced((p) => {

@@ -426,8 +426,18 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const [tokenIdx, setTokenIdx] = useState(0)
   const [moving, setMoving] = useState(false)
   const [narration, setNarration] = useState(dungeon.enterText)
-  // Uma dica aleatória no começo da run; some sozinha depois de ~30s.
-  const [tipIdx] = useState(() => Math.floor(Math.random() * TIPS.length))
+  // Uma dica por run, some sozinha depois de ~30s. Avança em sequência entre runs
+  // (índice no localStorage) pra não repetir a mesma toda vez que reentrar na masmorra.
+  const [tipIdx] = useState(() => {
+    try {
+      const last = Number(localStorage.getItem('dgn_tip_idx'))
+      const next = Number.isFinite(last) ? (last + 1) % TIPS.length : Math.floor(Math.random() * TIPS.length)
+      localStorage.setItem('dgn_tip_idx', String(next))
+      return next
+    } catch {
+      return Math.floor(Math.random() * TIPS.length)
+    }
+  })
   const [tipVisible, setTipVisible] = useState(true)
   const [nodeEvents, setNodeEvents] = useState<Record<number, RevealedNode>>({})
   const [floats, setFloats] = useState<{ id: number; label: string; color: string }[]>([])

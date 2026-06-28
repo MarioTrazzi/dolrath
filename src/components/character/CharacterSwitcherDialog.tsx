@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -101,7 +102,16 @@ function CharacterCard({
 }
 
 export function CharacterSwitcherDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { characters, activeCharacterId, setActiveCharacterId } = useActiveCharacter()
+  const { characters, activeCharacterId, setActiveCharacterId, refresh } = useActiveCharacter()
+
+  // O snapshot dos personagens só é buscado na montagem / criação / volta de run.
+  // Sem isto, abrir o seletor depois de gastar recursos (ex.: stamina numa run)
+  // mostrava o estado de quando a página carregou — a barra "cheia" mesmo já tendo
+  // gastado. Recarregar ao abrir garante que HP/MP/Stamina/Failstacks reflitam o
+  // banco na hora. (O regen passivo de stamina segue subindo sozinho via tick.)
+  useEffect(() => {
+    if (open) refresh()
+  }, [open, refresh])
 
   const handleSelect = (id: string) => {
     setActiveCharacterId(id)

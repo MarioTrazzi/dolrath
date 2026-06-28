@@ -19,12 +19,14 @@ interface CharacterItemGridProps {
   isEquipped?: (itemId: string) => boolean;
   accent: string;
   characterId: string;
-  onEquip: (itemId: string, slotType: EquipmentSlotType) => void;
-  onUnequip: (itemId: string) => void;
-  onConsume: (itemId: string) => void;
-  onEnhance: (inventoryId: string, itemName: string) => void;
+  onEquip?: (itemId: string, slotType: EquipmentSlotType) => void;
+  onUnequip?: (itemId: string) => void;
+  onConsume?: (itemId: string) => void;
+  onEnhance?: (inventoryId: string, itemName: string) => void;
   /** Envia o item de volta ao inventário global (opcional — usado em /inventory). */
   onSendToGlobal?: (itemId: string) => void;
+  /** Inventário global: transfere o item para o personagem ativo (opcional). */
+  onTransfer?: (itemId: string) => void;
   /** Texto de busca para filtrar por nome. */
   search?: string;
   gridTemplateColumns?: string;
@@ -47,6 +49,7 @@ export function CharacterItemGrid({
   onConsume,
   onEnhance,
   onSendToGlobal,
+  onTransfer,
   search,
   gridTemplateColumns = 'repeat(auto-fill, minmax(50px, 1fr))',
   gap = 5,
@@ -75,6 +78,7 @@ export function CharacterItemGrid({
               onConsume={onConsume}
               onEnhance={onEnhance}
               onSendToGlobal={onSendToGlobal}
+              onTransfer={onTransfer}
               characterId={characterId}
             />
           );

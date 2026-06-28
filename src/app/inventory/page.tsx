@@ -7,10 +7,12 @@ import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import EnhancementDialog from '@/components/EnhancementDialog';
 import VaultBackdrop from '@/components/inventory/VaultBackdrop';
-import { DraggableItem } from '@/components/DraggableItem';
-import { CharacterItemGrid } from '@/components/inventory/CharacterItemGrid';
+import InventoryPanel from '@/components/inventory/InventoryPanel';
 import BankPanel from '@/components/inventory/BankPanel';
 import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider';
+
+// Baú global começa com 50 espaços. (Liberar mais slots no global fica para depois.)
+const GLOBAL_SLOTS = 50;
 
 interface Item {
   id: string;
@@ -55,9 +57,12 @@ export default function InventoryPage() {
   const [equippedItems, setEquippedItems] = useState<EquippedItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [enhanceTarget, setEnhanceTarget] = useState<{ inventoryId: string; itemName: string } | null>(null);
+  // Gold da poupança da conta (User.goldBalance), exibido na barra de moedas do baú global.
+  const [bankGold, setBankGold] = useState<number | null>(null);
 
   useEffect(() => {
     fetchUserInventory();
+    fetchBankGold();
   }, []);
 
   useEffect(() => {
@@ -79,6 +84,18 @@ export default function InventoryPage() {
       }
     } catch (error) {
       console.error('Error fetching user inventory:', error);
+    }
+  };
+
+  const fetchBankGold = async () => {
+    try {
+      const response = await fetch('/api/bank/status');
+      if (response.ok) {
+        const data = await response.json();
+        setBankGold(Number(data?.bankGold ?? 0));
+      }
+    } catch (error) {
+      console.error('Error fetching bank gold:', error);
     }
   };
 
@@ -394,87 +411,40 @@ export default function InventoryPage() {
         </div>
 
         {/* 🏦 Banco: poupança da conta + carteira do personagem ativo */}
-        <BankPanel characterId={activeCharacterId} />
+        <BankPanel characterId={activeCharacterId} onChanged={fetchBankGold} />
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* User Global Inventory */}
-          <div className="bg-surface/50 border border-white/20 rounded-lg p-6 shadow-lg">
-            <h2 className="text-xl font-semibold mb-4 text-text-primary flex items-center gap-2">
-              🌐 Inventário Global do Usuário
-            </h2>
-            <p className="text-sm text-text-secondary mb-4">
-              Itens comprados que podem ser transferidos para qualquer personagem
-            </p>
-            
-            {userInventory.length === 0 ? (
-              <div className="text-center py-8">
-                <div className="text-4xl mb-3">📭</div>
-                <p className="text-text-secondary">Nenhum item no inventário global</p>
-              </div>
-            ) : (
-              <>
-                {!selectedCharacter && (
-                  <p className="mb-2 text-xs text-amber-300/80">Selecione um personagem para transferir os itens.</p>
-                )}
-                <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(50px, 1fr))', gap: 5 }}>
-                  {userInventory.map((inventoryItem) => (
-                    <div key={inventoryItem.id} className="relative">
-                      <DraggableItem
-                        item={inventoryItem.item as any}
-                        compact
-                        accent="#3b82f6"
-                        characterId={selectedCharacter}
-                        onTransfer={(itemId) => handleTransferToCharacter(itemId)}
-                      />
-                      {inventoryItem.quantity > 1 && (
-                        <span
-                          className="absolute top-0 left-0 text-[10px] font-black leading-none text-white px-0.5"
-                          style={{ textShadow: '0 1px 2px #000, 0 0 3px #000' }}
-                        >
-                          x{inventoryItem.quantity}
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
+        {!selectedCharacter && (
+          <p className="mb-3 text-xs text-amber-300/80">Selecione um personagem na navbar para equipar e transferir itens.</p>
+        )}
 
-          {/* Character Inventory */}
-          <div className="bg-surface/50 border border-white/20 rounded-lg p-6 shadow-lg">
-            <h2 className="text-xl font-semibold mb-4 text-text-primary flex items-center gap-2">
-              ⚔️ Inventário do Personagem
-              {activeCharacter && <span className="text-primary">- {activeCharacter.name}</span>}
-            </h2>
-            <p className="text-sm text-text-secondary mb-4">
-              Itens específicos deste personagem que podem ser equipados
-            </p>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+          {/* ⚔️ Inventário do herói ativo — mesma UI da ficha do personagem */}
+          <InventoryPanel
+            title={activeCharacter ? `Inventário — ${activeCharacter.name}` : 'Inventário'}
+            items={characterInventory as any}
+            totalSlots={Number(activeCharacter?.inventorySlots) || 10}
+            accent="#d9a441"
+            characterId={selectedCharacter}
+            isEquipped={(itemId) => isItemEquipped(itemId)}
+            onEquip={(itemId) => handleEquipItem(itemId)}
+            onUnequip={(itemId) => handleUnequipItem(itemId)}
+            onConsume={(itemId) => handleConsumeItem(itemId)}
+            onEnhance={(invId, name) => setEnhanceTarget({ inventoryId: invId, itemName: name })}
+            onSendToGlobal={(itemId) => handleTransferToGlobal(itemId)}
+            goldText={typeof activeCharacter?.gold === 'number' ? activeCharacter.gold.toLocaleString('pt-BR') : '0'}
+          />
 
-            {!selectedCharacter ? (
-              <div className="text-center py-8">
-                <div className="text-4xl mb-3">👤</div>
-                <p className="text-text-secondary">Selecione um personagem para ver seu inventário</p>
-              </div>
-            ) : characterInventory.length === 0 ? (
-              <div className="text-center py-8">
-                <div className="text-4xl mb-3">🎒</div>
-                <p className="text-text-secondary">Este personagem não possui itens</p>
-              </div>
-            ) : (
-              <CharacterItemGrid
-                items={characterInventory as any}
-                isEquipped={(itemId) => isItemEquipped(itemId)}
-                accent="#d9a441"
-                characterId={selectedCharacter}
-                onEquip={(itemId) => handleEquipItem(itemId)}
-                onUnequip={(itemId) => handleUnequipItem(itemId)}
-                onConsume={(itemId) => handleConsumeItem(itemId)}
-                onEnhance={(invId, name) => setEnhanceTarget({ inventoryId: invId, itemName: name })}
-                onSendToGlobal={(itemId) => handleTransferToGlobal(itemId)}
-              />
-            )}
-          </div>
+          {/* 🌐 Baú Geral — mesma UI, exibindo o inventário global da conta */}
+          <InventoryPanel
+            title="Baú Geral"
+            items={userInventory as any}
+            totalSlots={GLOBAL_SLOTS}
+            accent="#3b82f6"
+            characterId={selectedCharacter}
+            slotLabel="Slots do Baú"
+            onTransfer={(itemId) => handleTransferToCharacter(itemId)}
+            goldText={bankGold != null ? bankGold.toLocaleString('pt-BR') : '0'}
+          />
         </div>
 
         {/* Diálogo de aprimoramento ⚒️ */}

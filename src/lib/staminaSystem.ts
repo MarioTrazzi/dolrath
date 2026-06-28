@@ -68,6 +68,12 @@ export function computeStaminaRegen(state: StaminaState, now: Date = new Date())
   const anchor = new Date(state.staminaUpdatedAt)
   const { amountPerTick, tickSeconds, idleDelaySeconds } = STAMINA_REGEN
 
+  // Âncora inválida (ex.: staminaUpdatedAt ausente/mal serializado): não dá pra
+  // calcular regen sem ela. Devolve o estado intacto em vez de propagar NaN.
+  if (isNaN(anchor.getTime())) {
+    return { stamina, staminaUpdatedAt: now, gained: 0 }
+  }
+
   // Já cheio: mantém a âncora fresca para não acumular tempo à toa.
   if (stamina >= maxStamina) {
     return { stamina: maxStamina, staminaUpdatedAt: now, gained: 0 }

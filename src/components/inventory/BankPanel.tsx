@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
+import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider'
 
 interface CharWallet { id: string; name: string; class: string; gold: number }
 
@@ -11,11 +12,14 @@ interface CharWallet { id: string; name: string; class: string; gold: number }
 //
 // `characterId` (opcional): quando informado, o painel opera SÓ sobre o herói
 // ativo — sabe-se de quem é o ouro, então mostramos apenas sacar/depositar dele.
-export default function BankPanel({ characterId }: { characterId?: string | null }) {
+export default function BankPanel({ characterId, onChanged }: { characterId?: string | null; onChanged?: () => void }) {
   const [bankGold, setBankGold] = useState<number | null>(null)
   const [chars, setChars] = useState<CharWallet[]>([])
   const [amounts, setAmounts] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
+  // Sacar/depositar muda Character.gold; o gold da navbar vem do herói ativo do
+  // provider, então recarregamos a lista global para refletir o novo saldo.
+  const { refresh: refreshActiveCharacter } = useActiveCharacter()
 
   const load = useCallback(async () => {
     try {
@@ -52,6 +56,10 @@ export default function BankPanel({ characterId }: { characterId?: string | null
       // Atualiza os saldos a partir da resposta + recarrega.
       if (typeof data?.bankGold === 'number') setBankGold(data.bankGold)
       load()
+      // Sincroniza o gold do herói ativo na navbar (Character.gold mudou).
+      refreshActiveCharacter()
+      // Avisa o pai (ex.: página /inventory) para atualizar o gold do baú global.
+      onChanged?.()
     } catch {
       toast.error('Erro de conexão.')
     } finally {

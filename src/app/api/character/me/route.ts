@@ -6,6 +6,10 @@ import { regenAndPersist } from '@/lib/staminaServer';
 
 function serializeBigInt(value: unknown): unknown {
   if (typeof value === 'bigint') return value.toString();
+  // Date é `typeof object`, mas Object.entries(date) === [] — sem este guard,
+  // o ramo genérico abaixo o transforma em `{}`, e no cliente `new Date({})`
+  // vira Invalid Date → NaN (ex.: staminaUpdatedAt no regen passivo).
+  if (value instanceof Date) return value.toISOString();
   if (Array.isArray(value)) return value.map(serializeBigInt);
   if (value && typeof value === 'object') {
     const out: Record<string, unknown> = {};

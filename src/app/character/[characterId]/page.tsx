@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Sword, Zap, Plus, Brain, Star, Search, Box, LayoutGrid, HelpCircle, RefreshCw } from 'lucide-react';
+import { Shield, Sword, Zap, Brain, Star, HelpCircle, RefreshCw } from 'lucide-react';
 import { Character } from '@/types/game';
 import { EquipmentSlotType } from '@prisma/client';
 import { getRaceById, getClassById } from '@/lib/gameData';
@@ -13,7 +13,7 @@ import Link from 'next/link';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { EquipmentSlot } from '@/components/EquipmentSlot';
-import { CharacterItemGrid } from '@/components/inventory/CharacterItemGrid';
+import InventoryPanel from '@/components/inventory/InventoryPanel';
 import EnhancementDialog from '@/components/EnhancementDialog';
 import AttributeDistributionPanel from '@/components/AttributeDistributionPanel';
 import CharacterHistory from '@/components/CharacterHistory';
@@ -47,7 +47,6 @@ export default function CharacterDetailsPage() {
   const [equipment, setEquipment] = useState<any[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [goldOnchainText, setGoldOnchainText] = useState<string>('—');
-  const [invSearch, setInvSearch] = useState<string>('');
   const [enhanceTarget, setEnhanceTarget] = useState<{ inventoryId: string; itemName: string } | null>(null);
   // Índice da forma exibida na figura central (0 = forma original; demais = transformações).
   const [appearanceIndex, setAppearanceIndex] = useState(0);
@@ -926,100 +925,22 @@ export default function CharacterDetailsPage() {
           </div>
 
           {/* ============ PAINEL INVENTÁRIO ============ */}
-          <div
-            className="relative flex flex-col w-full max-w-[548px] xl:max-w-[470px] rounded-2xl overflow-hidden border-2 backdrop-blur-md shadow-xl"
-            style={{ background: 'linear-gradient(180deg, rgba(26,32,38,0.78), rgba(20,25,30,0.82))', borderColor: `${visual.borderColor}40` }}
-          >
-            {/* Barra de título */}
-            <div className="flex items-center gap-2" style={{ height: 38, padding: '0 12px', background: 'linear-gradient(180deg, #2b333c, #232a31)', borderBottom: '1px solid #11161a' }}>
-              <Box size={17} style={{ color: visual.borderColor }} />
-              <span style={{ fontSize: 16, fontWeight: 600, color: '#ece7da', letterSpacing: '0.3px' }}>Inventário</span>
-              <div className="flex-1" />
-              <Link
-                href="/doc#items"
-                title="Ver documentação de itens"
-                className="transition-colors hover:text-white"
-                style={{ color: '#7e8893' }}
-              >
-                <HelpCircle size={15} />
-              </Link>
-            </div>
-
-            {/* Abas */}
-            <div className="flex items-end" style={{ gap: 26, padding: '8px 16px 0', borderBottom: '1px solid #2a323b' }}>
-              <div className="relative" style={{ paddingBottom: 9, fontSize: 14, fontWeight: 600, color: '#f1d79a' }}>
-                Inventário
-                <div className="absolute" style={{ left: 0, right: 0, bottom: -1, height: 2, background: visual.borderColor }} />
-              </div>
-            </div>
-
-            {/* Barra de ferramentas */}
-            <div className="flex items-center gap-2" style={{ padding: '11px 14px' }}>
-              <div className="flex-1 flex items-center gap-2" style={{ height: 30, padding: '0 10px', background: '#0f141a', border: '1px solid #313a44' }}>
-                <input
-                  value={invSearch}
-                  onChange={(e) => setInvSearch(e.target.value)}
-                  placeholder="Buscar no inventário"
-                  style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: '#c4cad1', fontSize: '12.5px' }}
-                />
-                <Search size={14} style={{ color: '#7e8893' }} />
-              </div>
-              <div className="flex items-center justify-center" style={{ width: 30, height: 30, background: `linear-gradient(180deg, ${visual.borderColor}33, ${visual.borderColor}14)`, border: `1px solid ${visual.borderColor}` }}>
-                <LayoutGrid size={15} style={{ color: '#f1d79a' }} />
-              </div>
-            </div>
-
-            {/* Grade de itens */}
-            <div className="flex-1" style={{ padding: '2px 14px 8px' }}>
-              <CharacterItemGrid
-                items={inventory}
-                totalSlots={character.inventorySlots || 10}
-                isEquipped={(itemId) => character.equipment?.some(e => e.item.id === itemId) || false}
-                accent={visual.borderColor}
-                characterId={effectiveCharacterId || ''}
-                search={invSearch}
-                gridTemplateColumns="repeat(8, 1fr)"
-                gap={5}
-                onEquip={handleEquip}
-                onUnequip={handleUnequip}
-                onConsume={handleConsume}
-                onEnhance={(invId, name) => setEnhanceTarget({ inventoryId: invId, itemName: name })}
-              />
-            </div>
-
-            {/* Rodapé: slots / expandir */}
-            <div style={{ padding: '4px 16px 0', borderTop: '1px solid #2a323b' }}>
-              <div className="flex items-center gap-2" style={{ padding: '9px 0' }}>
-                <LayoutGrid size={16} style={{ color: '#8d96a1' }} />
-                <span style={{ fontSize: 13, color: '#c4cad1' }}>Slots do Inventário</span>
-                <div className="flex-1" />
-                <span style={{ fontSize: '13.5px', color: '#aeb5be' }}>{inventory.length} / {character.inventorySlots || 10}</span>
-                <button
-                  onClick={handleExpandInventory}
-                  disabled={expandingSlots}
-                  title="Expandir +5 slots (custo: 1000 GOLD)"
-                  className="flex items-center justify-center disabled:opacity-50"
-                  style={{ width: 22, height: 22, background: 'linear-gradient(180deg, #2f3842, #262e37)', border: '1px solid #46505c', cursor: 'pointer' }}
-                >
-                  <Plus size={13} style={{ color: '#cdd3da' }} />
-                </button>
-              </div>
-            </div>
-
-            {inventory.length > (character.inventorySlots || 10) && (
-              <div style={{ margin: '0 16px 8px', padding: 10, background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)' }}>
-                <p style={{ color: '#f0a8a8', fontSize: 12 }}>⚠️ Você tem mais itens do que slots. Expanda o inventário.</p>
-              </div>
-            )}
-
-            {/* Moedas */}
-            <div className="flex items-center flex-wrap" style={{ gap: '16px 24px', padding: '11px 18px 13px', borderTop: '1px solid #2a323b', background: 'rgba(0,0,0,0.18)' }}>
-              <div className="flex items-center" style={{ gap: 7 }}>
-                <div style={{ width: 16, height: 16, borderRadius: '50%', background: 'radial-gradient(circle at 35% 30%, #f6e08a, #c9962a)', border: '1px solid #8a6418' }} />
-                <span style={{ fontSize: 14, fontWeight: 600, color: '#ece7da' }}>{goldOnchainText}</span>
-                <span style={{ fontSize: 11, color: '#7e8893' }}>GOLD</span>
-              </div>
-            </div>
+          <div className="w-full max-w-[548px] xl:max-w-[470px]">
+            <InventoryPanel
+              items={inventory}
+              totalSlots={character.inventorySlots || 10}
+              accent={visual.borderColor}
+              characterId={effectiveCharacterId || ''}
+              isEquipped={(itemId) => character.equipment?.some(e => e.item.id === itemId) || false}
+              onEquip={handleEquip}
+              onUnequip={handleUnequip}
+              onConsume={handleConsume}
+              onEnhance={(invId, name) => setEnhanceTarget({ inventoryId: invId, itemName: name })}
+              onExpand={handleExpandInventory}
+              expanding={expandingSlots}
+              expandTitle="Expandir +5 slots (custo: 1000 GOLD)"
+              goldText={goldOnchainText}
+            />
           </div>
         </div>
         </div>

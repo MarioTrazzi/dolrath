@@ -732,8 +732,27 @@ export default function BattleScene({
         </div>
 
         {rightGroup && rightGroup.length > 0 ? (
-          <div className="flex items-end justify-end gap-1 sm:gap-2">
-            {rightGroup.map(f => renderFighter(f, 'right', { hideBars: hideEnemyBars, compact: rightGroup.length > 1 }))}
+          // Pacote em CASCATA sobreposta (não em linha): os monstros se amontoam, cada
+          // um deslocado; o ALVO ATIVO (= right.id) fica na frente e iluminado, os
+          // outros recuam (z menor + escurecidos). Cada card anima sozinho (por-id).
+          <div className="relative flex flex-col items-end justify-end self-end">
+            {rightGroup.map((f, i) => {
+              const isActive = f.id === right?.id
+              return (
+                <div
+                  key={f.id}
+                  className="relative transition-[filter] duration-300"
+                  style={{
+                    marginTop: i === 0 ? 0 : -48,
+                    transform: `translateX(${i % 2 === 0 ? -6 : 26}px)`,
+                    zIndex: isActive ? 50 : 10 + i,
+                    filter: isActive ? 'none' : 'brightness(0.75) saturate(0.9)',
+                  }}
+                >
+                  {renderFighter(f, 'right', { hideBars: hideEnemyBars, compact: true })}
+                </div>
+              )
+            })}
           </div>
         ) : (
           renderFighter(right, 'right', { hideBars: hideEnemyBars })

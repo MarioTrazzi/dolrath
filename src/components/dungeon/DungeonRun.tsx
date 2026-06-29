@@ -786,7 +786,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   }), [character, hp, mp, stamina, transform, effMaxHp, playerLevers, baseLevers])
 
   const monsterFighter: FighterView | null = useMemo(() => monster ? {
-    id: MONSTER_ID,
+    id: monster.id,
     name: monster.name,
     level: monster.level,
     race: dungeon.name,
@@ -809,13 +809,13 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     combatStatLabels: { ad: 'ATK', ap: 'DEF' },
   } : null, [monster, dungeon.name])
 
-  // Cards do PACOTE (>1 inimigo) lado a lado na arena. O ATIVO carrega o id
-  // MONSTER_ID (recebe dados/animações de combate); os demais ficam como sprites
-  // parados (HP vive no roster, então as barras ficam escondidas na arena).
+  // Cards do PACOTE (>1 inimigo) na arena (cascata sobreposta). Cada card mantém a
+  // id REAL do monstro (identidade estável → só o morto tomba, sem reaproveitar o
+  // card do ativo). HP vive no roster, então as barras ficam escondidas na arena.
   const packFighters: FighterView[] | undefined = useMemo(() => {
     if (pack.length <= 1) return undefined
     return pack.map(m => ({
-      id: m.id === monster?.id ? MONSTER_ID : m.id,
+      id: m.id,
       name: m.name,
       level: m.level,
       race: dungeon.name,
@@ -1106,7 +1106,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     const mine = mkResult(20, 0)
     setPanelResult(mine)
     const theirs = mkResult(20, 0)
-    later(() => setDiceResults(prev => ({ ...prev, [MONSTER_ID]: theirs })), 1700)
+    later(() => setDiceResults(prev => ({ ...prev, [monsterRef.current?.id ?? MONSTER_ID]: theirs })), 1700)
     later(() => {
       setStage('busy')
       setPanelResult(null)
@@ -1155,7 +1155,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     // bloqueie demais e deixa o combate mais dinâmico.
     const mDefChoice: DefenseKind = Math.random() < 0.2 ? 'defend' : 'dodge'
     const def = mkResult(sides, 0)
-    later(() => setDiceResults(prev => ({ ...prev, [MONSTER_ID]: def })), 1700)
+    later(() => setDiceResults(prev => ({ ...prev, [monsterRef.current?.id ?? MONSTER_ID]: def })), 1700)
     later(() => resolvePlayerAttack(atk, def, mDefChoice), 3000)
   }
 
@@ -1180,7 +1180,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     pushBattleEvent({
       kind: 'resolve',
       attackerId: character.id,
-      defenderId: MONSTER_ID,
+      defenderId: m.id,
       action: kindUsed,
       defenseAction: mDefChoice,
       hit: outcome.hit,
@@ -1219,7 +1219,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const monsterTelegraph = () => {
     const m = monsterRef.current
     if (!m) return
-    setCurrentTurnId(MONSTER_ID)
+    setCurrentTurnId(m.id)
     // Bosses preferem golpes fortes; só quem tem habilidade especial pode usá-la.
     const r = Math.random()
     const kind: AttackKind = m.isBoss
@@ -1299,7 +1299,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     setPanelResult(def)
 
     const atk = mkResult(sides, 0)
-    later(() => setDiceResults(prev => ({ ...prev, [MONSTER_ID]: atk })), 1700)
+    later(() => setDiceResults(prev => ({ ...prev, [monsterRef.current?.id ?? MONSTER_ID]: atk })), 1700)
     later(() => resolveMonsterAttack(atk, def), 3000)
   }
 
@@ -1319,7 +1319,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     )
     pushBattleEvent({
       kind: 'resolve',
-      attackerId: MONSTER_ID,
+      attackerId: m.id,
       defenderId: character.id,
       action: monsterPlan,
       defenseAction: defenseChoice,
@@ -1357,7 +1357,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     if (newHp <= 0) {
       later(() => {
         setCombatEnded(true)
-        setWinnerId(MONSTER_ID)
+        setWinnerId(m.id)
         later(() => handleDefeat(), 2200)
       }, 1400)
       return

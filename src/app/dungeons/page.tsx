@@ -161,20 +161,29 @@ export default function DungeonsPage() {
     // o personagem ativo para a barra refletir o ouro ganho na hora — sem reload.
     refreshActiveCharacter()
 
-    // Subiu de nível durante a run: busca os pontos disponíveis (o servidor já creditou
-    // +1 ponto por nível ao subir) e mostra um botão para distribuí-los.
-    if (updates.leveledUp && hero) {
+    // Recarrega o detalhe COMPLETO do herói para refletir o XP (e nível/pontos)
+    // ganho na run — o card mostra experience/nextLevelExperience, que a saída
+    // otimista acima (só hp/mp/stamina) não traz. Antes só buscávamos isso ao
+    // SUBIR de nível, então o XP no card ficava parado quando saía sem upar.
+    if (hero) {
       ;(async () => {
         try {
           const res = await fetch(`/api/character/${hero.id}`)
           if (!res.ok) return
           const detail = await res.json()
           const points = Number(detail.availablePoints) || 0
-          setLevelUpAlert({ characterId: hero.id, points })
-          // Reflete o novo nível/pontos no objeto local do herói.
-          setSelectedCharacter(prev => (prev && prev.id === hero.id
-            ? { ...prev, level: detail.level ?? prev.level, availablePoints: points } as DungeonCharacter
-            : prev))
+          const patch = {
+            experience: detail.experience,
+            nextLevelExperience: detail.nextLevelExperience,
+            level: detail.level,
+            availablePoints: points,
+            stamina: detail.stamina,
+            maxStamina: detail.maxStamina,
+          }
+          setSelectedCharacter(prev => (prev && prev.id === hero.id ? { ...prev, ...patch } as DungeonCharacter : prev))
+          setCharacters(prev => prev.map(c => (c.id === hero.id ? { ...c, ...patch } as DungeonCharacter : c)))
+          // Subiu de nível: mostra o botão para distribuir os pontos creditados.
+          if (updates.leveledUp) setLevelUpAlert({ characterId: hero.id, points })
         } catch { /* silencioso: o aviso aparece na página do personagem mesmo assim */ }
       })()
     }

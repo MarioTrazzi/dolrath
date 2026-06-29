@@ -48,14 +48,16 @@ export async function addExperienceToCharacter(characterId: string, xpToAdd: num
         level: newLevelInfo.level,
       });
 
-      // Atualizar stats no banco quando há level up
+      // Atualizar stats no banco quando há level up.
+      // Subir de nível restaura HP e MP, mas NÃO reabastece a stamina atual: a
+      // stamina é o orçamento DIÁRIO de runs (recupera sozinha +2/15min). Só o
+      // TETO (maxStamina) cresce com o nível; a stamina atual fica como estava.
       updateData = {
         ...updateData,
         hp: derived.maxHp,
         maxHp: derived.maxHp,
         mp: derived.maxMp,
         maxMp: derived.maxMp,
-        stamina: derived.maxStamina,
         maxStamina: derived.maxStamina,
         availablePoints: (character.availablePoints || 0) + pointsToGive,
         // Atualizar também o baseStats para referência

@@ -132,7 +132,9 @@ export const rollCombatAction = (
 
 // Função para verificar se personagem pode realizar ação (stamina)
 export const canPerformAction = (character: any, actionType: string): boolean => {
-  const currentStamina = character.stamina || character.baseStats?.stamina || 100
+  // ?? (não ||): stamina 0 é um valor VÁLIDO (sem stamina) — com || o zero caía
+  // no baseStats.stamina (= máximo), reabastecendo de graça e furando o limitador.
+  const currentStamina = character.stamina ?? character.baseStats?.stamina ?? 100
   const staminaCost = STAMINA_COSTS[actionType] || 5
   return currentStamina >= staminaCost
 }
@@ -140,7 +142,9 @@ export const canPerformAction = (character: any, actionType: string): boolean =>
 // Função para consumir stamina
 export const consumeStamina = (character: any, actionType: string): number => {
   const staminaCost = STAMINA_COSTS[actionType] || 5
-  const currentStamina = character.stamina || character.baseStats?.stamina || 100
+  // ?? (não ||): stamina 0 é um valor VÁLIDO (sem stamina) — com || o zero caía
+  // no baseStats.stamina (= máximo), reabastecendo de graça e furando o limitador.
+  const currentStamina = character.stamina ?? character.baseStats?.stamina ?? 100
   return Math.max(0, currentStamina - staminaCost)
 }
 

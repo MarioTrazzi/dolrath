@@ -252,7 +252,8 @@ export async function GET() {
       maxMp: c.maxMp || baseStats.maxMp || 50,
       // Stamina viva para exibição (regen passivo aplicado sem tocar no banco).
       stamina: computeStaminaRegen({
-        stamina: c.stamina || baseStats.stamina || 100,
+        // ?? (não ||): stamina 0 é válido; com || o zero caía no máximo e furava o limitador.
+        stamina: c.stamina ?? baseStats.stamina ?? 100,
         maxStamina: c.maxStamina || baseStats.maxStamina || 100,
         staminaUpdatedAt: c.staminaUpdatedAt,
       }).stamina,

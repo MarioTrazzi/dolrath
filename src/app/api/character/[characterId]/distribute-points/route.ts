@@ -128,9 +128,10 @@ export async function POST(request: NextRequest, { params }: { params: { charact
         maxHp: newHp,
         mp: newMp,
         maxMp: newMp,
-        stamina: newStamina,
+        // NÃO reabastece a stamina atual: ela é o limitador diário de runs (evita
+        // farmar sem parar / inflacionar o gold). Distribuir pontos só recalcula o
+        // TETO (maxStamina); a stamina atual e seu anchor de regen ficam intactos.
         maxStamina: newStamina,
-        staminaUpdatedAt: new Date(),
         availablePoints: availablePoints - totalPointsToSpend,
         baseStats: {
           // Stats distribuídos + bônus

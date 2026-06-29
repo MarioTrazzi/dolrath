@@ -83,7 +83,9 @@ async function seedBattleConsumables() {
       type: ItemType.CONSUMABLE,
       subtype: ConsumableSubtype.STAMINA_POTION,
       level: 1,
-      goldPrice: 80,
+      // Stamina é o LIMITADOR anti-farm: comprá-la de volta é premium de propósito
+      // (antes 80g ≈ HP/MP; agora bem mais cara p/ não furar o teto diário nem inflar o gold).
+      goldPrice: 400,
       stats: {
         staminaAmount: 20,
         effect: 'instant',
@@ -96,7 +98,8 @@ async function seedBattleConsumables() {
       type: ItemType.CONSUMABLE,
       subtype: ConsumableSubtype.STAMINA_POTION,
       level: 2,
-      goldPrice: 160,
+      // Premium pelo mesmo motivo da Poção de Stamina (limitador anti-farm).
+      goldPrice: 750,
       stats: {
         staminaAmount: 40,
         effect: 'instant',

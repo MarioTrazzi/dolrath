@@ -21,7 +21,9 @@ export default function CharacterStatusManager({
 
   const currentHp = (character as any).hp || character.baseStats?.hp || 100
   const maxHp = (character as any).maxHp || character.baseStats?.maxHp || 100
-  const currentStamina = (character as any).stamina || character.baseStats?.stamina || 100
+  // ?? (não ||): stamina 0 é válido; com || o zero caía no máximo (baseStats), o
+  // que mostraria a barra cheia mesmo sem stamina e furaria o limitador diário.
+  const currentStamina = (character as any).stamina ?? character.baseStats?.stamina ?? 100
   const maxStamina = (character as any).maxStamina || character.baseStats?.maxStamina || 100
   
   const isAlive = currentHp > 0

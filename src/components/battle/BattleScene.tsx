@@ -8,6 +8,8 @@ import { AnimatedDie, MiniDie } from '@/components/battle/AnimatedDice'
 import { getTransformationGlow } from '@/lib/transformationSystem'
 import { applyEnhancementToStats, getLevelLabel } from '@/lib/enhancementSystem'
 import { formatItemStats } from '@/lib/itemStats'
+import { resolveImageUrl } from '@/lib/imageUrl'
+import { itemImagePath } from '@/lib/itemCatalog'
 
 // ============================================================
 // Tipos
@@ -194,6 +196,15 @@ function EquipSlot({ slot, item }: { slot: string; item: EquippedItem }) {
   const [hover, setHover] = useState(false)
   const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
 
+  // Imagem: banco (item.image) → asset estático por nome (/items/<slug>.webp) →
+  // ícone genérico só se a arte 404. Mesmo padrão de EquipmentSlot/DraggableItem,
+  // para cobrir itens novos criados sem `image` no banco (ex.: colar/anel), que
+  // antes caíam direto no ItemIcon (SVG) aqui no combate.
+  const [imgError, setImgError] = useState(false)
+  const itemImage = !imgError
+    ? (resolveImageUrl(item.image) ?? (item.name ? itemImagePath(item.name) : null))
+    : null
+
   const level = item.enhancementLevel || 0
   const stats = formatItemStats(applyEnhancementToStats(item.stats, level), item.type)
 
@@ -215,9 +226,15 @@ function EquipSlot({ slot, item }: { slot: string; item: EquippedItem }) {
       onMouseLeave={() => setHover(false)}
       className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-black/40 border border-amber-500/40 flex items-center justify-center overflow-hidden hover:border-amber-400 hover:scale-110 transition-all cursor-help shadow-lg shadow-black/50"
     >
-      {item.image ? (
+      {itemImage ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+        <img
+          src={itemImage}
+          alt={item.name}
+          onError={() => setImgError(true)}
+          referrerPolicy="no-referrer"
+          className="w-full h-full object-cover"
+        />
       ) : item.type ? (
         <ItemIcon type={item.type as any} size={18} className="text-amber-300" />
       ) : (

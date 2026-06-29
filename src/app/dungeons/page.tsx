@@ -26,6 +26,8 @@ export default function DungeonsPage() {
   // Acabamos de sair da NOSSA run: ignora a detecção por uns segundos (o /abandon é
   // assíncrono, então o lock ainda pode constar "vivo" e piscaria o bloqueio à toa).
   const [recentExit, setRecentExit] = useState(false)
+  // Subiu de nível na última run: mostra um aviso/botão p/ distribuir os pontos novos.
+  const [levelUpAlert, setLevelUpAlert] = useState<{ characterId: string; points: number } | null>(null)
 
   useEffect(() => {
     if (!session) {
@@ -127,12 +129,13 @@ export default function DungeonsPage() {
   }, [heroId, activeDungeon, recentExit])
 
   // Ao sair da masmorra, sincroniza os recursos locais do personagem
-  const handleRunExit = (updates: { hp: number; mp: number; stamina: number }) => {
+  const handleRunExit = (updates: { hp: number; mp: number; stamina: number; leveledUp?: boolean }) => {
     setActiveDungeon(null)
     setRecentExit(true)
     setTimeout(() => setRecentExit(false), 4000)
-    if (selectedCharacter) {
-      const updated = { ...selectedCharacter, ...updates }
+    const hero = selectedCharacter
+    if (hero) {
+      const updated = { ...hero, ...updates }
       setSelectedCharacter(updated)
       setCharacters(prev => prev.map(c => (c.id === updated.id ? updated : c)))
     }
@@ -140,6 +143,24 @@ export default function DungeonsPage() {
     // ao mapa a navbar reaparece (a run a cobria com fixed inset-0), então recarrega
     // o personagem ativo para a barra refletir o ouro ganho na hora — sem reload.
     refreshActiveCharacter()
+
+    // Subiu de nível durante a run: busca os pontos disponíveis (o servidor já creditou
+    // +1 ponto por nível ao subir) e mostra um botão para distribuí-los.
+    if (updates.leveledUp && hero) {
+      ;(async () => {
+        try {
+          const res = await fetch(`/api/character/${hero.id}`)
+          if (!res.ok) return
+          const detail = await res.json()
+          const points = Number(detail.availablePoints) || 0
+          setLevelUpAlert({ characterId: hero.id, points })
+          // Reflete o novo nível/pontos no objeto local do herói.
+          setSelectedCharacter(prev => (prev && prev.id === hero.id
+            ? { ...prev, level: detail.level ?? prev.level, availablePoints: points } as DungeonCharacter
+            : prev))
+        } catch { /* silencioso: o aviso aparece na página do personagem mesmo assim */ }
+      })()
+    }
   }
 
   if (isLoading) {
@@ -212,6 +233,31 @@ export default function DungeonsPage() {
             </div>
           )}
         </div>
+
+        {levelUpAlert && (
+          <motion.button
+            initial={{ scale: 0.9, opacity: 0, y: -8 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            transition={{ type: 'spring', stiffness: 240, damping: 16 }}
+            onClick={() => router.push(`/character/${levelUpAlert.characterId}`)}
+            className="group relative w-full max-w-2xl mx-auto mb-6 flex items-center justify-center gap-2 overflow-hidden rounded-2xl border-2 border-yellow-400/60 bg-gradient-to-r from-amber-500/20 via-yellow-400/15 to-amber-500/20 px-5 py-3.5 text-center shadow-[0_0_30px_rgba(253,224,71,0.25)] transition-all hover:scale-[1.02] hover:shadow-[0_0_40px_rgba(253,224,71,0.4)]"
+          >
+            <motion.span
+              className="text-2xl"
+              animate={{ rotate: [0, -12, 12, 0], scale: [1, 1.2, 1] }}
+              transition={{ repeat: Infinity, duration: 1.6 }}
+            >
+              ⭐
+            </motion.span>
+            <span className="font-black text-yellow-200 text-sm sm:text-base">
+              Você subiu de nível!{' '}
+              {levelUpAlert.points > 0
+                ? `${levelUpAlert.points} ponto${levelUpAlert.points > 1 ? 's' : ''} a distribuir`
+                : 'Veja seus novos atributos'}
+            </span>
+            <span className="font-black text-yellow-300 text-base group-hover:translate-x-1 transition-transform">→</span>
+          </motion.button>
+        )}
 
         {error && (
           <div className="bg-red-950/60 border border-red-700/50 text-red-300 px-4 py-3 rounded-xl mb-6 text-sm text-center">

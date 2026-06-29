@@ -86,7 +86,7 @@ export interface DungeonCharacter {
 interface DungeonRunProps {
   dungeon: DungeonDef
   character: DungeonCharacter
-  onExit: (updates: { hp: number; mp: number; stamina: number }) => void
+  onExit: (updates: { hp: number; mp: number; stamina: number; leveledUp?: boolean }) => void
 }
 
 type RunPhase = 'explore' | 'combat' | 'summary' | 'defeat'
@@ -414,7 +414,10 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const [totals, setTotals] = useState({ gold: 0, xp: 0, kills: 0, items: [] as RunItem[] })
   const totalsRef = useRef(totals)
   totalsRef.current = totals
-  const [levelUpMsg, setLevelUpMsg] = useState<string | null>(null)
+  // Subiu de nível em ALGUM combate desta run? (avisa a página /dungeon ao sair)
+  const [leveledUpThisRun, setLeveledUpThisRun] = useState(false)
+  // Flash brilhante de "subiu de nível" (overlay dourado por ~2.6s); guarda o nível novo.
+  const [levelUpFlash, setLevelUpFlash] = useState<number | null>(null)
 
   // ---------- Mapa de exploração (trilha de nós) ----------
   // entrada → (nós menores + sala principal) × salas → covil do boss.
@@ -800,6 +803,25 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
 
     // Achado — o servidor já creditou ouro/itens; aqui só exibimos.
     const loot: NodeLoot = data.loot ?? { gold: 0, drops: [] }
+
+    // ⛲ Fonte revitalizadora: restaura HP e MP cheios (sem espólio neste nó).
+    if (loot.fountain) {
+      setHp(effMaxHp)
+      setMp(character.maxMp)
+      setNodeEvents(prev => ({ ...prev, [atIdx]: { kind: 'blessing', emoji: '⛲' } }))
+      pushFloat('HP/MP cheios! ⛲', '#34d399')
+      pushLog('⛲ Você encontra uma fonte revitalizadora — HP e MP restaurados!')
+      const def: DungeonEventDef = {
+        kind: 'blessing', min: 0, max: 0, icon: '⛲',
+        title: 'Fonte Revitalizadora',
+        description: 'Águas cristalinas brotam entre as pedras. Você bebe e recupera todas as forças — HP e MP restaurados por completo.',
+      }
+      return {
+        def, text: def.description,
+        effects: [{ kind: 'stat', text: '❤️ HP cheio' }, { kind: 'stat', text: '🔮 MP cheio' }],
+      }
+    }
+
     showLoot(loot)
 
     const hasGear = loot.drops.some(d => d.kind === 'item' || d.kind === 'stone')
@@ -1247,7 +1269,20 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       if (res.ok) {
         grant = data.granted ?? null
         leveledUp = !!data.leveledUp
-        if (leveledUp) setLevelUpMsg('🎉 Você subiu de nível!')
+        if (leveledUp) {
+          setLeveledUpThisRun(true)
+          // Efeito de level up: HP e MP voltam ao cheio + flash brilhante na tela.
+          // (o servidor já restaurou os recursos no banco ao subir de nível.)
+          const reachedLevel = data.newLevel ?? null
+          later(() => {
+            setHp(effMaxHp)
+            setMp(character.maxMp)
+            setLevelUpFlash(reachedLevel)
+            showBanner('⭐', reachedLevel ? `Nível ${reachedLevel}! HP e MP restaurados` : 'Subiu de nível! HP e MP restaurados', 3200)
+            pushLog('🎉 Você SUBIU DE NÍVEL! HP e MP restaurados por completo.')
+            later(() => setLevelUpFlash(null), 2600)
+          }, 1500)
+        }
       }
     } catch {
       /* sem conexão: exibe os valores do monstro como fallback visual */
@@ -1337,7 +1372,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       }).catch(() => {})
     }
     // HP e MP voltam ao cheio entre runs — só a stamina (orçamento diário) é consumida.
-    onExit({ hp: effMaxHp, mp: character.maxMp, stamina })
+    onExit({ hp: effMaxHp, mp: character.maxMp, stamina, leveledUp: leveledUpThisRun })
   }
 
   // ---------- Painel de dados da arena ----------
@@ -1564,6 +1599,61 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       <div className="absolute inset-0">
         <DungeonBackdrop theme={dungeon.id} />
       </div>
+
+      {/* ✨ Flash de SUBIU DE NÍVEL — explosão dourada sobre toda a tela */}
+      <AnimatePresence>
+        {levelUpFlash !== null && (
+          <motion.div
+            key="levelup-flash"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="absolute inset-0 z-[60] grid place-items-center pointer-events-none"
+          >
+            {/* Brilho radial pulsante */}
+            <motion.div
+              className="absolute inset-0"
+              style={{ background: 'radial-gradient(circle at center, rgba(253,224,71,0.45) 0%, rgba(253,224,71,0.12) 35%, transparent 70%)' }}
+              animate={{ opacity: [0, 1, 0.6, 0] }}
+              transition={{ duration: 2.4, times: [0, 0.2, 0.6, 1] }}
+            />
+            {/* Raios brilhantes girando */}
+            <motion.div
+              className="absolute w-[140vmax] h-[140vmax]"
+              style={{ background: 'conic-gradient(from 0deg, transparent 0deg, rgba(253,224,71,0.18) 12deg, transparent 24deg, transparent 36deg, rgba(253,224,71,0.18) 48deg, transparent 60deg)' }}
+              initial={{ rotate: 0, opacity: 0 }}
+              animate={{ rotate: 90, opacity: [0, 0.8, 0] }}
+              transition={{ duration: 2.4, ease: 'easeOut' }}
+            />
+            <motion.div
+              initial={{ scale: 0.3, opacity: 0, y: 20 }}
+              animate={{ scale: [0.3, 1.15, 1], opacity: 1, y: 0 }}
+              transition={{ type: 'spring', stiffness: 220, damping: 14 }}
+              className="relative text-center"
+            >
+              <motion.div
+                className="text-7xl sm:text-8xl mb-2 drop-shadow-[0_0_30px_rgba(253,224,71,0.9)]"
+                animate={{ rotate: [0, -10, 10, 0], scale: [1, 1.15, 1] }}
+                transition={{ repeat: Infinity, duration: 1.2 }}
+              >
+                ⭐
+              </motion.div>
+              <div className="text-yellow-200 font-black text-3xl sm:text-5xl tracking-wide drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)]">
+                SUBIU DE NÍVEL!
+              </div>
+              {levelUpFlash > 0 && (
+                <div className="text-amber-300 font-black text-xl sm:text-2xl mt-1 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
+                  Nível {levelUpFlash}
+                </div>
+              )}
+              <div className="text-emerald-200 font-bold text-sm sm:text-base mt-2 drop-shadow-[0_1px_6px_rgba(0,0,0,0.9)]">
+                ❤️ HP e 🔮 MP restaurados!
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <motion.div
         className="relative h-full flex flex-col"
@@ -2462,13 +2552,14 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                 </div>
               )}
 
-              {levelUpMsg && (
+              {leveledUpThisRun && (
                 <motion.div
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
-                  className="text-yellow-300 font-bold text-sm mb-4"
+                  className="mb-4 rounded-xl border border-yellow-500/40 bg-yellow-500/10 px-3 py-2"
                 >
-                  🎉 {levelUpMsg}
+                  <div className="text-yellow-300 font-black text-sm">🎉 Você subiu de nível!</div>
+                  <div className="text-yellow-200/80 text-[11px]">Há pontos de atributo esperando para serem distribuídos.</div>
                 </motion.div>
               )}
 

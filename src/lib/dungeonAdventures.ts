@@ -608,6 +608,8 @@ export interface LootDrop {
 export interface NodeLoot {
   gold: number
   drops: LootDrop[]
+  /** Fonte revitalizadora: restaura HP/MP no cliente. Quando true, não há ouro nem itens. */
+  fountain?: boolean
 }
 
 export type LootNodeKind = 'minor' | 'main' | 'boss'

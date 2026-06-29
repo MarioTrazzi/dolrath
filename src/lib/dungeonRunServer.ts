@@ -48,6 +48,10 @@ const MINOR_MONSTER_CHANCE_BY_TIER: Record<LuckTier, number> = {
   high: 0.1, // d20 14–20 → raro, mas a recompensa é ótima
 }
 
+// ⛲ Chance de uma fonte revitalizadora (HP/MP cheios) substituir o achado num nó
+// MENOR de sorte ALTA (d20 14+). Exclui o espólio daquele nó.
+const FOUNTAIN_CHANCE = 0.2
+
 export type NodeKind = 'start' | 'minor' | 'main' | 'boss'
 export interface TrailNode { kind: NodeKind; tier: number }
 
@@ -101,6 +105,13 @@ export function resolveExploreNode(
   if (monsterEncounter) {
     const monster = scaleMonster(pickMonster(dungeon), dungeon, character.level, scaling, klass)
     return { type: 'monster', roll, pending: { nodeIdx, kind: isMain ? 'main' : 'minor', lootRoll: roll, monster } }
+  }
+
+  // ⛲ Fonte revitalizadora: só em nó MENOR, na faixa de SORTE ALTA (d20 14+), com
+  // 20% de chance. Se a fonte aparece, NÃO há espólio — ela restaura HP/MP cheios
+  // no cliente (recurso da run; o servidor só sinaliza o evento). [[dolrath-dungeon-design-vision]]
+  if (!isMain && luckTier(roll) === 'high' && Math.random() < FOUNTAIN_CHANCE) {
+    return { type: 'find', roll, loot: { gold: 0, drops: [], fountain: true } }
   }
 
   const loot = rollNodeLoot(dungeon, roll, isMain ? 'main' : 'minor', character.level, character.race, character.class)

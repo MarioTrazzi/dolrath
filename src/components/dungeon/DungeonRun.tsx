@@ -23,6 +23,7 @@ import {
   NodeLoot,
   ScaledMonster,
   scaleMonster,
+  monsterImagePath,
 } from '@/lib/dungeonAdventures'
 import {
   TRANSFORMATION_CONFIG,
@@ -261,6 +262,25 @@ function ItemThumb({ name, emoji, className = 'text-base' }: { name: string; emo
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={itemImagePath(name)}
+      alt={name}
+      onError={() => setFailed(true)}
+      className="w-full h-full object-contain"
+      referrerPolicy="no-referrer"
+    />
+  )
+}
+
+// Arte do monstro: imagem do DB (monster.image) → asset estático por nome
+// (/monsters/<slug>.webp) → emoji se a arte 404. Mesmo padrão do ItemThumb,
+// para os diálogos de encontro/boss mostrarem a arte real em vez do emoji.
+function MonsterThumb({ name, image, emoji, className = 'text-6xl' }: { name: string; image?: string | null; emoji: string; className?: string }) {
+  const [failed, setFailed] = useState(false)
+  const src = image ?? monsterImagePath(name)
+  if (failed) return <span className={className}>{emoji}</span>
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
       alt={name}
       onError={() => setFailed(true)}
       className="w-full h-full object-contain"
@@ -2040,10 +2060,21 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                         initial={{ scale: 0, rotate: -20 }}
                         animate={{ scale: 1, rotate: 0 }}
                         transition={{ type: 'spring', stiffness: 240, damping: 12, delay: 0.08 }}
-                        className="text-6xl mb-2 mt-1 inline-block"
+                        className="mb-2 mt-1 inline-flex items-center justify-center"
                         style={{ filter: `drop-shadow(0 0 18px ${dungeon.accentSoft})` }}
                       >
-                        {eventCard.monster ? eventCard.monster.emoji : eventCard.def.icon}
+                        {eventCard.monster ? (
+                          <span className="block w-28 h-28 sm:w-32 sm:h-32">
+                            <MonsterThumb
+                              name={eventCard.monster.name}
+                              image={eventCard.monster.image}
+                              emoji={eventCard.monster.emoji}
+                              className="text-6xl"
+                            />
+                          </span>
+                        ) : (
+                          <span className="text-6xl">{eventCard.def.icon}</span>
+                        )}
                       </motion.div>
 
                       <h3 className="text-2xl font-black mb-1.5" style={{ color: dungeon.accent }}>{eventCard.def.title}</h3>
@@ -2113,10 +2144,17 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                         <motion.div
                           animate={{ scale: [1, 1.06, 1], rotate: [0, -2, 2, 0] }}
                           transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-                          className="text-7xl my-3 inline-block"
+                          className="my-3 inline-flex items-center justify-center"
                           style={{ filter: 'drop-shadow(0 0 26px rgba(231,76,60,0.7))' }}
                         >
-                          {dungeon.boss.emoji}
+                          <span className="block w-32 h-32 sm:w-36 sm:h-36">
+                            <MonsterThumb
+                              name={dungeon.boss.name}
+                              image={dungeon.boss.image}
+                              emoji={dungeon.boss.emoji}
+                              className="text-7xl"
+                            />
+                          </span>
                         </motion.div>
                         <h2 className="text-3xl font-black text-white leading-none">{dungeon.boss.name}</h2>
                         <p className="text-sm text-error/90 font-bold uppercase tracking-wider mt-1 mb-5">{dungeon.boss.title}</p>

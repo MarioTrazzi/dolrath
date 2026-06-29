@@ -6,8 +6,25 @@ import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import DungeonRun, { DungeonCharacter } from '@/components/dungeon/DungeonRun'
 import DungeonBackdrop from '@/components/dungeon/DungeonBackdrop'
-import { DUNGEON_LIST, DungeonDef } from '@/lib/dungeonAdventures'
+import { DUNGEON_LIST, DungeonDef, monsterImagePath } from '@/lib/dungeonAdventures'
 import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider'
+
+// Miniatura do bestiário: arte do monstro (DB → /monsters/<slug>.webp) e cai no
+// emoji se a imagem 404. Substitui os emojis-placeholder no card da masmorra.
+function BeastThumb({ name, image, emoji }: { name: string; image?: string; emoji: string }) {
+  const [failed, setFailed] = useState(false)
+  if (failed) return <span>{emoji}</span>
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={image ?? monsterImagePath(name)}
+      alt={name}
+      onError={() => setFailed(true)}
+      className="w-full h-full object-cover"
+      referrerPolicy="no-referrer"
+    />
+  )
+}
 
 export default function DungeonsPage() {
   const { data: session } = useSession()
@@ -332,21 +349,21 @@ export default function DungeonsPage() {
 
                 <div className="mt-auto flex items-end justify-between gap-2">
                   {/* Bestiário */}
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1.5">
                     {dungeon.monsters.map(m => (
                       <span
                         key={m.name}
                         title={m.name}
-                        className="w-8 h-8 rounded-lg bg-black/50 border border-white/15 flex items-center justify-center text-base"
+                        className="w-12 h-12 rounded-lg bg-black/50 border border-white/15 flex items-center justify-center text-xl overflow-hidden"
                       >
-                        {m.emoji}
+                        <BeastThumb name={m.name} image={m.image} emoji={m.emoji} />
                       </span>
                     ))}
                     <span
                       title={`Boss: ${dungeon.boss.name}`}
-                      className="w-8 h-8 rounded-lg bg-amber-950/70 border border-amber-500/50 flex items-center justify-center text-base"
+                      className="w-14 h-14 rounded-lg bg-amber-950/70 border border-amber-500/50 flex items-center justify-center text-2xl overflow-hidden"
                     >
-                      {dungeon.boss.emoji}
+                      <BeastThumb name={dungeon.boss.name} image={dungeon.boss.image} emoji={dungeon.boss.emoji} />
                     </span>
                   </div>
 

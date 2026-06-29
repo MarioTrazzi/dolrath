@@ -311,7 +311,8 @@ function FighterFigure({
   compact = false,
   hideNamePlate = false,
   nameInCard = false,
-  showHpBelow = false,
+  showHpBar = false,
+  hpAbove = false,
 }: {
   fighter: FighterView
   side: 'left' | 'right'
@@ -331,8 +332,10 @@ function FighterFigure({
   hideNamePlate?: boolean
   /** Faixa inferior do card mostra NOME • Nv.X do lutador (em vez de raça • classe). */
   nameInCard?: boolean
-  /** Barra de HP fina ABAIXO do card (usada nos cards do pacote da masmorra). */
-  showHpBelow?: boolean
+  /** Mostra uma barra de HP fina junto ao card (pacote da masmorra). */
+  showHpBar?: boolean
+  /** Posiciona a barra de HP ACIMA do card (em vez de abaixo) — usado na cascata. */
+  hpAbove?: boolean
 }) {
   const hpPct = fighter.maxHp > 0 ? (fighter.hp / fighter.maxHp) * 100 : 0
   const transformEmoji = fighter.isTransformed && fighter.transformationType
@@ -401,8 +404,15 @@ function FighterFigure({
         </div>
         )}
 
-        {/* Resultado do dado (mini-dado girando) */}
-        <div className="h-11 flex items-center">
+        {/* Barra de HP ACIMA do card (cascata do pacote) — fina, peeking na sobreposição */}
+        {showHpBar && hpAbove && (
+          <div className="w-full px-0.5">
+            <StatBar value={fighter.hp} max={fighter.maxHp} gradient={hpBarColor(hpPct)} icon="❤️" />
+          </div>
+        )}
+
+        {/* Resultado do dado (mini-dado girando) — slot menor no compacto */}
+        <div className={`${compact ? 'h-6' : 'h-11'} flex items-center`}>
           <AnimatePresence>
             {diceResult && (
               <MiniDie sides={diceResult.sides} result={diceResult} />
@@ -491,8 +501,8 @@ function FighterFigure({
           <div className={`mx-auto mt-1 ${compact ? 'w-16 sm:w-24' : 'w-24 sm:w-32'} h-3 bg-black/50 rounded-[100%] blur-sm`} />
         </motion.div>
 
-        {/* Barra de HP ABAIXO do card (cards do pacote da masmorra) */}
-        {showHpBelow && (
+        {/* Barra de HP ABAIXO do card (quando não for a cascata) */}
+        {showHpBar && !hpAbove && (
           <div className="w-full mt-0.5">
             <StatBar value={fighter.hp} max={fighter.maxHp} gradient={hpBarColor(hpPct)} icon="❤️" />
           </div>
@@ -629,7 +639,8 @@ export default function BattleScene({
       compact?: boolean
       hideNamePlate?: boolean
       nameInCard?: boolean
-      showHpBelow?: boolean
+      showHpBar?: boolean
+      hpAbove?: boolean
     } = {},
   ) => {
     if (!fighter) {
@@ -659,7 +670,8 @@ export default function BattleScene({
           compact={opts.compact}
           hideNamePlate={opts.hideNamePlate}
           nameInCard={opts.nameInCard}
-          showHpBelow={opts.showHpBelow}
+          showHpBar={opts.showHpBar}
+          hpAbove={opts.hpAbove}
         />
 
         {/* Efeito de corte */}
@@ -764,36 +776,45 @@ export default function BattleScene({
           )}
         </div>
 
-        {rightGroup && rightGroup.length > 0 ? (
-          // Pacote em CASCATA sobreposta (não em linha): os monstros se amontoam, cada
-          // um deslocado; o ALVO ATIVO (= right.id) fica na frente e iluminado, os
-          // outros recuam (z menor + escurecidos). Cada card anima sozinho (por-id).
-          <div className="relative flex flex-col items-end justify-end self-end">
-            {rightGroup.map((f, i) => {
-              const isActive = f.id === (focusEnemyId ?? right?.id)
-              return (
-                <div
-                  key={f.id}
-                  className="relative transition-[filter] duration-300"
-                  style={{
-                    marginTop: i === 0 ? 0 : -16,
-                    transform: `translateX(${i % 2 === 0 ? -10 : 30}px)`,
-                    zIndex: isActive ? 50 : 10 + i,
-                    filter: isActive ? 'none' : 'brightness(0.78) saturate(0.92)',
-                  }}
-                >
-                  {renderFighter(f, 'right', {
-                    hideBars: hideEnemyBars,
-                    compact: true,
-                    hideNamePlate: true,
-                    nameInCard: true,
-                    showHpBelow: true,
-                  })}
-                </div>
-              )
-            })}
-          </div>
-        ) : (
+        {rightGroup && rightGroup.length > 0 ? (() => {
+          // Pacote em CASCATA sobreposta e COMPACTA (centralizada, p/ não estourar a tela
+          // em fullscreen). Mais FORTE ao centro (vertical); mais FRACO mais à FRENTE
+          // (z maior); o FOCADO (alvo do jogador / atacante atual) vem à frente + iluminado.
+          const byStrength = [...rightGroup].sort((a, b) => (b.combatStats?.ad ?? 0) - (a.combatStats?.ad ?? 0))
+          const rank = (f: FighterView) => byStrength.findIndex(x => x.id === f.id) // 0 = mais forte
+          // Ordem VERTICAL: mais forte no meio (n=3 → [2º, 1º, 3º]); n≤2 mantém ordem.
+          const arranged = rightGroup.length === 3
+            ? [byStrength[1], byStrength[0], byStrength[2]]
+            : rightGroup
+          const focus = focusEnemyId ?? right?.id
+          return (
+            <div className="relative flex flex-col items-end justify-center self-center">
+              {arranged.map((f, i) => {
+                const focused = f.id === focus
+                return (
+                  <div
+                    key={f.id}
+                    className={`relative transition-[filter,transform] duration-300 ${i === 0 ? '' : '-mt-20 sm:-mt-28'}`}
+                    style={{
+                      transform: `translateX(${i % 2 === 0 ? -6 : 30}px)${focused ? ' scale(1.05)' : ''}`,
+                      zIndex: focused ? 100 : 10 + rank(f), // mais fraco (rank alto) → mais à frente
+                      filter: focused ? 'none' : 'brightness(0.74) saturate(0.9)',
+                    }}
+                  >
+                    {renderFighter(f, 'right', {
+                      hideBars: hideEnemyBars,
+                      compact: true,
+                      hideNamePlate: true,
+                      nameInCard: true,
+                      showHpBar: true,
+                      hpAbove: true,
+                    })}
+                  </div>
+                )
+              })}
+            </div>
+          )
+        })() : (
           renderFighter(right, 'right', { hideBars: hideEnemyBars })
         )}
       </div>

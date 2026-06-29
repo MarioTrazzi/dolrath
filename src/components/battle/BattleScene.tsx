@@ -306,6 +306,9 @@ function FighterFigure({
   diceResult,
   hideBars = false,
   compact = false,
+  hideNamePlate = false,
+  nameInCard = false,
+  showHpBelow = false,
 }: {
   fighter: FighterView
   side: 'left' | 'right'
@@ -321,6 +324,12 @@ function FighterFigure({
   hideBars?: boolean
   /** Versão menor (sprite + placa) p/ caber um pacote de 2-3 lado a lado. */
   compact?: boolean
+  /** Esconde a placa de cima (nome/nível/barras) — card vira só a imagem do monstro. */
+  hideNamePlate?: boolean
+  /** Faixa inferior do card mostra NOME • Nv.X do lutador (em vez de raça • classe). */
+  nameInCard?: boolean
+  /** Barra de HP fina ABAIXO do card (usada nos cards do pacote da masmorra). */
+  showHpBelow?: boolean
 }) {
   const hpPct = fighter.maxHp > 0 ? (fighter.hp / fighter.maxHp) * 100 : 0
   const transformEmoji = fighter.isTransformed && fighter.transformationType
@@ -342,8 +351,9 @@ function FighterFigure({
       {/* Equipamentos ao lado externo do lutador (oculto na versão compacta) */}
       {!compact && <EquipmentColumn equipment={fighter.equipmentMap} side={side} />}
 
-      <div className={`flex flex-col items-center gap-1 ${compact ? 'w-20 sm:w-28' : 'w-32 sm:w-44'}`}>
-        {/* Placa de nome + barras */}
+      <div className={`flex flex-col items-center gap-1 ${compact ? 'w-28 sm:w-36' : 'w-32 sm:w-44'}`}>
+        {/* Placa de nome + barras (oculta nos cards do pacote — viram só a imagem) */}
+        {!hideNamePlate && (
         <div className={`w-full bg-black/60 backdrop-blur-sm rounded-xl px-2 py-1.5 border ${
           isTurn ? 'border-amber-400 shadow-lg shadow-amber-500/30' : 'border-white/15'
         }`}>
@@ -386,6 +396,7 @@ function FighterFigure({
             )
           })()}
         </div>
+        )}
 
         {/* Resultado do dado (mini-dado girando) */}
         <div className="h-11 flex items-center">
@@ -439,7 +450,7 @@ function FighterFigure({
           <motion.div
             animate={isDefeated ? { rotate: side === 'left' ? -90 : 90, y: 30, opacity: 0.5 } : { rotate: 0, y: 0, opacity: 1 }}
             transition={{ duration: 0.8, ease: 'easeIn' }}
-            className={`relative ${compact ? 'w-20 h-28 sm:w-28 sm:h-36' : 'w-28 h-36 sm:w-40 sm:h-52'} rounded-2xl overflow-hidden border-2 shadow-2xl ${
+            className={`relative ${compact ? 'w-28 h-40 sm:w-36 sm:h-52' : 'w-28 h-36 sm:w-40 sm:h-52'} rounded-2xl overflow-hidden border-2 shadow-2xl ${
               isWinner ? 'border-yellow-400 shadow-yellow-500/40'
               : fighter.isTransformed ? ''
               : isTurn ? 'border-amber-400/70'
@@ -465,15 +476,24 @@ function FighterFigure({
                 </span>
               </div>
             )}
-            {/* Faixa raça/classe */}
-            <div className="absolute bottom-0 inset-x-0 bg-black/70 text-center py-0.5">
-              <span className="text-[9px] text-white/80">{fighter.race} • {fighter.class}</span>
+            {/* Faixa inferior: nome + nível do monstro (pacote) ou raça • classe (padrão) */}
+            <div className="absolute bottom-0 inset-x-0 bg-black/70 text-center py-0.5 px-1">
+              <span className="text-[9px] sm:text-[10px] text-white/85 font-bold truncate block">
+                {nameInCard ? `${fighter.name} • Nv.${fighter.level}` : `${fighter.race} • ${fighter.class}`}
+              </span>
             </div>
           </motion.div>
 
           {/* Sombra no chão */}
           <div className={`mx-auto mt-1 ${compact ? 'w-16 sm:w-24' : 'w-24 sm:w-32'} h-3 bg-black/50 rounded-[100%] blur-sm`} />
         </motion.div>
+
+        {/* Barra de HP ABAIXO do card (cards do pacote da masmorra) */}
+        {showHpBelow && (
+          <div className="w-full mt-0.5">
+            <StatBar value={fighter.hp} max={fighter.maxHp} gradient={hpBarColor(hpPct)} icon="❤️" />
+          </div>
+        )}
       </div>
     </div>
   )
@@ -600,7 +620,13 @@ export default function BattleScene({
   const renderFighter = (
     fighter: FighterView | null,
     side: 'left' | 'right',
-    opts: { hideBars?: boolean; compact?: boolean } = {},
+    opts: {
+      hideBars?: boolean
+      compact?: boolean
+      hideNamePlate?: boolean
+      nameInCard?: boolean
+      showHpBelow?: boolean
+    } = {},
   ) => {
     if (!fighter) {
       return (
@@ -627,6 +653,9 @@ export default function BattleScene({
           diceResult={miniDieFor(fighter, side)}
           hideBars={opts.hideBars}
           compact={opts.compact}
+          hideNamePlate={opts.hideNamePlate}
+          nameInCard={opts.nameInCard}
+          showHpBelow={opts.showHpBelow}
         />
 
         {/* Efeito de corte */}
@@ -743,13 +772,19 @@ export default function BattleScene({
                   key={f.id}
                   className="relative transition-[filter] duration-300"
                   style={{
-                    marginTop: i === 0 ? 0 : -48,
-                    transform: `translateX(${i % 2 === 0 ? -6 : 26}px)`,
+                    marginTop: i === 0 ? 0 : -16,
+                    transform: `translateX(${i % 2 === 0 ? -10 : 30}px)`,
                     zIndex: isActive ? 50 : 10 + i,
-                    filter: isActive ? 'none' : 'brightness(0.75) saturate(0.9)',
+                    filter: isActive ? 'none' : 'brightness(0.78) saturate(0.92)',
                   }}
                 >
-                  {renderFighter(f, 'right', { hideBars: hideEnemyBars, compact: true })}
+                  {renderFighter(f, 'right', {
+                    hideBars: hideEnemyBars,
+                    compact: true,
+                    hideNamePlate: true,
+                    nameInCard: true,
+                    showHpBelow: true,
+                  })}
                 </div>
               )
             })}

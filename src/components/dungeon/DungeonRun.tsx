@@ -2546,15 +2546,8 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                         <span className="w-6 h-6 inline-flex items-center justify-center shrink-0">
                           <MonsterThumb name={mm.name} image={mm.image} emoji={mm.emoji} className="text-base" />
                         </span>
-                        <span className="flex flex-col items-start">
-                          <span className="text-[9px] font-bold text-white/80 leading-none">{active ? '🎯 ' : ''}{mm.name}</span>
-                          <span className="w-16 h-1 mt-0.5 rounded-full bg-black/50 overflow-hidden">
-                            <span
-                              className="block h-full bg-gradient-to-r from-red-500 to-rose-400"
-                              style={{ width: `${Math.max(0, Math.min(100, (mm.hp / mm.maxHp) * 100))}%` }}
-                            />
-                          </span>
-                        </span>
+                        {/* Só nome/foco — o HP agora vive no card da arena (sem duplicar). */}
+                        <span className="text-[9px] font-bold text-white/80 leading-none">{active ? '🎯 ' : ''}{mm.name}</span>
                       </button>
                     )
                   })}

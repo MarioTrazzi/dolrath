@@ -9,6 +9,7 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import EnhancementDialog from '@/components/EnhancementDialog';
 import VaultBackdrop from '@/components/inventory/VaultBackdrop';
 import InventoryPanel from '@/components/inventory/InventoryPanel';
+import TransferQuantityDialog from '@/components/inventory/TransferQuantityDialog';
 import BankPanel from '@/components/inventory/BankPanel';
 import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider';
 import { getWalletTxErrorMessage } from '@/lib/walletErrors';
@@ -63,6 +64,12 @@ export default function InventoryPage() {
   const [equippedItems, setEquippedItems] = useState<EquippedItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [enhanceTarget, setEnhanceTarget] = useState<{ inventoryId: string; itemName: string; category?: 'WEAPON' | 'ARMOR' } | null>(null);
+  // Diálogo de quantidade ao arrastar uma pilha (>1) entre inventários.
+  const [transferTarget, setTransferTarget] = useState<{
+    item: Item;
+    maxQuantity: number;
+    destination: 'character' | 'global';
+  } | null>(null);
   // Gold da poupança da conta (User.goldBalance), exibido na barra de moedas do baú global.
   const [bankGold, setBankGold] = useState<number | null>(null);
   // Slots do Baú Geral (User.globalInventorySlots) — expansível como o do personagem.
@@ -135,7 +142,7 @@ export default function InventoryPage() {
     }
   };
 
-  const handleTransferToCharacter = async (itemId: string) => {
+  const handleTransferToCharacter = async (itemId: string, quantity: number = 1) => {
     if (!selectedCharacter) {
       toast.error('⚠️ Selecione um personagem primeiro', {
         duration: 3000,
@@ -150,16 +157,19 @@ export default function InventoryPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ itemId, quantity: 1 }),
+        body: JSON.stringify({ itemId, quantity }),
       });
 
       if (response.ok) {
         // Refresh both inventories
         fetchUserInventory();
         fetchCharacterInventory(selectedCharacter);
-        toast.success('📦 Item transferido para o personagem!', {
-          duration: 3000,
-        });
+        toast.success(
+          quantity > 1
+            ? `📦 ${quantity}x transferidos para o personagem!`
+            : '📦 Item transferido para o personagem!',
+          { duration: 3000 }
+        );
       } else {
         const error = await response.json();
         toast.error(`❌ Erro na transferência: ${error.error}`, {
@@ -225,6 +235,40 @@ export default function InventoryPage() {
       });
     }
     setLoading(false);
+  };
+
+  // 🔀 Drag & drop entre inventários. O item arrastado carrega a quantidade
+  // disponível na pilha de origem; pilhas (>1) abrem o diálogo de quantidade,
+  // itens únicos (equipamento) transferem direto.
+  const handleDropToCharacter = (item: any, availableQuantity: number) => {
+    if (!selectedCharacter) {
+      toast.error('⚠️ Selecione um personagem primeiro', { duration: 3000 });
+      return;
+    }
+    if (availableQuantity > 1) {
+      setTransferTarget({ item, maxQuantity: availableQuantity, destination: 'character' });
+    } else {
+      handleTransferToCharacter(item.id, 1);
+    }
+  };
+
+  const handleDropToGlobal = (item: any, availableQuantity: number) => {
+    // Itens equipados não podem ir ao global (handler já avisa); vão direto p/ o toast.
+    if (availableQuantity > 1 && !isItemEquipped(item.id)) {
+      setTransferTarget({ item, maxQuantity: availableQuantity, destination: 'global' });
+    } else {
+      handleTransferToGlobal(item.id, 1);
+    }
+  };
+
+  const handleConfirmTransfer = (quantity: number) => {
+    if (!transferTarget) return;
+    if (transferTarget.destination === 'character') {
+      handleTransferToCharacter(transferTarget.item.id, quantity);
+    } else {
+      handleTransferToGlobal(transferTarget.item.id, quantity);
+    }
+    setTransferTarget(null);
   };
 
   // 💳 Pagamento on-chain de GOLD para a treasury (mesmo fluxo do expand da ficha).
@@ -589,6 +633,8 @@ export default function InventoryPage() {
             expanding={expandingChar}
             expandTitle={`Expandir +${EXPAND_SLOTS} slots (custo: ${EXPAND_COST_GOLD} GOLD)`}
             goldText={typeof activeCharacter?.gold === 'number' ? activeCharacter.gold.toLocaleString('pt-BR') : '0'}
+            dragSource="character"
+            onItemDropped={handleDropToCharacter}
           />
 
           {/* 🌐 Baú Geral — mesma UI, exibindo o inventário global da conta */}
@@ -604,8 +650,27 @@ export default function InventoryPage() {
             expanding={expandingGlobal}
             expandTitle={`Expandir +${EXPAND_SLOTS} slots (custo: ${EXPAND_COST_GOLD} GOLD)`}
             goldText={bankGold != null ? bankGold.toLocaleString('pt-BR') : '0'}
+            dragSource="global"
+            onItemDropped={handleDropToGlobal}
           />
         </div>
+
+        {/* Diálogo de quantidade ao arrastar pilhas entre inventários 📦 */}
+        {transferTarget && (
+          <TransferQuantityDialog
+            open={!!transferTarget}
+            item={transferTarget.item as any}
+            maxQuantity={transferTarget.maxQuantity}
+            destinationLabel={
+              transferTarget.destination === 'character'
+                ? (activeCharacter?.name || 'personagem')
+                : 'Baú Geral'
+            }
+            destinationAccent={transferTarget.destination === 'character' ? '#d9a441' : '#3b82f6'}
+            onConfirm={handleConfirmTransfer}
+            onClose={() => setTransferTarget(null)}
+          />
+        )}
 
         {/* Diálogo de aprimoramento ⚒️ */}
         {enhanceTarget && selectedCharacter && (

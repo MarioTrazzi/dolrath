@@ -32,6 +32,8 @@ interface CharacterItemGridProps {
   search?: string;
   gridTemplateColumns?: string;
   gap?: number;
+  /** Painel de origem dos itens ('character' | 'global'), repassado ao drag. */
+  dragSource?: 'character' | 'global';
 }
 
 /**
@@ -54,6 +56,7 @@ export function CharacterItemGrid({
   search,
   gridTemplateColumns = 'repeat(auto-fill, minmax(50px, 1fr))',
   gap = 5,
+  dragSource,
 }: CharacterItemGridProps) {
   const q = (search || '').trim().toLowerCase();
   const shown = q ? items.filter((i) => (i.item.name || '').toLowerCase().includes(q)) : items;
@@ -81,6 +84,7 @@ export function CharacterItemGrid({
               onSendToGlobal={onSendToGlobal}
               onTransfer={onTransfer}
               characterId={characterId}
+              dragSource={dragSource}
             />
           );
         }

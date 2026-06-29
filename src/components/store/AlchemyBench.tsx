@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { Info } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { findRecipeByIngredients } from '@/lib/alchemy';
+import { findRecipeByIngredients, recipesByRarity, expandRecipe, type PotionRecipe } from '@/lib/alchemy';
 import { getIngredientByName, isIngredientItem, type Rarity } from '@/lib/itemCatalog';
 // Miniatura com card de detalhe ao passar o mouse (ver TODO ícone grande).
 import { CraftItemThumb as ItemThumb } from './CraftItemThumb';
@@ -16,6 +18,20 @@ const RARITY_UI: Record<Rarity, { text: string; ring: string; glow: string }> = 
   LEGENDARY: { text: 'text-amber-300', ring: '#fbbf24', glow: 'rgba(251,191,36,0.6)' },
 };
 const RARITY_ORDER: Rarity[] = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY'];
+
+const RARITY_LABEL: Record<Rarity, string> = {
+  COMMON: 'Comuns',
+  UNCOMMON: 'Incomuns',
+  RARE: 'Raras',
+  EPIC: 'Épicas',
+  LEGENDARY: 'Lendárias',
+};
+
+interface HoverInfo {
+  id: string;
+  top: number;
+  left: number;
+}
 
 interface Character {
   id: string;
@@ -59,6 +75,11 @@ export default function AlchemyBench({
   const [busy, setBusy] = useState(false);
   // Os 3 vértices do triângulo (nome do ingrediente ou null).
   const [slots, setSlots] = useState<(string | null)[]>([null, null, null]);
+  // Livro de receitas (modal) + popover de ingredientes ao passar o mouse.
+  const [recipesOpen, setRecipesOpen] = useState(false);
+  const [hover, setHover] = useState<HoverInfo | null>(null);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     if (!controlled && !internalCharacterId && characters.length > 0) {
@@ -118,6 +139,26 @@ export default function AlchemyBench({
 
   const filled = slots.filter((s): s is string => s != null);
   const matchedRecipe = filled.length === 3 ? findRecipeByIngredients(filled) : undefined;
+
+  // Receitas agrupadas por raridade para o livro de receitas.
+  const recipeGroups = useMemo(() => recipesByRarity(), []);
+  const allRecipes = useMemo(() => recipeGroups.flatMap((g) => g.recipes), [recipeGroups]);
+  const hoverRecipe = hover ? allRecipes.find((r) => r.id === hover.id) ?? null : null;
+
+  // Quantidade TOTAL do ingrediente no inventário (independe do que está no triângulo).
+  const have = useCallback((name: string) => ingredientCounts.get(name) ?? 0, [ingredientCounts]);
+  const canCraftRecipe = useCallback(
+    (r: PotionRecipe) => r.ingredients.every((i) => have(i.name) >= i.quantity),
+    [have]
+  );
+
+  // Atalho do livro: clicar numa receita pronta já preenche os 3 vértices do triângulo.
+  const loadRecipe = (r: PotionRecipe) => {
+    if (!canCraftRecipe(r)) return;
+    setSlots(expandRecipe(r));
+    setRecipesOpen(false);
+    setHover(null);
+  };
 
   const placeIngredient = (name: string) => {
     if (available(name) <= 0) return;
@@ -216,9 +257,19 @@ export default function AlchemyBench({
   return (
     <div className="relative overflow-hidden rounded-2xl border-2 border-emerald-500/40 bg-gradient-to-br from-emerald-950/40 to-purple-950/30 p-5 backdrop-blur-sm">
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-        <h2 className="text-2xl font-black text-emerald-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
-          ⚗️ Triângulo de Transmutação
-        </h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-2xl font-black text-emerald-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+            ⚗️ Triângulo de Transmutação
+          </h2>
+          <button
+            onClick={() => setRecipesOpen(true)}
+            title="Livro de receitas"
+            aria-label="Receitas de alquimia"
+            className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-emerald-500/40 text-emerald-300 hover:bg-emerald-900/60 transition-colors"
+          >
+            <Info size={15} />
+          </button>
+        </div>
         {!controlled && characters.length > 1 && (
           <select
             value={selectedCharacterId}
@@ -234,8 +285,15 @@ export default function AlchemyBench({
 
       <p className="text-sm text-white/60 mb-5">
         Coloque <strong className="text-white">3 ingredientes</strong> nos vértices do triângulo. Se a combinação
-        formar uma receita, a poção surge no centro e vai para o inventário. Consulte as combinações no{' '}
-        <a href="/doc#crafting" className="text-emerald-300 hover:underline">livro de receitas (/doc)</a>.
+        formar uma receita, a poção surge no centro e vai para o inventário. Abra o{' '}
+        <button
+          type="button"
+          onClick={() => setRecipesOpen(true)}
+          className="font-semibold text-emerald-300 underline underline-offset-2 hover:text-emerald-200"
+        >
+          livro de receitas
+        </button>
+        {' '}e clique numa receita pronta para montar o triângulo de uma vez.
       </p>
 
       {loadingInv ? (
@@ -365,6 +423,113 @@ export default function AlchemyBench({
             )}
           </div>
         </div>
+      )}
+
+      {/* ===== MODAL DE RECEITAS + POPOVER (portal: fora do container com blur/overflow) ===== */}
+      {mounted && createPortal(
+        <>
+          {recipesOpen && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+              onClick={() => { setRecipesOpen(false); setHover(null); }}
+            >
+              <div
+                className="relative w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border-2 border-emerald-500/40 bg-gradient-to-br from-zinc-950 to-emerald-950/40 p-5 [&::-webkit-scrollbar]:hidden"
+                style={{ scrollbarWidth: 'none' }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xl font-black text-emerald-300">📖 Receitas de Alquimia</h3>
+                  <button onClick={() => { setRecipesOpen(false); setHover(null); }} className="text-white/50 hover:text-white text-lg">✕</button>
+                </div>
+                <p className="text-xs text-white/50 mb-4">
+                  Passe o mouse para ver os ingredientes (em vermelho os que faltam). Receitas{' '}
+                  <span className="text-emerald-300">prontas</span> ficam acesas — clique para montar o triângulo;
+                  ou posicione os ingredientes você mesmo.
+                </p>
+
+                <div className="space-y-4">
+                  {recipeGroups.map(({ rarity, recipes }) => (
+                    <div key={rarity}>
+                      <label className={`block text-xs font-semibold mb-2 ${RARITY_UI[rarity].text}`}>
+                        {RARITY_LABEL[rarity]}
+                      </label>
+                      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 6 }}>
+                        {recipes.map((r) => {
+                          const ui = RARITY_UI[r.rarity];
+                          const ok = canCraftRecipe(r);
+                          return (
+                            <button
+                              key={r.id}
+                              type="button"
+                              onClick={() => loadRecipe(r)}
+                              onMouseEnter={(e) => {
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                const left = Math.min(rect.right + 8, window.innerWidth - 240);
+                                setHover({ id: r.id, top: rect.top, left });
+                              }}
+                              onMouseLeave={() => setHover((h) => (h?.id === r.id ? null : h))}
+                              className={`flex items-center gap-2 rounded-lg border p-2 text-left transition-transform ${ok ? 'cursor-pointer hover:scale-[1.02]' : 'cursor-not-allowed opacity-45'}`}
+                              style={{
+                                borderColor: ok ? ui.ring : ui.ring + '40',
+                                background: 'rgba(0,0,0,0.35)',
+                                boxShadow: ok ? `0 0 10px ${ui.glow}` : undefined,
+                              }}
+                            >
+                              <span className="block w-9 h-9 shrink-0 overflow-hidden rounded-md grid place-items-center">
+                                <ItemThumb name={r.outputName} emoji="🧪" className="text-2xl" />
+                              </span>
+                              <span className="min-w-0">
+                                <span className={`block text-[11px] font-bold leading-tight truncate ${ui.text}`}>{r.outputName}</span>
+                                <span className={`block text-[10px] leading-tight ${ok ? 'text-emerald-300' : 'text-white/35'}`}>
+                                  {ok ? '✓ pronto' : 'faltam ingredientes'}
+                                </span>
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Popover de disponibilidade (hover sobre uma receita) — só informação. */}
+          {hover && hoverRecipe && (
+            <div
+              className="pointer-events-none fixed z-[60] w-[224px] rounded-xl border border-emerald-500/40 bg-zinc-950/95 p-3 shadow-2xl"
+              style={{ top: Math.min(hover.top, (typeof window !== 'undefined' ? window.innerHeight : 800) - 220), left: hover.left }}
+            >
+              <p className={`text-xs font-black mb-2 ${RARITY_UI[hoverRecipe.rarity].text}`}>{hoverRecipe.outputName}</p>
+              <div className="space-y-1">
+                {hoverRecipe.ingredients.map((ing) => {
+                  const enough = have(ing.name) >= ing.quantity;
+                  const info = getIngredientByName(ing.name);
+                  return (
+                    <div key={ing.name} className="flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-1.5 min-w-0">
+                        <span className="block w-5 h-5 overflow-hidden rounded grid place-items-center">
+                          <ItemThumb name={ing.name} emoji={info?.emoji ?? '•'} className="text-sm" />
+                        </span>
+                        <span className="text-[11px] text-white/75 truncate">{ing.name}</span>
+                      </span>
+                      <span className={`text-[11px] font-bold shrink-0 ${enough ? 'text-emerald-300' : 'text-red-300'}`}>
+                        {have(ing.name)}/{ing.quantity}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-[10px] text-amber-300">taxa {hoverRecipe.goldCost} 🪙</p>
+              <p className={`mt-1 text-[10px] font-semibold ${canCraftRecipe(hoverRecipe) ? 'text-emerald-300' : 'text-white/40'}`}>
+                {canCraftRecipe(hoverRecipe) ? '✓ clique para montar o triângulo' : 'colete os ingredientes que faltam'}
+              </p>
+            </div>
+          )}
+        </>,
+        document.body,
       )}
     </div>
   );

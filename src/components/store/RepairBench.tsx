@@ -74,12 +74,15 @@ export default function RepairBench({
   characters,
   characterId,
   refreshSignal,
+  onChanged,
 }: {
   characters: Character[];
   /** Personagem controlado pela loja. Se ausente, a bancada gerencia o próprio. */
   characterId?: string;
   /** Muda quando o inventário do personagem foi alterado fora da bancada (ex.: compra). */
   refreshSignal?: number;
+  /** Chamado quando reparo/venda/aprimoramento muda o gold do personagem (atualiza a navbar). */
+  onChanged?: () => void;
 }) {
   const [internalCharacterId, setInternalCharacterId] = useState<string>('');
   // Modo controlado: usa o personagem da loja; senão, o estado interno.
@@ -231,6 +234,7 @@ export default function RepairBench({
       }
       toast.success(json.message || '🔧 Item reparado!');
       await fetchInventory(selectedCharacterId);
+      onChanged?.();
     } catch {
       toast.error('Erro inesperado ao reparar');
     } finally {
@@ -269,6 +273,7 @@ export default function RepairBench({
       }
       if (sold > 0) {
         toast.success(`💰 Vendeu ${sold}x ${name} por ${sellUnitPrice * sold} gold!`);
+        onChanged?.();
       }
       await fetchInventory(selectedCharacterId);
     } catch {
@@ -679,7 +684,7 @@ export default function RepairBench({
           inventoryId={selected?.id}
           itemName={selected?.item.name}
           items={enhanceableItems}
-          onChanged={() => fetchInventory(selectedCharacterId)}
+          onChanged={() => { fetchInventory(selectedCharacterId); onChanged?.(); }}
         />
       )}
     </div>

@@ -30,9 +30,12 @@ interface DraggableItemProps {
   compact?: boolean;
   /** Cor de destaque (hex) para a borda do slot */
   accent?: string;
+  /** Painel de origem do item ('character' | 'global'). Vai no payload do drag
+   *  para o painel de destino saber que é um arraste entre inventários. */
+  dragSource?: 'character' | 'global';
 }
 
-export function DraggableItem({ item, isEquipped, enhancementLevel = 0, quantity = 1, inventoryId, onEquip, onUnequip, onConsume, onEnhance, onTransfer, onSendToGlobal, characterId, compact, accent }: DraggableItemProps) {
+export function DraggableItem({ item, isEquipped, enhancementLevel = 0, quantity = 1, inventoryId, onEquip, onUnequip, onConsume, onEnhance, onTransfer, onSendToGlobal, characterId, compact, accent, dragSource }: DraggableItemProps) {
   // Imagem do item: banco (item.image) → asset estático por nome (/items/<slug>.webp)
   // → ícone genérico só se a arte 404 (ex.: item sem webp). Cobre registros antigos
   // (ingredientes/materiais) criados antes de gravarmos image no banco.
@@ -42,7 +45,10 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, quantity
   const showQuantity = quantity > 1;
   const [{ isDragging }, drag] = useDrag({
     type: 'ITEM',
-    item: { ...item },
+    // Além do item, carrega a origem/quantidade/linha para o painel de destino
+    // decidir se é transferência entre inventários e quanto mover. EquipmentSlot
+    // continua lendo só `.id`/`.type`, então os campos extras são inofensivos.
+    item: { ...item, __dragSource: dragSource, __quantity: quantity, __inventoryId: inventoryId, __isEquipped: isEquipped },
     collect: (monitor) => ({
       isDragging: monitor.isDragging(),
     }),

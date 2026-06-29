@@ -94,7 +94,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
   // Personagem ATIVO global (navbar). A loja compra/equipa SEMPRE neste herói —
   // sem seletor próprio. `characters`/`selectedCharacter` derivam do contexto
   // para preservar o resto da lógica original sem reescrevê-la.
-  const { characters: ctxCharacters, activeCharacterId } = useActiveCharacter();
+  const { characters: ctxCharacters, activeCharacterId, refresh: refreshActiveCharacter } = useActiveCharacter();
   const characters = ctxCharacters as unknown as Character[];
   const selectedCharacter = activeCharacterId ?? '';
   const [characterGold, setCharacterGold] = useState<number | null>(null);
@@ -187,6 +187,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
     if (lastGold !== null) setCharacterGold(lastGold);
     else fetchCharacterGold(selectedCharacter);
     refreshGoldBalance();
+    refreshActiveCharacter(); // atualiza o gold do personagem na navbar
     setInventoryRefreshKey((k) => k + 1);
     fetchUserInventory();
     if (purchased > 0) {
@@ -198,6 +199,16 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
   };
   // Sinaliza à Bancada de Reparo que o inventário do personagem mudou (compra/transferência).
   const [inventoryRefreshKey, setInventoryRefreshKey] = useState(0);
+
+  // Forja/alquimia/reparo gastam Character.gold no servidor. Além de recarregar o
+  // inventário das bancadas, precisamos atualizar o gold do personagem ativo na
+  // navbar (useActiveCharacter) e o saldo local da loja — senão o número fica preso.
+  const handleBenchChanged = useCallback(() => {
+    setInventoryRefreshKey((k) => k + 1);
+    refreshActiveCharacter();
+    if (selectedCharacter) fetchCharacterGold(selectedCharacter);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshActiveCharacter, selectedCharacter]);
   // Filtro por raça e level do personagem ativo (ligado por padrão).
   const [showAll, setShowAll] = useState(false);
 
@@ -479,12 +490,13 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
               characters={characters}
               characterId={selectedCharacter || undefined}
               refreshSignal={inventoryRefreshKey}
+              onChanged={handleBenchChanged}
             />
             <ForgeBench
               characters={characters}
               characterId={selectedCharacter || undefined}
               refreshSignal={inventoryRefreshKey}
-              onCrafted={() => setInventoryRefreshKey((k) => k + 1)}
+              onCrafted={handleBenchChanged}
             />
           </div>
         ) : (
@@ -495,6 +507,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                   characters={characters}
                   characterId={selectedCharacter || undefined}
                   refreshSignal={inventoryRefreshKey}
+                  onChanged={handleBenchChanged}
                 />
               </div>
             )}
@@ -505,7 +518,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                   characters={characters}
                   characterId={selectedCharacter || undefined}
                   refreshSignal={inventoryRefreshKey}
-                  onCrafted={() => setInventoryRefreshKey((k) => k + 1)}
+                  onCrafted={handleBenchChanged}
                 />
               </div>
             )}

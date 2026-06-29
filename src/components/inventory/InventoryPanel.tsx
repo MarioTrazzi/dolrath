@@ -1,10 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
+import { useDrop } from 'react-dnd';
 import Link from 'next/link';
 import { Box, LayoutGrid, Search, Plus, HelpCircle } from 'lucide-react';
 import { EquipmentSlotType } from '@prisma/client';
+import { Item } from '@/types/item';
 import { CharacterItemGrid, InventoryRow } from '@/components/inventory/CharacterItemGrid';
+
+/** Payload do drag: o item + metadados de origem injetados pelo DraggableItem. */
+type DraggedItem = Item & {
+  __dragSource?: 'character' | 'global';
+  __quantity?: number;
+  __isEquipped?: boolean;
+};
 
 interface InventoryPanelProps {
   /** Título exibido na barra de topo e na aba (ex.: "Inventário", "Baú Geral"). */
@@ -32,6 +41,11 @@ interface InventoryPanelProps {
   /** Texto de gold exibido na barra de moedas; oculta a barra se não definido. */
   goldText?: string | null;
   gridTemplateColumns?: string;
+  /** Identifica este painel como origem dos itens arrastados ('character' | 'global'). */
+  dragSource?: 'character' | 'global';
+  /** Chamado quando um item de OUTRO inventário é solto neste painel.
+   *  Recebe o item arrastado e a quantidade disponível na pilha de origem. */
+  onItemDropped?: (item: DraggedItem, availableQuantity: number) => void;
 }
 
 /**
@@ -59,15 +73,50 @@ export default function InventoryPanel({
   expandTitle = 'Expandir +5 slots',
   goldText,
   gridTemplateColumns = 'repeat(8, 1fr)',
+  dragSource,
+  onItemDropped,
 }: InventoryPanelProps) {
   const [search, setSearch] = useState('');
   const overCapacity = items.length > totalSlots;
 
+  // Alvo de drop: aceita itens arrastados do OUTRO inventário (drag entre baús).
+  // Só ativa quando o painel sabe sua origem e tem um handler de recebimento.
+  const dropRef = useRef<HTMLDivElement>(null);
+  const [{ isOver, canDrop }, drop] = useDrop({
+    accept: 'ITEM',
+    canDrop: (dragged: DraggedItem) =>
+      !!onItemDropped && !!dragSource && !!dragged.__dragSource && dragged.__dragSource !== dragSource,
+    drop: (dragged: DraggedItem) => {
+      onItemDropped?.(dragged, Math.max(1, Number(dragged.__quantity) || 1));
+    },
+    collect: (monitor) => ({
+      isOver: monitor.isOver(),
+      canDrop: monitor.canDrop(),
+    }),
+  });
+  drop(dropRef);
+
+  const dropActive = isOver && canDrop;
+
   return (
     <div
-      className="relative flex flex-col w-full rounded-2xl overflow-hidden border-2 backdrop-blur-md shadow-xl"
-      style={{ background: 'linear-gradient(180deg, rgba(26,32,38,0.78), rgba(20,25,30,0.82))', borderColor: `${accent}40` }}
+      ref={dropRef}
+      className="relative flex flex-col w-full rounded-2xl overflow-hidden border-2 backdrop-blur-md shadow-xl transition-colors"
+      style={{
+        background: 'linear-gradient(180deg, rgba(26,32,38,0.78), rgba(20,25,30,0.82))',
+        borderColor: dropActive ? '#22c55e' : `${accent}40`,
+        boxShadow: dropActive ? '0 0 0 2px #22c55e88, 0 0 22px rgba(34,197,94,0.35)' : undefined,
+      }}
     >
+      {/* Realce ao arrastar um item de outro inventário para cá */}
+      {dropActive && (
+        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center" style={{ background: 'rgba(34,197,94,0.10)' }}>
+          <span className="px-3 py-1.5 rounded-lg text-sm font-bold text-white" style={{ background: 'rgba(22,101,52,0.85)', border: '1px solid #22c55e' }}>
+            ⬇️ Soltar aqui para transferir
+          </span>
+        </div>
+      )}
+
       {/* Barra de título */}
       <div className="flex items-center gap-2" style={{ height: 38, padding: '0 12px', background: 'linear-gradient(180deg, #2b333c, #232a31)', borderBottom: '1px solid #11161a' }}>
         <Box size={17} style={{ color: accent }} />
@@ -118,6 +167,7 @@ export default function InventoryPanel({
           search={search}
           gridTemplateColumns={gridTemplateColumns}
           gap={5}
+          dragSource={dragSource}
           onEquip={onEquip}
           onUnequip={onUnequip}
           onConsume={onConsume}

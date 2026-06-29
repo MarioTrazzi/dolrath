@@ -586,9 +586,13 @@ const MINOR_PACK_WEIGHTS: { size: number; weight: number }[] = [
   { size: 2, weight: 0.35 },
   { size: 3, weight: 0.25 },
 ]
-// Fator de stats POR membro conforme o tamanho do pacote (> 1/N de propósito:
-// total um pouco maior, individual bem menor). Aplica em HP, ataque, AP e recompensas.
+// Fator de HP/recompensa POR membro conforme o tamanho do pacote (> 1/N: o pacote
+// tem MAIS HP/recompensa total — luta mais longa e mais XP por limpar tudo).
 const PACK_SHARE: Record<number, number> = { 1: 1, 2: 0.6, 3: 0.45 }
+// Fator de ATAQUE POR membro ≈ 1/N: como TODOS atacam por rodada (estilo FF/Chrono),
+// o dano de um monstro é "dividido" entre os 2-3 → a soma dos ataques do pacote por
+// rodada ≈ 1 monstro solo (matar um já reduz o dano da próxima rodada = focar compensa).
+const PACK_ATK_SHARE: Record<number, number> = { 1: 1, 2: 0.5, 3: 0.34 }
 
 function rollPackSize(): number {
   const total = MINOR_PACK_WEIGHTS.reduce((s, w) => s + w.weight, 0)
@@ -610,17 +614,18 @@ export function scaleMonsterGroup(
   combatClass: CombatClass = 'warrior'
 ): ScaledMonster[] {
   const size = s.isMain || s.isBoss ? 1 : rollPackSize()
-  const share = PACK_SHARE[size] ?? 1
+  const hpShare = PACK_SHARE[size] ?? 1
+  const atkShare = PACK_ATK_SHARE[size] ?? 1
   const out: ScaledMonster[] = []
   for (let i = 0; i < size; i++) {
     const m = scaleMonster(pickMonster(dungeon), dungeon, characterLevel, s, combatClass)
     if (size > 1) {
-      m.hp = Math.max(1, Math.floor(m.hp * share))
+      m.hp = Math.max(1, Math.floor(m.hp * hpShare))
       m.maxHp = m.hp
-      m.attack = Math.max(1, Math.floor(m.attack * share))
-      m.magicPower = Math.floor(m.magicPower * share)
-      m.goldReward = Math.max(1, Math.floor(m.goldReward * share))
-      m.xpReward = Math.max(1, Math.floor(m.xpReward * share))
+      m.attack = Math.max(1, Math.floor(m.attack * atkShare))
+      m.magicPower = Math.floor(m.magicPower * atkShare)
+      m.goldReward = Math.max(1, Math.floor(m.goldReward * hpShare))
+      m.xpReward = Math.max(1, Math.floor(m.xpReward * hpShare))
       m.id = `${m.id}-${i}` // garante id único dentro do pacote
     }
     out.push(m)

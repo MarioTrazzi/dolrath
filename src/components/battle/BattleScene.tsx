@@ -119,6 +119,9 @@ interface BattleSceneProps {
   /** Esconde as barras de HP/MP/stamina dos inimigos (o HP vive no roster de alvo,
    *  fora da arena — evita exibir 2x). O lado esquerdo (jogador) mantém as barras. */
   hideEnemyBars?: boolean
+  /** Id do inimigo em DESTAQUE na cascata (frente + iluminado): o alvo do jogador na
+   *  vez dele, ou o atacante atual na vez dos inimigos. Default = right.id. */
+  focusEnemyId?: string | null
 }
 
 interface FloatingText {
@@ -516,6 +519,7 @@ export default function BattleScene({
   backdrop,
   rightGroup,
   hideEnemyBars = false,
+  focusEnemyId,
 }: BattleSceneProps) {
   const [floatingTexts, setFloatingTexts] = useState<FloatingText[]>([])
   // Animações são por-ID (não por-lado): num pacote, só o monstro alvo sacode/avança,
@@ -766,7 +770,7 @@ export default function BattleScene({
           // outros recuam (z menor + escurecidos). Cada card anima sozinho (por-id).
           <div className="relative flex flex-col items-end justify-end self-end">
             {rightGroup.map((f, i) => {
-              const isActive = f.id === right?.id
+              const isActive = f.id === (focusEnemyId ?? right?.id)
               return (
                 <div
                   key={f.id}

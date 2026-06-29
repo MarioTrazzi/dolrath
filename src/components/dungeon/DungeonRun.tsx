@@ -156,10 +156,6 @@ const MINOR_MONSTER_CHANCE = 0.4
 // Custo de stamina ao DEFENDER no combate (esquiva e soco são grátis).
 const DEFEND_STAMINA_COST = 1
 
-// Chip de "fustigamento" por rodada de cada inimigo NÃO-alvo vivo de um pacote
-// (fração do ataque dele). Leve de propósito: o duelo é com o alvo ativo; o bando
-// só pressiona o atrito. [[dolrath-dungeon-design-vision]]
-const HARRY_FACTOR = 0.18
 
 // Falas de transição do Mestre entre as salas (genéricas, tom de RPG)
 const TRANSITIONS = [
@@ -514,6 +510,15 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const [pack, setPack] = useState<ScaledMonster[]>([])
   const packRef = useRef<ScaledMonster[]>([])
   packRef.current = pack
+  // FASE INIMIGA (estilo FF/Chrono): na vez dos inimigos, TODOS atacam 1x cada, em
+  // sequência. `attacker` = quem está atacando agora; a fila guarda os próximos.
+  const [attacker, setAttacker] = useState<ScaledMonster | null>(null)
+  const attackerRef = useRef<ScaledMonster | null>(null)
+  attackerRef.current = attacker
+  const enemyQueueRef = useRef<string[]>([])
+  // Card em destaque na arena (frente + iluminado): o ALVO do jogador na sua vez,
+  // ou o ATACANTE atual na vez dos inimigos.
+  const [focusEnemyId, setFocusEnemyId] = useState<string | null>(null)
   const [stage, setStage] = useState<CombatStage>('busy')
   const [currentTurnId, setCurrentTurnId] = useState<string | null>(null)
   const [pendingAttack, setPendingAttack] = useState<AttackKind | null>(null)
@@ -1018,6 +1023,10 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     packRef.current = list
     setMonster(active)
     monsterRef.current = active
+    setAttacker(null)
+    attackerRef.current = null
+    enemyQueueRef.current = []
+    setFocusEnemyId(active.id)
     setEventCard(null)
     setExploreResult(null)
     setExploreRolling(false)
@@ -1052,6 +1061,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     if (!next || next.id === monsterRef.current?.id) return
     setMonster(next)
     monsterRef.current = next
+    setFocusEnemyId(next.id)
     pushLog(`🎯 Você foca ${next.emoji} ${next.name}.`)
   }
 
@@ -1119,7 +1129,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
           setCurrentTurnId(character.id)
           setStage('playerSelect')
         } else {
-          monsterTelegraph()
+          startEnemyPhase()
         }
       }, 1400)
     }, 3000)
@@ -1207,17 +1217,51 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       setPack(prev => prev.map(x => (x.id === m.id ? { ...x, hp: newHp } : x)))
       packRef.current = packRef.current.map(x => (x.id === m.id ? { ...x, hp: newHp } : x))
     }, 500)
+    tickPlayerTurn()
     if (newHp <= 0) {
       later(() => onMonsterKilled({ ...m, hp: 0 }), 1600)
       return
     }
-    tickPlayerTurn()
-    later(() => monsterTelegraph(), 2000)
+    // Vez dos inimigos: TODOS os vivos atacam 1x cada.
+    later(() => startEnemyPhase(), 2000)
   }
 
-  // ---------- Turno do monstro ----------
+  // ---------- FASE INIMIGA: todos atacam 1x cada, em sequência ----------
+  // Monta a fila com todos os inimigos VIVOS e dispara o primeiro ataque.
+  const startEnemyPhase = () => {
+    const living = packRef.current.filter(m => m.hp > 0)
+    if (living.length === 0) { backToPlayerTurn(); return }
+    enemyQueueRef.current = living.map(m => m.id)
+    nextEnemyAttack()
+  }
+
+  // Próximo atacante da fila telegrafa seu golpe; se a fila acabou, volta ao jogador.
+  const nextEnemyAttack = () => {
+    let next: ScaledMonster | undefined
+    while (enemyQueueRef.current.length > 0) {
+      const id = enemyQueueRef.current.shift()!
+      const cand = packRef.current.find(m => m.id === id && m.hp > 0)
+      if (cand) { next = cand; break }
+    }
+    if (!next) { backToPlayerTurn(); return }
+    setAttacker(next)
+    attackerRef.current = next
+    setFocusEnemyId(next.id) // traz o atacante pra frente
+    monsterTelegraph()
+  }
+
+  // Fim da fase inimiga → devolve o turno ao jogador (foco volta pro alvo escolhido).
+  const backToPlayerTurn = () => {
+    setAttacker(null)
+    attackerRef.current = null
+    setFocusEnemyId(monsterRef.current?.id ?? null)
+    setCurrentTurnId(character.id)
+    setStage('playerSelect')
+  }
+
+  // ---------- Telegrafia do ATACANTE atual ----------
   const monsterTelegraph = () => {
-    const m = monsterRef.current
+    const m = attackerRef.current
     if (!m) return
     setCurrentTurnId(m.id)
     // Bosses preferem golpes fortes; só quem tem habilidade especial pode usá-la.
@@ -1264,11 +1308,11 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
 
     setShowItems(false)
 
-    // No combate, usar item consome o turno do jogador.
+    // No combate, usar item consome o turno do jogador → vez dos inimigos (todos atacam).
     if (inCombatTurn) {
       setStage('busy')
       tickPlayerTurn()
-      later(() => monsterTelegraph(), 1400)
+      later(() => startEnemyPhase(), 1400)
     }
   }
 
@@ -1290,7 +1334,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   }
 
   const handleDefenseRoll = () => {
-    const m = monsterRef.current
+    const m = attackerRef.current
     if (!m || hasRolled || !monsterPlan || !defenseChoice) return
     setHasRolled(true)
     // DISPUTA DE DADOS: o golpe do monstro define o dado (básico d8 / arma d12 / especial d20).
@@ -1299,12 +1343,12 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     setPanelResult(def)
 
     const atk = mkResult(sides, 0)
-    later(() => setDiceResults(prev => ({ ...prev, [monsterRef.current?.id ?? MONSTER_ID]: atk })), 1700)
+    later(() => setDiceResults(prev => ({ ...prev, [attackerRef.current?.id ?? MONSTER_ID]: atk })), 1700)
     later(() => resolveMonsterAttack(atk, def), 3000)
   }
 
   const resolveMonsterAttack = (atk: DiceResult, def: DiceResult) => {
-    const m = monsterRef.current
+    const m = attackerRef.current
     if (!m || !monsterPlan || !defenseChoice) return
     setStage('busy')
     setPanelResult(null)
@@ -1343,16 +1387,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     else if (outcome.crit) pushLog(`💥 ${m.name} acerta em cheio! ${outcome.damage} de dano em você`)
     else pushLog(`🩸 ${m.name} causou ${outcome.damage} de dano em você`)
 
-    // 🐾 Fustigamento: os OUTROS inimigos vivos do pacote dão um chip leve por rodada
-    // (~18% do ataque deles). Mantém o atrito de enfrentar um bando sem virar 1vN brutal.
-    const harriers = packRef.current.filter(x => x.id !== m.id && x.hp > 0)
-    const chip = harriers.reduce((s, x) => s + Math.max(1, Math.floor(x.attack * HARRY_FACTOR)), 0)
-    if (chip > 0) {
-      pushLog(`🐾 Os outros inimigos fustigam você: -${chip} de dano`)
-      later(() => pushFloat(`-${chip} 🐾`, '#f87171'), 700)
-    }
-
-    const newHp = Math.max(0, hpRef.current - outcome.damage - chip)
+    const newHp = Math.max(0, hpRef.current - outcome.damage)
     later(() => setHp(newHp), 500)
     if (newHp <= 0) {
       later(() => {
@@ -1362,10 +1397,8 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       }, 1400)
       return
     }
-    later(() => {
-      setCurrentTurnId(character.id)
-      setStage('playerSelect')
-    }, 2000)
+    // Próximo inimigo da fila ataca; se acabou a fila, volta ao jogador.
+    later(() => nextEnemyAttack(), 1800)
   }
 
   // ---------- Abate de um monstro do pacote ----------
@@ -1419,7 +1452,8 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     setTotals(prev => ({ ...prev, gold: prev.gold + killGold, xp: prev.xp + xp, kills: prev.kills + 1 }))
     pushLog(`🏆 Você derrotou ${m.emoji} ${m.name}! +${killGold} 💰 +${xp} XP`)
 
-    // Nó AINDA NÃO limpo: troca pro mais fraco vivo e devolve o turno ao jogador.
+    // Nó AINDA NÃO limpo: o jogador abateu o alvo na vez dele → agora é a vez dos
+    // inimigos restantes (todos atacam). O próximo alvo padrão vira o mais fraco vivo.
     if (!cleared) {
       const next = weakestOf(remaining)
       showBanner('🗡️', `${m.name} caiu! Restam ${remaining.length}.`, 1800)
@@ -1431,8 +1465,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
         setPendingAttack(null)
         setMonsterPlan(null)
         setDefenseChoice(null)
-        setCurrentTurnId(character.id)
-        setStage('playerSelect')
+        startEnemyPhase()
       }, 1200)
       return
     }
@@ -2511,6 +2544,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
               right={monsterFighter}
               rightGroup={packFighters}
               hideEnemyBars={pack.length > 1}
+              focusEnemyId={focusEnemyId}
               currentTurnId={currentTurnId}
               winnerId={winnerId}
               combatEnded={combatEnded}

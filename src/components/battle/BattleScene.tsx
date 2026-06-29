@@ -357,7 +357,7 @@ function FighterFigure({
       {/* Equipamentos ao lado externo do lutador (oculto na versão compacta) */}
       {!compact && <EquipmentColumn equipment={fighter.equipmentMap} side={side} />}
 
-      <div className={`flex flex-col items-center gap-1 ${compact ? 'w-28 sm:w-36' : 'w-32 sm:w-44'}`}>
+      <div className={`flex flex-col items-center gap-1 ${compact ? 'w-24 sm:w-28' : 'w-32 sm:w-44'}`}>
         {/* Placa de nome + barras (oculta nos cards do pacote — viram só a imagem) */}
         {!hideNamePlate && (
         <div className={`w-full bg-black/60 backdrop-blur-sm rounded-xl px-2 py-1.5 border ${
@@ -404,13 +404,6 @@ function FighterFigure({
         </div>
         )}
 
-        {/* Barra de HP ACIMA do card (cascata do pacote) — fina, peeking na sobreposição */}
-        {showHpBar && hpAbove && (
-          <div className="w-full px-0.5">
-            <StatBar value={fighter.hp} max={fighter.maxHp} gradient={hpBarColor(hpPct)} icon="❤️" />
-          </div>
-        )}
-
         {/* Resultado do dado (mini-dado girando) — slot menor no compacto */}
         <div className={`${compact ? 'h-6' : 'h-11'} flex items-center`}>
           <AnimatePresence>
@@ -419,6 +412,13 @@ function FighterFigure({
             )}
           </AnimatePresence>
         </div>
+
+        {/* Barra de HP ACIMA do card (cascata do pacote) — encostada no topo do card */}
+        {showHpBar && hpAbove && (
+          <div className="w-full px-0.5 -mb-0.5">
+            <StatBar value={fighter.hp} max={fighter.maxHp} gradient={hpBarColor(hpPct)} icon="❤️" />
+          </div>
+        )}
 
         {/* Sprite do personagem */}
         <motion.div
@@ -463,7 +463,7 @@ function FighterFigure({
           <motion.div
             animate={isDefeated ? { rotate: side === 'left' ? -90 : 90, y: 30, opacity: 0.5 } : { rotate: 0, y: 0, opacity: 1 }}
             transition={{ duration: 0.8, ease: 'easeIn' }}
-            className={`relative ${compact ? 'w-28 h-40 sm:w-36 sm:h-52' : 'w-28 h-36 sm:w-40 sm:h-52'} rounded-2xl overflow-hidden border-2 shadow-2xl ${
+            className={`relative ${compact ? 'w-24 h-32 sm:w-28 sm:h-40' : 'w-28 h-36 sm:w-40 sm:h-52'} rounded-2xl overflow-hidden border-2 shadow-2xl ${
               isWinner ? 'border-yellow-400 shadow-yellow-500/40'
               : fighter.isTransformed ? ''
               : isTurn ? 'border-amber-400/70'
@@ -781,24 +781,25 @@ export default function BattleScene({
           // em fullscreen). Mais FORTE ao centro (vertical); mais FRACO mais à FRENTE
           // (z maior); o FOCADO (alvo do jogador / atacante atual) vem à frente + iluminado.
           const byStrength = [...rightGroup].sort((a, b) => (b.combatStats?.ad ?? 0) - (a.combatStats?.ad ?? 0))
-          const rank = (f: FighterView) => byStrength.findIndex(x => x.id === f.id) // 0 = mais forte
           // Ordem VERTICAL: mais forte no meio (n=3 → [2º, 1º, 3º]); n≤2 mantém ordem.
           const arranged = rightGroup.length === 3
             ? [byStrength[1], byStrength[0], byStrength[2]]
             : rightGroup
           const focus = focusEnemyId ?? right?.id
           return (
-            <div className="relative flex flex-col items-end justify-center self-center">
+            <div className="relative flex flex-col items-end justify-center self-center pr-2 sm:pr-4">
               {arranged.map((f, i) => {
                 const focused = f.id === focus
                 return (
                   <div
                     key={f.id}
-                    className={`relative transition-[filter,transform] duration-300 ${i === 0 ? '' : '-mt-20 sm:-mt-28'}`}
+                    className={`relative transition-[filter,transform] duration-300 ${i === 0 ? '' : '-mt-14 sm:-mt-20'}`}
                     style={{
-                      transform: `translateX(${i % 2 === 0 ? -6 : 30}px)${focused ? ' scale(1.05)' : ''}`,
-                      zIndex: focused ? 100 : 10 + rank(f), // mais fraco (rank alto) → mais à frente
-                      filter: focused ? 'none' : 'brightness(0.74) saturate(0.9)',
+                      transform: `translateX(${i % 2 === 0 ? -4 : 16}px)${focused ? ' scale(1.04)' : ''}`,
+                      // Cascata natural: topo ATRÁS, base à FRENTE (z cresce de cima p/ baixo).
+                      // O focado vem à frente de tudo; brilho destaca o ativo.
+                      zIndex: focused ? 100 : 10 + i,
+                      filter: focused ? 'none' : 'brightness(0.76) saturate(0.9)',
                     }}
                   >
                     {renderFighter(f, 'right', {

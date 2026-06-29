@@ -71,7 +71,7 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
     description: 'Transformação ancestral dracônica que aumenta drasticamente força e resistência',
     duration: 4,
     cooldown: 5,
-    cost: { mp: 35, stamina: 40 },
+    cost: { mp: 20, stamina: 40 },
 
     // ⚖️ Rebalanceado (scripts/pvp-race-class-sim.js, teste simétrico das 4 raças):
     // "B modesto" — PISO de 1.20 nos atributos centrais (str/agi/int/hp/attack) p/ que
@@ -175,7 +175,7 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
     description: 'Forma defensiva suprema com alta resistência e força bruta',
     duration: 4,
     cooldown: 5,
-    cost: { mp: 30, stamina: 40 },
+    cost: { mp: 20, stamina: 40 },
 
     // ⚖️ Metamorfo: forma TANK. DEF moderada (inflar DEF mataria o mago via RES);
     // a tankeza vem do HP. Piso 1.20 nos centrais; HP é a assinatura.
@@ -275,7 +275,7 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
     description: 'O humano desperta o cosmo interior: reflexos, força e mente elevados em harmonia. Forma versátil, sem fraquezas marcantes.',
     duration: 4,
     cooldown: 5,
-    cost: { mp: 30, stamina: 35 },
+    cost: { mp: 20, stamina: 35 },
 
     // ⚖️ Humano: forma UNIVERSAL (str≈agi≈int) — serve qualquer classe, sem fraquezas.
     statModifiers: {
@@ -324,7 +324,7 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
     description: 'O elfo ascende a uma forma de luz astral, amplificando drasticamente o poder mágico e os reflexos — mas com corpo etéreo e frágil.',
     duration: 4,
     cooldown: 5,
-    cost: { mp: 25, stamina: 30 },
+    cost: { mp: 20, stamina: 30 },
 
     // ⚖️ Elfo: forma ARCANA (lean INT + mpPool alto). Base élfica é a mais fraca
     // fisicamente → forma um pouco mais forte (compensação inversa). Piso 1.20 nos

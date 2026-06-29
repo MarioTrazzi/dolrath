@@ -122,6 +122,8 @@ interface BattleSceneProps {
   /** Id do inimigo em DESTAQUE na cascata (frente + iluminado): o alvo do jogador na
    *  vez dele, ou o atacante atual na vez dos inimigos. Default = right.id. */
   focusEnemyId?: string | null
+  /** Clareia via CSS as imagens do lado inimigo (artes de monstro escuras). */
+  brightenEnemyImage?: boolean
 }
 
 interface FloatingText {
@@ -313,6 +315,7 @@ function FighterFigure({
   nameInCard = false,
   showHpBar = false,
   hpAbove = false,
+  brightenImage = false,
 }: {
   fighter: FighterView
   side: 'left' | 'right'
@@ -336,6 +339,8 @@ function FighterFigure({
   showHpBar?: boolean
   /** Posiciona a barra de HP ACIMA do card (em vez de abaixo) — usado na cascata. */
   hpAbove?: boolean
+  /** Clareia a imagem via CSS (artes de monstro costumam ser escuras) — sem regenerar. */
+  brightenImage?: boolean
 }) {
   const hpPct = fighter.maxHp > 0 ? (fighter.hp / fighter.maxHp) * 100 : 0
   const transformEmoji = fighter.isTransformed && fighter.transformationType
@@ -481,6 +486,7 @@ function FighterFigure({
                 src={displayedImage}
                 alt={fighter.name}
                 className={`w-full h-full object-cover ${side === 'right' ? 'scale-x-[-1]' : ''}`}
+                style={brightenImage ? { filter: 'brightness(1.35) contrast(1.06) saturate(1.05)' } : undefined}
               />
             ) : (
               <div className={`w-full h-full bg-gradient-to-b from-slate-700 to-slate-900 flex flex-col items-center justify-center gap-2 ${side === 'right' ? 'scale-x-[-1]' : ''}`}>
@@ -530,6 +536,7 @@ export default function BattleScene({
   rightGroup,
   hideEnemyBars = false,
   focusEnemyId,
+  brightenEnemyImage = false,
 }: BattleSceneProps) {
   const [floatingTexts, setFloatingTexts] = useState<FloatingText[]>([])
   // Animações são por-ID (não por-lado): num pacote, só o monstro alvo sacode/avança,
@@ -641,6 +648,7 @@ export default function BattleScene({
       nameInCard?: boolean
       showHpBar?: boolean
       hpAbove?: boolean
+      brightenImage?: boolean
     } = {},
   ) => {
     if (!fighter) {
@@ -672,6 +680,7 @@ export default function BattleScene({
           nameInCard={opts.nameInCard}
           showHpBar={opts.showHpBar}
           hpAbove={opts.hpAbove}
+          brightenImage={opts.brightenImage}
         />
 
         {/* Efeito de corte */}
@@ -800,7 +809,7 @@ export default function BattleScene({
                       // trazemos o focado pra frente — senão ele cobriria o HP do vizinho.
                       // O foco é marcado só pelo BRILHO (os outros ficam escurecidos).
                       zIndex: 10 + i,
-                      filter: focused ? 'none' : 'brightness(0.7) saturate(0.9)',
+                      filter: focused ? 'none' : 'brightness(0.85) saturate(0.95)',
                     }}
                   >
                     {renderFighter(f, 'right', {
@@ -810,6 +819,7 @@ export default function BattleScene({
                       nameInCard: true,
                       showHpBar: true,
                       hpAbove: true,
+                      brightenImage: brightenEnemyImage,
                     })}
                   </div>
                 )
@@ -817,7 +827,7 @@ export default function BattleScene({
             </div>
           )
         })() : (
-          renderFighter(right, 'right', { hideBars: hideEnemyBars })
+          renderFighter(right, 'right', { hideBars: hideEnemyBars, brightenImage: brightenEnemyImage })
         )}
       </div>
     </div>

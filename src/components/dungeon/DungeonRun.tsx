@@ -2550,6 +2550,8 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
               rightGroup={packFighters}
               hideEnemyBars={isPack}
               focusEnemyId={focusEnemyId}
+              brightenEnemyImage
+
               currentTurnId={currentTurnId}
               winnerId={winnerId}
               combatEnded={combatEnded}

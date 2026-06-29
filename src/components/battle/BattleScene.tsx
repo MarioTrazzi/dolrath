@@ -793,13 +793,14 @@ export default function BattleScene({
                 return (
                   <div
                     key={f.id}
-                    className={`relative transition-[filter,transform] duration-300 ${i === 0 ? '' : '-mt-14 sm:-mt-20'}`}
+                    className={`relative transition-[filter] duration-300 ${i === 0 ? '' : '-mt-14 sm:-mt-20'}`}
                     style={{
-                      transform: `translateX(${i % 2 === 0 ? -4 : 16}px)${focused ? ' scale(1.04)' : ''}`,
-                      // Cascata natural: topo ATRÁS, base à FRENTE (z cresce de cima p/ baixo).
-                      // O focado vem à frente de tudo; brilho destaca o ativo.
-                      zIndex: focused ? 100 : 10 + i,
-                      filter: focused ? 'none' : 'brightness(0.76) saturate(0.9)',
+                      transform: `translateX(${i % 2 === 0 ? -4 : 16}px)`,
+                      // Cascata ESTRITA: z só pela posição (topo atrás, base à frente). NÃO
+                      // trazemos o focado pra frente — senão ele cobriria o HP do vizinho.
+                      // O foco é marcado só pelo BRILHO (os outros ficam escurecidos).
+                      zIndex: 10 + i,
+                      filter: focused ? 'none' : 'brightness(0.7) saturate(0.9)',
                     }}
                   >
                     {renderFighter(f, 'right', {

@@ -510,6 +510,10 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const [pack, setPack] = useState<ScaledMonster[]>([])
   const packRef = useRef<ScaledMonster[]>([])
   packRef.current = pack
+  // Encontro começou como PACOTE (>1)? Mantém o render em cascata mesmo quando sobra
+  // 1 monstro — evita trocar de "cascata" p/ "card solo" no meio (causava flicker de
+  // tombar/levantar o sobrevivente ao remontar o card).
+  const [isPack, setIsPack] = useState(false)
   // FASE INIMIGA (estilo FF/Chrono): na vez dos inimigos, TODOS atacam 1x cada, em
   // sequência. `attacker` = quem está atacando agora; a fila guarda os próximos.
   const [attacker, setAttacker] = useState<ScaledMonster | null>(null)
@@ -818,7 +822,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   // id REAL do monstro (identidade estável → só o morto tomba, sem reaproveitar o
   // card do ativo). HP vive no roster, então as barras ficam escondidas na arena.
   const packFighters: FighterView[] | undefined = useMemo(() => {
-    if (pack.length <= 1) return undefined
+    if (!isPack || pack.length === 0) return undefined
     return pack.map(m => ({
       id: m.id,
       name: m.name,
@@ -837,7 +841,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       combatStats: { ad: Math.floor(m.attack + m.level / 2), ap: m.defense, dp: undefined },
       combatStatLabels: { ad: 'ATK', ap: 'DEF' },
     }))
-  }, [pack, monster?.id, dungeon.name])
+  }, [pack, isPack, monster?.id, dungeon.name])
 
   // ============================================================
   // EXPLORAÇÃO — mapa de trilha de nós
@@ -1027,6 +1031,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     attackerRef.current = null
     enemyQueueRef.current = []
     setFocusEnemyId(active.id)
+    setIsPack(list.length > 1)
     setEventCard(null)
     setExploreResult(null)
     setExploreRolling(false)
@@ -2543,7 +2548,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
               left={playerFighter}
               right={monsterFighter}
               rightGroup={packFighters}
-              hideEnemyBars={pack.length > 1}
+              hideEnemyBars={isPack}
               focusEnemyId={focusEnemyId}
               currentTurnId={currentTurnId}
               winnerId={winnerId}

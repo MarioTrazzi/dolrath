@@ -112,11 +112,18 @@ interface BattleSceneProps {
   className?: string
   /** Cenário customizado (ex.: fundo temático de masmorra). Substitui o céu noturno padrão. */
   backdrop?: React.ReactNode
+  /** PACOTE de inimigos no lado direito (ex.: masmorra com 2-3 monstros). Quando
+   *  presente, renderiza todos lado a lado (cada um anima sozinho) em vez do `right`
+   *  único. O ATIVO deve ter o mesmo id que `right` (recebe dados/eventos de combate). */
+  rightGroup?: FighterView[]
+  /** Esconde as barras de HP/MP/stamina dos inimigos (o HP vive no roster de alvo,
+   *  fora da arena — evita exibir 2x). O lado esquerdo (jogador) mantém as barras. */
+  hideEnemyBars?: boolean
 }
 
 interface FloatingText {
   key: number
-  side: 'left' | 'right'
+  fighterId: string
   text: string
   color: string
   big?: boolean
@@ -297,6 +304,8 @@ function FighterFigure({
   dodging,
   defending,
   diceResult,
+  hideBars = false,
+  compact = false,
 }: {
   fighter: FighterView
   side: 'left' | 'right'
@@ -308,6 +317,10 @@ function FighterFigure({
   dodging: boolean
   defending: boolean
   diceResult?: DiceResult
+  /** Esconde as barras de recurso (HP/MP/stamina) — usado p/ inimigos cujo HP vive no roster. */
+  hideBars?: boolean
+  /** Versão menor (sprite + placa) p/ caber um pacote de 2-3 lado a lado. */
+  compact?: boolean
 }) {
   const hpPct = fighter.maxHp > 0 ? (fighter.hp / fighter.maxHp) * 100 : 0
   const transformEmoji = fighter.isTransformed && fighter.transformationType
@@ -326,10 +339,10 @@ function FighterFigure({
 
   return (
     <div className={`flex items-end gap-1 sm:gap-2 ${side === 'right' ? 'flex-row-reverse' : ''}`}>
-      {/* Equipamentos ao lado externo do lutador */}
-      <EquipmentColumn equipment={fighter.equipmentMap} side={side} />
+      {/* Equipamentos ao lado externo do lutador (oculto na versão compacta) */}
+      {!compact && <EquipmentColumn equipment={fighter.equipmentMap} side={side} />}
 
-      <div className="flex flex-col items-center gap-1 w-32 sm:w-44">
+      <div className={`flex flex-col items-center gap-1 ${compact ? 'w-20 sm:w-28' : 'w-32 sm:w-44'}`}>
         {/* Placa de nome + barras */}
         <div className={`w-full bg-black/60 backdrop-blur-sm rounded-xl px-2 py-1.5 border ${
           isTurn ? 'border-amber-400 shadow-lg shadow-amber-500/30' : 'border-white/15'
@@ -341,14 +354,16 @@ function FighterFigure({
             </span>
             <span className="text-[9px] text-amber-300 font-bold flex-shrink-0 ml-1">Nv.{fighter.level}</span>
           </div>
-          <div className="space-y-0.5">
-            <StatBar value={fighter.hp} max={fighter.maxHp} gradient={hpBarColor(hpPct)} icon="❤️" />
-            <StatBar value={fighter.mp} max={fighter.maxMp} gradient="from-blue-600 to-cyan-400" icon="🔮" />
-            <StatBar value={fighter.stamina} max={fighter.maxStamina} gradient="from-yellow-600 to-amber-300" icon="⚡" />
-          </div>
+          {!hideBars && (
+            <div className="space-y-0.5">
+              <StatBar value={fighter.hp} max={fighter.maxHp} gradient={hpBarColor(hpPct)} icon="❤️" />
+              <StatBar value={fighter.mp} max={fighter.maxMp} gradient="from-blue-600 to-cyan-400" icon="🔮" />
+              <StatBar value={fighter.stamina} max={fighter.maxStamina} gradient="from-yellow-600 to-amber-300" icon="⚡" />
+            </div>
+          )}
 
           {/* Pills de combate (modelo enxuto) — rótulos por-lutador; bônus da transformação entre parênteses */}
-          {fighter.combatStats && (() => {
+          {!hideBars && fighter.combatStats && (() => {
             const cs = fighter.combatStats
             const L = fighter.combatStatLabels ?? { ad: 'PWR', ap: 'ARM', dp: 'HP' }
             const pills = [
@@ -424,7 +439,7 @@ function FighterFigure({
           <motion.div
             animate={isDefeated ? { rotate: side === 'left' ? -90 : 90, y: 30, opacity: 0.5 } : { rotate: 0, y: 0, opacity: 1 }}
             transition={{ duration: 0.8, ease: 'easeIn' }}
-            className={`relative w-28 h-36 sm:w-40 sm:h-52 rounded-2xl overflow-hidden border-2 shadow-2xl ${
+            className={`relative ${compact ? 'w-20 h-28 sm:w-28 sm:h-36' : 'w-28 h-36 sm:w-40 sm:h-52'} rounded-2xl overflow-hidden border-2 shadow-2xl ${
               isWinner ? 'border-yellow-400 shadow-yellow-500/40'
               : fighter.isTransformed ? ''
               : isTurn ? 'border-amber-400/70'
@@ -457,7 +472,7 @@ function FighterFigure({
           </motion.div>
 
           {/* Sombra no chão */}
-          <div className="mx-auto mt-1 w-24 sm:w-32 h-3 bg-black/50 rounded-[100%] blur-sm" />
+          <div className={`mx-auto mt-1 ${compact ? 'w-16 sm:w-24' : 'w-24 sm:w-32'} h-3 bg-black/50 rounded-[100%] blur-sm`} />
         </motion.div>
       </div>
     </div>
@@ -479,28 +494,34 @@ export default function BattleScene({
   dicePanel,
   className = '',
   backdrop,
+  rightGroup,
+  hideEnemyBars = false,
 }: BattleSceneProps) {
   const [floatingTexts, setFloatingTexts] = useState<FloatingText[]>([])
-  const [lungingSide, setLungingSide] = useState<'left' | 'right' | null>(null)
-  const [shakingSide, setShakingSide] = useState<'left' | 'right' | null>(null)
-  const [dodgingSide, setDodgingSide] = useState<'left' | 'right' | null>(null)
-  const [defendingSide, setDefendingSide] = useState<'left' | 'right' | null>(null)
-  const [slashSide, setSlashSide] = useState<'left' | 'right' | null>(null)
+  // Animações são por-ID (não por-lado): num pacote, só o monstro alvo sacode/avança,
+  // os outros ficam parados. Em PvP (left/right) o id do lutador equivale ao lado.
+  const [lungingId, setLungingId] = useState<string | null>(null)
+  const [shakingId, setShakingId] = useState<string | null>(null)
+  const [dodgingId, setDodgingId] = useState<string | null>(null)
+  const [defendingId, setDefendingId] = useState<string | null>(null)
+  const [slashId, setSlashId] = useState<string | null>(null)
   const textKey = useRef(0)
   const lastEventId = useRef(0)
   const timeouts = useRef<ReturnType<typeof setTimeout>[]>([])
 
+  // Lado de cada combatente: esquerda = jogador; direita = `right` e todos do pacote.
   const sideOf = (id?: string | null): 'left' | 'right' | null => {
     if (!id) return null
     if (left?.id === id) return 'left'
     if (right?.id === id) return 'right'
+    if (rightGroup?.some(f => f.id === id)) return 'right'
     return null
   }
 
-  const pushText = (side: 'left' | 'right', text: string, color: string, big = false) => {
+  const pushText = (fighterId: string, text: string, color: string, big = false) => {
     textKey.current += 1
     const key = textKey.current
-    setFloatingTexts(prev => [...prev, { key, side, text, color, big }])
+    setFloatingTexts(prev => [...prev, { key, fighterId, text, color, big }])
     const t = setTimeout(() => {
       setFloatingTexts(prev => prev.filter(ft => ft.key !== key))
     }, 1500)
@@ -518,50 +539,50 @@ export default function BattleScene({
     lastEventId.current = event.id
 
     if (event.kind === 'resolve') {
-      const atkSide = sideOf(event.attackerId)
-      const defSide = sideOf(event.defenderId)
-      if (!atkSide || !defSide) return
+      const atkId = event.attackerId
+      const defId = event.defenderId
+      if (!atkId || !defId || !sideOf(atkId) || !sideOf(defId)) return
 
       // 1. Investida do atacante
-      setLungingSide(atkSide)
-      later(() => setLungingSide(null), 550)
+      setLungingId(atkId)
+      later(() => setLungingId(null), 550)
 
       // 2. Impacto (no meio da investida)
       later(() => {
         if (event.hit) {
-          setSlashSide(defSide)
-          later(() => setSlashSide(null), 350)
-          setShakingSide(defSide)
-          later(() => setShakingSide(null), 450)
+          setSlashId(defId)
+          later(() => setSlashId(null), 350)
+          setShakingId(defId)
+          later(() => setShakingId(null), 450)
 
           if (event.defenseAction === 'defend') {
-            setDefendingSide(defSide)
-            later(() => setDefendingSide(null), 700)
+            setDefendingId(defId)
+            later(() => setDefendingId(null), 700)
           }
 
           if (event.isCritical) {
-            pushText(defSide, 'CRÍTICO!', 'text-yellow-300', true)
-            later(() => pushText(defSide, `-${event.damage}`, 'text-yellow-300', true), 150)
+            pushText(defId, 'CRÍTICO!', 'text-yellow-300', true)
+            later(() => pushText(defId, `-${event.damage}`, 'text-yellow-300', true), 150)
           } else {
-            pushText(defSide, `-${event.damage}`, 'text-red-400', (event.damage || 0) > 30)
+            pushText(defId, `-${event.damage}`, 'text-red-400', (event.damage || 0) > 30)
           }
         } else {
           // Esquiva bem-sucedida
-          setDodgingSide(defSide)
-          later(() => setDodgingSide(null), 500)
-          pushText(defSide, 'ESQUIVOU!', 'text-cyan-300', true)
+          setDodgingId(defId)
+          later(() => setDodgingId(null), 500)
+          pushText(defId, 'ESQUIVOU!', 'text-cyan-300', true)
         }
       }, 280)
     } else if (event.kind === 'item') {
-      const side = sideOf(event.actorId)
-      if (!side) return
-      if (event.hpRestored) pushText(side, `+${event.hpRestored} HP`, 'text-green-400', true)
-      if (event.mpRestored) later(() => pushText(side, `+${event.mpRestored} MP`, 'text-blue-400'), 200)
-      if (event.staminaRestored) later(() => pushText(side, `+${event.staminaRestored} ⚡`, 'text-yellow-300'), 400)
+      const id = event.actorId
+      if (!id || !sideOf(id)) return
+      if (event.hpRestored) pushText(id, `+${event.hpRestored} HP`, 'text-green-400', true)
+      if (event.mpRestored) later(() => pushText(id, `+${event.mpRestored} MP`, 'text-blue-400'), 200)
+      if (event.staminaRestored) later(() => pushText(id, `+${event.staminaRestored} ⚡`, 'text-yellow-300'), 400)
     } else if (event.kind === 'transform') {
-      const side = sideOf(event.actorId)
-      if (!side) return
-      pushText(side, 'TRANSFORMAÇÃO!', 'text-purple-300', true)
+      const id = event.actorId
+      if (!id || !sideOf(id)) return
+      pushText(id, 'TRANSFORMAÇÃO!', 'text-purple-300', true)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [event?.id])
@@ -576,7 +597,11 @@ export default function BattleScene({
     return diceResults?.[fighter.id]
   }
 
-  const renderFighter = (fighter: FighterView | null, side: 'left' | 'right') => {
+  const renderFighter = (
+    fighter: FighterView | null,
+    side: 'left' | 'right',
+    opts: { hideBars?: boolean; compact?: boolean } = {},
+  ) => {
     if (!fighter) {
       return (
         <div className="flex flex-col items-center justify-end w-32 sm:w-44 gap-2 opacity-60">
@@ -588,23 +613,25 @@ export default function BattleScene({
       )
     }
     return (
-      <div className="relative">
+      <div className="relative" key={fighter.id}>
         <FighterFigure
           fighter={fighter}
           side={side}
           isTurn={currentTurnId === fighter.id && !combatEnded}
           isWinner={!!combatEnded && winnerId === fighter.id}
           isDefeated={(!!combatEnded && !!winnerId && winnerId !== fighter.id) || fighter.hp <= 0}
-          lunging={lungingSide === side}
-          shaking={shakingSide === side}
-          dodging={dodgingSide === side}
-          defending={defendingSide === side}
+          lunging={lungingId === fighter.id}
+          shaking={shakingId === fighter.id}
+          dodging={dodgingId === fighter.id}
+          defending={defendingId === fighter.id}
           diceResult={miniDieFor(fighter, side)}
+          hideBars={opts.hideBars}
+          compact={opts.compact}
         />
 
         {/* Efeito de corte */}
         <AnimatePresence>
-          {slashSide === side && (
+          {slashId === fighter.id && (
             <motion.div
               initial={{ opacity: 0, scale: 0.4, rotate: -25 }}
               animate={{ opacity: 1, scale: 1.3, rotate: 15 }}
@@ -620,7 +647,7 @@ export default function BattleScene({
         {/* Textos flutuantes (dano, cura, esquiva) */}
         <div className="absolute inset-x-0 top-10 flex flex-col items-center pointer-events-none z-30">
           <AnimatePresence>
-            {floatingTexts.filter(ft => ft.side === side).map(ft => (
+            {floatingTexts.filter(ft => ft.fighterId === fighter.id).map(ft => (
               <motion.span
                 key={ft.key}
                 initial={{ y: 20, opacity: 0, scale: 0.6 }}
@@ -704,7 +731,13 @@ export default function BattleScene({
           )}
         </div>
 
-        {renderFighter(right, 'right')}
+        {rightGroup && rightGroup.length > 0 ? (
+          <div className="flex items-end justify-end gap-1 sm:gap-2">
+            {rightGroup.map(f => renderFighter(f, 'right', { hideBars: hideEnemyBars, compact: rightGroup.length > 1 }))}
+          </div>
+        ) : (
+          renderFighter(right, 'right', { hideBars: hideEnemyBars })
+        )}
       </div>
     </div>
   )

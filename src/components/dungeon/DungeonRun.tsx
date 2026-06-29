@@ -809,6 +809,31 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     combatStatLabels: { ad: 'ATK', ap: 'DEF' },
   } : null, [monster, dungeon.name])
 
+  // Cards do PACOTE (>1 inimigo) lado a lado na arena. O ATIVO carrega o id
+  // MONSTER_ID (recebe dados/animações de combate); os demais ficam como sprites
+  // parados (HP vive no roster, então as barras ficam escondidas na arena).
+  const packFighters: FighterView[] | undefined = useMemo(() => {
+    if (pack.length <= 1) return undefined
+    return pack.map(m => ({
+      id: m.id === monster?.id ? MONSTER_ID : m.id,
+      name: m.name,
+      level: m.level,
+      race: dungeon.name,
+      class: m.isBoss ? 'Boss' : 'Monstro',
+      avatar: m.image ?? null,
+      avatarEmoji: m.emoji,
+      hp: m.hp,
+      maxHp: m.maxHp,
+      mp: 0,
+      maxMp: 0,
+      stamina: 0,
+      maxStamina: 0,
+      isAlive: m.hp > 0,
+      combatStats: { ad: Math.floor(m.attack + m.level / 2), ap: m.defense, dp: undefined },
+      combatStatLabels: { ad: 'ATK', ap: 'DEF' },
+    }))
+  }, [pack, monster?.id, dungeon.name])
+
   // ============================================================
   // EXPLORAÇÃO — mapa de trilha de nós
   // ============================================================
@@ -2484,6 +2509,8 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
               className="flex-1 min-h-[280px]"
               left={playerFighter}
               right={monsterFighter}
+              rightGroup={packFighters}
+              hideEnemyBars={pack.length > 1}
               currentTurnId={currentTurnId}
               winnerId={winnerId}
               combatEnded={combatEnded}

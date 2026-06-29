@@ -520,6 +520,10 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const attackerRef = useRef<ScaledMonster | null>(null)
   attackerRef.current = attacker
   const enemyQueueRef = useRef<string[]>([])
+  // Acumula XP e gold-de-abate de TODOS os monstros do encontro atual, p/ o card de
+  // vitória mostrar o TOTAL do nó (não só o último abate). Reseta a cada startCombat.
+  const encounterXpRef = useRef(0)
+  const encounterKillGoldRef = useRef(0)
   // Card em destaque na arena (frente + iluminado): o ALVO do jogador na sua vez,
   // ou o ATACANTE atual na vez dos inimigos.
   const [focusEnemyId, setFocusEnemyId] = useState<string | null>(null)
@@ -1030,6 +1034,8 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     setAttacker(null)
     attackerRef.current = null
     enemyQueueRef.current = []
+    encounterXpRef.current = 0
+    encounterKillGoldRef.current = 0
     setFocusEnemyId(active.id)
     setIsPack(list.length > 1)
     setEventCard(null)
@@ -1453,6 +1459,9 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     const killGold = grant?.killGold ?? m.goldReward
     const xp = grant?.xp ?? m.xpReward
     const loot: NodeLoot = grant?.loot ?? { gold: 0, drops: [] }
+    // Acumula o total do ENCONTRO (todos os abates do nó) p/ o card de vitória.
+    encounterXpRef.current += xp
+    encounterKillGoldRef.current += killGold
 
     setTotals(prev => ({ ...prev, gold: prev.gold + killGold, xp: prev.xp + xp, kills: prev.kills + 1 }))
     pushLog(`🏆 Você derrotou ${m.emoji} ${m.name}! +${killGold} 💰 +${xp} XP`)
@@ -1490,11 +1499,13 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
           ? 'A trilha termina adiante. Você sente um olhar antigo cravado em você...'
           : TRANSITIONS[tokenIdx % TRANSITIONS.length])
 
-        const totalGold = killGold + loot.gold
+        // Card de vitória mostra o TOTAL do nó (soma de todos os abates) + espólio do nó.
+        const nodeXp = encounterXpRef.current
+        const totalGold = encounterKillGoldRef.current + loot.gold
         const hasGear = loot.drops.some(d => d.kind === 'item' || d.kind === 'stone')
 
         const effects: EffectChip[] = []
-        if (xp > 0) effects.push({ kind: 'stat', text: `+${xp} ⭐ XP` })
+        if (nodeXp > 0) effects.push({ kind: 'stat', text: `+${nodeXp} ⭐ XP` })
         if (totalGold > 0) effects.push({ kind: 'stat', text: `+${totalGold} 💰` })
         for (const d of loot.drops) effects.push({
           kind: 'item',

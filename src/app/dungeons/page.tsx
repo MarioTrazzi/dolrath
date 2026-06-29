@@ -21,6 +21,8 @@ function BeastThumb({ name, image, emoji }: { name: string; image?: string; emoj
       alt={name}
       onError={() => setFailed(true)}
       className="w-full h-full object-cover"
+      // Artes de monstro são escuras — clareia via CSS (mesmo da arena), sem regenerar.
+      style={{ filter: 'brightness(1.35) contrast(1.06) saturate(1.05)' }}
       referrerPolicy="no-referrer"
     />
   )

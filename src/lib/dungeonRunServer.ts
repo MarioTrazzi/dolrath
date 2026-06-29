@@ -13,7 +13,7 @@ import { ItemType, ConsumableSubtype } from '@prisma/client'
 import {
   DUNGEONS,
   scaleMonster,
-  pickMonster,
+  scaleMonsterGroup,
   rollNodeLoot,
   luckTier,
   type DungeonId,
@@ -73,11 +73,22 @@ export function getDungeon(id: string): DungeonDef | null {
 const combatClassOf = (cls: string): CombatClass => normalizeCombatClass(cls) ?? 'warrior'
 
 // Estado de combate pendente, persistido em DungeonRun.pending até o desfecho.
+// O encontro é um PACOTE de 1..3 monstros (só nó menor traz >1). O nó só "limpa"
+// (cursor avança + espólio) quando TODOS morrem; cada abate credita XP por si.
 export interface RunPending {
   nodeIdx: number
   kind: LootNodeKind // 'minor' | 'main' | 'boss'
   lootRoll: number   // d20 que define a qualidade do espólio pós-combate
-  monster: ScaledMonster
+  monsters: ScaledMonster[]
+  killedIds?: string[] // ids dos monstros já abatidos (progresso do nó)
+  /** @deprecated forma antiga (1 monstro) — lida por pendingMonsters() em runs legadas */
+  monster?: ScaledMonster
+}
+
+// Normaliza o pendente para a lista de monstros, tolerando o formato legado { monster }.
+export function pendingMonsters(p: RunPending): ScaledMonster[] {
+  if (Array.isArray(p.monsters) && p.monsters.length > 0) return p.monsters
+  return p.monster ? [p.monster] : []
 }
 
 export interface CharacterForRun {
@@ -103,8 +114,9 @@ export function resolveExploreNode(
 
   const monsterEncounter = isMain || Math.random() < MINOR_MONSTER_CHANCE_BY_TIER[luckTier(roll)]
   if (monsterEncounter) {
-    const monster = scaleMonster(pickMonster(dungeon), dungeon, character.level, scaling, klass)
-    return { type: 'monster', roll, pending: { nodeIdx, kind: isMain ? 'main' : 'minor', lootRoll: roll, monster } }
+    // Sala principal = guardião SOLO; nó menor pode trazer um pacote de 1..3 (mais fracos).
+    const monsters = scaleMonsterGroup(dungeon, character.level, scaling, klass)
+    return { type: 'monster', roll, pending: { nodeIdx, kind: isMain ? 'main' : 'minor', lootRoll: roll, monsters, killedIds: [] } }
   }
 
   // ⛲ Fonte revitalizadora: só em nó MENOR, na faixa de SORTE ALTA (d20 14+), com
@@ -126,7 +138,7 @@ export function resolveBossNode(
 ): RunPending {
   const klass = combatClassOf(character.class)
   const monster = scaleMonster(dungeon.boss, dungeon, character.level, { tier: dungeon.rooms, isMain: true, isBoss: true }, klass)
-  return { nodeIdx, kind: 'boss', lootRoll: 20, monster }
+  return { nodeIdx, kind: 'boss', lootRoll: 20, monsters: [monster], killedIds: [] }
 }
 
 // Espólio pós-combate (mesma regra do cliente: boss = sorte máxima e mais drops).

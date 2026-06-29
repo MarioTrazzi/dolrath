@@ -7,6 +7,7 @@ import {
   resolveExploreNode,
   resolveBossNode,
   applyLootTx,
+  pendingMonsters,
   STEP_COST,
   type RunPending,
 } from '@/lib/dungeonRunServer'
@@ -41,10 +42,14 @@ export async function POST(req: Request) {
     // Combate pendente: reenvia o monstro sem cobrar stamina nem rolar de novo.
     if (run.pending) {
       const pending = run.pending as unknown as RunPending
+      const monsters = pendingMonsters(pending)
+      const killed = new Set(pending.killedIds ?? [])
+      const alive = monsters.filter((m) => !killed.has(m.id))
       return NextResponse.json({
         type: pending.kind === 'boss' ? 'boss' : 'monster',
         roll: pending.lootRoll,
-        monster: pending.monster,
+        monster: alive[0] ?? monsters[0],
+        monsters: alive.length ? alive : monsters,
         pendingCombat: true,
       })
     }
@@ -81,7 +86,7 @@ export async function POST(req: Request) {
         await tx.dungeonRun.update({ where: { id: run.id }, data: { pending: pending as unknown as object } })
         return c
       })
-      return NextResponse.json({ type: 'boss', roll: 20, monster: pending.monster, stamina: updated.stamina })
+      return NextResponse.json({ type: 'boss', roll: 20, monster: pending.monsters[0], monsters: pending.monsters, stamina: updated.stamina })
     }
 
     // Nó de exploração: rola o d20 no servidor.
@@ -93,7 +98,7 @@ export async function POST(req: Request) {
         await tx.dungeonRun.update({ where: { id: run.id }, data: { pending: resolved.pending as unknown as object } })
         return c
       })
-      return NextResponse.json({ type: 'monster', roll: resolved.roll, monster: resolved.pending.monster, stamina: updated.stamina })
+      return NextResponse.json({ type: 'monster', roll: resolved.roll, monster: resolved.pending.monsters[0], monsters: resolved.pending.monsters, stamina: updated.stamina })
     }
 
     // ACHADO: credita gold+itens e avança o cursor numa transação.

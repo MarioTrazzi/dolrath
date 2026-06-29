@@ -571,6 +571,63 @@ export function pickMonster(dungeon: DungeonDef): DungeonMonsterDef {
   return dungeon.monsters[Math.floor(Math.random() * dungeon.monsters.length)]
 }
 
+// ============================================================
+// PACOTE DE MONSTROS (só em nó MENOR) — a "válvula de escape" do early-game.
+// Em vez de um único bicho que pode ser intransponível (o draw uniforme do
+// pickMonster às vezes entrega o tanque na 1ª sala), o nó menor pode trazer
+// 1–3 bichos: quanto MAIS bichos, mais FRACO cada um. O jogador escolhe o alvo,
+// e derrotar pelo menos UM já concede XP — então um nv1 sempre tem como progredir.
+// O orçamento de ameaça é "dividido": o pacote é um pouco mais de ameaça TOTAL
+// (atrito + chip de fustigamento no cliente), mas cada peça é bem mais matável.
+// Sala principal e boss continuam SOLO (o teste limpo do degrau / o gate de gear).
+// ============================================================
+const MINOR_PACK_WEIGHTS: { size: number; weight: number }[] = [
+  { size: 1, weight: 0.40 },
+  { size: 2, weight: 0.35 },
+  { size: 3, weight: 0.25 },
+]
+// Fator de stats POR membro conforme o tamanho do pacote (> 1/N de propósito:
+// total um pouco maior, individual bem menor). Aplica em HP, ataque, AP e recompensas.
+const PACK_SHARE: Record<number, number> = { 1: 1, 2: 0.6, 3: 0.45 }
+
+function rollPackSize(): number {
+  const total = MINOR_PACK_WEIGHTS.reduce((s, w) => s + w.weight, 0)
+  let r = Math.random() * total
+  for (const w of MINOR_PACK_WEIGHTS) {
+    if (r < w.weight) return w.size
+    r -= w.weight
+  }
+  return 1
+}
+
+// Sorteia o ENCONTRO de um nó: array de 1..3 monstros já escalados. Sala principal/
+// boss devolvem sempre 1 (use scaleMonster direto p/ o boss). Cada membro do pacote
+// pode ser um arquétipo diferente (variedade) e leva o fator PACK_SHARE nos stats.
+export function scaleMonsterGroup(
+  dungeon: DungeonDef,
+  characterLevel: number,
+  s: NodeScaling,
+  combatClass: CombatClass = 'warrior'
+): ScaledMonster[] {
+  const size = s.isMain || s.isBoss ? 1 : rollPackSize()
+  const share = PACK_SHARE[size] ?? 1
+  const out: ScaledMonster[] = []
+  for (let i = 0; i < size; i++) {
+    const m = scaleMonster(pickMonster(dungeon), dungeon, characterLevel, s, combatClass)
+    if (size > 1) {
+      m.hp = Math.max(1, Math.floor(m.hp * share))
+      m.maxHp = m.hp
+      m.attack = Math.max(1, Math.floor(m.attack * share))
+      m.magicPower = Math.floor(m.magicPower * share)
+      m.goldReward = Math.max(1, Math.floor(m.goldReward * share))
+      m.xpReward = Math.max(1, Math.floor(m.xpReward * share))
+      m.id = `${m.id}-${i}` // garante id único dentro do pacote
+    }
+    out.push(m)
+  }
+  return out
+}
+
 export function eventForRoll(dungeon: DungeonDef, roll: number): DungeonEventDef {
   return (
     dungeon.events.find(e => roll >= e.min && roll <= e.max) ||

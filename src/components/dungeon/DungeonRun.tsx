@@ -156,6 +156,11 @@ const MINOR_MONSTER_CHANCE = 0.4
 // Custo de stamina ao DEFENDER no combate (esquiva e soco são grátis).
 const DEFEND_STAMINA_COST = 1
 
+// Chip de "fustigamento" por rodada de cada inimigo NÃO-alvo vivo de um pacote
+// (fração do ataque dele). Leve de propósito: o duelo é com o alvo ativo; o bando
+// só pressiona o atrito. [[dolrath-dungeon-design-vision]]
+const HARRY_FACTOR = 0.18
+
 // Falas de transição do Mestre entre as salas (genéricas, tom de RPG)
 const TRANSITIONS = [
   'Você respira fundo e segue trilha adentro.',
@@ -182,6 +187,8 @@ interface ResolvedEvent {
   text: string
   effects: EffectChip[]
   monster?: ScaledMonster
+  /** Pacote completo do encontro (1..3). monster = o primeiro (avatar do card). */
+  monsters?: ScaledMonster[]
 }
 
 interface Banner {
@@ -195,6 +202,7 @@ interface StepResponse {
   type: 'find' | 'monster' | 'boss'
   roll?: number
   monster?: ScaledMonster
+  monsters?: ScaledMonster[]
   loot?: NodeLoot
   gold?: number
   cursor?: number
@@ -211,8 +219,11 @@ interface CombatGrant {
 }
 interface CombatResponse {
   granted?: CombatGrant
+  cleared?: boolean
   finished?: boolean
   bossDefeated?: boolean
+  retreated?: boolean
+  defeated?: boolean
   leveledUp?: boolean
   newLevel?: number
   error?: string
@@ -493,9 +504,16 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const [trapShake, setTrapShake] = useState(false)
 
   // ---------- Combate ----------
+  // `monster` = o ALVO ATIVO (o bicho que está sendo duelado). `pack` = todos os
+  // monstros VIVOS do encontro (1..3). O pacote é lutado como duelos 1v1 em
+  // sequência: ao matar o ativo, troca-se para o mais fraco vivo. Os não-ativos
+  // "fustigam" (chip leve) por rodada. Derrotar pelo menos um já creditou XP.
   const [monster, setMonster] = useState<ScaledMonster | null>(null)
   const monsterRef = useRef<ScaledMonster | null>(null)
   monsterRef.current = monster
+  const [pack, setPack] = useState<ScaledMonster[]>([])
+  const packRef = useRef<ScaledMonster[]>([])
+  packRef.current = pack
   const [stage, setStage] = useState<CombatStage>('busy')
   const [currentTurnId, setCurrentTurnId] = useState<string | null>(null)
   const [pendingAttack, setPendingAttack] = useState<AttackKind | null>(null)
@@ -531,6 +549,8 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   // Herói já em uso em outra aba (lock vivo): bloqueia a run com um aviso.
   const [blocked, setBlocked] = useState<string | null>(null)
   const serverMonsterRef = useRef<ScaledMonster | null>(null)
+  // Pacote completo (1..3) que o servidor rolou para o nó atual, p/ iniciar o combate.
+  const serverPackRef = useRef<ScaledMonster[] | null>(null)
   const startedRef = useRef(false)
 
   // ---------- Transformação (local, por combate) ----------
@@ -807,17 +827,30 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     const sc = scalingAt(atIdx)
     lootRollRef.current = data.roll ?? 12
 
-    if (data.type === 'monster' && data.monster) {
+    if (data.type === 'monster' && (data.monsters?.length || data.monster)) {
       const ev = dungeon.events.find(e => e.kind === 'monster')!
-      const scaled = data.monster
+      const group = data.monsters?.length ? data.monsters : [data.monster!]
+      const scaled = group[0]
       serverMonsterRef.current = scaled
+      serverPackRef.current = group
       setNodeEvents(prev => ({ ...prev, [atIdx]: { kind: 'monster', emoji: scaled.emoji } }))
-      pushLog(`${ev.icon} ${ev.title} ${scaled.emoji} ${scaled.name} apareceu!`)
+      const many = group.length > 1
+      pushLog(
+        many
+          ? `${ev.icon} ${ev.title} ${group.length} inimigos aparecem!`
+          : `${ev.icon} ${ev.title} ${scaled.emoji} ${scaled.name} apareceu!`
+      )
+      const effects: EffectChip[] = many
+        ? group.map(m => ({ kind: 'stat', text: `${m.emoji} ${m.name} • Nv.${m.level}` }))
+        : [{ kind: 'stat', text: `${scaled.emoji} ${scaled.name} • Nv.${scaled.level}` }]
       return {
         def: ev,
-        text: sc.isMain ? `Guardião da sala: ${ev.description}` : ev.description,
-        effects: [{ kind: 'stat', text: `${scaled.emoji} ${scaled.name} • Nv.${scaled.level}` }],
+        text: many
+          ? `Um grupo de ${group.length} criaturas cerca você — mais fracas, mas em bando.`
+          : sc.isMain ? `Guardião da sala: ${ev.description}` : ev.description,
+        effects,
         monster: scaled,
+        monsters: group,
       }
     }
 
@@ -902,6 +935,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     if (data.type === 'boss') {
       setExploreRolling(false)
       if (data.monster) serverMonsterRef.current = data.monster
+      serverPackRef.current = data.monsters?.length ? data.monsters : data.monster ? [data.monster] : null
       setMoving(true)
       setTokenIdx(dest)
       setNarration('A trilha desemboca no covil. O ar treme... algo antigo se ergue.')
@@ -945,8 +979,20 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   // COMBATE (motor local na arena nova)
   // ============================================================
 
-  const startCombat = (m: ScaledMonster) => {
-    setMonster(m)
+  // O mais fraco vivo (menor HP atual) — alvo padrão e foco do piloto automático.
+  const weakestOf = (list: ScaledMonster[]): ScaledMonster | null =>
+    list.filter(m => m.hp > 0).reduce<ScaledMonster | null>((best, m) => (!best || m.hp < best.hp ? m : best), null)
+
+  // Inicia o combate contra um PACOTE (1..3). O alvo ativo começa no mais fraco
+  // (também o foco do automático). Aceita um único monstro por conveniência (boss).
+  const startCombat = (group: ScaledMonster[] | ScaledMonster) => {
+    const list = (Array.isArray(group) ? group : [group]).filter(m => m.hp > 0)
+    if (list.length === 0) return
+    const active = weakestOf(list) ?? list[0]
+    setPack(list)
+    packRef.current = list
+    setMonster(active)
+    monsterRef.current = active
     setEventCard(null)
     setExploreResult(null)
     setExploreRolling(false)
@@ -968,7 +1014,20 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     setShowFormPicker(false)
     setPhase('combat')
     setStage('initiative')
-    pushLog(`⚔️ Combate contra ${m.emoji} ${m.name} começou!`)
+    pushLog(
+      list.length > 1
+        ? `⚔️ Combate contra ${list.length} inimigos começou! (foco: ${active.emoji} ${active.name})`
+        : `⚔️ Combate contra ${active.emoji} ${active.name} começou!`
+    )
+  }
+
+  // Troca o alvo ativo (clique no roster / piloto). Só durante o turno do jogador.
+  const setActiveTarget = (id: string) => {
+    const next = packRef.current.find(m => m.id === id && m.hp > 0)
+    if (!next || next.id === monsterRef.current?.id) return
+    setMonster(next)
+    monsterRef.current = next
+    pushLog(`🎯 Você foca ${next.emoji} ${next.name}.`)
   }
 
   // ---------- Transformação (custa só MP; stamina é o orçamento diário) ----------
@@ -1117,9 +1176,14 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     else pushLog(`${atkDef.icon} Acerto: ${outcome.damage} de dano em ${m.name}`)
 
     const newHp = Math.max(0, m.hp - outcome.damage)
-    later(() => setMonster(prev => (prev ? { ...prev, hp: newHp } : prev)), 500)
+    // Sincroniza o HP no alvo ativo E na entrada do pacote (roster mostra a barra certa).
+    later(() => {
+      setMonster(prev => (prev && prev.id === m.id ? { ...prev, hp: newHp } : prev))
+      setPack(prev => prev.map(x => (x.id === m.id ? { ...x, hp: newHp } : x)))
+      packRef.current = packRef.current.map(x => (x.id === m.id ? { ...x, hp: newHp } : x))
+    }, 500)
     if (newHp <= 0) {
-      later(() => handleCombatVictory(m), 1600)
+      later(() => onMonsterKilled({ ...m, hp: 0 }), 1600)
       return
     }
     tickPlayerTurn()
@@ -1254,7 +1318,16 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     else if (outcome.crit) pushLog(`💥 ${m.name} acerta em cheio! ${outcome.damage} de dano em você`)
     else pushLog(`🩸 ${m.name} causou ${outcome.damage} de dano em você`)
 
-    const newHp = Math.max(0, hpRef.current - outcome.damage)
+    // 🐾 Fustigamento: os OUTROS inimigos vivos do pacote dão um chip leve por rodada
+    // (~18% do ataque deles). Mantém o atrito de enfrentar um bando sem virar 1vN brutal.
+    const harriers = packRef.current.filter(x => x.id !== m.id && x.hp > 0)
+    const chip = harriers.reduce((s, x) => s + Math.max(1, Math.floor(x.attack * HARRY_FACTOR)), 0)
+    if (chip > 0) {
+      pushLog(`🐾 Os outros inimigos fustigam você: -${chip} de dano`)
+      later(() => pushFloat(`-${chip} 🐾`, '#f87171'), 700)
+    }
+
+    const newHp = Math.max(0, hpRef.current - outcome.damage - chip)
     later(() => setHp(newHp), 500)
     if (newHp <= 0) {
       later(() => {
@@ -1270,26 +1343,32 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     }, 2000)
   }
 
-  // ---------- Fim de combate ----------
-  // VITÓRIA: o SERVIDOR credita gold do abate + espólio + XP (e avança o cursor).
-  // O cliente só reporta o desfecho e EXIBE o que o servidor devolveu.
-  const handleCombatVictory = async (m: ScaledMonster) => {
-    setCombatEnded(true)
-    setWinnerId(character.id)
+  // ---------- Abate de um monstro do pacote ----------
+  // Cada abate é reportado ao SERVIDOR (outcome 'kill'): ele credita gold+XP daquele
+  // bicho e, quando o pacote inteiro cai (cleared), rola o espólio do nó e avança o
+  // cursor. Se ainda há inimigos vivos, troca pro mais fraco e o duelo continua.
+  const onMonsterKilled = async (m: ScaledMonster) => {
+    // Remove o abatido do pacote (estado + ref) antes de escolher o próximo alvo.
+    const remaining = packRef.current.filter(x => x.id !== m.id && x.hp > 0)
+    packRef.current = remaining
+    setPack(remaining)
+    const willClear = remaining.length === 0
+    // Só "encerra" o combate visualmente quando o nó limpa; senão o duelo segue.
+    if (willClear) { setCombatEnded(true); setWinnerId(character.id) }
 
     let grant: CombatGrant | null = null
-    let leveledUp = false
+    let cleared = willClear // fallback offline = inferência local; servidor é a verdade
     try {
       const res = await fetch('/api/dungeon/run/combat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ runId: runIdRef.current, outcome: 'win' }),
+        body: JSON.stringify({ runId: runIdRef.current, outcome: 'kill', monsterId: m.id }),
       })
       const data: CombatResponse = await res.json()
       if (res.ok) {
         grant = data.granted ?? null
-        leveledUp = !!data.leveledUp
-        if (leveledUp) {
+        cleared = !!data.cleared
+        if (data.leveledUp) {
           setLeveledUpThisRun(true)
           // Efeito de level up: HP e MP voltam ao cheio + flash brilhante na tela.
           // (o servidor já restaurou os recursos no banco ao subir de nível.)
@@ -1305,7 +1384,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
         }
       }
     } catch {
-      /* sem conexão: exibe os valores do monstro como fallback visual */
+      /* sem conexão: usa o fallback local (valores do monstro) */
     }
 
     const killGold = grant?.killGold ?? m.goldReward
@@ -1314,10 +1393,31 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
 
     setTotals(prev => ({ ...prev, gold: prev.gold + killGold, xp: prev.xp + xp, kills: prev.kills + 1 }))
     pushLog(`🏆 Você derrotou ${m.emoji} ${m.name}! +${killGold} 💰 +${xp} XP`)
-    showLoot(loot)
 
+    // Nó AINDA NÃO limpo: troca pro mais fraco vivo e devolve o turno ao jogador.
+    if (!cleared) {
+      const next = weakestOf(remaining)
+      showBanner('🗡️', `${m.name} caiu! Restam ${remaining.length}.`, 1800)
+      if (next) { setMonster(next); monsterRef.current = next }
+      later(() => {
+        setDiceResults({})
+        setPanelResult(null)
+        setHasRolled(false)
+        setPendingAttack(null)
+        setMonsterPlan(null)
+        setDefenseChoice(null)
+        setCurrentTurnId(character.id)
+        setStage('playerSelect')
+      }, 1200)
+      return
+    }
+
+    // Nó LIMPO: espólio do nó + avanço (boss → fim da run).
+    showLoot(loot)
     later(() => {
       setMonster(null)
+      setPack([])
+      packRef.current = []
       setCombatEnded(false)
       if (m.isBoss) {
         finishRun(true)
@@ -1353,6 +1453,30 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
         setLootCard({ def, text: def.description, effects })
       }
     }, 2800)
+  }
+
+  // RECUAR: sai do combate em SEGURANÇA mantendo tudo que já ganhou (XP/gold dos
+  // abates já foram creditados por kill). O servidor encerra a run e limpa o pendente.
+  // É a saída do early-game: matou o(s) bicho(s) que dava conta e volta com XP.
+  const handleRetreat = () => {
+    if (combatEnded) return
+    setCombatEnded(true)
+    setAuto(false)
+    if (runIdRef.current) {
+      fetch('/api/dungeon/run/combat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ runId: runIdRef.current, outcome: 'retreat' }),
+      }).catch(() => {})
+    }
+    pushLog('🏃 Você recua em segurança, levando o que conquistou.')
+    showBanner('🏃', 'Recuo seguro — XP e espólio dos abates preservados.', 2600)
+    later(() => {
+      setMonster(null)
+      setPack([])
+      packRef.current = []
+      setPhase('summary')
+    }, 1300)
   }
 
   // DERROTA: avisa o servidor (encerra a run). XP dos abates já foi creditado por kill.
@@ -1469,6 +1593,10 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     if (stage === 'initiative' && !hasRolled) return fire(handleInitiativeRoll, 600)
 
     if (stage === 'playerSelect') return fire(() => {
+      // Foco automático: sempre mira o inimigo MAIS FRACO vivo do pacote (atualiza o
+      // ref de forma síncrona e segue para o ataque no mesmo passo).
+      const weak = weakestOf(packRef.current)
+      if (weak && weak.id !== monsterRef.current?.id) setActiveTarget(weak.id)
       // Consumíveis automáticos (se o switch estiver ligado):
       if (autoConsumables) {
         // 1) Cura de emergência: HP baixo + poção de vida no inventário.
@@ -1529,13 +1657,15 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     // 2) Card de evento aberto → lutar (monstro) ou seguir (achado).
     if (eventCard) {
       return fire(() => {
-        if (eventCard.monster) startCombat(eventCard.monster)
+        const group = eventCard.monsters ?? (eventCard.monster ? [eventCard.monster] : null)
+        if (group) startCombat(group)
         else dismissEvent()
       }, 1000)
     }
     // 3) Covil do boss → enfrentar.
     if (atBoss) {
       return fire(() => startCombat(
+        serverPackRef.current ??
         serverMonsterRef.current ??
         scaleMonster(dungeon.boss, dungeon, character.level, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass)
       ), 1100)
@@ -2063,7 +2193,18 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                         className="mb-2 mt-1 inline-flex items-center justify-center"
                         style={{ filter: `drop-shadow(0 0 18px ${dungeon.accentSoft})` }}
                       >
-                        {eventCard.monster ? (
+                        {eventCard.monsters && eventCard.monsters.length > 1 ? (
+                          <span className="flex items-end justify-center gap-2">
+                            {eventCard.monsters.map((mm, i) => (
+                              <span
+                                key={mm.id}
+                                className={i === 1 ? 'block w-24 h-24 sm:w-28 sm:h-28' : 'block w-16 h-16 sm:w-20 sm:h-20 opacity-90'}
+                              >
+                                <MonsterThumb name={mm.name} image={mm.image} emoji={mm.emoji} className="text-4xl" />
+                              </span>
+                            ))}
+                          </span>
+                        ) : eventCard.monster ? (
                           <span className="block w-28 h-28 sm:w-32 sm:h-32">
                             <MonsterThumb
                               name={eventCard.monster.name}
@@ -2085,14 +2226,14 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                       {eventCard.monster ? (
                         <div className="flex gap-2">
                           <button
-                            onClick={() => startCombat(eventCard.monster!)}
+                            onClick={() => startCombat(eventCard.monsters ?? eventCard.monster!)}
                             className="flex-1 py-3.5 rounded-lg font-black text-white text-lg transition-transform active:scale-[0.98] hover:scale-[1.02] inline-flex items-center justify-center gap-2"
                             style={{ background: 'linear-gradient(90deg, #e74c3c, #b91c1c)', boxShadow: '0 0 24px rgba(231,76,60,0.45)' }}
                           >
                             ⚔️ Lutar!
                           </button>
                           <button
-                            onClick={() => { setAuto(true); startCombat(eventCard.monster!) }}
+                            onClick={() => { setAuto(true); startCombat(eventCard.monsters ?? eventCard.monster!) }}
                             title="Resolver a luta no automático (o piloto joga os turnos por você)"
                             className="shrink-0 px-4 py-3.5 rounded-lg font-black text-white text-sm transition-transform active:scale-[0.98] hover:scale-[1.02] inline-flex items-center justify-center gap-1.5"
                             style={{ background: 'linear-gradient(90deg, #3b82f6, #1d4ed8)', boxShadow: '0 0 24px rgba(59,130,246,0.4)' }}
@@ -2159,7 +2300,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                         <h2 className="text-3xl font-black text-white leading-none">{dungeon.boss.name}</h2>
                         <p className="text-sm text-error/90 font-bold uppercase tracking-wider mt-1 mb-5">{dungeon.boss.title}</p>
                         <button
-                          onClick={() => startCombat(serverMonsterRef.current ?? scaleMonster(dungeon.boss, dungeon, character.level, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass))}
+                          onClick={() => startCombat(serverPackRef.current ?? serverMonsterRef.current ?? scaleMonster(dungeon.boss, dungeon, character.level, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass))}
                           className="w-full py-4 rounded-lg font-black text-white text-lg inline-flex items-center justify-center gap-2 transition-transform active:scale-[0.98] hover:scale-[1.02]"
                           style={{ background: 'linear-gradient(90deg, #e94560, #b91c1c)', boxShadow: '0 0 28px rgba(233,69,96,0.5)' }}
                         >
@@ -2305,7 +2446,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                 <button
                   onClick={
                     atBoss
-                      ? () => startCombat(serverMonsterRef.current ?? scaleMonster(dungeon.boss, dungeon, character.level, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass))
+                      ? () => startCombat(serverPackRef.current ?? serverMonsterRef.current ?? scaleMonster(dungeon.boss, dungeon, character.level, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass))
                       : advance
                   }
                   disabled={exploreRolling || moving || !!eventCard}
@@ -2351,6 +2492,48 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
               dicePanel={dicePanel}
               backdrop={<DungeonBackdrop theme={dungeon.id} />}
             />
+
+            {/* Roster do pacote (só com >1 inimigo): clique para escolher o alvo no seu
+                turno. O ativo fica destacado; os outros fustigam com chip leve por rodada. */}
+            {pack.length > 1 && !combatEnded && (
+              <div className="flex-shrink-0 bg-black/55 border-t border-white/5 px-3 sm:px-6 py-1.5">
+                <div className="mx-auto max-w-2xl flex items-center justify-center gap-2 flex-wrap">
+                  <span className="text-[10px] text-white/45 font-bold mr-0.5">Alvo:</span>
+                  {pack.map(mm => {
+                    const active = mm.id === monster?.id
+                    const canTarget = stage === 'playerSelect' && !active
+                    return (
+                      <button
+                        key={mm.id}
+                        onClick={() => canTarget && setActiveTarget(mm.id)}
+                        disabled={!canTarget}
+                        title={canTarget ? `Focar ${mm.name}` : active ? 'Alvo atual' : 'Escolha o alvo no seu turno'}
+                        className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border transition-all ${
+                          active
+                            ? 'bg-red-600/30 border-red-400/70'
+                            : canTarget
+                              ? 'bg-white/5 border-white/15 hover:border-white/40 hover:scale-105 cursor-pointer'
+                              : 'bg-white/5 border-white/10 opacity-70 cursor-default'
+                        }`}
+                      >
+                        <span className="w-6 h-6 inline-flex items-center justify-center shrink-0">
+                          <MonsterThumb name={mm.name} image={mm.image} emoji={mm.emoji} className="text-base" />
+                        </span>
+                        <span className="flex flex-col items-start">
+                          <span className="text-[9px] font-bold text-white/80 leading-none">{active ? '🎯 ' : ''}{mm.name}</span>
+                          <span className="w-16 h-1 mt-0.5 rounded-full bg-black/50 overflow-hidden">
+                            <span
+                              className="block h-full bg-gradient-to-r from-red-500 to-rose-400"
+                              style={{ width: `${Math.max(0, Math.min(100, (mm.hp / mm.maxHp) * 100))}%` }}
+                            />
+                          </span>
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Log de combate (estilo RiPG): mostra a conta dos dados e o dano resultante */}
             <div className="flex-shrink-0 bg-black/60 border-t border-white/5 px-3 sm:px-6 py-1.5">
@@ -2509,6 +2692,18 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                     🧪 Item
                     <span className="block text-[9px] opacity-80 font-normal">HP/MP • gasta o turno</span>
                   </button>
+
+                  {/* Recuar: sai em segurança mantendo XP/espólio dos abates. Não no boss. */}
+                  {!monster?.isBoss && (
+                    <button
+                      onClick={handleRetreat}
+                      title="Recuar em segurança — você mantém o XP e o espólio dos inimigos já derrotados."
+                      className="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all shadow-lg bg-gradient-to-r from-slate-600 to-slate-500 hover:scale-105"
+                    >
+                      🏃 Recuar
+                      <span className="block text-[9px] opacity-80 font-normal">mantém o XP ganho</span>
+                    </button>
+                  )}
                 </div>
               ) : stage === 'playerDefense' ? (
                 <div className="flex items-center justify-center gap-2">

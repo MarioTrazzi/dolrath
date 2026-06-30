@@ -40,8 +40,10 @@ export default function DungeonsPage() {
   const [activeDungeon, setActiveDungeon] = useState<DungeonDef | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  // Herói já rodando em OUTRA aba/janela (lock vivo no servidor): bloqueia o "Entrar".
+  // Algum personagem da CONTA já rodando em OUTRA aba/janela (lock vivo no servidor):
+  // bloqueia o "Entrar" pra qualquer herói — só dá pra farmar um de cada vez.
   const [heroInUse, setHeroInUse] = useState(false)
+  const [lockedCharacterName, setLockedCharacterName] = useState<string | null>(null)
   // Acabamos de sair da NOSSA run: ignora a detecção por uns segundos (o /abandon é
   // assíncrono, então o lock ainda pode constar "vivo" e piscaria o bloqueio à toa).
   const [recentExit, setRecentExit] = useState(false)
@@ -125,18 +127,21 @@ export default function DungeonsPage() {
     })
   }, [activeCharacterId, characters])
 
-  // Detecta se o herói selecionado já está rodando em OUTRA aba/janela (lock vivo no
-  // servidor) e bloqueia o "Entrar". Recheca ao trocar de herói e ao focar a aba —
-  // assim, abrir o jogo numa segunda aba detecta a run em andamento na hora.
-  const heroId = selectedCharacter?.id
+  // Detecta se QUALQUER personagem da conta já está rodando em OUTRA aba/janela (lock
+  // vivo no servidor) e bloqueia o "Entrar" — não importa qual herói está selecionado
+  // aqui, só dá pra farmar um de cada vez. Recheca ao focar a aba — assim, abrir o
+  // jogo numa segunda aba detecta a run em andamento na hora.
   useEffect(() => {
-    if (!heroId || activeDungeon || recentExit) { setHeroInUse(false); return }
+    if (activeDungeon || recentExit) { setHeroInUse(false); setLockedCharacterName(null); return }
     let cancelled = false
     const check = async () => {
       try {
-        const res = await fetch(`/api/dungeon/run/active?characterId=${heroId}`)
+        const res = await fetch('/api/dungeon/run/active')
         const data = await res.json().catch(() => null)
-        if (!cancelled) setHeroInUse(!!data?.active)
+        if (!cancelled) {
+          setHeroInUse(!!data?.active)
+          setLockedCharacterName(data?.active ? data?.characterName ?? null : null)
+        }
       } catch { /* ignora: não bloqueia por falha de rede */ }
     }
     check()
@@ -145,7 +150,7 @@ export default function DungeonsPage() {
     // Recheca periodicamente para liberar o botão quando a outra aba fechar.
     const id = setInterval(check, 20000)
     return () => { cancelled = true; window.removeEventListener('focus', onFocus); clearInterval(id) }
-  }, [heroId, activeDungeon, recentExit])
+  }, [activeDungeon, recentExit])
 
   // Ao sair da masmorra, sincroniza os recursos locais do personagem
   const handleRunExit = (updates: { hp: number; mp: number; stamina: number; leveledUp?: boolean }) => {
@@ -304,7 +309,7 @@ export default function DungeonsPage() {
           <div className="bg-amber-950/60 border border-amber-600/50 rounded-xl p-4 mb-6 text-center">
             <p className="text-amber-300 font-bold text-sm">🔒 Herói em uso em outra aba</p>
             <p className="text-amber-400/80 text-xs">
-              {selectedCharacter?.name} já está numa masmorra em outra aba/janela. Saia daquela sessão para liberá-lo (libera sozinho ~1 min após fechar).
+              {lockedCharacterName ?? 'Outro personagem'} já está numa masmorra em outra aba/janela. Só dá pra explorar com um herói por vez — saia daquela sessão para liberá-lo (libera sozinho ~1 min após fechar).
             </p>
           </div>
         )}
@@ -386,7 +391,7 @@ export default function DungeonsPage() {
                         onClick={() => enter && setActiveDungeon(dungeon)}
                         disabled={!enter}
                         title={
-                          heroInUse ? 'Este herói já está em uma masmorra em outra aba ou janela.'
+                          heroInUse ? `${lockedCharacterName ?? 'Outro personagem'} já está em uma masmorra em outra aba ou janela. Só um herói por vez.`
                           : !meetsLevel ? `Requer nível ${dungeon.levelReq}` : undefined
                         }
                         className={`px-5 py-2.5 rounded-xl font-black text-sm text-white shadow-lg transition-all ${

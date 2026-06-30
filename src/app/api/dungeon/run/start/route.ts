@@ -44,19 +44,26 @@ export async function POST(req: Request) {
 
     const trail = buildTrail(dungeon)
 
-    // 🔒 Anti-duplicata entre abas: se este herói já tem uma run VIVA (heartbeat
-    // recente em outra aba/janela), bloqueia — não dá pra farmar o mesmo personagem
-    // em paralelo. Runs órfãs (aba caiu) já passaram da janela e são abandonadas abaixo.
+    // 🔒 Anti-duplicata entre abas: se a CONTA já tem alguma run VIVA (heartbeat
+    // recente em outra aba/janela), bloqueia — não importa qual personagem, só dá
+    // pra farmar um herói de cada vez. Runs órfãs (aba caiu) já passaram da janela
+    // e são abandonadas abaixo (só as do próprio personagem que está entrando).
     const existing = await prisma.dungeonRun.findFirst({
-      where: { characterId, status: 'active' },
+      where: { userId, status: 'active' },
       orderBy: { updatedAt: 'desc' },
+      include: { character: { select: { name: true } } },
     })
     if (existing && isRunLive(existing)) {
+      const sameHero = existing.characterId === characterId
       return NextResponse.json(
         {
-          error: 'Este herói já está em uma masmorra em outra aba ou janela. Saia da outra sessão para liberá-lo.',
+          error: sameHero
+            ? 'Este herói já está em uma masmorra em outra aba ou janela. Saia da outra sessão para liberá-lo.'
+            : `${existing.character.name} já está em uma masmorra em outra aba ou janela. Saia daquela sessão antes de entrar com outro herói.`,
           code: 'HERO_IN_USE',
           dungeonId: existing.dungeonId,
+          characterId: existing.characterId,
+          characterName: existing.character.name,
         },
         { status: 409 }
       )

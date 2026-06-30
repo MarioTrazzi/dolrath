@@ -1506,10 +1506,13 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     setHasRolled(false)
 
     const mLev = monsterLevers(m)
+    // 🌬️ Voo Veloz (Águia): buff de evasão temporário soma na esquiva do jogador.
+    const pfxDef = combatFxRef.current
+    const effEvade = Math.min(0.95, playerLevers.evade + (pfxDef.evadeBuffTurns > 0 ? pfxDef.evadeBuff : 0))
     const outcome = computeOutcome(
       atk.roll, def.roll, PVE_DIE[monsterPlan], defenseChoice,
       monsterPowerFor(m, monsterPlan),
-      { armor: playerLevers.armor, K: playerLevers.K, evade: playerLevers.evade },
+      { armor: playerLevers.armor, K: playerLevers.K, evade: effEvade },
       mLev.scale, playerLevers.scale,
     )
     pushBattleEvent({

@@ -118,11 +118,10 @@ enum ActionType {
 // em server/socket-server.js (o servidor é a autoridade; isto é só p/ a UI gatear/exibir).
 const SPECIAL_COST: Record<string, { stamina?: number; mp?: number; cd: number }> = {
   dragon_breath: { mp: 12, cd: 2 }, dragon_scales: { mp: 8, cd: 4 },
-  bite_bleeding: { mp: 12, cd: 2 },
-  unstoppable_charge: { mp: 12, cd: 2 },
-  ascending_spiral: { mp: 12, cd: 2 },
-  wild_fury: { mp: 8, cd: 4 },
-  cosmo_burst: { mp: 12, cd: 2 }, meditation: { mp: 8, cd: 3 },
+  bite_bleeding: { mp: 12, cd: 2 }, wild_fury: { mp: 8, cd: 4 },
+  unstoppable_charge: { mp: 12, cd: 2 }, bear_guard: { mp: 8, cd: 4 },
+  ascending_spiral: { mp: 12, cd: 2 }, eagle_swift: { mp: 8, cd: 4 },
+  cosmo_burst: { mp: 12, cd: 2 }, meditation: { mp: 8, cd: 4 },
   super_nova: { mp: 12, cd: 2 }, hyperfocus: { mp: 8, cd: 4 },
 }
 

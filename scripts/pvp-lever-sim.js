@@ -48,11 +48,13 @@ const DICE_SIDES = 12, LUCK_LO = 0.55, LUCK_HI = 1.75, CRIT_MULT = 1.6
 const K50 = 220, WL = 0.5, WG = 0.5, GEAR_FLOOR = 0.25, MAXLVL = 50
 const BLOCK_ARMOR_MULT = 2.5, TRANSFORM_SCALE = 1.25
 const DODGE_STAM = 3, BLOCK_STAM = 3
+// ⚠️ power/armor/hp/evade ESPELHAM src/lib/combatModel.ts PROFILE (nv50 BiS).
+// (O ajuste só-PvP por classe vive em PVP_CLASS_ADJ, aplicado SOBRE estes via pvpAdjust.)
 const PROFILE = {
-  warrior: { power: 0.917, armor: 160, hp: 438, evade: 0.05 },
-  rogue:   { power: 1.055, armor: 55,  hp: 282, evade: 0.30 },
-  mage:    { power: 1.007, armor: 57,  hp: 332, evade: 0.18 },
-  monk:    { power: 1.011, armor: 117, hp: 311, evade: 0.22 },
+  warrior: { power: 105, armor: 160, hp: 438, evade: 0.05 },
+  rogue:   { power: 145, armor: 55,  hp: 282, evade: 0.30 },
+  mage:    { power: 175, armor: 57,  hp: 332, evade: 0.18 },
+  monk:    { power: 129, armor: 117, hp: 311, evade: 0.22 },
 }
 // 🎲 NOVO KIT: ataques base custam MP e rolam o SEU dado (Golpe d6 / Ataque de Classe d8).
 // O 'special' base saiu do kit do jogador (o burst vem das habilidades de forma, d20).
@@ -87,11 +89,13 @@ const transformLevers = (l) => ({ power: l.power * TRANSFORM_SCALE, armor: l.arm
 // computeLevers direto → fica INTOCADO). Conserta o domínio do tank (Guerreiro) sem
 // mexer no PROFILE base nem no balance do dungeon. ADJ=0 desliga (= PvP de hoje).
 const ADJ_ON = process.env.ADJ === '0' ? false : true
+// ⚠️ ESPELHA server/socket-server.js PVP_CLASS_ADJ (a fonte real do PvP). Calibrado
+// no modelo de power CORRETO (mage 0.86 tempera o power 175; warrior 1.00 pois 105 é baixo).
 const PVP_CLASS_ADJ = {
-  warrior: { power: 0.917, armor: 0.90, hp: 0.97 },
-  rogue:   { power: 1.055, armor: 1.00, hp: 1.17 },
-  mage:    { power: 1.007, armor: 1.00, hp: 1.02 },
-  monk:    { power: 1.011, armor: 1.00, hp: 1.10 },
+  warrior: { power: 1.00, armor: 0.90, hp: 0.96 },
+  rogue:   { power: 1.06, armor: 1.00, hp: 1.10 },
+  mage:    { power: 0.86, armor: 1.00, hp: 1.00 },
+  monk:    { power: 1.04, armor: 1.00, hp: 1.08 },
 }
 for (const c in PVP_CLASS_ADJ) { // overrides do auto-tuner (CADJ_<classe>_pw / _hp)
   const pw = process.env['CADJ_' + c + '_pw']; if (pw !== undefined) PVP_CLASS_ADJ[c].power = Number(pw)
@@ -147,30 +151,31 @@ function pools(cls, form, level) {
 // mesmo nível. Lutas mais longas; status/DoT/utilidade decidem.
 // 🎲 NOVO KIT (espelha src/lib/transformationSpecials.ts + server): 2 por forma —
 // 1 DANO d20 (12 MP) + 1 BUFF (8 MP). Fúria Selvagem é o buff dos 3 metamorfos.
+// 😤 Fúria Selvagem agora é EXCLUSIVA do Lobo (Urso/Águia ganharam buffs próprios p/ identidade).
 const WILD_FURY = { id: 'wild_fury', name: '😤 Fúria Selvagem', util: (s) => st(s, 'dmgDealt', 1.2, 3), cost: { mp: 8 }, cd: 4, desc: '+20% dano causado 3t' }
 const SPECIALS = {
   dragon: [
-    { id: 'dragon_breath', name: '🔥 Sopro de Fogo', die: 20, dmgMult: 1.95, pierce: 0.6, cost: { mp: 12 }, cd: 2 },
-    { id: 'dragon_scales', name: '🛡️ Escama de Dragão', util: (s) => st(s, 'dmgTaken', 0.68, 3), cost: { mp: 8 }, cd: 4, desc: '-32% dano recebido 3t' },
+    { id: 'dragon_breath', name: '🔥 Sopro de Fogo', die: 20, dmgMult: 1.9, pierce: 0.6, cost: { mp: 12 }, cd: 2 },
+    { id: 'dragon_scales', name: '🛡️ Escama de Dragão', util: (s) => st(s, 'dmgTaken', 0.76, 3), cost: { mp: 8 }, cd: 4, desc: '-24% dano recebido 3t' },
   ],
   wolf: [
-    { id: 'bite_bleeding', name: '🩸 Mordida Sangrenta', die: 20, dmgMult: 1.6, pierce: 1, dot: (s) => ({ frac: 0.05, turns: 3, label: 'sangramento' }), cost: { mp: 12 }, cd: 2 },
+    { id: 'bite_bleeding', name: '🩸 Mordida Sangrenta', die: 20, dmgMult: 1.6, pierce: 1, dot: (s) => ({ frac: 0.03, turns: 3, label: 'sangramento' }), cost: { mp: 12 }, cd: 2 },
     WILD_FURY,
   ],
   bear: [
-    { id: 'unstoppable_charge', name: '💥 Investida Imparável', die: 20, dmgMult: 1.7, pierce: 1, cost: { mp: 12 }, cd: 2 },
-    WILD_FURY,
+    { id: 'unstoppable_charge', name: '💥 Investida Imparável', die: 20, dmgMult: 1.72, pierce: 1, cost: { mp: 12 }, cd: 2 },
+    { id: 'bear_guard', name: '🛡️ Pele de Ferro', util: (s) => st(s, 'dmgTaken', 0.80, 3), cost: { mp: 8 }, cd: 4, desc: '-20% dano recebido 3t' },
   ],
   eagle: [
-    { id: 'ascending_spiral', name: '🌀 Espiral Ascendente', die: 20, dmgMult: 1.7, pierce: 0.3, cost: { mp: 12 }, cd: 2 },
-    WILD_FURY,
+    { id: 'ascending_spiral', name: '🌀 Espiral Ascendente', die: 20, dmgMult: 2.15, pierce: 0.6, cost: { mp: 12 }, cd: 2 },
+    { id: 'eagle_swift', name: '🌬️ Voo Veloz', util: (s) => { s.evadeBuff = 0.45; s.evadeBuffTurns = 3 }, cost: { mp: 8 }, cd: 4, desc: '+45% evasão 3t' },
   ],
   seventh_sense: [
-    { id: 'cosmo_burst', name: '🌌 Explosão de Cosmo', die: 20, dmgMult: 2.0, cost: { mp: 12 }, cd: 2 },
-    { id: 'meditation', name: '🧘 Meditação', util: (s) => { s.healPct = 0.2 }, cost: { mp: 8 }, cd: 3, desc: 'cura 20% HP máx' },
+    { id: 'cosmo_burst', name: '🌌 Explosão de Cosmo', die: 20, dmgMult: 2.1, cost: { mp: 12 }, cd: 2 },
+    { id: 'meditation', name: '🧘 Meditação', util: (s) => { s.healPct = 0.14 }, cost: { mp: 8 }, cd: 4, desc: 'cura 14% HP máx' },
   ],
   celestial: [
-    { id: 'super_nova', name: '💥 Super Nova', die: 20, dmgMult: 1.85, pierce: 0.5, cost: { mp: 12 }, cd: 2 },
+    { id: 'super_nova', name: '💥 Super Nova', die: 20, dmgMult: 2.0, pierce: 0.5, cost: { mp: 12 }, cd: 2 },
     { id: 'hyperfocus', name: '✨ Hyperfoco', util: (s) => st(s, 'dmgDealt', 1.3, 3), cost: { mp: 8 }, cd: 4, desc: '+30% dano causado 3t' },
   ],
 }
@@ -257,7 +262,8 @@ function chooseAction(att, def) {
   for (const sp of sps) {
     if (!sp.util || !offCd(att, sp) || !afford(att, sp.cost)) continue
     if (sp.id === 'meditation' && att.hp > att.maxHp * 0.55) continue
-    if (sp.id === 'dragon_scales' && att.status?.dmgTaken) continue
+    if ((sp.id === 'dragon_scales' || sp.id === 'bear_guard') && att.status?.dmgTaken) continue
+    if (sp.id === 'eagle_swift' && att.evadeBuffTurns > 0) continue
     if ((sp.id === 'wild_fury' || sp.id === 'hyperfocus') && att.status?.dmgDealt) continue
     return { type: 'special', sp }
   }

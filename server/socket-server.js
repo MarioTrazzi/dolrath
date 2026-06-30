@@ -1945,23 +1945,26 @@ function setFxMult(p, kind, mult, turns) {
 // BUFF (sem dado) por 8 MP. ESPELHA src/lib/transformationSpecials.ts — manter em sincronia.
 // dano = power_transformado × dmgMult × sorte(die) × (1 − DR(armor×(1−pierce), K)).
 // 'apply' usa a camada de STATUS (fx). Fúria Selvagem é compartilhada (forms: 3 metamorfos).
+function setFxEvade(p, value, turns) { const fx = getFx(p); fx.evadeBuff = value; fx.evadeBuffTurns = turns }
 const SPECIAL_DEFS = {
   // 🐉 Dragão
-  dragon_breath:      { form: 'dragon', name: '🔥 Sopro de Fogo', kind: 'dmg', die: 20, dmgMult: 1.95, pierce: 0.6, cost: { mp: 12 }, cd: 2 },
-  dragon_scales:      { form: 'dragon', name: '🛡️ Escama de Dragão', kind: 'util', cost: { mp: 8 }, cd: 4, apply: (s) => setFxMult(s, 'dmgTaken', 0.68, 3), msg: '-32% dano recebido por 3 turnos' },
+  dragon_breath:      { form: 'dragon', name: '🔥 Sopro de Fogo', kind: 'dmg', die: 20, dmgMult: 1.9, pierce: 0.6, cost: { mp: 12 }, cd: 2 },
+  dragon_scales:      { form: 'dragon', name: '🛡️ Escama de Dragão', kind: 'util', cost: { mp: 8 }, cd: 4, apply: (s) => setFxMult(s, 'dmgTaken', 0.76, 3), msg: '-24% dano recebido por 3 turnos' },
   // 🐺 Lobo
-  bite_bleeding:      { form: 'wolf', name: '🩸 Mordida Sangrenta', kind: 'dmg', die: 20, dmgMult: 1.6, pierce: 1, dot: { frac: 0.05, turns: 3, label: 'sangramento' }, cost: { mp: 12 }, cd: 2 },
+  bite_bleeding:      { form: 'wolf', name: '🩸 Mordida Sangrenta', kind: 'dmg', die: 20, dmgMult: 1.6, pierce: 1, dot: { frac: 0.03, turns: 3, label: 'sangramento' }, cost: { mp: 12 }, cd: 2 },
+  // 😤 Fúria Selvagem — buff OFENSIVO do Lobo (Urso/Águia têm buffs próprios)
+  wild_fury:          { form: 'wolf', name: '😤 Fúria Selvagem', kind: 'util', cost: { mp: 8 }, cd: 4, apply: (s) => setFxMult(s, 'dmgDealt', 1.2, 3), msg: '+20% de dano causado por 3 turnos' },
   // 🐻 Urso
-  unstoppable_charge: { form: 'bear', name: '💥 Investida Imparável', kind: 'dmg', die: 20, dmgMult: 1.7, pierce: 1, cost: { mp: 12 }, cd: 2 },
+  unstoppable_charge: { form: 'bear', name: '💥 Investida Imparável', kind: 'dmg', die: 20, dmgMult: 1.72, pierce: 1, cost: { mp: 12 }, cd: 2 },
+  bear_guard:         { form: 'bear', name: '🛡️ Pele de Ferro', kind: 'util', cost: { mp: 8 }, cd: 4, apply: (s) => setFxMult(s, 'dmgTaken', 0.80, 3), msg: '-20% dano recebido por 3 turnos' },
   // 🦅 Águia
-  ascending_spiral:   { form: 'eagle', name: '🌀 Espiral Ascendente', kind: 'dmg', die: 20, dmgMult: 1.7, pierce: 0.3, cost: { mp: 12 }, cd: 2 },
-  // 😤 Fúria Selvagem — buff compartilhado pelas 3 formas metamorfo (lobo/urso/águia)
-  wild_fury:          { form: 'wolf', forms: ['wolf', 'bear', 'eagle'], name: '😤 Fúria Selvagem', kind: 'util', cost: { mp: 8 }, cd: 4, apply: (s) => setFxMult(s, 'dmgDealt', 1.2, 3), msg: '+20% de dano causado por 3 turnos' },
+  ascending_spiral:   { form: 'eagle', name: '🌀 Espiral Ascendente', kind: 'dmg', die: 20, dmgMult: 2.15, pierce: 0.6, cost: { mp: 12 }, cd: 2 },
+  eagle_swift:        { form: 'eagle', name: '🌬️ Voo Veloz', kind: 'util', cost: { mp: 8 }, cd: 4, apply: (s) => setFxEvade(s, 0.45, 3), msg: '+45% de evasão por 3 turnos' },
   // ✨ 7º Sentido (humano)
-  cosmo_burst:        { form: 'seventh_sense', name: '🌌 Explosão de Cosmo', kind: 'dmg', die: 20, dmgMult: 2.0, cost: { mp: 12 }, cd: 2 },
-  meditation:         { form: 'seventh_sense', name: '🧘 Meditação', kind: 'util', heal: 0.2, cost: { mp: 8 }, cd: 3, msg: 'cura 20% do HP máximo' },
+  cosmo_burst:        { form: 'seventh_sense', name: '🌌 Explosão de Cosmo', kind: 'dmg', die: 20, dmgMult: 2.1, cost: { mp: 12 }, cd: 2 },
+  meditation:         { form: 'seventh_sense', name: '🧘 Meditação', kind: 'util', heal: 0.14, cost: { mp: 8 }, cd: 4, msg: 'cura 14% do HP máximo' },
   // 🌟 Celestial (elfo)
-  super_nova:         { form: 'celestial', name: '💥 Super Nova', kind: 'dmg', die: 20, dmgMult: 1.85, pierce: 0.5, cost: { mp: 12 }, cd: 2 },
+  super_nova:         { form: 'celestial', name: '💥 Super Nova', kind: 'dmg', die: 20, dmgMult: 2.0, pierce: 0.5, cost: { mp: 12 }, cd: 2 },
   hyperfocus:         { form: 'celestial', name: '✨ Hyperfoco', kind: 'util', cost: { mp: 8 }, cd: 4, apply: (s) => setFxMult(s, 'dmgDealt', 1.3, 3), msg: '+30% de dano causado por 3 turnos' },
 }
 

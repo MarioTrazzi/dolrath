@@ -146,6 +146,14 @@ const BOSS_STEP_COST = 6  // aproximar-se do covil
 // Chance de encontrar monstro num nó MENOR (sala principal é sempre monstro).
 const MINOR_MONSTER_CHANCE = 0.4
 
+// Teto da VANTAGEM DE ESCALA DEFENSIVA do jogador (gear+nível) na disputa de dados quando
+// ELE é atacado. Sem isto, contra monstros de rampa baixa (nós menores/salas iniciais, que
+// são fracos de propósito) a vantagem de escala zerava o dano (-1/-2 = praticamente nada),
+// deixando o jogador invulnerável. Limitamos o gap defensivo a +0.12 → monstros fracos ainda
+// chipam (armadura e esquiva seguem contando), mas boss/luta espelho (gap≈0) ficam intactos.
+// NÃO afeta a OFENSA do jogador: atacar out-escalado continua premiando o gear (mais acerto/crit).
+const MAX_DEF_SCALE_GAP = 0.12
+
 
 // Falas de transição do Mestre entre as salas (genéricas, tom de RPG)
 const TRANSITIONS = [
@@ -1480,11 +1488,14 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     // 🌬️ Voo Veloz (Águia): buff de evasão temporário soma na esquiva do jogador.
     const pfxDef = combatFxRef.current
     const effEvade = Math.min(0.95, playerLevers.evade + (pfxDef.evadeBuffTurns > 0 ? pfxDef.evadeBuff : 0))
+    // defScale CLAMPADO: limita a vantagem de escala do jogador na DEFESA (ver MAX_DEF_SCALE_GAP)
+    // pra monstro fraco não cair em -1/-2. Boss/espelho (gap≈0) não muda.
+    const defScale = Math.min(playerLevers.scale, mLev.scale + MAX_DEF_SCALE_GAP)
     const outcome = computeOutcome(
       atk.roll, def.roll, sides, 'dodge',
       monsterPowerFor(m, kind),
       { armor: playerLevers.armor, K: playerLevers.K, evade: effEvade },
-      mLev.scale, playerLevers.scale,
+      mLev.scale, defScale,
     )
     pushBattleEvent({
       kind: 'resolve',

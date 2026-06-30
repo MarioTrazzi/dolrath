@@ -46,6 +46,7 @@ import {
   contestedOutcome,
   PVE_DIE,
   PVE_HIT_MIN,
+  PVE_GLANCE_MULT,
   K50,
   MAX_LEVEL_REF,
   type Levers,
@@ -102,8 +103,6 @@ type CombatStage =
   | 'initiative'
   | 'playerSelect'
   | 'playerRoll'
-  | 'playerDefense'
-  | 'defenseRoll'
   | 'busy'
 
 type AttackKind = 'basic' | 'weapon' | 'special'
@@ -124,9 +123,12 @@ type DefenseKind = 'dodge' | 'defend'
 //  - special: SÓ p/ a IA dos monstros (burst d20). O jogador não usa mais este botão —
 //    quando transformado, as HABILIDADES DE FORMA (transformationSpecials) cumprem esse papel.
 // (powerMults espelham combatModel.ATTACKS: 0.72 / 1.0 / 1.5)
-// DISPUTA DE DADOS (combatModel.contestedOutcome): cada ataque rola um dado próprio
-// (Golpe d6 / Ataque de Classe d8 / especial d20 — ver PVE_DIE). Sem regen passivo no
-// combate — o MP volta de consumíveis/espólios.
+// DISPUTA DE DADOS (combatModel.contestedOutcome): SÓ O JOGADOR rola um dado visível
+// (Golpe d6 / Ataque de Classe d8 / especial d20 — ver PVE_DIE). A defesa do monstro
+// (esquiva/bloqueio) é uma rolagem OCULTA — entra no cálculo de chances (decide muito vs.
+// pouco dano) e aparece no log, mas SEM animação; o golpe sempre acerta (esquiva total
+// vira raspão), igual ao Sopro de Fogo. Sem regen passivo no combate — o MP volta de
+// consumíveis/espólios.
 const ATTACKS: Record<
   AttackKind,
   { label: string; icon: string; powerMult: number; requiresTransform: boolean; mp: number }
@@ -144,9 +146,6 @@ const BOSS_STEP_COST = 6  // aproximar-se do covil
 // Chance de encontrar monstro num nó MENOR (sala principal é sempre monstro).
 const MINOR_MONSTER_CHANCE = 0.4
 
-// Custo de stamina ao DEFENDER no combate (esquiva e soco são grátis).
-const DEFEND_STAMINA_COST = 1
-
 
 // Falas de transição do Mestre entre as salas (genéricas, tom de RPG)
 const TRANSITIONS = [
@@ -163,7 +162,7 @@ const TIPS: { icon: string; text: string }[] = [
   { icon: '🧪', text: 'Não esqueça de passar na Alquimista e levar algumas poções para a aventura.' },
   { icon: '⚒️', text: 'Compre suas armaduras no Ferreiro e aprimore-as para buscar recompensas maiores nos bosses das masmorras.' },
   { icon: '⚡', text: 'A stamina se restaura sozinha: +2 a cada 15 min, após 15 min sem gastar.' },
-  { icon: '🤖', text: 'No automático, ligue "Poupar stamina" para o piloto só esquivar e guardar a stamina para o PvP.' },
+  { icon: '🤖', text: 'No automático, o piloto anda na trilha, coleta o espólio e luta os turnos por você.' },
   { icon: '✨', text: 'Salas principais (⚔️) têm monstro garantido e o melhor espólio — os bosses guardam os itens raros.' },
 ]
 
@@ -410,6 +409,15 @@ function computeOutcome(
   }
 }
 
+// A "defesa" (bloqueio) virou só LORE: mecanicamente todo mundo ESQUIVA (sem bloqueio nem
+// stamina). O log às vezes narra a reação como "defesa", às vezes como "esquiva", só pra dar
+// sabor — a matemática é sempre a da esquiva.
+function defenseFlavor(): { tag: string; p2: string; p3: string } {
+  return Math.random() < 0.3
+    ? { tag: '(defesa oculta)', p2: 'defende', p3: 'defendeu' }
+    : { tag: '(esquiva oculta)', p2: 'esquiva', p3: 'esquivou' }
+}
+
 // Monta a linha de dado estilo RiPG: "⚔️ d12 = 9 +3 (esquiva) = 12"
 function diceLine(label: string, sides: number, roll: number, bonus: number, tag: string): string {
   return bonus > 0
@@ -523,8 +531,6 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const [pendingAttack, setPendingAttack] = useState<AttackKind | null>(null)
   // Habilidade de DANO da forma à espera da rolagem (d20 visível, fluxo igual ao ataque).
   const [pendingAbility, setPendingAbility] = useState<SpecialDef | null>(null)
-  const [monsterPlan, setMonsterPlan] = useState<AttackKind | null>(null)
-  const [defenseChoice, setDefenseChoice] = useState<DefenseKind | null>(null)
   const [panelResult, setPanelResult] = useState<DiceResult | null>(null)
   const [hasRolled, setHasRolled] = useState(false)
   const [diceResults, setDiceResults] = useState<Record<string, DiceResult | undefined>>({})
@@ -536,10 +542,6 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const [auto, setAuto] = useState(false)
   // O piloto pode usar poções de HP/MP automaticamente (switch; ligado por padrão).
   const [autoConsumables, setAutoConsumables] = useState(true)
-  // MODO POUPAR STAMINA: o piloto luta SÓ no ataque básico + esquiva (nunca Defender, a
-  // única ação de combate que custa stamina) — para guardar o orçamento diário p/ runs
-  // manuais ou PvP. Desligado por padrão.
-  const [staminaSaver, setStaminaSaver] = useState(false)
   // Diálogo de confirmação ao sair: PAUSA a run (o piloto não age enquanto aberto).
   const [exitConfirm, setExitConfirm] = useState(false)
   const [lootCard, setLootCard] = useState<ResolvedEvent | null>(null)
@@ -623,20 +625,6 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     battleEventCounter.current += 1
     setBattleEvent({ ...data, id: battleEventCounter.current })
   }, [])
-
-  // ---------- Persistência (APIs existentes) ----------
-  const persistStamina = useCallback((cost: number) => {
-    fetch(`/api/character/${character.id}/update-stamina`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ staminaCost: cost }),
-    })
-      .then(res => (res.ok ? res.json() : null))
-      .then(data => {
-        if (data?.character?.stamina !== undefined) setStamina(data.character.stamina)
-      })
-      .catch(() => {})
-  }, [character.id])
 
   // Abre a sessão no servidor (uma vez). O servidor valida posse + gating e
   // passa a ser dono do RNG/recompensas. Sem runId, a exploração fica travada.
@@ -1048,8 +1036,6 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     setPanelResult(null)
     setHasRolled(false)
     setPendingAttack(null)
-    setMonsterPlan(null)
-    setDefenseChoice(null)
     setCurrentTurnId(null)
     setBattleEvent(null)
     setLootCard(null)
@@ -1185,21 +1171,19 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     const m = monsterRef.current
     if (!m || hasRolled || !pendingAttack) return
     setHasRolled(true)
-    // DISPUTA DE DADOS: cada ataque rola o SEU dado (básico d8 / arma d12 / especial d20).
+    // SÓ O JOGADOR ROLA (como o Sopro de Fogo): o dado visível decide o dano do golpe.
     const sides = PVE_DIE[pendingAttack]
     const atk = mkResult(sides, 0)
     setPanelResult(atk)
 
-    // Monstro reage e rola o MESMO dado (maior vence; evasão/escala entram na margem).
-    // Defender (bloqueio) é raro: ~20% das vezes; no resto Esquiva. Evita que o monstro
-    // bloqueie demais e deixa o combate mais dinâmico.
-    const mDefChoice: DefenseKind = Math.random() < 0.2 ? 'defend' : 'dodge'
+    // DEFESA OCULTA: o monstro "rola" o MESMO dado nos bastidores, mas SEM animação — entra
+    // só no cálculo de chances (decide se passou muito ou pouco dano). O log revela a rolagem
+    // oculta. Mecanicamente é sempre esquiva; o log às vezes a narra como "defesa" (lore).
     const def = mkResult(sides, 0)
-    later(() => setDiceResults(prev => ({ ...prev, [monsterRef.current?.id ?? MONSTER_ID]: def })), 1700)
-    later(() => resolvePlayerAttack(atk, def, mDefChoice), 3000)
+    later(() => resolvePlayerAttack(atk, def), 1700)
   }
 
-  const resolvePlayerAttack = (atk: DiceResult, def: DiceResult, mDefChoice: DefenseKind) => {
+  const resolvePlayerAttack = (atk: DiceResult, def: DiceResult) => {
     const m = monsterRef.current
     if (!m || !pendingAttack) return
     const atkDef = ATTACKS[pendingAttack]
@@ -1213,38 +1197,46 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     if (atkDef.mp > 0) setMp(prev => Math.max(0, prev - atkDef.mp))
 
     const mLev = monsterLevers(m)
+    // Defesa do monstro é sempre ESQUIVA (sem bloqueio); o flavor decide se o log diz "defesa".
+    const flavor = defenseFlavor()
     const outcome = computeOutcome(
-      atk.roll, def.roll, PVE_DIE[kindUsed], mDefChoice,
+      atk.roll, def.roll, PVE_DIE[kindUsed], 'dodge',
       playerPowerFor(kindUsed), mLev, playerLevers.scale, mLev.scale,
     )
+
+    // 🐉 Buff de dano causado (Uivo/Foco do Cosmo) + ignora-esquiva (Visão Aguçada).
+    // O golpe SEMPRE acerta (como o Sopro de Fogo): a esquiva total oculta vira só um
+    // "raspão" (dano mínimo) em vez de uma animação de esquiva — a rolagem oculta do
+    // monstro decide se passou muito ou pouco dano.
+    const pfx = combatFxRef.current
+    const grazed = !outcome.hit
+    let baseDmg = grazed ? Math.max(1, Math.round(playerPowerFor(kindUsed) * PVE_GLANCE_MULT)) : outcome.damage
+    if (grazed && pfx.ignoreEvadeNext) baseDmg = Math.max(1, Math.round(playerPowerFor(kindUsed))) // Visão Aguçada fura o raspão → dano cheio
+    if (pfx.ignoreEvadeNext) setCombatFx(prev => ({ ...prev, ignoreEvadeNext: false }))
+    const outDmg = Math.max(1, Math.round(baseDmg * pfx.dmgDealtMult))
+
     pushBattleEvent({
       kind: 'resolve',
       attackerId: character.id,
       defenderId: m.id,
       action: kindUsed,
-      defenseAction: mDefChoice,
-      hit: outcome.hit,
-      damage: outcome.damage,
+      defenseAction: 'none', // sem animação de defesa/esquiva do monstro (cálculo oculto)
+      hit: true,
+      damage: outDmg,
       isCritical: outcome.crit,
     })
 
     later(() => setDiceResults({}), 1500)
 
-    // Log estilo RiPG: a conta dos dois dados + a linha que justifica o dano.
-    const defTag = mDefChoice === 'dodge' ? '(esquiva)' : '(defesa)'
+    // Log estilo RiPG: o dado do jogador vs. a rolagem OCULTA do monstro + a linha do dano.
     pushLog(
       `${diceLine(atkDef.icon, outcome.sides, outcome.atkRoll, outcome.atkBonus, '(perícia)')}  vs  ` +
-      `${diceLine(m.emoji, outcome.sides, outcome.defRoll, outcome.defBonus, defTag)}`
+      `${diceLine(m.emoji, outcome.sides, outcome.defRoll, outcome.defBonus, flavor.tag)}`
     )
-    if (!outcome.hit) pushLog(`💨 ${m.name} esquiva o golpe por completo!`)
-    else if (outcome.crit) pushLog(`💥 Acerto CRÍTICO! ${outcome.damage} de dano em ${m.name}`)
-    else pushLog(`${atkDef.icon} Acerto: ${outcome.damage} de dano em ${m.name}`)
+    if (grazed) pushLog(`💨 ${m.name} quase ${flavor.p3} — só de raspão: ${outDmg} de dano`)
+    else if (outcome.crit) pushLog(`💥 Acerto CRÍTICO! ${outDmg} de dano em ${m.name}`)
+    else pushLog(`${atkDef.icon} Acerto: ${outDmg} de dano em ${m.name}`)
 
-    // 🐉 Buff de dano causado (Uivo/Foco do Cosmo) + ignora-esquiva (Visão Aguçada)
-    const pfx = combatFxRef.current
-    let outDmg = outcome.hit ? Math.max(1, Math.round(outcome.damage * pfx.dmgDealtMult)) : 0
-    if (!outcome.hit && pfx.ignoreEvadeNext) outDmg = Math.max(1, Math.round((outcome.damage || playerPowerFor(kindUsed)) * pfx.dmgDealtMult))
-    if (pfx.ignoreEvadeNext) setCombatFx(prev => ({ ...prev, ignoreEvadeNext: false }))
     const newHp = Math.max(0, m.hp - outDmg)
     // Sincroniza o HP no alvo ativo E na entrada do pacote (roster mostra a barra certa).
     later(() => {
@@ -1420,11 +1412,13 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       : m.hasSpecial
         ? (r < 0.5 ? 'basic' : r < 0.8 ? 'weapon' : 'special')
         : (r < 0.55 ? 'basic' : 'weapon')
-    setMonsterPlan(kind)
     // Rótulo do golpe pela ÓTICA do monstro (o ATTACKS.label é o nome dos botões do jogador).
     const foeLabel = kind === 'basic' ? 'Golpe' : kind === 'special' ? 'Golpe Especial' : 'Golpe Forte'
-    showBanner(m.emoji, `${m.name} prepara um ${foeLabel}!`, 2600)
-    setStage('playerDefense')
+    showBanner(m.emoji, `${m.name} desfere um ${foeLabel}!`, 1800)
+    // O monstro ataca AUTOMÁTICO (sem clique/dado do jogador): resolve sozinho e segue pro
+    // próximo da fila. A reação do jogador é uma defesa OCULTA (calculada, não rolada).
+    setStage('busy')
+    later(() => resolveMonsterAttack(kind), 850)
   }
 
   // ---------- Usar consumível (mapa e combate) ----------
@@ -1467,51 +1461,28 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     }
   }
 
-  // Esquivar é de graça (aposta no dado); Defender custa 1 stamina (mitiga sempre, então
-  // não pode ser spammado). Soco/esquiva grátis empurram os recursos pros golpes de MP.
-  const choosePlayerDefense = (choice: DefenseKind) => {
-    if (choice === 'defend') {
-      if (stamina < DEFEND_STAMINA_COST) {
-        showBanner('😮‍💨', `Sem stamina para Defender (precisa de ${DEFEND_STAMINA_COST}⚡)`)
-        return
-      }
-      setStamina(prev => Math.max(0, prev - DEFEND_STAMINA_COST))
-      persistStamina(DEFEND_STAMINA_COST)
-    }
-    setDefenseChoice(choice)
-    setPanelResult(null)
-    setHasRolled(false)
-    setStage('defenseRoll')
-  }
-
-  const handleDefenseRoll = () => {
+  // O monstro ataca automaticamente; a reação do jogador é uma ESQUIVA OCULTA (calculada,
+  // sem clique nem dado e sem custo de stamina). O bloqueio foi removido — o log às vezes
+  // narra a esquiva como "defesa" só pra dar sabor (lore).
+  const resolveMonsterAttack = (kind: AttackKind) => {
     const m = attackerRef.current
-    if (!m || hasRolled || !monsterPlan || !defenseChoice) return
-    setHasRolled(true)
-    // DISPUTA DE DADOS: o golpe do monstro define o dado (básico d8 / arma d12 / especial d20).
-    const sides = PVE_DIE[monsterPlan]
-    const def = mkResult(sides, 0)
-    setPanelResult(def)
-
-    const atk = mkResult(sides, 0)
-    later(() => setDiceResults(prev => ({ ...prev, [attackerRef.current?.id ?? MONSTER_ID]: atk })), 1700)
-    later(() => resolveMonsterAttack(atk, def), 3000)
-  }
-
-  const resolveMonsterAttack = (atk: DiceResult, def: DiceResult) => {
-    const m = attackerRef.current
-    if (!m || !monsterPlan || !defenseChoice) return
+    if (!m) return
     setStage('busy')
-    setPanelResult(null)
-    setHasRolled(false)
+
+    // DADOS OCULTOS: o monstro e o jogador "rolam" o mesmo dado do golpe, mas SEM animação —
+    // entram só no cálculo de chances (decide muito/pouco dano). O log revela as rolagens.
+    const sides = PVE_DIE[kind]
+    const atk = mkResult(sides, 0)
+    const def = mkResult(sides, 0)
+    const flavor = defenseFlavor()
 
     const mLev = monsterLevers(m)
     // 🌬️ Voo Veloz (Águia): buff de evasão temporário soma na esquiva do jogador.
     const pfxDef = combatFxRef.current
     const effEvade = Math.min(0.95, playerLevers.evade + (pfxDef.evadeBuffTurns > 0 ? pfxDef.evadeBuff : 0))
     const outcome = computeOutcome(
-      atk.roll, def.roll, PVE_DIE[monsterPlan], defenseChoice,
-      monsterPowerFor(m, monsterPlan),
+      atk.roll, def.roll, sides, 'dodge',
+      monsterPowerFor(m, kind),
       { armor: playerLevers.armor, K: playerLevers.K, evade: effEvade },
       mLev.scale, playerLevers.scale,
     )
@@ -1519,25 +1490,19 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       kind: 'resolve',
       attackerId: m.id,
       defenderId: character.id,
-      action: monsterPlan,
-      defenseAction: defenseChoice,
+      action: kind,
+      defenseAction: 'none',
       hit: outcome.hit,
       damage: outcome.damage,
       isCritical: outcome.crit,
     })
 
-    const myDefense = defenseChoice
-    setMonsterPlan(null)
-    setDefenseChoice(null)
-    later(() => setDiceResults({}), 1500)
-
-    // Log estilo RiPG (monstro ataca, você defende).
-    const defTag = myDefense === 'dodge' ? '(esquiva)' : '(defesa)'
+    // Log estilo RiPG (monstro ataca, você reage) — rolagens OCULTAS.
     pushLog(
-      `${diceLine(m.emoji, outcome.sides, outcome.atkRoll, outcome.atkBonus, '(golpe)')}  vs  ` +
-      `${diceLine('🛡️', outcome.sides, outcome.defRoll, outcome.defBonus, defTag)}`
+      `${diceLine(m.emoji, outcome.sides, outcome.atkRoll, outcome.atkBonus, '(golpe oculto)')}  vs  ` +
+      `${diceLine('🛡️', outcome.sides, outcome.defRoll, outcome.defBonus, flavor.tag)}`
     )
-    if (!outcome.hit) pushLog(`💨 Você esquiva o golpe por completo! (0 de dano)`)
+    if (!outcome.hit) pushLog(`💨 Você ${flavor.p2} o golpe por completo! (0 de dano)`)
     else if (outcome.crit) pushLog(`💥 ${m.name} acerta em cheio! ${outcome.damage} de dano em você`)
     else pushLog(`🩸 ${m.name} causou ${outcome.damage} de dano em você`)
 
@@ -1545,7 +1510,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     const dfx = combatFxRef.current
     const inDmg = outcome.hit ? Math.max(1, Math.round(outcome.damage * dfx.dmgTakenMult * dfx.enemyDmgMult)) : 0
     if (!outcome.hit && dfx.counterNext) {
-      const counter = Math.max(1, Math.round((outcome.damage || monsterPowerFor(m, monsterPlan)) * 0.5))
+      const counter = Math.max(1, Math.round((outcome.damage || monsterPowerFor(m, kind)) * 0.5))
       const mfx = (monsterFxRef.current[m.id] ||= { dots: [], immobilizeTurns: 0 })
       const mhp = Math.max(0, m.hp - counter)
       pushLog(`↩️ Contra-ataque! ${counter} de dano em ${m.name}`)
@@ -1632,8 +1597,6 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
         setPanelResult(null)
         setHasRolled(false)
         setPendingAttack(null)
-        setMonsterPlan(null)
-        setDefenseChoice(null)
         startEnemyPhase()
       }, 1200)
       return
@@ -1788,21 +1751,9 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
         waitingForOpponent: false,
       }
     }
-    if (stage === 'defenseRoll' && monsterPlan) {
-      const sides = PVE_DIE[monsterPlan]
-      return {
-        visible: true,
-        diceType: sides,
-        hasRolled,
-        label: `🛡️ Defenda-se! Role o d${sides}`,
-        onRoll: handleDefenseRoll,
-        myResult: panelResult,
-        waitingForOpponent: false,
-      }
-    }
     return null
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, stage, hasRolled, panelResult, pendingAttack, pendingAbility, monsterPlan, classAtkName, stamina, mp])
+  }, [phase, stage, hasRolled, panelResult, pendingAttack, pendingAbility, classAtkName, stamina, mp])
 
   // ---------- Piloto automático ----------
   // Dano "típico" estimado de um golpe (core × multiplicador mediano do acerto). Serve só
@@ -1849,8 +1800,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
           if (mPotion) { useConsumable(mPotion); return }
         }
       }
-      // POUPAR STAMINA não restringe o ATAQUE: tudo custa MP (não stamina). A economia de
-      // stamina acontece só na DEFESA (sempre Esquivar, nunca Defender — stage 'playerDefense').
+      // O combate NÃO gasta stamina (tudo custa MP); a stamina é só o orçamento diário de runs.
       // 3) Transforma (1× por luta) — mas só se o monstro vai SOBREVIVER a um Ataque de Classe.
       const foeHp = monsterRef.current?.hp ?? Infinity
       if (!transform && !transformedThisFightRef.current && transformForms.length > 0 && foeHp > estDamage('weapon')) {
@@ -1869,20 +1819,9 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
 
     if (stage === 'playerRoll' && !hasRolled) return fire(pendingAbility ? handleAbilityRoll : handlePlayerAttackRoll, 550)
 
-    if (stage === 'playerDefense') return fire(() => {
-      // POUPAR STAMINA: sempre Esquivar (grátis) — nunca Defender (custa 1⚡).
-      if (staminaSaver) { choosePlayerDefense('dodge'); return }
-      // Defender (mitiga sempre, custa 1⚡) só quando MUITO ferido (HP < 40%) E ainda há
-      // stamina sobrando (≥ 40% do máximo). Abaixo disso, sempre Esquivar (grátis) para
-      // preservar a stamina da run. Senão, Esquivar.
-      const hurt = hpRef.current < effMaxHp * 0.4
-      const hasStamina = stamina >= character.maxStamina * 0.4 && stamina >= DEFEND_STAMINA_COST
-      choosePlayerDefense(hurt && hasStamina ? 'defend' : 'dodge')
-    }, 650)
-
-    if (stage === 'defenseRoll' && !hasRolled) return fire(handleDefenseRoll, 550)
+    // A fase inimiga resolve sozinha (defesa oculta) — o piloto não precisa reagir a ela.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auto, autoConsumables, staminaSaver, exitConfirm, phase, stage, hasRolled, combatEnded, mp, stamina, transform, transformCd, transformedThisFight, pendingAbility, consumables, effMaxHp])
+  }, [auto, autoConsumables, exitConfirm, phase, stage, hasRolled, combatEnded, mp, stamina, transform, transformCd, transformedThisFight, pendingAbility, consumables, effMaxHp])
 
   // Piloto de EXPLORAÇÃO: anda na trilha, confirma loot/eventos e entra nos combates.
   // Para com segurança quando falta stamina (evita laço de avanços negados).
@@ -2647,22 +2586,6 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                     </span>
                   </button>
                 )}
-                {auto && (
-                  <button
-                    onClick={() => setStaminaSaver(v => !v)}
-                    title={staminaSaver ? 'Poupar stamina LIGADO: o piloto sempre Esquiva (nunca Defende, a única ação que gasta stamina). Transformação e Especiais continuam — eles custam só MP.' : 'Poupar stamina: o piloto sempre Esquiva em vez de Defender, guardando a stamina diária para runs manuais ou PvP. Ataques e transformação seguem normais.'}
-                    className={`shrink-0 h-9 px-3 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 border transition-colors ${
-                      staminaSaver
-                        ? 'bg-amber-600/85 border-amber-300/60 text-white'
-                        : 'bg-white/5 border-white/15 text-white/50 hover:text-white'
-                    }`}
-                  >
-                    ⚡ Poupar
-                    <span className={`inline-flex w-7 h-4 rounded-full items-center px-0.5 transition-colors ${staminaSaver ? 'bg-white/90 justify-end' : 'bg-white/20 justify-start'}`}>
-                      <span className={`w-3 h-3 rounded-full ${staminaSaver ? 'bg-amber-600' : 'bg-white/70'}`} />
-                    </span>
-                  </button>
-                )}
               </div>
               <div className="mx-auto max-w-md flex items-center gap-2.5">
                 <button
@@ -2801,19 +2724,6 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                       }`}
                     >
                       🧪 {autoConsumables ? 'ON' : 'OFF'}
-                    </button>
-                  )}
-                  {auto && (
-                    <button
-                      onClick={() => setStaminaSaver(v => !v)}
-                      title={staminaSaver ? 'Poupar stamina LIGADO: sempre Esquiva (nunca Defende). Transformação e Especiais seguem — custam só MP.' : 'Poupar stamina: sempre Esquiva em vez de Defender, sem gastar stamina. Ataques e transformação normais.'}
-                      className={`px-2 py-1 rounded-full text-[10px] font-black border transition-colors ${
-                        staminaSaver
-                          ? 'bg-amber-600/85 border-amber-300/60 text-white'
-                          : 'bg-white/5 border-white/15 text-white/50 hover:text-white'
-                      }`}
-                    >
-                      ⚡ {staminaSaver ? 'ON' : 'OFF'}
                     </button>
                   )}
                   <button
@@ -2966,26 +2876,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                     </button>
                   )}
                 </div>
-              ) : stage === 'playerDefense' ? (
-                <div className="flex items-center justify-center gap-2">
-                  <span className="text-amber-300 text-xs font-bold mr-1 hidden sm:inline">🛡️ Reaja ao ataque:</span>
-                  <button
-                    onClick={() => choosePlayerDefense('dodge')}
-                    className="px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all shadow-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:scale-105"
-                  >
-                    🌪️ Esquivar
-                    <span className="block text-[9px] opacity-80 font-normal">grátis • zera no lance extremo</span>
-                  </button>
-                  <button
-                    onClick={() => choosePlayerDefense('defend')}
-                    disabled={stamina < DEFEND_STAMINA_COST}
-                    className="px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all shadow-lg bg-gradient-to-r from-emerald-600 to-green-600 hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
-                  >
-                    🛡️ Defender
-                    <span className="block text-[9px] opacity-80 font-normal">{DEFEND_STAMINA_COST}⚡ • reduz sempre</span>
-                  </button>
-                </div>
-              ) : stage === 'initiative' || stage === 'playerRoll' || stage === 'defenseRoll' ? (
+              ) : stage === 'initiative' || stage === 'playerRoll' ? (
                 <div className="text-white/60 text-xs sm:text-sm font-bold">
                   🎲 {hasRolled ? 'Rolando...' : 'Clique no dado na arena para rolar!'}
                 </div>

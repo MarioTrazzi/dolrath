@@ -21,6 +21,9 @@ export interface DungeonMonsterDef {
   baseHp: number
   baseAttack: number
   baseDefense: number
+  /** Chance de esquiva (0..1) — identidade do bicho, igual ao evade do PROFILE do
+   *  jogador: invariante de escala (não cresce com nível/gear), só flavor de agilidade. */
+  baseEvade: number
 }
 
 /** Slug do asset de imagem de um monstro (mesma normalização dos itens). */
@@ -118,13 +121,13 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     exploreHint: 'Role o d20 para se embrenhar na mata',
     enterText: 'Você cruza a fronteira das árvores. A luz da lua mal atravessa a copa...',
     monsters: [
-      { name: 'Lobo Faminto', emoji: '🐺', image: '/monsters/lobo-faminto.webp', baseHp: 42, baseAttack: 9, baseDefense: 3 },
-      { name: 'Aranha Gigante', emoji: '🕷️', image: '/monsters/aranha-gigante.webp', baseHp: 38, baseAttack: 11, baseDefense: 2 },
-      { name: 'Javali Furioso', emoji: '🐗', image: '/monsters/javali-furioso.webp', baseHp: 55, baseAttack: 8, baseDefense: 5 },
-      { name: 'Ent Corrompido', emoji: '🌳', image: '/monsters/ent-corrompido.webp', baseHp: 70, baseAttack: 10, baseDefense: 7 },
+      { name: 'Lobo Faminto', emoji: '🐺', image: '/monsters/lobo-faminto.webp', baseHp: 42, baseAttack: 9, baseDefense: 3, baseEvade: 0.16 },
+      { name: 'Aranha Gigante', emoji: '🕷️', image: '/monsters/aranha-gigante.webp', baseHp: 38, baseAttack: 11, baseDefense: 2, baseEvade: 0.12 },
+      { name: 'Javali Furioso', emoji: '🐗', image: '/monsters/javali-furioso.webp', baseHp: 55, baseAttack: 8, baseDefense: 5, baseEvade: 0.05 },
+      { name: 'Ent Corrompido', emoji: '🌳', image: '/monsters/ent-corrompido.webp', baseHp: 70, baseAttack: 10, baseDefense: 7, baseEvade: 0.02 },
     ],
     // Arte do boss já existe e é reaproveitada (gerada anteriormente).
-    boss: { name: 'Anciã da Mata', title: 'Guardiã Corrompida', emoji: '🌲', image: '/boss-ancia-da-mata.webp', baseHp: 110, baseAttack: 12, baseDefense: 7 },
+    boss: { name: 'Anciã da Mata', title: 'Guardiã Corrompida', emoji: '🌲', image: '/boss-ancia-da-mata.webp', baseHp: 110, baseAttack: 12, baseDefense: 7, baseEvade: 0.08 },
     events: [
       {
         kind: 'trap', min: 1, max: 2, icon: '🌿', title: 'Espinhos Venenosos!',
@@ -183,12 +186,12 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     exploreHint: 'Role o d20 para explorar as galerias',
     enterText: 'O eco dos seus passos se mistura ao gotejar distante. Cristais iluminam o caminho...',
     monsters: [
-      { name: 'Morcego Sombrio', emoji: '🦇', baseHp: 34, baseAttack: 10, baseDefense: 2 },
-      { name: 'Goblin Minerador', emoji: '👺', baseHp: 45, baseAttack: 9, baseDefense: 4 },
-      { name: 'Slime de Cristal', emoji: '🟣', baseHp: 50, baseAttack: 8, baseDefense: 6 },
-      { name: 'Golem de Pedra', emoji: '🗿', baseHp: 78, baseAttack: 11, baseDefense: 9 },
+      { name: 'Morcego Sombrio', emoji: '🦇', baseHp: 34, baseAttack: 10, baseDefense: 2, baseEvade: 0.18 },
+      { name: 'Goblin Minerador', emoji: '👺', baseHp: 45, baseAttack: 9, baseDefense: 4, baseEvade: 0.10 },
+      { name: 'Slime de Cristal', emoji: '🟣', baseHp: 50, baseAttack: 8, baseDefense: 6, baseEvade: 0.02 },
+      { name: 'Golem de Pedra', emoji: '🗿', baseHp: 78, baseAttack: 11, baseDefense: 9, baseEvade: 0.03 },
     ],
-    boss: { name: 'Wyrm Cristalino', title: 'Senhor das Profundezas', emoji: '🐉', baseHp: 130, baseAttack: 14, baseDefense: 9 },
+    boss: { name: 'Wyrm Cristalino', title: 'Senhor das Profundezas', emoji: '🐉', baseHp: 130, baseAttack: 14, baseDefense: 9, baseEvade: 0.08 },
     events: [
       {
         kind: 'trap', min: 1, max: 3, icon: '🪨', title: 'Desabamento!',
@@ -248,12 +251,12 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     exploreHint: 'Role o d20 para avançar pela névoa',
     enterText: 'A lama engole suas botas. Luzes azuladas piscam na névoa, chamando você...',
     monsters: [
-      { name: 'Sapo Venenoso', emoji: '🐸', baseHp: 36, baseAttack: 12, baseDefense: 2 },
-      { name: 'Serpente do Lodo', emoji: '🐍', baseHp: 44, baseAttack: 13, baseDefense: 3 },
-      { name: 'Bruxa do Brejo', emoji: '🧙‍♀️', baseHp: 52, baseAttack: 15, baseDefense: 4 },
-      { name: 'Crocodilo Ancião', emoji: '🐊', baseHp: 68, baseAttack: 14, baseDefense: 6 },
+      { name: 'Sapo Venenoso', emoji: '🐸', baseHp: 36, baseAttack: 12, baseDefense: 2, baseEvade: 0.14 },
+      { name: 'Serpente do Lodo', emoji: '🐍', baseHp: 44, baseAttack: 13, baseDefense: 3, baseEvade: 0.13 },
+      { name: 'Bruxa do Brejo', emoji: '🧙‍♀️', baseHp: 52, baseAttack: 15, baseDefense: 4, baseEvade: 0.10 },
+      { name: 'Crocodilo Ancião', emoji: '🐊', baseHp: 68, baseAttack: 14, baseDefense: 6, baseEvade: 0.04 },
     ],
-    boss: { name: 'Hidra do Pântano', title: 'Terror de Três Cabeças', emoji: '🐲', baseHp: 150, baseAttack: 16, baseDefense: 10 },
+    boss: { name: 'Hidra do Pântano', title: 'Terror de Três Cabeças', emoji: '🐲', baseHp: 150, baseAttack: 16, baseDefense: 10, baseEvade: 0.07 },
     events: [
       {
         kind: 'trap', min: 1, max: 4, icon: '☠️', title: 'Gás Pantanoso!',
@@ -312,12 +315,12 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     exploreHint: 'Role o d20 para investigar as ruínas',
     enterText: 'Poeira de séculos cobre o salão. Runas mortas acendem à sua passagem...',
     monsters: [
-      { name: 'Esqueleto Guerreiro', emoji: '💀', baseHp: 48, baseAttack: 13, baseDefense: 5 },
-      { name: 'Espectro Errante', emoji: '👻', baseHp: 40, baseAttack: 16, baseDefense: 3 },
-      { name: 'Múmia Real', emoji: '🧟', baseHp: 64, baseAttack: 14, baseDefense: 7 },
-      { name: 'Gárgula de Obsidiana', emoji: '🦅', baseHp: 74, baseAttack: 15, baseDefense: 9 },
+      { name: 'Esqueleto Guerreiro', emoji: '💀', baseHp: 48, baseAttack: 13, baseDefense: 5, baseEvade: 0.06 },
+      { name: 'Espectro Errante', emoji: '👻', baseHp: 40, baseAttack: 16, baseDefense: 3, baseEvade: 0.18 },
+      { name: 'Múmia Real', emoji: '🧟', baseHp: 64, baseAttack: 14, baseDefense: 7, baseEvade: 0.03 },
+      { name: 'Gárgula de Obsidiana', emoji: '🦅', baseHp: 74, baseAttack: 15, baseDefense: 9, baseEvade: 0.08 },
     ],
-    boss: { name: 'Lich Imperador', title: 'O Que Não Morre', emoji: '👑', baseHp: 170, baseAttack: 18, baseDefense: 11 },
+    boss: { name: 'Lich Imperador', title: 'O Que Não Morre', emoji: '👑', baseHp: 170, baseAttack: 18, baseDefense: 11, baseEvade: 0.09 },
     events: [
       {
         kind: 'trap', min: 1, max: 3, icon: '🏹', title: 'Armadilha de Flechas!',
@@ -387,13 +390,16 @@ export interface ScaledMonster {
   goldReward: number
   xpReward: number
   isBoss: boolean
-  /** escala de poder enxuto (S) do monstro — alimenta o ACC_W da disputa de dados (acerto). */
+  /** escala de poder enxuto (S) do monstro — usada no K da mitigação (ver monsterLevers). */
   scale: number
+  /** Chance de esquiva (0..1) — vem direto de baseEvade (invariante de escala, como o
+   *  evade do PROFILE do jogador). O monstro nunca rola dado; só essa % decide. */
+  evade: number
 }
 
 // ============================================================
-// TUNING DE DIFICULDADE — DISPUTA DE DADOS + BANDS DE NÍVEL (validado em
-// scripts/dungeon-difficulty-sim.js; combate em combatModel.contestedOutcome).
+// TUNING DE DIFICULDADE — DADO-COMO-PLUS + BANDS DE NÍVEL (validado em
+// scripts/dungeon-difficulty-sim.js; combate em combatModel.resolveHit/resolveMonsterHit).
 //
 // Cada masmorra é a JORNADA do levelReq até o clearLevel (band). O BOSS ancora no
 // clearLevel FIXO (não no nível do jogador) → under-leveled trava, over-leveled vira farm.
@@ -401,20 +407,22 @@ export interface ScaledMonster {
 // ~65% no gear-ALVO (Floresta PRI · Caverna DUO · Pântano TRI · Ruínas TET).
 // As SALAS/NÓS são uma RAMPA: os primeiros (2 menores + 1ª principal) são vencíveis por
 // PELADO no levelReq; cada degrau sobe o nível/gear esperado até a última sala (perto do
-// boss). As salas gateiam o NÍVEL; o boss gateia o GEAR. hpMult maior aqui (≈4-9) que no
-// modelo antigo porque a disputa de dados esquiva ~50% → lutas mais longas.
+// boss). As salas gateiam o NÍVEL; o boss gateia o GEAR.
 // ============================================================
 const BOSS_POW_MULT = 0.9    // poder do boss = âncora.power × isto
 const BOSS_ARM_MULT = 0.8    // armadura do boss = MON_ARMOR × S × isto
 const MON_ARMOR = 96         // armadura neutra de referência (média dos PROFILEs do nv50)
 const TIER_POWER_STEP = 0.6  // p/ recompensas (gold/xp) por sala — não afeta o combate
 
-// HP do boss = âncora.hp × BOSS_HP_MULT[masmorra][classe] (resolvido no sim p/ ~65% no gear-alvo).
+// HP do boss = âncora.hp × BOSS_HP_MULT[masmorra][classe] (resolvido no sim p/ ~65% no
+// gear-alvo). Recalibrado 2026-06-30 pro modelo dado-como-plus (resolveHit/
+// resolveMonsterHit) — o spread entre classes encolheu bastante vs. o modelo antigo de
+// disputa de margem (ex.: floresta era 4.70/2.85/3.32/3.88, guerreiro≫ladino).
 const BOSS_HP_MULT: Record<DungeonId, Record<CombatClass, number>> = {
-  floresta: { warrior: 4.70, rogue: 2.85, mage: 3.32, monk: 3.88 },
-  caverna:  { warrior: 5.35, rogue: 3.54, mage: 3.44, monk: 4.53 },
-  pantano:  { warrior: 6.20, rogue: 4.45, mage: 4.15, monk: 5.50 },
-  ruinas:   { warrior: 7.58, rogue: 5.47, mage: 5.01, monk: 6.28 },
+  floresta: { warrior: 2.97, rogue: 2.95, mage: 2.82, monk: 3.12 },
+  caverna:  { warrior: 2.73, rogue: 2.95, mage: 2.93, monk: 2.93 },
+  pantano:  { warrior: 2.89, rogue: 2.93, mage: 2.82, monk: 3.03 },
+  ruinas:   { warrior: 3.03, rogue: 3.00, mage: 2.70, monk: 3.25 },
 }
 // Rampa das salas/nós: o HP-mult cresce ao longo do band (1ª sala fácil → última perto do
 // boss). Nó menor = fração extra mais fraca. (Boss usa a tabela acima.)
@@ -564,6 +572,9 @@ export function scaleMonster(
     xpReward: Math.floor((s.isBoss ? 150 + Math.random() * 100 : s.isMain ? 35 + Math.random() * 25 : 12 + Math.random() * 12) * d * tierFactor),
     isBoss: !!s.isBoss,
     scale: S,
+    // Invariante de escala (igual ao evade do PROFILE do jogador) — vem direto do
+    // flavor do bicho, não escala com nível/gear.
+    evade: def.baseEvade,
   }
 }
 

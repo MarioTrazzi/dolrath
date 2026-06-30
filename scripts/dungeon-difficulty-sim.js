@@ -132,41 +132,24 @@ function makeBoss(dg, race, _klass, hpMultOverride) {
     power: a.power * BOSS_POW_MULT,
     armor: MON_ARMOR * S * BOSS_ARM_MULT,
     K: CM.K50 * (bossLevel / CM.MAX_LEVEL_REF + 0.5),
-    evade: 0.06,
+    evade: BOSS_EVADE,
     hp: Math.floor(a.hp * hpMult),
     anchorTier: a.gearTier, anchorS: S, bossLevel,
   }
 }
 
 // ============================================================
-// COMBATE — DISPUTA DE DADOS (novo modelo, 2026-06-22).
-// Atacante e defensor rolam o MESMO dado do ataque (básico d8 / arma d12 / especial d20),
-// normalizados (0,1). margem = na − (nd + edgeDef):
-//   • margem < 0 → defesa vence: ESQUIVA = 0 dano; DEFENDER = golpe aparado (dano mínimo).
-//   • margem ≥ 0 → ACERTA: dano = poder × powerMult × mult(margem) × (1−DR).
-//       DR: esquiva falha = SEM mitigação (alto risco); defender = armadura×2.5 (seguro).
-//       margem grande (≥ CRIT_MARGIN) = CRÍTICO.
-// Poder e mitigação (levers) seguem dimensionando o dano → preserva o balanceamento.
-// Transformação modelada: duty-cycle (ativa TR_ON turnos, cd TR_OFF), ×1.25 nos levers e
-// libera o ESPECIAL (d20). Boss tunado p/ que MESMO transformado precise do gear-alvo.
+// COMBATE — DADO-COMO-PLUS (2026-06-30). O dado nunca disputa, só multiplica o dano de
+// quem rola. Esquiva é 100% %-de-stat, exceto que o número MÁXIMO do dado garante o
+// evento especial (crítico pro atacante, esquiva total pro defensor), independente de
+// stat — ver combatModel.resolveHit (jogador ataca) / resolveMonsterHit (boss ataca: ele
+// NÃO rola, dano sai dos stats com variação pequena sem dado).
 // ============================================================
-const DIE = CM.PVE_DIE // {basic:8, weapon:12, special:20} — fonte única em combatModel
+const DIE = CM.PVE_DIE // {basic:6, weapon:8, special:20} — fonte única em combatModel
 const TR_ON = 4, TR_OFF = 6 // duty-cycle da transformação (~40% uptime)
+const BOSS_EVADE = 0.08 // boss neutro (sintético) — espelha a faixa dos bosses reais (~0.07-0.09)
 
-// Disputa de dados — delega à FONTE ÚNICA (CM.contestedOutcome), idêntica à do jogo.
-function contestedHit(power, sides, defender, choice, atkScale = 0, defScale = 0) {
-  return CM.contestedOutcome({ power, sides, defender, defense: choice, atkScale, defScale }).damage
-}
-// Defesa racional do jogador: MC rápido — escolhe dodge/block de menor dano esperado.
-function chooseDefense(attackerPower, sides, defender, atkScale, defScale) {
-  let dDmg = 0, bDmg = 0
-  for (let i = 0; i < 400; i++) {
-    dDmg += contestedHit(attackerPower, sides, defender, 'dodge', atkScale, defScale)
-    bDmg += contestedHit(attackerPower, sides, defender, 'block', atkScale, defScale)
-  }
-  return bDmg <= dDmg ? 'block' : 'dodge'
-}
-function fight(base, pHP, boss, pDef) {
+function fight(base, pHP, boss) {
   const tr = { power: base.power * CM.TRANSFORM_SCALE, armor: base.armor * CM.TRANSFORM_SCALE, hp: base.hp, evade: base.evade, K: base.K * CM.TRANSFORM_SCALE, scale: base.scale * CM.TRANSFORM_SCALE }
   let php = pHP, mhp = boss.hp
   let playerTurn = Math.random() < 0.5
@@ -176,14 +159,13 @@ function fight(base, pHP, boss, pDef) {
     if (playerTurn) {
       const pl = isTransformed() ? tr : base
       const kind = isTransformed() ? 'special' : 'weapon' // especial só transformado
-      const mDef = Math.random() < 0.5 ? 'dodge' : 'block' // monstro reage 50/50
-      mhp -= contestedHit(pl.power * CM.ATTACKS[kind].powerMult, DIE[kind], boss, mDef, pl.scale, boss.anchorS)
+      mhp -= CM.resolveHit({ power: pl.power * CM.ATTACKS[kind].powerMult }, boss, { defense: 'dodge', sides: DIE[kind] }).damage
       phase = (phase + 1) % (TR_ON + TR_OFF)
     } else {
       const x = Math.random()
       const kind = x < 0.35 ? 'basic' : x < 0.7 ? 'weapon' : 'special'
       const pl = isTransformed() ? tr : base
-      php -= contestedHit(boss.power * CM.ATTACKS[kind].powerMult, DIE[kind], { armor: pl.armor, K: pl.K, evade: pl.evade }, pDef, boss.anchorS, pl.scale)
+      php -= CM.resolveMonsterHit({ power: boss.power * CM.ATTACKS[kind].powerMult, sides: DIE[kind], defender: { armor: pl.armor, K: pl.K, evade: pl.evade } }).damage
     }
     playerTurn = !playerTurn
   }
@@ -202,9 +184,8 @@ function winRate(dg, race, klass, rung, boss, n = FIGHTS) {
   const { gearTier, gearHp } = gearFor(rung.rarity, rung.enh)
   const levers = CM.computeLevers(klass, char.level, gearTier, { str: char.str, agi: char.agi, int: char.int, def: char.def })
   const pHP = char.gameMaxHp + gearHp
-  const pDef = chooseDefense(boss.power, DIE.weapon, levers, boss.anchorS, levers.scale) // 1× por config
   let win = 0
-  for (let i = 0; i < n; i++) if (fight(levers, pHP, boss, pDef) === 'win') win++
+  for (let i = 0; i < n; i++) if (fight(levers, pHP, boss) === 'win') win++
   return { wr: win / n, gearTier, levers, pHP }
 }
 // Binary-search do hpMult p/ a classe de referência vencer ~TARGET_WIN no gear-ALVO.

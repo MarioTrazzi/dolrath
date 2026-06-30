@@ -195,51 +195,30 @@ function resolveHit(attacker, defender, opts) {
 }
 
 // ============================================================
-// DISPUTA DE DADOS (PvE — masmorra). Atacante e defensor rolam o MESMO dado do ataque
-// (PVE_DIE: básico d8 / arma d12 / especial d20). margem = na − (nd + edge), com
-// na,nd normalizados (0,1) e edge = avoid_da_defesa − vantagem_de_escala·ACC_W.
-//   • esquiva: ESPELHO do crítico. margem ≤ −CRIT_MARGIN → esquiva COMPLETA (dano 0);
-//     qualquer outra margem = dano normal (vermelho), sem tier de "raspão".
-//   • bloqueio: margem < 0 → golpe aparado (mitigado); margem ≥ 0 → dano × (1−DR).
-//   • margem ≥ CRIT_MARGIN = crítico. Crit e esquiva são as duas pontas simétricas.
-// A vantagem de ESCALA (gear+nível) entra no acerto → gear melhor acerta mais (afia o gate);
-// num espelho as escalas se cancelam → luta de igual ~50/50. NÃO mexe no resolveHit do PvP.
+// O dado é só um PLUS no dano (sorte), nunca decide sozinho hit/miss. Esquiva é 100%
+// uma %-de-stat — EXCETO que rolar o número MÁXIMO do dado garante o evento especial
+// (crítico pro atacante, esquiva total pro defensor), independente de stat.
+//   • jogador ataca o monstro → resolveHit/luckOf (igual ao PvP): monstro esquiva por
+//     % pura, nunca rola.
+//   • monstro ataca o jogador → resolveMonsterHit: o monstro NÃO rola (dano dos stats,
+//     com variação pequena sem dado); o jogador, defendendo, ainda rola — número
+//     máximo = esquiva total garantida, senão esquiva por %.
 // ============================================================
 const PVE_DIE = { basic: 6, weapon: 8, special: 20 }
-const PVE_HIT_MIN = 0.6, PVE_HIT_SLOPE = 1.5, PVE_CRIT_MULT = 1.9, PVE_CRIT_MARGIN = 0.5
-const PVE_DODGE_EDGE = 1.0, PVE_BLOCK_EDGE = 0.10, PVE_ACC_W = 1.6
-// Esquiva COMPLETA só no extremo (espelho do crítico); piso do dano normal na esquiva.
-const PVE_DODGE_MARGIN = PVE_CRIT_MARGIN, PVE_GLANCE_MULT = 0.12
-function contestedOutcome(opts) {
+// Variação do dano do monstro (±12%, SEM dado): mantém o golpe "vivo" mesmo sem luck/crit.
+const MONSTER_DMG_VARIANCE = 0.12
+function resolveMonsterHit(opts) {
   const rng = opts.rng || Math.random
-  const sides = opts.sides || PVE_DIE.weapon
-  const ra = opts.atkRoll != null ? opts.atkRoll : 1 + Math.floor(rng() * sides)
-  const rd = opts.defRoll != null ? opts.defRoll : 1 + Math.floor(rng() * sides)
-  const na = (ra - 0.5) / sides, nd = (rd - 0.5) / sides
+  const sides = opts.sides || DICE_SIDES
+  const defRoll = opts.forcedDefRoll != null ? opts.forcedDefRoll : rollDie(rng, sides)
+  const natMax = defRoll >= sides
   const def = opts.defender || {}
-  const choice = opts.defense === 'dodge' ? 'dodge' : 'block'
-  const avoid = choice === 'dodge' ? (def.evade || 0) * PVE_DODGE_EDGE : PVE_BLOCK_EDGE
-  const edge = avoid - ((opts.atkScale || 0) - (opts.defScale || 0)) * PVE_ACC_W
-  const margin = na - (nd + edge)
-  // Bônus exibíveis (RiPG): converte o `edge` em pontos no dado (edge>0 → defensor; edge<0 → atacante).
-  const E = edge * sides
-  const atkBonus = E < 0 ? Math.round(-E) : 0
-  const defBonus = E > 0 ? Math.round(E) : 0
-  const crit = margin >= PVE_CRIT_MARGIN
-  if (choice === 'dodge') {
-    // ESPELHO do crítico: só zera no extremo; o resto é dano normal (vermelho), sem mitigação.
-    if (margin <= -PVE_DODGE_MARGIN) return { damage: 0, avoided: true, blocked: false, crit: false, margin, roll: ra, defRoll: rd, atkBonus, defBonus }
-    let mult = Math.max(PVE_GLANCE_MULT, PVE_HIT_MIN + margin * PVE_HIT_SLOPE)
-    if (crit) mult = Math.max(mult, PVE_CRIT_MULT)
-    return { damage: Math.max(1, Math.round(opts.power * mult)), avoided: false, blocked: false, crit, margin, roll: ra, defRoll: rd, atkBonus, defBonus }
-  }
-  const dr = damageReduction((def.armor || 0) * BLOCK_ARMOR_MULT, def.K)
-  if (margin < 0) {
-    return { damage: Math.max(1, Math.round(opts.power * 0.15 * (1 - dr))), avoided: false, blocked: true, crit: false, margin, roll: ra, defRoll: rd, atkBonus, defBonus }
-  }
-  let mult = PVE_HIT_MIN + margin * PVE_HIT_SLOPE
-  if (crit) mult = Math.max(mult, PVE_CRIT_MULT)
-  return { damage: Math.max(1, Math.round(opts.power * mult * (1 - dr))), avoided: false, blocked: true, crit, margin, roll: ra, defRoll: rd, atkBonus, defBonus }
+  const avoided = natMax || rng() < (def.evade || 0)
+  if (avoided) return { damage: 0, avoided: true, crit: false, defRoll, natMax }
+  const variance = 1 + (rng() * 2 - 1) * MONSTER_DMG_VARIANCE
+  const raw = opts.power * variance
+  const damage = Math.max(1, Math.round(raw * (1 - damageReduction(def.armor || 0, def.K))))
+  return { damage, avoided: false, crit: false, defRoll, natMax }
 }
 
 module.exports = {
@@ -250,5 +229,5 @@ module.exports = {
   RARITY_WEIGHT, NOMINAL_SLOTS, enhanceTierFactor, deriveGearTier,
   ATTACKS, attackPower, chooseAttack, CLASS_ATTACK_NAME, classAttackName,
   ATTR_TILT, ATTR_POWER_WEIGHT, applyAttrTilt, normalizeCombatClass,
-  PVE_DIE, PVE_ACC_W, contestedOutcome,
+  PVE_DIE, MONSTER_DMG_VARIANCE, resolveMonsterHit,
 }

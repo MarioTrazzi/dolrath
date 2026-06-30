@@ -43,13 +43,15 @@ import {
   deriveGearTier,
   normalizeCombatClass,
   classAttackName,
-  contestedOutcome,
+  resolveHit,
+  resolveMonsterHit,
+  monsterSpecialEffect,
   PVE_DIE,
-  PVE_HIT_MIN,
-  PVE_GLANCE_MULT,
+  LUCK_LO,
   K50,
   MAX_LEVEL_REF,
   type Levers,
+  type MonsterSpecialEffect,
 } from '@/lib/combatModel'
 
 // ============================================================
@@ -106,7 +108,6 @@ type CombatStage =
   | 'busy'
 
 type AttackKind = 'basic' | 'weapon' | 'special'
-type DefenseKind = 'dodge' | 'defend'
 
 // Combate NÃO gasta stamina (a stamina é o orçamento DIÁRIO de runs).
 //
@@ -123,12 +124,16 @@ type DefenseKind = 'dodge' | 'defend'
 //  - special: SÓ p/ a IA dos monstros (burst d20). O jogador não usa mais este botão —
 //    quando transformado, as HABILIDADES DE FORMA (transformationSpecials) cumprem esse papel.
 // (powerMults espelham combatModel.ATTACKS: 0.72 / 1.0 / 1.5)
-// DISPUTA DE DADOS (combatModel.contestedOutcome): SÓ O JOGADOR rola um dado visível
-// (Golpe d6 / Ataque de Classe d8 / especial d20 — ver PVE_DIE). A defesa do monstro
-// (esquiva/bloqueio) é uma rolagem OCULTA — entra no cálculo de chances (decide muito vs.
-// pouco dano) e aparece no log, mas SEM animação; o golpe sempre acerta (esquiva total
-// vira raspão), igual ao Sopro de Fogo. Sem regen passivo no combate — o MP volta de
-// consumíveis/espólios.
+// DADO-COMO-PLUS (combatModel.resolveHit/resolveMonsterHit): o dado nunca disputa —
+// só multiplica o dano (sorte) de quem rola. Esquiva é 100% uma %-de-stat, EXCETO que
+// rolar o número MÁXIMO do dado garante o evento especial (crítico pro atacante,
+// esquiva total pro defensor), independente de stat.
+//   • jogador ataca: ELE rola (visível) — vira luck multiplicativo; o monstro esquiva
+//     por % pura (monstro nunca rola).
+//   • monstro ataca: ele NÃO rola (dano sai dos stats, com variação pequena sem dado);
+//     o JOGADOR, defendendo, ainda "rola" (oculto, calculado) — número máximo = esquiva
+//     total garantida, senão esquiva por %.
+// Sem regen passivo no combate — o MP volta de consumíveis/espólios.
 const ATTACKS: Record<
   AttackKind,
   { label: string; icon: string; powerMult: number; requiresTransform: boolean; mp: number }
@@ -145,15 +150,6 @@ const BOSS_STEP_COST = 6  // aproximar-se do covil
 
 // Chance de encontrar monstro num nó MENOR (sala principal é sempre monstro).
 const MINOR_MONSTER_CHANCE = 0.4
-
-// Teto da VANTAGEM DE ESCALA DEFENSIVA do jogador (gear+nível) na disputa de dados quando
-// ELE é atacado. Sem isto, contra monstros de rampa baixa (nós menores/salas iniciais, que
-// são fracos de propósito) a vantagem de escala zerava o dano (-1/-2 = praticamente nada),
-// deixando o jogador invulnerável. Limitamos o gap defensivo a +0.12 → monstros fracos ainda
-// chipam (armadura e esquiva seguem contando), mas boss/luta espelho (gap≈0) ficam intactos.
-// NÃO afeta a OFENSA do jogador: atacar out-escalado continua premiando o gear (mais acerto/crit).
-const MAX_DEF_SCALE_GAP = 0.12
-
 
 // Falas de transição do Mestre entre as salas (genéricas, tom de RPG)
 const TRANSITIONS = [
@@ -224,12 +220,13 @@ interface CombatResponse {
 }
 
 // Efeito restaurador de um consumível a partir dos stats do catálogo.
-function consumableEffect(stats: any): { hp: number; mp: number } {
+function consumableEffect(stats: any): { hp: number; mp: number; cure: string | null } {
   const s = stats || {}
-  return { hp: Number(s.healAmount) || 0, mp: Number(s.manaAmount) || 0 }
+  return { hp: Number(s.healAmount) || 0, mp: Number(s.manaAmount) || 0, cure: s.cure || null }
 }
 function consumableIcon(stats: any): string {
   const e = consumableEffect(stats)
+  if (e.cure === 'poison') return '🧉'
   if (e.hp && e.mp) return '💖'
   if (e.hp) return '❤️'
   if (e.mp) return '🔮'
@@ -243,6 +240,7 @@ interface DungeonConsumable {
   mp: number
   qty: number
   icon: string
+  cure: string | null
 }
 
 // Item coletado durante a run (guarda o nome para a arte real /items/<slug>.webp).
@@ -384,37 +382,42 @@ interface Outcome {
   hit: boolean
   damage: number
   crit: boolean
-  /** dados e bônus exibíveis (estilo RiPG) para o log de combate */
+  /** dado exibível (estilo RiPG) para o log de combate */
   sides: number
   atkRoll: number
   defRoll: number
-  atkBonus: number
-  defBonus: number
 }
 
-// Resolve UM golpe pela DISPUTA DE DADOS (combatModel.contestedOutcome). `atkRoll`/`defRoll`
-// = os dados JÁ rolados para a animação (mesmo dado do ataque, `sides`); `power` = poder
-// efetivo já com o powerMult; `atkScale`/`defScale` = escalas de poder (gear+nível) que
-// entram no ACERTO. Esquiva COMPLETA (espelho do crítico) só no extremo; bloqueio vence → golpe aparado; senão dano ∝ margem.
-function computeOutcome(
+// Jogador ataca o monstro: ELE rola (vira luck multiplicativo — combatModel.resolveHit,
+// igual ao PvP). O monstro esquiva por % PURA (nunca rola nada) — exceto que o jogador
+// rolar o número máximo do dado garante crítico, independente de stat (luckOf já cobre
+// isso). `ignoreEvade` força o acerto (Visão Aguçada fura a esquiva do monstro).
+function computePlayerOutcome(
   atkRoll: number,
-  defRoll: number,
   sides: number,
-  defenseChoice: DefenseKind,
   power: number,
-  defender: { armor: number; K: number; evade: number },
-  atkScale: number,
-  defScale: number
+  monster: { armor: number; K: number; evade: number },
+  ignoreEvade: boolean,
 ): Outcome {
-  const r = contestedOutcome({
-    power, sides, atkRoll, defRoll,
-    defense: defenseChoice === 'defend' ? 'block' : 'dodge',
-    defender, atkScale, defScale,
+  const r = resolveHit({ power }, monster, {
+    defense: 'dodge', forcedRoll: atkRoll, sides,
+    dodgeSucceeded: ignoreEvade ? false : undefined,
   })
-  return {
-    hit: !r.avoided, damage: r.damage, crit: r.crit,
-    sides, atkRoll: r.roll, defRoll: r.defRoll, atkBonus: r.atkBonus, defBonus: r.defBonus,
-  }
+  return { hit: !r.dodged, damage: r.damage, crit: r.crit, sides, atkRoll: r.roll, defRoll: 0 }
+}
+
+// Monstro ataca o jogador: ele NÃO rola — dano sai dos stats dele, com uma variação
+// pequena sem dado (combatModel.resolveMonsterHit). O JOGADOR, defendendo, ainda "rola"
+// (oculto/calculado): número máximo do dado dele = esquiva total GARANTIDA, senão
+// esquiva por % pura — sem disputa de margem nenhuma.
+function computeMonsterOutcome(
+  sides: number,
+  power: number,
+  player: { armor: number; K: number; evade: number },
+  forcedDefRoll?: number,
+): Outcome {
+  const r = resolveMonsterHit({ power, sides, defender: player, forcedDefRoll })
+  return { hit: !r.avoided, damage: r.damage, crit: false, sides, atkRoll: 0, defRoll: r.defRoll }
 }
 
 // A "defesa" (bloqueio) virou só LORE: mecanicamente todo mundo ESQUIVA (sem bloqueio nem
@@ -426,11 +429,9 @@ function defenseFlavor(): { tag: string; p2: string; p3: string } {
     : { tag: '(esquiva oculta)', p2: 'esquiva', p3: 'esquivou' }
 }
 
-// Monta a linha de dado estilo RiPG: "⚔️ d12 = 9 +3 (esquiva) = 12"
-function diceLine(label: string, sides: number, roll: number, bonus: number, tag: string): string {
-  return bonus > 0
-    ? `${label} d${sides} = ${roll} +${bonus} ${tag} = ${roll + bonus}`
-    : `${label} d${sides} = ${roll} = ${roll}`
+// Monta a linha de dado estilo RiPG: "⚔️ d12 = 9 (esquiva oculta)"
+function diceLine(label: string, sides: number, roll: number, tag: string): string {
+  return `${label} d${sides} = ${roll} ${tag}`
 }
 
 export default function DungeonRun({ dungeon, character, onExit }: DungeonRunProps) {
@@ -592,12 +593,22 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     evadeBuff: number; evadeBuffTurns: number
     ignoreEvadeNext: boolean; amplifyNext: number; counterNext: boolean
     cd: Record<string, number>
+    // 🐍 Golpes secundários de MONSTRO contra o jogador (ver MONSTER_SPECIAL_EFFECTS).
+    poisoned: boolean                          // permanente até usar Antídoto: -2 HP/turno
+    bleedFrac: number; bleedTurns: number       // % do HP máx/turno, por N turnos
+    stunTurns: number                           // turnos do jogador perdidos (Raízes Rasteiras)
   }
-  const FX0: CombatFx = { dmgDealtMult: 1, dmgDealtTurns: 0, dmgTakenMult: 1, dmgTakenTurns: 0, enemyDmgMult: 1, enemyDmgTurns: 0, evadeBuff: 0, evadeBuffTurns: 0, ignoreEvadeNext: false, amplifyNext: 1, counterNext: false, cd: {} }
+  const FX0: CombatFx = {
+    dmgDealtMult: 1, dmgDealtTurns: 0, dmgTakenMult: 1, dmgTakenTurns: 0, enemyDmgMult: 1, enemyDmgTurns: 0,
+    evadeBuff: 0, evadeBuffTurns: 0, ignoreEvadeNext: false, amplifyNext: 1, counterNext: false, cd: {},
+    poisoned: false, bleedFrac: 0, bleedTurns: 0, stunTurns: 0,
+  }
   const [combatFx, setCombatFx] = useState<CombatFx>(FX0)
   const combatFxRef = useRef(combatFx); combatFxRef.current = combatFx
   // DoT/imobilização por MONSTRO (keyed por id)
   const monsterFxRef = useRef<Record<string, { dots: { dmg: number; turns: number; label: string }[]; immobilizeTurns: number }>>({})
+  // 🐍 Golpe secundário do monstro telegrafado nesta rodada (resolveMonsterAttack consome e limpa).
+  const pendingMonsterEffectRef = useRef<MonsterSpecialEffect | null>(null)
 
   // ---------- Banners centrais ----------
   const [banner, setBanner] = useState<Banner | null>(null)
@@ -716,9 +727,9 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
         .filter((row: any) => row?.item?.type === 'CONSUMABLE' && row.quantity > 0)
         .map((row: any) => {
           const e = consumableEffect(row.item.stats)
-          return { id: row.item.id, name: row.item.name, hp: e.hp, mp: e.mp, qty: row.quantity, icon: consumableIcon(row.item.stats) }
+          return { id: row.item.id, name: row.item.name, hp: e.hp, mp: e.mp, qty: row.quantity, icon: consumableIcon(row.item.stats), cure: e.cure }
         })
-        .filter((c: DungeonConsumable) => c.hp > 0 || c.mp > 0)
+        .filter((c: DungeonConsumable) => c.hp > 0 || c.mp > 0 || !!c.cure)
       setConsumables(list)
     } catch {
       /* silencioso */
@@ -1114,6 +1125,22 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     } else if (transformCdRef.current > 0) {
       setTransformCd(transformCdRef.current - 1)
     }
+    // ☠️ Poison (permanente, -2 fixo) + sangramento (% do HP máx, N turnos) do jogador.
+    // Piso de 1 HP — o veneno não mata sozinho, igual ao DoT que o jogador aplica nos monstros.
+    const pfx = combatFxRef.current
+    let dot = 0
+    const dotLabels: string[] = []
+    if (pfx.poisoned) { dot += 2; dotLabels.push('veneno') }
+    if (pfx.bleedTurns > 0) { dot += Math.max(1, Math.round(effMaxHp * pfx.bleedFrac)); dotLabels.push('sangramento') }
+    if (dot > 0) {
+      const nh = Math.max(1, hpRef.current - dot)
+      const lost = hpRef.current - nh
+      if (lost > 0) {
+        pushFloat(`-${lost} ☠️`, '#7c3aed')
+        pushLog(`☠️ Você sofre ${lost} de dano contínuo (${dotLabels.join(' + ')})`)
+        setHp(nh)
+      }
+    }
     // expira buffs/debuffs do jogador e reduz recarga das habilidades
     setCombatFx(prev => {
       const n: CombatFx = { ...prev, cd: { ...prev.cd } }
@@ -1121,17 +1148,17 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       if (n.dmgTakenTurns > 0 && --n.dmgTakenTurns <= 0) n.dmgTakenMult = 1
       if (n.enemyDmgTurns > 0 && --n.enemyDmgTurns <= 0) n.enemyDmgMult = 1
       if (n.evadeBuffTurns > 0 && --n.evadeBuffTurns <= 0) n.evadeBuff = 0
+      if (n.bleedTurns > 0 && --n.bleedTurns <= 0) n.bleedFrac = 0
       for (const k in n.cd) if (n.cd[k] > 0) n.cd[k]--
       return n
     })
-  }, [showBanner, pushLog])
+  }, [showBanner, pushLog, pushFloat, effMaxHp])
 
   // Levers do MONSTRO (classe desconhecida → fallback): poder/armadura dos stats
   // escalados, K pelo nível. Espelha o derive do socket-server e o dungeon-sim.
   const monsterLevers = (m: ScaledMonster): Levers => {
     const S = m.level / MAX_LEVEL_REF + 0.5 // K pela escala do NÍVEL (= sim/socket)
-    // scale (p/ a disputa de dados) = a escala de PODER do monstro (gear+nível âncora).
-    return { power: m.attack, armor: m.defense, hp: m.maxHp, evade: 0.06, K: K50 * S, scale: m.scale ?? S }
+    return { power: m.attack, armor: m.defense, hp: m.maxHp, evade: m.evade, K: K50 * S, scale: m.scale ?? S }
   }
   // Poder efetivo do golpe do monstro = poder do lever × multiplicador do tipo.
   const monsterPowerFor = (m: ScaledMonster, kind: AttackKind) => monsterLevers(m).power * ATTACKS[kind].powerMult
@@ -1182,19 +1209,15 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     const m = monsterRef.current
     if (!m || hasRolled || !pendingAttack) return
     setHasRolled(true)
-    // SÓ O JOGADOR ROLA (como o Sopro de Fogo): o dado visível decide o dano do golpe.
+    // SÓ O JOGADOR ROLA: o dado visível vira um multiplicador de sorte no dano (sem
+    // disputa nenhuma — o monstro esquiva por % pura, nunca rola).
     const sides = PVE_DIE[pendingAttack]
     const atk = mkResult(sides, 0)
     setPanelResult(atk)
-
-    // DEFESA OCULTA: o monstro "rola" o MESMO dado nos bastidores, mas SEM animação — entra
-    // só no cálculo de chances (decide se passou muito ou pouco dano). O log revela a rolagem
-    // oculta. Mecanicamente é sempre esquiva; o log às vezes a narra como "defesa" (lore).
-    const def = mkResult(sides, 0)
-    later(() => resolvePlayerAttack(atk, def), 1700)
+    later(() => resolvePlayerAttack(atk), 1700)
   }
 
-  const resolvePlayerAttack = (atk: DiceResult, def: DiceResult) => {
+  const resolvePlayerAttack = (atk: DiceResult) => {
     const m = monsterRef.current
     if (!m || !pendingAttack) return
     const atkDef = ATTACKS[pendingAttack]
@@ -1208,43 +1231,32 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     if (atkDef.mp > 0) setMp(prev => Math.max(0, prev - atkDef.mp))
 
     const mLev = monsterLevers(m)
-    // Defesa do monstro é sempre ESQUIVA (sem bloqueio); o flavor decide se o log diz "defesa".
+    // Flavor da reação do monstro ("esquiva"/"defesa") — mecanicamente é sempre esquiva.
     const flavor = defenseFlavor()
-    const outcome = computeOutcome(
-      atk.roll, def.roll, PVE_DIE[kindUsed], 'dodge',
-      playerPowerFor(kindUsed), mLev, playerLevers.scale, mLev.scale,
-    )
-
-    // 🐉 Buff de dano causado (Uivo/Foco do Cosmo) + ignora-esquiva (Visão Aguçada).
-    // O golpe SEMPRE acerta (como o Sopro de Fogo): a esquiva total oculta vira só um
-    // "raspão" (dano mínimo) em vez de uma animação de esquiva — a rolagem oculta do
-    // monstro decide se passou muito ou pouco dano.
+    // 👁️ Visão Aguçada (ignoreEvadeNext) força o acerto — fura a esquiva do monstro.
     const pfx = combatFxRef.current
-    const grazed = !outcome.hit
-    let baseDmg = grazed ? Math.max(1, Math.round(playerPowerFor(kindUsed) * PVE_GLANCE_MULT)) : outcome.damage
-    if (grazed && pfx.ignoreEvadeNext) baseDmg = Math.max(1, Math.round(playerPowerFor(kindUsed))) // Visão Aguçada fura o raspão → dano cheio
+    const outcome = computePlayerOutcome(atk.roll, PVE_DIE[kindUsed], playerPowerFor(kindUsed), mLev, pfx.ignoreEvadeNext)
     if (pfx.ignoreEvadeNext) setCombatFx(prev => ({ ...prev, ignoreEvadeNext: false }))
-    const outDmg = Math.max(1, Math.round(baseDmg * pfx.dmgDealtMult))
+
+    // 🐉 Buff de dano causado (Uivo/Foco do Cosmo) — só amplifica se o golpe acertou.
+    const outDmg = outcome.hit ? Math.max(1, Math.round(outcome.damage * pfx.dmgDealtMult)) : 0
 
     pushBattleEvent({
       kind: 'resolve',
       attackerId: character.id,
       defenderId: m.id,
       action: kindUsed,
-      defenseAction: 'none', // sem animação de defesa/esquiva do monstro (cálculo oculto)
-      hit: true,
+      defenseAction: 'none',
+      hit: outcome.hit,
       damage: outDmg,
       isCritical: outcome.crit,
     })
 
     later(() => setDiceResults({}), 1500)
 
-    // Log estilo RiPG: o dado do jogador vs. a rolagem OCULTA do monstro + a linha do dano.
-    pushLog(
-      `${diceLine(atkDef.icon, outcome.sides, outcome.atkRoll, outcome.atkBonus, '(perícia)')}  vs  ` +
-      `${diceLine(m.emoji, outcome.sides, outcome.defRoll, outcome.defBonus, flavor.tag)}`
-    )
-    if (grazed) pushLog(`💨 ${m.name} quase ${flavor.p3} — só de raspão: ${outDmg} de dano`)
+    // Log estilo RiPG: só o dado do jogador (o monstro não rola nada).
+    pushLog(diceLine(atkDef.icon, outcome.sides, outcome.atkRoll, outcome.crit ? '(CRÍTICO!)' : '(sorte)'))
+    if (!outcome.hit) pushLog(`💨 ${m.name} ${flavor.p3}! (evasão ${Math.round(mLev.evade * 100)}%, 0 de dano)`)
     else if (outcome.crit) pushLog(`💥 Acerto CRÍTICO! ${outDmg} de dano em ${m.name}`)
     else pushLog(`${atkDef.icon} Acerto: ${outDmg} de dano em ${m.name}`)
 
@@ -1403,10 +1415,19 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   }
 
   // Fim da fase inimiga → devolve o turno ao jogador (foco volta pro alvo escolhido).
+  // 🌿 Raízes Rasteiras (stun): se o jogador está preso, perde a vez e a fase inimiga
+  // recomeça direto — espelha o immobilizeTurns que o jogador já aplica nos monstros.
   const backToPlayerTurn = () => {
     setAttacker(null)
     attackerRef.current = null
     setFocusEnemyId(monsterRef.current?.id ?? null)
+    if (combatFxRef.current.stunTurns > 0) {
+      setCombatFx(prev => ({ ...prev, stunTurns: prev.stunTurns - 1 }))
+      pushLog('🌿 Você está preso pelas raízes e perde o turno!')
+      showBanner('🌿', 'Imobilizado!')
+      later(() => startEnemyPhase(), 1400)
+      return
+    }
     setCurrentTurnId(character.id)
     setStage('playerSelect')
   }
@@ -1423,9 +1444,15 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       : m.hasSpecial
         ? (r < 0.5 ? 'basic' : r < 0.8 ? 'weapon' : 'special')
         : (r < 0.55 ? 'basic' : 'weapon')
+    // 🐍 Golpe SECUNDÁRIO nomeado (ex: Presas Envenenadas) — rola com chance própria,
+    // independente do kind sorteado acima; se proc, narra pelo nome e aplica o efeito
+    // em resolveMonsterAttack (só se o golpe efetivamente acertar).
+    const special = monsterSpecialEffect(m.name)
+    const proc = !!special && Math.random() < special.chance
+    pendingMonsterEffectRef.current = proc ? special! : null
     // Rótulo do golpe pela ÓTICA do monstro (o ATTACKS.label é o nome dos botões do jogador).
-    const foeLabel = kind === 'basic' ? 'Golpe' : kind === 'special' ? 'Golpe Especial' : 'Golpe Forte'
-    showBanner(m.emoji, `${m.name} desfere um ${foeLabel}!`, 1800)
+    const foeLabel = proc ? special!.name : (kind === 'basic' ? 'Golpe' : kind === 'special' ? 'Golpe Especial' : 'Golpe Forte')
+    showBanner(m.emoji, proc ? `${m.name} usa ${foeLabel}!` : `${m.name} desfere um ${foeLabel}!`, 1800)
     // O monstro ataca AUTOMÁTICO (sem clique/dado do jogador): resolve sozinho e segue pro
     // próximo da fila. A reação do jogador é uma defesa OCULTA (calculada, não rolada).
     setStage('busy')
@@ -1442,6 +1469,11 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       showBanner('✋', 'Recurso já está cheio')
       return
     }
+    // 🧉 Antídoto: só consome se houver veneno pra curar (não desperdiça o item à toa).
+    if (c.cure === 'poison' && !combatFxRef.current.poisoned) {
+      showBanner('✋', 'Você não está envenenado')
+      return
+    }
     if (c.hp > 0) {
       const gain = Math.min(effMaxHp, hpRef.current + c.hp) - hpRef.current
       setHp(prev => Math.min(effMaxHp, prev + c.hp))
@@ -1450,6 +1482,10 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     if (c.mp > 0) {
       setMp(prev => Math.min(character.maxMp, prev + c.mp))
       pushFloat(`+${c.mp} 🔮`, '#3b82f6')
+    }
+    if (c.cure === 'poison') {
+      setCombatFx(prev => ({ ...prev, poisoned: false }))
+      pushFloat('Curado ✨', '#22d3ee')
     }
     pushLog(`🧪 Usou ${c.name}`)
     showBanner(c.icon, `${c.name} usada!`)
@@ -1480,10 +1516,10 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     if (!m) return
     setStage('busy')
 
-    // DADOS OCULTOS: o monstro e o jogador "rolam" o mesmo dado do golpe, mas SEM animação —
-    // entram só no cálculo de chances (decide muito/pouco dano). O log revela as rolagens.
+    // O MONSTRO não rola nada (dano sai dos stats dele, com variação pequena sem dado).
+    // O JOGADOR, defendendo, ainda "rola" (oculto/calculado): número máximo do dado =
+    // esquiva total garantida, senão esquiva por % pura — ver resolveMonsterHit.
     const sides = PVE_DIE[kind]
-    const atk = mkResult(sides, 0)
     const def = mkResult(sides, 0)
     const flavor = defenseFlavor()
 
@@ -1491,14 +1527,10 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     // 🌬️ Voo Veloz (Águia): buff de evasão temporário soma na esquiva do jogador.
     const pfxDef = combatFxRef.current
     const effEvade = Math.min(0.95, playerLevers.evade + (pfxDef.evadeBuffTurns > 0 ? pfxDef.evadeBuff : 0))
-    // defScale CLAMPADO: limita a vantagem de escala do jogador na DEFESA (ver MAX_DEF_SCALE_GAP)
-    // pra monstro fraco não cair em -1/-2. Boss/espelho (gap≈0) não muda.
-    const defScale = Math.min(playerLevers.scale, mLev.scale + MAX_DEF_SCALE_GAP)
-    const outcome = computeOutcome(
-      atk.roll, def.roll, sides, 'dodge',
-      monsterPowerFor(m, kind),
+    const outcome = computeMonsterOutcome(
+      sides, monsterPowerFor(m, kind),
       { armor: playerLevers.armor, K: playerLevers.K, evade: effEvade },
-      mLev.scale, defScale,
+      def.roll,
     )
     pushBattleEvent({
       kind: 'resolve',
@@ -1511,18 +1543,19 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       isCritical: outcome.crit,
     })
 
-    // Log estilo RiPG (monstro ataca, você reage) — rolagens OCULTAS.
-    pushLog(
-      `${diceLine(m.emoji, outcome.sides, outcome.atkRoll, outcome.atkBonus, '(golpe oculto)')}  vs  ` +
-      `${diceLine('🛡️', outcome.sides, outcome.defRoll, outcome.defBonus, flavor.tag)}`
-    )
+    // Log estilo RiPG: só a rolagem de DEFESA do jogador (o monstro não rola nada).
+    pushLog(diceLine('🛡️', outcome.sides, outcome.defRoll, outcome.defRoll >= outcome.sides ? '(ESQUIVA TOTAL!)' : flavor.tag))
     if (!outcome.hit) pushLog(`💨 Você ${flavor.p2} o golpe por completo! (0 de dano)`)
-    else if (outcome.crit) pushLog(`💥 ${m.name} acerta em cheio! ${outcome.damage} de dano em você`)
     else pushLog(`🩸 ${m.name} causou ${outcome.damage} de dano em você`)
+
+    // 🐍 Golpe secundário telegrafado (ver monsterTelegraph): só se aplica se o golpe acertou.
+    const proc = pendingMonsterEffectRef.current
+    pendingMonsterEffectRef.current = null
+    const procDmgMult = proc && outcome.hit && proc.effect === 'damage' ? (proc.dmgMult ?? 1) : 1
 
     // 🐉 Escamas (-dano recebido) + Rugido (-dano do inimigo). Contra-ataque ao esquivar.
     const dfx = combatFxRef.current
-    const inDmg = outcome.hit ? Math.max(1, Math.round(outcome.damage * dfx.dmgTakenMult * dfx.enemyDmgMult)) : 0
+    const inDmg = outcome.hit ? Math.max(1, Math.round(outcome.damage * dfx.dmgTakenMult * dfx.enemyDmgMult * procDmgMult)) : 0
     if (!outcome.hit && dfx.counterNext) {
       const counter = Math.max(1, Math.round((outcome.damage || monsterPowerFor(m, kind)) * 0.5))
       const mfx = (monsterFxRef.current[m.id] ||= { dots: [], immobilizeTurns: 0 })
@@ -1541,6 +1574,22 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
         later(() => handleDefeat(), 2200)
       }, 1400)
       return
+    }
+    // 🐍 Aplica o status do golpe secundário (só se acertou e o jogador segue de pé).
+    if (proc && outcome.hit) {
+      if (proc.effect === 'poison' && !dfx.poisoned) {
+        setCombatFx(prev => ({ ...prev, poisoned: true }))
+        pushLog(`☠️ ${proc.name} te envenenou! Perde ${proc.poisonDmg ?? 2} HP por turno até usar um Antídoto.`)
+        showBanner('☠️', 'Envenenado!')
+      } else if (proc.effect === 'bleed') {
+        setCombatFx(prev => ({ ...prev, bleedFrac: proc.bleedFrac ?? 0.04, bleedTurns: proc.bleedTurns ?? 3 }))
+        pushLog(`🩸 ${proc.name} abriu um corte! Você está sangrando.`)
+      } else if (proc.effect === 'stun') {
+        setCombatFx(prev => ({ ...prev, stunTurns: prev.stunTurns + (proc.stunTurns ?? 1) }))
+        pushLog(`🌿 ${proc.name} prendeu seus pés! Você perde o próximo turno.`)
+      } else if (proc.effect === 'damage') {
+        pushLog(`🐗 ${proc.name}! Um golpe brutal.`)
+      }
     }
     // Próximo inimigo da fila ataca; se acabou a fila, volta ao jogador.
     later(() => nextEnemyAttack(), 1800)
@@ -1782,9 +1831,9 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   }, [phase, stage, hasRolled, combatEnded, exitConfirm, pendingAbility, pendingAttack])
 
   // ---------- Piloto automático ----------
-  // Dano "típico" estimado de um golpe (core × multiplicador mediano do acerto). Serve só
-  // para o piloto decidir se vale gastar MP — o dano real ainda sai da disputa de dados.
-  const estDamage = (kind: AttackKind) => playerPowerFor(kind) * PVE_HIT_MIN
+  // Dano "típico" estimado de um golpe (core × pior sorte do dado). Serve só pro piloto
+  // decidir se vale gastar MP — o dano real ainda sai do luck multiplicativo (resolveHit).
+  const estDamage = (kind: AttackKind) => playerPowerFor(kind) * LUCK_LO
 
   // Melhor golpe PAGÁVEL agora, mas SEM desperdiçar MP num monstro quase morto:
   // se o Golpe (grátis) já deve derrubá-lo, golpeia; senão usa o Ataque de Classe (8 MP).
@@ -2132,7 +2181,8 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                     const disabled =
                       (c.hp > 0 && c.mp === 0 && hpFull) ||
                       (c.mp > 0 && c.hp === 0 && mpFull) ||
-                      (c.hp > 0 && c.mp > 0 && hpFull && mpFull)
+                      (c.hp > 0 && c.mp > 0 && hpFull && mpFull) ||
+                      (c.cure === 'poison' && !combatFx.poisoned)
                     return (
                       <div key={c.id} className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
                         <div className="flex items-center gap-2 min-w-0">
@@ -2143,6 +2193,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                             </div>
                             <div className="text-textsec text-[11px]">
                               {c.hp > 0 ? `+${c.hp} ❤️` : ''}{c.hp > 0 && c.mp > 0 ? ' • ' : ''}{c.mp > 0 ? `+${c.mp} 🔮` : ''}
+                              {c.cure === 'poison' ? 'Cura veneno' : ''}
                             </div>
                           </div>
                         </div>

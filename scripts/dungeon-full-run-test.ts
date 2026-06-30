@@ -4,8 +4,8 @@
 //
 // Importa a LÓGICA DE PRODUÇÃO (nada inventado):
 //   • monstros/boss: scaleMonster + pickMonster (src/lib/dungeonAdventures)
-//   • combate: contestedOutcome + computeLevers (src/lib/combatModel) — a mesma
-//     disputa de dados de DungeonRun.tsx
+//   • combate: resolveHit/resolveMonsterHit + computeLevers (src/lib/combatModel) — o
+//     mesmo dado-como-plus de DungeonRun.tsx
 //   • drops: rollNodeLoot — a MESMA tabela d20 que o servidor credita em /step
 //
 // Cada cenário = personagem no SET-ALVO da masmorra (PRI/DUO/TRI/TET, 9 slots
@@ -44,7 +44,8 @@ import {
   computeLevers,
   deriveGearTier,
   transformLevers,
-  contestedOutcome,
+  resolveHit,
+  resolveMonsterHit,
   normalizeCombatClass,
   PVE_DIE,
   ATTACKS,
@@ -131,18 +132,16 @@ function gearFor(rarity: string, enh: number) {
 type AttackKind = 'basic' | 'weapon' | 'special'
 function monsterLevers(m: ScaledMonster): Levers {
   const S = m.level / MAX_LEVEL_REF + 0.5
-  return { power: m.attack, armor: m.defense, hp: m.maxHp, evade: 0.06, K: K50 * S, scale: m.scale ?? S }
+  return { power: m.attack, armor: m.defense, hp: m.maxHp, evade: m.evade, K: K50 * S, scale: m.scale ?? S }
 }
-function strike(power: number, sides: number, defender: { armor: number; K: number; evade: number }, defense: 'dodge' | 'block', atkScale: number, defScale: number): number {
-  return contestedOutcome({ power, sides, defender, defense, atkScale, defScale }).damage
+// Jogador ataca: ELE rola (luck multiplicativo); o monstro esquiva por % pura (nunca rola).
+function playerStrike(power: number, sides: number, defender: { armor: number; K: number; evade: number }): number {
+  return resolveHit({ power }, defender, { defense: 'dodge', sides }).damage
 }
-function bestDefense(atkPower: number, sides: number, defender: { armor: number; K: number; evade: number }, atkScale: number, defScale: number): 'dodge' | 'block' {
-  let dodge = 0, block = 0
-  for (let i = 0; i < 120; i++) {
-    dodge += strike(atkPower, sides, defender, 'dodge', atkScale, defScale)
-    block += strike(atkPower, sides, defender, 'block', atkScale, defScale)
-  }
-  return block <= dodge ? 'block' : 'dodge'
+// Monstro ataca: ele NÃO rola (stats + variação pequena sem dado); o jogador esquiva por
+// % pura (número máximo do dado = esquiva total garantida, ver resolveMonsterHit).
+function monsterStrike(power: number, sides: number, defender: { armor: number; K: number; evade: number }): number {
+  return resolveMonsterHit({ power, sides, defender }).damage
 }
 function fight(base: Levers, startHp: number, m: ScaledMonster): { result: 'win' | 'loss' | 'timeout'; hp: number; turns: number } {
   const mLev = monsterLevers(m)
@@ -155,8 +154,7 @@ function fight(base: Levers, startHp: number, m: ScaledMonster): { result: 'win'
       const isTr = pturn % TRANSFORM_CYCLE < TRANSFORM_ON
       const pl = isTr ? transformed : base
       const kind: AttackKind = isTr ? 'special' : 'weapon'
-      const mDef = Math.random() < 0.5 ? 'dodge' : 'block'
-      mhp -= strike(pl.power * ATTACKS[kind].powerMult, PVE_DIE[kind], mLev, mDef, pl.scale, mLev.scale)
+      mhp -= playerStrike(pl.power * ATTACKS[kind].powerMult, PVE_DIE[kind], mLev)
       pturn++
     } else {
       const r = Math.random()
@@ -166,8 +164,7 @@ function fight(base: Levers, startHp: number, m: ScaledMonster): { result: 'win'
       const isTr = (pturn % TRANSFORM_CYCLE) < TRANSFORM_ON
       const pl = isTr ? transformed : base
       const def = { armor: pl.armor, K: pl.K, evade: pl.evade }
-      const pDef = bestDefense(mLev.power * ATTACKS[kind].powerMult, PVE_DIE[kind], def, mLev.scale, pl.scale)
-      php -= strike(mLev.power * ATTACKS[kind].powerMult, PVE_DIE[kind], def, pDef, mLev.scale, pl.scale)
+      php -= monsterStrike(mLev.power * ATTACKS[kind].powerMult, PVE_DIE[kind], def)
     }
     playerTurn = !playerTurn
   }
@@ -503,7 +500,7 @@ table.nodes,table.nodes th,table.nodes td{font-size:12.5px}
 table.nodes{border:none;border-radius:0}
 </style></head><body>
 <header><h1>🗺️ Dolrath — Relatório de Masmorra</h1>
-<div class="sub">${RUNS} runs/cenário · combate e loot da lógica de produção (scaleMonster · contestedOutcome · rollNodeLoot) · gerado ${new Date().toLocaleString('pt-BR')}</div></header>
+<div class="sub">${RUNS} runs/cenário · combate e loot da lógica de produção (scaleMonster · resolveHit/resolveMonsterHit · rollNodeLoot) · gerado ${new Date().toLocaleString('pt-BR')}</div></header>
 ${nav}
 ${body}
 </body></html>`

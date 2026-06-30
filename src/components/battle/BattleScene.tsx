@@ -98,6 +98,12 @@ export interface DicePanelInfo {
   myResult?: DiceResult | null
   /** Mostrar "aguardando oponente" depois de revelar meu resultado */
   waitingForOpponent?: boolean
+  /** Mostra 2 dados lado a lado (eu × oponente) em vez de 1 dado + mini-dado — ex.: iniciativa */
+  dual?: boolean
+  /** Resultado do oponente, usado só quando dual=true */
+  opponentResult?: DiceResult | null
+  /** Texto exibido quando os 2 dados (dual) revelarem — ex.: "Fulano venceu a iniciativa!" */
+  resultBanner?: string | null
 }
 
 interface BattleSceneProps {
@@ -634,6 +640,8 @@ export default function BattleScene({
   // Enquanto o dado grande do centro gira para o jogador local (lado esquerdo),
   // esconder o mini-dado dele para não revelar o resultado antes da hora
   const miniDieFor = (fighter: FighterView, side: 'left' | 'right') => {
+    // Modo dual (ex.: iniciativa) já mostra os 2 dados juntos no centro — evita duplicar
+    if (dicePanel?.visible && dicePanel.dual) return undefined
     if (side === 'left' && dicePanel?.visible) return undefined
     return diceResults?.[fighter.id]
   }
@@ -760,24 +768,53 @@ export default function BattleScene({
               className="text-center bg-black/70 border border-white/20 rounded-2xl px-4 py-2.5 backdrop-blur-sm"
             >
               <div className="text-[11px] sm:text-xs text-white/80 mb-1 font-bold">{dicePanel.label}</div>
-              <div className="flex justify-center">
-                <AnimatedDie
-                  sides={dicePanel.diceType}
-                  size={88}
-                  mode={dicePanel.hasRolled ? 'rolling' : 'idle'}
-                  result={dicePanel.myResult || null}
-                  onClick={dicePanel.onRoll}
-                />
-              </div>
-              {dicePanel.hasRolled && dicePanel.myResult && dicePanel.waitingForOpponent && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 1.2 }}
-                  className="text-green-400 text-[10px] font-bold"
-                >
-                  ⏳ Aguardando oponente rolar...
-                </motion.div>
+              {dicePanel.dual ? (
+                <>
+                  <div className="flex items-center justify-center gap-3 sm:gap-5">
+                    <div className="flex flex-col items-center gap-0.5">
+                      <span className="text-[9px] text-white/50 font-bold uppercase truncate max-w-[72px]">{left?.name || 'Você'}</span>
+                      <AnimatedDie sides={dicePanel.diceType} size={64} mode="rolling" result={dicePanel.myResult || null} />
+                    </div>
+                    <span className="text-white/30 font-black text-base sm:text-lg">×</span>
+                    <div className="flex flex-col items-center gap-0.5">
+                      <span className="text-[9px] text-white/50 font-bold uppercase truncate max-w-[72px]">{right?.name || 'Oponente'}</span>
+                      <AnimatedDie sides={dicePanel.diceType} size={64} mode="rolling" result={dicePanel.opponentResult || null} />
+                    </div>
+                  </div>
+                  <AnimatePresence>
+                    {dicePanel.resultBanner && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.8, y: -4 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        className="mt-1.5 text-yellow-300 text-xs font-black"
+                      >
+                        🏆 {dicePanel.resultBanner}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </>
+              ) : (
+                <>
+                  <div className="flex justify-center">
+                    <AnimatedDie
+                      sides={dicePanel.diceType}
+                      size={88}
+                      mode={dicePanel.hasRolled ? 'rolling' : 'idle'}
+                      result={dicePanel.myResult || null}
+                      onClick={dicePanel.onRoll}
+                    />
+                  </div>
+                  {dicePanel.hasRolled && dicePanel.myResult && dicePanel.waitingForOpponent && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 1.2 }}
+                      className="text-green-400 text-[10px] font-bold"
+                    >
+                      ⏳ Aguardando oponente rolar...
+                    </motion.div>
+                  )}
+                </>
               )}
             </motion.div>
           ) : (

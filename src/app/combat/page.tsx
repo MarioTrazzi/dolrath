@@ -1098,6 +1098,31 @@ function CombatPageContent() {
     setHasRolledInitiative(true)
   }
 
+  // 🎲 Iniciativa: os 2 dados rolam sozinhos assim que a fase começa — sem clique
+  useEffect(() => {
+    if (
+      combatRoom?.phase === CombatPhase.INITIATIVE_ROLL &&
+      !hasRolledInitiative &&
+      currentPlayer &&
+      !isSpectator &&
+      !isModerator
+    ) {
+      rollInitiative()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [combatRoom?.phase, hasRolledInitiative, currentPlayer?.id, isSpectator, isModerator])
+
+  // 🏆 Quem venceu a iniciativa, assim que os 2 dados chegarem (empate = servidor decide por XP)
+  const initiativeWinnerName = (() => {
+    if (combatRoom?.phase !== CombatPhase.INITIATIVE_ROLL || !currentPlayer || !opponent) return null
+    const mine = diceResults[currentPlayer.id]
+    const theirs = diceResults[opponent.id]
+    if (!mine || !theirs) return null
+    if (mine.total === theirs.total) return 'Empate! Decidindo por experiência...'
+    const winnerName = mine.total > theirs.total ? (currentPlayerDisplay?.name || currentPlayer.name) : opponent.name
+    return `${winnerName} venceu a iniciativa!`
+  })()
+
   const closeRoom = () => {
     if (!currentPlayer || !isCreator) return
     socket.emit('close_room', {
@@ -1174,7 +1199,10 @@ function CombatPageContent() {
                     label: '⚡ Iniciativa! Quem tirar mais no d20 começa',
                     onRoll: rollInitiative,
                     myResult: currentPlayer ? diceResults[currentPlayer.id] : null,
-                    waitingForOpponent: opponent ? !diceResults[opponent.id] : false
+                    waitingForOpponent: opponent ? !diceResults[opponent.id] : false,
+                    dual: true,
+                    opponentResult: opponent ? diceResults[opponent.id] : null,
+                    resultBanner: initiativeWinnerName
                   }
               : combatRoom?.phase === CombatPhase.DICE_ROLL && combatRoom?.pendingAction &&
                 !(combatRoom.pendingAction.defenseAction === 'exhausted' && !isMyTurn)
@@ -1332,7 +1360,7 @@ function CombatPageContent() {
                 <div className="text-center space-y-2 flex-1 flex flex-col items-center justify-center">
                   <div className="text-2xl animate-bounce">🎲</div>
                   <div className="text-xs sm:text-sm text-text-secondary">
-                    {hasRolledInitiative ? 'Você já rolou! Aguardando oponente...' : 'Clique no dado na arena para rolar a iniciativa!'}
+                    {initiativeWinnerName || 'Rolando os dados de iniciativa...'}
                   </div>
                 </div>
               ) : !combatRoom?.isActive ? (

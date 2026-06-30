@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X, Plus, Check, Heart, Sparkles, Zap, Layers } from 'lucide-react'
 import { resolveImageUrl } from '@/lib/imageUrl'
@@ -103,6 +104,7 @@ function CharacterCard({
 
 export function CharacterSwitcherDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { characters, activeCharacterId, setActiveCharacterId, refresh } = useActiveCharacter()
+  const router = useRouter()
 
   // O snapshot dos personagens só é buscado na montagem / criação / volta de run.
   // Sem isto, abrir o seletor depois de gastar recursos (ex.: stamina numa run)
@@ -116,6 +118,7 @@ export function CharacterSwitcherDialog({ open, onClose }: { open: boolean; onCl
   const handleSelect = (id: string) => {
     setActiveCharacterId(id)
     onClose()
+    router.push(`/character/${id}`)
   }
 
   return (

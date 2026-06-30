@@ -980,19 +980,19 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     }
 
     // Nó de evento: anima o d20 que o SERVIDOR rolou e revela. Tempos ≈ METADE do
-    // anterior (resultado em 350ms, encerra em 1100ms) — o d20 crava bem mais rápido.
+    // anterior de novo (resultado em 175ms, encerra em 550ms) — o d20 crava ainda mais rápido.
     setExploreResult(null)
     const result: DiceResult = { sides: 20, roll: data.roll ?? 12, modifier: 0, total: data.roll ?? 12 }
-    later(() => setExploreResult(result), 350)
+    later(() => setExploreResult(result), 175)
     later(() => {
       setExploreRolling(false)
       setExploreResult(null)
       setMoving(true)
       setTokenIdx(dest)
       const resolved = applyServerEvent(data, dest)
-      later(() => setMoving(false), 850)
-      later(() => setEventCard(resolved), 650)
-    }, 1100)
+      later(() => setMoving(false), 425)
+      later(() => setEventCard(resolved), 325)
+    }, 550)
   }
 
   // Fecha o card de evento e o Mestre narra a transição.
@@ -1766,6 +1766,18 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, stage, hasRolled, panelResult, pendingAttack, pendingAbility, classAtkName, stamina, mp])
 
+  // Rola o dado sozinho assim que o jogador escolhe um golpe/habilidade — não precisa
+  // mais clicar no dado, só no ataque. Vale mesmo fora do piloto automático.
+  useEffect(() => {
+    if (phase !== 'combat' || stage !== 'playerRoll' || hasRolled || combatEnded || exitConfirm) return
+    const t = setTimeout(() => {
+      if (pendingAbility) handleAbilityRoll()
+      else handlePlayerAttackRoll()
+    }, 400)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, stage, hasRolled, combatEnded, exitConfirm, pendingAbility, pendingAttack])
+
   // ---------- Piloto automático ----------
   // Dano "típico" estimado de um golpe (core × multiplicador mediano do acerto). Serve só
   // para o piloto decidir se vale gastar MP — o dano real ainda sai da disputa de dados.
@@ -1828,7 +1840,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       choosePlayerAttack(autoPickAttack())
     }, 650)
 
-    if (stage === 'playerRoll' && !hasRolled) return fire(pendingAbility ? handleAbilityRoll : handlePlayerAttackRoll, 550)
+    // playerRoll já rola sozinho (ver efeito acima), mesmo fora do piloto automático.
 
     // A fase inimiga resolve sozinha (defesa oculta) — o piloto não precisa reagir a ela.
     // eslint-disable-next-line react-hooks/exhaustive-deps

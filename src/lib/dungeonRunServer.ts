@@ -119,10 +119,12 @@ export function resolveExploreNode(
     return { type: 'monster', roll, pending: { nodeIdx, kind: isMain ? 'main' : 'minor', lootRoll: roll, monsters, killedIds: [] } }
   }
 
-  // ⛲ Fonte revitalizadora: só em nó MENOR, na faixa de SORTE ALTA (d20 14+), com
-  // 20% de chance. Se a fonte aparece, NÃO há espólio — ela restaura HP/MP cheios
-  // no cliente (recurso da run; o servidor só sinaliza o evento). [[dolrath-dungeon-design-vision]]
-  if (!isMain && luckTier(roll) === 'high' && Math.random() < FOUNTAIN_CHANCE) {
+  // ⛲ Fonte revitalizadora: só em nó MENOR, a partir da 2ª sala em diante (tier > 1)
+  // — nos nós menores da 1ª sala o HP/MP ainda está cheio, então a fonte não faz
+  // sentido ali. Faixa de SORTE ALTA (d20 14+), com 20% de chance. Se a fonte aparece,
+  // NÃO há espólio — ela restaura HP/MP cheios no cliente (recurso da run; o servidor
+  // só sinaliza o evento). [[dolrath-dungeon-design-vision]]
+  if (!isMain && node.tier > 1 && luckTier(roll) === 'high' && Math.random() < FOUNTAIN_CHANCE) {
     return { type: 'find', roll, loot: { gold: 0, drops: [], fountain: true } }
   }
 

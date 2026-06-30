@@ -54,14 +54,16 @@ const PROFILE = {
   mage:    { power: 1.007, armor: 57,  hp: 332, evade: 0.18 },
   monk:    { power: 1.011, armor: 117, hp: 311, evade: 0.22 },
 }
-const ATTACKS = { basic: { mult: 0.72, stam: 1 }, weapon: { mult: 1.0, stam: 2 }, special: { mult: 1.5, stam: 3, reqTf: true } }
+// 🎲 NOVO KIT: ataques base custam MP e rolam o SEU dado (Golpe d6 / Ataque de Classe d8).
+// O 'special' base saiu do kit do jogador (o burst vem das habilidades de forma, d20).
+const ATTACKS = { basic: { mult: 0.72, mp: 0, die: 6 }, weapon: { mult: 1.0, mp: 8, die: 8 } }
 const clampGear = (t) => Number.isNaN(t) ? GEAR_FLOOR : Math.max(GEAR_FLOOR, Math.min(1, t))
 const powerScale = (lvl, gear) => WL * (Math.max(0, lvl) / MAXLVL) + WG * clampGear(gear)
-const luckOf = (roll) => { const t = (roll - 1) / (DICE_SIDES - 1); let m = LUCK_LO + (LUCK_HI - LUCK_LO) * t; if (roll >= DICE_SIDES) m *= CRIT_MULT; return m }
+const luckOf = (roll, sides = DICE_SIDES) => { const t = (roll - 1) / (sides - 1); let m = LUCK_LO + (LUCK_HI - LUCK_LO) * t; if (roll >= sides) m *= CRIT_MULT; return m }
 // 🩹 Especiais CRITAM com bônus REDUZIDO (SPECIAL_CRIT_MULT, ex.: 1.3 vs 1.6 do normal):
-// o jogador ainda vê o crítico ao rolar o máximo (12), mas o bônus não vira nuke/one-shot.
+// o jogador ainda vê o crítico ao rolar o máximo do dado, mas o bônus não vira nuke/one-shot.
 const SPECIAL_CRIT_MULT = Number(process.env.SP_CRIT || 1.3)
-const luckSpecial = (roll) => { const m = LUCK_LO + (LUCK_HI - LUCK_LO) * ((roll - 1) / (DICE_SIDES - 1)); return roll >= DICE_SIDES ? m * SPECIAL_CRIT_MULT : m }
+const luckSpecial = (roll, sides = DICE_SIDES) => { const m = LUCK_LO + (LUCK_HI - LUCK_LO) * ((roll - 1) / (sides - 1)); return roll >= sides ? m * SPECIAL_CRIT_MULT : m }
 const DR = (armor, K) => Math.max(0, armor) / (Math.max(0, armor) + K)
 // 🔧 ATTR TILT — espelha applyAttrTilt do combatModel.ts. TILT=0 desliga (= PvP de
 // HOJE, sem tilt → guerreiro domina). Default ON = a CORREÇÃO (passar attrs como no PvE).
@@ -143,36 +145,33 @@ function pools(cls, form, level) {
 // HP do alvo) + DoT pra repor o output ao longo do tempo. Com o no-crit + o teto
 // SPECIAL_HP_CAP, NENHUM especial tira mais que o teto do HP máx → sem one-shot no
 // mesmo nível. Lutas mais longas; status/DoT/utilidade decidem.
+// 🎲 NOVO KIT (espelha src/lib/transformationSpecials.ts + server): 2 por forma —
+// 1 DANO d20 (12 MP) + 1 BUFF (8 MP). Fúria Selvagem é o buff dos 3 metamorfos.
+const WILD_FURY = { id: 'wild_fury', name: '😤 Fúria Selvagem', util: (s) => st(s, 'dmgDealt', 1.2, 3), cost: { mp: 8 }, cd: 4, desc: '+20% dano causado 3t' }
 const SPECIALS = {
   dragon: [
-    { id: 'dragon_breath', name: '🔥 Sopro de Fogo', dmgMult: 1.749, pierce: 0.6, dot: (s) => ({ frac: 0.05, turns: 3, label: 'queimadura' }), cost: { stamina: 14 }, cd: 2 },
-    { id: 'dragon_scales', name: '🛡️ Escamas', util: (s) => st(s, 'dmgTaken', 0.68, 3), cost: { mp: 14 }, cd: 4, desc: '-32% dano recebido 3t' },
-    { id: 'dragon_roar', name: '🦅 Rugido Dracônico', util: (s, e) => st(e, 'dmgDealt', 0.74, 2), cost: { stamina: 10 }, cd: 3, desc: '-26% dano inimigo 2t' },
+    { id: 'dragon_breath', name: '🔥 Sopro de Fogo', die: 20, dmgMult: 1.95, pierce: 0.6, cost: { mp: 12 }, cd: 2 },
+    { id: 'dragon_scales', name: '🛡️ Escama de Dragão', util: (s) => st(s, 'dmgTaken', 0.68, 3), cost: { mp: 8 }, cd: 4, desc: '-32% dano recebido 3t' },
   ],
   wolf: [
-    { id: 'pack_hunt', name: '🏃 Caçada (3x)', dmgMult: 0.619, hits: 3, cost: { stamina: 18 }, cd: 3 },
-    { id: 'bite_bleeding', name: '🩸 Mordida Sangrenta', dmgMult: 0.937, pierce: 1, dot: (s) => ({ frac: 0.05, turns: 3, label: 'sangramento' }), cost: { stamina: 12 }, cd: 3 },
-    { id: 'howl', name: '🌙 Uivo', util: (s) => { st(s, 'dmgDealt', 1.25, 3); s.evadeBuff = 0.08; s.evadeBuffTurns = 3 }, cost: { stamina: 14 }, cd: 4, desc: '+25% dano e +8% evasão 3t' },
+    { id: 'bite_bleeding', name: '🩸 Mordida Sangrenta', die: 20, dmgMult: 1.6, pierce: 1, dot: (s) => ({ frac: 0.05, turns: 3, label: 'sangramento' }), cost: { mp: 12 }, cd: 2 },
+    WILD_FURY,
   ],
   bear: [
-    { id: 'unstoppable_charge', name: '💥 Investida Imparável', dmgMult: 1.257, pierce: 1, cost: { stamina: 26 }, cd: 4 },
-    { id: 'bear_hug', name: '🤗 Abraço do Urso', dmgMult: 0.818, dot: (s) => ({ frac: 0.06, turns: 2, label: 'esmagamento' }), immobilizeRoll: 11, cost: { stamina: 22 }, cd: 4, desc: 'dano + DoT (imobiliza só com rolagem ≥11)' },
-    { id: 'intimidating_roar', name: '😤 Rugido Intimidador', util: (s, e) => st(e, 'dmgDealt', 0.70, 3), cost: { stamina: 14 }, cd: 4, desc: '-30% dano inimigo 3t' },
+    { id: 'unstoppable_charge', name: '💥 Investida Imparável', die: 20, dmgMult: 1.7, pierce: 1, cost: { mp: 12 }, cd: 2 },
+    WILD_FURY,
   ],
   eagle: [
-    { id: 'dive_attack', name: '💨 Mergulho', dmgMult: 0.931, pierce: 0.3, cost: { stamina: 18 }, cd: 3 },
-    { id: 'keen_sight', name: '👁️ Visão Aguçada', util: (s) => st(s, 'dmgDealt', 1.20, 2), cost: { stamina: 10 }, cd: 3, desc: '+20% dano 2t' },
-    { id: 'aerial_superiority', name: '☁️ Superioridade Aérea', util: (s) => { s.evadeBuff = 0.22; s.evadeBuffTurns = 1 }, cost: { mp: 14 }, cd: 4, desc: '+22% evasão 1t' },
+    { id: 'ascending_spiral', name: '🌀 Espiral Ascendente', die: 20, dmgMult: 1.7, pierce: 0.3, cost: { mp: 12 }, cd: 2 },
+    WILD_FURY,
   ],
   seventh_sense: [
-    { id: 'cosmo_burst', name: '🌌 Explosão de Cosmo', dmgMult: 1.768, cost: { mp: 6, stamina: 8 }, cd: 2 },
-    { id: 'cosmo_focus', name: '🧘 Foco do Cosmo', util: (s) => st(s, 'dmgDealt', 1.35, 3), cost: { mp: 12 }, cd: 4, desc: '+35% dano 3t' },
-    { id: 'precognitive_counter', name: '👁️ Contra-ataque', util: (s) => { s.evadeBuff = 0.6; s.evadeBuffTurns = 1; s.counterNext = true }, cost: { stamina: 12 }, cd: 3, desc: 'esquiva + contra-ataque' },
+    { id: 'cosmo_burst', name: '🌌 Explosão de Cosmo', die: 20, dmgMult: 2.0, cost: { mp: 12 }, cd: 2 },
+    { id: 'meditation', name: '🧘 Meditação', util: (s) => { s.healPct = 0.2 }, cost: { mp: 8 }, cd: 3, desc: 'cura 20% HP máx' },
   ],
   celestial: [
-    { id: 'holy_nova', name: '💥 Nova Sagrada', dmgMult: 4.732, pierce: 0.5, cost: { mp: 8 }, cd: 2 },
-    { id: 'restoring_blessing', name: '🕊️ Bênção', util: (s) => { s.healPct = 0.23 }, cost: { mp: 18 }, cd: 3, desc: 'cura 23% HP máx' },
-    { id: 'arcane_torrent', name: '🔷 Torrente Arcana', util: (s) => { s.amplifyNext = 1.6 }, cost: { stamina: 10 }, cd: 3, desc: 'próx. especial de dano ×1.6' },
+    { id: 'super_nova', name: '💥 Super Nova', die: 20, dmgMult: 1.85, pierce: 0.5, cost: { mp: 12 }, cd: 2 },
+    { id: 'hyperfocus', name: '✨ Hyperfoco', util: (s) => st(s, 'dmgDealt', 1.3, 3), cost: { mp: 8 }, cd: 4, desc: '+30% dano causado 3t' },
   ],
 }
 // helper de status temporário (multiplicador): kind 'dmgTaken' | 'dmgDealt'
@@ -195,24 +194,26 @@ function mk(cls, form, level, gear) {
 // dano de um golpe normal (com defesa do oponente)
 function attackDamage(att, def, type, roll, defense, dodgeOK) {
   const power = att.L.power * ATTACKS[type].mult
+  const sides = ATTACKS[type].die || DICE_SIDES
   if (defense === 'dodge' && dodgeOK) return { dmg: 0, dodged: true }
   const effArmor = defense === 'block' ? def.L.armor * BLOCK_ARMOR_MULT : def.L.armor
-  let dmg = power * luckOf(roll) * (1 - DR(effArmor, def.L.K))
+  let dmg = power * luckOf(roll, sides) * (1 - DR(effArmor, def.L.K))
   dmg = dmg * (att.status?.dmgDealt?.mult || 1) * (def.status?.dmgTaken?.mult || 1)
-  dmg = Math.min(dmg, (def.maxHp || 0) * SPECIAL_HP_CAP) // teto universal: sem one-shot
-  return { dmg: Math.max(1, Math.round(dmg)), dodged: false, crit: roll >= DICE_SIDES }
+  dmg = Math.min(dmg, (def.maxHp || 0) * SPECIAL_HP_CAP) // teto universal (env): default off
+  return { dmg: Math.max(1, Math.round(dmg)), dodged: false, crit: roll >= sides }
 }
 // dano de um especial (direto, sem esquiva)
 function specialDamage(att, def, sp) {
   const hits = sp.hits || 1
+  const sides = sp.die || DICE_SIDES
   let total = 0, crit = false, maxRoll = 0
   for (let h = 0; h < hits; h++) {
-    const roll = sp.gcrit || att.gcritNext ? DICE_SIDES : dInt(DICE_SIDES)
+    const roll = sp.gcrit || att.gcritNext ? sides : dInt(sides)
     if (roll > maxRoll) maxRoll = roll
-    if (roll >= DICE_SIDES) crit = true
+    if (roll >= sides) crit = true
     const power = att.L.power * sp.dmgMult * FM(att.form) * (att.amplifyNext || 1)
     const armor = def.L.armor * (1 - (sp.pierce || 0))
-    let dmg = power * luckSpecial(roll) * (1 - DR(armor, def.L.K))
+    let dmg = power * luckSpecial(roll, sides) * (1 - DR(armor, def.L.K))
     dmg = dmg * (att.status?.dmgDealt?.mult || 1) * (def.status?.dmgTaken?.mult || 1)
     total += Math.max(1, Math.round(dmg))
   }
@@ -222,7 +223,9 @@ function specialDamage(att, def, sp) {
   total = Math.min(total, Math.round((def.maxHp || 0) * SPECIAL_HP_CAP))
   return { dmg: Math.max(1, total), crit, maxRoll }
 }
-const SPECIAL_HP_CAP = Number(process.env.SPECIAL_CAP || 0.6)
+// O jogo SHIPADO não tem teto anti-one-shot (resolveSpecialHit não capa). Default = 1.0
+// (sem teto) p/ refletir o jogo; SPECIAL_CAP=0.6 reativa o teto do design antigo.
+const SPECIAL_HP_CAP = Number(process.env.SPECIAL_CAP || 1.0)
 // Multiplicador de dano POR FORMA (knob do auto-tuner; default 1). Escala todas as
 // mults de dano daquela forma — usado p/ balancear cada forma a ~50% sem flailing manual.
 const FORM_MULT = { dragon: 1, wolf: 1, bear: 1, eagle: 1, seventh_sense: 1, celestial: 1 }
@@ -249,25 +252,20 @@ function normalEV(att, def, type) {
 function chooseAction(att, def) {
   if (WELLS && att.hp < att.maxHp * 0.3) return { type: 'well_hp' }
   const sps = formSpecials(att.form)
-  // utilitários de abertura (1x enquanto não ativos)
+  // buff de abertura (1x enquanto não ativo): Fúria/Hyperfoco (dano), Escama (mitigação),
+  // Meditação (cura). Só vale se ainda houver MP folgado p/ um especial de dano depois.
   for (const sp of sps) {
     if (!sp.util || !offCd(att, sp) || !afford(att, sp.cost)) continue
-    if (sp.id === 'restoring_blessing' && att.hp > att.maxHp * 0.55) continue
+    if (sp.id === 'meditation' && att.hp > att.maxHp * 0.55) continue
     if (sp.id === 'dragon_scales' && att.status?.dmgTaken) continue
-    if ((sp.id === 'intimidating_roar' || sp.id === 'dragon_roar') && def.status?.dmgDealt) continue
-    if ((sp.id === 'cosmo_focus' || sp.id === 'howl') && att.status?.dmgDealt) continue
-    if (sp.id === 'arcane_torrent' && att.amplifyNext) continue
-    if (sp.id === 'keen_sight' || sp.id === 'aerial_superiority' || sp.id === 'precognitive_counter') continue // reativos
-    // arcane_torrent só vale se há holy_nova pagável em seguida
-    if (sp.id === 'arcane_torrent') { const nova = sps.find((x) => x.id === 'holy_nova'); if (!nova || !afford(att, { mp: nova.cost.mp })) continue }
+    if ((sp.id === 'wild_fury' || sp.id === 'hyperfocus') && att.status?.dmgDealt) continue
     return { type: 'special', sp }
   }
-  // melhor ataque (especiais de dano vs normais)
+  // melhor ataque (especial de dano d20 vs ataque de classe d8 vs golpe d6)
   let best = null
   for (const sp of sps) { if (!sp.dmgMult || !offCd(att, sp) || !afford(att, sp.cost)) continue; const ev = specialEV(att, def, sp); if (!best || ev > best.ev) best = { type: 'special', sp, ev } }
-  for (const t of ['special', 'weapon', 'basic']) {
-    if (ATTACKS[t].reqTf && !att.transformed) continue
-    if (att.stamina < ATTACKS[t].stam) continue
+  for (const t of ['weapon', 'basic']) {
+    if (att.mp < (ATTACKS[t].mp || 0)) continue
     const ev = normalEV(att, def, t)
     if (!best || ev > best.ev) best = { type: 'attack', action: t, ev }
   }
@@ -354,9 +352,9 @@ function applyAction(att, def, dec, log, actionCount) {
     if (log) log(`  ${sp.name}: ${dmg} dano DIRETO${crit ? ' CRÍTICO' : ''}  ${def.id} HP ${Math.max(0, Math.round(def.hp))}`)
     return actionCount
   }
-  // ataque normal (com reação do defensor)
-  const type = dec.action; att.stamina -= ATTACKS[type].stam
-  const roll = dInt(DICE_SIDES)
+  // ataque normal (com reação do defensor) — custa MP e rola o dado do ataque (d6/d8)
+  const type = dec.action; att.mp -= (ATTACKS[type].mp || 0)
+  const roll = dInt(ATTACKS[type].die || DICE_SIDES)
   const reaction = att.ignoreEvadeNext ? 'none' : chooseDefense(def, att, type)
   att.ignoreEvadeNext = false
   let dodgeOK = false

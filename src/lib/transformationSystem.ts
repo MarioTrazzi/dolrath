@@ -69,7 +69,7 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
   dragon: {
     name: '🐉 Dragão',
     description: 'Transformação ancestral dracônica que aumenta drasticamente força e resistência',
-    duration: 4,
+    duration: 5,
     cooldown: 5,
     cost: { mp: 20, stamina: 40 },
 
@@ -94,24 +94,17 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
       {
         id: 'dragon_breath',
         name: '🔥 Sopro de Fogo',
-        description: 'Ataque devastador que ignora 50% da defesa',
-        damage: 'dado + (STR * 1.8)', // Era 2.0 - balanceado
-        cost: { stamina: 12 }, // Era 15 - reduzido
-        effect: 'ignores_50_percent_defense'
-      },
-      {
-        id: 'dragon_roar',
-        name: '🦅 Rugido Dracônico', 
-        description: 'Intimida o oponente, reduzindo seu ataque por 2 turnos',
-        cost: { stamina: 8 }, // Era 10 - reduzido
-        effect: 'reduce_enemy_attack_20_percent_2_turns'
+        description: 'Ataque de fogo (d20) que fura 60% da armadura',
+        damage: 'd20',
+        cost: { mp: 12 },
+        effect: 'fire_pierce_60'
       },
       {
         id: 'dragon_scales',
-        name: '🛡️ Escamas Dracônicas',
-        description: 'Reduz todo dano recebido em 4 pontos por 3 turnos',
-        cost: { mp: 12 }, // Era 15 - reduzido
-        effect: 'damage_reduction_4_for_3_turns'
+        name: '🛡️ Escama de Dragão',
+        description: 'Reduz o dano recebido em 32% por 3 turnos',
+        cost: { mp: 8 },
+        effect: 'damage_taken_minus_32_for_3_turns'
       }
     ],
     
@@ -124,7 +117,7 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
   wolf: {
     name: '🐺 Lobo',
     description: 'Forma predatória focada em velocidade e ataques críticos',
-    duration: 4,
+    duration: 5,
     cooldown: 5,
     cost: { mp: 20, stamina: 30 },
 
@@ -144,27 +137,19 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
     
     specialAbilities: [
       {
-        id: 'pack_hunt',
-        name: '🏃 Caçada em Matilha',
-        description: 'Sequência de 3 ataques rápidos',
-        damage: 'dado + (AGI * 1.0) cada ataque',
-        cost: { stamina: 20 },
-        effect: 'triple_attack_sequence'
-      },
-      {
-        id: 'howl',
-        name: '🌙 Uivo Selvagem',
-        description: 'Aumenta permanently velocidade em +2 AGI',
-        cost: { stamina: 15 },
-        effect: 'permanent_agility_boost_2'
-      },
-      {
         id: 'bite_bleeding',
         name: '🩸 Mordida Sangrenta',
-        description: 'Causa sangramento que ignora defesa por 3 turnos',
-        damage: 'dado + (STR * 1.5)',
-        cost: { stamina: 12 },
+        description: 'Ataque (d20) que ignora a armadura e causa sangramento por 3 turnos',
+        damage: 'd20',
+        cost: { mp: 12 },
         effect: 'bleeding_dot_3_turns_ignores_defense'
+      },
+      {
+        id: 'wild_fury',
+        name: '😤 Fúria Selvagem',
+        description: '+20% de dano causado por 3 turnos',
+        cost: { mp: 8 },
+        effect: 'damage_dealt_plus_20_for_3_turns'
       }
     ],
     
@@ -175,7 +160,7 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
   bear: {
     name: '🐻 Urso',
     description: 'Forma defensiva suprema com alta resistência e força bruta',
-    duration: 4,
+    duration: 5,
     cooldown: 5,
     cost: { mp: 20, stamina: 40 },
 
@@ -196,27 +181,19 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
     
     specialAbilities: [
       {
-        id: 'bear_hug',
-        name: '🤗 Abraço do Urso',
-        description: 'Immobiliza o oponente por 2 turnos e causa DoT',
-        damage: 'dado + (STR * 1.2) por turno',
-        cost: { stamina: 25 },
-        effect: 'immobilize_2_turns_with_dot'
-      },
-      {
-        id: 'intimidating_roar',
-        name: '😤 Rugido Intimidador',
-        description: 'Reduz o dano do oponente em 30% por 4 turnos',
-        cost: { stamina: 15 },
-        effect: 'reduce_enemy_damage_30_percent_4_turns'
-      },
-      {
         id: 'unstoppable_charge',
         name: '💥 Investida Imparável',
-        description: 'Ataque que atravessa completamente a defesa',
-        damage: 'dado + (STR * 2.5)',
-        cost: { stamina: 30 },
+        description: 'Ataque (d20) que atravessa toda a armadura',
+        damage: 'd20',
+        cost: { mp: 12 },
         effect: 'ignores_all_defense'
+      },
+      {
+        id: 'wild_fury',
+        name: '😤 Fúria Selvagem',
+        description: '+20% de dano causado por 3 turnos',
+        cost: { mp: 8 },
+        effect: 'damage_dealt_plus_20_for_3_turns'
       }
     ],
     
@@ -227,7 +204,7 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
   eagle: {
     name: '🦅 Águia',
     description: 'Forma aérea focada em esquiva suprema e ataques precisos',
-    duration: 4,
+    duration: 5,
     cooldown: 5,
     cost: { mp: 20, stamina: 30 },
 
@@ -246,26 +223,19 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
     
     specialAbilities: [
       {
-        id: 'dive_attack',
-        name: '💨 Ataque em Mergulho',
-        description: 'Crítico garantido com dano aumentado',
-        damage: 'dado + (AGI * 2.0) + garanteed_critical',
-        cost: { stamina: 20 },
-        effect: 'guaranteed_critical_hit'
+        id: 'ascending_spiral',
+        name: '🌀 Espiral Ascendente',
+        description: 'Mergulho em espiral (d20) que fura 30% da armadura',
+        damage: 'd20',
+        cost: { mp: 12 },
+        effect: 'pierce_30'
       },
       {
-        id: 'aerial_superiority',
-        name: '☁️ Superioridade Aérea',
-        description: 'Imune a ataques terrestres por 1 turno',
-        cost: { mp: 15 },
-        effect: 'immune_to_ground_attacks_1_turn'
-      },
-      {
-        id: 'keen_sight',
-        name: '👁️ Visão Aguçada',
-        description: 'Próximo ataque ignora esquiva do oponente',
-        cost: { stamina: 10 },
-        effect: 'ignore_enemy_dodge_next_attack'
+        id: 'wild_fury',
+        name: '😤 Fúria Selvagem',
+        description: '+20% de dano causado por 3 turnos',
+        cost: { mp: 8 },
+        effect: 'damage_dealt_plus_20_for_3_turns'
       }
     ],
     
@@ -277,7 +247,7 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
   seventh_sense: {
     name: '✨ Despertar do 7º Sentido',
     description: 'O humano desperta o cosmo interior: reflexos, força e mente elevados em harmonia. Forma versátil, sem fraquezas marcantes.',
-    duration: 4,
+    duration: 5,
     cooldown: 5,
     cost: { mp: 20, stamina: 35 },
 
@@ -299,24 +269,17 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
       {
         id: 'cosmo_burst',
         name: '🌌 Explosão de Cosmo',
-        description: 'Concentra o cosmo num golpe que cresce com todos os atributos',
-        damage: 'dado + ((STR+AGI+INT) * 0.6)',
-        cost: { stamina: 15, mp: 10 },
-        effect: 'scaling_all_stats_strike'
-      },
-      {
-        id: 'precognitive_counter',
-        name: '👁️ Contra-ataque Precognitivo',
-        description: 'Prevê o próximo ataque: esquiva garantida e devolve metade do dano',
-        cost: { stamina: 12 },
-        effect: 'guaranteed_dodge_and_counter_next'
-      },
-      {
-        id: 'cosmo_focus',
-        name: '🧘 Foco do Cosmo',
-        description: 'Serenidade absoluta: +2 em todos os atributos por 3 turnos',
+        description: 'Explosão de cosmo concentrada (d20)',
+        damage: 'd20',
         cost: { mp: 12 },
-        effect: 'all_stats_plus_2_for_3_turns'
+        effect: 'cosmo_strike'
+      },
+      {
+        id: 'meditation',
+        name: '🧘 Meditação',
+        description: 'Cura 20% do HP máximo',
+        cost: { mp: 8 },
+        effect: 'heal_20_percent_max_hp'
       }
     ],
 
@@ -328,7 +291,7 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
   celestial: {
     name: '🌟 Forma Celestial',
     description: 'O elfo ascende a uma forma de luz astral, amplificando drasticamente o poder mágico e os reflexos — mas com corpo etéreo e frágil.',
-    duration: 4,
+    duration: 5,
     cooldown: 5,
     cost: { mp: 20, stamina: 30 },
 
@@ -348,26 +311,19 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
 
     specialAbilities: [
       {
-        id: 'holy_nova',
-        name: '💥 Nova Sagrada',
-        description: 'Explosão de luz arcana que ignora resistência mágica',
-        damage: 'dado + (INT * 1.8)',
-        cost: { mp: 18 },
-        effect: 'magic_burst_ignores_resistance'
+        id: 'super_nova',
+        name: '💥 Super Nova',
+        description: 'Explosão de luz (d20) que fura 50% da armadura',
+        damage: 'd20',
+        cost: { mp: 12 },
+        effect: 'magic_burst_pierce_50'
       },
       {
-        id: 'restoring_blessing',
-        name: '🕊️ Bênção Restauradora',
-        description: 'A luz celestial cura uma parcela do HP máximo',
-        cost: { mp: 20 },
-        effect: 'heal_25_percent_max_hp'
-      },
-      {
-        id: 'arcane_torrent',
-        name: '🔷 Torrente Arcana',
-        description: 'O próximo feitiço causa o dobro de dano mágico',
-        cost: { stamina: 10 },
-        effect: 'double_magic_damage_next'
+        id: 'hyperfocus',
+        name: '✨ Hyperfoco',
+        description: '+30% de dano causado por 3 turnos',
+        cost: { mp: 8 },
+        effect: 'damage_dealt_plus_30_for_3_turns'
       }
     ],
 

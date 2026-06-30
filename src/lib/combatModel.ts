@@ -95,9 +95,22 @@ export const TRANSFORM_SCALE = 1.25
 //   • special requer estar transformado.
 export type AttackType = 'basic' | 'weapon' | 'special'
 export const ATTACKS: Record<AttackType, { powerMult: number; stamina: number; requiresTransform: boolean; label: string }> = {
-  basic: { powerMult: 0.72, stamina: 1, requiresTransform: false, label: 'Ataque Básico' },
-  weapon: { powerMult: 1.0, stamina: 2, requiresTransform: false, label: 'Golpe' },
+  basic: { powerMult: 0.72, stamina: 1, requiresTransform: false, label: 'Golpe' },
+  weapon: { powerMult: 1.0, stamina: 2, requiresTransform: false, label: 'Ataque de Classe' },
   special: { powerMult: 1.5, stamina: 3, requiresTransform: true, label: 'Especial' },
+}
+
+// 🗡️ Nome do ATAQUE DE CLASSE (o `weapon`, d8) por classe — identidade visível no botão.
+// Fallback genérico p/ monstro/classe desconhecida.
+export const CLASS_ATTACK_NAME: Record<CombatClass, string> = {
+  warrior: 'Investida Pesada',
+  rogue: 'Ataque Furtivo',
+  mage: 'Bola de Fogo',
+  monk: 'Golpe Triplo',
+}
+export function classAttackName(raw: string | null | undefined): string {
+  const c = normalizeCombatClass(raw)
+  return (c && CLASS_ATTACK_NAME[c]) || 'Ataque de Classe'
 }
 
 /** Poder efetivo de um ataque (base da classe × multiplicador do tipo). */
@@ -271,17 +284,17 @@ export function revertTransformLevers(levers: Levers, scale: number = TRANSFORM_
   }
 }
 
-/** Mapeia uma rolagem (1..DICE_SIDES) para o multiplicador de sorte. Máximo = crítico. */
-export function luckOf(roll: number): number {
-  const t = DICE_SIDES > 1 ? (roll - 1) / (DICE_SIDES - 1) : 1
+/** Mapeia uma rolagem (1..sides) para o multiplicador de sorte. Máximo = crítico. */
+export function luckOf(roll: number, sides: number = DICE_SIDES): number {
+  const t = sides > 1 ? (roll - 1) / (sides - 1) : 1
   let mult = LUCK_LO + (LUCK_HI - LUCK_LO) * t
-  if (roll >= DICE_SIDES) mult *= CRIT_MULT
+  if (roll >= sides) mult *= CRIT_MULT
   return mult
 }
 
 /** Rola o dado de combate. rng() em [0,1) injetável para testes/sim determinístico. */
-export function rollDie(rng: () => number = Math.random): number {
-  return 1 + Math.floor(rng() * DICE_SIDES)
+export function rollDie(rng: () => number = Math.random, sides: number = DICE_SIDES): number {
+  return 1 + Math.floor(rng() * sides)
 }
 
 /** Redução de dano proporcional (0..1) de uma armadura contra a constante K. */
@@ -312,6 +325,8 @@ export interface ResolveOpts {
   forcedRoll?: number
   /** sucesso de esquiva já decidido externamente (pula o sorteio) */
   dodgeSucceeded?: boolean
+  /** lados do dado do ataque (PvP: Golpe d6 / Ataque de Classe d8 / Especial d20). Default d12. */
+  sides?: number
 }
 
 /**
@@ -325,8 +340,9 @@ export function resolveHit(
   opts: ResolveOpts = {},
 ): HitResult {
   const rng = opts.rng ?? Math.random
-  const roll = opts.forcedRoll ?? rollDie(rng)
-  const crit = roll >= DICE_SIDES
+  const sides = opts.sides ?? DICE_SIDES
+  const roll = opts.forcedRoll ?? rollDie(rng, sides)
+  const crit = roll >= sides
 
   // Esquiva: zera o golpe.
   if (opts.defense === 'dodge') {
@@ -336,7 +352,7 @@ export function resolveHit(
 
   const block = opts.defense === 'block'
   const effArmor = block ? defender.armor * BLOCK_ARMOR_MULT : defender.armor
-  const raw = attacker.power * luckOf(roll)
+  const raw = attacker.power * luckOf(roll, sides)
   const damage = Math.max(1, Math.round(raw * (1 - damageReduction(effArmor, defender.K))))
   return { damage, roll, crit, dodged: false, blocked: block }
 }
@@ -352,7 +368,7 @@ export function resolveHit(
 // A vantagem de ESCALA (gear+nível) entra no ACERTO → gear melhor acerta mais (afia o gate);
 // num espelho as escalas se cancelam → luta de igual ~50/50. NÃO mexe no resolveHit do PvP.
 // ============================================================
-export const PVE_DIE: Record<AttackType, number> = { basic: 8, weapon: 12, special: 20 }
+export const PVE_DIE: Record<AttackType, number> = { basic: 6, weapon: 8, special: 20 }
 export const PVE_HIT_MIN = 0.6
 export const PVE_HIT_SLOPE = 1.5
 export const PVE_CRIT_MULT = 1.9

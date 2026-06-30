@@ -935,11 +935,15 @@ io.on('connection', (socket) => {
     // Processar fim de turno das transformações antes da ação
     processTransformationTurns(room)
 
+    const currentPlayer = room.currentTurn === room.player1?.id ? room.player1 : room.player2
+    const opponent = room.currentTurn === room.player1?.id ? room.player2 : room.player1
+
+    const classAtk = (currentPlayer && currentPlayer.combatClass) ? CM.classAttackName(currentPlayer.combatClass) : 'Ataque de Classe'
     const actionNames = {
-      'light_attack': 'Ataque Básico',
-      'basic': 'Ataque Básico',
-      'heavy_attack': 'Ataque da Arma',
-      'weapon': 'Ataque da Arma',
+      'light_attack': 'Golpe',
+      'basic': 'Golpe',
+      'heavy_attack': classAtk,
+      'weapon': classAtk,
       'special_attack': 'Especial',
       'special': 'Especial',
       'dodge': 'Esquivar',
@@ -947,9 +951,6 @@ io.on('connection', (socket) => {
       'block': 'Bloquear',
       'use_item': 'Item'
     }
-
-    const currentPlayer = room.currentTurn === room.player1?.id ? room.player1 : room.player2
-    const opponent = room.currentTurn === room.player1?.id ? room.player2 : room.player1
 
     const isAttack = ATTACK_ACTIONS.includes(action)
     const attackType = ATTACK_TYPE_MAP[action]
@@ -962,23 +963,27 @@ io.on('connection', (socket) => {
       return
     }
 
-    // ⚔️ Custo de stamina pelo modelo enxuto (sem custo de MP em ataques).
-    const systemStaminaCost = isAttack
-      ? (CM.ATTACKS[attackType]?.stamina ?? 1)
-      : getStaminaCost('pvp', { playerLevel: currentPlayer.level || 1, actionType: action })
-
-    // Verificar stamina necessária
-    if (currentPlayer.stamina < systemStaminaCost) {
-      socket.emit('error', {
-        message: `Stamina insuficiente! Precisa de ${systemStaminaCost} Stamina`
-      })
-      return
+    // ⚔️ NOVO KIT: ATAQUES custam MP (Golpe 0 / Ataque de Classe 8 / Especial 18); a
+    // stamina fica para a DEFESA. Cada ataque rola o SEU dado (Golpe d6 / Classe d8 /
+    // Especial d20 — PVE_DIE). Ações não-ataque (item) seguem no custo de stamina + d12.
+    if (isAttack) {
+      // Só JOGADORES (com combatClass) pagam MP; monstros (sem classe) atacam de graça.
+      const mpCost = currentPlayer.combatClass ? (CM.ATTACKS[attackType]?.mp ?? 0) : 0
+      if ((currentPlayer.mp || 0) < mpCost) {
+        socket.emit('error', { message: `MP insuficiente! Precisa de ${mpCost} MP` })
+        return
+      }
+      if (mpCost > 0) currentPlayer.mp = Math.max(0, (currentPlayer.mp || 0) - mpCost)
+      diceType = CM.PVE_DIE[attackType] || CM.DICE_SIDES
+    } else {
+      const systemStaminaCost = getStaminaCost('pvp', { playerLevel: currentPlayer.level || 1, actionType: action })
+      if (currentPlayer.stamina < systemStaminaCost) {
+        socket.emit('error', { message: `Stamina insuficiente! Precisa de ${systemStaminaCost} Stamina` })
+        return
+      }
+      currentPlayer.stamina = Math.max(0, currentPlayer.stamina - systemStaminaCost)
+      diceType = CM.DICE_SIDES
     }
-
-    currentPlayer.stamina = Math.max(0, currentPlayer.stamina - systemStaminaCost)
-
-    // O modelo usa um único dado de SORTE (d12). Ignora o diceType legado do cliente.
-    diceType = CM.DICE_SIDES
 
     // 🔥 ATUALIZAÇÃO IMEDIATA para mostrar consumo de recursos
     io.to(roomId).emit('room_updated', room)
@@ -1049,10 +1054,10 @@ io.on('connection', (socket) => {
     }
 
     const player = room.player1?.id === playerId ? room.player1 : room.player2
-    // ⚔️ Modelo enxuto: o dado de combate é SEMPRE um d12 de SORTE (ignora `sides`
-    // legado). Não há mais modificador de AGI no dado — a esquiva é resolvida pela
-    // evasão da classe na resolução do golpe (processCompleteAction).
-    const diceSides = CM.DICE_SIDES
+    // ⚔️ NOVO KIT: o dado é o do ATAQUE pendente (Golpe d6 / Ataque de Classe d8 /
+    // Especial d20); atacante e defensor rolam o MESMO dado. A esquiva é resolvida pela
+    // evasão da classe (na faixa desse dado) em processCompleteAction.
+    const diceSides = room.pendingAction?.diceType || CM.DICE_SIDES
     const roll = Math.floor(Math.random() * diceSides) + 1
     const total = roll
 
@@ -1500,6 +1505,9 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
   // Crítico = rolagem máxima do d12 (embutida na banda de sorte). Esquiva (evasão da
   // classe) zera o golpe; bloqueio amplifica a armadura efetiva.
   const attackType = ATTACK_TYPE_MAP[attackAction] || 'weapon'
+  // 🎲 Dado do ataque (Golpe d6 / Ataque de Classe d8 / Especial d20). Sorte, crítico e
+  // faixa de esquiva usam ESSE dado.
+  const sides = CM.PVE_DIE[attackType] || CM.DICE_SIDES
   const aLev = attacker.levers || derivePlayerLevers(attacker).levers
   const dLev = defender.levers || derivePlayerLevers(defender).levers
   const attackerPower = aLev.power * (CM.ATTACKS[attackType]?.powerMult ?? 1)
@@ -1507,10 +1515,10 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
 
   // 🌀 Buff de evasão temporário (especiais: Superioridade Aérea / Uivo / Contra-ataque)
   const defEvade = Math.min(0.95, (dLev.evade || 0) + (defender.fx?.evadeBuffTurns > 0 ? defender.fx.evadeBuff : 0))
-  // Esquiva resolvida pela rolagem d12 do defensor: sucesso se cair na faixa de evasão.
+  // Esquiva resolvida pela rolagem do defensor (no dado do ataque): sucesso na faixa de evasão.
   let dodgeSucceeded
   if (defenseModel === 'dodge') {
-    const evadeBand = Math.round(defEvade * CM.DICE_SIDES)
+    const evadeBand = Math.round(defEvade * sides)
     dodgeSucceeded = defenseRoll <= evadeBand
   }
   // 👁️ Visão Aguçada: o próximo ataque do atacante ignora a esquiva.
@@ -1519,7 +1527,7 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
   const hitResult = CM.resolveHit(
     { power: attackerPower },
     { armor: dLev.armor, K: dLev.K, evade: defEvade },
-    { defense: defenseModel || 'none', forcedRoll: attackRoll, dodgeSucceeded }
+    { defense: defenseModel || 'none', forcedRoll: attackRoll, dodgeSucceeded, sides }
   )
   const isCritical = hitResult.crit && !hitResult.dodged
   let finalDamage = hitResult.dodged ? 0 : hitResult.damage
@@ -1596,10 +1604,13 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
       })
     }
 
-    // Log do tipo de ataque
+    // Log do tipo de ataque (d6 Golpe / d8 Ataque de Classe por classe / d20 Especial)
+    const atkLabel = attackType === 'weapon'
+      ? CM.classAttackName(attacker.combatClass)
+      : (CM.ATTACKS[attackType]?.label || 'Ataque')
     room.combatLog.push({
       type: 'action',
-      message: `${attackType === 'special' ? '✨' : attackType === 'weapon' ? '⚔️' : '👊'} ${CM.ATTACKS[attackType]?.label || 'Ataque'} (poder ${Math.round(attackerPower)})`,
+      message: `${attackType === 'special' ? '✨' : attackType === 'weapon' ? '⚔️' : '👊'} ${atkLabel} (d${sides}, poder ${Math.round(attackerPower)})`,
       timestamp: new Date()
     })
 
@@ -1930,57 +1941,53 @@ function setFxMult(p, kind, mult, turns) {
 }
 
 // 🐉 ESPECIAIS DE TRANSFORMAÇÃO — modelo de LEVERS (validado em scripts/pvp-lever-sim.js).
-// dano = power_transformado × dmgMult × sorte(d12) × (1 − DR(armor×(1−pierce), K)).
-// As 6 formas (humano/elfo antes não existiam). 'apply' usa a camada de STATUS (fx).
+// 🎲 Cada forma tem 2 habilidades: 1 de DANO (rola o SEU dado `die` — d20) por 12 MP e 1
+// BUFF (sem dado) por 8 MP. ESPELHA src/lib/transformationSpecials.ts — manter em sincronia.
+// dano = power_transformado × dmgMult × sorte(die) × (1 − DR(armor×(1−pierce), K)).
+// 'apply' usa a camada de STATUS (fx). Fúria Selvagem é compartilhada (forms: 3 metamorfos).
 const SPECIAL_DEFS = {
   // 🐉 Dragão
-  dragon_breath:      { form: 'dragon', name: '🔥 Sopro de Fogo', kind: 'dmg', dmgMult: 1.95, pierce: 0.6, cost: { stamina: 14 }, cd: 2 },
-  dragon_scales:      { form: 'dragon', name: '🛡️ Escamas Dracônicas', kind: 'util', cost: { mp: 14 }, cd: 4, apply: (s) => setFxMult(s, 'dmgTaken', 0.68, 3), msg: '-32% dano recebido por 3 turnos' },
-  dragon_roar:        { form: 'dragon', name: '🦅 Rugido Dracônico', kind: 'util', cost: { stamina: 10 }, cd: 3, apply: (s, e) => setFxMult(e, 'dmgDealt', 0.74, 2), msg: '-26% dano do oponente por 2 turnos' },
+  dragon_breath:      { form: 'dragon', name: '🔥 Sopro de Fogo', kind: 'dmg', die: 20, dmgMult: 1.95, pierce: 0.6, cost: { mp: 12 }, cd: 2 },
+  dragon_scales:      { form: 'dragon', name: '🛡️ Escama de Dragão', kind: 'util', cost: { mp: 8 }, cd: 4, apply: (s) => setFxMult(s, 'dmgTaken', 0.68, 3), msg: '-32% dano recebido por 3 turnos' },
   // 🐺 Lobo
-  pack_hunt:          { form: 'wolf', name: '🏃 Caçada em Matilha', kind: 'dmg', dmgMult: 0.66, hits: 3, cost: { stamina: 18 }, cd: 3 },
-  bite_bleeding:      { form: 'wolf', name: '🩸 Mordida Sangrenta', kind: 'dmg', dmgMult: 1.05, pierce: 1, dot: { frac: 0.05, turns: 3, label: 'sangramento' }, cost: { stamina: 12 }, cd: 3 },
-  howl:               { form: 'wolf', name: '🌙 Uivo Selvagem', kind: 'util', cost: { stamina: 14 }, cd: 4, apply: (s) => { setFxMult(s, 'dmgDealt', 1.15, 3); const fx = getFx(s); fx.evadeBuff = 0.08; fx.evadeBuffTurns = 3 }, msg: '+15% dano e +8% evasão por 3 turnos' },
+  bite_bleeding:      { form: 'wolf', name: '🩸 Mordida Sangrenta', kind: 'dmg', die: 20, dmgMult: 1.6, pierce: 1, dot: { frac: 0.05, turns: 3, label: 'sangramento' }, cost: { mp: 12 }, cd: 2 },
   // 🐻 Urso
-  unstoppable_charge: { form: 'bear', name: '💥 Investida Imparável', kind: 'dmg', dmgMult: 1.45, pierce: 1, cost: { stamina: 26 }, cd: 4 },
-  bear_hug:           { form: 'bear', name: '🤗 Abraço do Urso', kind: 'dmg', dmgMult: 0.95, dot: { frac: 0.06, turns: 2, label: 'esmagamento' }, immobilizeRoll: 11, cost: { stamina: 22 }, cd: 4 },
-  intimidating_roar:  { form: 'bear', name: '😤 Rugido Intimidador', kind: 'util', cost: { stamina: 14 }, cd: 4, apply: (s, e) => setFxMult(e, 'dmgDealt', 0.70, 3), msg: '-30% dano do oponente por 3 turnos' },
+  unstoppable_charge: { form: 'bear', name: '💥 Investida Imparável', kind: 'dmg', die: 20, dmgMult: 1.7, pierce: 1, cost: { mp: 12 }, cd: 2 },
   // 🦅 Águia
-  dive_attack:        { form: 'eagle', name: '💨 Ataque em Mergulho', kind: 'dmg', dmgMult: 1.4, pierce: 0.3, cost: { stamina: 18 }, cd: 3 },
-  keen_sight:         { form: 'eagle', name: '👁️ Visão Aguçada', kind: 'util', cost: { stamina: 10 }, cd: 3, apply: (s) => { getFx(s).ignoreEvadeNext = true }, msg: 'próximo ataque ignora a esquiva' },
-  aerial_superiority: { form: 'eagle', name: '☁️ Superioridade Aérea', kind: 'util', cost: { mp: 14 }, cd: 4, apply: (s) => { const fx = getFx(s); fx.evadeBuff = 0.35; fx.evadeBuffTurns = 1 }, msg: '+35% evasão por 1 turno' },
+  ascending_spiral:   { form: 'eagle', name: '🌀 Espiral Ascendente', kind: 'dmg', die: 20, dmgMult: 1.7, pierce: 0.3, cost: { mp: 12 }, cd: 2 },
+  // 😤 Fúria Selvagem — buff compartilhado pelas 3 formas metamorfo (lobo/urso/águia)
+  wild_fury:          { form: 'wolf', forms: ['wolf', 'bear', 'eagle'], name: '😤 Fúria Selvagem', kind: 'util', cost: { mp: 8 }, cd: 4, apply: (s) => setFxMult(s, 'dmgDealt', 1.2, 3), msg: '+20% de dano causado por 3 turnos' },
   // ✨ 7º Sentido (humano)
-  cosmo_burst:        { form: 'seventh_sense', name: '🌌 Explosão de Cosmo', kind: 'dmg', dmgMult: 2.0, cost: { mp: 10, stamina: 8 }, cd: 2 },
-  cosmo_focus:        { form: 'seventh_sense', name: '🧘 Foco do Cosmo', kind: 'util', cost: { mp: 12 }, cd: 4, apply: (s) => setFxMult(s, 'dmgDealt', 1.35, 3), msg: '+35% dano por 3 turnos' },
-  precognitive_counter: { form: 'seventh_sense', name: '👁️ Contra-ataque Precognitivo', kind: 'util', cost: { stamina: 12 }, cd: 3, apply: (s) => { const fx = getFx(s); fx.evadeBuff = 0.6; fx.evadeBuffTurns = 1; fx.counterNext = true }, msg: 'esquiva garantida + contra-ataque no próximo golpe' },
+  cosmo_burst:        { form: 'seventh_sense', name: '🌌 Explosão de Cosmo', kind: 'dmg', die: 20, dmgMult: 2.0, cost: { mp: 12 }, cd: 2 },
+  meditation:         { form: 'seventh_sense', name: '🧘 Meditação', kind: 'util', heal: 0.2, cost: { mp: 8 }, cd: 3, msg: 'cura 20% do HP máximo' },
   // 🌟 Celestial (elfo)
-  holy_nova:          { form: 'celestial', name: '💥 Nova Sagrada', kind: 'dmg', dmgMult: 1.85, pierce: 0.5, cost: { mp: 16 }, cd: 2 },
-  restoring_blessing: { form: 'celestial', name: '🕊️ Bênção Restauradora', kind: 'util', heal: 0.25, cost: { mp: 18 }, cd: 3, msg: 'cura 25% do HP máximo' },
-  arcane_torrent:     { form: 'celestial', name: '🔷 Torrente Arcana', kind: 'util', cost: { stamina: 10 }, cd: 3, apply: (s) => { getFx(s).amplifyNext = 1.6 }, msg: 'próximo especial de dano ×1.6' },
+  super_nova:         { form: 'celestial', name: '💥 Super Nova', kind: 'dmg', die: 20, dmgMult: 1.85, pierce: 0.5, cost: { mp: 12 }, cd: 2 },
+  hyperfocus:         { form: 'celestial', name: '✨ Hyperfoco', kind: 'util', cost: { mp: 8 }, cd: 4, apply: (s) => setFxMult(s, 'dmgDealt', 1.3, 3), msg: '+30% de dano causado por 3 turnos' },
 }
 
 // Dano de um especial: DIRETO (sem disputa de esquiva — como o handler legado já fazia).
 // 🩹 Sorte do ESPECIAL com crítico de bônus REDUZIDO (1.3 vs 1.6 do ataque normal):
 // o jogador ainda vê o crítico ao rolar o 12, mas não vira nuke/one-shot no mesmo nível.
 const SPECIAL_CRIT_MULT = 1.3
-function specialLuck(roll) {
-  const t = CM.DICE_SIDES > 1 ? (roll - 1) / (CM.DICE_SIDES - 1) : 1
+function specialLuck(roll, sides = CM.DICE_SIDES) {
+  const t = sides > 1 ? (roll - 1) / (sides - 1) : 1
   const m = CM.LUCK_LO + (CM.LUCK_HI - CM.LUCK_LO) * t
-  return roll >= CM.DICE_SIDES ? m * SPECIAL_CRIT_MULT : m
+  return roll >= sides ? m * SPECIAL_CRIT_MULT : m
 }
 function specialHitDamage(player, opponent, def) {
   const aLev = player.levers || derivePlayerLevers(player).levers
   const dLev = opponent.levers || derivePlayerLevers(opponent).levers
   const aFx = getFx(player), dFx = getFx(opponent)
+  const sides = def.die || CM.DICE_SIDES
   const hits = def.hits || 1
   let total = 0, crit = false, maxRoll = 0
   for (let h = 0; h < hits; h++) {
-    const roll = def.gcrit ? CM.DICE_SIDES : (Math.floor(Math.random() * CM.DICE_SIDES) + 1)
+    const roll = def.gcrit ? sides : (Math.floor(Math.random() * sides) + 1)
     if (roll > maxRoll) maxRoll = roll
-    if (roll >= CM.DICE_SIDES) crit = true
+    if (roll >= sides) crit = true
     const power = aLev.power * def.dmgMult * (aFx.amplifyNext || 1)
     const armor = Math.max(0, dLev.armor * (1 - (def.pierce || 0)))
-    let dmg = power * specialLuck(roll) * (1 - CM.damageReduction(armor, dLev.K))
+    let dmg = power * specialLuck(roll, sides) * (1 - CM.damageReduction(armor, dLev.K))
     dmg = dmg * (aFx.dmgDealtMult || 1) * (dFx.dmgTakenMult || 1)
     total += Math.max(1, Math.round(dmg))
   }
@@ -1991,7 +1998,9 @@ function specialHitDamage(player, opponent, def) {
 function processSpecialAbility(player, opponent, abilityId) {
   const def = SPECIAL_DEFS[abilityId]
   if (!def) return { success: false, error: 'Habilidade não reconhecida!' }
-  if (def.form !== player.transformationType) return { success: false, error: 'Habilidade não pertence à sua forma!' }
+  // Fúria Selvagem é compartilhada (def.forms); as demais validam a forma única (def.form).
+  const formOk = def.forms ? def.forms.includes(player.transformationType) : def.form === player.transformationType
+  if (!formOk) return { success: false, error: 'Habilidade não pertence à sua forma!' }
 
   const cost = def.cost || {}
   if ((player.stamina || 0) < (cost.stamina || 0)) return { success: false, error: 'Stamina insuficiente!' }

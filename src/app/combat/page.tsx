@@ -7,7 +7,7 @@ import { io, Socket } from 'socket.io-client'
 import TransformationDialog from '@/components/TransformationDialog'
 import BattleScene, { BattleEvent, DiceResult, EquipmentMap, FighterView } from '@/components/battle/BattleScene'
 import { TRANSFORMATION_CONFIG, getRaceTransformations, type TransformationType } from '@/lib/transformationSystem'
-import { TRANSFORM_SCALE } from '@/lib/combatModel'
+import { TRANSFORM_SCALE, classAttackName } from '@/lib/combatModel'
 
 interface Equipment {
   id: string
@@ -117,13 +117,19 @@ enum ActionType {
 // 🐉 Custos e cooldown dos especiais de transformação — DEVE espelhar SPECIAL_DEFS
 // em server/socket-server.js (o servidor é a autoridade; isto é só p/ a UI gatear/exibir).
 const SPECIAL_COST: Record<string, { stamina?: number; mp?: number; cd: number }> = {
-  dragon_breath: { stamina: 14, cd: 2 }, dragon_scales: { mp: 14, cd: 4 }, dragon_roar: { stamina: 10, cd: 3 },
-  pack_hunt: { stamina: 18, cd: 3 }, bite_bleeding: { stamina: 12, cd: 3 }, howl: { stamina: 14, cd: 4 },
-  unstoppable_charge: { stamina: 26, cd: 4 }, bear_hug: { stamina: 22, cd: 4 }, intimidating_roar: { stamina: 14, cd: 4 },
-  dive_attack: { stamina: 18, cd: 3 }, keen_sight: { stamina: 10, cd: 3 }, aerial_superiority: { mp: 14, cd: 4 },
-  cosmo_burst: { stamina: 8, mp: 10, cd: 2 }, cosmo_focus: { mp: 12, cd: 4 }, precognitive_counter: { stamina: 12, cd: 3 },
-  holy_nova: { mp: 16, cd: 2 }, restoring_blessing: { mp: 18, cd: 3 }, arcane_torrent: { stamina: 10, cd: 3 },
+  dragon_breath: { mp: 12, cd: 2 }, dragon_scales: { mp: 8, cd: 4 },
+  bite_bleeding: { mp: 12, cd: 2 },
+  unstoppable_charge: { mp: 12, cd: 2 },
+  ascending_spiral: { mp: 12, cd: 2 },
+  wild_fury: { mp: 8, cd: 4 },
+  cosmo_burst: { mp: 12, cd: 2 }, meditation: { mp: 8, cd: 3 },
+  super_nova: { mp: 12, cd: 2 }, hyperfocus: { mp: 8, cd: 4 },
 }
+
+// ⚔️ NOVO KIT: ataques custam MP (Golpe 0 / Ataque de Classe 8) e rolam o SEU dado
+// (Golpe d6 / Classe d8). Espelha CM.ATTACKS.mp e CM.PVE_DIE no servidor.
+const ATTACK_MP: Record<string, number> = { light_attack: 0, heavy_attack: 8 }
+const ATTACK_DIE: Record<string, number> = { light_attack: 6, heavy_attack: 8 }
 
 // Função para criar conexão Socket.IO real
 function createSocketConnection(): Socket {
@@ -202,6 +208,10 @@ function CombatPageContent() {
   const [hasRolledDice, setHasRolledDice] = useState(false) // Novo estado para controlar se já rolou
   const [showTransformationDialog, setShowTransformationDialog] = useState(false)
   const [isTransforming, setIsTransforming] = useState(false)
+  // 🐉 Transformação é 1× POR LUTA: trava após o primeiro uso na partida atual.
+  const [usedTransformThisMatch, setUsedTransformThisMatch] = useState(false)
+  // Nova sala/partida → libera o uso único de novo.
+  useEffect(() => { setUsedTransformThisMatch(false) }, [roomId])
 
   // 🎬 Estados da cena de batalha visual (estilo Adventure Quest)
   const [battleEvent, setBattleEvent] = useState<BattleEvent | null>(null)
@@ -767,8 +777,7 @@ function CombatPageContent() {
   const handlePlayerAction = (action: ActionType) => {
     if (!currentPlayer) return
 
-    // 🐉 GATE DO ESPECIAL: só disponível com a transformação ativa (o burst é
-    // desbloqueado pela transformação — sem custo de MP no modelo enxuto).
+    // 🐉 GATE DO ESPECIAL: só disponível com a transformação ativa.
     if (action === ActionType.SPECIAL_ATTACK && !currentPlayer.isTransformed) {
       socket.emit('chat_message', {
         playerId: currentPlayer.id,
@@ -778,36 +787,40 @@ function CombatPageContent() {
       return
     }
 
-    const staminaCost = STAMINA_COSTS[action]
-
-    if (staminaCost > 0 && currentPlayer.stamina < staminaCost) {
-      socket.emit('chat_message', {
-        playerId: currentPlayer.id,
-        roomId,
-        message: `❌ Stamina insuficiente para esta ação! (${staminaCost} stamina necessária)`
+    // ⚔️ NOVO KIT: ATAQUES custam MP (Golpe 0 / Ataque de Classe 8) e rolam o SEU dado
+    // (Golpe d6 / Classe d8). Demais ações (esquiva/defesa/item) custam STAMINA + d12.
+    const isAttack = action in ATTACK_MP || action === ActionType.SPECIAL_ATTACK
+    if (isAttack) {
+      const mpCost = ATTACK_MP[action] ?? 0
+      if (currentPlayer.mp < mpCost) {
+        socket.emit('chat_message', {
+          playerId: currentPlayer.id, roomId,
+          message: `❌ MP insuficiente para esta ação! (${mpCost} MP necessário)`
+        })
+        return
+      }
+      if (mpCost > 0) setCurrentPlayer(prev => prev ? { ...prev, mp: Math.max(0, prev.mp - mpCost) } : null)
+      socket.emit('player_action', {
+        playerId: currentPlayer.id, roomId, action,
+        diceType: ATTACK_DIE[action] ?? 12, mpCost, staminaCost: 0
       })
       return
     }
 
-    // ✅ APLICAR CUSTO DE STAMINA LOCALMENTE (otimista; sem custo de MP)
-    if (staminaCost > 0) {
-      setCurrentPlayer(prev => prev ? {
-        ...prev,
-        stamina: Math.max(0, prev.stamina - staminaCost)
-      } : null)
+    const staminaCost = STAMINA_COSTS[action]
+    if (staminaCost > 0 && currentPlayer.stamina < staminaCost) {
+      socket.emit('chat_message', {
+        playerId: currentPlayer.id, roomId,
+        message: `❌ Stamina insuficiente para esta ação! (${staminaCost} stamina necessária)`
+      })
+      return
     }
-
-    // ⚔️ Modelo enxuto: dado único de SORTE (d12) para todas as ações.
-    const diceType = 12
-
-    // Enviar ação (que irá para OPPONENT_REACTION, não DICE_ROLL diretamente)
+    if (staminaCost > 0) {
+      setCurrentPlayer(prev => prev ? { ...prev, stamina: Math.max(0, prev.stamina - staminaCost) } : null)
+    }
     socket.emit('player_action', {
-      playerId: currentPlayer.id,
-      roomId,
-      action,
-      diceType,
-      mpCost: 0,
-      staminaCost
+      playerId: currentPlayer.id, roomId, action,
+      diceType: 12, mpCost: 0, staminaCost
     })
   }
 
@@ -899,7 +912,17 @@ function CombatPageContent() {
 
   const handleTransformation = () => {
     if (!currentPlayer || !characterId) return
-    
+
+    // 🐉 1× por luta: bloqueia uma segunda transformação na mesma partida.
+    if (usedTransformThisMatch) {
+      socket.emit('chat_message', {
+        playerId: currentPlayer.id,
+        roomId,
+        message: '🔒 Você já se transformou nesta luta!'
+      })
+      return
+    }
+
     // Verificar se a raça pode transformar
     if (getRaceTransformations(currentPlayer.race).length === 0) {
       socket.emit('chat_message', {
@@ -1006,7 +1029,10 @@ function CombatPageContent() {
           transformationImage: formImage ?? prev.transformationImage ?? null,
           transformationData: updatedCharacter.transformationData
         } : null)
-        
+
+        // 🐉 1× por luta: marca como usada (não dá pra transformar de novo nesta partida).
+        setUsedTransformThisMatch(true)
+
         // Sincronizar com o servidor de combate para que o OPONENTE também veja a
         // transformação (imagem/glow) — o servidor não sabe nada disso até aqui,
         // já que tudo acima foi feito via API REST, sem nenhum evento de socket.
@@ -1345,36 +1371,27 @@ function CombatPageContent() {
                 </div>
               ) : isMyTurn && combatRoom?.phase === CombatPhase.PLAYER_TURN ? (
                 <div className="space-y-2">
+                  {/* 👊 Golpe (d6, grátis) — o ataque básico de todos */}
                   <button
                     onClick={() => handlePlayerAction(ActionType.LIGHT_ATTACK)}
-                    disabled={!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.LIGHT_ATTACK]}
-                    className={`w-full ${!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.LIGHT_ATTACK] 
-                      ? 'bg-gray-600 opacity-50 cursor-not-allowed' 
+                    disabled={!currentPlayer}
+                    className={`w-full ${!currentPlayer
+                      ? 'bg-gray-600 opacity-50 cursor-not-allowed'
                       : 'bg-gradient-to-r from-warning to-yellow-500 hover:from-yellow-500 hover:to-warning'
                     } text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                   >
-                    👊 Básico (d12, {STAMINA_COSTS[ActionType.LIGHT_ATTACK]}⚡)
+                    👊 Golpe (d6, grátis)
                   </button>
+                  {/* ⚔️ Ataque de Classe (d8, 8 MP) — nome por classe */}
                   <button
                     onClick={() => handlePlayerAction(ActionType.HEAVY_ATTACK)}
-                    disabled={!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.HEAVY_ATTACK]}
-                    className={`w-full ${!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.HEAVY_ATTACK]
+                    disabled={!currentPlayer || currentPlayer.mp < ATTACK_MP.heavy_attack}
+                    className={`w-full ${!currentPlayer || currentPlayer.mp < ATTACK_MP.heavy_attack
                       ? 'bg-gray-600 opacity-50 cursor-not-allowed'
                       : 'bg-gradient-to-r from-error to-red-600 hover:from-red-600 hover:to-error'
                     } text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                   >
-                    ⚔️ Arma (d12, {STAMINA_COSTS[ActionType.HEAVY_ATTACK]}⚡)
-                  </button>
-                  <button
-                    onClick={() => handlePlayerAction(ActionType.SPECIAL_ATTACK)}
-                    disabled={!currentPlayer || !currentPlayer.isTransformed || currentPlayer.stamina < STAMINA_COSTS[ActionType.SPECIAL_ATTACK]}
-                    title={!currentPlayer?.isTransformed ? 'Disponível apenas transformado' : undefined}
-                    className={`w-full ${!currentPlayer || !currentPlayer.isTransformed || currentPlayer.stamina < STAMINA_COSTS[ActionType.SPECIAL_ATTACK]
-                      ? 'bg-gray-600 opacity-50 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-primary to-primary-dark hover:shadow-lg hover:shadow-primary/25'
-                    } text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
-                  >
-                    {currentPlayer?.isTransformed ? '✨' : '🔒'} Especial (d12, {STAMINA_COSTS[ActionType.SPECIAL_ATTACK]}⚡{currentPlayer?.isTransformed ? '' : ' · transforme-se'})
+                    ⚔️ {classAttackName(currentPlayer?.class)} (d8, {ATTACK_MP.heavy_attack}🔵{currentPlayer && currentPlayer.mp < ATTACK_MP.heavy_attack ? ' · sem MP' : ''})
                   </button>
 
                   {/* 🐉 Habilidades especiais da FORMA (só transformado; consomem o turno, sem dado) */}
@@ -1451,25 +1468,29 @@ function CombatPageContent() {
                     <button
                       onClick={handleTransformation}
                       disabled={
-                        currentPlayer.isTransformed || 
+                        currentPlayer.isTransformed ||
+                        usedTransformThisMatch ||
                         (currentPlayer.transformationData?.cooldownTurns || 0) > 0 ||
                         isTransforming ||
                         // Verificar recursos mínimos (assumindo dragon como mais caro)
-                        currentPlayer.stamina < 30 || 
+                        currentPlayer.stamina < 30 ||
                         currentPlayer.mp < 20
                       }
                       className={`w-full ${
-                        currentPlayer.isTransformed || 
+                        currentPlayer.isTransformed ||
+                        usedTransformThisMatch ||
                         (currentPlayer.transformationData?.cooldownTurns || 0) > 0 ||
                         isTransforming ||
-                        currentPlayer.stamina < 30 || 
+                        currentPlayer.stamina < 30 ||
                         currentPlayer.mp < 20
-                        ? 'bg-gray-600 opacity-50 cursor-not-allowed' 
+                        ? 'bg-gray-600 opacity-50 cursor-not-allowed'
                         : 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-blue-600 hover:to-purple-600'
                       } text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                     >
                       {currentPlayer.isTransformed ?
                         '🐉 Já Transformado' :
+                        usedTransformThisMatch ?
+                        '🔒 Já usada nesta luta' :
                         (currentPlayer.transformationData?.cooldownTurns || 0) > 0 ?
                         `⏰ Cooldown (${currentPlayer.transformationData?.cooldownTurns || 0})` :
                         isTransforming ? '⏳ Transformando...' :

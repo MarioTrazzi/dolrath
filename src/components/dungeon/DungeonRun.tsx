@@ -42,6 +42,7 @@ import {
   transformLevers,
   deriveGearTier,
   normalizeCombatClass,
+  classAttackName,
   contestedOutcome,
   PVE_DIE,
   PVE_HIT_MIN,
@@ -117,37 +118,22 @@ type DefenseKind = 'dodge' | 'defend'
 // o ataque PRIMÁRIO é a ARMA (o poder da arma entra via gearTier). Mitigação proporcional
 // (DR = armadura/(armadura+K)); esquiva usa a evasão do lever; bloqueio amplifica a
 // armadura (×BLOCK_ARMOR_MULT). Todos rolam d12 (a sorte do modelo); diferem só no powerMult.
-//  - basic (Básico): golpe barato/seguro (powerMult menor).
-//  - weapon (Arma): o ataque primário da sua arma (powerMult cheio).
-//  - special (Especial): burst — só LIBERADO transformado (igual ao PvP).
+//  - basic (Golpe): golpe barato/seguro de todos (d6, sem MP).
+//  - weapon (Ataque de Classe): o ataque de assinatura da CLASSE (d8, 8 MP). O nome aparece
+//    por classe (Ataque Furtivo/Bola de Fogo/Golpe Triplo/Investida Pesada — ver classAttackName).
+//  - special: SÓ p/ a IA dos monstros (burst d20). O jogador não usa mais este botão —
+//    quando transformado, as HABILIDADES DE FORMA (transformationSpecials) cumprem esse papel.
 // (powerMults espelham combatModel.ATTACKS: 0.72 / 1.0 / 1.5)
 // DISPUTA DE DADOS (combatModel.contestedOutcome): cada ataque rola um dado próprio
-// (básico d8 / arma d12 / especial d20 — ver PVE_DIE). MP: a arma é um golpe canalizado
-// (8 MP) e o especial é a SKILL da arma (18 MP); o básico é o fallback sem custo. Sem
-// regen passivo no combate — o MP volta de consumíveis/espólios.
+// (Golpe d6 / Ataque de Classe d8 / especial d20 — ver PVE_DIE). Sem regen passivo no
+// combate — o MP volta de consumíveis/espólios.
 const ATTACKS: Record<
   AttackKind,
   { label: string; icon: string; powerMult: number; requiresTransform: boolean; mp: number }
 > = {
-  basic: { label: 'Ataque Básico', icon: '👊', powerMult: 0.72, requiresTransform: false, mp: 0 },
-  weapon: { label: 'Golpe', icon: '⚔️', powerMult: 1.0, requiresTransform: false, mp: 8 },
+  basic: { label: 'Golpe', icon: '👊', powerMult: 0.72, requiresTransform: false, mp: 0 },
+  weapon: { label: 'Ataque de Classe', icon: '⚔️', powerMult: 1.0, requiresTransform: false, mp: 8 },
   special: { label: 'Especial', icon: '✨', powerMult: 1.5, requiresTransform: true, mp: 18 },
-}
-
-// Especial = SKILL da ARMA equipada (nome por categoria; detecta pelo nome do item).
-function weaponSkillName(equipment: any[]): string {
-  const w = (equipment || []).find((e: any) => {
-    const slot = String(e?.slot || '').toLowerCase()
-    return slot === 'weapon' || slot === 'mainhand' || slot === 'main_hand'
-  })
-  const n = String(w?.item?.name || w?.name || '').toLowerCase()
-  if (/manopla|punho|cestus/.test(n)) return 'Punho do Trovão'
-  if (/garra|presa|lâmina das|lamina das/.test(n)) return 'Garras Selvagens'
-  if (/adaga|punhal|presas/.test(n)) return 'Dança das Lâminas'
-  if (/arco/.test(n)) return 'Flecha Perfurante'
-  if (/cajado|bordão|bordao|orbe/.test(n)) return /orbe/.test(n) ? 'Pulso Arcano' : 'Explosão Arcana'
-  if (/espada|lâmina|lamina|aço|aco/.test(n)) return 'Talho Brutal'
-  return 'Especial'
 }
 
 // Custo de stamina por TIPO de nó ao avançar na trilha (exploração).
@@ -535,6 +521,8 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const [stage, setStage] = useState<CombatStage>('busy')
   const [currentTurnId, setCurrentTurnId] = useState<string | null>(null)
   const [pendingAttack, setPendingAttack] = useState<AttackKind | null>(null)
+  // Habilidade de DANO da forma à espera da rolagem (d20 visível, fluxo igual ao ataque).
+  const [pendingAbility, setPendingAbility] = useState<SpecialDef | null>(null)
   const [monsterPlan, setMonsterPlan] = useState<AttackKind | null>(null)
   const [defenseChoice, setDefenseChoice] = useState<DefenseKind | null>(null)
   const [panelResult, setPanelResult] = useState<DiceResult | null>(null)
@@ -575,6 +563,10 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const transformForms = useMemo(() => getRaceTransformations(character.race), [character.race])
   const [transform, setTransform] = useState<{ type: TransformationType; turns: number } | null>(null)
   const [transformCd, setTransformCd] = useState(0)
+  // 🐉 Transformação é 1× POR LUTA: trava após o primeiro uso até o próximo combate.
+  const [transformedThisFight, setTransformedThisFight] = useState(false)
+  const transformedThisFightRef = useRef(false)
+  transformedThisFightRef.current = transformedThisFight
   const [showFormPicker, setShowFormPicker] = useState(false)
   const transformRef = useRef(transform)
   transformRef.current = transform
@@ -767,20 +759,8 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const effMaxHp = character.maxHp + gear.hp
   // Poder efetivo de um ataque = poder do lever × multiplicador do tipo.
   const playerPowerFor = (kind: AttackKind) => playerLevers.power * ATTACKS[kind].powerMult
-  // Tem arma de mão equipada? (sem arma: some o "Golpe"; luta-se no soco)
-  const hasWeapon = useMemo(
-    () => (character.equipment || []).some((e: any) => {
-      const slot = String(e?.slot || '').toLowerCase()
-      return slot === 'weapon' || slot === 'mainhand' || slot === 'main_hand'
-    }),
-    [character.equipment]
-  )
-  // O ESPECIAL é a skill da ARMA equipada (nome por categoria). SEM arma ele vem da
-  // TRANSFORMAÇÃO (golpe da fera), então recebe um nome equivalente.
-  const specialName = useMemo(
-    () => (hasWeapon ? weaponSkillName(character.equipment) : 'Fúria Selvagem'),
-    [hasWeapon, character.equipment]
-  )
+  // Nome do ATAQUE DE CLASSE (o `weapon`, d8) por classe — Ataque Furtivo/Bola de Fogo/etc.
+  const classAtkName = useMemo(() => classAttackName(character.class), [character.class])
 
   // ---------- Lutadores para a arena ----------
   const playerFighter: FighterView = useMemo(() => ({
@@ -1073,9 +1053,12 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     setCurrentTurnId(null)
     setBattleEvent(null)
     setLootCard(null)
-    // Transformação reinicia a cada combate
+    // Transformação reinicia a cada combate (e libera o uso único da luta)
     setTransform(null)
     setTransformCd(0)
+    setTransformedThisFight(false)
+    transformedThisFightRef.current = false
+    setPendingAbility(null)
     setShowFormPicker(false)
     setPhase('combat')
     setStage('initiative')
@@ -1099,13 +1082,19 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   // ---------- Transformação (custa só MP; stamina é o orçamento diário) ----------
   const activateTransform = (type: TransformationType) => {
     const cfg = TRANSFORMATION_CONFIG[type]
-    if (!cfg || transform || transformCd > 0) return
+    if (!cfg || transform) return
+    if (transformedThisFightRef.current) {
+      showBanner('🔒', 'Você já se transformou nesta luta!')
+      return
+    }
     if (mp < cfg.cost.mp) {
       showBanner('🔮', `MP insuficiente para transformar! (${cfg.cost.mp}🔮)`)
       return
     }
     setMp(prev => Math.max(0, prev - cfg.cost.mp))
     setTransform({ type, turns: cfg.duration })
+    setTransformedThisFight(true)
+    transformedThisFightRef.current = true
     setShowFormPicker(false)
     showBanner('✨', `${cfg.name} ativada! (${cfg.duration} turnos)`, 2800)
     pushLog(`✨ Você assumiu a ${cfg.name}!`)
@@ -1294,7 +1283,9 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     })
   }
 
-  // ---------- Usar uma HABILIDADE de forma (dano direto/utilitário; consome o turno) ----------
+  // ---------- Usar uma HABILIDADE de forma (consome o turno) ----------
+  // BUFF (util): aplica direto, SEM rolagem, mas gasta o turno.
+  // DANO (dmg): vai para a ROLAGEM (d20 visível) — o MP/recarga só saem ao resolver.
   const useAbility = (def: SpecialDef) => {
     const m = monsterRef.current
     if (!m || stage !== 'playerSelect' || !transformRef.current) return
@@ -1302,11 +1293,11 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     if ((fx.cd[def.id] || 0) > 0) { showBanner('⏳', `${def.name} em recarga (${fx.cd[def.id]})`); return }
     const mpCost = def.cost.mp || 0
     if (mp < mpCost) { showBanner('🔵', `MP insuficiente para ${def.name} (${mpCost}🔵)`); return }
-    setStage('busy'); setPendingAttack(null); setHasRolled(false)
-    if (mpCost > 0) setMp(prev => Math.max(0, prev - mpCost))
-    setCombatFx(prev => ({ ...prev, cd: { ...prev.cd, [def.id]: def.cd }, ...(def.kind === 'dmg' && prev.amplifyNext !== 1 ? { amplifyNext: 1 } : {}) }))
 
     if (def.kind === 'util') {
+      setStage('busy'); setPendingAttack(null); setPendingAbility(null); setHasRolled(false)
+      if (mpCost > 0) setMp(prev => Math.max(0, prev - mpCost))
+      setCombatFx(prev => ({ ...prev, cd: { ...prev.cd, [def.id]: def.cd } }))
       applyUtil(def)
       pushLog(`${def.name}: ${def.desc}`)
       showBanner('✨', def.name)
@@ -1315,15 +1306,43 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       return
     }
 
-    // dano DIRETO (sem disputa de esquiva, como no PvP)
+    // DANO: abre a rolagem do dado próprio da habilidade (d20). Resolve em resolveAbility.
+    setPendingAttack(null)
+    setPendingAbility(def)
+    setPanelResult(null)
+    setHasRolled(false)
+    setStage('playerRoll')
+  }
+
+  // Rola o dado (d20) da habilidade de dano em espera e resolve o golpe (direto, sem disputa).
+  const handleAbilityRoll = () => {
+    const def = pendingAbility
+    if (!def || hasRolled || !monsterRef.current) return
+    setHasRolled(true)
+    const sides = def.die ?? 20
+    const atk = mkResult(sides, 0)
+    setPanelResult(atk)
+    later(() => resolveAbility(def, atk.roll), 1700)
+  }
+
+  const resolveAbility = (def: SpecialDef, roll: number) => {
+    const m = monsterRef.current
+    if (!m) return
+    setStage('busy'); setPanelResult(null); setHasRolled(false); setPendingAbility(null)
+    const fx = combatFxRef.current
+    const mpCost = def.cost.mp || 0
+    if (mpCost > 0) setMp(prev => Math.max(0, prev - mpCost))
+    setCombatFx(prev => ({ ...prev, cd: { ...prev.cd, [def.id]: def.cd }, ...(prev.amplifyNext !== 1 ? { amplifyNext: 1 } : {}) }))
+
+    // dano DIRETO (sem disputa de esquiva, como no PvP) — usa a rolagem já animada.
     const mLev = monsterLevers(m)
-    const hit = resolveSpecialHit(def, playerLevers.power, { armor: mLev.armor, K: mLev.K }, { amplify: fx.amplifyNext, outMult: fx.dmgDealtMult })
+    const hit = resolveSpecialHit(def, playerLevers.power, { armor: mLev.armor, K: mLev.K }, { amplify: fx.amplifyNext, outMult: fx.dmgDealtMult, forcedRoll: roll })
     const mfx = (monsterFxRef.current[m.id] ||= { dots: [], immobilizeTurns: 0 })
     if (def.dot) mfx.dots.push({ dmg: Math.max(1, Math.round(m.maxHp * def.dot.frac)), turns: def.dot.turns, label: def.dot.label })
     if (def.immobilizeRoll && hit.maxRoll >= def.immobilizeRoll) { mfx.immobilizeTurns = 1; pushLog(`🌟 ${m.name} foi IMOBILIZADO! (rolou ${hit.maxRoll})`) }
     const newHp = Math.max(0, m.hp - hit.damage)
     pushBattleEvent({ kind: 'resolve', attackerId: character.id, defenderId: m.id, action: 'special', defenseAction: 'none', hit: true, damage: hit.damage, isCritical: hit.crit })
-    pushLog(`${def.name}: ${hit.damage} de dano${hit.crit ? ' CRÍTICO' : ''} em ${m.name}`)
+    pushLog(`${def.name} (d${def.die ?? 20}=${roll}): ${hit.damage} de dano${hit.crit ? ' CRÍTICO' : ''} em ${m.name}`)
     showBanner('💥', def.name)
     later(() => {
       setMonster(prev => (prev && prev.id === m.id ? { ...prev, hp: newHp } : prev))
@@ -1402,7 +1421,9 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
         ? (r < 0.5 ? 'basic' : r < 0.8 ? 'weapon' : 'special')
         : (r < 0.55 ? 'basic' : 'weapon')
     setMonsterPlan(kind)
-    showBanner(m.emoji, `${m.name} prepara um ${ATTACKS[kind].label}!`, 2600)
+    // Rótulo do golpe pela ÓTICA do monstro (o ATTACKS.label é o nome dos botões do jogador).
+    const foeLabel = kind === 'basic' ? 'Golpe' : kind === 'special' ? 'Golpe Especial' : 'Golpe Forte'
+    showBanner(m.emoji, `${m.name} prepara um ${foeLabel}!`, 2600)
     setStage('playerDefense')
   }
 
@@ -1510,7 +1531,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     // Log estilo RiPG (monstro ataca, você defende).
     const defTag = myDefense === 'dodge' ? '(esquiva)' : '(defesa)'
     pushLog(
-      `${diceLine(m.emoji, outcome.sides, outcome.atkRoll, outcome.atkBonus, '(fúria)')}  vs  ` +
+      `${diceLine(m.emoji, outcome.sides, outcome.atkRoll, outcome.atkBonus, '(golpe)')}  vs  ` +
       `${diceLine('🛡️', outcome.sides, outcome.defRoll, outcome.defBonus, defTag)}`
     )
     if (!outcome.hit) pushLog(`💨 Você esquiva o golpe por completo! (0 de dano)`)
@@ -1738,10 +1759,22 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
         waitingForOpponent: false,
       }
     }
+    if (stage === 'playerRoll' && pendingAbility) {
+      const sides = pendingAbility.die ?? 20
+      return {
+        visible: true,
+        diceType: sides,
+        hasRolled,
+        label: `${pendingAbility.name} — role o d${sides}!`,
+        onRoll: handleAbilityRoll,
+        myResult: panelResult,
+        waitingForOpponent: false,
+      }
+    }
     if (stage === 'playerRoll' && pendingAttack) {
       const atk = ATTACKS[pendingAttack]
       const sides = PVE_DIE[pendingAttack]
-      const label = pendingAttack === 'special' ? `${atk.icon} ${specialName}` : `${atk.icon} ${atk.label}`
+      const label = pendingAttack === 'weapon' ? `${atk.icon} ${classAtkName}` : `${atk.icon} ${atk.label}`
       return {
         visible: true,
         diceType: sides,
@@ -1766,7 +1799,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     }
     return null
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, stage, hasRolled, panelResult, pendingAttack, monsterPlan, stamina, mp])
+  }, [phase, stage, hasRolled, panelResult, pendingAttack, pendingAbility, monsterPlan, classAtkName, stamina, mp])
 
   // ---------- Piloto automático ----------
   // Dano "típico" estimado de um golpe (core × multiplicador mediano do acerto). Serve só
@@ -1774,13 +1807,11 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const estDamage = (kind: AttackKind) => playerPowerFor(kind) * PVE_HIT_MIN
 
   // Melhor golpe PAGÁVEL agora, mas SEM desperdiçar MP num monstro quase morto:
-  // se o soco (grátis) já deve derrubá-lo, soca; se a arma já basta, evita o Especial caro.
+  // se o Golpe (grátis) já deve derrubá-lo, golpeia; senão usa o Ataque de Classe (8 MP).
   const autoPickAttack = (): AttackKind => {
     const foeHp = monsterRef.current?.hp ?? Infinity
     if (foeHp <= estDamage('basic')) return 'basic'
-    if (hasWeapon && mp >= ATTACKS.weapon.mp && foeHp <= estDamage('weapon')) return 'weapon'
-    if (transform && mp >= ATTACKS.special.mp) return 'special'
-    if (hasWeapon && mp >= ATTACKS.weapon.mp) return 'weapon'
+    if (mp >= ATTACKS.weapon.mp) return 'weapon'
     return 'basic'
   }
 
@@ -1815,21 +1846,25 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
           if (mPotion) { useConsumable(mPotion); return }
         }
       }
-      // POUPAR STAMINA não restringe o ATAQUE: transformação, Especial e arma custam só
-      // MP (não stamina), então o piloto segue usando o melhor golpe. A economia de stamina
-      // acontece só na DEFESA (sempre Esquivar, nunca Defender — ver stage 'playerDefense').
-      // 3) Transforma para liberar o Especial — mas só se o monstro vai SOBREVIVER a um
-      //    golpe de arma. Transformar (MP + recarga) num bicho com 2 de vida é desperdício.
+      // POUPAR STAMINA não restringe o ATAQUE: tudo custa MP (não stamina). A economia de
+      // stamina acontece só na DEFESA (sempre Esquivar, nunca Defender — stage 'playerDefense').
+      // 3) Transforma (1× por luta) — mas só se o monstro vai SOBREVIVER a um Ataque de Classe.
       const foeHp = monsterRef.current?.hp ?? Infinity
-      if (!transform && transformCd === 0 && transformForms.length > 0 && foeHp > estDamage('weapon')) {
+      if (!transform && !transformedThisFightRef.current && transformForms.length > 0 && foeHp > estDamage('weapon')) {
         const cfg = TRANSFORMATION_CONFIG[transformForms[0]]
         if (cfg && mp >= cfg.cost.mp) { activateTransform(transformForms[0]); return }
       }
-      // 4) Ataca com o melhor golpe pagável.
+      // 4) Transformado: usa a HABILIDADE DE DANO da forma (d20) se pagável e fora da recarga.
+      if (transform) {
+        const dmgAbility = getFormSpecials(transform.type).find(d => d.kind === 'dmg')
+        const cd = dmgAbility ? (combatFxRef.current.cd[dmgAbility.id] || 0) : 0
+        if (dmgAbility && cd === 0 && mp >= (dmgAbility.cost.mp || 0)) { useAbility(dmgAbility); return }
+      }
+      // 5) Ataca com o melhor golpe pagável.
       choosePlayerAttack(autoPickAttack())
     }, 650)
 
-    if (stage === 'playerRoll' && !hasRolled) return fire(handlePlayerAttackRoll, 550)
+    if (stage === 'playerRoll' && !hasRolled) return fire(pendingAbility ? handleAbilityRoll : handlePlayerAttackRoll, 550)
 
     if (stage === 'playerDefense') return fire(() => {
       // POUPAR STAMINA: sempre Esquivar (grátis) — nunca Defender (custa 1⚡).
@@ -1844,7 +1879,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
 
     if (stage === 'defenseRoll' && !hasRolled) return fire(handleDefenseRoll, 550)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auto, autoConsumables, staminaSaver, exitConfirm, phase, stage, hasRolled, combatEnded, mp, stamina, transform, transformCd, consumables, effMaxHp])
+  }, [auto, autoConsumables, staminaSaver, exitConfirm, phase, stage, hasRolled, combatEnded, mp, stamina, transform, transformCd, transformedThisFight, pendingAbility, consumables, effMaxHp])
 
   // Piloto de EXPLORAÇÃO: anda na trilha, confirma loot/eventos e entra nos combates.
   // Para com segurança quando falta stamina (evita laço de avanços negados).
@@ -2797,16 +2832,13 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                 </div>
               ) : stage === 'playerSelect' ? (
                 <div className="flex flex-wrap items-center justify-center gap-2">
-                  {(Object.keys(ATTACKS) as AttackKind[])
-                    // Sem arma equipada não há "Golpe" (luta-se no soco); o Especial
-                    // continua, pois vem da transformação (golpe da fera).
-                    .filter(kind => kind !== 'weapon' || hasWeapon)
-                    .map(kind => {
+                  {/* Golpe (d6, grátis) + Ataque de Classe (d8, 8 MP). O 'special' é só da IA
+                      dos monstros — quando transformado o jogador usa as HABILIDADES DE FORMA. */}
+                  {(['basic', 'weapon'] as AttackKind[]).map(kind => {
                     const atk = ATTACKS[kind]
-                    // Especial só liberado transformado (igual ao PvP) e exige MP.
-                    const locked = (atk.requiresTransform && !transform) || mp < atk.mp
+                    const locked = mp < atk.mp
                     const noMp = mp < atk.mp
-                    const name = kind === 'special' ? specialName : atk.label
+                    const name = kind === 'weapon' ? classAtkName : atk.label
                     return (
                       <button
                         key={kind}
@@ -2816,13 +2848,12 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                           locked
                             ? 'bg-gray-700/60 opacity-50 cursor-not-allowed'
                             : kind === 'basic' ? 'bg-gradient-to-r from-yellow-600 to-amber-500 hover:scale-105'
-                            : kind === 'weapon' ? 'bg-gradient-to-r from-red-700 to-red-500 hover:scale-105'
-                            : 'bg-gradient-to-r from-purple-700 to-fuchsia-600 hover:scale-105'
+                            : 'bg-gradient-to-r from-red-700 to-red-500 hover:scale-105'
                         }`}
                       >
-                        {locked && atk.requiresTransform && !transform ? '🔒' : atk.icon} {name}
+                        {atk.icon} {name}
                         <span className="block text-[9px] opacity-80 font-normal">
-                          d{PVE_DIE[kind]}{atk.mp > 0 ? ` • ${atk.mp}🔵${noMp ? ' (sem MP)' : ''}` : ''}{atk.requiresTransform && !transform ? ' • transforme-se' : ''}
+                          d{PVE_DIE[kind]}{atk.mp > 0 ? ` • ${atk.mp}🔵${noMp ? ' (sem MP)' : ''}` : ''}
                         </span>
                       </button>
                     )
@@ -2845,7 +2876,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                       >
                         {def.name}
                         <span className="block text-[9px] opacity-80 font-normal">
-                          {cd > 0 ? `recarga ${cd}` : mpCost > 0 ? `${mpCost}🔵` : 'pronto'}
+                          {cd > 0 ? `recarga ${cd}` : `${def.kind === 'dmg' ? `d${def.die ?? 20} • ` : ''}${mpCost}🔵`}
                         </span>
                       </button>
                     )
@@ -2861,12 +2892,13 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                         </div>
                       ) : (() => {
                         const single = transformForms.length === 1 ? TRANSFORMATION_CONFIG[transformForms[0]] : null
-                        const disabled = transformCd > 0 || (!!single && mp < single.cost.mp)
+                        // 🐉 Transformação é 1× POR LUTA.
+                        const disabled = transformedThisFight || (!!single && mp < single.cost.mp)
                         return (
                           <>
                             <button
                               onClick={() => {
-                                if (transformCd > 0) return
+                                if (transformedThisFight) return
                                 if (single) activateTransform(transformForms[0])
                                 else setShowFormPicker(v => !v)
                               }}
@@ -2877,9 +2909,9 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                                   : 'bg-gradient-to-r from-fuchsia-700 to-purple-600 hover:scale-105'
                               }`}
                             >
-                              {transformCd > 0 ? `🌀 Recarga (${transformCd})` : '🌀 Transformar'}
+                              {transformedThisFight ? '🌀 Já usada' : '🌀 Transformar'}
                               <span className="block text-[9px] opacity-80 font-normal">
-                                {single ? `${single.cost.mp}🔮` : `${transformForms.length} formas`}
+                                {transformedThisFight ? '1× por luta' : single ? `${single.cost.mp}🔮 • ${single.duration} turnos` : `${transformForms.length} formas`}
                               </span>
                             </button>
 

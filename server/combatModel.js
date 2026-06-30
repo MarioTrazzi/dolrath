@@ -30,9 +30,17 @@ const TRANSFORM_SCALE = 1.25
 
 // Ataques gated por recurso de combate UNIFORME (ver src/lib/combatModel.ts).
 const ATTACKS = {
-  basic: { powerMult: 0.72, stamina: 1, requiresTransform: false, label: 'Ataque Básico' },
-  weapon: { powerMult: 1.0, stamina: 2, requiresTransform: false, label: 'Ataque da Arma' },
-  special: { powerMult: 1.5, stamina: 3, requiresTransform: true, label: 'Especial' },
+  basic: { powerMult: 0.72, stamina: 1, mp: 0, requiresTransform: false, label: 'Golpe' },
+  weapon: { powerMult: 1.0, stamina: 2, mp: 8, requiresTransform: false, label: 'Ataque de Classe' },
+  special: { powerMult: 1.5, stamina: 3, mp: 18, requiresTransform: true, label: 'Especial' },
+}
+// 🗡️ Nome do ATAQUE DE CLASSE (o `weapon`, d8) por classe — identidade no botão do PvP.
+const CLASS_ATTACK_NAME = {
+  warrior: 'Investida Pesada', rogue: 'Ataque Furtivo', mage: 'Bola de Fogo', monk: 'Golpe Triplo',
+}
+function classAttackName(raw) {
+  const c = normalizeCombatClass(raw)
+  return (c && CLASS_ATTACK_NAME[c]) || 'Ataque de Classe'
 }
 function attackPower(basePower, type) { return basePower * ((ATTACKS[type] && ATTACKS[type].powerMult) || 1) }
 function chooseAttack(opts) {
@@ -150,15 +158,16 @@ function revertTransformLevers(levers, scale) {
   }
 }
 
-function luckOf(roll) {
-  const t = DICE_SIDES > 1 ? (roll - 1) / (DICE_SIDES - 1) : 1
+function luckOf(roll, sides) {
+  const s = sides || DICE_SIDES
+  const t = s > 1 ? (roll - 1) / (s - 1) : 1
   let mult = LUCK_LO + (LUCK_HI - LUCK_LO) * t
-  if (roll >= DICE_SIDES) mult *= CRIT_MULT
+  if (roll >= s) mult *= CRIT_MULT
   return mult
 }
 
-function rollDie(rng) {
-  return 1 + Math.floor((rng || Math.random)() * DICE_SIDES)
+function rollDie(rng, sides) {
+  return 1 + Math.floor((rng || Math.random)() * (sides || DICE_SIDES))
 }
 
 function damageReduction(armor, K) {
@@ -166,18 +175,21 @@ function damageReduction(armor, K) {
   return a / (a + K)
 }
 
+// `opts.sides` = lados do dado do ATAQUE (PvP: Golpe d6 / Ataque de Classe d8 / Especial d20).
+// Sorte e crítico (rolagem máxima) usam esse dado; default d12 preserva o comportamento antigo.
 function resolveHit(attacker, defender, opts) {
   opts = opts || {}
   const rng = opts.rng || Math.random
-  const roll = opts.forcedRoll != null ? opts.forcedRoll : rollDie(rng)
-  const crit = roll >= DICE_SIDES
+  const sides = opts.sides || DICE_SIDES
+  const roll = opts.forcedRoll != null ? opts.forcedRoll : rollDie(rng, sides)
+  const crit = roll >= sides
   if (opts.defense === 'dodge') {
     const dodged = opts.dodgeSucceeded != null ? opts.dodgeSucceeded : rng() < defender.evade
     if (dodged) return { damage: 0, roll, crit, dodged: true, blocked: false }
   }
   const block = opts.defense === 'block'
   const effArmor = block ? defender.armor * BLOCK_ARMOR_MULT : defender.armor
-  const raw = attacker.power * luckOf(roll)
+  const raw = attacker.power * luckOf(roll, sides)
   const damage = Math.max(1, Math.round(raw * (1 - damageReduction(effArmor, defender.K))))
   return { damage, roll, crit, dodged: false, blocked: block }
 }
@@ -193,7 +205,7 @@ function resolveHit(attacker, defender, opts) {
 // A vantagem de ESCALA (gear+nível) entra no acerto → gear melhor acerta mais (afia o gate);
 // num espelho as escalas se cancelam → luta de igual ~50/50. NÃO mexe no resolveHit do PvP.
 // ============================================================
-const PVE_DIE = { basic: 8, weapon: 12, special: 20 }
+const PVE_DIE = { basic: 6, weapon: 8, special: 20 }
 const PVE_HIT_MIN = 0.6, PVE_HIT_SLOPE = 1.5, PVE_CRIT_MULT = 1.9, PVE_CRIT_MARGIN = 0.5
 const PVE_DODGE_EDGE = 1.0, PVE_BLOCK_EDGE = 0.10, PVE_ACC_W = 1.6
 // Esquiva COMPLETA só no extremo (espelho do crítico); piso do dano normal na esquiva.
@@ -236,7 +248,7 @@ module.exports = {
   TRANSFORM_SCALE, transformLevers, revertTransformLevers,
   clampGearTier, powerScale, computeLevers, luckOf, rollDie, damageReduction, resolveHit,
   RARITY_WEIGHT, NOMINAL_SLOTS, enhanceTierFactor, deriveGearTier,
-  ATTACKS, attackPower, chooseAttack,
+  ATTACKS, attackPower, chooseAttack, CLASS_ATTACK_NAME, classAttackName,
   ATTR_TILT, ATTR_POWER_WEIGHT, applyAttrTilt, normalizeCombatClass,
   PVE_DIE, PVE_ACC_W, contestedOutcome,
 }

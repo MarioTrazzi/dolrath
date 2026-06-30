@@ -979,11 +979,14 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       return
     }
 
-    // Nó de evento: anima o d20 que o SERVIDOR rolou e revela. Tempos ≈ METADE do
-    // anterior de novo (resultado em 175ms, encerra em 550ms) — o d20 crava ainda mais rápido.
+    // Nó de evento: o dado já está girando desde o clique (cobrindo a espera da
+    // rede) — assim que a resposta chega, mostra o resultado NA HORA, sem atraso
+    // artificial. O piso de giro (minSpinMs no AnimatedDie) garante uma rolagem
+    // mínima visível mesmo se a rede for instantânea. Os 375ms abaixo são só pra
+    // dar tempo de LER o número antes de seguir pro próximo nó.
     setExploreResult(null)
     const result: DiceResult = { sides: 20, roll: data.roll ?? 12, modifier: 0, total: data.roll ?? 12 }
-    later(() => setExploreResult(result), 175)
+    setExploreResult(result)
     later(() => {
       setExploreRolling(false)
       setExploreResult(null)
@@ -992,7 +995,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       const resolved = applyServerEvent(data, dest)
       later(() => setMoving(false), 425)
       later(() => setEventCard(resolved), 325)
-    }, 550)
+    }, 375)
   }
 
   // Fecha o card de evento e o Mestre narra a transição.

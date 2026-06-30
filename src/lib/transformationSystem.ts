@@ -129,8 +129,10 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
     cost: { mp: 20, stamina: 30 },
 
     // ⚖️ Metamorfo: forma ÁGIL (striker). Piso 1.20 nos centrais; AGI é a assinatura.
+    // AGI 1.32→1.24: com custo de transformação barateado (20 MP), o Lobo num Monge
+    // ágil/durável dominava o PvP (~67% nv20). Domado p/ raça transformada ~50%.
     statModifiers: {
-      agility: 1.32,
+      agility: 1.24,
       strength: 1.20,
       critical: 1.22,
       attack: 1.20,
@@ -179,10 +181,12 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
 
     // ⚖️ Metamorfo: forma TANK. DEF moderada (inflar DEF mataria o mago via RES);
     // a tankeza vem do HP. Piso 1.20 nos centrais; HP é a assinatura.
+    // STR 1.22→1.19 / DEF 1.07→1.05 / HP 1.28→1.23: com transformação barata, o Urso
+    // num Guerreiro era dominante no late (~67% nv50). Domado p/ raça transformada ~50%.
     statModifiers: {
-      strength: 1.22,
-      defense: 1.07,
-      hp: 1.28,
+      strength: 1.19,
+      defense: 1.05,
+      hp: 1.23,
       agility: 1.20,
       critical: 1.12,
       attack: 1.22,
@@ -278,12 +282,14 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
     cost: { mp: 20, stamina: 35 },
 
     // ⚖️ Humano: forma UNIVERSAL (str≈agi≈int) — serve qualquer classe, sem fraquezas.
+    // Leve up (agi 1.23→1.25, int 1.27→1.28, str/def/hp +0.01): era o piso das raças
+    // transformadas (~47%); subido p/ ~50% ao comprimir o Metamorfo.
     statModifiers: {
-      strength: 1.20,
-      defense: 1.02,
-      hp: 1.21,
-      agility: 1.23,
-      intelligence: 1.27,
+      strength: 1.21,
+      defense: 1.03,
+      hp: 1.22,
+      agility: 1.25,
+      intelligence: 1.28,
       attack: 1.20,
       critical: 1.15,
       mpPool: 1.28

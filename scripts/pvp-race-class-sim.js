@@ -100,13 +100,15 @@ function effAgi(agi) {
 // ============================================================
 // v12 "B modesto": PISO 1.20 nos centrais (str/agi/int/hp/attack) p/ todo stat subir
 // visível; assinatura mais alta; DEF segue baixa (não inflar RES→mago vive).
+// Custo/cooldown espelham src/lib/transformationSystem.ts em produção:
+// custo-raiz unificado em 20 MP (commit 065a907) e cooldown 5.
 const TF_CONFIG = {
-  dragon:    { strength: 1.20, agility: 1.22, intelligence: 1.25, defense: 1.03, hp: 1.20, mpPool: 1.26, duration: 4, cooldown: 3, mp: 15 }, // draconiano
-  seventh_sense: { strength: 1.20, agility: 1.23, intelligence: 1.27, defense: 1.02, hp: 1.21, mpPool: 1.28, duration: 4, cooldown: 3, mp: 12 }, // humano: 7º Sentido (universal)
-  celestial: { strength: 1.20, agility: 1.24, intelligence: 1.34, defense: 1.02, hp: 1.22, mpPool: 1.40, duration: 4, cooldown: 3, mp: 12 }, // elfo: Forma Celestial (base fraca → forma forte arcana)
-  wolf:      { strength: 1.20, agility: 1.32, intelligence: 1.22, defense: 1.03, hp: 1.20, mpPool: 1.22, duration: 4, cooldown: 3, mp: 10 }, // metamorfo: striker
-  bear:      { strength: 1.22, agility: 1.20, intelligence: 1.20, defense: 1.07, hp: 1.28, mpPool: 1.22, duration: 4, cooldown: 3, mp: 10 }, // metamorfo: tank
-  eagle:     { strength: 1.20, agility: 1.28, intelligence: 1.33, defense: 1.00, hp: 1.20, mpPool: 1.32, duration: 4, cooldown: 3, mp: 10 }, // metamorfo: caster
+  dragon:    { strength: 1.20, agility: 1.22, intelligence: 1.25, defense: 1.03, hp: 1.20, mpPool: 1.26, duration: 4, cooldown: 5, mp: 20 }, // draconiano
+  seventh_sense: { strength: 1.21, agility: 1.25, intelligence: 1.28, defense: 1.03, hp: 1.22, mpPool: 1.28, duration: 4, cooldown: 5, mp: 20 }, // humano: 7º Sentido (universal)
+  celestial: { strength: 1.20, agility: 1.24, intelligence: 1.34, defense: 1.02, hp: 1.22, mpPool: 1.40, duration: 4, cooldown: 5, mp: 20 }, // elfo: Forma Celestial (base fraca → forma forte arcana)
+  wolf:      { strength: 1.20, agility: 1.24, intelligence: 1.22, defense: 1.03, hp: 1.20, mpPool: 1.22, duration: 4, cooldown: 5, mp: 20 }, // metamorfo: striker
+  bear:      { strength: 1.19, agility: 1.20, intelligence: 1.20, defense: 1.05, hp: 1.23, mpPool: 1.22, duration: 4, cooldown: 5, mp: 20 }, // metamorfo: tank
+  eagle:     { strength: 1.20, agility: 1.28, intelligence: 1.33, defense: 1.00, hp: 1.20, mpPool: 1.32, duration: 4, cooldown: 5, mp: 20 }, // metamorfo: caster
 }
 const TRANSFORM = Boolean(process.env.TRANSFORM)
 const FORM = process.env.FORM || 'auto'

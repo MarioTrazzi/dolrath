@@ -30,6 +30,11 @@ import {
   getRaceTransformations,
   type TransformationType,
 } from '@/lib/transformationSystem'
+import {
+  getFormSpecials,
+  resolveSpecialHit,
+  type SpecialDef,
+} from '@/lib/transformationSpecials'
 import { applyEnhancementToStats } from '@/lib/enhancementSystem'
 import { itemImagePath } from '@/lib/itemCatalog'
 import {
@@ -577,6 +582,21 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   transformCdRef.current = transformCd
   const activeTransformCfg = transform ? TRANSFORMATION_CONFIG[transform.type] : null
 
+  // ---------- Efeitos das HABILIDADES de forma (DoT/buff/debuff/recarga) ----------
+  type CombatFx = {
+    dmgDealtMult: number; dmgDealtTurns: number   // dano CAUSADO pelo jogador
+    dmgTakenMult: number; dmgTakenTurns: number    // dano RECEBIDO pelo jogador
+    enemyDmgMult: number; enemyDmgTurns: number     // dano dos inimigos (debuff de rugido)
+    evadeBuff: number; evadeBuffTurns: number
+    ignoreEvadeNext: boolean; amplifyNext: number; counterNext: boolean
+    cd: Record<string, number>
+  }
+  const FX0: CombatFx = { dmgDealtMult: 1, dmgDealtTurns: 0, dmgTakenMult: 1, dmgTakenTurns: 0, enemyDmgMult: 1, enemyDmgTurns: 0, evadeBuff: 0, evadeBuffTurns: 0, ignoreEvadeNext: false, amplifyNext: 1, counterNext: false, cd: {} }
+  const [combatFx, setCombatFx] = useState<CombatFx>(FX0)
+  const combatFxRef = useRef(combatFx); combatFxRef.current = combatFx
+  // DoT/imobilização por MONSTRO (keyed por id)
+  const monsterFxRef = useRef<Record<string, { dots: { dmg: number; turns: number; label: string }[]; immobilizeTurns: number }>>({})
+
   // ---------- Banners centrais ----------
   const [banner, setBanner] = useState<Banner | null>(null)
   const bannerKey = useRef(0)
@@ -1108,6 +1128,16 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     } else if (transformCdRef.current > 0) {
       setTransformCd(transformCdRef.current - 1)
     }
+    // expira buffs/debuffs do jogador e reduz recarga das habilidades
+    setCombatFx(prev => {
+      const n: CombatFx = { ...prev, cd: { ...prev.cd } }
+      if (n.dmgDealtTurns > 0 && --n.dmgDealtTurns <= 0) n.dmgDealtMult = 1
+      if (n.dmgTakenTurns > 0 && --n.dmgTakenTurns <= 0) n.dmgTakenMult = 1
+      if (n.enemyDmgTurns > 0 && --n.enemyDmgTurns <= 0) n.enemyDmgMult = 1
+      if (n.evadeBuffTurns > 0 && --n.evadeBuffTurns <= 0) n.evadeBuff = 0
+      for (const k in n.cd) if (n.cd[k] > 0) n.cd[k]--
+      return n
+    })
   }, [showBanner, pushLog])
 
   // Levers do MONSTRO (classe desconhecida → fallback): poder/armadura dos stats
@@ -1221,7 +1251,12 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     else if (outcome.crit) pushLog(`💥 Acerto CRÍTICO! ${outcome.damage} de dano em ${m.name}`)
     else pushLog(`${atkDef.icon} Acerto: ${outcome.damage} de dano em ${m.name}`)
 
-    const newHp = Math.max(0, m.hp - outcome.damage)
+    // 🐉 Buff de dano causado (Uivo/Foco do Cosmo) + ignora-esquiva (Visão Aguçada)
+    const pfx = combatFxRef.current
+    let outDmg = outcome.hit ? Math.max(1, Math.round(outcome.damage * pfx.dmgDealtMult)) : 0
+    if (!outcome.hit && pfx.ignoreEvadeNext) outDmg = Math.max(1, Math.round((outcome.damage || playerPowerFor(kindUsed)) * pfx.dmgDealtMult))
+    if (pfx.ignoreEvadeNext) setCombatFx(prev => ({ ...prev, ignoreEvadeNext: false }))
+    const newHp = Math.max(0, m.hp - outDmg)
     // Sincroniza o HP no alvo ativo E na entrada do pacote (roster mostra a barra certa).
     later(() => {
       setMonster(prev => (prev && prev.id === m.id ? { ...prev, hp: newHp } : prev))
@@ -1237,9 +1272,89 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     later(() => startEnemyPhase(), 2000)
   }
 
+  // ---------- Aplicar efeito UTILITÁRIO de uma habilidade ----------
+  const applyUtil = (def: SpecialDef) => {
+    const e = def.effect
+    if (def.heal) {
+      const h = Math.round(effMaxHp * def.heal)
+      setHp(prev => Math.min(effMaxHp, prev + h))
+      pushFloat(`+${h} ❤️`, '#2ecc71')
+      return
+    }
+    setCombatFx(prev => {
+      const n: CombatFx = { ...prev }
+      if (e?.selfDmgTaken) { n.dmgTakenMult = e.selfDmgTaken.mult; n.dmgTakenTurns = e.selfDmgTaken.turns }
+      if (e?.selfDmgDealt) { n.dmgDealtMult = e.selfDmgDealt.mult; n.dmgDealtTurns = e.selfDmgDealt.turns }
+      if (e?.enemyDmgDealt) { n.enemyDmgMult = e.enemyDmgDealt.mult; n.enemyDmgTurns = e.enemyDmgDealt.turns }
+      if (e?.selfEvade) { n.evadeBuff = e.selfEvade.value; n.evadeBuffTurns = e.selfEvade.turns }
+      if (e?.ignoreEvadeNext) n.ignoreEvadeNext = true
+      if (e?.amplifyNext) n.amplifyNext = e.amplifyNext
+      if (e?.counterNext) n.counterNext = true
+      return n
+    })
+  }
+
+  // ---------- Usar uma HABILIDADE de forma (dano direto/utilitário; consome o turno) ----------
+  const useAbility = (def: SpecialDef) => {
+    const m = monsterRef.current
+    if (!m || stage !== 'playerSelect' || !transformRef.current) return
+    const fx = combatFxRef.current
+    if ((fx.cd[def.id] || 0) > 0) { showBanner('⏳', `${def.name} em recarga (${fx.cd[def.id]})`); return }
+    const mpCost = def.cost.mp || 0
+    if (mp < mpCost) { showBanner('🔵', `MP insuficiente para ${def.name} (${mpCost}🔵)`); return }
+    setStage('busy'); setPendingAttack(null); setHasRolled(false)
+    if (mpCost > 0) setMp(prev => Math.max(0, prev - mpCost))
+    setCombatFx(prev => ({ ...prev, cd: { ...prev.cd, [def.id]: def.cd }, ...(def.kind === 'dmg' && prev.amplifyNext !== 1 ? { amplifyNext: 1 } : {}) }))
+
+    if (def.kind === 'util') {
+      applyUtil(def)
+      pushLog(`${def.name}: ${def.desc}`)
+      showBanner('✨', def.name)
+      tickPlayerTurn()
+      later(() => startEnemyPhase(), 1400)
+      return
+    }
+
+    // dano DIRETO (sem disputa de esquiva, como no PvP)
+    const mLev = monsterLevers(m)
+    const hit = resolveSpecialHit(def, playerLevers.power, { armor: mLev.armor, K: mLev.K }, { amplify: fx.amplifyNext, outMult: fx.dmgDealtMult })
+    const mfx = (monsterFxRef.current[m.id] ||= { dots: [], immobilizeTurns: 0 })
+    if (def.dot) mfx.dots.push({ dmg: Math.max(1, Math.round(m.maxHp * def.dot.frac)), turns: def.dot.turns, label: def.dot.label })
+    if (def.immobilizeRoll && hit.maxRoll >= def.immobilizeRoll) { mfx.immobilizeTurns = 1; pushLog(`🌟 ${m.name} foi IMOBILIZADO! (rolou ${hit.maxRoll})`) }
+    const newHp = Math.max(0, m.hp - hit.damage)
+    pushBattleEvent({ kind: 'resolve', attackerId: character.id, defenderId: m.id, action: 'special', defenseAction: 'none', hit: true, damage: hit.damage, isCritical: hit.crit })
+    pushLog(`${def.name}: ${hit.damage} de dano${hit.crit ? ' CRÍTICO' : ''} em ${m.name}`)
+    showBanner('💥', def.name)
+    later(() => {
+      setMonster(prev => (prev && prev.id === m.id ? { ...prev, hp: newHp } : prev))
+      setPack(prev => prev.map(x => (x.id === m.id ? { ...x, hp: newHp } : x)))
+      packRef.current = packRef.current.map(x => (x.id === m.id ? { ...x, hp: newHp } : x))
+    }, 400)
+    tickPlayerTurn()
+    if (newHp <= 0) { later(() => onMonsterKilled({ ...m, hp: 0 }), 1500); return }
+    later(() => startEnemyPhase(), 1800)
+  }
+
   // ---------- FASE INIMIGA: todos atacam 1x cada, em sequência ----------
   // Monta a fila com todos os inimigos VIVOS e dispara o primeiro ataque.
   const startEnemyPhase = () => {
+    // ☠️ DoT (sangramento/esmagamento/queimadura): cada inimigo afetado sofre no início
+    // da fase. Piso de 1 HP (o DoT não mata sozinho — o jogador desfere o golpe final).
+    const fxMap = monsterFxRef.current
+    packRef.current.forEach(m => {
+      const mfx = fxMap[m.id]
+      if (!mfx?.dots?.length || m.hp <= 0) return
+      let total = 0
+      for (const d of mfx.dots) { total += d.dmg; d.turns-- }
+      mfx.dots = mfx.dots.filter(d => d.turns > 0)
+      const nh = Math.max(1, m.hp - total)
+      if (total > 0) {
+        pushLog(`☠️ ${m.name} sofre ${m.hp - nh} de dano contínuo`)
+        m.hp = nh
+        setMonster(prev => (prev && prev.id === m.id ? { ...prev, hp: nh } : prev))
+        setPack(prev => prev.map(x => (x.id === m.id ? { ...x, hp: nh } : x)))
+      }
+    })
     const living = packRef.current.filter(m => m.hp > 0)
     if (living.length === 0) { backToPlayerTurn(); return }
     enemyQueueRef.current = living.map(m => m.id)
@@ -1252,7 +1367,11 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     while (enemyQueueRef.current.length > 0) {
       const id = enemyQueueRef.current.shift()!
       const cand = packRef.current.find(m => m.id === id && m.hp > 0)
-      if (cand) { next = cand; break }
+      if (!cand) continue
+      // 🤗 Abraço do Urso: inimigo imobilizado perde o turno
+      const mfx = monsterFxRef.current[cand.id]
+      if (mfx && mfx.immobilizeTurns > 0) { mfx.immobilizeTurns--; pushLog(`🚫 ${cand.name} está imobilizado e perde o turno!`); continue }
+      next = cand; break
     }
     if (!next) { backToPlayerTurn(); return }
     setAttacker(next)
@@ -1398,7 +1517,19 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     else if (outcome.crit) pushLog(`💥 ${m.name} acerta em cheio! ${outcome.damage} de dano em você`)
     else pushLog(`🩸 ${m.name} causou ${outcome.damage} de dano em você`)
 
-    const newHp = Math.max(0, hpRef.current - outcome.damage)
+    // 🐉 Escamas (-dano recebido) + Rugido (-dano do inimigo). Contra-ataque ao esquivar.
+    const dfx = combatFxRef.current
+    const inDmg = outcome.hit ? Math.max(1, Math.round(outcome.damage * dfx.dmgTakenMult * dfx.enemyDmgMult)) : 0
+    if (!outcome.hit && dfx.counterNext) {
+      const counter = Math.max(1, Math.round((outcome.damage || monsterPowerFor(m, monsterPlan)) * 0.5))
+      const mfx = (monsterFxRef.current[m.id] ||= { dots: [], immobilizeTurns: 0 })
+      const mhp = Math.max(0, m.hp - counter)
+      pushLog(`↩️ Contra-ataque! ${counter} de dano em ${m.name}`)
+      later(() => { setMonster(prev => (prev && prev.id === m.id ? { ...prev, hp: mhp } : prev)); setPack(prev => prev.map(x => (x.id === m.id ? { ...x, hp: mhp } : x))); packRef.current = packRef.current.map(x => (x.id === m.id ? { ...x, hp: mhp } : x)) }, 400)
+      void mfx
+      setCombatFx(prev => ({ ...prev, counterNext: false }))
+    }
+    const newHp = Math.max(0, hpRef.current - inDmg)
     later(() => setHp(newHp), 500)
     if (newHp <= 0) {
       later(() => {
@@ -2692,6 +2823,29 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                         {locked && atk.requiresTransform && !transform ? '🔒' : atk.icon} {name}
                         <span className="block text-[9px] opacity-80 font-normal">
                           d{PVE_DIE[kind]}{atk.mp > 0 ? ` • ${atk.mp}🔵${noMp ? ' (sem MP)' : ''}` : ''}{atk.requiresTransform && !transform ? ' • transforme-se' : ''}
+                        </span>
+                      </button>
+                    )
+                  })}
+
+                  {/* 🐉 Habilidades da FORMA (só transformado; dano direto/utilitário, usam o turno) */}
+                  {transform && getFormSpecials(transform.type).map((def: SpecialDef) => {
+                    const cd = combatFx.cd[def.id] || 0
+                    const mpCost = def.cost.mp || 0
+                    const locked = cd > 0 || mp < mpCost
+                    return (
+                      <button
+                        key={def.id}
+                        onClick={() => useAbility(def)}
+                        disabled={locked}
+                        title={def.desc}
+                        className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all shadow-lg ${
+                          locked ? 'bg-gray-700/60 opacity-50 cursor-not-allowed' : 'bg-gradient-to-r from-fuchsia-700 to-pink-600 hover:scale-105'
+                        }`}
+                      >
+                        {def.name}
+                        <span className="block text-[9px] opacity-80 font-normal">
+                          {cd > 0 ? `recarga ${cd}` : mpCost > 0 ? `${mpCost}🔵` : 'pronto'}
                         </span>
                       </button>
                     )

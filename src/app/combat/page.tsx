@@ -114,6 +114,17 @@ enum ActionType {
   USE_ITEM = 'use_item'
 }
 
+// 🐉 Custos e cooldown dos especiais de transformação — DEVE espelhar SPECIAL_DEFS
+// em server/socket-server.js (o servidor é a autoridade; isto é só p/ a UI gatear/exibir).
+const SPECIAL_COST: Record<string, { stamina?: number; mp?: number; cd: number }> = {
+  dragon_breath: { stamina: 14, cd: 2 }, dragon_scales: { mp: 14, cd: 4 }, dragon_roar: { stamina: 10, cd: 3 },
+  pack_hunt: { stamina: 18, cd: 3 }, bite_bleeding: { stamina: 12, cd: 3 }, howl: { stamina: 14, cd: 4 },
+  unstoppable_charge: { stamina: 26, cd: 4 }, bear_hug: { stamina: 22, cd: 4 }, intimidating_roar: { stamina: 14, cd: 4 },
+  dive_attack: { stamina: 18, cd: 3 }, keen_sight: { stamina: 10, cd: 3 }, aerial_superiority: { mp: 14, cd: 4 },
+  cosmo_burst: { stamina: 8, mp: 10, cd: 2 }, cosmo_focus: { mp: 12, cd: 4 }, precognitive_counter: { stamina: 12, cd: 3 },
+  holy_nova: { mp: 16, cd: 2 }, restoring_blessing: { mp: 18, cd: 3 }, arcane_torrent: { stamina: 10, cd: 3 },
+}
+
 // Função para criar conexão Socket.IO real
 function createSocketConnection(): Socket {
   // URL do servidor WebSocket do Railway em produção
@@ -800,6 +811,25 @@ function CombatPageContent() {
     })
   }
 
+  // 🐉 Usar habilidade especial da forma (dano DIRETO/utilitário — consome o turno,
+  // sem disputa de dado). O servidor (use_special_ability) valida forma/custo/recarga.
+  const handleSpecialAbility = (abilityId: string) => {
+    if (!currentPlayer || !isMyTurn || combatRoom?.phase !== CombatPhase.PLAYER_TURN) return
+    if (!currentPlayer.isTransformed) {
+      socket.emit('chat_message', { playerId: currentPlayer.id, roomId, message: '❌ Os especiais só podem ser usados transformado!' })
+      return
+    }
+    const cost = SPECIAL_COST[abilityId] || { stamina: 0, mp: 0, cd: 0 }
+    const sCost = cost.stamina || 0, mCost = cost.mp || 0
+    if (currentPlayer.stamina < sCost || currentPlayer.mp < mCost) {
+      socket.emit('chat_message', { playerId: currentPlayer.id, roomId, message: `❌ Recursos insuficientes (${sCost ? `${sCost}⚡ ` : ''}${mCost ? `${mCost} MP` : ''})` })
+      return
+    }
+    // Custo otimista (o servidor reconcilia via room_updated)
+    setCurrentPlayer(prev => prev ? { ...prev, stamina: Math.max(0, prev.stamina - sCost), mp: Math.max(0, prev.mp - mCost) } : null)
+    socket.emit('use_special_ability', { playerId: currentPlayer.id, roomId, abilityId })
+  }
+
   const handleRollDice = (sides: number) => {
     if (!currentPlayer || !roomId || !combatRoom) return
     
@@ -1346,9 +1376,46 @@ function CombatPageContent() {
                   >
                     {currentPlayer?.isTransformed ? '✨' : '🔒'} Especial (d12, {STAMINA_COSTS[ActionType.SPECIAL_ATTACK]}⚡{currentPlayer?.isTransformed ? '' : ' · transforme-se'})
                   </button>
-                  
+
+                  {/* 🐉 Habilidades especiais da FORMA (só transformado; consomem o turno, sem dado) */}
+                  {currentPlayer?.isTransformed && currentPlayer.transformationType && (() => {
+                    const form = currentPlayer.transformationType as TransformationType
+                    const abilities = TRANSFORMATION_CONFIG[form]?.specialAbilities || []
+                    const cds = (currentPlayerDisplay as { fx?: { abilityCd?: Record<string, number> } })?.fx?.abilityCd || {}
+                    if (abilities.length === 0) return null
+                    return (
+                      <div className="mt-2 rounded-lg border border-purple-500/30 bg-purple-900/15 p-2">
+                        <div className="text-[10px] text-purple-300 font-bold mb-1.5">🐉 Habilidades da Forma (usa o turno)</div>
+                        <div className="space-y-1.5">
+                          {abilities.map((ab) => {
+                            const cost = SPECIAL_COST[ab.id] || { cd: 0 }
+                            const sCost = cost.stamina || 0, mCost = cost.mp || 0
+                            const cd = cds[ab.id] || 0
+                            const disabled = !currentPlayer || cd > 0 || currentPlayer.stamina < sCost || currentPlayer.mp < mCost
+                            const costLabel = cd > 0 ? `⏰${cd}` : `${sCost ? `${sCost}⚡` : ''}${sCost && mCost ? ' ' : ''}${mCost ? `${mCost}MP` : ''}`
+                            return (
+                              <button
+                                key={ab.id}
+                                onClick={() => handleSpecialAbility(ab.id)}
+                                disabled={disabled}
+                                title={ab.description}
+                                className={`w-full flex items-center justify-between gap-2 ${disabled
+                                  ? 'bg-gray-600 opacity-50 cursor-not-allowed'
+                                  : 'bg-gradient-to-r from-fuchsia-600 to-purple-600 hover:from-purple-600 hover:to-fuchsia-600'
+                                } text-white py-1.5 px-3 rounded-lg font-bold text-[11px] transition-all duration-200`}
+                              >
+                                <span className="truncate">{ab.name}</span>
+                                <span className="shrink-0 opacity-90">{costLabel}</span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })()}
+
                   <div className="border-t border-white/10 my-3"></div>
-                  
+
                   {consumables.length > 0 ? (
                     <div>
                       <div className="text-[10px] text-text-secondary font-bold mb-1.5">🧪 Consumíveis (usa o turno)</div>

@@ -26,6 +26,22 @@ function normalizeClass(cls) {
 // Deriva os levers de combate do jogador a partir de classe/nível/equipamento.
 // Classe de jogador → PROFILE do modelo escalado por S; classe desconhecida (monstro)
 // → fallback que mapeia os stats fornecidos para levers (preserva a dificuldade do treino).
+// 🎯 AJUSTE DE CLASSE SÓ-PvP (validado em scripts/pvp-lever-sim.js). O PROFILE puro
+// (sem applyAttrTilt, que o PvP não usa) deixa o Guerreiro dominar (~74% no sim;
+// armor 160 + hp 438). Este ajuste é aplicado APENAS aqui (PvP) — o PvE/dungeon chama
+// CM.computeLevers direto e fica intocado. Resultado no sim: classes 47-54%.
+const PVP_CLASS_ADJ = {
+  warrior: { power: 1.00, armor: 0.90, hp: 0.96 },
+  rogue:   { power: 1.06, armor: 1.00, hp: 1.10 },
+  mage:    { power: 0.86, armor: 1.00, hp: 1.00 },
+  monk:    { power: 1.04, armor: 1.00, hp: 1.08 },
+}
+function applyPvpClassAdj(levers, cls) {
+  const a = PVP_CLASS_ADJ[cls]
+  if (!a) return levers
+  return { ...levers, power: levers.power * a.power, armor: levers.armor * a.armor, hp: levers.hp * a.hp }
+}
+
 function derivePlayerLevers(player) {
   const cls = normalizeClass(player.class)
   const level = Math.max(1, Number(player.level) || 1)
@@ -35,7 +51,7 @@ function derivePlayerLevers(player) {
   const gearTier = CM.deriveGearTier(equipped)
 
   if (cls) {
-    const levers = CM.computeLevers(cls, level, gearTier)
+    const levers = applyPvpClassAdj(CM.computeLevers(cls, level, gearTier), cls)
     return { levers, cls, gearTier }
   }
 
@@ -178,6 +194,66 @@ function processTransformationTurns(room) {
       player.transformationData.cooldownTurns--
     }
   })
+}
+
+// 🔥 CAMADA DE STATUS — processada no INÍCIO do turno do jogador que vai agir
+// (room.currentTurn). Aplica DoT, expira buffs/debuffs e reduz cooldown de habilidade.
+// No-op para quem nunca usou especial (sem `fx`). Retorna true se o DoT matou.
+function processStatusStartOfTurn(room, roomId) {
+  const p = room.currentTurn === room.player1?.id ? room.player1 : room.player2
+  const opp = room.currentTurn === room.player1?.id ? room.player2 : room.player1
+  if (!p || !p.fx) return false
+  const fx = p.fx
+  // Dano contínuo (sangramento/esmagamento)
+  if (fx.dots && fx.dots.length) {
+    let total = 0
+    for (const d of fx.dots) { total += d.dmg; d.turns-- }
+    fx.dots = fx.dots.filter((d) => d.turns > 0)
+    if (total > 0) {
+      p.hp = Math.max(0, (p.hp || 0) - total)
+      room.combatLog.push({ type: 'damage', message: `☠️ ${p.name} sofre ${total} de dano contínuo! (${p.hp}/${p.maxHp})`, timestamp: new Date() })
+      io.to(roomId).emit('damage_dealt', { playerId: p.id, damage: total, newHp: p.hp })
+      if (p.hp <= 0 && opp) { declareWinner(room, opp, p, roomId, 'dano contínuo'); return true }
+    }
+  }
+  // Expirar buffs/debuffs temporários
+  if (fx.dmgDealtTurns > 0 && --fx.dmgDealtTurns <= 0) fx.dmgDealtMult = 1
+  if (fx.dmgTakenTurns > 0 && --fx.dmgTakenTurns <= 0) fx.dmgTakenMult = 1
+  if (fx.evadeBuffTurns > 0 && --fx.evadeBuffTurns <= 0) fx.evadeBuff = 0
+  for (const k in fx.abilityCd) if (fx.abilityCd[k] > 0) fx.abilityCd[k]--
+  return false
+}
+
+// 🏁 Encerra o combate declarando um vencedor (usado por morte via DoT, fora do
+// fluxo normal de processCompleteAction). Espelha o bloco de vitória de lá.
+function declareWinner(room, winner, loser, roomId, cause) {
+  room.phase = CombatPhase.COMBAT_END
+  room.winner = winner.id
+  room.isActive = false
+  room.combatLog.push({ type: 'victory', message: `🏆 ${winner.name} venceu o combate${cause ? ` (${cause})` : ''}!`, timestamp: new Date() })
+  if (room.isTraining) {
+    room.combatLog.push({ type: 'system', message: '🏟️ Treino concluído! Nenhuma recompensa ou penalidade aplicada.', timestamp: new Date() })
+  } else {
+    processBattleRewards(room, winner, loser, roomId)
+  }
+  regeneratePlayerResources(room.player1, 'Combat Victory/Defeat')
+  regeneratePlayerResources(room.player2, 'Combat Victory/Defeat')
+  io.to(roomId).emit('room_updated', room)
+}
+
+// 🔄 Avança o turno (troca currentTurn) + transformações + regen + status do próximo.
+// Usado quando uma ação não passa por processCompleteAction (ex.: imobilizado perde o turno).
+function advanceTurn(room, roomId) {
+  room.currentTurn = room.currentTurn === room.player1?.id ? room.player2?.id : room.player1?.id
+  room.phase = CombatPhase.PLAYER_TURN
+  processTransformationTurns(room)
+  regenTurnStamina(room)
+  const dead = processStatusStartOfTurn(room, roomId)
+  if (!dead) {
+    room.combatLog.push({ type: 'system', message: `🔄 Turno de ${room.currentTurn === room.player1?.id ? room.player1?.name : room.player2?.name}`, timestamp: new Date() })
+  }
+  room.pendingAction = null
+  io.to(roomId).emit('room_updated', room)
 }
 
 function revertPlayerTransformation(player) {
@@ -807,41 +883,54 @@ io.on('connection', (socket) => {
 
     const player = room.player1?.id === playerId ? room.player1 : room.player2
     const opponent = room.player1?.id === playerId ? room.player2 : room.player1
+    if (!player || !opponent) return
 
-    if (!player?.isTransformed || !player.transformationData) {
-      socket.emit('error', { message: 'Você não está transformado!' })
+    // 🚫 Imobilizado (Abraço do Urso): perde o turno
+    if (player.fx?.immobilizeTurns > 0) {
+      player.fx.immobilizeTurns--
+      room.combatLog.push({ type: 'system', message: `🚫 ${player.name} está imobilizado e perde o turno!`, timestamp: new Date() })
+      advanceTurn(room, roomId)
       return
     }
 
-    const abilities = player.transformationData.specialAbilities
-    if (!abilities.includes(abilityId)) {
-      socket.emit('error', { message: 'Habilidade não disponível!' })
+    if (!player.isTransformed) {
+      socket.emit('error', { message: 'O especial só pode ser usado transformado!' })
       return
     }
 
-    // Processar habilidade especial baseada no ID
-    let abilityResult = processSpecialAbility(player, opponent, abilityId)
-    
-    if (abilityResult.success) {
-      room.combatLog.push({
-        type: 'special_ability',
-        player: player.name,
-        message: abilityResult.message,
-        timestamp: new Date()
-      })
+    // A validação (forma/custo/recarga) acontece em processSpecialAbility.
+    const result = processSpecialAbility(player, opponent, abilityId)
+    if (!result.success) { socket.emit('error', { message: result.error }); return }
 
-      // Trocar turno
-      room.currentTurn = room.currentTurn === room.player1?.id ? room.player2?.id : room.player1?.id
-      
-      io.to(roomId).emit('room_updated', room)
-    } else {
-      socket.emit('error', { message: abilityResult.error })
+    room.combatLog.push({ type: 'special_ability', player: player.name, message: result.message, timestamp: new Date() })
+
+    if (result.damage > 0) {
+      io.to(roomId).emit('damage_dealt', { playerId: opponent.id, damage: result.damage, newHp: opponent.hp })
     }
+    io.to(roomId).emit('action_resolved', {
+      attackerId: player.id, defenderId: opponent.id, action: abilityId,
+      defenseAction: 'none', hit: result.damage > 0, damage: result.damage || 0, isCritical: !!result.crit,
+    })
+
+    // Vitória por especial (dano direto pode zerar o HP)
+    if (opponent.hp <= 0) { declareWinner(room, player, opponent, roomId); return }
+
+    // O especial consome o turno → avança (transformações + regen + status do próximo)
+    advanceTurn(room, roomId)
   })
 
   socket.on('player_action', ({ playerId, roomId, action, diceType, mpCost, staminaCost }) => {
     const room = rooms.get(roomId)
     if (!room || room.currentTurn !== playerId) return
+
+    // 🚫 Imobilizado (Abraço do Urso): perde o turno antes de qualquer ação
+    const actor = room.player1?.id === playerId ? room.player1 : room.player2
+    if (actor?.fx?.immobilizeTurns > 0) {
+      actor.fx.immobilizeTurns--
+      room.combatLog.push({ type: 'system', message: `🚫 ${actor.name} está imobilizado e perde o turno!`, timestamp: new Date() })
+      advanceTurn(room, roomId)
+      return
+    }
 
     // Processar fim de turno das transformações antes da ação
     processTransformationTurns(room)
@@ -1371,6 +1460,8 @@ function regenTurnStamina(room) {
   const next = room.currentTurn === room.player1?.id ? room.player1 : room.player2
   if (next) {
     next.stamina = Math.min(next.maxStamina || 100, (next.stamina || 0) + 2)
+    // 🔵 Regen de MP (+3/turno): sustenta os especiais de transformação (custo em MP).
+    if (next.maxMp != null) next.mp = Math.min(next.maxMp, (next.mp || 0) + 3)
   }
 }
 
@@ -1414,21 +1505,40 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
   const attackerPower = aLev.power * (CM.ATTACKS[attackType]?.powerMult ?? 1)
   const defenseModel = DEFENSE_MAP[defenseAction] // 'dodge' | 'block' | undefined
 
+  // 🌀 Buff de evasão temporário (especiais: Superioridade Aérea / Uivo / Contra-ataque)
+  const defEvade = Math.min(0.95, (dLev.evade || 0) + (defender.fx?.evadeBuffTurns > 0 ? defender.fx.evadeBuff : 0))
   // Esquiva resolvida pela rolagem d12 do defensor: sucesso se cair na faixa de evasão.
   let dodgeSucceeded
   if (defenseModel === 'dodge') {
-    const evadeBand = Math.round((dLev.evade || 0) * CM.DICE_SIDES)
+    const evadeBand = Math.round(defEvade * CM.DICE_SIDES)
     dodgeSucceeded = defenseRoll <= evadeBand
   }
+  // 👁️ Visão Aguçada: o próximo ataque do atacante ignora a esquiva.
+  if (attacker.fx?.ignoreEvadeNext) { dodgeSucceeded = false; attacker.fx.ignoreEvadeNext = false }
 
   const hitResult = CM.resolveHit(
     { power: attackerPower },
-    { armor: dLev.armor, K: dLev.K, evade: dLev.evade },
+    { armor: dLev.armor, K: dLev.K, evade: defEvade },
     { defense: defenseModel || 'none', forcedRoll: attackRoll, dodgeSucceeded }
   )
   const isCritical = hitResult.crit && !hitResult.dodged
   let finalDamage = hitResult.dodged ? 0 : hitResult.damage
+  // 🔥 Camada de status: dano causado (atacante) e dano recebido (defensor)
+  if (!hitResult.dodged) {
+    const outMult = attacker.fx?.dmgDealtMult ?? 1
+    const inMult = defender.fx?.dmgTakenMult ?? 1
+    if (outMult !== 1 || inMult !== 1) finalDamage = Math.max(1, Math.round(finalDamage * outMult * inMult))
+  }
   let hit = !hitResult.dodged
+
+  // ↩️ Contra-ataque Precognitivo: ao esquivar, devolve metade do dano que sofreria.
+  if (hitResult.dodged && defender.fx?.counterNext) {
+    defender.fx.counterNext = false
+    const reflected = Math.max(1, Math.round((hitResult.damage || finalDamage) * 0.5))
+    attacker.hp = Math.max(0, (attacker.hp || 0) - reflected)
+    room.combatLog.push({ type: 'damage', message: `↩️ ${defender.name} contra-ataca e devolve ${reflected} a ${attacker.name}! (${attacker.hp}/${attacker.maxHp})`, timestamp: new Date() })
+    io.to(roomId).emit('damage_dealt', { playerId: attacker.id, damage: reflected, newHp: attacker.hp })
+  }
 
   if (hitResult.dodged) {
     room.combatLog.push({
@@ -1557,11 +1667,15 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
     // ⚡ REGEN DE STAMINA: +2 no início do turno (evita exaustão permanente)
     regenTurnStamina(room)
 
-    room.combatLog.push({
-      type: 'system',
-      message: `🔄 Turno de ${room.currentTurn === room.player1?.id ? room.player1?.name : room.player2?.name}`,
-      timestamp: new Date()
-    })
+    // 🔥 Status do próximo jogador (DoT/expiração/cooldown). Pode encerrar por DoT.
+    const deadByDot = processStatusStartOfTurn(room, roomId)
+    if (!deadByDot) {
+      room.combatLog.push({
+        type: 'system',
+        message: `🔄 Turno de ${room.currentTurn === room.player1?.id ? room.player1?.name : room.player2?.name}`,
+        timestamp: new Date()
+      })
+    }
   }
 
   // Limpar ação pendente
@@ -1803,202 +1917,114 @@ httpServer.listen(PORT, () => {
 
 module.exports = { io }
 
+// fx = efeitos de status ativos do lutador. Iniciado sob demanda → quem nunca usa
+// especial fica sem `fx` e toda leitura é no-op (PvP normal inalterado).
+function getFx(p) {
+  if (!p.fx) p.fx = { dmgDealtMult: 1, dmgDealtTurns: 0, dmgTakenMult: 1, dmgTakenTurns: 0, dots: [], immobilizeTurns: 0, evadeBuff: 0, evadeBuffTurns: 0, ignoreEvadeNext: false, amplifyNext: 1, counterNext: false, abilityCd: {} }
+  return p.fx
+}
+function setFxMult(p, kind, mult, turns) {
+  const fx = getFx(p)
+  if (kind === 'dmgDealt') { fx.dmgDealtMult = mult; fx.dmgDealtTurns = turns }
+  else { fx.dmgTakenMult = mult; fx.dmgTakenTurns = turns }
+}
+
+// 🐉 ESPECIAIS DE TRANSFORMAÇÃO — modelo de LEVERS (validado em scripts/pvp-lever-sim.js).
+// dano = power_transformado × dmgMult × sorte(d12) × (1 − DR(armor×(1−pierce), K)).
+// As 6 formas (humano/elfo antes não existiam). 'apply' usa a camada de STATUS (fx).
+const SPECIAL_DEFS = {
+  // 🐉 Dragão
+  dragon_breath:      { form: 'dragon', name: '🔥 Sopro de Fogo', kind: 'dmg', dmgMult: 1.95, pierce: 0.6, cost: { stamina: 14 }, cd: 2 },
+  dragon_scales:      { form: 'dragon', name: '🛡️ Escamas Dracônicas', kind: 'util', cost: { mp: 14 }, cd: 4, apply: (s) => setFxMult(s, 'dmgTaken', 0.68, 3), msg: '-32% dano recebido por 3 turnos' },
+  dragon_roar:        { form: 'dragon', name: '🦅 Rugido Dracônico', kind: 'util', cost: { stamina: 10 }, cd: 3, apply: (s, e) => setFxMult(e, 'dmgDealt', 0.74, 2), msg: '-26% dano do oponente por 2 turnos' },
+  // 🐺 Lobo
+  pack_hunt:          { form: 'wolf', name: '🏃 Caçada em Matilha', kind: 'dmg', dmgMult: 0.66, hits: 3, cost: { stamina: 18 }, cd: 3 },
+  bite_bleeding:      { form: 'wolf', name: '🩸 Mordida Sangrenta', kind: 'dmg', dmgMult: 1.05, pierce: 1, dot: { frac: 0.05, turns: 3, label: 'sangramento' }, cost: { stamina: 12 }, cd: 3 },
+  howl:               { form: 'wolf', name: '🌙 Uivo Selvagem', kind: 'util', cost: { stamina: 14 }, cd: 4, apply: (s) => { setFxMult(s, 'dmgDealt', 1.15, 3); const fx = getFx(s); fx.evadeBuff = 0.08; fx.evadeBuffTurns = 3 }, msg: '+15% dano e +8% evasão por 3 turnos' },
+  // 🐻 Urso
+  unstoppable_charge: { form: 'bear', name: '💥 Investida Imparável', kind: 'dmg', dmgMult: 1.45, pierce: 1, cost: { stamina: 26 }, cd: 4 },
+  bear_hug:           { form: 'bear', name: '🤗 Abraço do Urso', kind: 'dmg', dmgMult: 0.95, dot: { frac: 0.06, turns: 2, label: 'esmagamento' }, immobilizeRoll: 11, cost: { stamina: 22 }, cd: 4 },
+  intimidating_roar:  { form: 'bear', name: '😤 Rugido Intimidador', kind: 'util', cost: { stamina: 14 }, cd: 4, apply: (s, e) => setFxMult(e, 'dmgDealt', 0.70, 3), msg: '-30% dano do oponente por 3 turnos' },
+  // 🦅 Águia
+  dive_attack:        { form: 'eagle', name: '💨 Ataque em Mergulho', kind: 'dmg', dmgMult: 1.4, pierce: 0.3, cost: { stamina: 18 }, cd: 3 },
+  keen_sight:         { form: 'eagle', name: '👁️ Visão Aguçada', kind: 'util', cost: { stamina: 10 }, cd: 3, apply: (s) => { getFx(s).ignoreEvadeNext = true }, msg: 'próximo ataque ignora a esquiva' },
+  aerial_superiority: { form: 'eagle', name: '☁️ Superioridade Aérea', kind: 'util', cost: { mp: 14 }, cd: 4, apply: (s) => { const fx = getFx(s); fx.evadeBuff = 0.35; fx.evadeBuffTurns = 1 }, msg: '+35% evasão por 1 turno' },
+  // ✨ 7º Sentido (humano)
+  cosmo_burst:        { form: 'seventh_sense', name: '🌌 Explosão de Cosmo', kind: 'dmg', dmgMult: 2.0, cost: { mp: 10, stamina: 8 }, cd: 2 },
+  cosmo_focus:        { form: 'seventh_sense', name: '🧘 Foco do Cosmo', kind: 'util', cost: { mp: 12 }, cd: 4, apply: (s) => setFxMult(s, 'dmgDealt', 1.35, 3), msg: '+35% dano por 3 turnos' },
+  precognitive_counter: { form: 'seventh_sense', name: '👁️ Contra-ataque Precognitivo', kind: 'util', cost: { stamina: 12 }, cd: 3, apply: (s) => { const fx = getFx(s); fx.evadeBuff = 0.6; fx.evadeBuffTurns = 1; fx.counterNext = true }, msg: 'esquiva garantida + contra-ataque no próximo golpe' },
+  // 🌟 Celestial (elfo)
+  holy_nova:          { form: 'celestial', name: '💥 Nova Sagrada', kind: 'dmg', dmgMult: 1.85, pierce: 0.5, cost: { mp: 16 }, cd: 2 },
+  restoring_blessing: { form: 'celestial', name: '🕊️ Bênção Restauradora', kind: 'util', heal: 0.25, cost: { mp: 18 }, cd: 3, msg: 'cura 25% do HP máximo' },
+  arcane_torrent:     { form: 'celestial', name: '🔷 Torrente Arcana', kind: 'util', cost: { stamina: 10 }, cd: 3, apply: (s) => { getFx(s).amplifyNext = 1.6 }, msg: 'próximo especial de dano ×1.6' },
+}
+
+// Dano de um especial: DIRETO (sem disputa de esquiva — como o handler legado já fazia).
+// 🩹 Sorte do ESPECIAL com crítico de bônus REDUZIDO (1.3 vs 1.6 do ataque normal):
+// o jogador ainda vê o crítico ao rolar o 12, mas não vira nuke/one-shot no mesmo nível.
+const SPECIAL_CRIT_MULT = 1.3
+function specialLuck(roll) {
+  const t = CM.DICE_SIDES > 1 ? (roll - 1) / (CM.DICE_SIDES - 1) : 1
+  const m = CM.LUCK_LO + (CM.LUCK_HI - CM.LUCK_LO) * t
+  return roll >= CM.DICE_SIDES ? m * SPECIAL_CRIT_MULT : m
+}
+function specialHitDamage(player, opponent, def) {
+  const aLev = player.levers || derivePlayerLevers(player).levers
+  const dLev = opponent.levers || derivePlayerLevers(opponent).levers
+  const aFx = getFx(player), dFx = getFx(opponent)
+  const hits = def.hits || 1
+  let total = 0, crit = false, maxRoll = 0
+  for (let h = 0; h < hits; h++) {
+    const roll = def.gcrit ? CM.DICE_SIDES : (Math.floor(Math.random() * CM.DICE_SIDES) + 1)
+    if (roll > maxRoll) maxRoll = roll
+    if (roll >= CM.DICE_SIDES) crit = true
+    const power = aLev.power * def.dmgMult * (aFx.amplifyNext || 1)
+    const armor = Math.max(0, dLev.armor * (1 - (def.pierce || 0)))
+    let dmg = power * specialLuck(roll) * (1 - CM.damageReduction(armor, dLev.K))
+    dmg = dmg * (aFx.dmgDealtMult || 1) * (dFx.dmgTakenMult || 1)
+    total += Math.max(1, Math.round(dmg))
+  }
+  aFx.amplifyNext = 1 // consome a amplificação
+  return { damage: total, crit, maxRoll }
+}
+
 function processSpecialAbility(player, opponent, abilityId) {
-  const transformationType = player.transformationType
-  
-  // 🐉 HABILIDADES DO DRAGÃO
-  if (transformationType === 'dragon') {
-    switch (abilityId) {
-      case 'dragon_breath':
-        if (player.stamina < 15) return { success: false, error: 'Stamina insuficiente!' }
-        
-        const breathDamage = Math.floor(Math.random() * 20) + 1 + (player.baseStats.str * 2)
-        const actualDamage = Math.max(1, Math.floor(breathDamage * 0.5)) // Ignora 50% da defesa
-        
-        opponent.hp = Math.max(0, opponent.hp - actualDamage)
-        player.stamina -= 15
-        
-        return {
-          success: true,
-          message: `🔥 ${player.name} usa Sopro de Fogo! ${opponent.name} recebeu ${actualDamage} de dano! (${opponent.hp}/${opponent.maxHp} HP)`
-        }
-        
-      case 'dragon_roar':
-        if (player.stamina < 10) return { success: false, error: 'Stamina insuficiente!' }
-        
-        // Aplicar debuff de -20% ataque por 2 turnos
-        if (!opponent.debuffs) opponent.debuffs = {}
-        opponent.debuffs.weakened = { turns: 2, effect: -0.2 }
-        player.stamina -= 10
-        
-        return {
-          success: true,
-          message: `🦅 ${player.name} ruge intimidadoramente! ${opponent.name} está abalado (-20% ataque por 2 turnos)`
-        }
-        
-      case 'dragon_scales':
-        if (player.mp < 15) return { success: false, error: 'MP insuficiente!' }
-        
-        // Aplicar buff de redução de dano
-        if (!player.buffs) player.buffs = {}
-        player.buffs.dragonScales = { turns: 3, damageReduction: 5 }
-        player.mp -= 15
-        
-        return {
-          success: true,
-          message: `🛡️ ${player.name} ativa Escamas Dracônicas! (-5 dano recebido por 3 turnos)`
-        }
+  const def = SPECIAL_DEFS[abilityId]
+  if (!def) return { success: false, error: 'Habilidade não reconhecida!' }
+  if (def.form !== player.transformationType) return { success: false, error: 'Habilidade não pertence à sua forma!' }
+
+  const cost = def.cost || {}
+  if ((player.stamina || 0) < (cost.stamina || 0)) return { success: false, error: 'Stamina insuficiente!' }
+  if ((player.mp || 0) < (cost.mp || 0)) return { success: false, error: 'MP insuficiente!' }
+  const fx = getFx(player)
+  if ((fx.abilityCd[abilityId] || 0) > 0) return { success: false, error: `Em recarga: ${fx.abilityCd[abilityId]} turno(s)` }
+
+  player.stamina = Math.max(0, (player.stamina || 0) - (cost.stamina || 0))
+  player.mp = Math.max(0, (player.mp || 0) - (cost.mp || 0))
+  fx.abilityCd[abilityId] = def.cd || 0
+
+  if (def.kind === 'util') {
+    if (def.heal) {
+      const heal = Math.round((player.maxHp || 0) * def.heal)
+      player.hp = Math.min(player.maxHp, (player.hp || 0) + heal)
+      return { success: true, damage: 0, message: `${def.name}: ${player.name} recupera ${heal} HP! (${player.hp}/${player.maxHp})` }
     }
+    if (def.apply) def.apply(player, opponent)
+    return { success: true, damage: 0, message: `${def.name}: ${player.name} — ${def.msg}` }
   }
-  
-  // 🐺 HABILIDADES DO LOBO
-  if (transformationType === 'wolf') {
-    switch (abilityId) {
-      case 'pack_hunt':
-        if (player.stamina < 20) return { success: false, error: 'Stamina insuficiente!' }
-        
-        let totalDamage = 0
-        for (let i = 0; i < 3; i++) {
-          const attackDamage = Math.floor(Math.random() * 12) + 1 + player.baseStats.agi
-          const finalDamage = Math.max(1, attackDamage - Math.floor(opponent.baseStats.def * 0.5))
-          totalDamage += finalDamage
-        }
-        
-        opponent.hp = Math.max(0, opponent.hp - totalDamage)
-        player.stamina -= 20
-        
-        return {
-          success: true,
-          message: `🏃 ${player.name} executa Caçada em Matilha! 3 ataques causaram ${totalDamage} de dano total! (${opponent.hp}/${opponent.maxHp} HP)`
-        }
-        
-      case 'howl':
-        if (player.stamina < 15) return { success: false, error: 'Stamina insuficiente!' }
-        
-        // Boost permanente de agilidade
-        player.baseStats.agi += 2
-        player.stamina -= 15
-        
-        return {
-          success: true,
-          message: `🌙 ${player.name} uiva selvagemente! Agilidade aumentada permanentemente (+2 AGI)`
-        }
-        
-      case 'bite_bleeding':
-        if (player.stamina < 12) return { success: false, error: 'Stamina insuficiente!' }
-        
-        const biteDamage = Math.floor(Math.random() * 16) + 1 + Math.floor(player.baseStats.str * 1.5)
-        const finalDamage = Math.max(1, biteDamage - Math.floor(opponent.baseStats.def * 0.5))
-        
-        // Aplicar sangramento
-        if (!opponent.debuffs) opponent.debuffs = {}
-        opponent.debuffs.bleeding = { turns: 3, damage: 8 }
-        
-        opponent.hp = Math.max(0, opponent.hp - finalDamage)
-        player.stamina -= 12
-        
-        return {
-          success: true,
-          message: `🩸 ${player.name} morde ferozmente! ${finalDamage} de dano + sangramento (8 dano/turno por 3 turnos)! (${opponent.hp}/${opponent.maxHp} HP)`
-        }
-    }
+
+  // especial de dano
+  if (def.dot) {
+    const dmg = Math.max(1, Math.round((opponent.maxHp || 0) * def.dot.frac))
+    getFx(opponent).dots.push({ dmg, turns: def.dot.turns, label: def.dot.label })
   }
-  
-  // 🐻 HABILIDADES DO URSO
-  if (transformationType === 'bear') {
-    switch (abilityId) {
-      case 'bear_hug':
-        if (player.stamina < 25) return { success: false, error: 'Stamina insuficiente!' }
-        
-        const hugDamage = Math.floor(Math.random() * 16) + 1 + Math.floor(player.baseStats.str * 1.2)
-        
-        // Imobilizar por 2 turnos + DoT
-        if (!opponent.debuffs) opponent.debuffs = {}
-        opponent.debuffs.immobilized = { turns: 2 }
-        opponent.debuffs.squeezed = { turns: 2, damage: hugDamage }
-        
-        opponent.hp = Math.max(0, opponent.hp - hugDamage)
-        player.stamina -= 25
-        
-        return {
-          success: true,
-          message: `🤗 ${player.name} abraça ${opponent.name}! ${hugDamage} de dano + imobilizado e esmagado por 2 turnos! (${opponent.hp}/${opponent.maxHp} HP)`
-        }
-        
-      case 'intimidating_roar':
-        if (player.stamina < 15) return { success: false, error: 'Stamina insuficiente!' }
-        
-        // Reduzir dano do oponente em 30% por 4 turnos
-        if (!opponent.debuffs) opponent.debuffs = {}
-        opponent.debuffs.intimidated = { turns: 4, damageReduction: 0.3 }
-        player.stamina -= 15
-        
-        return {
-          success: true,
-          message: `😤 ${player.name} ruge intimidadoramente! ${opponent.name} está amedrontado (-30% dano por 4 turnos)`
-        }
-        
-      case 'unstoppable_charge':
-        if (player.stamina < 30) return { success: false, error: 'Stamina insuficiente!' }
-        
-        const chargeDamage = Math.floor(Math.random() * 20) + 1 + Math.floor(player.baseStats.str * 2.5)
-        // Ignora TODA a defesa
-        
-        opponent.hp = Math.max(0, opponent.hp - chargeDamage)
-        player.stamina -= 30
-        
-        return {
-          success: true,
-          message: `💥 ${player.name} executa Investida Imparável! ${chargeDamage} de dano (ignora defesa)! (${opponent.hp}/${opponent.maxHp} HP)`
-        }
-    }
+  const { damage, crit, maxRoll } = specialHitDamage(player, opponent, def)
+  opponent.hp = Math.max(0, (opponent.hp || 0) - damage)
+  // 🌟 Imobilização = PROC de sorte alta (rolagem ≥ immobilizeRoll), não garantida.
+  let immobMsg = ''
+  if (def.immobilizeRoll && maxRoll >= def.immobilizeRoll) {
+    getFx(opponent).immobilizeTurns = 1
+    immobMsg = ` ${opponent.name} foi IMOBILIZADO (rolagem ${maxRoll})!`
   }
-  
-  // 🦅 HABILIDADES DA ÁGUIA
-  if (transformationType === 'eagle') {
-    switch (abilityId) {
-      case 'dive_attack':
-        if (player.stamina < 20) return { success: false, error: 'Stamina insuficiente!' }
-        
-        const diveDamage = Math.floor(Math.random() * 20) + 1 + (player.baseStats.agi * 2)
-        const criticalDamage = Math.floor(diveDamage * 2) // Crítico garantido
-        const finalDamage = Math.max(1, criticalDamage - Math.floor(opponent.baseStats.def * 0.5))
-        
-        opponent.hp = Math.max(0, opponent.hp - finalDamage)
-        player.stamina -= 20
-        
-        return {
-          success: true,
-          message: `💨 ${player.name} mergulha do alto! Crítico garantido: ${finalDamage} de dano! (${opponent.hp}/${opponent.maxHp} HP)`
-        }
-        
-      case 'aerial_superiority':
-        if (player.mp < 15) return { success: false, error: 'MP insuficiente!' }
-        
-        // Imune a ataques terrestres por 1 turno
-        if (!player.buffs) player.buffs = {}
-        player.buffs.flying = { turns: 1, groundImmunity: true }
-        player.mp -= 15
-        
-        return {
-          success: true,
-          message: `☁️ ${player.name} voa alto! Imune a ataques terrestres por 1 turno!`
-        }
-        
-      case 'keen_sight':
-        if (player.stamina < 10) return { success: false, error: 'Stamina insuficiente!' }
-        
-        // Próximo ataque ignora esquiva
-        if (!player.buffs) player.buffs = {}
-        player.buffs.keenSight = { turns: 1, ignoreEvasion: true }
-        player.stamina -= 10
-        
-        return {
-          success: true,
-          message: `👁️ ${player.name} foca intensamente! Próximo ataque ignora esquiva!`
-        }
-    }
-  }
-  
-  return { success: false, error: 'Habilidade não reconhecida!' }
+  return { success: true, damage, crit, message: `${def.name}: ${player.name} causa ${damage} de dano${crit ? ' CRÍTICO' : ''}! (${opponent.hp}/${opponent.maxHp})${immobMsg}` }
 }

@@ -793,6 +793,15 @@ export default function CharacterDetailsPage() {
 
                 {/* Anel de 12 slots (9 funcionais + 2 brincos e 1 cinto como placeholders) */}
                 {(() => {
+                  // Manopla (arma do Monge) e luva ocupam as mesmas mãos e nunca
+                  // acumulam (ver mutex em equip-item/route.ts). Quando uma manopla
+                  // está equipada na arma principal ou na secundária, o slot de luva
+                  // mostra o mesmo desenho de forma opaca para indicar que está
+                  // ocupado, em vez de aparecer livre.
+                  const gauntletEquipment = character.equipment?.find(
+                    (e) => (e.slot === 'WEAPON' || e.slot === 'SHIELD') && e.item.type === 'GAUNTLET'
+                  );
+
                   const RING: Array<{ key: string; type?: EquipmentSlotType; placeholder?: boolean; emoji?: string; color: string; top: number; left: number }> = [
                     { key: 'BRINCO_1', placeholder: true, emoji: '💎', color: '#e0b84c', top: 8, left: 150 },
                     { key: 'HELMET', type: 'HELMET' as EquipmentSlotType, color: '#3f7fd6', top: 8, left: 229 },
@@ -817,17 +826,26 @@ export default function CharacterDetailsPage() {
                         >
                           <span className="text-xl opacity-60">{s.emoji}</span>
                         </div>
-                      ) : (
-                        <EquipmentSlot
-                          compact
-                          accent={s.color}
-                          type={s.type as EquipmentSlotType}
-                          item={character.equipment?.find(e => e.slot === s.type)?.item}
-                          enhancementLevel={character.equipment?.find(e => e.slot === s.type)?.enhancementLevel || 0}
-                          onEquip={handleEquip}
-                          onUnequip={handleUnequip}
-                        />
-                      )}
+                      ) : (() => {
+                        const equipped = character.equipment?.find(e => e.slot === s.type);
+                        // Slot de luva sem luva equipada, mas com manopla nas mãos:
+                        // mostra a manopla de forma opaca para sinalizar que o slot
+                        // está ocupado pela mecânica mão-a-mão.
+                        const showGauntletGhost = s.type === 'GLOVES' && !equipped && gauntletEquipment;
+                        const displayed = showGauntletGhost ? gauntletEquipment : equipped;
+                        return (
+                          <EquipmentSlot
+                            compact
+                            accent={s.color}
+                            type={s.type as EquipmentSlotType}
+                            item={displayed?.item}
+                            enhancementLevel={displayed?.enhancementLevel || 0}
+                            ghost={!!showGauntletGhost}
+                            onEquip={handleEquip}
+                            onUnequip={handleUnequip}
+                          />
+                        );
+                      })()}
                     </div>
                   ));
                 })()}

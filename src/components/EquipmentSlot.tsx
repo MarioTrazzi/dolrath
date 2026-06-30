@@ -22,6 +22,12 @@ interface EquipmentSlotProps {
   compact?: boolean;
   /** Cor de destaque (hex) para borda/realce do slot */
   accent?: string;
+  /**
+   * Slot "fantasma": exibe o item de forma opaca/esmaecida porque ele está
+   * ocupado indiretamente (ex.: luva bloqueada por manopla equipada nas mãos).
+   * O item ainda pode ser desequipado a partir daqui, mas não fica em destaque.
+   */
+  ghost?: boolean;
 }
 
 // Emoji-placeholder por tipo de slot (mostrado quando o slot está vazio no modo compacto)
@@ -67,7 +73,7 @@ function canEquipInSlot(itemType: string, slotType: EquipmentSlotType): boolean 
   }
 }
 
-export function EquipmentSlot({ type, item, enhancementLevel = 0, onEquip, onUnequip, compact, accent }: EquipmentSlotProps) {
+export function EquipmentSlot({ type, item, enhancementLevel = 0, onEquip, onUnequip, compact, accent, ghost }: EquipmentSlotProps) {
   // Imagem: banco (item.image) → asset estático por nome (/items/<slug>.webp) →
   // ícone genérico só se a arte 404. Espelha DraggableItem/ItemTooltip e cobre
   // itens criados sem `image` no banco (ex.: acessórios novos), que antes caíam
@@ -109,7 +115,7 @@ export function EquipmentSlot({ type, item, enhancementLevel = 0, onEquip, onUne
     return (
       <div
         ref={ref}
-        title={slotLabel}
+        title={ghost ? `${slotLabel} (ocupado pela manopla)` : slotLabel}
         className="w-[52px] h-[52px] sm:w-[54px] sm:h-[54px] flex items-center justify-center relative transition-all"
         style={{
           border: `2px solid ${borderColor}`,
@@ -119,7 +125,7 @@ export function EquipmentSlot({ type, item, enhancementLevel = 0, onEquip, onUne
       >
         {item ? (
           <ItemTooltip item={item} isEquipped={true} enhancementLevel={enhancementLevel} onUnequip={onUnequip}>
-            <div className="w-full h-full cursor-pointer group flex items-center justify-center overflow-hidden">
+            <div className={`w-full h-full cursor-pointer group flex items-center justify-center overflow-hidden ${ghost ? 'opacity-40' : ''}`}>
               {itemImage ? (
                 <img
                   src={itemImage}

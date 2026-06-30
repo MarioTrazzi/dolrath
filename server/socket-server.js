@@ -32,7 +32,7 @@ function normalizeClass(cls) {
 // CM.computeLevers direto e fica intocado. Resultado no sim: classes 47-54%.
 const PVP_CLASS_ADJ = {
   warrior: { power: 1.00, armor: 0.90, hp: 0.96 },
-  rogue:   { power: 1.06, armor: 1.00, hp: 1.10 },
+  rogue:   { power: 1.10, armor: 1.00, hp: 1.18 }, // glass cannon: +HP p/ sobreviver (era o piso ~44%)
   mage:    { power: 0.86, armor: 1.00, hp: 1.00 },
   monk:    { power: 1.04, armor: 1.00, hp: 1.08 },
 }

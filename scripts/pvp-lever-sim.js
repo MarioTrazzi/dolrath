@@ -93,7 +93,7 @@ const ADJ_ON = process.env.ADJ === '0' ? false : true
 // no modelo de power CORRETO (mage 0.86 tempera o power 175; warrior 1.00 pois 105 é baixo).
 const PVP_CLASS_ADJ = {
   warrior: { power: 1.00, armor: 0.90, hp: 0.96 },
-  rogue:   { power: 1.06, armor: 1.00, hp: 1.10 },
+  rogue:   { power: 1.10, armor: 1.00, hp: 1.18 }, // glass cannon: +HP p/ sobreviver (era o piso ~44%)
   mage:    { power: 0.86, armor: 1.00, hp: 1.00 },
   monk:    { power: 1.04, armor: 1.00, hp: 1.08 },
 }

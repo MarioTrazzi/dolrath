@@ -31,7 +31,7 @@ export type AuraKind =
 /** Duração de cada impacto (ms) — o BattleScene desmonta o overlay depois disso. */
 export const IMPACT_MS: Record<ImpactKind, number> = {
   punch: 550, triple: 850, fireball: 950, stealth: 750, charge: 850,
-  firebreath: 1100, bite: 950, spiral: 950, cosmic: 1050, nova: 950,
+  firebreath: 1100, bite: 950, spiral: 950, cosmic: 1400, nova: 950,
   claw: 650, clawStrong: 850, generic: 450,
 }
 
@@ -305,15 +305,19 @@ export function ImpactFX({ kind, side }: { kind: ImpactKind; side: 'left' | 'rig
         </Overlay>
       )
 
-    case 'cosmic': // 🌌 Explosão de Cosmo: estrelas convergindo e estourando
+    case 'cosmic': // 🌌 Explosão de Cosmo: estrelas convergindo → explosão igual à Super Nova
       return (
         <Overlay>
           <Flash color="radial-gradient(circle, rgba(90,60,200,0.5), transparent 70%)" duration={0.9} peak={1} />
           {[[-40, -30], [42, -24], [-34, 34], [38, 30]].map(([px, py], i) => (
             <Particle key={i} x={px} y={py} toX={0} toY={0} delay={0.05 * i} duration={0.35} size="text-base">✨</Particle>
           ))}
-          <Pop delay={0.4} size="text-5xl" duration={0.5}>🌌</Pop>
-          <Ring color="rgba(170,120,255,0.9)" delay={0.42} duration={0.55} to={1.9} />
+          <Flash color="rgba(255,250,220,0.95)" delay={0.4} duration={0.5} peak={1} />
+          <Ring color="rgba(255,220,90,0.95)" delay={0.52} duration={0.6} to={2.2} border={6} />
+          <Ring color="rgba(255,255,255,0.9)" delay={0.62} duration={0.6} to={1.7} />
+          <Pop delay={0.55} size="text-5xl">💥</Pop>
+          <Particle x={0} y={0} toX={-40} toY={-36} delay={0.65} size="text-lg">✨</Particle>
+          <Particle x={0} y={0} toX={42} toY={-30} delay={0.68} size="text-lg">✨</Particle>
         </Overlay>
       )
 

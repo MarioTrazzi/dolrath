@@ -685,8 +685,11 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
 
   // 💓 Heartbeat: mantém o lock vivo enquanto a run está aberta. Se o servidor
   // disser que a run não está mais ativa (assumida/encerrada noutro lugar), bloqueia.
+  // Para assim que a run chega a uma fase terminal (derrota/resumo) — ela mesma
+  // já encerrou a sessão no servidor, então "inativa" aqui não é "outra aba".
   useEffect(() => {
     if (!runReady || !runIdRef.current) return
+    if (phase === 'defeat' || phase === 'summary') return
     let stop = false
     const beat = async () => {
       try {
@@ -703,7 +706,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     }
     const id = setInterval(beat, 25000)
     return () => { stop = true; clearInterval(id) }
-  }, [runReady])
+  }, [runReady, phase])
 
   // Esconde a dica do rodapé depois de ~30s (aparece uma vez no início da run).
   useEffect(() => {
@@ -1763,6 +1766,8 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   }
 
   // DERROTA: avisa o servidor (encerra a run). XP dos abates já foi creditado por kill.
+  // Depois de alguns segundos, sai sozinho da sala de volta pro mapa — sem depender
+  // do jogador clicar "Voltar ao mapa" (evita ficar preso vendo a tela de queda).
   const handleDefeat = () => {
     setPhase('defeat')
     if (runIdRef.current) {
@@ -1772,6 +1777,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
         body: JSON.stringify({ runId: runIdRef.current, outcome: 'lose' }),
       }).catch(() => {})
     }
+    later(() => exitRun(), 4000)
   }
 
   const finishRun = async (bossDefeated: boolean) => {

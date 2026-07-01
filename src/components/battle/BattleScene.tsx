@@ -10,6 +10,10 @@ import { applyEnhancementToStats, getLevelLabel } from '@/lib/enhancementSystem'
 import { formatItemStats } from '@/lib/itemStats'
 import { resolveImageUrl } from '@/lib/imageUrl'
 import { itemImagePath } from '@/lib/itemCatalog'
+import {
+  resolveActionFx, ImpactFX, AuraFX, DodgeFX, CritFX,
+  IMPACT_MS, AURA_MS, type ImpactKind, type AuraKind,
+} from '@/components/battle/AbilityFX'
 
 // ============================================================
 // Tipos
@@ -65,15 +69,17 @@ export interface FighterView {
 
 export interface BattleEvent {
   id: number
-  kind: 'resolve' | 'item' | 'transform'
+  /** resolve = golpe; buff = habilidade utilitária no próprio; status = veneno/sangramento/stun aplicado. */
+  kind: 'resolve' | 'item' | 'transform' | 'buff' | 'status'
   attackerId?: string
   defenderId?: string
+  /** id da habilidade (dragon_breath, wild_fury...) ou basic/weapon/special — decide a animação. */
   action?: string
   defenseAction?: string
   hit?: boolean
   damage?: number
   isCritical?: boolean
-  // Para kind === 'item'
+  // Para kind === 'item' | 'transform' | 'buff' | 'status'
   actorId?: string
   itemName?: string
   hpRestored?: number
@@ -315,6 +321,7 @@ function FighterFigure({
   dodging,
   defending,
   diceResult,
+  fxOverlay,
   hideBars = false,
   compact = false,
   hideNamePlate = false,
@@ -333,6 +340,8 @@ function FighterFigure({
   dodging: boolean
   defending: boolean
   diceResult?: DiceResult
+  /** FX de habilidade (impacto/aura/esquiva/crítico) ancorado no SPRITE do lutador. */
+  fxOverlay?: React.ReactNode
   /** Esconde as barras de recurso (HP/MP/stamina) — usado p/ inimigos cujo HP vive no roster. */
   hideBars?: boolean
   /** Versão menor (sprite + placa) p/ caber um pacote de 2-3 lado a lado. */
@@ -511,6 +520,9 @@ function FighterFigure({
 
           {/* Sombra no chão */}
           <div className={`mx-auto mt-1 ${compact ? 'w-16 sm:w-24' : 'w-24 sm:w-32'} h-3 bg-black/50 rounded-[100%] blur-sm`} />
+
+          {/* FX de habilidade sobre o corpo do lutador (acompanha o shake do card) */}
+          {fxOverlay}
         </motion.div>
 
         {/* Barra de HP ABAIXO do card (quando não for a cascata) */}
@@ -551,7 +563,12 @@ export default function BattleScene({
   const [shakingId, setShakingId] = useState<string | null>(null)
   const [dodgingId, setDodgingId] = useState<string | null>(null)
   const [defendingId, setDefendingId] = useState<string | null>(null)
-  const [slashId, setSlashId] = useState<string | null>(null)
+  // FX por habilidade: impacto no defensor / aura no conjurador (key = remonta a animação)
+  const [impactFx, setImpactFx] = useState<{ id: string; kind: ImpactKind; key: number } | null>(null)
+  const [auraFx, setAuraFx] = useState<{ id: string; kind: AuraKind; color?: string; key: number } | null>(null)
+  const [critId, setCritId] = useState<string | null>(null)
+  const [dodgeFxId, setDodgeFxId] = useState<string | null>(null)
+  const fxKey = useRef(0)
   const textKey = useRef(0)
   const lastEventId = useRef(0)
   const timeouts = useRef<ReturnType<typeof setTimeout>[]>([])
@@ -580,6 +597,21 @@ export default function BattleScene({
     timeouts.current.push(t)
   }
 
+  const fighterById = (id?: string | null): FighterView | null => {
+    if (!id) return null
+    if (left?.id === id) return left
+    if (right?.id === id) return right
+    return rightGroup?.find(f => f.id === id) ?? null
+  }
+
+  // Mostra uma AURA (buff/status/transformação) no card do próprio lutador.
+  const showAura = (id: string, kind: AuraKind, color?: string) => {
+    fxKey.current += 1
+    const key = fxKey.current
+    setAuraFx({ id, kind, color, key })
+    later(() => setAuraFx(prev => (prev?.key === key ? null : prev)), AURA_MS[kind])
+  }
+
   // Coreografia dos eventos de batalha
   useEffect(() => {
     if (!event || event.id === lastEventId.current) return
@@ -590,6 +622,14 @@ export default function BattleScene({
       const defId = event.defenderId
       if (!atkId || !defId || !sideOf(atkId) || !sideOf(defId)) return
 
+      // FX da habilidade: impacto no defensor OU aura no conjurador (buff de forma no PvP
+      // chega como resolve com dano 0 — vira aura, sem investida nem "ESQUIVOU!").
+      const fx = resolveActionFx(event.action, fighterById(atkId)?.class)
+      if ('aura' in fx) {
+        showAura(atkId, fx.aura)
+        return
+      }
+
       // 1. Investida do atacante
       setLungingId(atkId)
       later(() => setLungingId(null), 550)
@@ -597,8 +637,10 @@ export default function BattleScene({
       // 2. Impacto (no meio da investida)
       later(() => {
         if (event.hit) {
-          setSlashId(defId)
-          later(() => setSlashId(null), 350)
+          fxKey.current += 1
+          const key = fxKey.current
+          setImpactFx({ id: defId, kind: fx.impact, key })
+          later(() => setImpactFx(prev => (prev?.key === key ? null : prev)), IMPACT_MS[fx.impact])
           setShakingId(defId)
           later(() => setShakingId(null), 450)
 
@@ -608,28 +650,47 @@ export default function BattleScene({
           }
 
           if (event.isCritical) {
+            setCritId(defId)
+            later(() => setCritId(null), 800)
             pushText(defId, 'CRÍTICO!', 'text-yellow-300', true)
             later(() => pushText(defId, `-${event.damage}`, 'text-yellow-300', true), 150)
           } else {
             pushText(defId, `-${event.damage}`, 'text-red-400', (event.damage || 0) > 30)
           }
         } else {
-          // Esquiva bem-sucedida
+          // Esquiva bem-sucedida: deslize + linhas de velocidade
           setDodgingId(defId)
           later(() => setDodgingId(null), 500)
+          setDodgeFxId(defId)
+          later(() => setDodgeFxId(null), 600)
           pushText(defId, 'ESQUIVOU!', 'text-cyan-300', true)
         }
       }, 280)
     } else if (event.kind === 'item') {
       const id = event.actorId
       if (!id || !sideOf(id)) return
+      if (event.hpRestored) showAura(id, 'heal')
       if (event.hpRestored) pushText(id, `+${event.hpRestored} HP`, 'text-green-400', true)
       if (event.mpRestored) later(() => pushText(id, `+${event.mpRestored} MP`, 'text-blue-400'), 200)
       if (event.staminaRestored) later(() => pushText(id, `+${event.staminaRestored} ⚡`, 'text-yellow-300'), 400)
     } else if (event.kind === 'transform') {
       const id = event.actorId
       if (!id || !sideOf(id)) return
+      const glow = getTransformationGlow(fighterById(id)?.transformationType)
+      showAura(id, 'transform', glow.hex)
       pushText(id, 'TRANSFORMAÇÃO!', 'text-purple-300', true)
+    } else if (event.kind === 'buff') {
+      // Habilidade utilitária usada no PvE (o PvP manda como 'resolve' com o id da habilidade)
+      const id = event.actorId
+      if (!id || !sideOf(id)) return
+      const fx = resolveActionFx(event.action, fighterById(id)?.class)
+      showAura(id, 'aura' in fx ? fx.aura : 'focus')
+    } else if (event.kind === 'status') {
+      // Status aplicado no lutador (veneno/sangramento/stun dos golpes de monstro)
+      const id = event.actorId
+      const kind = event.action as AuraKind
+      if (!id || !sideOf(id) || !['poison', 'bleed', 'stun'].includes(kind)) return
+      showAura(id, kind)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [event?.id])
@@ -669,6 +730,16 @@ export default function BattleScene({
         </div>
       )
     }
+    // FX por habilidade ancorados no sprite: impacto / aura de buff / esquiva / crítico
+    const fxOverlay = (
+      <>
+        {impactFx?.id === fighter.id && <ImpactFX key={`imp-${impactFx.key}`} kind={impactFx.kind} side={side} />}
+        {auraFx?.id === fighter.id && <AuraFX key={`aura-${auraFx.key}`} kind={auraFx.kind} color={auraFx.color} />}
+        {dodgeFxId === fighter.id && <DodgeFX side={side} />}
+        {critId === fighter.id && <CritFX />}
+      </>
+    )
+
     return (
       <div className="relative" key={fighter.id}>
         <FighterFigure
@@ -682,6 +753,7 @@ export default function BattleScene({
           dodging={dodgingId === fighter.id}
           defending={defendingId === fighter.id}
           diceResult={miniDieFor(fighter, side)}
+          fxOverlay={fxOverlay}
           hideBars={opts.hideBars}
           compact={opts.compact}
           hideNamePlate={opts.hideNamePlate}
@@ -690,21 +762,6 @@ export default function BattleScene({
           hpAbove={opts.hpAbove}
           brightenImage={opts.brightenImage}
         />
-
-        {/* Efeito de corte */}
-        <AnimatePresence>
-          {slashId === fighter.id && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.4, rotate: -25 }}
-              animate={{ opacity: 1, scale: 1.3, rotate: 15 }}
-              exit={{ opacity: 0, scale: 1.6 }}
-              transition={{ duration: 0.3 }}
-              className="absolute inset-0 flex items-center justify-center pointer-events-none z-20"
-            >
-              <span className="text-6xl drop-shadow-[0_0_12px_rgba(255,200,0,0.9)]">💥</span>
-            </motion.div>
-          )}
-        </AnimatePresence>
 
         {/* Textos flutuantes (dano, cura, esquiva) */}
         <div className="absolute inset-x-0 top-10 flex flex-col items-center pointer-events-none z-30">

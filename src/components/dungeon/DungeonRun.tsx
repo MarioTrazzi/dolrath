@@ -1121,6 +1121,9 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     setTransformedThisFight(true)
     transformedThisFightRef.current = true
     setShowFormPicker(false)
+    // Explosão de energia na cor da forma sobre o card do jogador (a arena lê o
+    // transformationType do FighterView, que já terá virado no próximo render).
+    later(() => pushBattleEvent({ kind: 'transform', actorId: character.id }), 50)
     showBanner('✨', `${cfg.name} ativada! (${cfg.duration} turnos)`, 2800)
     pushLog(`✨ Você assumiu a ${cfg.name}!`)
   }
@@ -1331,6 +1334,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       if (mpCost > 0) setMp(prev => Math.max(0, prev - mpCost))
       setCombatFx(prev => ({ ...prev, cd: { ...prev.cd, [def.id]: def.cd } }))
       applyUtil(def)
+      pushBattleEvent({ kind: 'buff', actorId: character.id, action: def.id })
       pushLog(`${def.name}: ${def.desc}`)
       showBanner('✨', def.name)
       tickPlayerTurn()
@@ -1373,7 +1377,8 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     if (def.dot) mfx.dots.push({ dmg: Math.max(1, Math.round(m.maxHp * def.dot.frac)), turns: def.dot.turns, label: def.dot.label })
     if (def.immobilizeRoll && hit.maxRoll >= def.immobilizeRoll) { mfx.immobilizeTurns = 1; pushLog(`🌟 ${m.name} foi IMOBILIZADO! (rolou ${hit.maxRoll})`) }
     const newHp = Math.max(0, m.hp - hit.damage)
-    pushBattleEvent({ kind: 'resolve', attackerId: character.id, defenderId: m.id, action: 'special', defenseAction: 'none', hit: true, damage: hit.damage, isCritical: hit.crit })
+    // action = id da habilidade (dragon_breath, super_nova...) → animação própria na arena
+    pushBattleEvent({ kind: 'resolve', attackerId: character.id, defenderId: m.id, action: def.id, defenseAction: 'none', hit: true, damage: hit.damage, isCritical: hit.crit })
     pushLog(`${def.name} (d${def.die ?? 20}=${roll}): ${hit.damage} de dano${hit.crit ? ' CRÍTICO' : ''} em ${m.name}`)
     showBanner('💥', def.name)
     later(() => {
@@ -1442,6 +1447,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       setCombatFx(prev => ({ ...prev, stunTurns: prev.stunTurns - 1 }))
       pushLog('🌿 Você está preso pelas raízes e perde o turno!')
       showBanner('🌿', 'Imobilizado!')
+      pushBattleEvent({ kind: 'status', actorId: character.id, action: 'stun' })
       later(() => startEnemyPhase(), 1400)
       return
     }
@@ -1593,16 +1599,21 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       return
     }
     // 🐍 Aplica o status do golpe secundário (só se acertou e o jogador segue de pé).
+    // O evento 'status' anima o card do jogador (bolhas de veneno/gotas/estrelas) DEPOIS
+    // do impacto do golpe — por isso o atraso (o slot de battleEvent é único).
     if (proc && outcome.hit) {
       if (proc.effect === 'poison' && !dfx.poisoned) {
         setCombatFx(prev => ({ ...prev, poisoned: true }))
+        later(() => pushBattleEvent({ kind: 'status', actorId: character.id, action: 'poison' }), 1100)
         pushLog(`☠️ ${proc.name} te envenenou! Perde ${proc.poisonDmg ?? 2} HP por turno até usar um Antídoto.`)
         showBanner('☠️', 'Envenenado!')
       } else if (proc.effect === 'bleed') {
         setCombatFx(prev => ({ ...prev, bleedFrac: proc.bleedFrac ?? 0.04, bleedTurns: proc.bleedTurns ?? 3 }))
+        later(() => pushBattleEvent({ kind: 'status', actorId: character.id, action: 'bleed' }), 1100)
         pushLog(`🩸 ${proc.name} abriu um corte! Você está sangrando.`)
       } else if (proc.effect === 'stun') {
         setCombatFx(prev => ({ ...prev, stunTurns: prev.stunTurns + (proc.stunTurns ?? 1) }))
+        later(() => pushBattleEvent({ kind: 'status', actorId: character.id, action: 'stun' }), 1100)
         pushLog(`🌿 ${proc.name} prendeu seus pés! Você perde o próximo turno.`)
       } else if (proc.effect === 'damage') {
         pushLog(`🐗 ${proc.name}! Um golpe brutal.`)

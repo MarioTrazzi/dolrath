@@ -15,7 +15,7 @@ export const RACES: Race[] = [
     id: 'draconiano',
     name: 'Draconiano',
     description: 'Descendentes de dragões com capacidade de transformação',
-    bonuses: { constitution: 50, strength: 30 }, // Mantido igual
+    bonuses: { constitution: 30, strength: 30 }, // era con 50: caía inteiro em STR/DEF (únicos que alimentam HP = str*2+def*4), sobrando HP no PvE sem mais poder (sim: scripts/pve-race-class-sim.js)
     abilities: ['Transformação Dracônica', 'Resistência ao Fogo', 'Escamas Protetoras'],
     transformationAvailable: true
   },

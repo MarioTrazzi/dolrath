@@ -419,7 +419,7 @@ const TIER_POWER_STEP = 0.6  // p/ recompensas (gold/xp) por sala — não afeta
 // resolveMonsterHit) — o spread entre classes encolheu bastante vs. o modelo antigo de
 // disputa de margem (ex.: floresta era 4.70/2.85/3.32/3.88, guerreiro≫ladino).
 const BOSS_HP_MULT: Record<DungeonId, Record<CombatClass, number>> = {
-  floresta: { warrior: 2.97, rogue: 2.95, mage: 2.82, monk: 3.12 },
+  floresta: { warrior: 2.76, rogue: 2.74, mage: 2.62, monk: 2.90 }, // ×0.93 p/ subir o win-alvo de ~65%→~75% (sim: scripts/pve-race-class-sim.js)
   caverna:  { warrior: 2.73, rogue: 2.95, mage: 2.93, monk: 2.93 },
   pantano:  { warrior: 2.89, rogue: 2.93, mage: 2.82, monk: 3.03 },
   ruinas:   { warrior: 3.03, rogue: 3.00, mage: 2.70, monk: 3.25 },

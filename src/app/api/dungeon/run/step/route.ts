@@ -104,12 +104,12 @@ export async function POST(req: Request) {
     // ACHADO: credita gold+itens e avança o cursor numa transação.
     const out = await prisma.$transaction(async (tx) => {
       const c = await tx.character.update({ where: { id: character.id }, data: staminaSpend })
-      const gold = await applyLootTx(tx, userId, character.id, resolved.loot)
+      const { gold, skippedDrops } = await applyLootTx(tx, userId, character.id, resolved.loot)
       await tx.dungeonRun.update({
         where: { id: run.id },
         data: { cursor: nextIdx, goldEarned: { increment: gold } },
       })
-      return { stamina: c.stamina, gold }
+      return { stamina: c.stamina, gold, skippedDrops }
     })
 
     return NextResponse.json({
@@ -119,6 +119,7 @@ export async function POST(req: Request) {
       gold: out.gold,
       cursor: nextIdx,
       stamina: out.stamina,
+      skippedDrops: out.skippedDrops,
     })
   } catch (error) {
     console.error('Error stepping dungeon run:', error)

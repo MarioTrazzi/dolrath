@@ -620,7 +620,7 @@ export default function InventoryPage() {
           <InventoryPanel
             title={activeCharacter ? `Inventário — ${activeCharacter.name}` : 'Inventário'}
             items={characterInventory as any}
-            totalSlots={Number(activeCharacter?.inventorySlots) || 10}
+            totalSlots={Number(activeCharacter?.inventorySlots) || 20}
             accent="#d9a441"
             characterId={selectedCharacter}
             isEquipped={(itemId) => isItemEquipped(itemId)}

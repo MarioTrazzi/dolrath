@@ -6,6 +6,7 @@ import { getForgeRecipeById, getForgeOutputCatalogItem } from '@/lib/forge'
 import { itemImagePath } from '@/lib/itemCatalog'
 import { STONE_NAMES } from '@/lib/enhancementSystem'
 import { addHistoryEntry } from '@/lib/characterHistory'
+import { assertInventoryRoom } from '@/lib/inventoryMutations'
 
 // ⚒️ Crafta uma peça de equipamento OU refina uma pedra na Mesa de Forja.
 // Consome materiais/pedras do inventário do personagem + taxa em gold (carteira
@@ -143,6 +144,7 @@ export async function POST(
           })
         }
         // Equipamento NÃO empilha — cada peça é uma linha (durabilidade cheia por default).
+        await assertInventoryRoom(tx, character.id, 1)
         await tx.characterInventory.create({
           data: { characterId: character.id, itemId: item.id, quantity: 1 },
         })
@@ -179,6 +181,7 @@ export async function POST(
             data: { quantity: { increment: 1 } },
           })
         } else {
+          await assertInventoryRoom(tx, character.id, 1)
           await tx.characterInventory.create({
             data: { characterId: character.id, itemId: item.id, quantity: 1 },
           })
@@ -212,7 +215,7 @@ export async function POST(
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Erro interno do servidor'
-    const isValidation = /insuficiente|Falta /.test(message)
+    const isValidation = /insuficiente|Falta |Inventário cheio/.test(message)
     console.error('Error forging item:', error)
     return NextResponse.json({ error: message }, { status: isValidation ? 400 : 500 })
   }

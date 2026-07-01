@@ -49,6 +49,40 @@ export async function restoreItemToInventory(
 }
 
 /**
+ * Quantos slots o personagem tem livres agora (linhas de CharacterInventory
+ * contam 1 slot cada, empilhado ou não — mesma regra usada em transfer-item).
+ */
+export async function freeInventorySlots(
+  tx: Prisma.TransactionClient,
+  characterId: string,
+): Promise<{ used: number; limit: number; free: number }> {
+  const [used, character] = await Promise.all([
+    tx.characterInventory.count({ where: { characterId } }),
+    tx.character.findUnique({ where: { id: characterId }, select: { inventorySlots: true } }),
+  ])
+  const limit = character?.inventorySlots ?? 10
+  return { used, limit, free: Math.max(0, limit - used) }
+}
+
+/**
+ * Garante que há espaço pra `slotsNeeded` linhas NOVAS antes de criar. Lança
+ * erro (pego como 400 pelas rotas) — usado em ações explícitas do jogador
+ * (craft, forja, compra), onde é melhor barrar com uma mensagem clara do que
+ * cobrar gold/ingrediente e não entregar o item.
+ */
+export async function assertInventoryRoom(
+  tx: Prisma.TransactionClient,
+  characterId: string,
+  slotsNeeded = 1,
+) {
+  if (slotsNeeded <= 0) return
+  const { used, limit, free } = await freeInventorySlots(tx, characterId)
+  if (slotsNeeded > free) {
+    throw new Error(`Inventário cheio (${used}/${limit}). Libere espaço antes de continuar.`)
+  }
+}
+
+/**
  * Remove uma unidade de uma linha do inventário. Se a linha tiver quantity > 1,
  * apenas decrementa; caso contrário, apaga a linha. Relê dentro da transação
  * para evitar quantidade obsoleta.

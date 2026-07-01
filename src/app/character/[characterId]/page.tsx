@@ -946,7 +946,7 @@ export default function CharacterDetailsPage() {
           <div className="w-full max-w-[548px] xl:max-w-[470px]">
             <InventoryPanel
               items={inventory}
-              totalSlots={character.inventorySlots || 10}
+              totalSlots={character.inventorySlots || 20}
               accent={visual.borderColor}
               characterId={effectiveCharacterId || ''}
               isEquipped={(itemId) => character.equipment?.some(e => e.item.id === itemId) || false}

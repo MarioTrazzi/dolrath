@@ -103,7 +103,8 @@ export async function POST(req: Request) {
 
     const credited = await prisma.$transaction(async (tx) => {
       const killGold = await creditGoldTx(tx, userId, character.id, killGoldTotal)
-      const lootGold = loot ? await applyLootTx(tx, userId, character.id, loot) : 0
+      const lootResult = loot ? await applyLootTx(tx, userId, character.id, loot) : { gold: 0, skippedDrops: [] }
+      const lootGold = lootResult.gold
       await tx.dungeonRun.update({
         where: { id: run.id },
         data: {
@@ -114,7 +115,7 @@ export async function POST(req: Request) {
             : { pending: { ...pending, killedIds: Array.from(killed) } as unknown as object }),
         },
       })
-      return { killGold, lootGold }
+      return { killGold, lootGold, skippedDrops: lootResult.skippedDrops }
     })
 
     // XP creditado pelos abates deste request (faz seu próprio update de personagem).
@@ -127,6 +128,7 @@ export async function POST(req: Request) {
         lootGold: credited.lootGold,
         xp: xpTotal,
         loot: loot ?? { gold: 0, drops: [] },
+        skippedDrops: credited.skippedDrops,
       },
       cleared: allDead,
       cursor: allDead ? pending.nodeIdx : run.cursor,

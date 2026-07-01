@@ -44,6 +44,11 @@ export async function POST(req: Request) {
 
     const trail = buildTrail(dungeon)
 
+    // Aviso (não bloqueia): se o inventário já está no limite, os drops que
+    // exigirem uma linha nova não serão coletados durante a run.
+    const inventoryUsed = await prisma.characterInventory.count({ where: { characterId } })
+    const inventoryFull = inventoryUsed >= character.inventorySlots
+
     // 🔒 Anti-duplicata entre abas: se a CONTA já tem alguma run VIVA (heartbeat
     // recente em outra aba/janela), bloqueia — não importa qual personagem, só dá
     // pra farmar um herói de cada vez. Runs órfãs (aba caiu) já passaram da janela
@@ -94,6 +99,7 @@ export async function POST(req: Request) {
       cursor: 0,
       stamina: character.stamina,
       maxStamina: character.maxStamina,
+      inventoryFull,
     })
   } catch (error) {
     console.error('Error starting dungeon run:', error)

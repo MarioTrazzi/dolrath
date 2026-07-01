@@ -153,7 +153,7 @@ model Character {
   availablePoints Int           @default(0)
   gold          Int             @default(0)
   baseStats     Json?           @db.JsonB
-  inventorySlots Int            @default(10)
+  inventorySlots Int            @default(20)
   // Sistema de vida e morte
   hp            Int             @default(100)
   maxHp         Int             @default(100)

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
+import { assertInventoryRoom } from '@/lib/inventoryMutations'
 
 export const dynamic = 'force-dynamic'
 
@@ -53,10 +54,12 @@ export async function POST(req: Request) {
         if (existing) {
           await tx.characterInventory.update({ where: { id: existing.id }, data: { quantity: { increment: qty } } })
         } else {
+          await assertInventoryRoom(tx, characterId, 1)
           await tx.characterInventory.create({ data: { characterId, itemId: item.id, quantity: qty, enhancementLevel: 0 } })
         }
       } else {
-        // Equipamento NÃO agrupa: cada peça é um slot próprio (+0).
+        // Equipamento NÃO agrupa: cada peça é um slot próprio (+0) — precisa de `qty` linhas novas.
+        await assertInventoryRoom(tx, characterId, qty)
         for (let i = 0; i < qty; i++) {
           await tx.characterInventory.create({ data: { characterId, itemId: item.id, quantity: 1, enhancementLevel: 0 } })
         }
@@ -75,7 +78,7 @@ export async function POST(req: Request) {
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Falha na compra'
-    const status = message.includes('insuficiente') ? 400 : 500
+    const status = message.includes('insuficiente') || message.includes('Inventário cheio') ? 400 : 500
     if (status === 500) console.error('Error in off-chain purchase:', error)
     return NextResponse.json({ error: message }, { status })
   }

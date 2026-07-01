@@ -20,11 +20,13 @@ import {
   type DungeonDef,
   type ScaledMonster,
   type NodeLoot,
+  type LootDrop,
   type LootNodeKind,
   type LuckTier,
 } from './dungeonAdventures'
 import { normalizeCombatClass, type CombatClass } from './combatModel'
 import { getCatalogItemByName, getConsumableByName, getIngredientByName, getForgeMaterialByName, itemImagePath } from './itemCatalog'
+import { freeInventorySlots } from './inventoryMutations'
 
 // Custo de stamina por TIPO de nó (espelha DungeonRun.tsx: MINOR/MAIN/BOSS_STEP_COST).
 export const STEP_COST = { minor: 4, main: 8, boss: 6 } as const
@@ -342,29 +344,42 @@ async function addDropToInventoryTx(
     : null
 
   if (existingInv) {
+    // Empilha numa linha existente: não gasta slot novo, sempre entra.
     await tx.characterInventory.update({ where: { id: existingInv.id }, data: { quantity: { increment: 1 } } })
-  } else {
-    const enhancementLevel = isConsumable ? 0 : Math.max(0, Math.floor(Number(drop.enhancement) || 0))
-    await tx.characterInventory.create({
-      data: { characterId, itemId: existingItem.id, quantity: 1, enhancementLevel },
-    })
+    return true
   }
+
+  // Precisa de uma linha NOVA — só cria se ainda houver slot livre. Sem isto,
+  // o inventário passava do limite (drops de dungeon ignoravam inventorySlots).
+  const { free } = await freeInventorySlots(tx, characterId)
+  if (free <= 0) return false
+
+  const enhancementLevel = isConsumable ? 0 : Math.max(0, Math.floor(Number(drop.enhancement) || 0))
+  await tx.characterInventory.create({
+    data: { characterId, itemId: existingItem.id, quantity: 1, enhancementLevel },
+  })
+  return true
 }
 
 // Credita o espólio de um nó: ouro no User.goldBalance (pote off-chain/claimável)
 // + cada drop no inventário do personagem. Tudo dentro da transação da rota.
+// Itens que não couberem (inventário cheio) são descartados silenciosamente —
+// `skippedDrops` devolve exatamente quais, pra rota/cliente avisarem o jogador
+// e não fingir na UI que o item foi coletado.
 export async function applyLootTx(
   tx: Prisma.TransactionClient,
   userId: string,
   characterId: string,
   loot: NodeLoot,
-): Promise<number> {
+): Promise<{ gold: number; skippedDrops: LootDrop[] }> {
   // Ouro vai pra carteira do personagem (com teto diário); drops (itens) sempre entram.
   const credited = await creditCappedGoldTx(tx, userId, characterId, loot.gold)
+  const skippedDrops: LootDrop[] = []
   for (const d of loot.drops) {
-    await addDropToInventoryTx(tx, characterId, { name: d.name, rarity: d.rarity, enhancement: d.enhancement })
+    const added = await addDropToInventoryTx(tx, characterId, { name: d.name, rarity: d.rarity, enhancement: d.enhancement })
+    if (!added) skippedDrops.push(d)
   }
-  return credited
+  return { gold: credited, skippedDrops }
 }
 
 // Credita ouro avulso (recompensa de abate do monstro) na carteira do personagem.

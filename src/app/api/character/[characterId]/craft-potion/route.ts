@@ -5,6 +5,7 @@ import { ConsumableSubtype } from '@prisma/client'
 import { getConsumableByName, isIngredientItem } from '@/lib/itemCatalog'
 import { getRecipeById } from '@/lib/alchemy'
 import { addHistoryEntry } from '@/lib/characterHistory'
+import { assertInventoryRoom } from '@/lib/inventoryMutations'
 
 // ⚗️ Crafta uma poção na Bancada de Alquimia.
 // Consome os ingredientes do inventário do personagem + uma taxa em gold
@@ -136,6 +137,8 @@ export async function POST(
           data: { quantity: { increment: 1 } },
         })
       } else {
+        // Precisa de uma linha nova — barra antes de cobrar gold/ingrediente à toa.
+        await assertInventoryRoom(tx, character.id, 1)
         await tx.characterInventory.create({
           data: { characterId: character.id, itemId: potionItem.id, quantity: 1 },
         })
@@ -167,8 +170,8 @@ export async function POST(
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Erro interno do servidor'
-    // Erros de validação (gold/ingrediente) são 400; o resto 500.
-    const isValidation = /insuficiente|Falta /.test(message)
+    // Erros de validação (gold/ingrediente/inventário cheio) são 400; o resto 500.
+    const isValidation = /insuficiente|Falta |Inventário cheio/.test(message)
     console.error('Error crafting potion:', error)
     return NextResponse.json({ error: message }, { status: isValidation ? 400 : 500 })
   }

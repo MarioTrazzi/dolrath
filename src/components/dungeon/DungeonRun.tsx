@@ -21,6 +21,7 @@ import {
   DungeonEventKind,
   NodeScaling,
   NodeLoot,
+  LootDrop,
   ScaledMonster,
   scaleMonster,
   monsterImagePath,
@@ -198,6 +199,7 @@ interface StepResponse {
   cursor?: number
   stamina?: number
   pendingCombat?: boolean
+  skippedDrops?: LootDrop[]
   error?: string
 }
 interface CombatGrant {
@@ -206,6 +208,7 @@ interface CombatGrant {
   lootGold: number
   xp: number
   loot: NodeLoot
+  skippedDrops?: LootDrop[]
 }
 interface CombatResponse {
   granted?: CombatGrant
@@ -670,11 +673,15 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
         runIdRef.current = data.runId
         if (typeof data.stamina === 'number') setStamina(data.stamina)
         setRunReady(true)
+        // Inventário já cheio ao entrar: avisa que os drops não vão ser coletados.
+        if (data.inventoryFull) {
+          later(() => showBanner('🎒', 'Seu inventário está cheio! Itens encontrados não serão coletados.', 3200), 400)
+        }
       } catch {
         showBanner('⚠️', 'Sem conexão com o servidor')
       }
     })()
-  }, [character.id, dungeon.id, showBanner])
+  }, [character.id, dungeon.id, showBanner, later])
 
   // 💓 Heartbeat: mantém o lock vivo enquanto a run está aberta. Se o servidor
   // disser que a run não está mais ativa (assumida/encerrada noutro lugar), bloqueia.
@@ -705,17 +712,27 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   }, [])
 
   // Exibe (sem persistir) o espólio que o SERVIDOR já creditou: ouro + drops.
-  const showLoot = useCallback((loot: NodeLoot) => {
+  // `skippedDrops` são itens que o servidor NÃO conseguiu colocar no inventário
+  // (sem slot livre) — não entram nos totais, só avisam o jogador que sumiram.
+  const showLoot = useCallback((loot: NodeLoot, skippedDrops?: LootDrop[]) => {
     if (loot.gold > 0) {
       setTotals(prev => ({ ...prev, gold: prev.gold + loot.gold }))
       pushFloat(`+${loot.gold} 💰`, '#f39c12')
     }
+    const skippedNames = new Set((skippedDrops ?? []).map(d => d.name))
     for (const d of loot.drops) {
       const label = d.enhancement ? `${d.name} +${d.enhancement}` : d.name
+      if (skippedNames.has(d.name)) {
+        pushLog(`🚫 Inventário cheio — ${label} foi perdido!`)
+        continue
+      }
       setTotals(prev => ({ ...prev, items: [...prev.items, { name: d.name, emoji: d.emoji, label }] }))
       pushLog(`${d.emoji} ${label}`)
     }
-  }, [pushFloat, pushLog])
+    if (skippedDrops && skippedDrops.length > 0) {
+      showBanner('🎒', 'Inventário cheio! Alguns itens não foram coletados.')
+    }
+  }, [pushFloat, pushLog, showBanner])
 
   // Carrega os consumíveis restauradores (HP/MP) do inventário do personagem.
   const loadConsumables = useCallback(async () => {
@@ -920,7 +937,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
       }
     }
 
-    showLoot(loot)
+    showLoot(loot, data.skippedDrops)
 
     const hasGear = loot.drops.some(d => d.kind === 'item' || d.kind === 'stone')
     const anyDrop = loot.drops.length > 0 || loot.gold > 0
@@ -1666,7 +1683,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     }
 
     // Nó LIMPO: espólio do nó + avanço (boss → fim da run).
-    showLoot(loot)
+    showLoot(loot, grant?.skippedDrops)
     later(() => {
       setMonster(null)
       setPack([])

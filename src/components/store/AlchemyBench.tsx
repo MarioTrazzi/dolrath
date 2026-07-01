@@ -140,6 +140,23 @@ export default function AlchemyBench({
   const filled = slots.filter((s): s is string => s != null);
   const matchedRecipe = filled.length === 3 ? findRecipeByIngredients(filled) : undefined;
 
+  // Animação da transmutação: uma luz percorre os 3 vértices ('tracing') e então
+  // o item surge no centro com um brilho ('reveal'). Dispara quando o triângulo
+  // fecha numa receita válida (via clique manual ou pelo livro de receitas).
+  const [animPhase, setAnimPhase] = useState<'idle' | 'tracing' | 'reveal'>('idle');
+  const prevRecipeId = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const id = matchedRecipe?.id;
+    if (id && id !== prevRecipeId.current) {
+      prevRecipeId.current = id;
+      setAnimPhase('tracing');
+      const t1 = setTimeout(() => setAnimPhase('reveal'), 900);
+      const t2 = setTimeout(() => setAnimPhase('idle'), 900 + 650);
+      return () => { clearTimeout(t1); clearTimeout(t2); };
+    }
+    if (!id) prevRecipeId.current = undefined;
+  }, [matchedRecipe?.id]);
+
   // Receitas agrupadas por raridade para o livro de receitas.
   const recipeGroups = useMemo(() => recipesByRarity(), []);
   const allRecipes = useMemo(() => recipeGroups.flatMap((g) => g.recipes), [recipeGroups]);
@@ -250,12 +267,46 @@ export default function AlchemyBench({
         ) : (
           <span className="text-2xl text-white/30">＋</span>
         )}
+        {/* Flash da luz ao passar por este vértice (sequencial: topo → esq → dir). */}
+        {animPhase === 'tracing' && name && (
+          <span
+            className="alchemy-vertex pointer-events-none absolute inset-0 rounded-2xl"
+            style={{ animationDelay: `${idx * 0.3}s`, boxShadow: `0 0 22px 2px ${ring}, inset 0 0 12px ${ring}` }}
+          />
+        )}
       </button>
     );
   };
 
   return (
     <div className="relative overflow-hidden rounded-2xl border-2 border-emerald-500/40 bg-gradient-to-br from-emerald-950/40 to-purple-950/30 p-5 backdrop-blur-sm">
+      <style>{`
+        @keyframes alchemy-trace {
+          from { stroke-dashoffset: 0; }
+          to { stroke-dashoffset: -100; }
+        }
+        .alchemy-trace { animation: alchemy-trace 0.9s linear both; }
+        @keyframes alchemy-vertex {
+          0%, 100% { opacity: 0; }
+          50% { opacity: 1; }
+        }
+        .alchemy-vertex { animation: alchemy-vertex 0.5s ease-in-out both; }
+        @keyframes alchemy-pop {
+          0% { opacity: 0; transform: scale(0.2); filter: brightness(2.4); }
+          55% { opacity: 1; transform: scale(1.14); filter: brightness(1.6); }
+          100% { opacity: 1; transform: scale(1); filter: brightness(1); }
+        }
+        .alchemy-pop { animation: alchemy-pop 0.6s cubic-bezier(.2,.9,.3,1.3) both; }
+        @keyframes alchemy-flash {
+          0% { opacity: 0; transform: scale(0.3); }
+          35% { opacity: 0.95; transform: scale(1.1); }
+          100% { opacity: 0; transform: scale(1.9); }
+        }
+        .alchemy-flash { animation: alchemy-flash 0.65s ease-out forwards; }
+        @media (prefers-reduced-motion: reduce) {
+          .alchemy-trace, .alchemy-vertex, .alchemy-pop, .alchemy-flash { animation: none; }
+        }
+      `}</style>
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
         <div className="flex items-center gap-2">
           <h2 className="text-2xl font-black text-emerald-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
@@ -316,6 +367,20 @@ export default function AlchemyBench({
                 strokeDasharray={matchedRecipe ? undefined : '6 6'}
                 style={{ filter: matchedRecipe ? `drop-shadow(0 0 8px ${resultUi.glow})` : undefined }}
               />
+              {/* Luz-cometa que percorre o triângulo passando pelos 3 vértices. */}
+              {animPhase === 'tracing' && (
+                <polygon
+                  points={`${POS.top.x},${POS.top.y} ${POS.left.x},${POS.left.y} ${POS.right.x},${POS.right.y}`}
+                  pathLength={100}
+                  fill="none"
+                  stroke={resultUi.ring}
+                  strokeWidth={4}
+                  strokeLinecap="round"
+                  strokeDasharray="16 84"
+                  className="alchemy-trace"
+                  style={{ filter: `drop-shadow(0 0 8px ${resultUi.glow})` }}
+                />
+              )}
             </svg>
 
             {/* Vértices */}
@@ -336,11 +401,25 @@ export default function AlchemyBench({
               title={matchedRecipe ? matchedRecipe.outputName : 'Combinação ainda incompleta'}
             >
               {matchedRecipe ? (
-                <span className="block w-[86%] h-[86%] overflow-hidden rounded-full drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] grid place-items-center animate-pulse">
-                  <ItemThumb name={matchedRecipe.outputName} emoji="🧪" className="text-4xl" />
-                </span>
+                animPhase === 'tracing' ? (
+                  // A luz ainda está percorrendo os vértices: centro "carregando".
+                  <span className="text-3xl text-white/40 animate-ping">✦</span>
+                ) : (
+                  <span
+                    className={`block w-[86%] h-[86%] overflow-hidden rounded-full drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] grid place-items-center ${animPhase === 'reveal' ? 'alchemy-pop' : 'animate-pulse'}`}
+                  >
+                    <ItemThumb name={matchedRecipe.outputName} emoji="🧪" className="text-4xl" />
+                  </span>
+                )
               ) : (
                 <span className="text-3xl text-white/20">?</span>
+              )}
+              {/* Estouro de brilho no item recém-formado. */}
+              {matchedRecipe && animPhase === 'reveal' && (
+                <span
+                  className="alchemy-flash pointer-events-none absolute inset-[-30%] rounded-full"
+                  style={{ background: `radial-gradient(circle, ${resultUi.glow} 0%, transparent 65%)` }}
+                />
               )}
             </div>
           </div>

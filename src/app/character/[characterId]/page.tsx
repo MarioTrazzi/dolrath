@@ -949,7 +949,6 @@ export default function CharacterDetailsPage() {
               totalSlots={character.inventorySlots || 20}
               accent={visual.borderColor}
               characterId={effectiveCharacterId || ''}
-              isEquipped={(itemId) => character.equipment?.some(e => e.item.id === itemId) || false}
               onEquip={handleEquip}
               onUnequip={handleUnequip}
               onConsume={handleConsume}

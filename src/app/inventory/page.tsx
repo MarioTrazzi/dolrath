@@ -47,12 +47,6 @@ interface CharacterInventoryItem {
   item: Item;
 }
 
-interface EquippedItem {
-  id: string;
-  slot: string;
-  item: Item;
-}
-
 export default function InventoryPage() {
   const { data: session } = useSession();
   // Personagem ATIVO global: o inventário sempre mostra o herói selecionado na
@@ -61,7 +55,6 @@ export default function InventoryPage() {
   const selectedCharacter = activeCharacterId ?? '';
   const [userInventory, setUserInventory] = useState<UserInventoryItem[]>([]);
   const [characterInventory, setCharacterInventory] = useState<CharacterInventoryItem[]>([]);
-  const [equippedItems, setEquippedItems] = useState<EquippedItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [enhanceTarget, setEnhanceTarget] = useState<{ inventoryId: string; itemName: string; category?: 'WEAPON' | 'ARMOR' } | null>(null);
   // Diálogo de quantidade ao arrastar uma pilha (>1) entre inventários.
@@ -86,10 +79,8 @@ export default function InventoryPage() {
   useEffect(() => {
     if (selectedCharacter) {
       fetchCharacterInventory(selectedCharacter);
-      fetchEquippedItems(selectedCharacter);
     } else {
       setCharacterInventory([]);
-      setEquippedItems([]);
     }
   }, [selectedCharacter]);
 
@@ -127,18 +118,6 @@ export default function InventoryPage() {
       }
     } catch (error) {
       console.error('Error fetching character inventory:', error);
-    }
-  };
-
-  const fetchEquippedItems = async (characterId: string) => {
-    try {
-      const response = await fetch(`/api/character/${characterId}`);
-      if (response.ok) {
-        const data = await response.json();
-        setEquippedItems(data.equipment || []);
-      }
-    } catch (error) {
-      console.error('Error fetching equipped items:', error);
     }
   };
 
@@ -189,14 +168,6 @@ export default function InventoryPage() {
     if (!selectedCharacter) {
       toast.error('⚠️ Selecione um personagem primeiro', {
         duration: 3000,
-      });
-      return;
-    }
-
-    // Check if item is equipped
-    if (isItemEquipped(itemId)) {
-      toast.error('❌ Não é possível transferir itens equipados. Desequipe o item primeiro.', {
-        duration: 4000,
       });
       return;
     }
@@ -253,8 +224,7 @@ export default function InventoryPage() {
   };
 
   const handleDropToGlobal = (item: any, availableQuantity: number) => {
-    // Itens equipados não podem ir ao global (handler já avisa); vão direto p/ o toast.
-    if (availableQuantity > 1 && !isItemEquipped(item.id)) {
+    if (availableQuantity > 1) {
       setTransferTarget({ item, maxQuantity: availableQuantity, destination: 'global' });
     } else {
       handleTransferToGlobal(item.id, 1);
@@ -475,7 +445,6 @@ export default function InventoryPage() {
 
       if (response.ok) {
         fetchCharacterInventory(selectedCharacter);
-        fetchEquippedItems(selectedCharacter);
         toast.success('⚡ Item equipado com sucesso!', {
           duration: 3000,
         });
@@ -514,7 +483,6 @@ export default function InventoryPage() {
 
       if (response.ok) {
         fetchCharacterInventory(selectedCharacter);
-        fetchEquippedItems(selectedCharacter);
         toast.success('🔓 Item desequipado com sucesso!', {
           duration: 3000,
         });
@@ -577,10 +545,6 @@ export default function InventoryPage() {
     setLoading(false);
   };
 
-  const isItemEquipped = (itemId: string) => {
-    return equippedItems.some(equippedItem => equippedItem.item.id === itemId);
-  };
-
   if (!session) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -623,7 +587,6 @@ export default function InventoryPage() {
             totalSlots={Number(activeCharacter?.inventorySlots) || 20}
             accent="#d9a441"
             characterId={selectedCharacter}
-            isEquipped={(itemId) => isItemEquipped(itemId)}
             onEquip={(itemId) => handleEquipItem(itemId)}
             onUnequip={(itemId) => handleUnequipItem(itemId)}
             onConsume={(itemId) => handleConsumeItem(itemId)}
@@ -703,7 +666,6 @@ export default function InventoryPage() {
               }))}
             onChanged={() => {
               fetchCharacterInventory(selectedCharacter);
-              fetchEquippedItems(selectedCharacter);
             }}
           />
         )}

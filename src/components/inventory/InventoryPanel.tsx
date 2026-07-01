@@ -24,7 +24,6 @@ interface InventoryPanelProps {
   /** Cor de destaque do painel (bordas/realces). */
   accent: string;
   characterId: string;
-  isEquipped?: (itemId: string) => boolean;
   // Ações do grid (todas opcionais — o baú global, p.ex., só usa onTransfer).
   onEquip?: (itemId: string, slotType: EquipmentSlotType) => void;
   onUnequip?: (itemId: string) => void;
@@ -60,7 +59,6 @@ export default function InventoryPanel({
   totalSlots,
   accent,
   characterId,
-  isEquipped,
   onEquip,
   onUnequip,
   onConsume,
@@ -161,7 +159,6 @@ export default function InventoryPanel({
         <CharacterItemGrid
           items={items}
           totalSlots={totalSlots}
-          isEquipped={isEquipped}
           accent={accent}
           characterId={characterId}
           search={search}

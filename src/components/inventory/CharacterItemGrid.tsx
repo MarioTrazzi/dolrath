@@ -15,8 +15,6 @@ interface CharacterItemGridProps {
   items: InventoryRow[];
   /** Quantidade total de slots a exibir (preenche o resto com slots vazios). */
   totalSlots?: number;
-  /** Determina se um item está equipado (para o destaque verde). */
-  isEquipped?: (itemId: string) => boolean;
   accent: string;
   characterId: string;
   onEquip?: (itemId: string, slotType: EquipmentSlotType) => void;
@@ -45,7 +43,6 @@ interface CharacterItemGridProps {
 export function CharacterItemGrid({
   items,
   totalSlots,
-  isEquipped,
   accent,
   characterId,
   onEquip,
@@ -75,7 +72,6 @@ export function CharacterItemGrid({
               enhancementLevel={row.enhancementLevel || 0}
               quantity={row.quantity || 1}
               inventoryId={row.id}
-              isEquipped={isEquipped ? isEquipped(row.item.id) : false}
               compact
               accent={accent}
               onEquip={onEquip}

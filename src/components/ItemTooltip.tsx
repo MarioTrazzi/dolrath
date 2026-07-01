@@ -26,8 +26,10 @@ interface ItemTooltipProps {
   /** Abre o diálogo de aprimoramento. Ao vir de uma Pedra Negra, inventoryId vem
    *  vazio e `stoneCategory` indica a categoria de gear que a pedra aprimora. */
   onEnhance?: (inventoryId: string, itemName: string, stoneCategory?: 'WEAPON' | 'ARMOR') => void;
-  /** Inventário global: transfere o item para o personagem selecionado. */
-  onTransfer?: (itemId: string) => void;
+  /** Inventário global: transfere o item para o personagem selecionado.
+   *  Recebe a quantidade disponível na pilha (1 = uma unidade; stack > 1 abre
+   *  o diálogo de quantidade no chamador). */
+  onTransfer?: (itemId: string, quantity?: number) => void;
   /** Inventário do personagem: envia o item de volta ao inventário global.
    *  Recebe a quantidade a enviar (1 = uma unidade; stack inteiro no "Enviar tudo"). */
   onSendToGlobal?: (itemId: string, quantity?: number) => void;
@@ -207,7 +209,7 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryI
     'w-full px-4 py-2.5 rounded-xl font-black text-sm text-white transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed';
 
   const handleTransferClick = () => {
-    if (onTransfer) onTransfer(item.id);
+    if (onTransfer) onTransfer(item.id, quantity);
     setShowTooltip(false);
   };
 
@@ -350,13 +352,14 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryI
             {/* Botões — mesmo estilo da loja */}
             <div className="mt-auto flex flex-col gap-2">
               {onTransfer ? (
-                /* Inventário global: só transferir para o personagem */
+                /* Inventário global: transferir para o personagem. Pilha > 1 abre
+                   o diálogo de quantidade (enviar tudo ou um valor escolhido). */
                 <button
                   onClick={handleTransferClick}
                   className={storeButtonClass}
                   style={buttonStyle('#3b82f6', 'rgba(59,130,246,0.35)')}
                 >
-                  🌐 Transferir
+                  {quantity > 1 ? `🌐 Transferir… (x${quantity})` : '🌐 Transferir'}
                 </button>
               ) : (
                 <>

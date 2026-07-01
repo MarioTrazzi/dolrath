@@ -645,7 +645,18 @@ export default function InventoryPage() {
             accent="#3b82f6"
             characterId={selectedCharacter}
             slotLabel="Slots do Baú"
-            onTransfer={(itemId) => handleTransferToCharacter(itemId)}
+            onTransfer={(itemId, quantity = 1) => {
+              // Pilha > 1: abre o diálogo de quantidade (mesmo do drag & drop) em
+              // vez de mandar sempre 1 — permite escolher um valor ou enviar tudo.
+              if (quantity > 1) {
+                const row = userInventory.find((i) => i.item.id === itemId);
+                if (row) {
+                  setTransferTarget({ item: row.item, maxQuantity: quantity, destination: 'character' });
+                  return;
+                }
+              }
+              handleTransferToCharacter(itemId, 1);
+            }}
             onExpand={handleExpandGlobalInventory}
             expanding={expandingGlobal}
             expandTitle={`Expandir +${EXPAND_SLOTS} slots (custo: ${EXPAND_COST_GOLD} GOLD)`}

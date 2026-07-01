@@ -26,8 +26,9 @@ interface CharacterItemGridProps {
   /** Envia o item de volta ao inventário global (opcional — usado em /inventory).
    *  Recebe a quantidade (1 = uma unidade; stack inteiro no "Enviar tudo"). */
   onSendToGlobal?: (itemId: string, quantity?: number) => void;
-  /** Inventário global: transfere o item para o personagem ativo (opcional). */
-  onTransfer?: (itemId: string) => void;
+  /** Inventário global: transfere o item para o personagem ativo (opcional).
+   *  Recebe a quantidade disponível na pilha (1 = uma unidade). */
+  onTransfer?: (itemId: string, quantity?: number) => void;
   /** Texto de busca para filtrar por nome. */
   search?: string;
   gridTemplateColumns?: string;

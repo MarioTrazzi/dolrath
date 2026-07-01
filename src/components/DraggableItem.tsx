@@ -23,7 +23,7 @@ interface DraggableItemProps {
   onUnequip?: (itemId: string) => void;
   onConsume?: (itemId: string) => void;
   onEnhance?: (inventoryId: string, itemName: string, stoneCategory?: 'WEAPON' | 'ARMOR') => void;
-  onTransfer?: (itemId: string) => void;
+  onTransfer?: (itemId: string, quantity?: number) => void;
   onSendToGlobal?: (itemId: string, quantity?: number) => void;
   characterId?: string;
   /** Modo compacto estilo Black Desert: slot pequeno, fundo escuro */

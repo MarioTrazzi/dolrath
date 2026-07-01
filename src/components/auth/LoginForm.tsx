@@ -1,21 +1,46 @@
 'use client'
 
+// ============================================================
+// DOLRATH — Login por carteira (SIWE-style)
+// Fluxo: challenge HMAC → assinatura gratuita → signIn('wallet').
+// Visual segue o design system da landing (ui.tsx + glass-card).
+// ============================================================
+
 import { useState } from 'react'
-import { signIn } from 'next-auth/react'
-import { Wallet } from 'lucide-react'
+import { signIn, useSession } from 'next-auth/react'
+import Link from 'next/link'
+import { Wallet, Swords, ArrowRight, Scroll, PenLine } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { ethers } from 'ethers'
 import { getWalletTxErrorMessage } from '@/lib/walletErrors'
+import { Button, GlassCard, Badge, D20 } from '@/components/landing/ui'
+
+// Etapas do fluxo — viram feedback visual no botão e na lista de passos.
+type LoginStep = 'idle' | 'connect' | 'sign' | 'verify'
+
+const STEP_LABEL: Record<Exclude<LoginStep, 'idle'>, string> = {
+  connect: 'Abrindo a carteira…',
+  sign: 'Aguardando sua assinatura…',
+  verify: 'Validando e entrando…',
+}
+
+const STEPS: { key: Exclude<LoginStep, 'idle'>; Icon: typeof Wallet; title: string; desc: string }[] = [
+  { key: 'connect', Icon: Wallet, title: 'Conecte a carteira', desc: 'MetaMask ou compatível — sem cadastro, sem senha.' },
+  { key: 'sign', Icon: PenLine, title: 'Assine a mensagem', desc: 'Assinatura gratuita: prova que a carteira é sua. Nenhuma transação é enviada.' },
+  { key: 'verify', Icon: Swords, title: 'Entre na arena', desc: 'Primeira vez? Sua conta é criada na hora, vinculada à carteira.' },
+]
 
 export function LoginForm() {
-  const [isLoading, setIsLoading] = useState(false)
+  const { data: session } = useSession()
+  const [step, setStep] = useState<LoginStep>('idle')
   const [error, setError] = useState<string | null>(null)
+  const isLoading = step !== 'idle'
 
   const handleWalletLogin = async () => {
-    setIsLoading(true)
     setError(null)
 
     try {
+      setStep('connect')
       const eth = (window as any)?.ethereum
       if (!eth) {
         throw new Error('MetaMask não encontrada. Instale/ative a extensão para continuar.')
@@ -26,7 +51,7 @@ export function LoginForm() {
       const signer = await provider.getSigner()
       const address = (await signer.getAddress()).toLowerCase()
 
-      // 1) Get a challenge from the server.
+      // 1) Challenge do servidor (HMAC, sem escrita no DB).
       const challengeRes = await fetch('/api/auth/wallet/challenge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -44,10 +69,12 @@ export function LoginForm() {
         hmac: string
       }
 
-      // 2) Sign it (free, no transaction).
+      // 2) Assinatura gratuita (nenhuma transação).
+      setStep('sign')
       const signature = await signer.signMessage(message)
 
-      // 3) Submit to NextAuth.
+      // 3) Submete ao NextAuth.
+      setStep('verify')
       const result = await signIn('wallet', {
         address,
         message,
@@ -60,81 +87,134 @@ export function LoginForm() {
 
       if (result?.error) {
         setError('Não foi possível validar sua carteira. Tente novamente.')
+        setStep('idle')
       } else {
+        // Reload completo: garante que SessionProvider, GoldProvider e
+        // ActiveCharacterProvider partam já com a sessão nova.
         window.location.href = '/dashboard'
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : getWalletTxErrorMessage(e))
-    } finally {
-      setIsLoading(false)
+      setError(getWalletTxErrorMessage(e, 'Não foi possível conectar. Tente novamente.'))
+      setStep('idle')
     }
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="glass-card p-8"
-    >
-      {/* Header */}
+    <GlassCard className="relative p-8 sm:p-10">
+      {/* Emblema d20 + título */}
       <div className="text-center mb-8">
         <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ delay: 0.2, type: 'spring' }}
-          className="w-16 h-16 bg-gradient-to-r from-primary to-primary-dark rounded-full flex items-center justify-center mx-auto mb-4"
+          initial={{ scale: 0, rotate: -30 }}
+          animate={{ scale: 1, rotate: 0 }}
+          transition={{ delay: 0.15, type: 'spring', stiffness: 200, damping: 16 }}
+          className="flex justify-center mb-5"
         >
-          <span className="text-2xl font-bold text-white">⚔️</span>
+          <D20 size={84} value={20} />
         </motion.div>
-        <h1 className="text-3xl font-bold text-text-primary mb-2">
-          Bem-vindo ao Dolrath
+        <Badge tone="primary" icon={<Scroll size={13} />} className="mb-4">
+          RPG on-chain · NFT
+        </Badge>
+        <h1 className="text-3xl sm:text-4xl font-bold text-white text-balance">
+          Entre em{' '}
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-purple-400">
+            Dolrath
+          </span>
         </h1>
-        <p className="text-text-secondary">
-          Conecte sua carteira para entrar na arena
+        <p className="mt-3 text-textsec text-pretty">
+          Sua carteira é sua conta. Conecte, assine de graça e role seu primeiro d20.
         </p>
       </div>
 
-      {/* Wallet Login Button */}
-      <button
-        type="button"
-        onClick={handleWalletLogin}
-        disabled={isLoading}
-        className="w-full h-12 flex items-center justify-center gap-3 text-base font-semibold bg-gradient-to-r from-primary to-primary-dark text-white rounded-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        <Wallet className="w-5 h-5" />
-        {isLoading ? 'Conectando…' : 'Conectar carteira'}
-      </button>
+      {session ? (
+        // Já logado: nada de pedir assinatura de novo — segue pro jogo.
+        <div className="flex flex-col gap-3">
+          <Button as="a" href="/dashboard" size="lg" className="w-full" icon={<Swords size={18} />}>
+            Continuar como {session.user?.name || 'aventureiro'}
+          </Button>
+          <p className="text-center text-xs text-textsec">
+            Você já está conectado. Para trocar de carteira, saia primeiro.
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* Passos do fluxo — o passo ativo acende durante o login */}
+          <ol className="flex flex-col gap-3 mb-8">
+            {STEPS.map((s, i) => {
+              const active = step === s.key
+              return (
+                <li
+                  key={s.key}
+                  className={`flex items-start gap-3 rounded-xl border p-3 transition-colors ${
+                    active ? 'border-primary/50 bg-primary/10' : 'border-white/10 bg-white/[0.03]'
+                  }`}
+                >
+                  <span
+                    className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors ${
+                      active
+                        ? 'border-primary/50 bg-primary/20 text-primary'
+                        : 'border-white/10 bg-white/5 text-textsec'
+                    }`}
+                  >
+                    <s.Icon size={16} />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-combat text-[10px] text-primary/80">0{i + 1}</span>
+                      <h2 className="text-sm font-semibold text-white">{s.title}</h2>
+                    </div>
+                    <p className="text-xs text-textsec leading-relaxed">{s.desc}</p>
+                  </div>
+                </li>
+              )
+            })}
+          </ol>
 
-      {/* Error Message */}
-      {error && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mt-4 bg-error/10 border border-error/20 rounded-lg p-3"
-        >
-          <p className="text-sm text-error">{error}</p>
-        </motion.div>
+          <Button
+            size="lg"
+            className="w-full"
+            onClick={handleWalletLogin}
+            disabled={isLoading}
+            icon={<Wallet size={18} />}
+            iconRight={isLoading ? undefined : <ArrowRight size={16} />}
+          >
+            {isLoading ? STEP_LABEL[step as Exclude<LoginStep, 'idle'>] : 'Conectar Carteira'}
+          </Button>
+
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-4 rounded-lg border border-error/30 bg-error/10 p-3"
+              role="alert"
+            >
+              <p className="text-sm text-error">{error}</p>
+            </motion.div>
+          )}
+
+          <div className="mt-8 flex flex-col gap-2 text-center">
+            <p className="text-sm text-textsec">
+              Não tem uma carteira?{' '}
+              <a
+                href="https://metamask.io/download/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-primary transition-colors hover:text-primary-dark"
+              >
+                Instalar MetaMask
+              </a>
+            </p>
+            <p className="text-xs text-textsec/70 text-pretty">
+              Você pode adicionar um email depois, nas configurações, para receber novidades.
+            </p>
+          </div>
+        </>
       )}
 
-      {/* Footer */}
-      <div className="mt-8 text-center">
-        <p className="text-text-secondary text-sm">
-          Não tem uma carteira?{' '}
-          <a
-            href="https://metamask.io/download/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary hover:text-primary-dark font-medium transition-colors"
-          >
-            Instalar MetaMask
-          </a>
-        </p>
-        <p className="text-text-secondary text-xs mt-3">
-          Sua primeira conexão cria sua conta automaticamente. Você pode adicionar
-          um email depois, nas configurações, para receber novidades.
-        </p>
+      <div className="mt-8 border-t border-white/5 pt-4 text-center">
+        <Link href="/" className="text-xs text-textsec transition-colors hover:text-white">
+          ← Voltar para a página inicial
+        </Link>
       </div>
-    </motion.div>
+    </GlassCard>
   )
 }

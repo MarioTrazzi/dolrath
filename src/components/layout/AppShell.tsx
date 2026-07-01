@@ -5,7 +5,7 @@ import { Navbar } from '@/components/layout/Navbar'
 
 // Rotas que usam chrome próprio (navbar/hero full-bleed) e por isso NÃO
 // recebem a Navbar global do app nem o wrapper de gradiente/pt-16.
-const BARE_ROUTES = ['/']
+const BARE_ROUTES = ['/', '/auth/login', '/auth/error']
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()

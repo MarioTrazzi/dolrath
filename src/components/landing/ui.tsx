@@ -12,8 +12,8 @@
 //   ✓ rounded-lg/xl/2xl                   ✗ cantos retos
 // ============================================================
 
-import React from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
+import React, { useMemo } from 'react'
+import { motion, useReducedMotion, useScroll, useTransform } from 'framer-motion'
 
 type DivProps = React.HTMLAttributes<HTMLDivElement>
 
@@ -308,6 +308,83 @@ export function DiceChip({
       <span className="font-combat text-xs text-textsec">d{sides}</span>
       <span className="font-combat text-sm font-bold text-primary">{rolling ? '…' : value}</span>
     </span>
+  )
+}
+
+// ---------- ArenaSky (céu enluarado — hero, CTA e telas de auth) ----------
+interface Star {
+  id: number; x: number; y: number; size: number; delay: number; dur: number; dim: boolean
+}
+
+// Estrelas determinísticas (seed fixa) para layout estável entre renders.
+function makeStars(count: number, seed = 7): Star[] {
+  let s = seed
+  const rnd = () => {
+    s = (s * 16807) % 2147483647
+    return s / 2147483647
+  }
+  return Array.from({ length: count }, (_, i) => ({
+    id: i,
+    x: rnd() * 100,
+    y: rnd() * 88,
+    size: 6 + rnd() * 9,
+    delay: rnd() * 4,
+    dur: 2.5 + rnd() * 3,
+    dim: rnd() > 0.6,
+  }))
+}
+
+export function ArenaSky({
+  starCount = 40, glow = 1, parallax = true, moon = true,
+}: { starCount?: number; glow?: number; parallax?: boolean; moon?: boolean }) {
+  const stars = useMemo(() => makeStars(starCount), [starCount])
+  const { scrollY } = useScroll()
+  const yStars = useTransform(scrollY, [0, 800], [0, parallax ? 80 : 0])
+  const yMoon = useTransform(scrollY, [0, 800], [0, parallax ? 140 : 0])
+  return (
+    <div className="absolute inset-0 overflow-hidden arena-sky" aria-hidden="true">
+      {/* brilhos de cena */}
+      <div
+        className="absolute -bottom-32 left-1/2 -translate-x-1/2 w-[80rem] h-[26rem] rounded-full blur-3xl"
+        style={{ background: 'rgba(233,69,96,0.16)', opacity: glow }}
+      />
+      <div
+        className="absolute top-1/4 -left-40 w-[34rem] h-[34rem] rounded-full blur-3xl"
+        style={{ background: 'rgba(147,51,234,0.18)', opacity: glow }}
+      />
+      {/* lua */}
+      {moon && (
+        <motion.div style={{ y: yMoon }} className="absolute top-[12%] right-[12%]">
+          <div
+            className="w-20 h-20 md:w-28 md:h-28 rounded-full"
+            style={{
+              background: 'radial-gradient(circle at 38% 35%, #fef3c7, #fde68a 55%, #f5d57a)',
+              boxShadow: `0 0 60px 18px rgba(253,230,138,${0.35 * glow}), 0 0 140px 60px rgba(253,230,138,${0.12 * glow})`,
+            }}
+          />
+        </motion.div>
+      )}
+      {/* estrelas ✦ */}
+      <motion.div style={{ y: yStars }} className="absolute inset-0">
+        {stars.map((st) => (
+          <span
+            key={st.id}
+            className="absolute text-amber-100 select-none"
+            style={{
+              left: `${st.x}%`,
+              top: `${st.y}%`,
+              fontSize: `${st.size}px`,
+              opacity: st.dim ? 0.3 : 0.7,
+              animation: `star-twinkle ${st.dur}s ease-in-out ${st.delay}s infinite`,
+            }}
+          >
+            ✦
+          </span>
+        ))}
+      </motion.div>
+      {/* horizonte */}
+      <div className="absolute bottom-0 inset-x-0 h-40 bg-gradient-to-t from-background to-transparent" />
+    </div>
   )
 }
 

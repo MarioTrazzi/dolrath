@@ -10,14 +10,14 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
-import { motion, AnimatePresence, useScroll, useTransform, useReducedMotion } from 'framer-motion'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import {
   Dices, Swords, Shield, Coins, Wallet, Play, Sparkles, ArrowRight, Menu, X,
   Github, Twitter, MessageCircle, Scroll, Wand2, VenetianMask, Hand, Axe,
   AlertTriangle, Zap, Gem, RefreshCw, Palette, Crown, Skull,
   Lock, Hammer,
 } from 'lucide-react'
-import { Button, Card, GlassCard, Badge, StatBar, SectionHeading, D20, DiceChip, Reveal } from './ui'
+import { Button, Card, GlassCard, Badge, StatBar, SectionHeading, D20, DiceChip, Reveal, ArenaSky } from './ui'
 import { itemImagePath } from '@/lib/itemCatalog'
 import { DUNGEON_RUNS, type DungeonRunId, type RunNode, type RunDrop } from './dungeonRuns'
 
@@ -52,86 +52,6 @@ function GearTile({ piece, size = 'sm', className = '' }: { piece: GearPiece; si
       {/* asset estático /items/<slug>.webp — img simples (sem next/image) */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={itemImagePath(piece.name)} alt={piece.name} loading="lazy" className="w-full h-full object-cover" />
-    </div>
-  )
-}
-
-// ============================================================
-// Céu enluarado (fundo do hero / CTA)
-// ============================================================
-
-interface Star {
-  id: number; x: number; y: number; size: number; delay: number; dur: number; dim: boolean
-}
-
-// Estrelas determinísticas (seed fixa) para layout estável entre renders.
-function makeStars(count: number, seed = 7): Star[] {
-  let s = seed
-  const rnd = () => {
-    s = (s * 16807) % 2147483647
-    return s / 2147483647
-  }
-  return Array.from({ length: count }, (_, i) => ({
-    id: i,
-    x: rnd() * 100,
-    y: rnd() * 88,
-    size: 6 + rnd() * 9,
-    delay: rnd() * 4,
-    dur: 2.5 + rnd() * 3,
-    dim: rnd() > 0.6,
-  }))
-}
-
-function ArenaSky({
-  starCount = 40, glow = 1, parallax = true, moon = true,
-}: { starCount?: number; glow?: number; parallax?: boolean; moon?: boolean }) {
-  const stars = useMemo(() => makeStars(starCount), [starCount])
-  const { scrollY } = useScroll()
-  const yStars = useTransform(scrollY, [0, 800], [0, parallax ? 80 : 0])
-  const yMoon = useTransform(scrollY, [0, 800], [0, parallax ? 140 : 0])
-  return (
-    <div className="absolute inset-0 overflow-hidden arena-sky" aria-hidden="true">
-      {/* brilhos de cena */}
-      <div
-        className="absolute -bottom-32 left-1/2 -translate-x-1/2 w-[80rem] h-[26rem] rounded-full blur-3xl"
-        style={{ background: 'rgba(233,69,96,0.16)', opacity: glow }}
-      />
-      <div
-        className="absolute top-1/4 -left-40 w-[34rem] h-[34rem] rounded-full blur-3xl"
-        style={{ background: 'rgba(147,51,234,0.18)', opacity: glow }}
-      />
-      {/* lua */}
-      {moon && (
-        <motion.div style={{ y: yMoon }} className="absolute top-[12%] right-[12%]">
-          <div
-            className="w-20 h-20 md:w-28 md:h-28 rounded-full"
-            style={{
-              background: 'radial-gradient(circle at 38% 35%, #fef3c7, #fde68a 55%, #f5d57a)',
-              boxShadow: `0 0 60px 18px rgba(253,230,138,${0.35 * glow}), 0 0 140px 60px rgba(253,230,138,${0.12 * glow})`,
-            }}
-          />
-        </motion.div>
-      )}
-      {/* estrelas ✦ */}
-      <motion.div style={{ y: yStars }} className="absolute inset-0">
-        {stars.map((st) => (
-          <span
-            key={st.id}
-            className="absolute text-amber-100 select-none"
-            style={{
-              left: `${st.x}%`,
-              top: `${st.y}%`,
-              fontSize: `${st.size}px`,
-              opacity: st.dim ? 0.3 : 0.7,
-              animation: `star-twinkle ${st.dur}s ease-in-out ${st.delay}s infinite`,
-            }}
-          >
-            ✦
-          </span>
-        ))}
-      </motion.div>
-      {/* horizonte */}
-      <div className="absolute bottom-0 inset-x-0 h-40 bg-gradient-to-t from-background to-transparent" />
     </div>
   )
 }

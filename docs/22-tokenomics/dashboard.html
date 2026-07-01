@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dolrath — Tokenomics Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="dashboard-data.js"></script>
+<style>
+  :root { --bg:#0d0a1a; --card:#171230; --line:#2a2350; --tx:#e5e0ff; --mut:#8f86c2;
+          --roxo:#8B5CF6; --ciano:#06B6D4; --ambar:#F59E0B; --verde:#22c55e; --verm:#ef4444; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--tx);
+         font:14px/1.5 system-ui,-apple-system,'Segoe UI',sans-serif; padding:24px; }
+  h1 { font-size:22px; margin:0; }
+  h1 span { color:var(--roxo); }
+  .sub { color:var(--mut); margin:4px 0 20px; }
+  .controls { display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap; }
+  .controls button { background:var(--card); color:var(--tx); border:1px solid var(--line);
+    padding:8px 16px; border-radius:8px; cursor:pointer; font-size:14px; }
+  .controls button.active { background:var(--roxo); border-color:var(--roxo); color:#fff; }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-bottom:20px; }
+  .kpi { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; }
+  .kpi .v { font-size:20px; font-weight:700; color:var(--ciano); }
+  .kpi .l { color:var(--mut); font-size:12px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(420px,1fr)); gap:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; }
+  .card h3 { margin:0 0 4px; font-size:15px; }
+  .card p { margin:0 0 10px; color:var(--mut); font-size:12px; }
+  .card canvas { max-height:260px; }
+  footer { color:var(--mut); margin-top:24px; font-size:12px; }
+  a { color:var(--ciano); }
+</style>
+</head>
+<body>
+<h1>⚔️ Dolrath — <span>Tokenomics Dashboard</span></h1>
+<div class="sub">Projeção de 120 meses gerada por <code>scripts/token-economy-sim.js</code> — cenários com premissas públicas, não previsão de preço. <span id="gen"></span></div>
+
+<div class="controls" id="scenarioBtns"></div>
+<div class="kpis" id="kpis"></div>
+
+<div class="grid">
+  <div class="card"><h3>Circulação do DOL</h3><p>circulante vs supply total (1B) ao longo de 10 anos</p><canvas id="c1"></canvas></div>
+  <div class="card"><h3>DOL bloqueado × staked × livre</h3><p>vesting/locks, stake e float líquido</p><canvas id="c2"></canvas></div>
+  <div class="card"><h3>Emissão × queima mensal de DOL</h3><p>epochs (decaimento 25%/ano do bucket) vs burn de taxas/passes</p><canvas id="c3"></canvas></div>
+  <div class="card"><h3>Crescimento de jogadores</h3><p>MAU, entradas e saídas mensais</p><canvas id="c4"></canvas></div>
+  <div class="card"><h3>Treasury</h3><p>DOL acumulado (bucket + taxas) e GOLD do tesouro</p><canvas id="c5"></canvas></div>
+  <div class="card"><h3>GOLD on-chain</h3><p>supply claimado, queima acumulada</p><canvas id="c6"></canvas></div>
+  <div class="card"><h3>Market cap (premissa de preço por cenário)</h3><p>circulante × preço-premissa — sensibilidade, não previsão</p><canvas id="c7"></canvas></div>
+  <div class="card"><h3>Inflação mensal do DOL</h3><p>emissão do mês ÷ circulante</p><canvas id="c8"></canvas></div>
+</div>
+
+<footer>Dolrath Game Bible · <a href="README.md">docs/22-tokenomics</a> · regenerar: <code>node scripts/token-economy-sim.js</code></footer>
+
+<script>
+const SIM = window.DOLRATH_SIM;
+document.getElementById('gen').textContent = 'Gerado em ' + new Date(SIM.generatedAt).toLocaleString('pt-BR') + '.';
+const CORES = { roxo:'#8B5CF6', ciano:'#06B6D4', ambar:'#F59E0B', verde:'#22c55e', verm:'#ef4444', mut:'#8f86c2' };
+Chart.defaults.color = '#8f86c2';
+Chart.defaults.borderColor = '#2a2350';
+
+let scenario = 'base';
+let charts = [];
+const anos = Array.from({length: SIM.months}, (_, i) => ((i + 1) / 12));
+const labels = anos.map(a => Number.isInteger(a) ? 'Ano ' + a : '');
+
+function fmt(n) {
+  if (Math.abs(n) >= 1e9) return (n/1e9).toFixed(1) + 'B';
+  if (Math.abs(n) >= 1e6) return (n/1e6).toFixed(1) + 'M';
+  if (Math.abs(n) >= 1e3) return (n/1e3).toFixed(1) + 'k';
+  return String(Math.round(n));
+}
+const OPT = (yFmt) => ({
+  responsive: true, interaction: { mode: 'index', intersect: false },
+  plugins: { legend: { labels: { boxWidth: 12 } },
+    tooltip: { callbacks: { label: (c) => c.dataset.label + ': ' + fmt(c.parsed.y) } } },
+  scales: { x: { ticks: { autoSkip: false, maxRotation: 0,
+                 callback: (v, i) => labels[i] || null } },
+            y: { ticks: { callback: (v) => (yFmt || fmt)(v) } } },
+  elements: { point: { radius: 0 } },
+});
+function line(label, data, color, extra) {
+  return Object.assign({ label, data, borderColor: color, backgroundColor: color + '33',
+    borderWidth: 2, tension: 0.25, fill: false }, extra || {});
+}
+
+function render() {
+  charts.forEach(c => c.destroy()); charts = [];
+  const S = SIM.scenarios[scenario].series;
+  const last = SIM.months - 1;
+
+  document.getElementById('kpis').innerHTML = [
+    ['MAU ano 10', fmt(S.mau[last])],
+    ['DOL circulante ano 10', fmt(S.dolCirculating[last])],
+    ['DOL queimado (acum.)', fmt(S.dolBurnedTotal[last])],
+    ['DOL em staking ano 10', fmt(S.dolStaked[last])],
+    ['Treasury DOL ano 10', fmt(S.dolTreasury[last])],
+    ['Market cap ano 10', '$' + fmt(S.marketCapUsd[last])],
+  ].map(([l, v]) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('');
+
+  const mk = (id, cfg) => charts.push(new Chart(document.getElementById(id), cfg));
+
+  mk('c1', { type: 'line', options: OPT(), data: { labels, datasets: [
+    line('DOL circulante', S.dolCirculating, CORES.roxo, { fill: true }),
+    line('Supply total', Array(SIM.months).fill(SIM.supply), CORES.mut, { borderDash: [6,4] }),
+  ]}});
+  mk('c2', { type: 'line', options: OPT(), data: { labels, datasets: [
+    line('Bloqueado (vesting)', S.dolLocked, CORES.ambar),
+    line('Em staking', S.dolStaked, CORES.ciano),
+    line('Float livre', S.dolFloatFree, CORES.verde),
+  ]}});
+  mk('c3', { type: 'line', options: OPT(), data: { labels, datasets: [
+    line('Emissão mensal', S.dolEmissionMonth, CORES.roxo),
+    line('Burn mensal', S.dolBurnMonth, CORES.verm),
+  ]}});
+  mk('c4', { type: 'line', options: OPT(), data: { labels, datasets: [
+    line('MAU', S.mau, CORES.ciano, { fill: true }),
+    line('Entradas/mês', S.joins, CORES.verde),
+    line('Saídas/mês', S.quits, CORES.verm),
+  ]}});
+  mk('c5', { type: 'line', options: OPT(), data: { labels, datasets: [
+    line('Treasury DOL', S.dolTreasury, CORES.roxo),
+    line('Treasury GOLD', S.goldTreasury, CORES.ambar),
+  ]}});
+  mk('c6', { type: 'line', options: OPT(), data: { labels, datasets: [
+    line('GOLD on-chain', S.goldOnchainSupply, CORES.ambar, { fill: true }),
+    line('GOLD queimado (acum.)', S.goldBurnedTotal, CORES.verm),
+  ]}});
+  mk('c7', { type: 'line', options: OPT((v) => '$' + fmt(v)), data: { labels, datasets:
+    Object.entries(SIM.scenarios).map(([k, sc], i) =>
+      line(`${sc.label} ($${sc.dolPrice})`, sc.series.marketCapUsd,
+        [CORES.verm, CORES.roxo, CORES.verde][i], k === scenario ? { borderWidth: 3 } : { borderDash: [4,4] }))
+  }});
+  mk('c8', { type: 'line', options: OPT((v) => v.toFixed(1) + '%'), data: { labels, datasets: [
+    line('Inflação mensal %', S.inflationMonthlyPct, CORES.ciano),
+  ]}});
+}
+
+const btns = document.getElementById('scenarioBtns');
+for (const [k, sc] of Object.entries(SIM.scenarios)) {
+  const b = document.createElement('button');
+  b.textContent = sc.label;
+  b.dataset.k = k;
+  if (k === scenario) b.classList.add('active');
+  b.onclick = () => {
+    scenario = k;
+    btns.querySelectorAll('button').forEach(x => x.classList.toggle('active', x.dataset.k === k));
+    render();
+  };
+  btns.appendChild(b);
+}
+render();
+</script>
+</body>
+</html>

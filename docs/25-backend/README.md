@@ -1,0 +1,35 @@
+# 25 — Backend
+
+## Stack
+
+| Camada | Tecnologia |
+|---|---|
+| Runtime web + API | Next.js 14 (App Router) na **Vercel** (projeto "dolrath"; push no `main` = deploy automático) |
+| Tempo real (PvP) | Socket.IO standalone (`server/socket-server.js`) |
+| Banco | PostgreSQL **Neon** com Prisma (Accelerate na frente); scripts administrativos usam `DATABASE_URL_NEON` |
+| ORM | Prisma 6 (`prisma/schema.prisma`) |
+| Blockchain | ethers v6 + Hardhat (`web3/`) |
+| IA | Anthropic + OpenAI (juiz de combate, geração de imagens gpt-image-1) |
+| Mídia | Cloudinary (arte de itens/monstros/personagens) |
+
+## Modelos de dados centrais
+
+`User` (conta, `goldBalance` = banco), `Character` (herói, `gold` = carteira), `CharacterInventory`/`CharacterEquipment` (itens jogáveis), `UserInventory` (compras da loja), `Item`/`ItemNft` (catálogo e espelho on-chain, com `enhancementLevel`/`mintSource`/`listingLockedAt`), `DungeonRun` (estado servidor-autoritativo da run), `CharacterHistory`, `Account`/`Session` (auth).
+
+## Decisões de arquitetura que importam
+
+1. **Servidor é dono da economia.** Rolagens, loot, preços e recompensas nascem no servidor; o cliente é apresentação (ver [API](../24-api/README.md)).
+2. **Off-chain primeiro, on-chain por escolha.** O jogo roda inteiro no Postgres; blockchain entra por assinatura quando o jogador quer propriedade/comércio.
+3. **Idempotência nas pontes:** claims usam nonce por destinatário; mints usam voucher com trava de inventário; confirmações leem eventos da chain, nunca o body do cliente.
+4. **Simulação como teste:** mudanças de balance/economia validadas por scripts em `scripts/` antes de produção (ver [Balancing](../30-balancing/README.md)).
+
+## Ambientes
+
+- **Produção:** Vercel + Neon + Polygon; envs no painel da Vercel (segredos de auth/DB não existem no dev local — UI é validada com páginas mock).
+- **Dev local:** `npm run dev` + `npm run socket:dev`; typecheck direcionado aos arquivos tocados (53 erros históricos conhecidos no projeto).
+
+## EM BREVE
+
+- Fila de jobs (claims em lote, snapshots de métricas).
+- Cache/replicação de leitura para leaderboards.
+- Indexador de eventos on-chain (histórico de preços do marketplace).

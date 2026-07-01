@@ -747,6 +747,24 @@ const CROSS_CLASS_CHANCE = 0.2
 // Só armas/armaduras podem vir com +N embutido.
 const ACCESSORY_TYPES = new Set(['RING', 'NECKLACE', 'BELT'])
 
+// Floresta empurra pra alquimia: Pó de Fênix (revive) quase não se usa nesse
+// início, então só passa a cair a partir da Caverna. Em troca, ingrediente de
+// alquimia cai bem mais na Floresta (ver DUNGEON_INGREDIENT_MULT) pra bancar
+// craft de poção de vida/mana.
+const CONSUMABLE_MIN_DIFFICULTY_STARS: Record<string, number> = {
+  'Pó de Fênix': 2,
+}
+
+// Multiplica a chance de ingrediente de alquimia (não afeta material de forja,
+// que usa o mesmo cfg.pMaterial). Floresta ganha mais pra sustentar o craft de
+// poção de vida/mana logo cedo.
+const DUNGEON_INGREDIENT_MULT: Record<DungeonId, number> = {
+  floresta: 1.8,
+  caverna: 1,
+  pantano: 1,
+  ruinas: 1,
+}
+
 // Aprimoramento JÁ embutido no drop, por masmorra. A floresta entrega itens +4..+7
 // (o +7 é raro). null = item cai +0.
 const DUNGEON_DROP_ENH: Record<DungeonId, { min: number; max: number } | null> = {
@@ -792,7 +810,7 @@ export function rollNodeLoot(
 
   // ingrediente de alquimia (espólio de craft de poção).
   // Nó normal → COMUM/INCOMUM; chefe → também RARO/ÉPICO.
-  if (Math.random() < cfg.pMaterial * mult.all) {
+  if (Math.random() < cfg.pMaterial * mult.all * DUNGEON_INGREDIENT_MULT[dungeon.id]) {
     const rarities = isBoss
       ? (['COMMON', 'UNCOMMON', 'RARE', 'EPIC'] as const)
       : (['COMMON', 'UNCOMMON'] as const)
@@ -870,7 +888,10 @@ export function rollNodeLoot(
     if (Math.random() < cfg.pItemRare * mult.all) {
       const pool = getDungeonConsumables().filter(c => {
         const r = rarityOf(c)
-        return r === 'RARE' || r === 'EPIC'
+        if (r !== 'RARE' && r !== 'EPIC') return false
+        const minStars = CONSUMABLE_MIN_DIFFICULTY_STARS[c.name]
+        if (minStars && dungeon.difficultyStars < minStars) return false
+        return true
       })
       const c = pickFrom(pool)
       if (c) drops.push({ name: c.name, kind: 'consumable', rarity: rarityOf(c), emoji: '🧪' })

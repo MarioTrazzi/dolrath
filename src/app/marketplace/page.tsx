@@ -455,6 +455,17 @@ export default function MarketplacePage() {
         </p>
       </header>
 
+      {/* ECONOMIA EM 30 SEGUNDOS */}
+      <section className="rounded-2xl border border-emerald-400/20 bg-black/30 p-5">
+        <h2 className="text-sm font-bold text-emerald-200 mb-2">⚖️ A economia em 30 segundos</h2>
+        <ul className="grid gap-1.5 sm:grid-cols-2 text-xs text-textsec">
+          <li><span className="text-amber-300 font-semibold">GOLD</span> só nasce jogando — teto diário por jogador e gastos (loja, forja, alquimia) que consomem antes do saque. Sem impressora de dinheiro.</li>
+          <li><span className="text-indigo-300 font-semibold">DOL</span> tem supply fixo de 1 bilhão, cunhado uma única vez. Não existe mint: o supply só pode diminuir.</li>
+          <li>Cada venda aqui <span className="text-emerald-300 font-semibold">queima moeda de verdade</span> (destruição de supply no contrato) — quanto mais o mercado gira, mais escassos os tokens ficam.</li>
+          <li>Nada é chute: cada parâmetro foi <span className="text-emerald-300 font-semibold">balanceado por IA (Claude Fable 5)</span> com milhares de combates simulados e a economia projetada por 10 anos. <a href="/doc#tokenomics" className="text-primary hover:underline">Ver tokenomics</a> · <a href="/tokenomics/dashboard.html" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">dashboard</a></li>
+        </ul>
+      </section>
+
       {/* ABAS */}
       <div className="flex gap-2">
         <button

@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Wand2, RefreshCw, Check } from 'lucide-react';
+import { Wand2, RefreshCw, Check, Coins } from 'lucide-react';
 import { useCharacterCreationStore } from '@/lib/stores/characterCreationStore';
+import { payDolToTreasury, getImageRegenCostDol } from '@/lib/payDol';
 import {
   getRaceTransformations,
   TRANSFORMATION_CONFIG,
@@ -20,9 +21,64 @@ const TRANSFORMATION_STEPS = [
   'Finalizando…',
 ];
 
+// Regeração paga de uma forma: campo de ajustes + botão que paga DOL e regera.
+function PaidRegenControls({
+  cost,
+  busy,
+  onGenerate,
+}: {
+  cost: string;
+  busy: boolean;
+  onGenerate: (modification: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState('');
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        disabled={busy}
+        className="text-xs flex items-center gap-1 text-primary hover:underline disabled:opacity-50"
+      >
+        <Coins className="w-3 h-3" /> Ajustar e gerar de novo ({cost} DOL)
+      </button>
+    );
+  }
+
+  return (
+    <div className="space-y-2 w-full">
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="Opcional: o que quer mudar nesta forma? Ex: aura mais intensa, manter o cajado visível…"
+        className="w-full h-16 px-3 py-2 text-sm bg-background border border-white/20 rounded-lg text-text-primary placeholder:text-text-secondary resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
+      />
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => onGenerate(text)}
+          disabled={busy}
+          className="flex-1 py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-accent to-primary text-white disabled:opacity-50 flex items-center justify-center gap-2"
+        >
+          {busy ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Coins className="w-4 h-4" />}
+          Pagar {cost} DOL e gerar
+        </button>
+        <button
+          onClick={() => setOpen(false)}
+          disabled={busy}
+          className="px-3 py-2 rounded-lg text-sm bg-surface border border-white/20 text-text-secondary hover:text-text-primary disabled:opacity-50"
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function TransformationStep() {
   const {
     selectedRace,
+    selectedClass,
     selectedImage,
     chosenTransformation,
     transformationImage,
@@ -35,6 +91,7 @@ export function TransformationStep() {
 
   // Formas sendo geradas no momento (uma ou várias em paralelo).
   const [generating, setGenerating] = useState<Record<string, boolean>>({});
+  const regenCostDol = getImageRegenCostDol();
 
   const forms = getRaceTransformations(selectedRace?.id) as TransformationType[];
   const isMultiForm = forms.length > 1; // metamorfo
@@ -47,9 +104,10 @@ export function TransformationStep() {
     }
   }, [forms.length, markStepComplete]);
 
-  // Gera a arte de uma forma específica a partir da imagem base.
+  // Gera a arte de uma forma específica a partir da imagem base. A primeira
+  // geração de cada forma está inclusa; regerar é pago (DOL) e aceita ajustes.
   const generate = useCallback(
-    async (form: TransformationType) => {
+    async (form: TransformationType, opts?: { regen?: boolean; modification?: string }) => {
       if (!selectedImage) {
         toast.error('Escolha a imagem do personagem primeiro.');
         return;
@@ -58,10 +116,22 @@ export function TransformationStep() {
       // Single-form: também registra a forma escolhida.
       if (!isMultiForm) setChosenTransformation(form);
       try {
+        let paymentTxHash: string | undefined;
+        if (opts?.regen) {
+          paymentTxHash = await payDolToTreasury(regenCostDol);
+        }
+
         const res = await fetch('/api/ai/transformation-image', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ baseImage: selectedImage, transformationType: form }),
+          body: JSON.stringify({
+            baseImage: selectedImage,
+            transformationType: form,
+            classId: (selectedClass as any)?.id,
+            regen: Boolean(opts?.regen),
+            modification: opts?.modification,
+            paymentTxHash,
+          }),
         });
         const json = await res.json().catch(() => null);
         if (!res.ok || !json?.image) {
@@ -74,13 +144,16 @@ export function TransformationStep() {
         }
       } catch (error) {
         toast.error(error instanceof Error ? error.message : 'Erro ao gerar transformação');
-        if (isMultiForm) setTransformationImageFor(form, null);
-        else setTransformationImage(null);
+        // Regen: mantém a arte anterior em caso de falha (o jogador não perde nada).
+        if (!opts?.regen) {
+          if (isMultiForm) setTransformationImageFor(form, null);
+          else setTransformationImage(null);
+        }
       } finally {
         setGenerating((g) => ({ ...g, [form]: false }));
       }
     },
-    [selectedImage, isMultiForm, setChosenTransformation, setTransformationImage, setTransformationImageFor]
+    [selectedImage, selectedClass, isMultiForm, regenCostDol, setChosenTransformation, setTransformationImage, setTransformationImageFor]
   );
 
   // Single-form: gera automaticamente ao entrar na etapa.
@@ -173,28 +246,27 @@ export function TransformationStep() {
                   )}
                 </div>
 
-                <button
-                  onClick={() => generate(form)}
-                  disabled={busy || !selectedImage}
-                  className={cn(
-                    'w-full py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50',
-                    img
-                      ? 'bg-surface border border-white/20 text-text-secondary hover:text-text-primary'
-                      : 'bg-gradient-to-r from-primary to-primary-dark text-white'
-                  )}
-                >
-                  {busy ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                  ) : img ? (
-                    <>
-                      <RefreshCw className="w-4 h-4" /> Gerar de novo
-                    </>
-                  ) : (
-                    <>
-                      <Wand2 className="w-4 h-4" /> Gerar
-                    </>
-                  )}
-                </button>
+                {img ? (
+                  <PaidRegenControls
+                    cost={regenCostDol}
+                    busy={busy}
+                    onGenerate={(modification) => generate(form, { regen: true, modification })}
+                  />
+                ) : (
+                  <button
+                    onClick={() => generate(form)}
+                    disabled={busy || !selectedImage}
+                    className="w-full py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 bg-gradient-to-r from-primary to-primary-dark text-white"
+                  >
+                    {busy ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Wand2 className="w-4 h-4" /> Gerar
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             );
           })}
@@ -213,7 +285,9 @@ export function TransformationStep() {
       <div>
         <h2 className="text-2xl font-bold text-text-primary mb-2">Transformação</h2>
         <p className="text-text-secondary">
-          A IA usa sua imagem para revelar a forma que seu herói assume em combate.
+          A IA usa sua imagem para revelar a forma que seu herói assume em combate — o mesmo
+          personagem, com o mesmo traje, tomado pela energia da transformação. A primeira
+          geração está inclusa; regerar com ajustes custa {regenCostDol} DOL.
         </p>
       </div>
 
@@ -260,17 +334,15 @@ export function TransformationStep() {
           </div>
 
           {transformationImage && activeForm && (
-            <div className="mt-3 flex items-center justify-between">
-              <span className="text-xs text-text-secondary">
+            <div className="mt-3 space-y-2">
+              <span className="text-xs text-text-secondary block">
                 Brilho em combate: <span style={{ color: glow?.hex }}>{glow?.label}</span>
               </span>
-              <button
-                onClick={() => generate(activeForm)}
-                disabled={isGenerating}
-                className="text-xs flex items-center gap-1 text-primary hover:underline disabled:opacity-50"
-              >
-                <RefreshCw className="w-3 h-3" /> Gerar de novo
-              </button>
+              <PaidRegenControls
+                cost={regenCostDol}
+                busy={isGenerating}
+                onGenerate={(modification) => generate(activeForm, { regen: true, modification })}
+              />
             </div>
           )}
         </div>

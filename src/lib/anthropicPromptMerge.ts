@@ -64,6 +64,67 @@ export function deterministicMerge({ preprompt, userPrompt, statHints }: MergeIn
   return parts.join('\n');
 }
 
+// ─── Paid re-generation (image EDIT) ─────────────────────────────────────────
+// The player's current portrait goes to gpt-image-1's edit endpoint; Claude
+// turns their free-text request (any language) into one precise English edit
+// instruction that keeps the character identity and the locked style.
+
+const EDIT_SYSTEM =
+  'You are a prompt engineer for the dark-fantasy RPG "Dolrath". A player has ' +
+  'an AI-generated character portrait and requested changes to it. Produce ONE ' +
+  'edit instruction in English for an image-editing model (gpt-image-1) that ' +
+  'will receive the current portrait as the reference image.\n\n' +
+  'Rules:\n' +
+  '- The edit must KEEP the same character: same face and facial structure, ' +
+  'same race features, same class outfit and equipment, same framing, same art ' +
+  'style. State this explicitly in the instruction.\n' +
+  '- Apply ONLY the changes the player asked for, phrased clearly and ' +
+  'concretely. Translate to English if needed.\n' +
+  '- If part of the request would change the art style, add text/logos, add ' +
+  'more characters, or change race/class identity, silently drop that part.\n' +
+  '- Output a single cohesive English paragraph under 100 words.';
+
+export async function mergeEditPromptWithClaude(input: {
+  modification: string;
+  fallbackPrompt: string;
+}): Promise<{ prompt: string; mergedByClaude: boolean }> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const modification = (input.modification || '').replace(/\s+/g, ' ').trim().slice(0, 400);
+  if (!apiKey || !modification) {
+    return { prompt: input.fallbackPrompt, mergedByClaude: false };
+  }
+
+  const model = (process.env.ANTHROPIC_MODEL || 'claude-opus-4-8').trim();
+
+  try {
+    const client = new Anthropic({ apiKey });
+    const response = await client.messages.create({
+      model,
+      max_tokens: 1024,
+      system: EDIT_SYSTEM,
+      output_config: { format: { type: 'json_schema', schema: MERGE_SCHEMA } },
+      messages: [
+        { role: 'user', content: `PLAYER REQUESTED CHANGES: ${modification}` },
+      ],
+    });
+
+    const text = response.content
+      .map((block) => (block.type === 'text' ? block.text : ''))
+      .join('')
+      .trim();
+
+    const parsed = JSON.parse(text) as { prompt?: unknown };
+    const finalPrompt = typeof parsed?.prompt === 'string' ? parsed.prompt.trim() : '';
+
+    if (!finalPrompt) {
+      return { prompt: input.fallbackPrompt, mergedByClaude: false };
+    }
+    return { prompt: finalPrompt, mergedByClaude: true };
+  } catch {
+    return { prompt: input.fallbackPrompt, mergedByClaude: false };
+  }
+}
+
 export async function mergePromptWithClaude(input: MergeInput): Promise<{
   prompt: string;
   mergedByClaude: boolean;

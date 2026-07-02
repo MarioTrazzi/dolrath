@@ -97,6 +97,7 @@ export async function POST(
     const { image } = await generateTransformationImage({
       baseImage,
       transformationType,
+      classId: character.class,
     })
 
     const updated = await prisma.character.update({

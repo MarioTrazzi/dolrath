@@ -12,10 +12,44 @@ export type GenerateCharacterImageOptions = {
   statHints?: string;
 };
 
+// Regeração paga: edita o retrato ATUAL (image-to-image) aplicando só os
+// ajustes pedidos pelo jogador. Exige o txHash do pagamento em DOL.
+export async function editCharacterImage(options: {
+  baseImage: string;
+  modification: string;
+  paymentTxHash: string;
+}): Promise<{ image?: string; finalPrompt?: string; error?: string }> {
+  try {
+    const res = await fetch('/api/ai/character-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        edit: true,
+        baseImage: options.baseImage,
+        modification: options.modification,
+        paymentTxHash: options.paymentTxHash,
+      }),
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok) {
+      const msg = typeof json?.error === 'string' ? json.error : 'Falha ao regerar imagem';
+      return { error: msg };
+    }
+    const image = Array.isArray(json?.images) ? String(json.images[0] || '') : '';
+    if (!image) return { error: 'Resposta da IA vazia (sem imagem)' };
+    return {
+      image,
+      finalPrompt: typeof json?.finalPrompt === 'string' ? json.finalPrompt : undefined,
+    };
+  } catch {
+    return { error: 'Erro ao chamar o gerador de imagens' };
+  }
+}
+
 export async function generateCharacterImage(
   options: GenerateCharacterImageOptions
 ): Promise<{ images: string[]; finalPrompt?: string; mergedByClaude?: boolean; error?: string }> {
-  const numImages = options.numImages ?? 3;
+  const numImages = options.numImages ?? 1;
 
   const makeSvg = (label: string, bg: string) => {
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">

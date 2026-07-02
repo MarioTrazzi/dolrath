@@ -1,9 +1,17 @@
 import { NextResponse } from 'next/server';
-import { buildCombinationPreprompt } from '@/lib/characterImagePrompt';
-import { mergePromptWithClaude } from '@/lib/anthropicPromptMerge';
+import { auth } from '@/app/api/auth/[...nextauth]/route';
+import {
+  buildCombinationPreprompt,
+  buildCharacterEditPrompt,
+  DOLRATH_STYLE_BASE,
+} from '@/lib/characterImagePrompt';
+import { mergePromptWithClaude, mergeEditPromptWithClaude } from '@/lib/anthropicPromptMerge';
+import { openaiImageEdit, ImageEditError } from '@/lib/openaiImageEdit';
+import { consumeAiGenPayment, releaseAiGenPayment, AiGenPaymentError } from '@/lib/aiGenPayment';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 120;
 
 type Body = {
   // Legacy: a fully-built prompt.
@@ -17,6 +25,12 @@ type Body = {
   className?: string;
   userPrompt?: string;
   statHints?: string;
+  // Paid re-generation (image EDIT): the current portrait + the player's
+  // requested changes + the on-chain DOL payment that funds this generation.
+  edit?: boolean;
+  baseImage?: string;
+  modification?: string;
+  paymentTxHash?: string;
 };
 
 const clampInt = (value: unknown, min: number, max: number, fallback: number) => {
@@ -34,11 +48,64 @@ export async function POST(req: Request) {
     );
   }
 
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   let body: Body | null = null;
   try {
     body = (await req.json()) as Body;
   } catch {
     return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
+  }
+
+  // Paid re-generation: edits the CURRENT portrait (image-to-image) applying
+  // only the player's requested changes, so the result is the same character.
+  // Requires a fresh on-chain DOL payment (one tx = one generation).
+  if (body?.edit) {
+    const baseImage = String(body?.baseImage || '').trim();
+    if (!baseImage) {
+      return NextResponse.json({ error: 'baseImage é obrigatório para regerar' }, { status: 400 });
+    }
+    const walletAddress = (session.user.walletAddress || '').trim();
+    if (!walletAddress) {
+      return NextResponse.json({ error: 'Carteira não vinculada' }, { status: 403 });
+    }
+
+    const modification = String(body?.modification || '').trim();
+    const paymentTxHash = String(body?.paymentTxHash || '');
+    let paid = false;
+
+    try {
+      await consumeAiGenPayment({
+        userId: session.user.id,
+        walletAddress,
+        txHash: paymentTxHash,
+        purpose: 'character-image-edit',
+      });
+      paid = true;
+
+      const fallbackPrompt = buildCharacterEditPrompt(modification);
+      const merged = await mergeEditPromptWithClaude({ modification, fallbackPrompt });
+      const editPrompt = merged.mergedByClaude
+        ? `${merged.prompt}\n${DOLRATH_STYLE_BASE}`
+        : merged.prompt;
+
+      const image = await openaiImageEdit({ baseImage, prompt: editPrompt });
+      return NextResponse.json({
+        images: [image],
+        finalPrompt: editPrompt,
+        mergedByClaude: merged.mergedByClaude,
+      });
+    } catch (err) {
+      // Falhou depois do pagamento consumido: libera o tx para nova tentativa.
+      if (paid) await releaseAiGenPayment(paymentTxHash);
+      const status =
+        err instanceof AiGenPaymentError ? 402 : err instanceof ImageEditError ? 400 : 500;
+      const msg = err instanceof Error ? err.message : 'Erro ao regerar imagem';
+      return NextResponse.json({ error: msg }, { status });
+    }
   }
 
   // Structured NFT mode: race/class drive a locked style pre-prompt, then Claude
@@ -70,7 +137,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Prompt obrigatório' }, { status: 400 });
   }
 
-  const numImages = clampInt(body?.numImages, 1, 4, 3);
+  // A criação gera UMA imagem (a NFT); ajustes extras são regerações pagas.
+  const numImages = clampInt(body?.numImages, 1, 4, 1);
 
   const model = (process.env.OPENAI_IMAGE_MODEL || 'dall-e-3').trim();
   const size = (process.env.OPENAI_IMAGE_SIZE || '1024x1024').trim();

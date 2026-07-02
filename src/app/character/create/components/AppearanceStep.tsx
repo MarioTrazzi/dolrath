@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Wand2, RefreshCw, Download, Upload, Check } from 'lucide-react';
-import { generateCharacterImage } from '@/lib/openai';
+import { Wand2, RefreshCw, Download, Upload, Check, Coins } from 'lucide-react';
+import { generateCharacterImage, editCharacterImage } from '@/lib/openai';
+import { payDolToTreasury, getImageRegenCostDol } from '@/lib/payDol';
 import { ImageUpload } from './ImageUpload';
 import { GenerationProgress } from './GenerationProgress';
 import { useCharacterCreationStore } from '@/lib/stores/characterCreationStore';
@@ -16,6 +17,12 @@ export function AppearanceStep() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const [customPrompt, setCustomPrompt] = useState('');
+  // Ajuste pago da imagem (regeração via edição image-to-image).
+  const [adjustPrompt, setAdjustPrompt] = useState('');
+  const [isAdjusting, setIsAdjusting] = useState(false);
+  // Falha na geração inclusa: libera tentar de novo sem pagar.
+  const [genFailed, setGenFailed] = useState(false);
+  const regenCostDol = getImageRegenCostDol();
   
   useEffect(() => {
     // Mark step complete if an image is selected
@@ -92,7 +99,7 @@ export function AppearanceStep() {
       // Send race/class + the player's request; the server builds the locked
       // combination pre-prompt and merges the request with Claude.
       const result = await generateCharacterImage({
-        numImages: 3,
+        numImages: 1,
         raceId: selectedRace?.id,
         classId: (selectedClass as any)?.id,
         raceName: selectedRace?.name,
@@ -102,6 +109,7 @@ export function AppearanceStep() {
       });
       const images = result.images;
 
+      setGenFailed(Boolean(result.error));
       if (result.error) {
         toast.error(result.error);
       }
@@ -135,12 +143,59 @@ export function AppearanceStep() {
       }
     } catch (error) {
       console.error('Erro ao gerar imagens:', error);
+      setGenFailed(true);
       toast.error(error instanceof Error ? error.message : 'Erro ao gerar imagens');
     } finally {
       setIsGenerating(false);
     }
   };
-  
+
+  // Regeração paga: paga DOL, edita a imagem selecionada aplicando só os
+  // ajustes pedidos e adiciona o resultado à galeria para comparação.
+  const adjustImage = async () => {
+    if (!selectedImage) {
+      toast.error('Gere ou selecione uma imagem primeiro.');
+      return;
+    }
+    setIsAdjusting(true);
+    try {
+      const txHash = await payDolToTreasury(regenCostDol);
+
+      const result = await editCharacterImage({
+        baseImage: selectedImage,
+        modification: adjustPrompt,
+        paymentTxHash: txHash,
+      });
+      if (result.error || !result.image) {
+        throw new Error(result.error || 'Falha ao regerar imagem');
+      }
+
+      let finalImage = result.image;
+      if (finalImage.startsWith('data:image/') && isCloudinaryUploadConfigured()) {
+        try {
+          const { secureUrl } = await uploadImageToCloudinary({
+            dataUrl: finalImage,
+            folder: 'dolrath/characters/avatars',
+            tags: ['dolrath', 'character-avatar', 'ai-generated'],
+          });
+          finalImage = secureUrl;
+        } catch {
+          // Se o Cloudinary falhar, mantém a data URL.
+        }
+      }
+
+      setGeneratedImages((imgs) => [...imgs, finalImage]);
+      setSelectedImage(finalImage);
+      setAdjustPrompt('');
+      toast.success('Nova versão gerada! Compare e escolha a que preferir.');
+    } catch (error) {
+      console.error('Erro ao ajustar imagem:', error);
+      toast.error(error instanceof Error ? error.message : 'Erro ao ajustar imagem');
+    } finally {
+      setIsAdjusting(false);
+    }
+  };
+
   return (
     <div className="space-y-8">
       <div>
@@ -148,7 +203,9 @@ export function AppearanceStep() {
           Aparência do Personagem
         </h2>
         <p className="text-text-secondary">
-          Gere uma imagem única com IA ou faça upload da sua própria
+          A IA gera a imagem única da sua NFT (inclusa na taxa de criação). Depois, se quiser
+          mudar algo, você pode pedir ajustes pagando {regenCostDol} DOL por versão — ou fazer
+          upload da sua própria imagem.
         </p>
       </div>
       
@@ -176,7 +233,7 @@ export function AppearanceStep() {
             
             <button
               onClick={generateImages}
-              disabled={isGenerating || !selectedRace}
+              disabled={isGenerating || !selectedRace || (generatedImages.length > 0 && !genFailed)}
               className="w-full bg-gradient-to-r from-primary to-primary-dark text-white py-3 rounded-lg font-medium disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {isGenerating ? (
@@ -187,12 +244,18 @@ export function AppearanceStep() {
               ) : (
                 <>
                   <Wand2 className="w-4 h-4" />
-                  Gerar Imagens
+                  Gerar Imagem
                 </>
               )}
             </button>
             {!selectedRace && (
               <p className="text-sm text-red-400">Selecione uma raça primeiro para gerar imagens.</p>
+            )}
+            {generatedImages.length > 0 && !genFailed && (
+              <p className="text-xs text-text-secondary">
+                Sua imagem inclusa já foi gerada. Quer mudar algo? Use o painel de ajustes
+                abaixo ({regenCostDol} DOL por versão).
+              </p>
             )}
           </div>
         </div>
@@ -211,16 +274,24 @@ export function AppearanceStep() {
         </div>
       </div>
 
-      {/* Loading com etapas enquanto a IA gera as 3 imagens */}
+      {/* Loading com etapas enquanto a IA gera a imagem */}
       <GenerationProgress
         active={isGenerating}
         steps={[
           'Coletando e ajustando o prompt para a lore de Dolrath…',
-          'Criando a 1ª de 3 imagens para você escolher…',
-          'Criando a 2ª de 3 imagens…',
-          'Criando a 3ª e última imagem…',
+          'Criando a imagem única do seu herói…',
           'Finalizando…',
         ]}
+        stepDurationMs={6000}
+      />
+      <GenerationProgress
+        active={isAdjusting}
+        steps={[
+          'Confirmando o pagamento…',
+          'Aplicando seus ajustes na imagem…',
+          'Finalizando…',
+        ]}
+        stepDurationMs={8000}
       />
 
       {/* Generated Images Gallery */}
@@ -234,9 +305,9 @@ export function AppearanceStep() {
             className="space-y-4"
           >
             <h3 className="text-lg font-medium text-text-primary">
-              Escolha uma imagem
+              {generatedImages.length > 1 ? 'Escolha a versão que vira sua NFT' : 'Sua imagem'}
             </h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {generatedImages.map((image, index) => (
                 <motion.div
@@ -271,6 +342,43 @@ export function AppearanceStep() {
                   )}
                 </motion.div>
               ))}
+            </div>
+
+            {/* Ajuste pago: edita a imagem selecionada mantendo o personagem */}
+            <div className="bg-surface/50 border border-white/10 rounded-lg p-6 space-y-3">
+              <h4 className="text-base font-medium text-text-primary flex items-center gap-2">
+                <Coins className="w-4 h-4 text-accent" />
+                Quer mudar algo? ({regenCostDol} DOL)
+              </h4>
+              <p className="text-xs text-text-secondary">
+                Descreva o que quer mudar na imagem selecionada — a IA mantém o mesmo
+                personagem e aplica só os seus ajustes (custo cobre a geração da imagem
+                e o refinamento do prompt). A versão anterior continua disponível para
+                comparar.
+              </p>
+              <textarea
+                value={adjustPrompt}
+                onChange={(e) => setAdjustPrompt(e.target.value)}
+                placeholder="Ex: cabelo mais longo e branco, capuz abaixado, cicatriz no olho esquerdo, fundo com ruínas…"
+                className="w-full h-20 px-3 py-2 bg-background border border-white/20 rounded-lg text-text-primary placeholder:text-text-secondary resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
+              />
+              <button
+                onClick={adjustImage}
+                disabled={isAdjusting || isGenerating || !selectedImage || !adjustPrompt.trim()}
+                className="w-full bg-gradient-to-r from-accent to-primary text-white py-3 rounded-lg font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {isAdjusting ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Gerando nova versão...
+                  </>
+                ) : (
+                  <>
+                    <Wand2 className="w-4 h-4" />
+                    Pagar {regenCostDol} DOL e ajustar
+                  </>
+                )}
+              </button>
             </div>
           </motion.div>
         )}

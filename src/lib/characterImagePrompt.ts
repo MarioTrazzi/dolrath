@@ -14,8 +14,10 @@ export type ClassId = 'warrior' | 'rogue' | 'mage' | 'monk';
 export const DOLRATH_STYLE_BASE =
   'Fantasy RPG character portrait set in the dark-fantasy world of Dolrath. ' +
   'Cinematic, highly detailed digital painting; semi-realistic proportions with ' +
-  'coherent anatomy; dramatic volumetric lighting and rich, moody color; sharp ' +
-  'focus on a single character in three-quarter or portrait framing. Grounded, ' +
+  'coherent anatomy; dramatic volumetric lighting, subtle rim light and rich, ' +
+  'moody color; painterly brushwork over a dark atmospheric background with ' +
+  'faint drifting embers or mist; sharp focus on a single character in ' +
+  'three-quarter or portrait framing, collectible-art quality. Grounded, ' +
   'serious tone — never goofy or cartoonish. No text, no watermark, no logo, no ' +
   'UI and no border.';
 
@@ -24,21 +26,24 @@ export const RACE_STYLE: Record<RaceId, string> = {
   draconiano:
     'Draconian heritage: subtle dragon scales along the arms, jaw and brow, ' +
     'slit reptilian eyes, a faint ember glow under the skin, and an imposing, ' +
-    'powerful build that hints at the dragon transformation within.',
+    'powerful build that hints at the dragon transformation within. Accent ' +
+    'palette: deep crimson and molten gold.',
   metamorfo:
     'Shapeshifter heritage: a fully human adventurer in their normal, ' +
     'untransformed form — ordinary human face and anatomy, NO fur, NO muzzle, ' +
     'NO claws, NO scales and NO animal features. Only a subtle wild, untamed ' +
     'presence and sharp, watchful eyes hint at the beast they can become; the ' +
-    'animal transformation itself is NOT shown here.',
+    'animal transformation itself is NOT shown here. Accent palette: earthy ' +
+    'moss green and weathered bone.',
   humano:
     'Human heritage: a determined, adaptable adventurer with expressive human ' +
     'features and a versatile, resilient bearing, carrying a faint inner spark ' +
-    'that hints at the awakening of the 7th Sense.',
+    'that hints at the awakening of the 7th Sense. Accent palette: warm amber ' +
+    'and steel blue.',
   elfo:
     'Elven heritage: elegant, ethereal features, long pointed ears, luminous ' +
     'eyes and graceful arcane beauty, with a faint celestial astral glow that ' +
-    'hints at the Celestial Form.',
+    'hints at the Celestial Form. Accent palette: silver green and pale gold.',
 };
 
 // Class-specific visual identity. Mirrors the classes in gameData.ts.
@@ -118,48 +123,99 @@ const TRANSFORMATION_ART: Record<TransformationArtId, string> = {
     'Draconic ascension: the same character erupting into their ancestral dragon ' +
     'form — crimson and molten-gold scales spreading across face and arms, ' +
     'reptilian glowing eyes, jagged horns and wisps of fire-breath, a fierce ' +
-    'red-orange ember aura radiating around the body.',
+    'red-orange ember aura radiating around the body. Their original clothing ' +
+    'and gear remain visible beneath the spreading scales.',
   wolf:
     'Feral wolf form: the same character shifting into a savage werewolf-like ' +
     'predator — grey-silver fur, elongated muzzle and fangs, piercing amber ' +
-    'eyes, claws bared in a low hunting stance, a cold silver-blue feral aura.',
+    'eyes, claws bared in a low hunting stance, a cold silver-blue feral aura. ' +
+    'Their original clothing remains on the body, stretched and torn by the ' +
+    'shift but still recognizable.',
   bear:
-    'Mighty bear form: the same character swelling into a colossal, armored ' +
-    'bear-warrior — thick brown fur and broad muscular frame, massive claws, ' +
-    'an unshakable grounded stance, a warm amber-brown aura of brute resilience.',
+    'Mighty bear form: the same character swelling into a colossal bear — thick ' +
+    'brown fur and broad muscular frame, massive claws, an unshakable grounded ' +
+    'stance, a warm amber-brown aura of brute resilience. Their original ' +
+    'clothing remains on the body, strained by the massive frame but still ' +
+    'recognizable; do NOT add armor plates or pauldrons.',
   eagle:
     'Aerial eagle form: the same character taking flight as a winged raptor — ' +
     'great feathered wings unfurled, sharp golden eyes, talons extended, a swift ' +
-    'soaring pose, a bright cyan wind-charged aura.',
+    'soaring pose, a bright cyan wind-charged aura. Their original clothing ' +
+    'remains visible amid the feathers.',
   seventh_sense:
-    'Awakening of the 7th Sense: the same character haloed by an explosive white ' +
-    'cosmic aura — radiant inner light, glowing eyes, swirling galaxies and stars ' +
-    'of cosmo energy around the body, serene yet overwhelmingly powerful.',
+    'Awakening of the 7th Sense: the character\'s body, face, hair and OUTFIT ' +
+    'remain exactly as in the reference image — this transformation adds NO new ' +
+    'armor and changes NO clothing. They are haloed by an explosive white cosmic ' +
+    'aura: radiant inner light, glowing eyes, swirling galaxies and stars of ' +
+    'cosmo energy around the body, hair lifted by rising power, serene yet ' +
+    'overwhelmingly powerful.',
   celestial:
     'Celestial Form: the same character ascending into a being of astral light — ' +
     'an ethereal golden-white radiance, luminous arcane runes orbiting the body, ' +
     'softly glowing skin and eyes, translucent angelic light wisps, a divine ' +
-    'golden aura.',
+    'golden aura. Their face and original outfit remain clearly visible and ' +
+    'recognizable beneath the radiance; do not wash the figure out into pure light.',
 };
 
 const isTransformationArtId = (id: string): id is TransformationArtId =>
   id in TRANSFORMATION_ART;
 
+export type TransformationPromptOptions = {
+  classId?: string | null;
+  className?: string | null;
+  // Player-requested adjustments for a paid re-generation of the form.
+  modification?: string | null;
+};
+
 // Builds the edit prompt that turns a chosen NFT portrait into its transformed
 // form while preserving the character's identity and the locked Dolrath style.
-export function buildTransformationPrompt(transformationType: string): string {
+export function buildTransformationPrompt(
+  transformationType: string,
+  options: TransformationPromptOptions = {}
+): string {
   const id = String(transformationType || '').toLowerCase();
   const art = isTransformationArtId(id) ? TRANSFORMATION_ART[id] : '';
 
+  const classId = String(options.classId || '').toLowerCase();
+  // Reasserting the class outfit stops the model from drifting to a generic
+  // armored knight (e.g. a robed mage must stay a robed mage when transformed).
+  const classReminder = isClassId(classId)
+    ? `The character's class outfit must stay consistent — ${CLASS_STYLE[classId]}`
+    : '';
+
+  const modification = String(options.modification || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 400);
+
   return [
     'Transform the SAME character shown in the reference image into their ' +
-      'unleashed combat transformation. Keep their identity recognizable — ' +
-      'same facial structure, same gear/armor cues, same three-quarter or ' +
-      'portrait framing.',
+      'unleashed combat transformation. This is the SAME person one moment ' +
+      'later — same face and facial structure, same hair, same skin tone, and ' +
+      'the SAME outfit and equipment shown in the reference image. Do NOT ' +
+      'invent new armor, clothing or weapons that are not in the reference ' +
+      'image. Keep the same three-quarter or portrait framing.',
     art,
+    classReminder,
+    modification ? `Player-requested adjustments (apply without breaking the rules above): ${modification}` : '',
     DOLRATH_STYLE_BASE,
   ]
     .filter(Boolean)
     .join('\n');
+}
+
+// Builds the edit prompt for a paid re-generation of the BASE portrait: the
+// player's current image is sent to the image edit endpoint and only their
+// requested changes are applied, keeping the same character and locked style.
+export function buildCharacterEditPrompt(modification: string): string {
+  const changes = String(modification || '').replace(/\s+/g, ' ').trim().slice(0, 400);
+  return [
+    'Edit the character portrait in the reference image. Keep the SAME ' +
+      'character — same face and facial structure, same race features, same ' +
+      'class outfit and equipment, same framing and the same art style. Apply ' +
+      'ONLY the following requested changes, weaving them in naturally:',
+    changes || 'Subtle refinement pass: improve lighting, detail and overall epic quality.',
+    DOLRATH_STYLE_BASE,
+  ].join('\n');
 }
 

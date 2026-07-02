@@ -359,3 +359,17 @@ model DungeonRun {
   @@index([characterId])
   @@index([characterId, status])
 }
+
+// Pagamento on-chain (DOL → tesouraria) consumido por uma regeração de imagem
+// por IA (retrato base ou forma de transformação). O txHash único impede que a
+// mesma transação pague mais de uma geração.
+model AiGenPayment {
+  id        String   @id @default(cuid())
+  txHash    String   @unique
+  userId    String
+  purpose   String   // 'character-image-edit' | 'transformation-regen'
+  amountDol String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}

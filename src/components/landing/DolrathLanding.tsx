@@ -15,7 +15,7 @@ import {
   Dices, Swords, Shield, Coins, Wallet, Play, Sparkles, ArrowRight, Menu, X,
   Github, Twitter, MessageCircle, Scroll, Wand2, VenetianMask, Hand, Axe,
   AlertTriangle, Zap, Gem, RefreshCw, Palette, Crown, Skull,
-  Lock, Hammer,
+  Lock, Hammer, Flame, Scale,
 } from 'lucide-react'
 import { Button, Card, GlassCard, Badge, StatBar, SectionHeading, D20, DiceChip, Reveal, ArenaSky } from './ui'
 import { itemImagePath } from '@/lib/itemCatalog'
@@ -65,7 +65,7 @@ const NAV_LINKS = [
   { label: 'Personagens', href: '#racas' },
   { label: 'Masmorras', href: '#masmorras' },
   { label: 'Forja', href: '#aprimoramento' },
-  { label: 'Marketplace', href: '#como-funciona' },
+  { label: 'Economia', href: '#economia' },
   { label: 'Docs', href: '/doc' },
 ]
 
@@ -1590,6 +1590,66 @@ function RacesSection() {
 }
 
 // ============================================================
+// Economia — o anúncio do equilíbrio
+// ============================================================
+
+const ECONOMY_PILLARS = [
+  {
+    Icon: Coins,
+    title: 'GOLD sem impressora',
+    desc: 'Todo GOLD nasce jogando — com teto diário por jogador e gastos reais (loja, forja, alquimia) que consomem o ouro antes de ele virar token. A economia não infla porque não pode.',
+  },
+  {
+    Icon: Lock,
+    title: 'DOL: 1 bilhão, para sempre',
+    desc: 'O token do jogo tem supply fixo cunhado uma única vez. Não existe função de mint no contrato: o supply só pode diminuir. Escassez garantida por código, não por promessa.',
+  },
+  {
+    Icon: Flame,
+    title: 'Queima real a cada venda',
+    desc: 'Toda negociação no marketplace destrói uma fatia da moeda direto no contrato — não é carteira morta, é supply a menos. Quanto mais o jogo gira, mais escassos os tokens ficam.',
+  },
+  {
+    Icon: Scale,
+    title: 'Balanceado por IA, provado por dados',
+    desc: 'Cada número da economia foi afinado pela IA Claude Fable 5 com milhares de combates simulados e 10 anos de projeção econômica — antes de qualquer jogador sentir na pele.',
+  },
+]
+
+function EconomySection() {
+  return (
+    <section id="economia" className="relative py-24">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 flex flex-col gap-12">
+        <SectionHeading
+          eyebrow="Economia"
+          title="Um jogo que não trai quem joga"
+          sub="Os play-to-earn morreram inflacionando o próprio token. Dolrath foi desenhado ao contrário: emissão travada, queima acoplada ao uso e cada parâmetro validado em simulação antes de ir ao ar."
+        />
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {ECONOMY_PILLARS.map((p, i) => (
+            <Reveal key={p.title} delay={i * 80}>
+              <GlassCard hover className="p-6 h-full flex flex-col gap-4">
+                <span className="w-11 h-11 rounded-xl bg-primary/15 border border-primary/30 flex items-center justify-center text-primary">
+                  <p.Icon size={22} />
+                </span>
+                <h3 className="font-semibold text-white text-lg leading-snug">{p.title}</h3>
+                <p className="text-sm text-textsec leading-relaxed">{p.desc}</p>
+              </GlassCard>
+            </Reveal>
+          ))}
+        </div>
+        <p className="text-center text-sm text-textsec">
+          Transparência total: a tokenomics completa está na{' '}
+          <a href="/doc#tokenomics" className="text-primary hover:underline">documentação pública</a>{' '}
+          e a projeção de 10 anos no{' '}
+          <a href="/tokenomics/dashboard.html" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">dashboard interativo</a>.
+        </p>
+      </div>
+    </section>
+  )
+}
+
+// ============================================================
 // Como funciona
 // ============================================================
 
@@ -1751,6 +1811,7 @@ export default function DolrathLanding() {
         <EnhancementSection />
         <CraftingSection />
         <RacesSection />
+        <EconomySection />
         <HowSection />
         <FinalCTA primaryHref={primaryHref} glow={glow} />
       </main>

@@ -1,7 +1,7 @@
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { resolveImageUrl } from '@/lib/imageUrl';
-import { canEquip, ItemTypeStr } from '@/lib/itemCatalog';
+import { canEquip, ItemTypeStr, itemImagePath } from '@/lib/itemCatalog';
 import { NextResponse } from 'next/server';
 
 export async function GET(request: Request) {
@@ -50,7 +50,7 @@ export async function GET(request: Request) {
       type: item.type,
       level: item.level,
       stats: item.stats,
-      image: resolveImageUrl(item.image) ?? item.image ?? null,
+      image: resolveImageUrl(item.image) ?? (item.name ? itemImagePath(item.name) : null),
       price: item.goldPrice, // Mapear goldPrice para price
       goldPrice: item.goldPrice
     }));

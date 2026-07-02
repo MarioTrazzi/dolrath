@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getGoldContract } from '@/lib/goldOnchain'
 import { getItemMarketChainId, getItemMarketContract } from '@/lib/itemMarketOnchain'
 import { resolveImageUrl } from '@/lib/imageUrl'
+import { itemImagePath } from '@/lib/itemCatalog'
 import { formatUnits } from 'ethers'
 import { NextResponse } from 'next/server'
 
@@ -80,7 +81,7 @@ export async function GET() {
               type: db.item.type,
               level: db.item.level,
               goldPrice: db.item.goldPrice,
-              image: resolveImageUrl(db.item.image) ?? db.item.image ?? null,
+              image: resolveImageUrl(db.item.image) ?? (db.item.name ? itemImagePath(db.item.name) : null),
               enhancementLevel: db.enhancementLevel,
               mintSource: db.mintSource,
             }

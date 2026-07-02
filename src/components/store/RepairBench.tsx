@@ -325,7 +325,9 @@ export default function RepairBench({
   );
 
   const visual = selected ? getItemVisual(selected.item.type) : null;
-  const selectedImage = selected ? resolveImageUrl(selected.item.image) : null;
+  const selectedImage = selected
+    ? resolveImageUrl(selected.item.image) ?? (selected.item.name ? itemImagePath(selected.item.name) : null)
+    : null;
   const selectedDamaged = selected ? selected.durability < selected.maxDurability : false;
   const selectedStats = selected ? formatItemStats(selected.item.stats ?? undefined, selected.item.type) : [];
 
@@ -374,7 +376,7 @@ export default function RepairBench({
           >
             {displayGroups.map(({ rep, count }) => {
               const itemVisual = getItemVisual(rep.item.type);
-              const image = resolveImageUrl(rep.item.image);
+              const image = resolveImageUrl(rep.item.image) ?? (rep.item.name ? itemImagePath(rep.item.name) : null);
               const pct = Math.round((rep.durability / rep.maxDurability) * 100);
               const isSelected = rep.id === selectedInventoryId;
               const barColor = pct < 30 ? '#ef4444' : pct < 70 ? '#f59e0b' : '#10b981';

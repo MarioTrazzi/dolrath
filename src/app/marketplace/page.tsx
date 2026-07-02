@@ -8,11 +8,12 @@ import { ethers } from 'ethers'
 import { getPolygonFeeOverrides } from '@/lib/gasFees'
 import { getWalletTxErrorMessage } from '@/lib/walletErrors'
 import { resolveImageUrl } from '@/lib/imageUrl'
+import { itemImagePath } from '@/lib/itemCatalog'
 import { getItemVisual, getItemTypeLabel } from '@/lib/itemVisuals'
 
-// Miniatura do item: imagem (Cloudinary/URL) ou fallback com emoji/categoria.
-function ItemThumb({ image, type, enhancement }: { image?: string | null; type: string; enhancement?: number }) {
-  const url = resolveImageUrl(image ?? null)
+// Miniatura do item: imagem (Cloudinary/URL), fallback por nome (asset estático), ou emoji/categoria.
+function ItemThumb({ image, name, type, enhancement }: { image?: string | null; name?: string | null; type: string; enhancement?: number }) {
+  const url = resolveImageUrl(image ?? null) ?? (name ? itemImagePath(name) : null)
   const visual = getItemVisual(type)
   return (
     <div
@@ -497,7 +498,7 @@ export default function MarketplacePage() {
           <div className="grid gap-2 sm:grid-cols-2">
             {inventory.map((row) => (
               <div key={row.id} className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/50 p-3">
-                <ItemThumb image={row.item.image} type={row.item.type} enhancement={row.enhancementLevel} />
+                <ItemThumb image={row.item.image} name={row.item.name} type={row.item.type} enhancement={row.enhancementLevel} />
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-white truncate">
                     {row.item.name}
@@ -536,7 +537,7 @@ export default function MarketplacePage() {
             {listings.map((l) => (
               <div key={l.listingId} className="rounded-2xl border border-white/10 bg-slate-900/50 p-4 flex flex-col gap-2">
                 <div className="flex items-center gap-3">
-                  <ItemThumb image={l.item?.image} type={l.item?.type ?? ''} enhancement={l.item?.enhancementLevel} />
+                  <ItemThumb image={l.item?.image} name={l.item?.name} type={l.item?.type ?? ''} enhancement={l.item?.enhancementLevel} />
                   <div className="min-w-0">
                     <div className="font-bold text-white truncate">
                       {l.item?.name ?? `Token #${l.tokenId}`}

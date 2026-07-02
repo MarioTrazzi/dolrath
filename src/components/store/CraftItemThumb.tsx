@@ -12,6 +12,7 @@ import {
 } from '@/lib/itemCatalog';
 import { getItemVisual, getItemTypeLabel } from '@/lib/itemVisuals';
 import { formatItemStats } from '@/lib/itemStats';
+import { whatItemCanProduce } from '@/lib/craftProduces';
 
 // Cores e rótulo por raridade (espelha o /doc e as bancadas).
 const RARITY_UI: Record<Rarity, { label: string; text: string; ring: string; glow: string }> = {
@@ -90,6 +91,7 @@ export function CraftItemThumb({
   const ui = meta ? RARITY_UI[meta.rarity] : null;
   const cardImg = itemImagePath(name);
   const stats = meta?.stats ? formatItemStats(meta.stats, meta.statType) : [];
+  const produces = whatItemCanProduce(name);
 
   return (
     <span
@@ -157,6 +159,17 @@ export function CraftItemThumb({
                 {stats.map((s, i) => (
                   <span key={i} className="text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded-full">{s}</span>
                 ))}
+              </div>
+            )}
+
+            {produces.length > 0 && (
+              <div className="mb-2">
+                <div className="text-[10px] font-bold text-white/50 uppercase tracking-wide mb-1">Pode produzir</div>
+                <div className="flex flex-wrap gap-1">
+                  {produces.map((n) => (
+                    <span key={n} className="text-[10px] font-semibold bg-sky-500/20 text-sky-300 px-1.5 py-0.5 rounded-full">{n}</span>
+                  ))}
+                </div>
               </div>
             )}
 

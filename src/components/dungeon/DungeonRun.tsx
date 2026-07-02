@@ -1293,7 +1293,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
           startEnemyPhase()
         }
       }, 600)
-    }, 1400)
+    }, 1700) // dado crava aos 1100ms (MIN_SPIN_MS); folga de ~600ms pra dar pra ver o resultado
   }
 
   // A iniciativa rola sozinha assim que o combate começa — sem clique, os 2 dados já
@@ -2169,8 +2169,9 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
       return null
     }
 
-    // 1) Espólio da vitória aberto → confirmar.
-    if (lootCard) return fire(() => setLootCard(null), 1000)
+    // 1) Espólio da vitória aberto → confirmar (fica mais tempo na tela pra dar
+    // pra ver o que dropou e, se quiser, desligar o automático a tempo).
+    if (lootCard) return fire(() => setLootCard(null), 3000)
     // 2) Card de evento aberto → lutar (monstro) ou seguir (achado).
     if (eventCard) {
       const group = eventCard.monsters ?? (eventCard.monster ? [eventCard.monster] : null)

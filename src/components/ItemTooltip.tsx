@@ -11,6 +11,7 @@ import { itemImagePath, isIngredientItem, isMaterialItem } from '@/lib/itemCatal
 import { applyEnhancementToStats, getLevelLabel } from '@/lib/enhancementSystem';
 import { formatItemStats } from '@/lib/itemStats';
 import { whatItemCanProduce } from '@/lib/craftProduces';
+import { getSlotTypeFromItemType } from '@/lib/equipmentSlot';
 import ItemCardBackdrop from '@/components/store/ItemCardBackdrop';
 import ItemIcon from '@/components/ItemIcon';
 
@@ -79,42 +80,6 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryI
     setCoords({ top, left, placement: 'bottom' });
   }, [showTooltip]);
 
-  const getSlotTypeFromItemType = (itemType: string): EquipmentSlotType => {
-    switch (itemType) {
-      case 'LIGHT_HELMET':
-      case 'MEDIUM_HELMET':
-      case 'HEAVY_HELMET':
-        return 'HELMET';
-      case 'LIGHT_ARMOR':
-      case 'MEDIUM_ARMOR':
-      case 'HEAVY_ARMOR':
-        return 'ARMOR';
-      case 'SWORD':
-      case 'AXE':
-      case 'DAGGER':
-      case 'STAFF':
-      case 'BOW':
-        return 'WEAPON';
-      case 'SHIELD':
-        return 'SHIELD';
-      case 'LIGHT_GLOVES':
-      case 'MEDIUM_GLOVES':
-      case 'HEAVY_GLOVES':
-        return 'GLOVES';
-      case 'LIGHT_BOOTS':
-      case 'MEDIUM_BOOTS':
-      case 'HEAVY_BOOTS':
-        return 'BOOTS';
-      case 'NECKLACE':
-        return 'NECKLACE';
-      case 'RING':
-        return 'RING_1'; // Sempre tentar RING_1 primeiro, a API vai decidir o slot final
-      case 'BELT':
-        return 'BELT';
-      default:
-        return 'WEAPON';
-    }
-  };
 
   const handleMouseEnter = () => {
     timeoutRef.current = setTimeout(() => {

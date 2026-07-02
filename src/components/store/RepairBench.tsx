@@ -8,41 +8,9 @@ import { getDisplayName, getLevelLabel } from '@/lib/enhancementSystem';
 import { formatItemStats } from '@/lib/itemStats';
 import { resolveImageUrl } from '@/lib/imageUrl';
 import EnhancementDialog, { EnhanceablePickerItem } from '@/components/EnhancementDialog';
-import type { EquipmentSlotType } from '@prisma/client';
+import { getSlotTypeFromItemType } from '@/lib/equipmentSlot';
 
 const REPAIR_PER_DUPLICATE = 10;
-
-// Mapeia o tipo do item para o slot de equipamento (espelha /inventory).
-function getSlotTypeFromItemType(itemType: string): EquipmentSlotType {
-  switch (itemType) {
-    case 'LIGHT_HELMET':
-    case 'MEDIUM_HELMET':
-    case 'HEAVY_HELMET':
-      return 'HELMET';
-    case 'LIGHT_ARMOR':
-    case 'MEDIUM_ARMOR':
-    case 'HEAVY_ARMOR':
-      return 'ARMOR';
-    case 'SHIELD':
-      return 'SHIELD';
-    case 'LIGHT_GLOVES':
-    case 'MEDIUM_GLOVES':
-    case 'HEAVY_GLOVES':
-      return 'GLOVES';
-    case 'LIGHT_BOOTS':
-    case 'MEDIUM_BOOTS':
-    case 'HEAVY_BOOTS':
-      return 'BOOTS';
-    case 'NECKLACE':
-      return 'NECKLACE';
-    case 'RING':
-      return 'RING_1';
-    case 'BELT':
-      return 'BELT';
-    default:
-      return 'WEAPON';
-  }
-}
 
 interface Character {
   id: string;

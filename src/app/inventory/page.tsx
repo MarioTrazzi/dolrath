@@ -14,6 +14,7 @@ import BankPanel from '@/components/inventory/BankPanel';
 import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider';
 import { getWalletTxErrorMessage } from '@/lib/walletErrors';
 import { getPolygonFeeOverrides } from '@/lib/gasFees';
+import { getSlotTypeFromItemType } from '@/lib/equipmentSlot';
 
 // Baú Geral começa com 50 espaços (User.globalInventorySlots), expansível como o do personagem.
 const GLOBAL_SLOTS_DEFAULT = 50;
@@ -393,43 +394,6 @@ export default function InventoryPage() {
       });
       return;
     }
-
-    const getSlotTypeFromItemType = (itemType: string) => {
-      switch (itemType) {
-        case 'LIGHT_HELMET':
-        case 'MEDIUM_HELMET':
-        case 'HEAVY_HELMET':
-          return 'HELMET';
-        case 'LIGHT_ARMOR':
-        case 'MEDIUM_ARMOR':
-        case 'HEAVY_ARMOR':
-          return 'ARMOR';
-        case 'SWORD':
-        case 'AXE':
-        case 'DAGGER':
-        case 'STAFF':
-        case 'BOW':
-          return 'WEAPON';
-        case 'SHIELD':
-          return 'SHIELD';
-        case 'LIGHT_GLOVES':
-        case 'MEDIUM_GLOVES':
-        case 'HEAVY_GLOVES':
-          return 'GLOVES';
-        case 'LIGHT_BOOTS':
-        case 'MEDIUM_BOOTS':
-        case 'HEAVY_BOOTS':
-          return 'BOOTS';
-        case 'NECKLACE':
-          return 'NECKLACE';
-        case 'RING':
-          return 'RING_1';
-        case 'BELT':
-          return 'BELT';
-        default:
-          return 'WEAPON';
-      }
-    };
 
     const slotType = getSlotTypeFromItemType(item.type);
 

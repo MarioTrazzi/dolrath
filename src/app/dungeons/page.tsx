@@ -49,6 +49,9 @@ export default function DungeonsPage() {
   const [recentExit, setRecentExit] = useState(false)
   // Subiu de nível na última run: mostra um aviso/botão p/ distribuir os pontos novos.
   const [levelUpAlert, setLevelUpAlert] = useState<{ characterId: string; points: number } | null>(null)
+  // 🔁 Re-run: incrementa a key da DungeonRun (remonta do zero) preservando o piloto.
+  const [runSeq, setRunSeq] = useState(0)
+  const [resumeAuto, setResumeAuto] = useState(false)
 
   useEffect(() => {
     if (!session) {
@@ -152,9 +155,23 @@ export default function DungeonsPage() {
     return () => { cancelled = true; window.removeEventListener('focus', onFocus); clearInterval(id) }
   }, [activeDungeon, recentExit])
 
+  // 🔁 Re-run: mantém a masmorra ativa e remonta a DungeonRun do zero (nova key),
+  // sincronizando os recursos e preservando o estado do piloto automático.
+  const handleRunRestart = (updates: { hp: number; mp: number; stamina: number; leveledUp?: boolean; auto: boolean }) => {
+    const hero = selectedCharacter
+    if (hero) {
+      const updated = { ...hero, hp: updates.hp, mp: updates.mp, stamina: updates.stamina }
+      setSelectedCharacter(updated)
+      setCharacters(prev => prev.map(c => (c.id === updated.id ? updated : c)))
+    }
+    setResumeAuto(updates.auto)
+    setRunSeq(s => s + 1)
+  }
+
   // Ao sair da masmorra, sincroniza os recursos locais do personagem
   const handleRunExit = (updates: { hp: number; mp: number; stamina: number; leveledUp?: boolean }) => {
     setActiveDungeon(null)
+    setResumeAuto(false)
     setRecentExit(true)
     setTimeout(() => setRecentExit(false), 4000)
     const hero = selectedCharacter
@@ -211,9 +228,12 @@ export default function DungeonsPage() {
   if (activeDungeon && selectedCharacter) {
     return (
       <DungeonRun
+        key={`${activeDungeon.id}-${runSeq}`}
         dungeon={activeDungeon}
         character={selectedCharacter}
         onExit={handleRunExit}
+        onRestart={handleRunRestart}
+        initialAuto={resumeAuto}
       />
     )
   }

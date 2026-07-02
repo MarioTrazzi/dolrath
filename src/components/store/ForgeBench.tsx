@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Info } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { forgeRecipesByGroup, forgeMaterialEmoji, getForgeOutputCatalogItem, findForgeRecipeByMaterials, type ForgeRecipe } from '@/lib/forge';
+import { forgeRecipesByGroup, forgeMaterialEmoji, getForgeOutputCatalogItem, findForgeRecipeByMaterials, forgeRecipesUsingMaterial, type ForgeRecipe } from '@/lib/forge';
 import { getItemVisual } from '@/lib/itemVisuals';
 import { isMaterialItem, type Rarity } from '@/lib/itemCatalog';
 // Miniatura com card de detalhe ao passar o mouse (ver TODO ícone grande).
@@ -78,6 +78,8 @@ export default function ForgeBench({
   const [busy, setBusy] = useState(false);
   const [recipesOpen, setRecipesOpen] = useState(false);
   const [hover, setHover] = useState<HoverInfo | null>(null);
+  // Popover "usado em" ao passar o mouse sobre um material da paleta (fora do livro).
+  const [matHover, setMatHover] = useState<HoverInfo | null>(null);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
@@ -395,6 +397,12 @@ export default function ForgeBench({
                       e.dataTransfer.effectAllowed = 'copy';
                     }}
                     onClick={() => addMaterial(name)}
+                    onMouseEnter={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const left = Math.min(rect.right + 8, window.innerWidth - 250);
+                      setMatHover({ id: name, top: rect.top, left });
+                    }}
+                    onMouseLeave={() => setMatHover((h) => (h?.id === name ? null : h))}
                     disabled={avail <= 0}
                     title={`${name} — ${avail} disponível${avail === 1 ? '' : 's'} de ${count}`}
                     className="relative flex flex-col items-center gap-0.5 rounded-lg border border-white/10 bg-black/30 p-1.5 transition-transform enabled:cursor-grab enabled:hover:scale-[1.05] enabled:active:cursor-grabbing disabled:opacity-35 disabled:cursor-not-allowed"
@@ -510,6 +518,44 @@ export default function ForgeBench({
           <p className={`mt-1 text-[10px] font-semibold ${canForgeRecipe(hoverRecipe) ? 'text-emerald-300' : 'text-white/40'}`}>
             {canForgeRecipe(hoverRecipe) ? '✓ clique para montar na bigorna' : 'colete os materiais que faltam'}
           </p>
+        </div>
+      )}
+
+      {/* Popover "usado em" (hover sobre um material da paleta) — mostra em quais peças ele entra. */}
+      {matHover && (
+        <div
+          className="pointer-events-none fixed z-[60] w-[230px] rounded-xl border border-orange-500/40 bg-zinc-950/95 p-3 shadow-2xl"
+          style={{ top: Math.min(matHover.top, (typeof window !== 'undefined' ? window.innerHeight : 800) - 260), left: matHover.left }}
+        >
+          <p className="text-xs font-black mb-2 text-white/90">Usado em:</p>
+          {(() => {
+            const recipes = forgeRecipesUsingMaterial(matHover.id);
+            if (recipes.length === 0) {
+              return <p className="text-[11px] text-white/40">Nenhuma receita conhecida usa este material.</p>;
+            }
+            return (
+              <div className="space-y-1.5">
+                {recipes.map((r) => {
+                  const ui = RARITY_UI[r.rarity];
+                  const need = r.materials.find((m) => m.name === matHover.id)?.quantity ?? 1;
+                  const ok = canForgeRecipe(r);
+                  return (
+                    <div key={r.id} className="flex items-center gap-2">
+                      <span className="block w-6 h-6 shrink-0 overflow-hidden rounded grid place-items-center">
+                        <ItemThumb name={r.outputName} emoji={outputEmoji(r)} className="text-base" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className={`block text-[11px] font-bold leading-tight truncate ${ui.text}`}>{r.outputName}</span>
+                        <span className={`block text-[10px] leading-tight ${ok ? 'text-emerald-300' : 'text-white/40'}`}>
+                          precisa {need}x{ok ? ' · pronta' : ''}
+                        </span>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
       )}
         </>,

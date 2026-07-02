@@ -98,6 +98,10 @@ interface DungeonRunProps {
   dungeon: DungeonDef
   character: DungeonCharacter
   onExit: (updates: { hp: number; mp: number; stamina: number; leveledUp?: boolean }) => void
+  /** Re-run: o pai remonta a run do zero (mesma masmorra), preservando o piloto via initialAuto. */
+  onRestart?: (updates: { hp: number; mp: number; stamina: number; leveledUp?: boolean; auto: boolean }) => void
+  /** Estado inicial do piloto automático (preservado entre re-runs). */
+  initialAuto?: boolean
 }
 
 type RunPhase = 'explore' | 'combat' | 'summary' | 'defeat'
@@ -222,14 +226,32 @@ interface CombatResponse {
   error?: string
 }
 
-// Efeito restaurador de um consumível a partir dos stats do catálogo.
-function consumableEffect(stats: any): { hp: number; mp: number; cure: string | null } {
+// Efeito de um consumível a partir dos stats do catálogo: restauração (hp/mp),
+// cura de status, buffs temporários de combate e revive (auto ao cair).
+function consumableEffect(stats: any): {
+  hp: number; mp: number; cure: string | null
+  atk: number; def: number; dodge: number; buffTurns: number
+  revive: number
+} {
   const s = stats || {}
-  return { hp: Number(s.healAmount) || 0, mp: Number(s.manaAmount) || 0, cure: s.cure || null }
+  return {
+    hp: Number(s.healAmount) || 0,
+    mp: Number(s.manaAmount) || 0,
+    cure: s.cure || null,
+    atk: Number(s.attackBonus) || 0,
+    def: Number(s.defenseBonus) || 0,
+    dodge: Number(s.dodgeBonus) || 0,
+    buffTurns: Number(s.duration) || 0,
+    revive: Number(s.reviveHpPercent) || 0,
+  }
 }
 function consumableIcon(stats: any): string {
   const e = consumableEffect(stats)
+  if (e.revive) return '🪶'
   if (e.cure === 'poison') return '🧉'
+  if (e.atk) return '💪'
+  if (e.def) return '🛡️'
+  if (e.dodge) return '💨'
   if (e.hp && e.mp) return '💖'
   if (e.hp) return '❤️'
   if (e.mp) return '🔮'
@@ -244,6 +266,11 @@ interface DungeonConsumable {
   qty: number
   icon: string
   cure: string | null
+  atk: number
+  def: number
+  dodge: number
+  buffTurns: number
+  revive: number
 }
 
 // Item coletado durante a run (guarda o nome para a arte real /items/<slug>.webp).
@@ -257,7 +284,17 @@ interface RunItem {
 // ou um item — que renderiza o ÍCONE de jogo real (não o emoji-placeholder).
 type EffectChip =
   | { kind: 'stat'; text: string }
-  | { kind: 'item'; name: string; emoji: string; label: string }
+  | { kind: 'item'; name: string; emoji: string; label: string; rarity?: string }
+
+// Mesma linguagem visual de raridade usada na landing (DolrathLanding.tsx RARITY_FRAME),
+// replicada aqui para os cards de loot da masmorra não terem que importar a landing inteira.
+const LOOT_RARITY_RING: Record<string, { ring: string; glow: string; text: string }> = {
+  COMMON:    { ring: 'border-zinc-400/50',    glow: 'rgba(161,161,170,0.35)', text: 'text-zinc-300' },
+  UNCOMMON:  { ring: 'border-emerald-400/60', glow: 'rgba(52,211,153,0.45)',  text: 'text-emerald-300' },
+  RARE:      { ring: 'border-sky-400/60',     glow: 'rgba(56,189,248,0.5)',   text: 'text-sky-300' },
+  EPIC:      { ring: 'border-fuchsia-400/70', glow: 'rgba(232,121,249,0.55)', text: 'text-fuchsia-300' },
+  LEGENDARY: { ring: 'border-amber-400/70',   glow: 'rgba(251,191,36,0.6)',   text: 'text-amber-300' },
+}
 
 // Miniatura do item: usa a arte /items/<slug>.webp e cai no emoji se a imagem falhar
 // (mesmo padrão da forja/alquimia). Substitui os emojis-placeholder (📦/🧪/⚒️/...) dos drops.
@@ -295,31 +332,53 @@ function MonsterThumb({ name, image, emoji, className = 'text-6xl' }: { name: st
   )
 }
 
-// Lista de chips de efeito (ouro/XP como texto; itens com ícone real de jogo).
+// Lista de chips de efeito: itens ganham tiles grandes com arte real + moldura de
+// raridade (mesma linguagem da landing); ouro/XP continuam como pílulas pequenas.
 function EffectChipList({ effects }: { effects: EffectChip[] }) {
   if (effects.length === 0) return null
+  const items = effects.filter((fx): fx is Extract<EffectChip, { kind: 'item' }> => fx.kind === 'item')
+  const stats = effects.filter((fx): fx is Extract<EffectChip, { kind: 'stat' }> => fx.kind === 'stat')
   return (
-    <div className="flex flex-wrap justify-center gap-2 mb-5">
-      {effects.map((fx, i) => (
-        <motion.span
-          key={i}
-          initial={{ opacity: 0, y: 10, scale: 0.8 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ delay: 0.2 + i * 0.12, type: 'spring', stiffness: 300, damping: 18 }}
-          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-sm font-bold font-combat bg-white/10 border-white/20 text-white"
-        >
-          {fx.kind === 'item' ? (
-            <>
-              <span className="w-5 h-5 inline-flex items-center justify-center shrink-0">
-                <ItemThumb name={fx.name} emoji={fx.emoji} />
-              </span>
-              {fx.label}
-            </>
-          ) : (
-            fx.text
-          )}
-        </motion.span>
-      ))}
+    <div className="mb-5">
+      {items.length > 0 && (
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          {items.map((fx, i) => {
+            const frame = LOOT_RARITY_RING[fx.rarity ?? 'COMMON'] ?? LOOT_RARITY_RING.COMMON
+            return (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 10, scale: 0.8 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ delay: 0.2 + i * 0.12, type: 'spring', stiffness: 300, damping: 18 }}
+                className={`flex items-center gap-2 px-2.5 py-2 rounded-xl border-2 bg-white/5 ${frame.ring}`}
+                style={{ boxShadow: `0 0 14px ${frame.glow}` }}
+              >
+                <span className="w-11 h-11 inline-flex items-center justify-center shrink-0 rounded-lg bg-black/20 text-2xl">
+                  <ItemThumb name={fx.name} emoji={fx.emoji} className="text-2xl" />
+                </span>
+                <span className={`text-xs font-bold font-combat leading-tight text-left ${frame.text}`}>
+                  {fx.label}
+                </span>
+              </motion.div>
+            )
+          })}
+        </div>
+      )}
+      {stats.length > 0 && (
+        <div className="flex flex-wrap justify-center gap-2">
+          {stats.map((fx, i) => (
+            <motion.span
+              key={i}
+              initial={{ opacity: 0, y: 10, scale: 0.8 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ delay: 0.2 + (items.length + i) * 0.12, type: 'spring', stiffness: 300, damping: 18 }}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-sm font-bold font-combat bg-white/10 border-white/20 text-white"
+            >
+              {fx.text}
+            </motion.span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -437,7 +496,7 @@ function diceLine(label: string, sides: number, roll: number, tag: string): stri
   return `${label} d${sides} = ${roll} ${tag}`
 }
 
-export default function DungeonRun({ dungeon, character, onExit }: DungeonRunProps) {
+export default function DungeonRun({ dungeon, character, onExit, onRestart, initialAuto }: DungeonRunProps) {
   // ---------- Recursos locais do personagem (durante a run) ----------
   // HP e MP começam cheios: a stamina diária é o que limita as tentativas.
   const [hp, setHp] = useState(() => character.maxHp + equipmentPower(character.equipment).hp)
@@ -535,6 +594,9 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   // vitória mostrar o TOTAL do nó (não só o último abate). Reseta a cada startCombat.
   const encounterXpRef = useRef(0)
   const encounterKillGoldRef = useRef(0)
+  // 💀 Drops de abates INTERMEDIÁRIOS do pacote (o servidor credita por kill);
+  // acumulados aqui só para o card de vitória do nó exibi-los junto do espólio.
+  const encounterDropsRef = useRef<LootDrop[]>([])
   // Card em destaque na arena (frente + iluminado): o ALVO do jogador na sua vez,
   // ou o ATACANTE atual na vez dos inimigos.
   const [focusEnemyId, setFocusEnemyId] = useState<string | null>(null)
@@ -551,7 +613,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const [winnerId, setWinnerId] = useState<string | null>(null)
   // RUN AUTOMÁTICA: um "piloto" toca a expedição inteira — anda na trilha, confirma
   // loot/eventos e joga os combates. Persiste até ser desligado.
-  const [auto, setAuto] = useState(false)
+  const [auto, setAuto] = useState(initialAuto ?? false)
   // O piloto pode usar poções de HP/MP automaticamente (switch; ligado por padrão).
   const [autoConsumables, setAutoConsumables] = useState(true)
   // Diálogo de confirmação ao sair: PAUSA a run (o piloto não age enquanto aberto).
@@ -747,9 +809,13 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
         .filter((row: any) => row?.item?.type === 'CONSUMABLE' && row.quantity > 0)
         .map((row: any) => {
           const e = consumableEffect(row.item.stats)
-          return { id: row.item.id, name: row.item.name, hp: e.hp, mp: e.mp, qty: row.quantity, icon: consumableIcon(row.item.stats), cure: e.cure }
+          return {
+            id: row.item.id, name: row.item.name, hp: e.hp, mp: e.mp, qty: row.quantity,
+            icon: consumableIcon(row.item.stats), cure: e.cure,
+            atk: e.atk, def: e.def, dodge: e.dodge, buffTurns: e.buffTurns, revive: e.revive,
+          }
         })
-        .filter((c: DungeonConsumable) => c.hp > 0 || c.mp > 0 || !!c.cure)
+        .filter((c: DungeonConsumable) => c.hp > 0 || c.mp > 0 || !!c.cure || c.atk > 0 || c.def > 0 || c.dodge > 0 || c.revive > 0)
       setConsumables(list)
     } catch {
       /* silencioso */
@@ -960,7 +1026,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
 
     const effects: EffectChip[] = []
     if (loot.gold > 0) effects.push({ kind: 'stat', text: `+${loot.gold} 💰` })
-    for (const d of loot.drops) effects.push({ kind: 'item', name: d.name, emoji: d.emoji, label: d.name })
+    for (const d of loot.drops) effects.push({ kind: 'item', name: d.name, emoji: d.emoji, label: d.name, rarity: d.rarity })
 
     const def: DungeonEventDef = { kind: revealKind, min: 0, max: 0, icon, title, description: text }
     return { def, text, effects }
@@ -1066,6 +1132,7 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     enemyQueueRef.current = []
     encounterXpRef.current = 0
     encounterKillGoldRef.current = 0
+    encounterDropsRef.current = []
     setFocusEnemyId(active.id)
     setIsPack(list.length > 1)
     setEventCard(null)
@@ -1489,6 +1556,17 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
   const useConsumable = (c: DungeonConsumable) => {
     if (c.qty <= 0) return
     const inCombatTurn = phase === 'combat' && stage === 'playerSelect'
+    const isBuff = c.atk > 0 || c.def > 0 || c.dodge > 0
+    // 🪶 Poção de Reviver: nunca se usa manualmente — é consumida sozinha ao cair.
+    if (c.revive > 0) {
+      showBanner('🪶', 'Guardada: age sozinha se você cair em combate')
+      return
+    }
+    // 💪 Buff de combate: só faz sentido durante uma luta (dura N turnos).
+    if (isBuff && phase !== 'combat') {
+      showBanner('⚔️', 'Use durante um combate')
+      return
+    }
     const hpFull = hpRef.current >= effMaxHp
     const mpFull = mp >= character.maxMp
     if ((c.hp > 0 && c.mp === 0 && hpFull) || (c.mp > 0 && c.hp === 0 && mpFull)) {
@@ -1499,6 +1577,22 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     if (c.cure === 'poison' && !combatFxRef.current.poisoned) {
       showBanner('✋', 'Você não está envenenado')
       return
+    }
+    // Buffs mapeados nos combatFx que as habilidades de forma já usam. O +1 nos turnos
+    // compensa o tickPlayerTurn imediato abaixo (usar item consome o turno).
+    if (isBuff) {
+      const turns = (c.buffTurns || 3) + (inCombatTurn ? 1 : 0)
+      setCombatFx(prev => ({
+        ...prev,
+        ...(c.atk > 0 ? { dmgDealtMult: 1 + c.atk / 25, dmgDealtTurns: turns } : {}),
+        ...(c.def > 0 ? { dmgTakenMult: Math.max(0.5, 1 - c.def / 25), dmgTakenTurns: turns } : {}),
+        ...(c.dodge > 0 ? { evadeBuff: c.dodge / 100, evadeBuffTurns: turns } : {}),
+      }))
+      pushBattleEvent({ kind: 'buff', actorId: character.id, action: 'potion' })
+      pushFloat(
+        c.atk > 0 ? `+${c.atk} ⚔️` : c.def > 0 ? `+${c.def} 🛡️` : `+${c.dodge}% 💨`,
+        '#f59e0b'
+      )
     }
     if (c.hp > 0) {
       const gain = Math.min(effMaxHp, hpRef.current + c.hp) - hpRef.current
@@ -1594,6 +1688,26 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     const newHp = Math.max(0, hpRef.current - inDmg)
     later(() => setHp(newHp), 500)
     if (newHp <= 0) {
+      // 🪶 Poção de Reviver: consumida SOZINHA ao cair — volta com % do HP máx e a
+      // luta continua (fase inimiga segue). É o que sustenta o farm automático.
+      const reviver = consumables.find(x => x.revive > 0 && x.qty > 0)
+      if (reviver) {
+        const back = Math.max(1, Math.round(effMaxHp * (reviver.revive / 100)))
+        setConsumables(prev => prev.map(x => (x.id === reviver.id ? { ...x, qty: x.qty - 1 } : x)).filter(x => x.qty > 0))
+        fetch(`/api/character/${character.id}/use-consumable`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ itemId: reviver.id }),
+        }).catch(() => {})
+        later(() => {
+          setHp(back)
+          showBanner('🪶', `${reviver.name}! Você volta à luta com ${back} HP`, 2600)
+          pushLog(`🪶 ${reviver.name} te trouxe de volta (${back} HP)!`)
+          pushFloat(`+${back} 🪶`, '#fbbf24')
+        }, 1000)
+        later(() => nextEnemyAttack(), 2400)
+        return
+      }
       later(() => {
         setCombatEnded(true)
         setWinnerId(m.id)
@@ -1683,6 +1797,12 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     // Nó AINDA NÃO limpo: o jogador abateu o alvo na vez dele → agora é a vez dos
     // inimigos restantes (todos atacam). O próximo alvo padrão vira o mais fraco vivo.
     if (!cleared) {
+      // 💀 Drop por abate: já creditado no servidor — mostra na hora e guarda pro card do nó.
+      if (loot.drops.length > 0) {
+        showLoot(loot, grant?.skippedDrops)
+        const skipped = new Set((grant?.skippedDrops ?? []).map(d => d.name))
+        encounterDropsRef.current.push(...loot.drops.filter(d => !skipped.has(d.name)))
+      }
       const next = weakestOf(remaining)
       showBanner('🗡️', `${m.name} caiu! Restam ${remaining.length}.`, 1800)
       if (next) { setMonster(next); monsterRef.current = next }
@@ -1719,12 +1839,15 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
         const effects: EffectChip[] = []
         if (nodeXp > 0) effects.push({ kind: 'stat', text: `+${nodeXp} ⭐ XP` })
         if (totalGold > 0) effects.push({ kind: 'stat', text: `+${totalGold} 💰` })
-        for (const d of loot.drops) effects.push({
+        // Drops do nó + o que caiu dos abates intermediários do pacote.
+        for (const d of [...encounterDropsRef.current, ...loot.drops]) effects.push({
           kind: 'item',
           name: d.name,
           emoji: d.emoji,
           label: d.enhancement ? `${d.name} +${d.enhancement}` : d.name,
+          rarity: d.rarity,
         })
+        encounterDropsRef.current = []
 
         const def: DungeonEventDef = {
           kind: hasGear ? 'item' : 'gold',
@@ -1765,19 +1888,33 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     }, 1300)
   }
 
+  // 🔁 Re-run: o pai remonta a run do zero (mesma masmorra/herói), preservando o
+  // estado do piloto. Precisa de stamina para ao menos o 1º passo (nó menor).
+  // Aguarda o POST que encerra a run atual aterrissar antes de remontar — senão o
+  // /start da nova run vê a antiga ainda 'active' (lock vivo) e devolve 409.
+  const endRunPromiseRef = useRef<Promise<unknown> | null>(null)
+  const canRerun = !!onRestart && stamina >= MINOR_STEP_COST
+  const restartRun = async () => {
+    if (!onRestart) { exitRun(); return }
+    try { await endRunPromiseRef.current } catch { /* segue mesmo assim */ }
+    onRestart({ hp: effMaxHp, mp: character.maxMp, stamina, leveledUp: leveledUpThisRun, auto })
+  }
+
   // DERROTA: avisa o servidor (encerra a run). XP dos abates já foi creditado por kill.
-  // Depois de alguns segundos, sai sozinho da sala de volta pro mapa — sem depender
-  // do jogador clicar "Voltar ao mapa" (evita ficar preso vendo a tela de queda).
+  // A tela oferece Sair e Re-run; no piloto automático o Re-run é escolhido sozinho
+  // (enquanto houver stamina) — sem stamina, volta ao mapa como antes.
   const handleDefeat = () => {
     setPhase('defeat')
     if (runIdRef.current) {
-      fetch('/api/dungeon/run/combat', {
+      endRunPromiseRef.current = fetch('/api/dungeon/run/combat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ runId: runIdRef.current, outcome: 'lose' }),
       }).catch(() => {})
     }
-    later(() => exitRun(), 4000)
+    if (auto) {
+      later(() => { if (onRestart && stamina >= MINOR_STEP_COST) restartRun(); else exitRun() }, 3200)
+    }
   }
 
   const finishRun = async (bossDefeated: boolean) => {
@@ -1792,6 +1929,10 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
     }
     if (bossDefeated) {
       pushLog(`👑 ${dungeon.name} conquistada!`)
+      // Piloto automático: boss vencido também reinicia a run (farm contínuo até a stamina acabar).
+      if (auto) {
+        later(() => { if (onRestart && stamina >= MINOR_STEP_COST) restartRun(); else exitRun() }, 3600)
+      }
     }
   }
 
@@ -2212,15 +2353,20 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                   {consumables.map(c => {
                     const hpFull = hp >= effMaxHp
                     const mpFull = mp >= character.maxMp
+                    const isBuff = c.atk > 0 || c.def > 0 || c.dodge > 0
                     const disabled =
                       (c.hp > 0 && c.mp === 0 && hpFull) ||
                       (c.mp > 0 && c.hp === 0 && mpFull) ||
                       (c.hp > 0 && c.mp > 0 && hpFull && mpFull) ||
-                      (c.cure === 'poison' && !combatFx.poisoned)
+                      (c.cure === 'poison' && !combatFx.poisoned) ||
+                      (isBuff && phase !== 'combat') ||
+                      c.revive > 0
                     return (
                       <div key={c.id} className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-xl">{c.icon}</span>
+                          <span className="w-8 h-8 shrink-0 inline-flex items-center justify-center text-xl">
+                            <ItemThumb name={c.name} emoji={c.icon} className="text-xl" />
+                          </span>
                           <div className="min-w-0">
                             <div className="text-white text-sm font-bold truncate">
                               {c.name} <span className="text-textsec font-normal">×{c.qty}</span>
@@ -2228,6 +2374,10 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                             <div className="text-textsec text-[11px]">
                               {c.hp > 0 ? `+${c.hp} ❤️` : ''}{c.hp > 0 && c.mp > 0 ? ' • ' : ''}{c.mp > 0 ? `+${c.mp} 🔮` : ''}
                               {c.cure === 'poison' ? 'Cura veneno' : ''}
+                              {c.atk > 0 ? `+${c.atk} ⚔️ por ${c.buffTurns || 3} turnos` : ''}
+                              {c.def > 0 ? `+${c.def} 🛡️ por ${c.buffTurns || 3} turnos` : ''}
+                              {c.dodge > 0 ? `+${c.dodge}% 💨 por ${c.buffTurns || 3} turnos` : ''}
+                              {c.revive > 0 ? `Revive com ${c.revive}% do HP — age sozinha ao cair` : ''}
                             </div>
                           </div>
                         </div>
@@ -3059,12 +3209,27 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
                 </motion.div>
               )}
 
-              <button
-                onClick={exitRun}
-                className="px-8 py-3 rounded-xl font-black text-white text-sm bg-gradient-to-r from-emerald-700 to-teal-600 hover:from-emerald-600 hover:to-teal-500 shadow-lg transition-all hover:scale-105"
-              >
-                🏠 Voltar ao mapa
-              </button>
+              {auto && canRerun && (
+                <div className="text-emerald-300/90 text-[11px] font-bold mb-3 animate-pulse">
+                  🤖 Piloto automático: refazendo a run…
+                </div>
+              )}
+              <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                {canRerun && (
+                  <button
+                    onClick={restartRun}
+                    className="px-8 py-3 rounded-xl font-black text-white text-sm bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 hover:to-orange-400 shadow-lg transition-all hover:scale-105"
+                  >
+                    🔁 Nova run
+                  </button>
+                )}
+                <button
+                  onClick={exitRun}
+                  className="px-8 py-3 rounded-xl font-black text-white text-sm bg-gradient-to-r from-emerald-700 to-teal-600 hover:from-emerald-600 hover:to-teal-500 shadow-lg transition-all hover:scale-105"
+                >
+                  🏠 Voltar ao mapa
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
@@ -3088,12 +3253,27 @@ export default function DungeonRun({ dungeon, character, onExit }: DungeonRunPro
               <div className="text-white/70 text-xs mb-5">
                 💰 {totals.gold} ouro • ⭐ {totals.xp} XP • 📦 {totals.items.length} itens — tudo salvo
               </div>
-              <button
-                onClick={exitRun}
-                className="px-8 py-3 rounded-xl font-black text-white text-sm bg-gradient-to-r from-stone-700 to-stone-600 hover:from-stone-600 hover:to-stone-500 shadow-lg transition-all hover:scale-105"
-              >
-                🏠 Voltar ao mapa
-              </button>
+              {auto && canRerun && (
+                <div className="text-emerald-300/90 text-[11px] font-bold mb-3 animate-pulse">
+                  🤖 Piloto automático: refazendo a run…
+                </div>
+              )}
+              <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                {canRerun && (
+                  <button
+                    onClick={restartRun}
+                    className="px-8 py-3 rounded-xl font-black text-white text-sm bg-gradient-to-r from-emerald-700 to-teal-600 hover:from-emerald-600 hover:to-teal-500 shadow-lg transition-all hover:scale-105"
+                  >
+                    🔁 Refazer a run
+                  </button>
+                )}
+                <button
+                  onClick={exitRun}
+                  className="px-8 py-3 rounded-xl font-black text-white text-sm bg-gradient-to-r from-stone-700 to-stone-600 hover:from-stone-600 hover:to-stone-500 shadow-lg transition-all hover:scale-105"
+                >
+                  🏠 Voltar ao mapa
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

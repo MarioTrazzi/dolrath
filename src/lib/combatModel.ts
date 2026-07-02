@@ -138,7 +138,12 @@ export const MONSTER_SPECIAL_EFFECTS: Record<string, MonsterSpecialEffect> = {
   'Anciã da Mata': { name: 'Abraço da Floresta', effect: 'poison', chance: 0.35, poisonDmg: 2, dmgMult: 1.25 },
 }
 export function monsterSpecialEffect(name: string): MonsterSpecialEffect | undefined {
-  return MONSTER_SPECIAL_EFFECTS[name]
+  const direct = MONSTER_SPECIAL_EFFECTS[name]
+  if (direct) return direct
+  // O boss escalado vem renomeado ("👑 Anciã da Mata • Guardiã Corrompida") —
+  // sem normalizar, o efeito especial dele nunca dispararia.
+  const base = name.replace(/^👑\s*/, '').split('•')[0].trim()
+  return MONSTER_SPECIAL_EFFECTS[base]
 }
 
 /** Poder efetivo de um ataque (base da classe × multiplicador do tipo). */

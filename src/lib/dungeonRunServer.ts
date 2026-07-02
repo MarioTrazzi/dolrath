@@ -15,6 +15,7 @@ import {
   scaleMonster,
   scaleMonsterGroup,
   rollNodeLoot,
+  rollKillLoot,
   luckTier,
   type DungeonId,
   type DungeonDef,
@@ -150,6 +151,8 @@ export function rollCombatLoot(dungeon: DungeonDef, character: CharacterForRun, 
   const roll = pending.kind === 'boss' ? 20 : pending.lootRoll
   return rollNodeLoot(dungeon, roll, pending.kind, character.level, character.race, character.class)
 }
+
+export { rollKillLoot }
 
 // ============================================================
 // TETO DIÁRIO DE EMISSÃO (faucet cap). Mesmo com o combate confiando no

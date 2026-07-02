@@ -6,6 +6,7 @@ import { addExperienceToCharacter } from '@/lib/characterLevelSystem'
 import {
   getDungeon,
   rollCombatLoot,
+  rollKillLoot,
   applyLootTx,
   creditGoldTx,
   pendingMonsters,
@@ -98,8 +99,14 @@ export async function POST(req: Request) {
     const allDead = monsters.every((m) => killed.has(m.id))
 
     const charForRun = { id: character.id, level: character.level, race: character.race, class: character.class }
-    // O espólio do NÓ só sai quando o pacote inteiro cai (último abate "limpa" o nó).
-    const loot = allDead ? rollCombatLoot(dungeon, charForRun, pending) : null
+    // 💀 Drop POR ABATE: cada monstro morto rola material na hora (estilhaço; boss =
+    // Pedra Negra garantida) — recuar depois de matar 1 de 3 ainda rende algo.
+    const killDrops = newlyKilled.flatMap((m) => rollKillLoot(pending.kind, !!m.isBoss))
+    // O espólio do NÓ segue saindo só quando o pacote inteiro cai (recompensa por limpar).
+    const nodeLoot = allDead ? rollCombatLoot(dungeon, charForRun, pending) : null
+    const loot = nodeLoot || killDrops.length
+      ? { gold: nodeLoot?.gold ?? 0, drops: [...killDrops, ...(nodeLoot?.drops ?? [])] }
+      : null
 
     const credited = await prisma.$transaction(async (tx) => {
       const killGold = await creditGoldTx(tx, userId, character.id, killGoldTotal)

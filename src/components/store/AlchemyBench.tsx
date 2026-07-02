@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Info } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { findRecipeByIngredients, recipesByRarity, expandRecipe, type PotionRecipe } from '@/lib/alchemy';
+import { findRecipeByIngredients, recipesByRarity, expandRecipe, recipesUsingIngredient, type PotionRecipe } from '@/lib/alchemy';
 import { getIngredientByName, isIngredientItem, type Rarity } from '@/lib/itemCatalog';
 // Miniatura com card de detalhe ao passar o mouse (ver TODO ícone grande).
 import { CraftItemThumb as ItemThumb } from './CraftItemThumb';
@@ -78,6 +78,8 @@ export default function AlchemyBench({
   // Livro de receitas (modal) + popover de ingredientes ao passar o mouse.
   const [recipesOpen, setRecipesOpen] = useState(false);
   const [hover, setHover] = useState<HoverInfo | null>(null);
+  // Popover "usado em" ao passar o mouse sobre um ingrediente da paleta (fora do livro).
+  const [ingHover, setIngHover] = useState<HoverInfo | null>(null);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
@@ -482,6 +484,12 @@ export default function AlchemyBench({
                       key={name}
                       type="button"
                       onClick={() => placeIngredient(name)}
+                      onMouseEnter={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const left = Math.min(rect.right + 8, window.innerWidth - 250);
+                        setIngHover({ id: name, top: rect.top, left });
+                      }}
+                      onMouseLeave={() => setIngHover((h) => (h?.id === name ? null : h))}
                       disabled={busy || left <= 0}
                       title={`${name} — ${left} disponível`}
                       className="relative flex flex-col items-center gap-1 rounded-lg border p-2 transition-transform hover:scale-[1.03] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
@@ -605,6 +613,44 @@ export default function AlchemyBench({
               <p className={`mt-1 text-[10px] font-semibold ${canCraftRecipe(hoverRecipe) ? 'text-emerald-300' : 'text-white/40'}`}>
                 {canCraftRecipe(hoverRecipe) ? '✓ clique para montar o triângulo' : 'colete os ingredientes que faltam'}
               </p>
+            </div>
+          )}
+
+          {/* Popover "usado em" (hover sobre um ingrediente da paleta) — mostra em quais poções ele entra. */}
+          {ingHover && (
+            <div
+              className="pointer-events-none fixed z-[60] w-[230px] rounded-xl border border-emerald-500/40 bg-zinc-950/95 p-3 shadow-2xl"
+              style={{ top: Math.min(ingHover.top, (typeof window !== 'undefined' ? window.innerHeight : 800) - 260), left: ingHover.left }}
+            >
+              <p className="text-xs font-black mb-2 text-white/90">Usado em:</p>
+              {(() => {
+                const recipes = recipesUsingIngredient(ingHover.id);
+                if (recipes.length === 0) {
+                  return <p className="text-[11px] text-white/40">Nenhuma poção conhecida usa este ingrediente.</p>;
+                }
+                return (
+                  <div className="space-y-1.5">
+                    {recipes.map((r) => {
+                      const ui = RARITY_UI[r.rarity];
+                      const need = r.ingredients.find((i) => i.name === ingHover.id)?.quantity ?? 1;
+                      const ok = canCraftRecipe(r);
+                      return (
+                        <div key={r.id} className="flex items-center gap-2">
+                          <span className="block w-6 h-6 shrink-0 overflow-hidden rounded grid place-items-center">
+                            <ItemThumb name={r.outputName} emoji="🧪" className="text-base" />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className={`block text-[11px] font-bold leading-tight truncate ${ui.text}`}>{r.outputName}</span>
+                            <span className={`block text-[10px] leading-tight ${ok ? 'text-emerald-300' : 'text-white/40'}`}>
+                              precisa {need}x{ok ? ' · pronta' : ''}
+                            </span>
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
           )}
         </>,

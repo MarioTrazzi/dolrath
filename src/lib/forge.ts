@@ -210,6 +210,11 @@ export function findForgeRecipeByMaterials(mats: ForgeMaterialReq[]): ForgeRecip
   return key ? RECIPE_BY_MATERIALS.get(key) : undefined;
 }
 
+/** Receitas que usam um dado material — para o tooltip "usado em" na mesa de forja. */
+export function forgeRecipesUsingMaterial(name: string): ForgeRecipe[] {
+  return FORGE_RECIPES.filter((r) => r.materials.some((m) => m.name === name));
+}
+
 const FORGE_GROUP_ORDER: { group: ForgeRecipe['group']; rarities: Rarity[] }[] = [
   { group: 'armor', rarities: ['COMMON', 'UNCOMMON'] },
   { group: 'weapon', rarities: ['COMMON', 'UNCOMMON'] },

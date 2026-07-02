@@ -783,6 +783,13 @@ export const CONSUMABLE_CATALOG: ConsumableItem[] = [
     subtype: 'REVIVE_POTION', level: 12, rarity: 'EPIC', goldPrice: 1200, source: 'dungeon_boss',
     stats: { reviveHpPercent: 50, effect: 'revive', battleUsable: false },
   },
+  {
+    // Versão acessível do revive (craft de alquimia com ingredientes da Floresta) —
+    // é o combustível do farm automático: ao cair na masmorra, é consumida sozinha.
+    name: 'Poção de Reviver', description: 'Traz um herói caído de volta à luta com 30% do HP máximo.',
+    subtype: 'REVIVE_POTION', level: 4, rarity: 'RARE', goldPrice: 350, source: 'dungeon',
+    stats: { reviveHpPercent: 30, effect: 'revive', battleUsable: false },
+  },
 
   // ---------- 🗓️ AVENTURAS — únicos (drop de chefe semanal) ----------
   {

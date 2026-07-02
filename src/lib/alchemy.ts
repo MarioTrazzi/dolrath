@@ -98,6 +98,13 @@ export const POTION_RECIPES: PotionRecipe[] = [
   ]),
 
   // ---------- RARAS (precisam de ingrediente raro — só de chefe) ----------
+  // Exceção deliberada: a Poção de Reviver usa só ingredientes de chão da Floresta,
+  // para o farm automático (auto-revive ao cair) ser sustentável desde o early-game.
+  recipe('reviver', 'Poção de Reviver', 'RARE', [
+    { name: 'Erva Medicinal', quantity: 1 },
+    { name: 'Seiva Ancestral', quantity: 1 },
+    { name: 'Cogumelo Lunar', quantity: 1 },
+  ]),
   recipe('vida_grande', 'Poção de Vida Grande', 'RARE', [
     { name: 'Erva Medicinal', quantity: 1 },
     { name: 'Seiva Ancestral', quantity: 1 },
@@ -149,6 +156,11 @@ const RECIPE_BY_COMBO = new Map(POTION_RECIPES.map((r) => [expandRecipe(r).join(
 export function findRecipeByIngredients(names: string[]): PotionRecipe | undefined {
   if (names.length !== 3) return undefined;
   return RECIPE_BY_COMBO.get([...names].sort().join('|'));
+}
+
+/** Receitas que usam um dado ingrediente — para o tooltip "usado em" na bancada. */
+export function recipesUsingIngredient(name: string): PotionRecipe[] {
+  return POTION_RECIPES.filter((r) => r.ingredients.some((i) => i.name === name));
 }
 
 const RECIPE_RARITY_ORDER: Rarity[] = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY'];

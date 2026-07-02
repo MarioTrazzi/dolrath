@@ -913,3 +913,33 @@ export function rollNodeLoot(
 
   return { gold, drops }
 }
+
+// ============================================================
+// 💀 DROP POR ABATE (2026-07-02) — o monstro é a fonte PRINCIPAL de estilhaço,
+// creditado a CADA abate individual (recuar depois de matar 1 de 3 ainda rende
+// algo — antes o espólio só saía quando o pacote inteiro caía). O boss garante
+// Pedra(s) Negra(s) INTEIRA(S): é o coração da economia de aprimoramento.
+// Constantes calibradas em scripts/farm-progression-sim.js — metas: main full
+// +15 em ~1 semana com 5 chars (~7d), ~1 mês solo ou p/ o esquadrão inteiro.
+// ============================================================
+const KILL_SHARD_CHANCE: Record<LootNodeKind, number> = { minor: 0.4, main: 0.6, boss: 0.6 }
+const BOSS_KILL_STONES = { min: 1, max: 3 }
+
+export function rollKillLoot(nodeKind: LootNodeKind, isBoss: boolean): LootDrop[] {
+  const drops: LootDrop[] = []
+  if (isBoss) {
+    const n = BOSS_KILL_STONES.min + Math.floor(Math.random() * (BOSS_KILL_STONES.max - BOSS_KILL_STONES.min + 1))
+    for (let i = 0; i < n; i++) {
+      const stone = Math.random() < 0.5 ? STONE_NAMES.WEAPON_BASIC : STONE_NAMES.ARMOR_BASIC
+      drops.push({ name: stone, kind: 'stone', rarity: 'UNCOMMON', emoji: '🪨' })
+    }
+    return drops
+  }
+  if (Math.random() < KILL_SHARD_CHANCE[nodeKind]) {
+    const shard = Math.random() < 0.5
+      ? { name: 'Estilhaço de Pedra Negra (Arma)', emoji: '🔸' }
+      : { name: 'Estilhaço de Pedra Negra (Armadura)', emoji: '🔹' }
+    drops.push({ name: shard.name, kind: 'material', rarity: 'COMMON', emoji: shard.emoji })
+  }
+  return drops
+}

@@ -614,6 +614,9 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
   // RUN AUTOMÁTICA: um "piloto" toca a expedição inteira — anda na trilha, confirma
   // loot/eventos e joga os combates. Persiste até ser desligado.
   const [auto, setAuto] = useState(initialAuto ?? false)
+  // Espelho síncrono do piloto p/ callbacks estáveis (showLoot, abertura da run).
+  const autoRef = useRef(auto)
+  autoRef.current = auto
   // O piloto pode usar poções de HP/MP automaticamente (switch; ligado por padrão).
   const [autoConsumables, setAutoConsumables] = useState(true)
   // Diálogo de confirmação ao sair: PAUSA a run (o piloto não age enquanto aberto).
@@ -736,8 +739,14 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
         if (typeof data.stamina === 'number') setStamina(data.stamina)
         setRunReady(true)
         // Inventário já cheio ao entrar: avisa que os drops não vão ser coletados.
+        // No piloto (re-run automático) isso viraria stamina queimada sem farm — desliga.
         if (data.inventoryFull) {
-          later(() => showBanner('🎒', 'Seu inventário está cheio! Itens encontrados não serão coletados.', 3200), 400)
+          if (autoRef.current) {
+            setAuto(false)
+            later(() => showBanner('🎒', 'Inventário cheio — piloto desligado. Abra espaço para voltar a farmar.', 3600), 400)
+          } else {
+            later(() => showBanner('🎒', 'Seu inventário está cheio! Itens encontrados não serão coletados.', 3200), 400)
+          }
         }
       } catch {
         showBanner('⚠️', 'Sem conexão com o servidor')
@@ -795,7 +804,13 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
       pushLog(`${d.emoji} ${label}`)
     }
     if (skippedDrops && skippedDrops.length > 0) {
-      showBanner('🎒', 'Inventário cheio! Alguns itens não foram coletados.')
+      // Sem slot livre o farm vira queima de stamina — o piloto desliga sozinho.
+      if (autoRef.current) {
+        setAuto(false)
+        showBanner('🎒', 'Inventário cheio — piloto desligado. Abra espaço para voltar a farmar.', 3600)
+      } else {
+        showBanner('🎒', 'Inventário cheio! Alguns itens não foram coletados.')
+      }
     }
   }, [pushFloat, pushLog, showBanner])
 
@@ -1254,20 +1269,22 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
   const monsterPowerFor = (m: ScaledMonster, kind: AttackKind) => monsterLevers(m).power * ATTACKS[kind].powerMult
 
   // ---------- Iniciativa ----------
+  // Os 2 dados rolam JUNTOS (dual, no centro sob o "VS") — sem esperar um pelo
+  // outro. O giro mínimo do dado (1100ms) já dá tempo de sobra pra animação.
   const handleInitiativeRoll = () => {
     if (hasRolled) return
     setHasRolled(true)
     const mine = mkResult(20, 0)
-    setPanelResult(mine)
     const theirs = mkResult(20, 0)
-    later(() => setDiceResults(prev => ({ ...prev, [monsterRef.current?.id ?? MONSTER_ID]: theirs })), 1700)
+    setPanelResult(mine)
+    setDiceResults(prev => ({ ...prev, [monsterRef.current?.id ?? MONSTER_ID]: theirs }))
     later(() => {
       setStage('busy')
       setPanelResult(null)
       setHasRolled(false)
       const playerFirst = mine.total >= theirs.total
       showBanner(playerFirst ? '⚡' : '😈', playerFirst ? 'Você começa!' : `${monsterRef.current?.name} começa!`)
-      later(() => setDiceResults({}), 1200)
+      later(() => setDiceResults({}), 500)
       later(() => {
         if (playerFirst) {
           setCurrentTurnId(character.id)
@@ -1275,9 +1292,16 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
         } else {
           startEnemyPhase()
         }
-      }, 1400)
-    }, 3000)
+      }, 600)
+    }, 1400)
   }
+
+  // A iniciativa rola sozinha assim que o combate começa — sem clique, os 2 dados já
+  // giram juntos no centro (igual ao PvP). Independe do piloto automático (`auto`).
+  useEffect(() => {
+    if (phase === 'combat' && stage === 'initiative' && !hasRolled) handleInitiativeRoll()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, stage, hasRolled])
 
   // ---------- Turno do jogador (Especial exige transformação, igual ao PvP) ----------
   const choosePlayerAttack = (kind: AttackKind) => {
@@ -1953,14 +1977,23 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
   const dicePanel = useMemo(() => {
     if (phase !== 'combat') return null
     if (stage === 'initiative') {
+      const foe = monsterRef.current
+      const theirs = foe ? diceResults[foe.id] : undefined
+      // Empate favorece o jogador (mesmo critério do handleInitiativeRoll: mine >= theirs).
+      const resultBanner = panelResult && theirs
+        ? panelResult.total >= theirs.total ? 'Você começa!' : `${foe?.name} começa!`
+        : null
       return {
         visible: true,
         diceType: 20,
         hasRolled,
-        label: '⚡ Iniciativa! Role o d20',
+        label: '⚡ Iniciativa! Quem começa?',
         onRoll: handleInitiativeRoll,
         myResult: panelResult,
         waitingForOpponent: false,
+        dual: true,
+        opponentResult: theirs,
+        resultBanner,
       }
     }
     if (stage === 'playerRoll' && pendingAbility) {
@@ -1991,7 +2024,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
     }
     return null
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, stage, hasRolled, panelResult, pendingAttack, pendingAbility, classAtkName, stamina, mp])
+  }, [phase, stage, hasRolled, panelResult, diceResults, pendingAttack, pendingAbility, classAtkName, stamina, mp])
 
   // Rola o dado sozinho assim que o jogador escolhe um golpe/habilidade — não precisa
   // mais clicar no dado, só no ataque. Vale mesmo fora do piloto automático.
@@ -2019,6 +2052,17 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
     return 'basic'
   }
 
+  // Poção mais "justa" pro déficit: a MAIOR que restaura sem desperdiçar; se todas
+  // passam do buraco, a menor disponível. Só restauradores puros (nada de buff/revive).
+  const pickPotion = (kind: 'hp' | 'mp', deficit: number): DungeonConsumable | null => {
+    const amt = (c: DungeonConsumable) => (kind === 'hp' ? c.hp : c.mp)
+    const pool = consumables.filter(c => c.qty > 0 && amt(c) > 0 && c.revive === 0 && c.atk === 0 && c.def === 0 && c.dodge === 0)
+    if (pool.length === 0) return null
+    const fits = pool.filter(c => amt(c) <= deficit)
+    if (fits.length > 0) return fits.reduce((a, b) => (amt(b) > amt(a) ? b : a))
+    return pool.reduce((a, b) => (amt(b) < amt(a) ? b : a))
+  }
+
   // Lê o estágio da máquina de estados do combate e dispara a MESMA ação que o jogador
   // faria. Cada etapa muda o stage (ou hasRolled), então o efeito reage à próxima sem
   // disparo duplo. Pequenos atrasos mantêm as animações visíveis.
@@ -2030,40 +2074,64 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
       return () => { cancelled = true; clearTimeout(t) }
     }
 
-    if (stage === 'initiative' && !hasRolled) return fire(handleInitiativeRoll, 600)
-
     if (stage === 'playerSelect') return fire(() => {
-      // Foco automático: sempre mira o inimigo MAIS FRACO vivo do pacote (atualiza o
-      // ref de forma síncrona e segue para o ataque no mesmo passo).
-      const weak = weakestOf(packRef.current)
-      if (weak && weak.id !== monsterRef.current?.id) setActiveTarget(weak.id)
+      const alive = packRef.current.filter(m => m.hp > 0)
       // Consumíveis automáticos (se o switch estiver ligado):
       if (autoConsumables) {
         // 1) Cura de emergência: HP baixo + poção de vida no inventário.
         if (hpRef.current <= effMaxHp * 0.35 && hpRef.current < effMaxHp) {
-          const potion = consumables.find(c => c.hp > 0 && c.qty > 0)
+          const potion = pickPotion('hp', effMaxHp - hpRef.current)
           if (potion) { useConsumable(potion); return }
         }
         // 2) Repõe MP quando nem o golpe da arma cabe — habilita ataques mais fortes.
         if (mp < ATTACKS.weapon.mp && mp < character.maxMp) {
-          const mPotion = consumables.find(c => c.mp > 0 && c.qty > 0)
+          const mPotion = pickPotion('mp', character.maxMp - mp)
           if (mPotion) { useConsumable(mPotion); return }
         }
       }
       // O combate NÃO gasta stamina (tudo custa MP); a stamina é só o orçamento diário de runs.
-      // 3) Transforma (1× por luta) — mas só se o monstro vai SOBREVIVER a um Ataque de Classe.
-      const foeHp = monsterRef.current?.hp ?? Infinity
-      if (!transform && !transformedThisFightRef.current && transformForms.length > 0 && foeHp > estDamage('weapon')) {
+      // 3) Transforma (1× por luta) — mas só se o PACOTE ainda tem luta pela frente (não
+      // desperdiça a transformação num resto de encontro que cai em 1-2 golpes baratos).
+      const packHp = alive.reduce((sum, m) => sum + m.hp, 0)
+      if (!transform && !transformedThisFightRef.current && transformForms.length > 0 && packHp > estDamage('weapon') * 2) {
         const cfg = TRANSFORMATION_CONFIG[transformForms[0]]
         if (cfg && mp >= cfg.cost.mp) { activateTransform(transformForms[0]); return }
       }
-      // 4) Transformado: usa a HABILIDADE DE DANO da forma (d20) se pagável e fora da recarga.
+      // 4) Transformado: usa a HABILIDADE DE DANO da forma (d20) se pagável e fora da
+      // recarga — mas NUNCA em quem já cai com um Ataque de Classe: o especial vai no
+      // inimigo mais FORTE que ainda aguenta; o quase-morto é finalizado com golpe barato.
       if (transform) {
-        const dmgAbility = getFormSpecials(transform.type).find(d => d.kind === 'dmg')
-        const cd = dmgAbility ? (combatFxRef.current.cd[dmgAbility.id] || 0) : 0
-        if (dmgAbility && cd === 0 && mp >= (dmgAbility.cost.mp || 0)) { useAbility(dmgAbility); return }
+        const specials = getFormSpecials(transform.type)
+        const dmgAbility = specials.find(d => d.kind === 'dmg')
+        const dmgCd = dmgAbility ? (combatFxRef.current.cd[dmgAbility.id] || 0) : 0
+        if (dmgAbility && dmgCd === 0 && mp >= (dmgAbility.cost.mp || 0)) {
+          const worthy = alive.filter(m => m.hp > estDamage('weapon'))
+          if (worthy.length > 0) {
+            const strongest = worthy.reduce((best, m) => (m.hp > best.hp ? m : best))
+            if (strongest.id !== monsterRef.current?.id) setActiveTarget(strongest.id)
+            useAbility(dmgAbility)
+            return
+          }
+          // Nenhum alvo "merece" o especial — guarda o MP e cai pros golpes baratos.
+        } else if (dmgAbility && packHp > estDamage('weapon') * 2) {
+          // 4b) Dano em recarga numa luta ainda longa: aproveita o turno com o UTILITÁRIO
+          // da forma (buff/cura, 8 MP) — sem re-aplicar por cima de um buff ativo e sem
+          // comprometer o MP do próximo especial de dano.
+          const fx = combatFxRef.current
+          const util = specials.find(d => d.kind === 'util')
+          const utilCd = util ? (fx.cd[util.id] || 0) : 0
+          const buffActive = fx.dmgDealtTurns > 0 || fx.dmgTakenTurns > 0 || fx.evadeBuffTurns > 0
+          const utilUseful = util?.heal ? hpRef.current < effMaxHp * 0.85 : !buffActive
+          if (util && utilCd === 0 && utilUseful && mp >= (util.cost.mp || 0) + (dmgAbility.cost.mp || 0)) {
+            useAbility(util)
+            return
+          }
+        }
       }
-      // 5) Ataca com o melhor golpe pagável.
+      // 5) Golpes baratos: foca o inimigo MAIS FRACO vivo do pacote (atualiza o ref de
+      // forma síncrona) e ataca com o melhor golpe pagável sem desperdiçar MP.
+      const weak = weakestOf(packRef.current)
+      if (weak && weak.id !== monsterRef.current?.id) setActiveTarget(weak.id)
       choosePlayerAttack(autoPickAttack())
     }, 650)
 
@@ -2084,18 +2152,40 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
       return () => { cancelled = true; clearTimeout(t) }
     }
 
+    // Reabastecer HP/MP com poções FORA de combate (não gasta turno): usado antes de
+    // avançar E antes de entrar num combate (boss/emboscada) — entra o mais cheio
+    // possível. Uma poção por vez; o efeito re-dispara até encher (>= 90%) ou acabarem
+    // as poções. Só com o switch de consumíveis ligado.
+    const refillPotion = (): DungeonConsumable | null => {
+      if (!autoConsumables) return null
+      if (hp < effMaxHp * 0.9) {
+        const potion = pickPotion('hp', effMaxHp - hp)
+        if (potion) return potion
+      }
+      if (mp < character.maxMp * 0.9) {
+        const mPotion = pickPotion('mp', character.maxMp - mp)
+        if (mPotion) return mPotion
+      }
+      return null
+    }
+
     // 1) Espólio da vitória aberto → confirmar.
     if (lootCard) return fire(() => setLootCard(null), 1000)
     // 2) Card de evento aberto → lutar (monstro) ou seguir (achado).
     if (eventCard) {
+      const group = eventCard.monsters ?? (eventCard.monster ? [eventCard.monster] : null)
+      // Vai ter luta: bebe poção ANTES de entrar (o card espera; uma por vez).
+      const potion = group ? refillPotion() : null
+      if (potion) return fire(() => useConsumable(potion), 450)
       return fire(() => {
-        const group = eventCard.monsters ?? (eventCard.monster ? [eventCard.monster] : null)
         if (group) startCombat(group)
         else dismissEvent()
       }, 1000)
     }
-    // 3) Covil do boss → enfrentar.
+    // 3) Covil do boss → reabastece primeiro, depois enfrenta.
     if (atBoss) {
+      const potion = refillPotion()
+      if (potion) return fire(() => useConsumable(potion), 450)
       return fire(() => startCombat(
         serverPackRef.current ??
         serverMonsterRef.current ??
@@ -2104,19 +2194,9 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
     }
     if (!runReady) return
 
-    // 4) Reabastece HP/MP com poções FORA de combate (não gasta turno) antes de avançar —
-    // entra no próximo combate o mais cheio possível. Uma poção por vez; o efeito re-dispara
-    // até encher (>= 90%) ou acabarem as poções. Só com o switch de consumíveis ligado.
-    if (autoConsumables) {
-      if (hp < effMaxHp * 0.9) {
-        const potion = consumables.find(c => c.hp > 0 && c.qty > 0)
-        if (potion) return fire(() => useConsumable(potion), 450)
-      }
-      if (mp < character.maxMp * 0.9) {
-        const mPotion = consumables.find(c => c.mp > 0 && c.qty > 0)
-        if (mPotion) return fire(() => useConsumable(mPotion), 450)
-      }
-    }
+    // 4) Reabastece antes de avançar na trilha.
+    const potion = refillPotion()
+    if (potion) return fire(() => useConsumable(potion), 450)
 
     // 5) Seguir a trilha — mas só se a stamina cobre o próximo passo.
     if (stamina < stepCost(tokenIdx + 1)) {
@@ -3187,14 +3267,30 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
 
               {totals.items.length > 0 && (
                 <div className="flex flex-wrap justify-center gap-1.5 mb-4">
-                  {totals.items.map((item, i) => (
-                    <span key={`${item.label}-${i}`} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/10 border border-white/20 text-white text-[10px] font-bold">
-                      <span className="w-4 h-4 inline-flex items-center justify-center shrink-0">
-                        <ItemThumb name={item.name} emoji={item.emoji} className="text-xs" />
-                      </span>
-                      {item.label}
-                    </span>
-                  ))}
+                  {(() => {
+                    // Agrupa por item (como no inventário): 1 slot por tipo + badge de quantidade,
+                    // em vez de 1 chip por drop — evita estourar o card com pickups repetidos.
+                    const agg = new Map<string, { name: string; emoji: string; label: string; qty: number }>()
+                    for (const it of totals.items) {
+                      const cur = agg.get(it.label)
+                      if (cur) cur.qty += 1
+                      else agg.set(it.label, { ...it, qty: 1 })
+                    }
+                    return Array.from(agg.values()).map((it, i) => (
+                      <div
+                        key={`${it.label}-${i}`}
+                        title={it.qty > 1 ? `${it.label} ×${it.qty}` : it.label}
+                        className="relative shrink-0 w-9 h-9 rounded-lg bg-white/5 border border-white/15 grid place-items-center"
+                      >
+                        <ItemThumb name={it.name} emoji={it.emoji} className="text-lg" />
+                        {it.qty > 1 && (
+                          <span className="absolute -bottom-1 -right-1 px-0.5 rounded bg-black/85 border border-white/15 text-[8px] font-mono font-bold text-white leading-none">
+                            ×{it.qty}
+                          </span>
+                        )}
+                      </div>
+                    ))
+                  })()}
                 </div>
               )}
 

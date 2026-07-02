@@ -660,7 +660,7 @@ export default function EnhancementDialog({
               </div>
               <div className="grid grid-cols-5 gap-2 sm:grid-cols-6">
                 {pickable.map((it) => {
-                  const img = resolveImageUrl(it.image);
+                  const img = resolveImageUrl(it.image) ?? (it.name ? itemImagePath(it.name) : null);
                   const isSel = it.id === selectedId;
                   return (
                     <button

@@ -37,6 +37,8 @@ export async function POST(
     if (!recipeId) {
       return NextResponse.json({ error: 'recipeId é obrigatório' }, { status: 400 })
     }
+    const rawQuantity = Number(body?.quantity ?? 1)
+    const quantity = Number.isFinite(rawQuantity) ? Math.min(999, Math.max(1, Math.floor(rawQuantity))) : 1
 
     const recipe = getForgeRecipeById(recipeId)
     if (!recipe) {
@@ -65,8 +67,9 @@ export async function POST(
         where: { id: character.id },
         select: { gold: true },
       })
-      if (!charGold || charGold.gold < recipe.goldCost) {
-        throw new Error(`GOLD insuficiente na carteira do personagem: precisa de ${recipe.goldCost} 🪙.`)
+      const totalGoldCost = recipe.goldCost * quantity
+      if (!charGold || charGold.gold < totalGoldCost) {
+        throw new Error(`GOLD insuficiente na carteira do personagem: precisa de ${totalGoldCost} 🪙.`)
       }
 
       // 2. Materiais/pedras de entrada — linhas CONSUMABLE com o nome exigido.
@@ -89,15 +92,16 @@ export async function POST(
       }
 
       for (const req of recipe.materials) {
+        const needed = req.quantity * quantity
         const have = (byName.get(req.name) ?? []).reduce((n, r) => n + r.quantity, 0)
-        if (have < req.quantity) {
-          throw new Error(`Falta ${req.name} (tem ${have}, precisa de ${req.quantity}).`)
+        if (have < needed) {
+          throw new Error(`Falta ${req.name} (tem ${have}, precisa de ${needed}).`)
         }
       }
 
       // 3. Consome os materiais (decrementa; deleta na qtd 0).
       for (const req of recipe.materials) {
-        let remaining = req.quantity
+        let remaining = req.quantity * quantity
         for (const r of byName.get(req.name) ?? []) {
           if (remaining <= 0) break
           const take = Math.min(r.quantity, remaining)
@@ -116,7 +120,7 @@ export async function POST(
       // 4. Debita o gold.
       await tx.character.update({
         where: { id: character.id },
-        data: { gold: { decrement: recipe.goldCost } },
+        data: { gold: { decrement: totalGoldCost } },
       })
 
       // 5. Produz a saída.
@@ -144,10 +148,12 @@ export async function POST(
           })
         }
         // Equipamento NÃO empilha — cada peça é uma linha (durabilidade cheia por default).
-        await assertInventoryRoom(tx, character.id, 1)
-        await tx.characterInventory.create({
-          data: { characterId: character.id, itemId: item.id, quantity: 1 },
-        })
+        await assertInventoryRoom(tx, character.id, quantity)
+        for (let i = 0; i < quantity; i++) {
+          await tx.characterInventory.create({
+            data: { characterId: character.id, itemId: item.id, quantity: 1 },
+          })
+        }
         outputItemId = item.id
       } else {
         // Refino: acha/cria a pedra e empilha (consumível).
@@ -178,12 +184,12 @@ export async function POST(
         if (existing) {
           await tx.characterInventory.update({
             where: { id: existing.id },
-            data: { quantity: { increment: 1 } },
+            data: { quantity: { increment: quantity } },
           })
         } else {
           await assertInventoryRoom(tx, character.id, 1)
           await tx.characterInventory.create({
-            data: { characterId: character.id, itemId: item.id, quantity: 1 },
+            data: { characterId: character.id, itemId: item.id, quantity },
           })
         }
         outputItemId = item.id
@@ -196,13 +202,15 @@ export async function POST(
       return { outputItemId, characterGold: updatedChar?.gold ?? null }
     })
 
+    const totalGoldCost = recipe.goldCost * quantity
+    const qtyLabel = quantity > 1 ? ` ${quantity}x` : ''
     try {
       await addHistoryEntry({
         characterId: character.id,
         activityType: 'ITEM_GAINED',
-        description: `⚒️ Forjou ${recipe.outputName} (−${recipe.goldCost} gold).`,
+        description: `⚒️ Forjou${qtyLabel} ${recipe.outputName} (−${totalGoldCost} gold).`,
         itemId: result.outputItemId,
-        goldAmount: -recipe.goldCost,
+        goldAmount: -totalGoldCost,
       })
     } catch (historyError) {
       console.error('Erro ao registrar histórico de forja:', historyError)
@@ -211,7 +219,7 @@ export async function POST(
     return NextResponse.json({
       success: true,
       characterGold: result.characterGold,
-      message: `⚒️ ${recipe.outputName} forjado com sucesso!`,
+      message: `⚒️${qtyLabel} ${recipe.outputName} forjado${quantity > 1 ? 's' : ''} com sucesso!`,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Erro interno do servidor'

@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { Info } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { findRecipeByIngredients, recipesByRarity, expandRecipe, recipesUsingIngredient, type PotionRecipe } from '@/lib/alchemy';
-import { getIngredientByName, isIngredientItem, type Rarity } from '@/lib/itemCatalog';
+import { getIngredientByName, getConsumableByName, isIngredientItem, type Rarity } from '@/lib/itemCatalog';
 // Miniatura com card de detalhe ao passar o mouse (ver TODO ícone grande).
 import { CraftItemThumb as ItemThumb } from './CraftItemThumb';
 
@@ -26,6 +26,25 @@ const RARITY_LABEL: Record<Rarity, string> = {
   EPIC: 'Épicas',
   LEGENDARY: 'Lendárias',
 };
+
+// Efeito da poção em texto curto (ex.: "❤️25 · 💧20") — lido direto do
+// CONSUMABLE_CATALOG (fonte única de verdade dos stats de consumível).
+function potionEffectLine(outputName: string): string | null {
+  const c = getConsumableByName(outputName);
+  if (!c) return null;
+  const s = c.stats;
+  const parts: string[] = [];
+  if (s.healAmount) parts.push(`❤️${s.healAmount >= 9999 ? '∞' : s.healAmount}`);
+  if (s.manaAmount) parts.push(`💧${s.manaAmount >= 9999 ? '∞' : s.manaAmount}`);
+  if (s.staminaAmount) parts.push(`⚡${s.staminaAmount}`);
+  if (s.reviveHpPercent) parts.push(`✨revive ${s.reviveHpPercent}%`);
+  if (s.attackBonus) parts.push(`⚔️+${s.attackBonus}${s.duration ? `(${s.duration}t)` : ''}`);
+  if (s.defenseBonus) parts.push(`🛡️+${s.defenseBonus}${s.duration ? `(${s.duration}t)` : ''}`);
+  if (s.dodgeBonus) parts.push(`💨+${s.dodgeBonus}%${s.duration ? `(${s.duration}t)` : ''}`);
+  if (s.shieldAmount) parts.push(`🔰${s.shieldAmount}${s.duration ? `(${s.duration}t)` : ''}`);
+  if (s.cure) parts.push(`☠️cura ${s.cure === 'poison' ? 'veneno' : s.cure}`);
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
 
 interface HoverInfo {
   id: string;
@@ -568,6 +587,9 @@ export default function AlchemyBench({
                               </span>
                               <span className="min-w-0">
                                 <span className={`block text-[11px] font-bold leading-tight truncate ${ui.text}`}>{r.outputName}</span>
+                                {potionEffectLine(r.outputName) && (
+                                  <span className="block text-[9px] leading-tight text-white/40 truncate">{potionEffectLine(r.outputName)}</span>
+                                )}
                                 <span className={`block text-[10px] leading-tight ${ok ? 'text-emerald-300' : 'text-white/35'}`}>
                                   {ok ? '✓ pronto' : 'faltam ingredientes'}
                                 </span>
@@ -589,7 +611,8 @@ export default function AlchemyBench({
               className="pointer-events-none fixed z-[60] w-[224px] rounded-xl border border-emerald-500/40 bg-zinc-950/95 p-3 shadow-2xl"
               style={{ top: Math.min(hover.top, (typeof window !== 'undefined' ? window.innerHeight : 800) - 220), left: hover.left }}
             >
-              <p className={`text-xs font-black mb-2 ${RARITY_UI[hoverRecipe.rarity].text}`}>{hoverRecipe.outputName}</p>
+              <p className={`text-xs font-black ${RARITY_UI[hoverRecipe.rarity].text}`}>{hoverRecipe.outputName}</p>
+              <p className="text-[9px] text-white/40 mb-2">{potionEffectLine(hoverRecipe.outputName) ?? ' '}</p>
               <div className="space-y-1">
                 {hoverRecipe.ingredients.map((ing) => {
                   const enough = have(ing.name) >= ing.quantity;

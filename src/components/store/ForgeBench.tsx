@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { forgeRecipesByGroup, forgeMaterialEmoji, getForgeOutputCatalogItem, findForgeRecipeByMaterials, forgeRecipesUsingMaterial, type ForgeRecipe } from '@/lib/forge';
 import { getItemVisual } from '@/lib/itemVisuals';
 import { isMaterialItem, type Rarity } from '@/lib/itemCatalog';
+import { formatItemStats } from '@/lib/itemStats';
 // Miniatura com card de detalhe ao passar o mouse (ver TODO ícone grande).
 import { CraftItemThumb as ItemThumb } from './CraftItemThumb';
 
@@ -38,6 +39,17 @@ function outputEmoji(recipe: ForgeRecipe): string {
   if (recipe.kind === 'stone') return recipe.outputName.includes('Concentrada') ? '💠' : '🪨';
   const item = getForgeOutputCatalogItem(recipe);
   return item ? getItemVisual(item.type).emoji ?? '⚒️' : '⚒️';
+}
+
+// Nível exigido + stats da peça produzida (só gear tem — pedra não equipa).
+// Linha discreta exibida no livro de receitas.
+function gearInfoLine(recipe: ForgeRecipe): string | null {
+  if (recipe.kind !== 'gear') return null;
+  const item = getForgeOutputCatalogItem(recipe);
+  if (!item) return null;
+  const stats = formatItemStats(item.stats, item.type);
+  const parts = [`Lv.${item.level}`, ...stats];
+  return parts.join(' · ');
 }
 
 interface Character {
@@ -152,6 +164,13 @@ export default function ForgeBench({
   const matched = useMemo(() => findForgeRecipeByMaterials(placedList), [placedList]);
   const availableOf = useCallback((name: string) => have(name) - (placed[name] ?? 0), [have, placed]);
 
+  // Quantas vezes essa receita dá pra forjar de uma vez com o que tem no inventário inteiro
+  // (não só o que está na bigorna — a bigorna guarda 1x da receita).
+  const maxCraftable = useMemo(() => {
+    if (!matched) return 0;
+    return matched.materials.reduce((max, m) => Math.min(max, Math.floor(have(m.name) / m.quantity)), Infinity);
+  }, [matched, have]);
+
   const addMaterial = useCallback((name: string) => {
     setPlaced((p) => {
       const cur = p[name] ?? 0;
@@ -196,14 +215,14 @@ export default function ForgeBench({
     [have]
   );
 
-  const handleForge = async () => {
+  const handleForge = async (quantity = 1) => {
     if (!matched || !selectedCharacterId) return;
     setBusy(true);
     try {
       const res = await fetch(`/api/character/${selectedCharacterId}/forge-item`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recipeId: matched.id }),
+        body: JSON.stringify({ recipeId: matched.id, quantity }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -353,14 +372,23 @@ export default function ForgeBench({
                   </p>
                 )}
 
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <button
-                    onClick={handleForge}
+                    onClick={() => handleForge(1)}
                     disabled={busy || !matched || !selectedCharacterId}
-                    className="flex-1 px-4 py-2.5 rounded-xl font-black text-sm text-white transition-all hover:scale-[1.02] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 bg-gradient-to-r from-orange-600 to-amber-500"
+                    className="flex-1 min-w-[140px] px-4 py-2.5 rounded-xl font-black text-sm text-white transition-all hover:scale-[1.02] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 bg-gradient-to-r from-orange-600 to-amber-500"
                   >
-                    {busy ? 'Forjando…' : matched ? `⚒️ Forjar e pagar ${matched.goldCost} 🪙` : '⚒️ Sem receita'}
+                    {busy ? 'Forjando…' : matched ? `⚒️ Pagar e Forjar (${matched.goldCost} 🪙)` : '⚒️ Sem receita'}
                   </button>
+                  {matched && maxCraftable > 1 && (
+                    <button
+                      onClick={() => handleForge(maxCraftable)}
+                      disabled={busy || !selectedCharacterId}
+                      className="flex-1 min-w-[140px] px-4 py-2.5 rounded-xl font-black text-sm text-white transition-all hover:scale-[1.02] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 bg-gradient-to-r from-amber-600 to-orange-700"
+                    >
+                      {busy ? 'Forjando…' : `⚒️ Pagar e Forjar ${maxCraftable}x (${matched.goldCost * maxCraftable} 🪙)`}
+                    </button>
+                  )}
                   <button
                     onClick={() => setPlaced({})}
                     disabled={busy}
@@ -474,6 +502,9 @@ export default function ForgeBench({
                           </span>
                           <span className="min-w-0">
                             <span className={`block text-[11px] font-bold leading-tight truncate ${ui.text}`}>{r.outputName}</span>
+                            {gearInfoLine(r) && (
+                              <span className="block text-[9px] leading-tight text-white/40 truncate">{gearInfoLine(r)}</span>
+                            )}
                             <span className={`block text-[10px] leading-tight ${ok ? 'text-emerald-300' : 'text-white/35'}`}>
                               {ok ? '✓ pronto' : 'faltam materiais'}
                             </span>
@@ -495,7 +526,8 @@ export default function ForgeBench({
           className="pointer-events-none fixed z-[60] w-[224px] rounded-xl border border-orange-500/40 bg-zinc-950/95 p-3 shadow-2xl"
           style={{ top: Math.min(hover.top, (typeof window !== 'undefined' ? window.innerHeight : 800) - 220), left: hover.left }}
         >
-          <p className={`text-xs font-black mb-2 ${RARITY_UI[hoverRecipe.rarity].text}`}>{hoverRecipe.outputName}</p>
+          <p className={`text-xs font-black ${RARITY_UI[hoverRecipe.rarity].text}`}>{hoverRecipe.outputName}</p>
+          <p className="text-[9px] text-white/40 mb-2">{gearInfoLine(hoverRecipe) ?? ' '}</p>
           <div className="space-y-1">
             {hoverRecipe.materials.map((m) => {
               const enough = have(m.name) >= m.quantity;

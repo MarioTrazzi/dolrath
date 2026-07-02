@@ -13,13 +13,16 @@ async function main() {
     throw new Error("Missing ITEM_NFT_CONTRACT_ADDRESS in web3/.env");
   }
 
+  const feeTreasury = process.env.GOLD_TREASURY_ADDRESS || deployer.address;
+
   console.log("Deploying DolrathItemMarket...");
   console.log("Deployer:", deployer.address);
   console.log("GOLD:", gold);
   console.log("Items NFT:", items);
+  console.log("Fee treasury:", feeTreasury, "(fee: 2% burn + 2% treasury)");
 
   const Factory = await ethers.getContractFactory("DolrathItemMarket");
-  const contract = await Factory.deploy(gold, items);
+  const contract = await Factory.deploy(gold, items, feeTreasury);
   await contract.waitForDeployment();
 
   const address = await contract.getAddress();

@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {ERC20Burnable} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
@@ -11,8 +12,9 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
  * - ERC-20 token minted via user-paid claim transactions.
  * - Claim requires a server signature (EIP-712) to control minting.
  * - Intended flow: the game accrues off-chain GOLD and users claim on-chain when desired.
+ * - Burnable: on-chain sinks (marketplace fee) destroy supply via burnFrom.
  */
-contract DolrathGold is ERC20, EIP712, Ownable {
+contract DolrathGold is ERC20, ERC20Burnable, EIP712, Ownable {
     using ECDSA for bytes32;
 
     struct ClaimRequest {

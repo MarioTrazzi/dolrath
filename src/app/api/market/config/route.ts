@@ -1,6 +1,7 @@
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { NextResponse } from 'next/server'
 import { getGoldContract } from '@/lib/goldOnchain'
+import { getItemMarketFees } from '@/lib/itemMarketOnchain'
 
 export async function GET() {
   const session = await auth()
@@ -33,7 +34,7 @@ export async function GET() {
 
   try {
     const gold = getGoldContract()
-    const [decimals, symbol] = await Promise.all([gold.decimals(), gold.symbol()])
+    const [decimals, symbol, marketFee] = await Promise.all([gold.decimals(), gold.symbol(), getItemMarketFees()])
 
     return NextResponse.json({
       chainId: marketChainId,
@@ -41,6 +42,7 @@ export async function GET() {
       goldContractAddress,
       gold: { decimals: Number(decimals), symbol: String(symbol) },
       itemNftContractAddress,
+      marketFee,
     })
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Failed to load market config'

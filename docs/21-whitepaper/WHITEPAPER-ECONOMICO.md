@@ -91,7 +91,7 @@ Os cinco pilares (detalhados em [Vision](../01-vision/README.md)):
 
 A separação resolve o dilema central dos jogos Web3: recompensar milhões de ações de gameplay (GOLD, abundante e gastável) sem diluir o ativo de investimento (DOL, escasso e meritocrático).
 
-**Correção pré-launch [LAUNCH]:** o contrato atual do DOL usa name "Dolrath Gold"/símbolo DOL e `MINTER_ROLE` sem teto (adequado só para dev). O v2 fixa supply em 1B, renomeia para "Dolrath" (DOL) e move alocações para contratos de vesting (ver §9).
+**Correção pré-launch — IMPLEMENTADA (2026-07-01):** o `DolToken.sol` v2 já está no repositório: supply fixo de 1B cunhado uma única vez ao treasury, name "Dolrath" (DOL), **sem função de mint** (o `MINTER_ROLE` foi removido; o supply só pode diminuir via burn). Falta o redeploy (Amoy → mainnet) e os contratos de vesting por bucket (ver §9) **[LAUNCH]**.
 
 ## 5. Fluxo completo do GOLD
 
@@ -143,7 +143,7 @@ Detalhe completo por sistema no [EDD](../07-economy/GAME-ECONOMY-DESIGN.md). Res
 
 | Uso | Mecânica | Status |
 |---|---|---|
-| Mercado de personagens | comprar/vender heróis NFT precificados em DOL (taxa 5%: 2,5% burn / 2,5% treasury) | código pronto **[LAUNCH]** |
+| Mercado de personagens | comprar/vender heróis NFT precificados em DOL (taxa 5%: 2,5% burn / 2,5% treasury) | contrato pronto e testado; deploy pendente **[LAUNCH]** |
 | Staking | lock de DOL → participação nas taxas do protocolo + peso de voto | **[LAUNCH]** |
 | Governança | veDOL (quantidade × duração do lock) | **[LAUNCH→ROADMAP]** |
 | Passe de temporada premium | pago em DOL com 50% queimado (ou fiat) | **[ROADMAP]** |
@@ -178,8 +178,8 @@ Circulante no TGE: ~4–6% do supply (liquidez inicial + primeira campanha comun
 
 | Mecanismo | Token | Taxa | Status |
 |---|---|---|---|
-| Taxa do mercado de itens | GOLD | 2% de cada venda queimado | **[LAUNCH]** |
-| Taxa do mercado de personagens | DOL | 2,5% de cada venda queimado | **[LAUNCH]** |
+| Taxa do mercado de itens | GOLD | 2% de cada venda queimado (`burnFrom`, destruição real) | contrato pronto; deploy **[LAUNCH]** |
+| Taxa do mercado de personagens | DOL | 2,5% de cada venda queimado (`burnFrom`, destruição real) | contrato pronto; deploy **[LAUNCH]** |
 | Passe premium pago em DOL | DOL | 50% do preço | **[ROADMAP]** |
 | Venda primária de coleções (lands/pets) | DOL | ≥ 30% do arrecadado | **[ROADMAP]** |
 | Serviços de vaidade | DOL/GOLD | 100% do custo (é sumidouro puro) | **[ROADMAP]** |

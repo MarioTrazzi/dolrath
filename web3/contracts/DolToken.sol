@@ -3,29 +3,19 @@ pragma solidity ^0.8.24;
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {ERC20Burnable} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
-import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 
-contract DolToken is ERC20, ERC20Burnable, AccessControl {
-    bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
+/**
+ * DolToken (DOL) — v2
+ * - Fixed supply: 1,000,000,000 DOL minted once at deploy to the treasury.
+ * - No mint function and no minter role: the supply can only shrink (burns).
+ * - Allocation buckets (Play & Achieve, team, investors, liquidity...) are
+ *   distributed from the treasury per the vesting schedule in the whitepaper.
+ */
+contract DolToken is ERC20, ERC20Burnable {
+    uint256 public constant MAX_SUPPLY = 1_000_000_000 ether;
 
-    constructor(address admin, address initialMinter) ERC20("Dolrath Gold", "DOL") {
-        require(admin != address(0), "admin=0");
-        require(initialMinter != address(0), "minter=0");
-
-        _grantRole(DEFAULT_ADMIN_ROLE, admin);
-        _grantRole(MINTER_ROLE, initialMinter);
-    }
-
-    function mint(address to, uint256 amount) external onlyRole(MINTER_ROLE) {
-        _mint(to, amount);
-    }
-
-    function supportsInterface(bytes4 interfaceId)
-        public
-        view
-        override(AccessControl)
-        returns (bool)
-    {
-        return super.supportsInterface(interfaceId);
+    constructor(address treasury) ERC20("Dolrath", "DOL") {
+        require(treasury != address(0), "treasury=0");
+        _mint(treasury, MAX_SUPPLY);
     }
 }

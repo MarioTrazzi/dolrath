@@ -13,7 +13,7 @@ Números vivos da economia dual-token. A especificação está no [Whitepaper](.
 
 - Emissão elástica gateada por gameplay: teto diário **20.000/usuário** (`DUNGEON_DAILY_GOLD_CAP`), stamina, servidor-autoritativo.
 - Claim on-chain assinado (EIP-712); sinks off-chain atacam o saldo **antes** do claim.
-- Taxa de marketplace 4% (2% burn / 2% treasury) — [LAUNCH].
+- Taxa de marketplace 4% (2% burn real / 2% treasury) — **implementada nos contratos** (`DolrathItemMarket.sol`; personagens 5% em `DolrathCharacterMarket.sol`); falta só o redeploy.
 
 ## Simulador (Fase 3)
 
@@ -46,6 +46,8 @@ Leitura honesta: com apenas as queimas de marketplace, o DOL quase estabiliza no
 ## Dashboard (Fase 4)
 
 Abra **[`dashboard.html`](dashboard.html)** no navegador (duplo clique — funciona offline). Gráficos: circulação de DOL, DOL bloqueado vs staked, emissão × burn mensal, crescimento de jogadores, treasury, GOLD on-chain, market cap por cenário.
+
+**Em produção:** o dashboard é servido em **`/tokenomics/dashboard.html`** (cópia em `public/tokenomics/`, regenerada pelo simulador) e linkado na página pública [`/doc`](https://dolrath.vercel.app/doc#tokenomics).
 
 Para atualizar os dados: rode o simulador de novo (o HTML lê `dashboard-data.js`).
 

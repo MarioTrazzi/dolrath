@@ -1,7 +1,7 @@
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { NextResponse } from 'next/server'
 import { getDolContract, getDolTokenAddress } from '@/lib/dolOnchain'
-import { getCharacterMarketChainId, getCharacterMarketContractAddress } from '@/lib/characterMarketOnchain'
+import { getCharacterMarketChainId, getCharacterMarketContractAddress, getCharacterMarketFees } from '@/lib/characterMarketOnchain'
 import { getCharacterNftContractAddress } from '@/lib/characterNftOnchain'
 
 export async function GET() {
@@ -33,7 +33,7 @@ export async function GET() {
 
   try {
     const dol = getDolContract()
-    const [decimals, symbol] = await Promise.all([dol.decimals(), dol.symbol()])
+    const [decimals, symbol, marketFee] = await Promise.all([dol.decimals(), dol.symbol(), getCharacterMarketFees()])
 
     return NextResponse.json({
       chainId,
@@ -41,6 +41,7 @@ export async function GET() {
       dolTokenAddress,
       characterNftContractAddress,
       dol: { decimals: Number(decimals), symbol: String(symbol) },
+      marketFee,
     })
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Failed to load character market config'

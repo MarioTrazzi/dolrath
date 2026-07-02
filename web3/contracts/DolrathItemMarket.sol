@@ -7,11 +7,17 @@ import {ERC721Holder} from "@openzeppelin/contracts/token/ERC721/utils/ERC721Hol
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
+interface IERC20Burnable is IERC20 {
+    function burnFrom(address account, uint256 value) external;
+}
+
 /**
  * DolrathItemMarket
  * - Simple escrow marketplace for Dolrath item NFTs.
  * - Seller escrows the item NFT into the contract at a fixed GOLD price.
  * - Buyer pays GOLD via transferFrom and receives the NFT.
+ * - Market fee (basis points of the price) is split between a real burn
+ *   (supply destruction) and the game treasury; the seller receives the rest.
  */
 contract DolrathItemMarket is ERC721Holder, Ownable, ReentrancyGuard {
     struct Listing {
@@ -21,8 +27,14 @@ contract DolrathItemMarket is ERC721Holder, Ownable, ReentrancyGuard {
         bool active;
     }
 
-    IERC20 public immutable gold;
+    uint16 public constant MAX_TOTAL_FEE_BPS = 1000; // 10%
+
+    IERC20Burnable public immutable gold;
     IERC721 public immutable items;
+
+    uint16 public burnFeeBps = 200; // 2%
+    uint16 public treasuryFeeBps = 200; // 2%
+    address public feeTreasury;
 
     uint256 public nextListingId = 1;
 
@@ -34,20 +46,49 @@ contract DolrathItemMarket is ERC721Holder, Ownable, ReentrancyGuard {
     error NotSeller();
     error NotActive();
     error PriceZero();
+    error FeeTooHigh();
+    error TreasuryZero();
 
     event ListingCreated(uint256 indexed listingId, address indexed seller, uint256 indexed tokenId, uint256 priceGold);
     event ListingCancelled(uint256 indexed listingId, address indexed seller);
     event ListingPurchased(uint256 indexed listingId, address indexed seller, address indexed buyer, uint256 tokenId, uint256 priceGold);
+    event MarketFeePaid(uint256 indexed listingId, uint256 burned, uint256 toTreasury);
+    event FeesUpdated(uint16 burnFeeBps, uint16 treasuryFeeBps);
+    event FeeTreasuryUpdated(address indexed oldTreasury, address indexed newTreasury);
 
-    constructor(address goldToken, address itemsNft) Ownable(msg.sender) {
+    constructor(address goldToken, address itemsNft, address feeTreasury_) Ownable(msg.sender) {
         require(goldToken != address(0), "gold=0");
         require(itemsNft != address(0), "items=0");
-        gold = IERC20(goldToken);
+        if (feeTreasury_ == address(0)) revert TreasuryZero();
+        gold = IERC20Burnable(goldToken);
         items = IERC721(itemsNft);
+        feeTreasury = feeTreasury_;
+        emit FeeTreasuryUpdated(address(0), feeTreasury_);
+    }
+
+    function setFees(uint16 burnFeeBps_, uint16 treasuryFeeBps_) external onlyOwner {
+        if (uint256(burnFeeBps_) + treasuryFeeBps_ > MAX_TOTAL_FEE_BPS) revert FeeTooHigh();
+        burnFeeBps = burnFeeBps_;
+        treasuryFeeBps = treasuryFeeBps_;
+        emit FeesUpdated(burnFeeBps_, treasuryFeeBps_);
+    }
+
+    function setFeeTreasury(address newTreasury) external onlyOwner {
+        if (newTreasury == address(0)) revert TreasuryZero();
+        address old = feeTreasury;
+        feeTreasury = newTreasury;
+        emit FeeTreasuryUpdated(old, newTreasury);
     }
 
     function getActiveListingIds() external view returns (uint256[] memory) {
         return activeListingIds;
+    }
+
+    /// Seller proceeds for a given price under the current fee config.
+    function quoteProceeds(uint256 priceGold) public view returns (uint256 sellerAmount, uint256 burnAmount, uint256 treasuryAmount) {
+        burnAmount = (priceGold * burnFeeBps) / 10_000;
+        treasuryAmount = (priceGold * treasuryFeeBps) / 10_000;
+        sellerAmount = priceGold - burnAmount - treasuryAmount;
     }
 
     function createListing(uint256 tokenId, uint256 priceGold) external nonReentrant returns (uint256 listingId) {
@@ -89,12 +130,23 @@ contract DolrathItemMarket is ERC721Holder, Ownable, ReentrancyGuard {
         l.active = false;
         _removeActive(listingId);
 
-        // Buyer must approve GOLD to this contract.
-        require(gold.transferFrom(msg.sender, l.seller, l.priceGold), "gold transfer failed");
+        // Buyer must approve GOLD (the full price) to this contract.
+        (uint256 sellerAmount, uint256 burnAmount, uint256 treasuryAmount) = quoteProceeds(l.priceGold);
+
+        require(gold.transferFrom(msg.sender, l.seller, sellerAmount), "gold transfer failed");
+        if (treasuryAmount > 0) {
+            require(gold.transferFrom(msg.sender, feeTreasury, treasuryAmount), "fee transfer failed");
+        }
+        if (burnAmount > 0) {
+            gold.burnFrom(msg.sender, burnAmount);
+        }
 
         items.safeTransferFrom(address(this), msg.sender, l.tokenId);
 
         emit ListingPurchased(listingId, l.seller, msg.sender, l.tokenId, l.priceGold);
+        if (burnAmount > 0 || treasuryAmount > 0) {
+            emit MarketFeePaid(listingId, burnAmount, treasuryAmount);
+        }
     }
 
     function _removeActive(uint256 listingId) internal {

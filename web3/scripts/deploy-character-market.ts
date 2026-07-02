@@ -13,13 +13,16 @@ async function main() {
     throw new Error("Missing CHARACTER_NFT_CONTRACT_ADDRESS in web3/.env");
   }
 
+  const feeTreasury = process.env.DOL_FEE_TREASURY_ADDRESS || process.env.GOLD_TREASURY_ADDRESS || deployer.address;
+
   console.log("Deploying DolrathCharacterMarket...");
   console.log("Deployer:", deployer.address);
   console.log("DOL:", dol);
   console.log("Characters NFT:", characters);
+  console.log("Fee treasury:", feeTreasury, "(fee: 2.5% burn + 2.5% treasury)");
 
   const Factory = await ethers.getContractFactory("DolrathCharacterMarket");
-  const contract = await Factory.deploy(dol, characters);
+  const contract = await Factory.deploy(dol, characters, feeTreasury);
   await contract.waitForDeployment();
 
   const address = await contract.getAddress();

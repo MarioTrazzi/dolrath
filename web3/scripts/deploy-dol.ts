@@ -4,16 +4,15 @@ async function main() {
   const [deployer] = await ethers.getSigners();
   if (!deployer) throw new Error("No deployer signer available");
 
-  const admin = process.env.DOL_ADMIN || deployer.address;
-  const minter = process.env.DOL_MINTER || deployer.address;
+  // Fixed 1B supply is minted once to the treasury at deploy (no minter role).
+  const treasury = process.env.DOL_TREASURY_ADDRESS || deployer.address;
 
   const DolToken = await ethers.getContractFactory("DolToken");
-  const dol = await DolToken.deploy(admin, minter);
+  const dol = await DolToken.deploy(treasury);
   await dol.waitForDeployment();
 
   console.log("DolToken deployed:", await dol.getAddress());
-  console.log("Admin:", admin);
-  console.log("Minter:", minter);
+  console.log("Treasury (holds 1B DOL):", treasury);
 }
 
 main().catch((err) => {

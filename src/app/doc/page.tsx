@@ -109,6 +109,14 @@ function Todo() {
   return <Tag tone="todo">🔜 TODO</Tag>
 }
 
+function Live() {
+  return <Tag tone="ok">✅ AO VIVO</Tag>
+}
+
+function Soon() {
+  return <Tag tone="todo">🔜 EM BREVE</Tag>
+}
+
 // Card visual de item (mesmo tamanho dos cards da /store) com a imagem gerada.
 // Usado na seção Itens para revisar toda a arte de uma vez.
 function ItemArtCard({
@@ -249,6 +257,8 @@ const ENHANCE_TARGETS = [
 const XP_SAMPLE = [1, 4, 9, 19, 49]
 
 const RESOLVED = [
+  'Tokenomics v2 nos contratos: DOL com supply fixo de 1B (sem mint), GOLD queimável e taxa de mercado com queima real (4% itens / 5% personagens).',
+  'Dashboard de tokenomics publicado em /tokenomics/dashboard.html (projeção de 120 meses, 3 cenários).',
   'Sistema antigo de masmorras (monstros rank F–S) removido — restam só os MATERIAIS em dungeonData.ts.',
   'Pontos por nível padronizados em 1/nível (pointSystem.leveling alinhado ao characterLevelSystem).',
   'Atributo wisdom removido de types/game.ts, gameData.ts e characterFactory.ts (simplificação).',
@@ -257,6 +267,7 @@ const RESOLVED = [
 ]
 
 const ROADMAP = [
+  { title: 'Deploy dos contratos v2 (Amoy → mainnet)', body: 'DolToken v2 (1B fixo), GOLD queimável e os dois mercados com taxa já estão prontos e testados no repositório. Falta redeployar na Amoy (novos endereços nas envs) e, na sequência do go-live econômico, na mainnet Polygon.' },
   { title: 'Aventuras semanais (PvE) — implementação', body: 'Gear dos 4 chefes semanais já catalogado (Krax-thar, Vol\'theris, Gorthak, Sylariel). Falta implementar o modo em si: rotação por sábado (semana 1–4), encontro do chefe e a tabela de drop exclusiva (source adventure_boss).' },
   { title: 'Alinhar fonte de stats no servidor', body: 'A criação usa characterCreationData.ts (mais nova, rebalanceada), mas o servidor (api/character/route.ts) ainda computa stats por gameData.ts. Consolidar numa fonte única após a bateria de testes.' },
   { title: 'Afinar custos de stamina', body: 'Regen passivo implementado (+2/15s após 15 min sem gastar). Falta a bateria de testes para medir se o gasto por atividade está alto ou baixo e calibrar os custos.' },
@@ -294,7 +305,7 @@ export default function DocPage() {
       <div className="mx-auto max-w-7xl px-4 pt-28 pb-24 sm:px-6">
         {/* Hero */}
         <header className="mb-10">
-          <Tag tone="default">📖 Documentação · v0.1 · pública</Tag>
+          <Tag tone="default">📖 Documentação oficial · v1.0 · pública</Tag>
           <h1 className="mt-3 text-4xl font-extrabold tracking-tight text-white sm:text-5xl">
             Dolrath <span className="text-primary">Game Docs</span>
           </h1>
@@ -304,7 +315,7 @@ export default function DocPage() {
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
             <Tag tone="ok">Atualizado {lastUpdated}</Tag>
-            <Tag>Next.js 14 · Prisma · NextAuth</Tag>
+            <Tag>Next.js 14 · Prisma · Login por carteira (SIWE)</Tag>
             <Tag>Polygon (Amoy/Mainnet)</Tag>
             <Tag tone="ok">Fonte: dados importados do código</Tag>
           </div>
@@ -344,7 +355,7 @@ export default function DocPage() {
               <div className="grid gap-4 sm:grid-cols-3">
                 <Card><div className="text-2xl">🧬</div><h3 className="mt-2 font-semibold text-white">Personagem = NFT</h3><p className="mt-1 text-sm">Criados pagando DOL, mintáveis como ERC-721 e negociáveis num mercado on-chain.</p></Card>
                 <Card><div className="text-2xl">⚔️</div><h3 className="mt-2 font-semibold text-white">Combate tático</h3><p className="mt-1 text-sm">Dados (d6–d20), crítico por AGI, esquiva por SPEED e bloqueio por RES.</p></Card>
-                <Card><div className="text-2xl">💰</div><h3 className="mt-2 font-semibold text-white">Economia dupla</h3><p className="mt-1 text-sm">GOLD (ganho no jogo) para itens; DOL (premium) para criação e personagens.</p></Card>
+                <Card><div className="text-2xl">💰</div><h3 className="mt-2 font-semibold text-white">Economia dupla</h3><p className="mt-1 text-sm">GOLD (elástico, ganho jogando) para itens e crafting; DOL (supply fixo de 1B) para criação, personagens, staking e governança.</p></Card>
               </div>
               <Card>
                 <h3 className="font-semibold text-white">Loop principal</h3>
@@ -359,38 +370,157 @@ export default function DocPage() {
 
             {/* Tokenomics */}
             <Section id="tokenomics" kicker="Economia" title="Tokenomics">
-              <p>Duas moedas e três famílias de NFTs, em Polygon (testnet Amoy / mainnet).</p>
+              <p>
+                Economia <strong className="text-white">dual-token</strong> em Polygon: <Tag tone="dol">DOL</Tag> é o ativo de longo prazo
+                (supply fixo, governança, staking) e <Tag tone="gold">GOLD</Tag> é a moeda elástica do gameplay, ganha jogando e
+                gasta em loja, forja, alquimia e mercado de itens. Separar as duas protege o valor do DOL da pressão de venda
+                do grind — a lição dos play-to-earn que morreram inflacionando o token principal.
+              </p>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Card>
-                  <div className="flex items-center justify-between"><h3 className="font-semibold text-white">DOL — moeda premium</h3><Tag tone="dol">DOL</Tag></div>
-                  <p className="mt-2 text-sm">ERC-20 (<Code>DolToken.sol</Code>) com <Code>MINTER_ROLE</Code> e burnable. Usado para <strong className="text-white">criar personagens</strong> e comprar personagens no mercado.</p>
+                  <div className="flex items-center justify-between"><h3 className="font-semibold text-white">DOL — ativo de longo prazo</h3><Tag tone="dol">DOL</Tag></div>
+                  <p className="mt-2 text-sm">
+                    ERC-20 <Code>DolToken.sol</Code> — <strong className="text-white">supply fixo de 1.000.000.000</strong>, cunhado
+                    uma única vez no deploy. <strong className="text-white">Não existe função de mint</strong>: o supply só pode
+                    diminuir (queimas). Nome on-chain: <Code>Dolrath</Code>.
+                  </p>
                   <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
                     <li>Criação de personagem: <Tag tone="dol">2 DOL</Tag> (<Code>CHARACTER_CREATION_COST_DOL</Code>)</li>
-                    <li>Mercado de personagens negocia em DOL</li>
+                    <li>Mercado de personagens negocia em DOL (taxa 5%: 2,5% queima + 2,5% treasury)</li>
+                    <li>Staking com veDOL <Soon /></li>
+                    <li>Governança (DAO) <Soon /></li>
                   </ul>
                 </Card>
                 <Card>
-                  <div className="flex items-center justify-between"><h3 className="font-semibold text-white">GOLD — moeda do jogo</h3><Tag tone="gold">GOLD</Tag></div>
-                  <p className="mt-2 text-sm">ERC-20 (<Code>DolrathGold.sol</Code>) acumulado off-chain e <strong className="text-white">reivindicado on-chain</strong> via assinatura do servidor (EIP-712, <Code>claimWithSig</Code>). Moeda principal do jogo: loja, crafting e mercado de itens.</p>
+                  <div className="flex items-center justify-between"><h3 className="font-semibold text-white">GOLD — moeda do gameplay</h3><Tag tone="gold">GOLD</Tag></div>
+                  <p className="mt-2 text-sm">
+                    ERC-20 <Code>DolrathGold.sol</Code> — emissão elástica <strong className="text-white">gateada por gameplay</strong>:
+                    todo GOLD nasce off-chain (servidor-autoritativo, stamina, teto diário) e só vira token quando o jogador
+                    <strong className="text-white"> reivindica on-chain</strong> (EIP-712, <Code>claimWithSig</Code>, taxa de claim 0%).
+                  </p>
                   <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
-                    <li>Ganho em PvP, PvE e eventos</li>
-                    <li>Gasto em loja, crafting e mercado de itens</li>
+                    <li>Ganho em PvE (masmorras), PvP e eventos</li>
+                    <li>Gasto em loja, forja, alquimia e mercado de itens</li>
+                    <li>Teto de emissão: <strong className="text-white">20.000/dia por usuário</strong> (<Code>DUNGEON_DAILY_GOLD_CAP</Code>)</li>
                   </ul>
                 </Card>
               </div>
+
+              <h3 className="pt-2 text-lg font-semibold text-white">Fluxo do GOLD — três camadas</h3>
+              <Card>
+                <Formula>{`[1] Personagem (Character.gold)   ← masmorra, PvP, venda de item
+        │  gasta na loja, forja, alquimia (sinks OFF-chain)
+        ▼
+[2] Banco da conta (User.goldBalance)   ← depósito voluntário
+        │  claim assinado pelo servidor (EIP-712), 0% de taxa
+        ▼
+[3] GOLD on-chain (ERC-20)   ← mercado de itens P2P, loja on-chain
+        └─ queima real: 2% de cada venda no mercado destrói supply`}</Formula>
+                <p className="mt-2 text-xs">
+                  Os sinks atacam o saldo <strong className="text-white">antes</strong> do claim: na prática só 20–40% do GOLD ganho
+                  vira token. A saída (claim) não é taxada; a <em>circulação</em> é — a taxa vive no mercado, não na porta.
+                </p>
+              </Card>
+
+              <h3 className="pt-2 text-lg font-semibold text-white">Alocação do DOL (1B, supply fixo)</h3>
+              <Table
+                head={['Bucket', '%', 'DOL', 'Vesting']}
+                rows={[
+                  [<strong key="p" className="text-white">Play &amp; Achieve</strong>, '30%', '300M', 'emissão de 25% do saldo restante/ano (ano 1: 75M, ano 2: 56M…)'],
+                  [<strong key="t" className="text-white">Treasury / DAO</strong>, '20%', '200M', 'linear em 48 meses'],
+                  [<strong key="e" className="text-white">Equipe</strong>, '15%', '150M', 'cliff 12 meses + linear 36 meses'],
+                  [<strong key="i" className="text-white">Investidores</strong>, '12%', '120M', 'cliff 6 meses + linear 24 meses'],
+                  [<strong key="l" className="text-white">Liquidez</strong>, '10%', '100M', '25% no TGE, resto conforme necessidade (LP com lock)'],
+                  [<strong key="ec" className="text-white">Ecossistema</strong>, '8%', '80M', 'parcerias, grants e integrações'],
+                  [<strong key="c" className="text-white">Comunidade</strong>, '5%', '50M', '40% no TGE (airdrops, eventos de lançamento)'],
+                ]}
+              />
+              <p className="text-xs text-textsec">
+                A emissão a jogadores decai 25% ao ano sobre o saldo restante do bucket — nunca zera de repente, nunca explode.
+                Detalhe completo no <Code>docs/21-whitepaper</Code> do repositório.
+              </p>
+
+              <h3 className="pt-2 text-lg font-semibold text-white">Taxas & queimas</h3>
+              <Table
+                head={['Onde', 'Taxa', 'Destino', 'Status']}
+                rows={[
+                  ['Mercado de itens (GOLD)', '4%', '2% queima real + 2% treasury', <Live key="1" />],
+                  ['Mercado de personagens (DOL)', '5%', '2,5% queima real + 2,5% treasury', <Live key="2" />],
+                  ['Forja (craft de equipamento)', '30% do valor de catálogo (mín. 10)', 'sink off-chain', <Live key="3" />],
+                  ['Alquimia (craft de poções)', '30% do valor (mín. 5)', 'sink off-chain', <Live key="4" />],
+                  ['Venda de item à loja (NPC)', 'recompra a 60% do catálogo', 'sink off-chain (40%)', <Live key="5" />],
+                  ['Claim de GOLD on-chain', '0% (só gas)', '—', <Live key="6" />],
+                  ['Passes de temporada em DOL', '50% queimado', 'queima + treasury', <Soon key="7" />],
+                  ['Coleções primárias (NFT)', '100% da venda primária', 'queima parcial + treasury', <Soon key="8" />],
+                  ['Buyback trimestral', 'definido pela DAO', 'queima', <Soon key="9" />],
+                ]}
+              />
+              <p className="text-xs text-textsec">
+                As taxas dos dois mercados estão no contrato (<Code>burnFeeBps</Code>/<Code>treasuryFeeBps</Code>, teto rígido de 10%)
+                e a queima é <strong className="text-white">destruição real de supply</strong> (<Code>burnFrom</Code>), não carteira morta.
+              </p>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Card>
+                  <div className="flex items-center gap-2"><Soon /><h3 className="font-semibold text-white">Staking de DOL (veDOL)</h3></div>
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+                    <li>Locks de 3 a 24 meses — quanto mais longo, mais peso (veDOL)</li>
+                    <li>Recompensa: 20% de cada epoch de emissão + 50% das taxas do treasury</li>
+                    <li><strong className="text-white">Sem APY fixo prometido</strong> — o yield vem de receita real do jogo</li>
+                  </ul>
+                </Card>
+                <Card>
+                  <h3 className="font-semibold text-white">Liquidez — postura oficial</h3>
+                  <p className="mt-2 text-sm">
+                    O par oficial com liquidez do projeto (e lock de LP) é <strong className="text-white">só do DOL</strong>.
+                    O GOLD vale pelo que compra dentro do jogo: o projeto <strong className="text-white">não subsidia</strong> preço
+                    externo de GOLD. Um par GOLD/DOL pode existir por arbitragem natural do mercado.
+                  </p>
+                </Card>
+              </div>
+
+              <h3 className="pt-2 text-lg font-semibold text-white">Roadmap econômico</h3>
+              <Table
+                head={['Etapa', 'O quê', 'Status']}
+                rows={[
+                  ['E0 — Fundação', 'GOLD off-chain com teto diário, sinks (loja/forja/alquimia), claim assinado', <Live key="0" />],
+                  ['E1 — Contratos v2', 'DOL supply fixo 1B, taxas de mercado com queima real (deploy mainnet pendente)', <Tag key="1" tone="warn">🚧 CONTRATOS PRONTOS</Tag>],
+                  ['E2 — TGE & liquidez', 'Distribuição do DOL, par oficial com LP lock, listagem', <Soon key="2" />],
+                  ['E3 — Staking', 'veDOL, epochs, distribuição de taxas do treasury', <Soon key="3" />],
+                  ['E4 — DAO', 'Governança sobre treasury, buyback e parâmetros econômicos', <Soon key="4" />],
+                  ['E5 — Expansão', 'Guildas, terrenos, raids e seasons plugados nos mesmos sinks', <Soon key="5" />],
+                ]}
+              />
+
               <h3 className="pt-2 text-lg font-semibold text-white">Contratos on-chain</h3>
               <Table
                 head={['Contrato', 'Padrão', 'Função']}
                 rows={[
-                  [<Code key="a">DolToken.sol</Code>, 'ERC-20', 'Moeda premium DOL (mint por role, burnable)'],
-                  [<Code key="b">DolrathGold.sol</Code>, 'ERC-20', 'GOLD do jogo, claim por assinatura EIP-712'],
+                  [<Code key="a">DolToken.sol</Code>, 'ERC-20', 'DOL — supply fixo 1B, sem mint, burnable'],
+                  [<Code key="b">DolrathGold.sol</Code>, 'ERC-20', 'GOLD — claim por assinatura EIP-712, burnable'],
                   [<Code key="c">DolrathCharacters.sol</Code>, 'ERC-721', 'Personagens como NFT (mint pago + assinatura)'],
                   [<Code key="d">DolrathItems.sol</Code>, 'ERC-721', 'Itens como NFT (guarda GOLD pago no mint)'],
-                  [<Code key="e">DolrathCharacterMarket.sol</Code>, 'Market', 'Escrow + venda de personagens por DOL'],
-                  [<Code key="f">DolrathItemMarket.sol</Code>, 'Market', 'Escrow + venda de itens por GOLD'],
+                  [<Code key="e">DolrathCharacterMarket.sol</Code>, 'Market', 'Escrow + venda por DOL · taxa 5% (2,5% burn / 2,5% treasury)'],
+                  [<Code key="f">DolrathItemMarket.sol</Code>, 'Market', 'Escrow + venda por GOLD · taxa 4% (2% burn / 2% treasury)'],
                 ]}
               />
               <p className="text-sm">Mints e claims exigem <strong className="text-white">assinatura do servidor</strong> (EIP-712) para impedir cunhagem arbitrária; os mercados usam <Code>nonReentrant</Code> e escrow do NFT.</p>
+
+              <Card>
+                <h3 className="font-semibold text-white">📊 Dashboard de tokenomics</h3>
+                <p className="mt-2 text-sm">
+                  Projeção determinística de 120 meses (3 cenários: pessimista/base/otimista) — circulação do DOL, emissão × queima,
+                  staking, treasury, crescimento de jogadores e market cap por premissa de preço.
+                </p>
+                <a
+                  href="/tokenomics/dashboard.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 inline-flex items-center gap-2 rounded-lg bg-primary/15 px-4 py-2 text-sm font-semibold text-primary ring-1 ring-primary/40 hover:bg-primary/25"
+                >
+                  Abrir dashboard interativo →
+                </a>
+              </Card>
             </Section>
 
             {/* Raças */}

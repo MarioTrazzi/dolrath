@@ -276,13 +276,20 @@ const dashboard = {
     ])
   ),
 };
-fs.writeFileSync(
-  path.join(outDir, 'dashboard-data.js'),
+const dashboardJs =
   '// Gerado por scripts/token-economy-sim.js — NÃO editar à mão\n' +
-    'window.DOLRATH_SIM = ' +
-    JSON.stringify(dashboard) +
-    ';\n'
-);
+  'window.DOLRATH_SIM = ' +
+  JSON.stringify(dashboard) +
+  ';\n';
+fs.writeFileSync(path.join(outDir, 'dashboard-data.js'), dashboardJs);
+
+// Cópia pública: dashboard servido em produção em /tokenomics/dashboard.html
+const publicDir = path.join(__dirname, '..', 'public', 'tokenomics');
+if (fs.existsSync(publicDir)) {
+  fs.writeFileSync(path.join(publicDir, 'dashboard-data.js'), dashboardJs);
+  fs.copyFileSync(path.join(outDir, 'dashboard.html'), path.join(publicDir, 'dashboard.html'));
+  fs.copyFileSync(path.join(outDir, 'simulacao-10-anos.csv'), path.join(publicDir, 'simulacao-10-anos.csv'));
+}
 
 // Resumo no terminal
 function fmt(n) {

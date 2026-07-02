@@ -92,6 +92,7 @@ interface MarketConfig {
   goldContractAddress: string
   itemNftContractAddress: string
   gold: { decimals: number; symbol: string }
+  marketFee?: { burnBps: number; treasuryBps: number; totalBps: number }
 }
 interface Listing {
   listingId: string
@@ -110,6 +111,7 @@ interface CharMarketConfig {
   dolTokenAddress: string
   characterNftContractAddress: string
   dol: { decimals: number; symbol: string }
+  marketFee?: { burnBps: number; treasuryBps: number; totalBps: number }
 }
 interface CharListing {
   listingId: string
@@ -473,6 +475,12 @@ export default function MarketplacePage() {
       {/* VENDER */}
       <section className="rounded-2xl border border-amber-400/20 bg-black/30 p-5">
         <h2 className="text-xl font-bold text-amber-200 mb-3">Vender um item</h2>
+        {config?.marketFee && config.marketFee.totalBps > 0 ? (
+          <p className="text-textsec text-xs mb-3">
+            Taxa de mercado: <span className="text-amber-300 font-semibold">{(config.marketFee.totalBps / 100).toFixed(1).replace('.0', '')}%</span> do preço
+            ({(config.marketFee.burnBps / 100).toFixed(1).replace('.0', '')}% queimado + {(config.marketFee.treasuryBps / 100).toFixed(1).replace('.0', '')}% treasury) — o restante vai direto para o vendedor.
+          </p>
+        ) : null}
         <div className="flex items-center gap-3 mb-4">
           <label className="text-sm text-textsec">Personagem:</label>
           <select
@@ -561,6 +569,10 @@ export default function MarketplacePage() {
         <h2 className="text-xl font-bold text-indigo-200 mb-1">Vender um personagem</h2>
         <p className="text-textsec text-xs mb-4">
           A NFT vai só com o nível e os atributos. Desequipe e mande todos os itens para o inventário global antes de listar.
+          {charConfig?.marketFee && charConfig.marketFee.totalBps > 0 ? (
+            <> Taxa de mercado: <span className="text-indigo-300 font-semibold">{(charConfig.marketFee.totalBps / 100).toFixed(1).replace('.0', '')}%</span> do preço
+            ({(charConfig.marketFee.burnBps / 100).toFixed(1).replace('.0', '')}% queimado + {(charConfig.marketFee.treasuryBps / 100).toFixed(1).replace('.0', '')}% treasury).</>
+          ) : null}
         </p>
         {myCharacters.length === 0 ? (
           <p className="text-textsec text-sm">Você não tem personagens.</p>

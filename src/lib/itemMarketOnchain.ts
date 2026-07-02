@@ -5,6 +5,8 @@ const ITEM_MARKET_ABI = [
   'function items() view returns (address)',
   'function getActiveListingIds() view returns (uint256[])',
   'function listings(uint256) view returns (address seller, uint256 tokenId, uint256 priceGold, bool active)',
+  'function burnFeeBps() view returns (uint16)',
+  'function treasuryFeeBps() view returns (uint16)',
 ] as const
 
 function normalizeRpcUrl(url: string): string {
@@ -62,4 +64,17 @@ export function getItemMarketContract(): Contract {
   const address = getItemMarketContractAddress()
   if (!address) throw new Error('Missing ITEM_MARKET_CONTRACT_ADDRESS')
   return new Contract(address, ITEM_MARKET_ABI, getItemMarketProvider())
+}
+
+// Contratos antigos (pré-taxa) não têm os getters — nesse caso a taxa é 0.
+export async function getItemMarketFees(): Promise<{ burnBps: number; treasuryBps: number; totalBps: number }> {
+  try {
+    const market = getItemMarketContract()
+    const [burn, treasury] = await Promise.all([market.burnFeeBps(), market.treasuryFeeBps()])
+    const burnBps = Number(burn)
+    const treasuryBps = Number(treasury)
+    return { burnBps, treasuryBps, totalBps: burnBps + treasuryBps }
+  } catch {
+    return { burnBps: 0, treasuryBps: 0, totalBps: 0 }
+  }
 }

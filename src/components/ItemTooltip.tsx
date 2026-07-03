@@ -10,7 +10,7 @@ import { resolveImageUrl } from '@/lib/imageUrl';
 import { itemImagePath, isIngredientItem, isMaterialItem } from '@/lib/itemCatalog';
 import { applyEnhancementToStats, getLevelLabel } from '@/lib/enhancementSystem';
 import { formatItemStats } from '@/lib/itemStats';
-import { whatItemCanProduce } from '@/lib/craftProduces';
+import { whatItemCanProduceSummary } from '@/lib/craftProduces';
 import { getSlotTypeFromItemType } from '@/lib/equipmentSlot';
 import ItemCardBackdrop from '@/components/store/ItemCardBackdrop';
 import ItemIcon from '@/components/ItemIcon';
@@ -174,7 +174,7 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryI
   const isMaterial = !isEnhancementStone && isMaterialItem(item);
   // O que este ingrediente/material ajuda a produzir (receitas do alquimista/ferreiro
   // que o usam como insumo). Vazio para itens que não são insumo de nenhuma receita.
-  const produces = whatItemCanProduce(item.name);
+  const producesSummary = whatItemCanProduceSummary(item.name);
 
   // Estilo de botão da loja: gradiente da cor de destaque + sombra.
   const buttonStyle = (hex: string, soft: string) => ({
@@ -321,15 +321,8 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryI
               <p className="text-sm text-purple-300 mb-3 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">✨ {item.stats.specialEffect}</p>
             )}
 
-            {produces.length > 0 && (
-              <div className="mb-3">
-                <div className="text-[11px] font-bold text-white/50 uppercase tracking-wide mb-1">Pode produzir</div>
-                <div className="flex flex-wrap gap-1.5">
-                  {produces.map((n) => (
-                    <span key={n} className="text-xs font-semibold bg-sky-500/20 text-sky-300 px-2 py-1 rounded-full">{n}</span>
-                  ))}
-                </div>
-              </div>
+            {producesSummary && (
+              <p className="text-xs font-semibold text-sky-300 mb-3">{producesSummary}</p>
             )}
 
             <div className="text-base font-semibold text-amber-400 mb-3 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">

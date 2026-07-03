@@ -131,6 +131,9 @@ interface BattleSceneProps {
   /** Esconde as barras de HP/MP/stamina dos inimigos (o HP vive no roster de alvo,
    *  fora da arena — evita exibir 2x). O lado esquerdo (jogador) mantém as barras. */
   hideEnemyBars?: boolean
+  /** Inimigo único em modo enxuto (monstro do PvE): sem placa de nome/MP/stamina/pills —
+   *  só a barra de HP acima do card + nome dentro do card. O jogador mantém o card cheio. */
+  enemyHpOnly?: boolean
   /** Id do inimigo em DESTAQUE na cascata (frente + iluminado): o alvo do jogador na
    *  vez dele, ou o atacante atual na vez dos inimigos. Default = right.id. */
   focusEnemyId?: string | null
@@ -523,9 +526,18 @@ function FighterFigure({
             )}
             {/* Faixa inferior: nome + nível do monstro (pacote) ou raça • classe (padrão) */}
             <div className="absolute bottom-0 inset-x-0 bg-black/70 text-center py-0.5 px-1">
-              <span className="text-[10px] text-white/85 font-bold truncate block">
-                {nameInCard ? `${fighter.name} • Nv.${fighter.level}` : `${fighter.race} • ${fighter.class}`}
-              </span>
+              {nameInCard ? (
+                // Nome pode ser longo (ex.: "Aranha Gigante") — trunca SÓ o nome e
+                // preserva o Nv.X, senão o nível some primeiro.
+                <span className="flex items-baseline justify-center gap-1 text-[10px] font-bold">
+                  <span className="truncate text-white/85">{fighter.name}</span>
+                  <span className="flex-shrink-0 text-amber-300">Nv.{fighter.level}</span>
+                </span>
+              ) : (
+                <span className="text-[10px] text-white/85 font-bold truncate block">
+                  {fighter.race} • {fighter.class}
+                </span>
+              )}
             </div>
           </motion.div>
 
@@ -564,6 +576,7 @@ export default function BattleScene({
   backdrop,
   rightGroup,
   hideEnemyBars = false,
+  enemyHpOnly = false,
   focusEnemyId,
   brightenEnemyImage = false,
 }: BattleSceneProps) {
@@ -811,8 +824,10 @@ export default function BattleScene({
         </>
       )}
 
-      {/* Lutadores */}
-      <div className="relative h-full flex items-end justify-between px-2 sm:px-8 pb-6 pt-2 gap-2">
+      {/* Lutadores — no celular (retrato) a arena é alta, então o combate fica
+          CENTRALIZADO na vertical (embaixo ele encostava no rodapé); no desktop
+          mantém o pé no "chão" (items-end). */}
+      <div className="relative h-full flex items-center sm:items-end justify-between px-2 sm:px-8 pb-2 sm:pb-6 pt-2 gap-2">
         {renderFighter(left, 'left')}
 
         {/* Centro: VS / banner de vitória / prompt de dado */}
@@ -932,7 +947,9 @@ export default function BattleScene({
             </div>
           )
         })() : (
-          renderFighter(right, 'right', { hideBars: hideEnemyBars, brightenImage: brightenEnemyImage })
+          renderFighter(right, 'right', enemyHpOnly
+            ? { hideNamePlate: true, nameInCard: true, showHpBar: true, hpAbove: true, brightenImage: brightenEnemyImage }
+            : { hideBars: hideEnemyBars, brightenImage: brightenEnemyImage })
         )}
       </div>
     </div>

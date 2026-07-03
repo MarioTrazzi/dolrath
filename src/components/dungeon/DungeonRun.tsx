@@ -485,15 +485,8 @@ function computeMonsterOutcome(
 // A "defesa" (bloqueio) virou só LORE: mecanicamente todo mundo ESQUIVA (sem bloqueio nem
 // stamina). O log às vezes narra a reação como "defesa", às vezes como "esquiva", só pra dar
 // sabor — a matemática é sempre a da esquiva.
-function defenseFlavor(): { tag: string; p2: string; p3: string } {
-  return Math.random() < 0.3
-    ? { tag: '(defesa oculta)', p2: 'defende', p3: 'defendeu' }
-    : { tag: '(esquiva oculta)', p2: 'esquiva', p3: 'esquivou' }
-}
-
-// Monta a linha de dado estilo RiPG: "⚔️ d12 = 9 (esquiva oculta)"
-function diceLine(label: string, sides: number, roll: number, tag: string): string {
-  return `${label} d${sides} = ${roll} ${tag}`
+function defenseVerb(): string {
+  return Math.random() < 0.3 ? 'defendeu' : 'esquivou'
 }
 
 export default function DungeonRun({ dungeon, character, onExit, onRestart, initialAuto }: DungeonRunProps) {
@@ -1345,8 +1338,6 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
     if (atkDef.mp > 0) setMp(prev => Math.max(0, prev - atkDef.mp))
 
     const mLev = monsterLevers(m)
-    // Flavor da reação do monstro ("esquiva"/"defesa") — mecanicamente é sempre esquiva.
-    const flavor = defenseFlavor()
     // 👁️ Visão Aguçada (ignoreEvadeNext) força o acerto — fura a esquiva do monstro.
     const pfx = combatFxRef.current
     const outcome = computePlayerOutcome(atk.roll, PVE_DIE[kindUsed], playerPowerFor(kindUsed), mLev, pfx.ignoreEvadeNext)
@@ -1368,11 +1359,11 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
 
     later(() => setDiceResults({}), 1500)
 
-    // Log estilo RiPG: só o dado do jogador (o monstro não rola nada).
-    pushLog(diceLine(atkDef.icon, outcome.sides, outcome.atkRoll, outcome.crit ? '(CRÍTICO!)' : '(sorte)'))
-    if (!outcome.hit) pushLog(`💨 ${m.name} ${flavor.p3}! (evasão ${Math.round(mLev.evade * 100)}%, 0 de dano)`)
-    else if (outcome.crit) pushLog(`💥 Acerto CRÍTICO! ${outDmg} de dano em ${m.name}`)
-    else pushLog(`${atkDef.icon} Acerto: ${outDmg} de dano em ${m.name}`)
+    // Log: UMA linha por golpe — só o jogador rola (dado-como-plus: a rolagem
+    // multiplica o dano; o monstro esquiva por % pura, sem dado).
+    if (!outcome.hit) pushLog(`💨 d${outcome.sides}=${outcome.atkRoll} — ${m.name} ${defenseVerb()}! (evasão ${Math.round(mLev.evade * 100)}%)`)
+    else if (outcome.crit) pushLog(`💥 d${outcome.sides}=${outcome.atkRoll} CRÍTICO! ${outDmg} de dano em ${m.name}`)
+    else pushLog(`${atkDef.icon} d${outcome.sides}=${outcome.atkRoll} → ${outDmg} de dano em ${m.name}`)
 
     const newHp = Math.max(0, m.hp - outDmg)
     // Sincroniza o HP no alvo ativo E na entrada do pacote (roster mostra a barra certa).
@@ -1665,7 +1656,6 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
     // esquiva total garantida, senão esquiva por % pura — ver resolveMonsterHit.
     const sides = PVE_DIE[kind]
     const def = mkResult(sides, 0)
-    const flavor = defenseFlavor()
 
     const mLev = monsterLevers(m)
     // 🌬️ Voo Veloz (Águia): buff de evasão temporário soma na esquiva do jogador.
@@ -1676,22 +1666,6 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
       { armor: playerLevers.armor, K: playerLevers.K, evade: effEvade },
       def.roll,
     )
-    pushBattleEvent({
-      kind: 'resolve',
-      attackerId: m.id,
-      defenderId: character.id,
-      action: kind,
-      defenseAction: 'none',
-      hit: outcome.hit,
-      damage: outcome.damage,
-      isCritical: outcome.crit,
-    })
-
-    // Log estilo RiPG: só a rolagem de DEFESA do jogador (o monstro não rola nada).
-    pushLog(diceLine('🛡️', outcome.sides, outcome.defRoll, outcome.defRoll >= outcome.sides ? '(ESQUIVA TOTAL!)' : flavor.tag))
-    if (!outcome.hit) pushLog(`💨 Você ${flavor.p2} o golpe por completo! (0 de dano)`)
-    else pushLog(`🩸 ${m.name} causou ${outcome.damage} de dano em você`)
-
     // 🐍 Golpe secundário telegrafado (ver monsterTelegraph): só se aplica se o golpe acertou.
     const proc = pendingMonsterEffectRef.current
     pendingMonsterEffectRef.current = null
@@ -1700,6 +1674,28 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
     // 🐉 Escamas (-dano recebido) + Rugido (-dano do inimigo). Contra-ataque ao esquivar.
     const dfx = combatFxRef.current
     const inDmg = outcome.hit ? Math.max(1, Math.round(outcome.damage * dfx.dmgTakenMult * dfx.enemyDmgMult * procDmgMult)) : 0
+
+    pushBattleEvent({
+      kind: 'resolve',
+      attackerId: m.id,
+      defenderId: character.id,
+      action: kind,
+      defenseAction: 'none',
+      hit: outcome.hit,
+      damage: inDmg,
+      isCritical: outcome.crit,
+    })
+
+    // Log: UMA linha por golpe — o monstro NÃO rola (dano sai dos stats dele); a sua
+    // esquiva é % pura calculada por baixo, então só o desfecho aparece. A exceção é a
+    // rolagem oculta máxima (esquiva total garantida), que merece destaque.
+    if (!outcome.hit) {
+      pushLog(outcome.defRoll >= outcome.sides
+        ? `✨ ESQUIVA TOTAL! Você evitou o golpe de ${m.name} (rolagem máxima)`
+        : `💨 Você ${defenseVerb()} o golpe de ${m.name}! (0 de dano)`)
+    } else {
+      pushLog(`🩸 ${m.name} causou ${inDmg} de dano em você`)
+    }
     if (!outcome.hit && dfx.counterNext) {
       const counter = Math.max(1, Math.round((outcome.damage || monsterPowerFor(m, kind)) * 0.5))
       const mfx = (monsterFxRef.current[m.id] ||= { dots: [], immobilizeTurns: 0 })
@@ -2994,6 +2990,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
               right={monsterFighter}
               rightGroup={packFighters}
               hideEnemyBars={isPack}
+              enemyHpOnly
               focusEnemyId={focusEnemyId}
               brightenEnemyImage
 
@@ -3050,68 +3047,76 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
               </div>
             </div>
 
-            {/* Barra de ações do combate */}
+            {/* Barra de ações do combate — altura ESTÁVEL entre os estados (botões ↔
+                "rolando" ↔ "resolvendo"), senão a arena inteira pula a cada turno.
+                Os toggles do piloto têm uma LINHA própria (antes eram absolute no canto
+                e sobrepunham os botões de ataque no celular). */}
             <div
-              className="relative flex-shrink-0 bg-black/70 backdrop-blur-md border-t border-white/10 px-3 sm:px-6 pt-3 min-h-[88px] flex items-center justify-center"
+              className="relative flex-shrink-0 bg-black/70 backdrop-blur-md border-t border-white/10 px-3 sm:px-6 pt-1.5 flex flex-col"
               style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
             >
               {/* Toggle do piloto automático (+ switch de poções) — liga/desliga a qualquer momento */}
-              {!combatEnded && (
-                <div className="absolute right-2 top-2 z-10 flex items-center gap-1.5">
-                  {auto && (
+              <div className="h-9 flex items-center justify-end gap-1.5">
+                {!combatEnded && (
+                  <>
+                    {auto && (
+                      <button
+                        onClick={() => setAutoConsumables(v => !v)}
+                        title={autoConsumables ? 'O piloto usa poções de HP/MP — clique para desligar' : 'O piloto NÃO usa poções — clique para ligar'}
+                        className={`px-3 py-1.5 rounded-full text-[10px] font-black border transition-colors ${
+                          autoConsumables
+                            ? 'bg-emerald-600/85 border-emerald-300/60 text-white'
+                            : 'bg-white/5 border-white/15 text-white/50 hover:text-white'
+                        }`}
+                      >
+                        🧪 {autoConsumables ? 'ON' : 'OFF'}
+                      </button>
+                    )}
                     <button
-                      onClick={() => setAutoConsumables(v => !v)}
-                      title={autoConsumables ? 'O piloto usa poções de HP/MP — clique para desligar' : 'O piloto NÃO usa poções — clique para ligar'}
-                      className={`px-3 py-2 rounded-full text-[10px] font-black border transition-colors ${
-                        autoConsumables
-                          ? 'bg-emerald-600/85 border-emerald-300/60 text-white'
-                          : 'bg-white/5 border-white/15 text-white/50 hover:text-white'
+                      onClick={() => setAuto(a => !a)}
+                      title={auto ? 'Desligar o piloto automático' : 'Ligar o piloto automático (joga os turnos por você)'}
+                      className={`px-3 py-1.5 rounded-full text-[10px] font-black border transition-colors ${
+                        auto
+                          ? 'bg-blue-600/90 border-blue-300/60 text-white shadow-lg shadow-blue-900/50'
+                          : 'bg-white/5 border-white/15 text-white/60 hover:text-white hover:border-white/30'
                       }`}
                     >
-                      🧪 {autoConsumables ? 'ON' : 'OFF'}
+                      {auto ? '⚡ Auto ON' : '⚡ Auto'}
                     </button>
-                  )}
-                  <button
-                    onClick={() => setAuto(a => !a)}
-                    title={auto ? 'Desligar o piloto automático' : 'Ligar o piloto automático (joga os turnos por você)'}
-                    className={`px-3 py-2 rounded-full text-[10px] font-black border transition-colors ${
-                      auto
-                        ? 'bg-blue-600/90 border-blue-300/60 text-white shadow-lg shadow-blue-900/50'
-                        : 'bg-white/5 border-white/15 text-white/60 hover:text-white hover:border-white/30'
-                    }`}
-                  >
-                    {auto ? '⚡ Auto ON' : '⚡ Auto'}
-                  </button>
-                </div>
-              )}
+                  </>
+                )}
+              </div>
+              <div className="min-h-[56px] flex items-center justify-center">
               {combatEnded ? (
                 <div className="text-white/70 text-sm font-bold animate-pulse">
                   {winnerId === character.id ? '🏆 Vitória! Coletando recompensas...' : '💀 Derrotado...'}
                 </div>
               ) : stage === 'playerSelect' ? (
-                <div className="flex flex-wrap items-center justify-center gap-2">
+                <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
                   {/* Golpe (d6, grátis) + Ataque de Classe (d8, 8 MP). O 'special' é só da IA
-                      dos monstros — quando transformado o jogador usa as HABILIDADES DE FORMA. */}
+                      dos monstros — quando transformado o jogador usa as HABILIDADES DE FORMA.
+                      Botões de LINHA ÚNICA (sem emoji/subtexto): no celular eles dobravam de
+                      altura e faziam a barra sanfonar a cada turno. */}
                   {(['basic', 'weapon'] as AttackKind[]).map(kind => {
                     const atk = ATTACKS[kind]
                     const locked = mp < atk.mp
-                    const noMp = mp < atk.mp
                     const name = kind === 'weapon' ? classAtkName : atk.label
                     return (
                       <button
                         key={kind}
                         onClick={() => choosePlayerAttack(kind)}
                         disabled={locked}
-                        className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all shadow-lg ${
+                        title={atk.mp > 0 ? `d${PVE_DIE[kind]} • ${atk.mp} MP${locked ? ' — MP insuficiente' : ''}` : `d${PVE_DIE[kind]} • grátis`}
+                        className={`px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white whitespace-nowrap transition-all shadow-lg ${
                           locked
                             ? 'bg-gray-700/60 opacity-50 cursor-not-allowed'
                             : kind === 'basic' ? 'bg-gradient-to-r from-yellow-600 to-amber-500 hover:scale-105'
                             : 'bg-gradient-to-r from-red-700 to-red-500 hover:scale-105'
                         }`}
                       >
-                        {atk.icon} {name}
-                        <span className="block text-[10px] opacity-80 font-normal">
-                          d{PVE_DIE[kind]}{atk.mp > 0 ? ` • ${atk.mp}🔵${noMp ? ' (sem MP)' : ''}` : ''}
+                        {name}
+                        <span className="ml-1.5 text-[10px] opacity-75 font-semibold">
+                          d{PVE_DIE[kind]}{atk.mp > 0 ? `·${atk.mp}MP` : ''}
                         </span>
                       </button>
                     )
@@ -3128,13 +3133,13 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
                         onClick={() => useAbility(def)}
                         disabled={locked}
                         title={def.desc}
-                        className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all shadow-lg ${
+                        className={`px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white whitespace-nowrap transition-all shadow-lg ${
                           locked ? 'bg-gray-700/60 opacity-50 cursor-not-allowed' : 'bg-gradient-to-r from-fuchsia-700 to-pink-600 hover:scale-105'
                         }`}
                       >
                         {def.name}
-                        <span className="block text-[10px] opacity-80 font-normal">
-                          {cd > 0 ? `recarga ${cd}` : `${def.kind === 'dmg' ? `d${def.die ?? 20} • ` : ''}${mpCost}🔵`}
+                        <span className="ml-1.5 text-[10px] opacity-75 font-semibold">
+                          {cd > 0 ? `recarga ${cd}` : `${def.kind === 'dmg' ? `d${def.die ?? 20}·` : ''}${mpCost}MP`}
                         </span>
                       </button>
                     )
@@ -3144,9 +3149,9 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
                   {transformForms.length > 0 && (
                     <div className="relative">
                       {transform ? (
-                        <div className="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white bg-gradient-to-r from-fuchsia-700 to-purple-600 shadow-lg shadow-purple-900/50">
+                        <div className="px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white whitespace-nowrap bg-gradient-to-r from-fuchsia-700 to-purple-600 shadow-lg shadow-purple-900/50">
                           {activeTransformCfg?.name}
-                          <span className="block text-[10px] opacity-90 font-normal">restam {transform.turns} turno(s)</span>
+                          <span className="ml-1.5 text-[10px] opacity-75 font-semibold">{transform.turns} turno(s)</span>
                         </div>
                       ) : (() => {
                         const single = transformForms.length === 1 ? TRANSFORMATION_CONFIG[transformForms[0]] : null
@@ -3161,16 +3166,19 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
                                 else setShowFormPicker(v => !v)
                               }}
                               disabled={disabled}
-                              className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all shadow-lg ${
+                              title={transformedThisFight ? 'Transformação já usada nesta luta (1× por luta)' : single ? `${single.cost.mp} MP • ${single.duration} turnos` : `${transformForms.length} formas disponíveis`}
+                              className={`px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white whitespace-nowrap transition-all shadow-lg ${
                                 disabled
                                   ? 'bg-gray-700/60 opacity-50 cursor-not-allowed'
                                   : 'bg-gradient-to-r from-fuchsia-700 to-purple-600 hover:scale-105'
                               }`}
                             >
-                              {transformedThisFight ? '🌀 Já usada' : '🌀 Transformar'}
-                              <span className="block text-[10px] opacity-80 font-normal">
-                                {transformedThisFight ? '1× por luta' : single ? `${single.cost.mp}🔮 • ${single.duration} turnos` : `${transformForms.length} formas`}
-                              </span>
+                              {transformedThisFight ? 'Transf. usada' : 'Transformar'}
+                              {!transformedThisFight && (
+                                <span className="ml-1.5 text-[10px] opacity-75 font-semibold">
+                                  {single ? `${single.cost.mp}MP` : `${transformForms.length} formas`}
+                                </span>
+                              )}
                             </button>
 
                             {showFormPicker && !single && (
@@ -3203,10 +3211,10 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
                   {/* Usar consumível (consome o turno) */}
                   <button
                     onClick={() => { loadConsumables(); setShowItems(true) }}
-                    className="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all shadow-lg bg-gradient-to-r from-emerald-700 to-green-600 hover:scale-105"
+                    title="Poções de HP/MP — usar gasta o turno"
+                    className="px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white whitespace-nowrap transition-all shadow-lg bg-gradient-to-r from-emerald-700 to-green-600 hover:scale-105"
                   >
-                    🧪 Item
-                    <span className="block text-[10px] opacity-80 font-normal">HP/MP • gasta o turno</span>
+                    Item
                   </button>
 
                   {/* Recuar: sai em segurança mantendo XP/espólio dos abates. Não no boss. */}
@@ -3214,10 +3222,9 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
                     <button
                       onClick={handleRetreat}
                       title="Recuar em segurança — você mantém o XP e o espólio dos inimigos já derrotados."
-                      className="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all shadow-lg bg-gradient-to-r from-slate-600 to-slate-500 hover:scale-105"
+                      className="px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white whitespace-nowrap transition-all shadow-lg bg-gradient-to-r from-slate-600 to-slate-500 hover:scale-105"
                     >
-                      🏃 Recuar
-                      <span className="block text-[10px] opacity-80 font-normal">mantém o XP ganho</span>
+                      Recuar
                     </button>
                   )}
                 </div>
@@ -3228,6 +3235,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
               ) : (
                 <div className="text-white/50 text-xs sm:text-sm font-bold animate-pulse">⚔️ Resolvendo ação...</div>
               )}
+              </div>
             </div>
           </div>
         )}

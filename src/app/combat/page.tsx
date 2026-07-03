@@ -1358,10 +1358,12 @@ function CombatPageContent() {
               </div>
             </div>
 
-            {/* Actions - Sempre visível e responsivo. No mobile ocupa o rodapé inteiro,
-                sem altura máxima compartilhada — o scroll interno é só válvula de escape. */}
+            {/* Actions - Sempre visível e responsivo. No mobile o rodapé tem altura FIXA
+                (os estados alternam entre muitos botões e uma linha de espera — sem altura
+                fixa a arena inteira pulava a cada turno); o scroll interno é a válvula de
+                escape quando transformado (mais botões). */}
             <div
-              className="order-1 sm:order-3 w-full sm:w-64 bg-surface/30 p-2 sm:p-4 flex flex-col sm:flex-shrink-0 min-h-0 space-y-4 overflow-y-auto overscroll-contain"
+              className="order-1 sm:order-3 w-full sm:w-64 bg-surface/30 p-2 sm:p-4 flex flex-col sm:flex-shrink-0 h-[256px] sm:h-auto min-h-0 space-y-4 overflow-y-auto overscroll-contain"
               style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
             >
               <h3 className="hidden sm:block font-bold text-text-primary mb-2 sm:mb-3 text-xs sm:text-sm text-center">
@@ -1448,7 +1450,7 @@ function CombatPageContent() {
                       : 'bg-gradient-to-r from-warning to-yellow-500 hover:from-yellow-500 hover:to-warning'
                     } text-white py-3 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                   >
-                    👊 Golpe (d6, grátis)
+                    Golpe <span className="text-[10px] opacity-75">d6</span>
                   </button>
                   {/* ⚔️ Ataque de Classe (d8, 8 MP) — nome por classe */}
                   <button
@@ -1459,7 +1461,7 @@ function CombatPageContent() {
                       : 'bg-gradient-to-r from-error to-red-600 hover:from-red-600 hover:to-error'
                     } text-white py-3 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                   >
-                    ⚔️ {classAttackName(currentPlayer?.class)} (d8, {ATTACK_MP.heavy_attack}🔵{currentPlayer && currentPlayer.mp < ATTACK_MP.heavy_attack ? ' · sem MP' : ''})
+                    {classAttackName(currentPlayer?.class)} <span className="text-[10px] opacity-75">d8·{ATTACK_MP.heavy_attack}MP{currentPlayer && currentPlayer.mp < ATTACK_MP.heavy_attack ? ' — sem MP' : ''}</span>
                   </button>
 
                   {/* 🐉 Habilidades especiais da FORMA (só transformado; consomem o turno, sem dado) */}
@@ -1556,15 +1558,15 @@ function CombatPageContent() {
                       } text-white py-3 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                     >
                       {currentPlayer.isTransformed ?
-                        '🐉 Já Transformado' :
+                        'Transformado' :
                         usedTransformThisMatch ?
-                        '🔒 Já usada nesta luta' :
+                        'Transf. já usada' :
                         (currentPlayer.transformationData?.cooldownTurns || 0) > 0 ?
-                        `⏰ Cooldown (${currentPlayer.transformationData?.cooldownTurns || 0})` :
-                        isTransforming ? '⏳ Transformando...' :
+                        `Cooldown (${currentPlayer.transformationData?.cooldownTurns || 0})` :
+                        isTransforming ? 'Transformando...' :
                         currentPlayer.stamina < 30 || currentPlayer.mp < 20 ?
-                        '❌ Recursos insuficientes' :
-                        '🔆 Transformar (libera o Especial)'
+                        'Recursos insuficientes' :
+                        'Transformar'
                       }
                     </button>
                   )}
@@ -1582,7 +1584,7 @@ function CombatPageContent() {
                       : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-blue-600 hover:to-cyan-600'
                     } text-white py-3 sm:py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                   >
-                    🌪️ Esquivar · evasão{currentPlayerDisplay?.levers ? ` ${Math.round((currentPlayerDisplay.levers.evade || 0) * 100)}%` : ''} ({STAMINA_COSTS[ActionType.DODGE]}⚡)
+                    Esquivar <span className="text-[10px] opacity-75">evasão{currentPlayerDisplay?.levers ? ` ${Math.round((currentPlayerDisplay.levers.evade || 0) * 100)}%` : ''} · {STAMINA_COSTS[ActionType.DODGE]}⚡</span>
                   </button>
                   <button
                     onClick={() => handleDefenseChoice('defend')}
@@ -1592,7 +1594,7 @@ function CombatPageContent() {
                       : 'bg-gradient-to-r from-emerald-600 to-green-600 hover:from-green-600 hover:to-emerald-600'
                     } text-white py-3 sm:py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                   >
-                    🛡️ Bloquear · armadura reforçada ({STAMINA_COSTS[ActionType.DEFEND]}⚡)
+                    Bloquear <span className="text-[10px] opacity-75">armadura reforçada · {STAMINA_COSTS[ActionType.DEFEND]}⚡</span>
                   </button>
                 </div>
               ) : (

@@ -25,14 +25,17 @@ export const SAFE_ENHANCE_MAX = 7;
 
 export type GearCategory = 'WEAPON' | 'ARMOR' | 'ACCESSORY';
 
-const WEAPON_TYPES = ['SWORD', 'AXE', 'DAGGER', 'STAFF', 'BOW', 'SHIELD'];
+// ⚠️ Mantenha em sincronia com ItemTypeStr / WEAPON_TYPES de itemCatalog.ts.
+// GAUNTLET = arma do Monge (manoplas); ORB = secundária do Mago (orbe).
+const WEAPON_TYPES = ['SWORD', 'AXE', 'DAGGER', 'STAFF', 'BOW', 'SHIELD', 'GAUNTLET', 'ORB'];
 const ARMOR_TYPES = [
   'LIGHT_ARMOR', 'MEDIUM_ARMOR', 'HEAVY_ARMOR',
   'LIGHT_HELMET', 'MEDIUM_HELMET', 'HEAVY_HELMET',
   'LIGHT_GLOVES', 'MEDIUM_GLOVES', 'HEAVY_GLOVES',
   'LIGHT_BOOTS', 'MEDIUM_BOOTS', 'HEAVY_BOOTS',
 ];
-const ACCESSORY_TYPES = ['RING', 'NECKLACE'];
+// BELT (cinto) é tratado como acessório (ver ACCESSORY_TYPES em dungeonAdventures.ts).
+const ACCESSORY_TYPES = ['RING', 'NECKLACE', 'BELT'];
 
 export function getGearCategory(itemType: string): GearCategory | null {
   if (WEAPON_TYPES.includes(itemType)) return 'WEAPON';

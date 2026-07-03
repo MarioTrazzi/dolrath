@@ -275,7 +275,7 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryI
                   src={itemImage}
                   alt={item.name}
                   onError={() => setImgError(true)}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover art-bright"
                   referrerPolicy="no-referrer"
                 />
               ) : (

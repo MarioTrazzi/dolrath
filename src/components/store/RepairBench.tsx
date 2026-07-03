@@ -370,7 +370,7 @@ export default function RepairBench({
                       <img
                         src={image}
                         alt={rep.item.name}
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                        className="w-full h-full object-cover art-bright group-hover:scale-110 transition-transform"
                         referrerPolicy="no-referrer"
                       />
                     ) : (
@@ -427,7 +427,7 @@ export default function RepairBench({
                     <img
                       src={selectedImage}
                       alt={selected.item.name}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover art-bright"
                       referrerPolicy="no-referrer"
                     />
                   ) : (
@@ -532,7 +532,7 @@ export default function RepairBench({
                           <img
                             src={selectedImage}
                             alt={selected.item.name}
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-cover art-bright"
                             referrerPolicy="no-referrer"
                           />
                         ) : (
@@ -557,7 +557,7 @@ export default function RepairBench({
                           <img
                             src={itemImagePath('Estilhaço de Memória')}
                             alt="Estilhaço de Memória"
-                            className={`w-full h-full object-cover ${repairUnitsAvailable > 0 ? '' : 'grayscale'}`}
+                            className={`w-full h-full object-cover ${repairUnitsAvailable > 0 ? 'art-bright' : 'grayscale'}`}
                             referrerPolicy="no-referrer"
                           />
                         ) : repairUnitsAvailable > 0 && selectedImage ? (

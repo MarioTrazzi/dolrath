@@ -313,7 +313,7 @@ export default function EnhancementDialog({
                       <div className="flex items-center justify-center gap-2.5">
                         <span className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/15 bg-gradient-to-br from-[#1c232b] to-[#0d1116]">
                           {headerImg ? (
-                            <img src={headerImg} alt={info.itemName || ''} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                            <img src={headerImg} alt={info.itemName || ''} className="h-full w-full object-cover art-bright" referrerPolicy="no-referrer" />
                           ) : (
                             <ItemIcon type={(info.itemType as any) || 'SWORD'} size={22} />
                           )}
@@ -675,7 +675,7 @@ export default function EnhancementDialog({
                       style={{ background: 'linear-gradient(160deg, #1c232b, #0d1116)' }}
                     >
                       {img ? (
-                        <img src={img} alt={it.name} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                        <img src={img} alt={it.name} className="h-full w-full object-cover art-bright" referrerPolicy="no-referrer" />
                       ) : (
                         <span className="flex h-full w-full items-center justify-center text-white">
                           <ItemIcon type={it.type as any} size={22} />

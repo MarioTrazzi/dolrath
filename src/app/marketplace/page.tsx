@@ -26,7 +26,7 @@ function ItemThumb({ image, name, type, enhancement }: { image?: string | null; 
           alt=""
           fill
           sizes="56px"
-          className="object-cover"
+          className="object-cover art-bright"
           unoptimized={!/^https?:\/\//i.test(url)}
         />
       ) : (
@@ -52,7 +52,7 @@ function CharThumb({ avatar }: { avatar?: string | null }) {
           alt=""
           fill
           sizes="56px"
-          className="object-cover"
+          className="object-cover art-bright"
           unoptimized={!/^https?:\/\//i.test(url)}
         />
       ) : (

@@ -276,7 +276,7 @@ export function PlayerToken({
             >
               {avatar ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={avatar} alt="" className="w-full h-full object-cover" />
+                <img src={avatar} alt="" className="w-full h-full object-cover art-bright" />
               ) : (
                 <span
                   className="text-2xl"

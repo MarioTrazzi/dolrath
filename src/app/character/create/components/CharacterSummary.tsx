@@ -57,7 +57,7 @@ export function CharacterSummary({ race, characterClass, distributedPoints, char
               <motion.img
                 src={imageUrl}
                 alt="Character Avatar"
-                className="w-40 h-40 rounded-full object-cover border-4 border-primary shadow-lg mb-4"
+                className="w-40 h-40 rounded-full object-cover art-bright border-4 border-primary shadow-lg mb-4"
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ duration: 0.5 }}

@@ -529,7 +529,7 @@ export default function CharacterDetailsPage() {
                   <img
                     src={avatarUrl}
                     alt={`${character.name} avatar`}
-                    className="absolute inset-0 w-full h-full object-cover"
+                    className="absolute inset-0 w-full h-full object-cover art-bright"
                     loading="eager"
                     decoding="async"
                     referrerPolicy="no-referrer"
@@ -727,7 +727,7 @@ export default function CharacterDetailsPage() {
               {(() => {
                 const avatarUrl = resolveImageUrl(character.avatar);
                 return avatarUrl ? (
-                  <img src={avatarUrl} alt={character.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  <img src={avatarUrl} alt={character.name} className="w-full h-full object-cover art-bright" referrerPolicy="no-referrer" />
                 ) : (
                   <span className="text-2xl text-white/80">{character.name?.[0]?.toUpperCase() || '?'}</span>
                 );

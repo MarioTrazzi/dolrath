@@ -145,6 +145,17 @@
 
 ::selection { background: rgba(233, 69, 96, 0.4); color: #fff; }
 
+/* ============================================================
+   REALCE DE ARTE (brilho/contraste)
+   As artes geradas (gpt-image-1) saem escuras — itens, monstros e
+   personagens ficam quase pretos, sobretudo nos ícones pequenos.
+   Uma classe única clareia TUDO no mesmo lugar (mesmos valores da arena
+   das masmorras, que ficaram bons). Ajuste aqui p/ mudar o jogo inteiro.
+   ============================================================ */
+.art-bright {
+  filter: brightness(1.35) contrast(1.06) saturate(1.05);
+}
+
 @keyframes star-twinkle {
   0%, 100% { opacity: 0.25; }
   50% { opacity: 0.9; }

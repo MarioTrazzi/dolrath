@@ -536,7 +536,7 @@ export function NameConfirmStep() {
                               width={800}
                               height={800}
                               unoptimized
-                              className="w-full h-full object-cover rounded-lg border border-white/10"
+                              className="w-full h-full object-cover art-bright rounded-lg border border-white/10"
                             />
                           </div>
                           {/* Verso: transformação */}
@@ -552,7 +552,7 @@ export function NameConfirmStep() {
                             <img
                               src={previewTransformationImage}
                               alt="Transformação"
-                              className="w-full h-full object-cover rounded-lg border border-primary/40"
+                              className="w-full h-full object-cover art-bright rounded-lg border border-primary/40"
                               style={{ boxShadow: '0 0 24px 2px rgba(124,58,237,0.45)' }}
                             />
                           </div>
@@ -565,7 +565,7 @@ export function NameConfirmStep() {
                         width={800}
                         height={800}
                         unoptimized
-                        className="w-full h-auto rounded-lg border border-white/10"
+                        className="w-full h-auto art-bright rounded-lg border border-white/10"
                       />
                     )
                   ) : (

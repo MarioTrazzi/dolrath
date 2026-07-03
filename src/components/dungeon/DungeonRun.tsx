@@ -307,7 +307,7 @@ function ItemThumb({ name, emoji, className = 'text-base' }: { name: string; emo
       src={itemImagePath(name)}
       alt={name}
       onError={() => setFailed(true)}
-      className="w-full h-full object-contain"
+      className="w-full h-full object-contain art-bright"
       referrerPolicy="no-referrer"
     />
   )
@@ -326,7 +326,7 @@ function MonsterThumb({ name, image, emoji, className = 'text-6xl' }: { name: st
       src={src}
       alt={name}
       onError={() => setFailed(true)}
-      className="w-full h-full object-contain"
+      className="w-full h-full object-contain art-bright"
       referrerPolicy="no-referrer"
     />
   )

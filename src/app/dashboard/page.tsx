@@ -508,7 +508,7 @@ export default function DashboardPage() {
                             width={112}
                             height={112}
                             unoptimized
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-cover art-bright"
                           />
                         ) : (
                           <div
@@ -636,7 +636,7 @@ export default function DashboardPage() {
                             width={256}
                             height={256}
                             unoptimized
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-cover art-bright"
                           />
                         </div>
                       ) : (

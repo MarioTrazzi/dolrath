@@ -64,7 +64,7 @@ function CharacterCard({
             alt={character.name}
             fill
             sizes="224px"
-            className={`object-cover transition-transform group-hover:scale-105 ${dead ? 'grayscale' : ''}`}
+            className={`object-cover transition-transform group-hover:scale-105 ${dead ? 'grayscale' : 'art-bright'}`}
             unoptimized={!/^https?:\/\//i.test(avatarUrl)}
           />
         ) : (

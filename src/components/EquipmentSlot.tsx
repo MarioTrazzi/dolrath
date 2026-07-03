@@ -118,7 +118,8 @@ export function EquipmentSlot({ type, item, enhancementLevel = 0, onEquip, onUne
         title={ghost ? `${slotLabel} (ocupado pela manopla)` : slotLabel}
         className="w-[52px] h-[52px] sm:w-[54px] sm:h-[54px] flex items-center justify-center relative transition-all"
         style={{
-          border: `2px solid ${borderColor}`,
+          // Borda o mais fina possível (1px) p/ a arte do item dominar o slot.
+          border: `1px solid ${borderColor}`,
           background: 'linear-gradient(155deg, #1c232b, #0d1116)',
           boxShadow: `inset 0 0 13px ${slotAccent}${item ? '4d' : '26'}`,
         }}
@@ -131,7 +132,7 @@ export function EquipmentSlot({ type, item, enhancementLevel = 0, onEquip, onUne
                   src={itemImage}
                   alt={item.name}
                   onError={() => setImgError(true)}
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                  className="w-full h-full object-cover art-bright group-hover:scale-110 transition-transform"
                   referrerPolicy="no-referrer"
                   loading="lazy"
                   decoding="async"
@@ -163,7 +164,7 @@ export function EquipmentSlot({ type, item, enhancementLevel = 0, onEquip, onUne
   return (
     <div
       ref={ref}
-      className={`equipment-slot aspect-square bg-surface/50 rounded-lg border-2
+      className={`equipment-slot aspect-square bg-surface/50 rounded-lg border
         ${isOver && canDrop ? 'border-green-500' : ''}
         ${isOver && !canDrop ? 'border-red-500' : ''}
         ${!isOver ? 'border-primary/30' : ''}
@@ -182,7 +183,7 @@ export function EquipmentSlot({ type, item, enhancementLevel = 0, onEquip, onUne
                 src={itemImage}
                 alt={item.name}
                 onError={() => setImgError(true)}
-                className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                className="w-full h-full object-cover art-bright group-hover:scale-110 transition-transform"
                 referrerPolicy="no-referrer"
                 loading="lazy"
                 decoding="async"

@@ -77,8 +77,10 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, quantity
         >
           <div
             style={{
-              position: 'absolute', inset: 3,
-              border: `1.5px solid ${isEquipped ? '#22c55e' : (accent || '#3f7fd6')}`,
+              // Moldura o mais fina possível: sem folga (inset 0) e borda de 1px,
+              // para a arte do item ocupar quase todo o slot.
+              position: 'absolute', inset: 0,
+              border: `1px solid ${isEquipped ? '#22c55e' : (accent || '#3f7fd6')}`,
               background: 'linear-gradient(160deg, #262e38, #141a20)',
               boxShadow: 'inset 0 0 7px rgba(0,0,0,0.5)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -90,7 +92,7 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, quantity
                 src={itemImage}
                 alt={item.name}
                 onError={() => setImgError(true)}
-                className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                className="w-full h-full object-cover art-bright group-hover:scale-110 transition-transform"
                 referrerPolicy="no-referrer"
                 loading="lazy"
                 decoding="async"
@@ -145,8 +147,8 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, quantity
       <div
         ref={drag as any}
         className={`
-          group relative aspect-square bg-surface/50 rounded-lg border-2
-          border-primary/30 hover:border-primary transition-colors p-2 cursor-pointer
+          group relative aspect-square bg-surface/50 rounded-lg border
+          border-primary/30 hover:border-primary transition-colors cursor-pointer
           ${isDragging ? 'opacity-50' : 'opacity-100'}
           ${isEquipped ? 'border-green-500' : ''}
         `}
@@ -157,7 +159,7 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, quantity
               src={itemImage}
               alt={item.name}
               onError={() => setImgError(true)}
-              className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+              className="w-full h-full object-cover art-bright group-hover:scale-110 transition-transform"
               referrerPolicy="no-referrer"
               loading="lazy"
               decoding="async"

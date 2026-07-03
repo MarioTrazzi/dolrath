@@ -787,7 +787,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                           src={resolvedImageUrl}
                           alt={item.name}
                           fill
-                          className="object-cover group-hover:scale-105 transition-transform duration-300"
+                          className="object-cover art-bright group-hover:scale-105 transition-transform duration-300"
                           unoptimized={Boolean(resolvedImageUrl && !/^https?:\/\//i.test(resolvedImageUrl))}
                         />
                       </div>
@@ -1006,7 +1006,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                               src={item.image}
                               alt={item.name}
                               fill
-                              className="object-cover"
+                              className="object-cover art-bright"
                               unoptimized={Boolean(item.image && !/^https?:\/\//i.test(item.image))}
                             />
                           ) : (

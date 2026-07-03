@@ -236,7 +236,7 @@ export function TransformationStep() {
                   ) : img ? (
                     <>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={img} alt={cfg.name} className="w-full h-full object-cover" />
+                      <img src={img} alt={cfg.name} className="w-full h-full object-cover art-bright" />
                       <div className="absolute top-2 right-2 w-7 h-7 bg-primary rounded-full flex items-center justify-center">
                         <Check className="w-4 h-4 text-white" />
                       </div>
@@ -297,7 +297,7 @@ export function TransformationStep() {
           <h3 className="text-sm font-medium text-text-secondary mb-3">Forma base (NFT)</h3>
           {selectedImage ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={selectedImage} alt="Forma base" className="w-full aspect-square object-cover rounded-lg" />
+            <img src={selectedImage} alt="Forma base" className="w-full aspect-square object-cover art-bright rounded-lg" />
           ) : (
             <div className="w-full aspect-square rounded-lg bg-background/40 flex items-center justify-center text-text-secondary text-sm">
               Sem imagem
@@ -323,7 +323,7 @@ export function TransformationStep() {
             ) : transformationImage ? (
               <>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={transformationImage} alt="Forma transformada" className="w-full h-full object-cover" />
+                <img src={transformationImage} alt="Forma transformada" className="w-full h-full object-cover art-bright" />
                 <div className="absolute top-2 right-2 w-7 h-7 bg-primary rounded-full flex items-center justify-center">
                   <Check className="w-4 h-4 text-white" />
                 </div>

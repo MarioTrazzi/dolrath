@@ -130,7 +130,7 @@ export function Navbar() {
                       alt={activeCharacter?.name ?? ''}
                       fill
                       sizes="36px"
-                      className="object-cover"
+                      className="object-cover art-bright"
                       unoptimized={!/^https?:\/\//i.test(activeAvatarUrl)}
                     />
                   ) : (

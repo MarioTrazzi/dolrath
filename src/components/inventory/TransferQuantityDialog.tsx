@@ -79,7 +79,7 @@ export default function TransferQuantityDialog({
           <div className="w-12 h-12 rounded-lg overflow-hidden flex items-center justify-center shrink-0" style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid #313a44' }}>
             {itemImage ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={itemImage} alt={item.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              <img src={itemImage} alt={item.name} className="w-full h-full object-cover art-bright" referrerPolicy="no-referrer" />
             ) : (
               <ItemIcon type={item.type} size={28} className="text-white/80" />
             )}

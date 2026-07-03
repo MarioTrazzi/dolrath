@@ -156,7 +156,7 @@ export function CraftItemThumb({
           src={itemImagePath(name)}
           alt={name}
           onError={() => setFailed(true)}
-          className="w-full h-full object-cover"
+          className="w-full h-full object-cover art-bright"
           referrerPolicy="no-referrer"
         />
       )}
@@ -177,7 +177,7 @@ export function CraftItemThumb({
                   src={cardImg}
                   alt={name}
                   onError={() => setCardFailed(true)}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover art-bright"
                   referrerPolicy="no-referrer"
                 />
               )}

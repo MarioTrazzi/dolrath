@@ -514,8 +514,7 @@ function FighterFigure({
               <img
                 src={displayedImage}
                 alt={fighter.name}
-                className={`w-full h-full object-cover ${side === 'right' ? 'scale-x-[-1]' : ''}`}
-                style={brightenImage ? { filter: 'brightness(1.35) contrast(1.06) saturate(1.05)' } : undefined}
+                className={`w-full h-full object-cover ${side === 'right' ? 'scale-x-[-1]' : ''} ${brightenImage ? 'art-bright' : ''}`}
               />
             ) : (
               <div className={`w-full h-full bg-gradient-to-b from-slate-700 to-slate-900 flex flex-col items-center justify-center gap-2 ${side === 'right' ? 'scale-x-[-1]' : ''}`}>
@@ -830,8 +829,10 @@ export default function BattleScene({
       <div className="relative h-full flex items-center sm:items-end justify-between px-2 sm:px-8 pb-2 sm:pb-6 pt-2 gap-2">
         {renderFighter(left, 'left')}
 
-        {/* Centro: VS / banner de vitória / prompt de dado */}
-        <div className="flex-1 flex flex-col items-center justify-center self-center gap-3 min-w-0">
+        {/* Centro: VS / banner de vitória / prompt de dado — z acima dos cards dos
+            lutadores (que chegam a ter zIndex 10+ no pacote), senão no mobile o dado
+            de iniciativa fica atrás do card do monstro quando o centro estoura a largura. */}
+        <div className="relative z-40 flex-1 flex flex-col items-center justify-center self-center gap-3 min-w-0">
           {combatEnded && winnerId ? (
             <motion.div
               initial={{ scale: 0, rotate: -10 }}

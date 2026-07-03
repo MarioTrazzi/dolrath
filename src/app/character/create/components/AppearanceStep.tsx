@@ -326,7 +326,7 @@ export function AppearanceStep() {
                   <img
                     src={image}
                     alt={`Opção ${index + 1}`}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover art-bright"
                   />
                   
                   {selectedImage === image && (

@@ -26,6 +26,10 @@ export async function POST(
     if (!recipeId) {
       return NextResponse.json({ error: 'recipeId é obrigatório' }, { status: 400 })
     }
+    // Fabricação em lote: qtd de poções a criar de uma vez (gasta gold×qty e
+    // ingredientes×qty). Padrão 1; teto de 99 por chamada.
+    const rawQty = Number(body?.quantity ?? 1)
+    const quantity = Number.isFinite(rawQty) ? Math.min(99, Math.max(1, Math.floor(rawQty))) : 1
 
     const recipe = getRecipeById(recipeId)
     if (!recipe) {
@@ -44,6 +48,8 @@ export async function POST(
       return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
     }
 
+    const totalGoldCost = recipe.goldCost * quantity
+
     const result = await prisma.$transaction(async (tx) => {
       // 1. Gold (taxa da alquimista) — paga com a CARTEIRA DO PERSONAGEM
       // (Character.gold). Banco é só pra claim/transferência. [[bank — Opção B]]
@@ -51,8 +57,8 @@ export async function POST(
         where: { id: character.id },
         select: { gold: true },
       })
-      if (!charGold || charGold.gold < recipe.goldCost) {
-        throw new Error(`GOLD insuficiente na carteira do personagem: precisa de ${recipe.goldCost} 🪙.`)
+      if (!charGold || charGold.gold < totalGoldCost) {
+        throw new Error(`GOLD insuficiente na carteira do personagem: precisa de ${totalGoldCost} 🪙.`)
       }
 
       // 2. Ingredientes — busca todas as linhas de cada ingrediente do personagem
@@ -75,17 +81,18 @@ export async function POST(
         byName.set(r.item.name, arr)
       }
 
-      // Confere quantidade de cada ingrediente
+      // Confere quantidade de cada ingrediente (×quantity para o lote)
       for (const req of recipe.ingredients) {
+        const need = req.quantity * quantity
         const have = (byName.get(req.name) ?? []).reduce((n, r) => n + r.quantity, 0)
-        if (have < req.quantity) {
-          throw new Error(`Falta ${req.name} (tem ${have}, precisa de ${req.quantity}).`)
+        if (have < need) {
+          throw new Error(`Falta ${req.name} (tem ${have}, precisa de ${need}).`)
         }
       }
 
       // 3. Consome ingredientes (decrementa linhas; deleta na qtd 0)
       for (const req of recipe.ingredients) {
-        let remaining = req.quantity
+        let remaining = req.quantity * quantity
         for (const r of byName.get(req.name) ?? []) {
           if (remaining <= 0) break
           const take = Math.min(r.quantity, remaining)
@@ -101,10 +108,10 @@ export async function POST(
         }
       }
 
-      // 4. Debita o gold da carteira do personagem
+      // 4. Debita o gold da carteira do personagem (taxa × quantidade)
       await tx.character.update({
         where: { id: character.id },
-        data: { gold: { decrement: recipe.goldCost } },
+        data: { gold: { decrement: totalGoldCost } },
       })
 
       // 5. Acha/cria o Item da poção (mesma lógica de add-exploration-reward)
@@ -127,20 +134,21 @@ export async function POST(
         })
       }
 
-      // 6. Adiciona ao inventário (consumível empilha em enhancementLevel 0)
+      // 6. Adiciona ao inventário (consumível empilha em enhancementLevel 0).
+      // O lote inteiro entra numa única linha (empilha), então ocupa 1 slot.
       const existing = await tx.characterInventory.findFirst({
         where: { characterId: character.id, itemId: potionItem.id, enhancementLevel: 0 },
       })
       if (existing) {
         await tx.characterInventory.update({
           where: { id: existing.id },
-          data: { quantity: { increment: 1 } },
+          data: { quantity: { increment: quantity } },
         })
       } else {
         // Precisa de uma linha nova — barra antes de cobrar gold/ingrediente à toa.
         await assertInventoryRoom(tx, character.id, 1)
         await tx.characterInventory.create({
-          data: { characterId: character.id, itemId: potionItem.id, quantity: 1 },
+          data: { characterId: character.id, itemId: potionItem.id, quantity },
         })
       }
 
@@ -155,9 +163,9 @@ export async function POST(
       await addHistoryEntry({
         characterId: character.id,
         activityType: 'ITEM_GAINED',
-        description: `⚗️ Craftou ${recipe.outputName} (−${recipe.goldCost} gold).`,
+        description: `⚗️ Craftou ${quantity}× ${recipe.outputName} (−${totalGoldCost} gold).`,
         itemId: result.potionItemId,
-        goldAmount: -recipe.goldCost,
+        goldAmount: -totalGoldCost,
       })
     } catch (historyError) {
       console.error('Erro ao registrar histórico de craft:', historyError)
@@ -166,7 +174,12 @@ export async function POST(
     return NextResponse.json({
       success: true,
       characterGold: result.characterGold,
-      message: `⚗️ ${recipe.outputName} criada com sucesso!`,
+      crafted: quantity,
+      outputName: recipe.outputName,
+      rarity: recipe.rarity,
+      message: quantity > 1
+        ? `⚗️ ${quantity}× ${recipe.outputName} criadas com sucesso!`
+        : `⚗️ ${recipe.outputName} criada com sucesso!`,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Erro interno do servidor'

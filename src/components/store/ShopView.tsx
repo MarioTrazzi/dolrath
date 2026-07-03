@@ -517,6 +517,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                 <AlchemyBench
                   characters={characters}
                   characterId={selectedCharacter || undefined}
+                  characterGold={characterGold}
                   refreshSignal={inventoryRefreshKey}
                   onCrafted={handleBenchChanged}
                 />

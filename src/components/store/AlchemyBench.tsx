@@ -78,11 +78,13 @@ const SLOT_KEYS = ['top', 'left', 'right'] as const;
 export default function AlchemyBench({
   characters,
   characterId,
+  characterGold,
   refreshSignal,
   onCrafted,
 }: {
   characters: Character[];
   characterId?: string;
+  characterGold?: number | null;
   refreshSignal?: number;
   onCrafted?: () => void;
 }) {
@@ -91,7 +93,19 @@ export default function AlchemyBench({
   const selectedCharacterId = controlled ? characterId : internalCharacterId;
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loadingInv, setLoadingInv] = useState(false);
+  // Distingue o 1º carregamento (mostra placeholder) das recargas em segundo
+  // plano (mantém o triângulo na tela — sem "refresh" do card ao craftar).
+  const hasLoadedRef = useRef(false);
   const [busy, setBusy] = useState(false);
+  // Barra de progresso (0–100) enquanto o servidor cria a(s) poção(ões).
+  const [progress, setProgress] = useState(0);
+  const progressTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Item recém-transmutado que fica exibido no centro até o usuário montar
+  // uma nova receita (igual ao flash de subir de nível).
+  const [craftedResult, setCraftedResult] = useState<
+    { name: string; rarity: Rarity; quantity: number } | null
+  >(null);
+  const animTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   // Os 3 vértices do triângulo (nome do ingrediente ou null).
   const [slots, setSlots] = useState<(string | null)[]>([null, null, null]);
   // Livro de receitas (modal) + popover de ingredientes ao passar o mouse.
@@ -118,7 +132,16 @@ export default function AlchemyBench({
       setInventory([]);
     } finally {
       setLoadingInv(false);
+      hasLoadedRef.current = true;
     }
+  }, []);
+
+  // Limpa timers de animação/progresso ao desmontar.
+  useEffect(() => {
+    return () => {
+      animTimers.current.forEach(clearTimeout);
+      if (progressTimer.current) clearInterval(progressTimer.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -126,9 +149,11 @@ export default function AlchemyBench({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCharacterId, refreshSignal, fetchInventory]);
 
-  // Limpa o triângulo ao trocar de personagem.
+  // Limpa o triângulo e o resultado ao trocar de personagem.
   useEffect(() => {
     setSlots([null, null, null]);
+    setCraftedResult(null);
+    setAnimPhase('idle');
   }, [selectedCharacterId]);
 
   // Ingredientes do inventário: nome → quantidade total.
@@ -161,22 +186,11 @@ export default function AlchemyBench({
   const filled = slots.filter((s): s is string => s != null);
   const matchedRecipe = filled.length === 3 ? findRecipeByIngredients(filled) : undefined;
 
-  // Animação da transmutação: uma luz percorre os 3 vértices ('tracing') e então
-  // o item surge no centro com um brilho ('reveal'). Dispara quando o triângulo
-  // fecha numa receita válida (via clique manual ou pelo livro de receitas).
+  // Animação da transmutação: dispara APÓS o craft dar certo no servidor.
+  // Uma luz percorre os 3 vértices ('tracing') e então o item surge no centro
+  // com um flash ('reveal') e FICA ali (craftedResult) até o usuário montar
+  // uma nova receita.
   const [animPhase, setAnimPhase] = useState<'idle' | 'tracing' | 'reveal'>('idle');
-  const prevRecipeId = useRef<string | undefined>(undefined);
-  useEffect(() => {
-    const id = matchedRecipe?.id;
-    if (id && id !== prevRecipeId.current) {
-      prevRecipeId.current = id;
-      setAnimPhase('tracing');
-      const t1 = setTimeout(() => setAnimPhase('reveal'), 900);
-      const t2 = setTimeout(() => setAnimPhase('idle'), 900 + 650);
-      return () => { clearTimeout(t1); clearTimeout(t2); };
-    }
-    if (!id) prevRecipeId.current = undefined;
-  }, [matchedRecipe?.id]);
 
   // Receitas agrupadas por raridade para o livro de receitas.
   const recipeGroups = useMemo(() => recipesByRarity(), []);
@@ -190,9 +204,29 @@ export default function AlchemyBench({
     [have]
   );
 
+  // Máx. de poções que dá pra fabricar de uma vez com o que se tem
+  // (limitado por ingredientes e, se conhecido, pelo gold da carteira).
+  const maxCraftable = useMemo(() => {
+    if (!matchedRecipe) return 0;
+    let n = Math.min(
+      ...matchedRecipe.ingredients.map((i) => Math.floor(have(i.name) / i.quantity))
+    );
+    if (characterGold != null && matchedRecipe.goldCost > 0) {
+      n = Math.min(n, Math.floor(characterGold / matchedRecipe.goldCost));
+    }
+    return Math.max(0, Math.min(99, n));
+  }, [matchedRecipe, have, characterGold]);
+
+  // Começar uma nova receita apaga o item transmutado que estava no centro.
+  const clearCraftedResult = () => {
+    setCraftedResult((prev) => (prev ? null : prev));
+    setAnimPhase((p) => (p === 'idle' ? p : 'idle'));
+  };
+
   // Atalho do livro: clicar numa receita pronta já preenche os 3 vértices do triângulo.
   const loadRecipe = (r: PotionRecipe) => {
     if (!canCraftRecipe(r)) return;
+    clearCraftedResult();
     setSlots(expandRecipe(r));
     setRecipesOpen(false);
     setHover(null);
@@ -202,6 +236,7 @@ export default function AlchemyBench({
     if (available(name) <= 0) return;
     const idx = slots.findIndex((s) => s == null);
     if (idx === -1) return;
+    clearCraftedResult();
     setSlots((prev) => prev.map((s, i) => (i === idx ? name : s)));
   };
 
@@ -228,33 +263,74 @@ export default function AlchemyBench({
     setSlots((prev) => prev.map((s, i) => (i === idx ? null : s)));
   };
 
-  const handleTransmute = async () => {
-    if (!matchedRecipe || !selectedCharacterId) return;
+  const handleTransmute = async (quantity: number = 1) => {
+    if (!matchedRecipe || !selectedCharacterId || busy) return;
+    const recipe = matchedRecipe;
+    const qty = Math.max(1, Math.min(99, quantity));
+
+    // Barra de progresso enquanto o servidor cria a(s) poção(ões): sobe rápido
+    // até ~90% e completa em 100% na resposta (mesmo estilo do carregamento).
     setBusy(true);
+    setProgress(8);
+    if (progressTimer.current) clearInterval(progressTimer.current);
+    progressTimer.current = setInterval(() => {
+      setProgress((p) => (p >= 90 ? p : p + Math.max(1, Math.round((92 - p) / 8))));
+    }, 90);
+
+    let ok = false;
     try {
       const res = await fetch(`/api/character/${selectedCharacterId}/craft-potion`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recipeId: matchedRecipe.id }),
+        body: JSON.stringify({ recipeId: recipe.id, quantity: qty }),
       });
       const json = await res.json().catch(() => ({}));
+      if (progressTimer.current) { clearInterval(progressTimer.current); progressTimer.current = null; }
+      setProgress(100);
       if (!res.ok) {
         toast.error(json.error || 'Erro ao transmutar');
         return;
       }
+      ok = true;
+      const madeQty: number = json.crafted ?? qty;
       toast.success(json.message || '⚗️ Poção criada!');
-      setSlots([null, null, null]);
+
+      // Sequência da animação: luz percorre os vértices (tracing) → flash e o
+      // item surge no centro (reveal) e FICA (craftedResult). Só limpa o
+      // triângulo depois do tracing, para a luz percorrer os ingredientes.
+      animTimers.current.forEach(clearTimeout);
+      animTimers.current = [];
+      setAnimPhase('tracing');
+      animTimers.current.push(
+        setTimeout(() => {
+          setCraftedResult({ name: recipe.outputName, rarity: recipe.rarity, quantity: madeQty });
+          setAnimPhase('reveal');
+          setSlots([null, null, null]);
+        }, 900),
+      );
+      animTimers.current.push(setTimeout(() => setAnimPhase('idle'), 900 + 650));
+
+      // Recarrega o inventário do card (silencioso — sem esconder o triângulo)
+      // e avisa o pai para atualizar o gold na navbar.
       await fetchInventory(selectedCharacterId);
       onCrafted?.();
     } catch {
+      if (progressTimer.current) { clearInterval(progressTimer.current); progressTimer.current = null; }
       toast.error('Erro inesperado ao transmutar');
     } finally {
       setBusy(false);
+      // Esconde a barra logo após completar (ou em caso de erro).
+      setTimeout(() => setProgress(0), ok ? 250 : 0);
     }
   };
 
   const resultRarity = matchedRecipe?.rarity ?? 'COMMON';
   const resultUi = RARITY_UI[resultRarity];
+  // O centro pode exibir: o item já transmutado (craftedResult, persiste) ou,
+  // enquanto monta, a prévia da receita casada. A cor segue quem estiver ativo.
+  const centerRarity = craftedResult?.rarity ?? matchedRecipe?.rarity ?? 'COMMON';
+  const centerUi = RARITY_UI[centerRarity];
+  const centerActive = !!(craftedResult || matchedRecipe);
 
   const renderSlot = (idx: number) => {
     const key = SLOT_KEYS[idx];
@@ -368,7 +444,7 @@ export default function AlchemyBench({
         {' '}e clique numa receita pronta para montar o triângulo de uma vez.
       </p>
 
-      {loadingInv ? (
+      {loadingInv && !hasLoadedRef.current ? (
         <div className="text-white/50 text-sm py-8 text-center">Carregando ingredientes…</div>
       ) : (
         <div className="flex flex-col lg:flex-row gap-6 items-center lg:items-start">
@@ -415,31 +491,43 @@ export default function AlchemyBench({
                 height: 84,
                 left: POS.center.x - 42,
                 top: POS.center.y - 42,
-                borderColor: matchedRecipe ? resultUi.ring : '#ffffff22',
+                borderColor: centerActive ? centerUi.ring : '#ffffff22',
                 background: 'radial-gradient(circle at 50% 35%, rgba(20,50,40,0.95), rgba(4,6,8,0.98))',
-                boxShadow: matchedRecipe ? `0 0 26px ${resultUi.glow}` : 'inset 0 0 12px rgba(0,0,0,0.7)',
+                boxShadow: centerActive ? `0 0 26px ${centerUi.glow}` : 'inset 0 0 12px rgba(0,0,0,0.7)',
               }}
-              title={matchedRecipe ? matchedRecipe.outputName : 'Combinação ainda incompleta'}
+              title={craftedResult?.name ?? matchedRecipe?.outputName ?? 'Combinação ainda incompleta'}
             >
-              {matchedRecipe ? (
-                animPhase === 'tracing' ? (
-                  // A luz ainda está percorrendo os vértices: centro "carregando".
-                  <span className="text-3xl text-white/40 animate-ping">✦</span>
-                ) : (
-                  <span
-                    className={`block w-[86%] h-[86%] overflow-hidden rounded-full drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] grid place-items-center ${animPhase === 'reveal' ? 'alchemy-pop' : 'animate-pulse'}`}
-                  >
-                    <ItemThumb name={matchedRecipe.outputName} emoji="🧪" className="text-4xl" />
-                  </span>
-                )
+              {animPhase === 'tracing' ? (
+                // A luz ainda está percorrendo os vértices: centro "carregando".
+                <span className="text-3xl text-white/40 animate-ping">✦</span>
+              ) : craftedResult ? (
+                // Item transmutado — fica exibido até montar uma nova receita.
+                <span
+                  className={`relative block w-[86%] h-[86%] overflow-hidden rounded-full drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] grid place-items-center ${animPhase === 'reveal' ? 'alchemy-pop' : ''}`}
+                >
+                  <ItemThumb name={craftedResult.name} emoji="🧪" className="text-4xl" />
+                  {craftedResult.quantity > 1 && (
+                    <span
+                      className="absolute -bottom-0.5 -right-0.5 min-w-[20px] rounded-full bg-black/85 px-1 text-center text-[11px] font-black text-white"
+                      style={{ boxShadow: `0 0 8px ${centerUi.glow}` }}
+                    >
+                      ×{craftedResult.quantity}
+                    </span>
+                  )}
+                </span>
+              ) : matchedRecipe ? (
+                // Prévia da poção enquanto o triângulo está montado (antes do craft).
+                <span className="block w-[86%] h-[86%] overflow-hidden rounded-full opacity-45 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] grid place-items-center animate-pulse">
+                  <ItemThumb name={matchedRecipe.outputName} emoji="🧪" className="text-4xl" />
+                </span>
               ) : (
                 <span className="text-3xl text-white/20">?</span>
               )}
               {/* Estouro de brilho no item recém-formado. */}
-              {matchedRecipe && animPhase === 'reveal' && (
+              {craftedResult && animPhase === 'reveal' && (
                 <span
                   className="alchemy-flash pointer-events-none absolute inset-[-30%] rounded-full"
-                  style={{ background: `radial-gradient(circle, ${resultUi.glow} 0%, transparent 65%)` }}
+                  style={{ background: `radial-gradient(circle, ${centerUi.glow} 0%, transparent 65%)` }}
                 />
               )}
             </div>
@@ -457,6 +545,9 @@ export default function AlchemyBench({
                 <p className="text-sm">
                   ✨ Combinação: <span className={`font-bold ${resultUi.text}`}>{matchedRecipe.outputName}</span>{' '}
                   <span className="text-amber-300">· taxa {matchedRecipe.goldCost} 🪙</span>
+                  {maxCraftable > 1 && (
+                    <span className="text-white/50"> · dá para fabricar até {maxCraftable}×</span>
+                  )}
                 </p>
               ) : (
                 <p className="text-sm text-red-300">
@@ -465,21 +556,39 @@ export default function AlchemyBench({
               )}
             </div>
 
-            <div className="flex gap-2 mb-4">
+            <div className="flex gap-2 mb-2">
               <button
-                onClick={handleTransmute}
+                onClick={() => handleTransmute(1)}
                 disabled={busy || !matchedRecipe || !selectedCharacterId}
                 className="flex-1 px-4 py-2.5 rounded-xl font-black text-sm text-white transition-all hover:scale-[1.02] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 bg-gradient-to-r from-emerald-600 to-teal-500"
               >
                 {busy ? 'Transmutando…' : '⚗️ Transmutar'}
               </button>
+              {matchedRecipe && maxCraftable > 1 && (
+                <button
+                  onClick={() => handleTransmute(maxCraftable)}
+                  disabled={busy || !selectedCharacterId}
+                  title={`Fabrica ${maxCraftable} de uma vez (gasta ${matchedRecipe.goldCost * maxCraftable} 🪙)`}
+                  className="px-4 py-2.5 rounded-xl font-black text-sm text-white transition-all hover:scale-[1.02] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 bg-gradient-to-r from-amber-600 to-orange-500"
+                >
+                  Fabricar ×{maxCraftable}
+                </button>
+              )}
               <button
-                onClick={() => setSlots([null, null, null])}
-                disabled={busy || filled.length === 0}
+                onClick={() => { clearCraftedResult(); setSlots([null, null, null]); }}
+                disabled={busy || (filled.length === 0 && !craftedResult)}
                 className="px-4 py-2.5 rounded-xl font-bold text-sm text-white/80 bg-white/10 hover:bg-white/15 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
                 Limpar
               </button>
+            </div>
+
+            {/* Barra de progresso — preenche durante a resposta do servidor. */}
+            <div className="mb-4 h-1.5 overflow-hidden rounded-full bg-white/10" style={{ opacity: progress > 0 ? 1 : 0, transition: 'opacity 0.2s' }}>
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-300"
+                style={{ width: `${progress}%`, transition: 'width 0.15s ease-out', boxShadow: '0 0 8px rgba(52,211,153,0.7)' }}
+              />
             </div>
 
             {/* Inventário de ingredientes — clique para colocar no triângulo */}

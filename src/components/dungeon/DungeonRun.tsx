@@ -2257,7 +2257,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
   }
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-black">
+    <div className="fixed inset-0 z-50 overflow-hidden overscroll-none touch-pan-y bg-black">
       {/* Cenário temático */}
       <div className="absolute inset-0">
         <DungeonBackdrop theme={dungeon.id} />
@@ -3021,7 +3021,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
                         onClick={() => canTarget && setActiveTarget(mm.id)}
                         disabled={!canTarget}
                         title={canTarget ? `Focar ${mm.name}` : active ? 'Alvo atual' : 'Escolha o alvo no seu turno'}
-                        className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border transition-all ${
+                        className={`flex items-center gap-1.5 px-2.5 py-1.5 min-h-[36px] rounded-lg border transition-all ${
                           active
                             ? 'bg-red-600/30 border-red-400/70'
                             : canTarget
@@ -3029,11 +3029,11 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
                               : 'bg-white/5 border-white/10 opacity-70 cursor-default'
                         }`}
                       >
-                        <span className="w-6 h-6 inline-flex items-center justify-center shrink-0">
+                        <span className="w-7 h-7 inline-flex items-center justify-center shrink-0">
                           <MonsterThumb name={mm.name} image={mm.image} emoji={mm.emoji} className="text-base" />
                         </span>
                         {/* Só nome/foco — o HP agora vive no card da arena (sem duplicar). */}
-                        <span className="text-[9px] font-bold text-white/80 leading-none">{active ? '🎯 ' : ''}{mm.name}</span>
+                        <span className="text-[11px] font-bold text-white/80 leading-none">{active ? '🎯 ' : ''}{mm.name}</span>
                       </button>
                     )
                   })}
@@ -3043,7 +3043,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
 
             {/* Log de combate (estilo RiPG): mostra a conta dos dados e o dano resultante */}
             <div className="flex-shrink-0 bg-black/60 border-t border-white/5 px-3 sm:px-6 py-1.5">
-              <div className="mx-auto max-w-2xl h-[46px] overflow-y-auto flex flex-col justify-end gap-0.5 font-mono text-[10px] leading-tight text-white/65">
+              <div className="mx-auto max-w-2xl h-[54px] overflow-y-auto overscroll-contain flex flex-col justify-end gap-0.5 font-mono text-[11px] leading-tight text-white/65">
                 {log.slice(-4).map((line, i) => (
                   <div key={`${log.length}-${i}`} className="break-words last:text-white/90">{line}</div>
                 ))}
@@ -3051,7 +3051,10 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
             </div>
 
             {/* Barra de ações do combate */}
-            <div className="relative flex-shrink-0 bg-black/70 backdrop-blur-md border-t border-white/10 px-3 sm:px-6 py-3 min-h-[88px] flex items-center justify-center">
+            <div
+              className="relative flex-shrink-0 bg-black/70 backdrop-blur-md border-t border-white/10 px-3 sm:px-6 pt-3 min-h-[88px] flex items-center justify-center"
+              style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+            >
               {/* Toggle do piloto automático (+ switch de poções) — liga/desliga a qualquer momento */}
               {!combatEnded && (
                 <div className="absolute right-2 top-2 z-10 flex items-center gap-1.5">
@@ -3059,7 +3062,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
                     <button
                       onClick={() => setAutoConsumables(v => !v)}
                       title={autoConsumables ? 'O piloto usa poções de HP/MP — clique para desligar' : 'O piloto NÃO usa poções — clique para ligar'}
-                      className={`px-2 py-1 rounded-full text-[10px] font-black border transition-colors ${
+                      className={`px-3 py-2 rounded-full text-[10px] font-black border transition-colors ${
                         autoConsumables
                           ? 'bg-emerald-600/85 border-emerald-300/60 text-white'
                           : 'bg-white/5 border-white/15 text-white/50 hover:text-white'
@@ -3071,7 +3074,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
                   <button
                     onClick={() => setAuto(a => !a)}
                     title={auto ? 'Desligar o piloto automático' : 'Ligar o piloto automático (joga os turnos por você)'}
-                    className={`px-2.5 py-1 rounded-full text-[10px] font-black border transition-colors ${
+                    className={`px-3 py-2 rounded-full text-[10px] font-black border transition-colors ${
                       auto
                         ? 'bg-blue-600/90 border-blue-300/60 text-white shadow-lg shadow-blue-900/50'
                         : 'bg-white/5 border-white/15 text-white/60 hover:text-white hover:border-white/30'
@@ -3107,7 +3110,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
                         }`}
                       >
                         {atk.icon} {name}
-                        <span className="block text-[9px] opacity-80 font-normal">
+                        <span className="block text-[10px] opacity-80 font-normal">
                           d{PVE_DIE[kind]}{atk.mp > 0 ? ` • ${atk.mp}🔵${noMp ? ' (sem MP)' : ''}` : ''}
                         </span>
                       </button>
@@ -3130,7 +3133,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
                         }`}
                       >
                         {def.name}
-                        <span className="block text-[9px] opacity-80 font-normal">
+                        <span className="block text-[10px] opacity-80 font-normal">
                           {cd > 0 ? `recarga ${cd}` : `${def.kind === 'dmg' ? `d${def.die ?? 20} • ` : ''}${mpCost}🔵`}
                         </span>
                       </button>
@@ -3143,7 +3146,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
                       {transform ? (
                         <div className="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white bg-gradient-to-r from-fuchsia-700 to-purple-600 shadow-lg shadow-purple-900/50">
                           {activeTransformCfg?.name}
-                          <span className="block text-[9px] opacity-90 font-normal">restam {transform.turns} turno(s)</span>
+                          <span className="block text-[10px] opacity-90 font-normal">restam {transform.turns} turno(s)</span>
                         </div>
                       ) : (() => {
                         const single = transformForms.length === 1 ? TRANSFORMATION_CONFIG[transformForms[0]] : null
@@ -3165,7 +3168,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
                               }`}
                             >
                               {transformedThisFight ? '🌀 Já usada' : '🌀 Transformar'}
-                              <span className="block text-[9px] opacity-80 font-normal">
+                              <span className="block text-[10px] opacity-80 font-normal">
                                 {transformedThisFight ? '1× por luta' : single ? `${single.cost.mp}🔮 • ${single.duration} turnos` : `${transformForms.length} formas`}
                               </span>
                             </button>
@@ -3185,7 +3188,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
                                       }`}
                                     >
                                       <span className="font-bold text-white text-xs">{cfg.name}</span>
-                                      <span className="block text-[9px] text-white/60">{cfg.cost.mp}🔮 • {cfg.duration} turnos</span>
+                                      <span className="block text-[10px] text-white/60">{cfg.cost.mp}🔮 • {cfg.duration} turnos</span>
                                     </button>
                                   )
                                 })}
@@ -3203,7 +3206,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
                     className="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all shadow-lg bg-gradient-to-r from-emerald-700 to-green-600 hover:scale-105"
                   >
                     🧪 Item
-                    <span className="block text-[9px] opacity-80 font-normal">HP/MP • gasta o turno</span>
+                    <span className="block text-[10px] opacity-80 font-normal">HP/MP • gasta o turno</span>
                   </button>
 
                   {/* Recuar: sai em segurança mantendo XP/espólio dos abates. Não no boss. */}
@@ -3214,7 +3217,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
                       className="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all shadow-lg bg-gradient-to-r from-slate-600 to-slate-500 hover:scale-105"
                     >
                       🏃 Recuar
-                      <span className="block text-[9px] opacity-80 font-normal">mantém o XP ganho</span>
+                      <span className="block text-[10px] opacity-80 font-normal">mantém o XP ganho</span>
                     </button>
                   )}
                 </div>

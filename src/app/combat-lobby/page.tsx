@@ -403,7 +403,7 @@ export default function CombatLobbyPage() {
   }
 
   return (
-    <div className="relative min-h-screen text-white overflow-hidden">
+    <div className="relative min-h-[100dvh] text-white overflow-hidden">
       {/* Cenário animado da arena (igual às masmorras) */}
       <div className="fixed inset-0 z-0">
         <ArenaBackdrop />

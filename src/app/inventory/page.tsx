@@ -511,7 +511,7 @@ export default function InventoryPage() {
 
   if (!session) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-[100dvh] bg-background flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-text-primary mb-4">Acesso Restrito</h1>
           <p className="text-text-secondary">Por favor, faça login para ver seu inventário</p>
@@ -522,7 +522,7 @@ export default function InventoryPage() {
 
   return (
     <DndProvider backend={HTML5Backend}>
-    <div className="relative min-h-screen text-white overflow-hidden">
+    <div className="relative min-h-[100dvh] text-white overflow-hidden">
       {/* Cenário animado da câmara do tesouro */}
       <div className="fixed inset-0 z-0">
         <VaultBackdrop />

@@ -458,7 +458,7 @@ export default function ForgeBench({
           onClick={() => { setRecipesOpen(false); setHover(null); }}
         >
           <div
-            className="relative w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border-2 border-orange-500/40 bg-gradient-to-br from-zinc-950 to-orange-950/40 p-5 [&::-webkit-scrollbar]:hidden"
+            className="relative w-full max-w-2xl max-h-[85dvh] overflow-y-auto rounded-2xl border-2 border-orange-500/40 bg-gradient-to-br from-zinc-950 to-orange-950/40 p-5 [&::-webkit-scrollbar]:hidden"
             style={{ scrollbarWidth: 'none' }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -467,7 +467,7 @@ export default function ForgeBench({
               <button onClick={() => { setRecipesOpen(false); setHover(null); }} className="text-white/50 hover:text-white text-lg">✕</button>
             </div>
             <p className="text-xs text-white/50 mb-4">
-              Passe o mouse para ver os materiais (em vermelho os que faltam). Receitas <span className="text-emerald-300">prontas</span> ficam acesas —
+              Passe o mouse (ou segure o dedo) para ver os materiais (em vermelho os que faltam). Receitas <span className="text-emerald-300">prontas</span> ficam acesas —
               clique para já montar na bigorna; ou arraste os materiais você mesmo.
             </p>
 

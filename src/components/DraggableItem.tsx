@@ -92,6 +92,8 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, quantity
                 onError={() => setImgError(true)}
                 className="w-full h-full object-cover group-hover:scale-110 transition-transform"
                 referrerPolicy="no-referrer"
+                loading="lazy"
+                decoding="async"
               />
             ) : (
               <ItemIcon type={item.type} size={20} className="group-hover:scale-110 transition-transform text-white" />
@@ -157,6 +159,8 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, quantity
               onError={() => setImgError(true)}
               className="w-full h-full object-cover group-hover:scale-110 transition-transform"
               referrerPolicy="no-referrer"
+              loading="lazy"
+              decoding="async"
             />
           ) : (
             <ItemIcon type={item.type} size={32} className="group-hover:scale-110 transition-transform" />

@@ -134,7 +134,7 @@ export default function TransformationDialog({
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.9 }}
-          className="bg-gradient-to-br from-purple-900/95 to-blue-900/95 border border-purple-500/30 rounded-xl max-w-lg w-full max-h-[80vh] overflow-y-auto"
+          className="bg-gradient-to-br from-purple-900/95 to-blue-900/95 border border-purple-500/30 rounded-xl max-w-lg w-full max-h-[80dvh] overflow-y-auto"
         >
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-white/10">

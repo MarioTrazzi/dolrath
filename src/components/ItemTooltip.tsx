@@ -61,23 +61,30 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryI
   // do card e mantém tudo dentro da viewport (prefere acima, senão abaixo, com clamp).
   useLayoutEffect(() => {
     if (!showTooltip || !containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const tipH = tooltipRef.current?.getBoundingClientRect().height ?? 360;
-    const GAP = 8;
-    const M = 8;
+    const compute = () => {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const tipH = tooltipRef.current?.getBoundingClientRect().height ?? 360;
+      const GAP = 8;
+      const M = 8;
 
-    let left = rect.left + rect.width / 2 - TOOLTIP_WIDTH / 2;
-    left = Math.max(M, Math.min(left, window.innerWidth - TOOLTIP_WIDTH - M));
+      let left = rect.left + rect.width / 2 - TOOLTIP_WIDTH / 2;
+      left = Math.max(M, Math.min(left, window.innerWidth - TOOLTIP_WIDTH - M));
 
-    // Prefere acima do item; se não couber, mostra abaixo.
-    let top = rect.top - GAP - tipH;
-    if (top < M) top = rect.bottom + GAP;
-    // Garante que não ultrapasse o rodapé da viewport.
-    if (top + tipH > window.innerHeight - M) {
-      top = Math.max(M, window.innerHeight - M - tipH);
-    }
+      // Prefere acima do item; se não couber, mostra abaixo.
+      let top = rect.top - GAP - tipH;
+      if (top < M) top = rect.bottom + GAP;
+      // Garante que não ultrapasse o rodapé da viewport.
+      if (top + tipH > window.innerHeight - M) {
+        top = Math.max(M, window.innerHeight - M - tipH);
+      }
 
-    setCoords({ top, left, placement: 'bottom' });
+      setCoords({ top, left, placement: 'bottom' });
+    };
+    compute();
+    // Rotação/resize do celular muda a viewport com o card aberto.
+    window.addEventListener('resize', compute);
+    return () => window.removeEventListener('resize', compute);
   }, [showTooltip]);
 
 
@@ -243,7 +250,7 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryI
       {showTooltip && mounted && createPortal(
         <div
           ref={tooltipRef}
-          className="fixed w-72 rounded-2xl border-2 overflow-hidden shadow-2xl group"
+          className="fixed w-72 max-w-[calc(100vw-16px)] max-h-[80dvh] rounded-2xl border-2 overflow-hidden shadow-2xl group"
           style={{
             borderColor: visual.accent + '55',
             top: coords.top,
@@ -260,8 +267,8 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryI
           </div>
           <div className="absolute inset-0 bg-black/45" />
 
-          {/* Conteúdo */}
-          <div className="relative p-4 flex flex-col">
+          {/* Conteúdo (rola por dentro quando o card não cabe na tela do celular) */}
+          <div className="relative p-4 flex flex-col max-h-[80dvh] overflow-y-auto overscroll-contain">
             <div className="w-full aspect-square relative mb-3 rounded-xl overflow-hidden bg-black/40 ring-1 ring-white/10 flex items-center justify-center">
               {itemImage ? (
                 <img

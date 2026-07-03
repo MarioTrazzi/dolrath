@@ -170,7 +170,9 @@ function Pop({ children, x = 0, y = 0, delay = 0, size = 'text-4xl', duration = 
 }
 
 const Overlay = ({ children }: { children: React.ReactNode }) => (
-  <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
+  // scale-75 no mobile: os tamanhos fixos (anéis 90/130px, partículas ±52px)
+  // foram calibrados pro card grande do desktop; o card compacto tem ~96px.
+  <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none scale-75 sm:scale-100">
     {children}
   </div>
 )

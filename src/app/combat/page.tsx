@@ -234,6 +234,12 @@ function CombatPageContent() {
   }
 
   const combatLogRef = useRef<HTMLDivElement>(null)
+  // 📱 Mobile: o chat/log sai do rodapé (onde disputava espaço com as ações) e vira
+  // um bottom-sheet aberto pelo botão 💬; o badge conta mensagens de chat não lidas.
+  const [chatOpen, setChatOpen] = useState(false)
+  const [unreadChat, setUnreadChat] = useState(0)
+  const seenChatCount = useRef(0)
+  const sheetLogRef = useRef<HTMLDivElement>(null)
 
   const opponent = combatRoom?.player1?.id === currentPlayer?.id ? combatRoom?.player2 : combatRoom?.player1
   // 🔥 CORREÇÃO: Card verde deve usar dados do combatRoom igual ao vermelho
@@ -307,15 +313,24 @@ function CombatPageContent() {
     }
   }
 
-  // Auto scroll para o chat quando novas mensagens chegam
+  // Auto scroll para o chat quando novas mensagens chegam (painel desktop e sheet mobile)
   useEffect(() => {
-    if (combatLogRef.current && combatRoom?.combatLog) {
-      const scrollToBottom = () => {
-        combatLogRef.current!.scrollTop = combatLogRef.current!.scrollHeight
-      }
-      scrollToBottom()
+    if (!combatRoom?.combatLog) return
+    for (const el of [combatLogRef.current, sheetLogRef.current]) {
+      if (el) el.scrollTop = el.scrollHeight
     }
-  }, [combatRoom?.combatLog])
+  }, [combatRoom?.combatLog, chatOpen])
+
+  // Badge de não lidas: só mensagens de chat (ações/resultados já aparecem no ticker)
+  useEffect(() => {
+    const chats = combatRoom?.combatLog?.filter(l => l.type === 'chat').length || 0
+    if (chatOpen) {
+      seenChatCount.current = chats
+      setUnreadChat(0)
+    } else {
+      setUnreadChat(Math.max(0, chats - seenChatCount.current))
+    }
+  }, [combatRoom?.combatLog, chatOpen])
 
   useEffect(() => {
     const initializeCombat = async () => {
@@ -1132,10 +1147,10 @@ function CombatPageContent() {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-1 sm:p-2">
-      <div className="bg-surface/95 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl w-full h-full sm:h-[95vh] sm:max-w-6xl flex flex-col">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 overscroll-none p-0 sm:p-2">
+      <div className="bg-surface/95 backdrop-blur-xl border border-white/20 rounded-none sm:rounded-2xl shadow-2xl w-full h-full sm:h-[95dvh] sm:max-w-6xl flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-primary to-primary-dark text-white p-2 sm:p-3 rounded-t-2xl flex justify-between items-center flex-shrink-0">
+        <div className="bg-gradient-to-r from-primary to-primary-dark text-white p-2 sm:p-3 rounded-t-none sm:rounded-t-2xl flex justify-between items-center flex-shrink-0">
           <div className="flex items-center">
             <h2 className="text-sm sm:text-lg font-bold">
               {isTraining ? '🏟️ Modo Treino' : `⚔️ Combate PvP - Sala ${roomId}`}
@@ -1163,7 +1178,7 @@ function CombatPageContent() {
             {isCreator && (
               <button
                 onClick={closeRoom}
-                className="text-white/80 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/10"
+                className="text-white/80 hover:text-white transition-colors p-2.5 sm:p-1 rounded-lg hover:bg-white/10"
                 title="Fechar sala"
               >
                 🚪
@@ -1171,9 +1186,9 @@ function CombatPageContent() {
             )}
             <button
               onClick={() => router.push('/combat-lobby')}
-              className="text-white/80 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/10"
+              className="text-white/80 hover:text-white transition-colors p-2.5 sm:p-1 rounded-lg hover:bg-white/10"
             >
-              <X size={16} className="sm:w-5 sm:h-5" />
+              <X size={20} className="sm:w-5 sm:h-5" />
             </button>
           </div>
         </div>
@@ -1181,7 +1196,7 @@ function CombatPageContent() {
         <div className="flex-1 flex flex-col min-h-0">
           {/* 🎬 Arena de Batalha - estilo Adventure Quest */}
           <BattleScene
-            className="flex-1 min-h-[260px]"
+            className="flex-1 min-h-[220px] sm:min-h-[260px]"
             left={withFighterStats((isSpectator || isModerator ? combatRoom?.player1 : (currentPlayerView || currentPlayer)) || null)}
             right={withFighterStats((isSpectator || isModerator ? combatRoom?.player2 : opponent) || null)}
             currentTurnId={combatRoom?.currentTurn}
@@ -1225,7 +1240,7 @@ function CombatPageContent() {
 
           {/* Resumo compacto de atributos (CRIT/ESQ/ESP) */}
           {!isSpectator && !isModerator && currentPlayerDisplay && (
-            <div className="bg-background/40 border-y border-white/10 px-2 py-1 flex items-center justify-center gap-3 text-[10px] text-text-secondary flex-shrink-0">
+            <div className="bg-background/40 border-y border-white/10 px-2 py-1 flex items-center justify-center gap-3 text-[11px] text-text-secondary flex-shrink-0">
               <span>CRIT: <span className="font-bold text-yellow-300">{playerStats.critChance}%</span></span>
               <span>EVA: <span className="font-bold text-cyan-300">{playerStats.evade}%</span></span>
               <span>PWR: <span className="font-bold text-purple-300">{playerStats.power}</span></span>
@@ -1274,17 +1289,39 @@ function CombatPageContent() {
             </div>
           )}
 
+          {/* 📱 Ticker mobile: última linha do log + botão do chat (o painel completo
+              vira bottom-sheet — no celular ele disputava o rodapé com as ações) */}
+          <div className="sm:hidden flex-shrink-0 bg-black/60 border-t border-white/10 px-3 py-1 flex items-center gap-2">
+            <div className="flex-1 text-[11px] text-white/70 truncate">
+              {(() => {
+                const last = combatRoom?.combatLog?.[combatRoom.combatLog.length - 1]
+                return last ? `${last.player ? `${last.player}: ` : ''}${last.message}` : '⚔️ O log da luta aparece aqui'
+              })()}
+            </div>
+            <button
+              onClick={() => setChatOpen(true)}
+              className="relative flex-shrink-0 w-10 h-10 rounded-lg bg-white/5 border border-white/15 flex items-center justify-center text-base active:bg-white/15 transition-colors"
+            >
+              💬
+              {unreadChat > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-primary text-[10px] font-black grid place-items-center text-white">
+                  {unreadChat}
+                </span>
+              )}
+            </button>
+          </div>
+
           {/* Ações + Chat (abaixo da arena) */}
-          <div className="flex-shrink-0 flex flex-col sm:flex-row min-h-0 max-h-[45vh] sm:max-h-[36vh]">
-            {/* Mobile: Stack vertically, Desktop: Side by side */}
-            
-            {/* Chat/Log Unificado - Primeira no mobile para ficar visível */}
-            <div className="order-2 sm:order-2 flex-1 sm:w-80 bg-surface/30 p-2 sm:p-4 flex flex-col min-h-0">
+          <div className="flex flex-col sm:flex-row min-h-0 sm:flex-shrink-0 sm:max-h-[36vh]">
+            {/* Mobile: só as ações (chat no sheet), Desktop: lado a lado */}
+
+            {/* Chat/Log Unificado - painel fixo só no desktop */}
+            <div className="hidden sm:flex order-2 sm:order-2 flex-1 sm:w-80 bg-surface/30 p-2 sm:p-4 flex-col min-h-0">
               <h3 className="font-bold text-text-primary mb-2 sm:mb-3 text-xs sm:text-sm text-center">💬 Chat & Log</h3>
               <div className="flex-1 bg-background/50 backdrop-blur-xl border border-white/10 rounded-xl p-2 sm:p-3 flex flex-col min-h-0">
-                <div 
+                <div
                   ref={combatLogRef}
-                  className="flex-1 overflow-y-auto space-y-2 mb-3 min-h-[120px] sm:min-h-[160px]"
+                  className="flex-1 overflow-y-auto overscroll-contain space-y-2 mb-3 min-h-[120px] sm:min-h-[160px]"
                   style={{ maxHeight: '200px' }}
                 >
                   {combatRoom?.combatLog.map((log, index) => (
@@ -1321,9 +1358,13 @@ function CombatPageContent() {
               </div>
             </div>
 
-            {/* Actions - Sempre visível e responsivo */}
-            <div className="order-1 sm:order-3 w-full sm:w-64 bg-surface/30 p-2 sm:p-4 flex flex-col flex-shrink-0 space-y-4 overflow-y-auto">
-              <h3 className="font-bold text-text-primary mb-2 sm:mb-3 text-xs sm:text-sm text-center">
+            {/* Actions - Sempre visível e responsivo. No mobile ocupa o rodapé inteiro,
+                sem altura máxima compartilhada — o scroll interno é só válvula de escape. */}
+            <div
+              className="order-1 sm:order-3 w-full sm:w-64 bg-surface/30 p-2 sm:p-4 flex flex-col sm:flex-shrink-0 min-h-0 space-y-4 overflow-y-auto overscroll-contain"
+              style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+            >
+              <h3 className="hidden sm:block font-bold text-text-primary mb-2 sm:mb-3 text-xs sm:text-sm text-center">
                 {isSpectator ? '👁️ Espectando' : isModerator ? '🛡️ Moderando' : '🎯 Ações'}
               </h3>
               
@@ -1405,7 +1446,7 @@ function CombatPageContent() {
                     className={`w-full ${!currentPlayer
                       ? 'bg-gray-600 opacity-50 cursor-not-allowed'
                       : 'bg-gradient-to-r from-warning to-yellow-500 hover:from-yellow-500 hover:to-warning'
-                    } text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
+                    } text-white py-3 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                   >
                     👊 Golpe (d6, grátis)
                   </button>
@@ -1416,7 +1457,7 @@ function CombatPageContent() {
                     className={`w-full ${!currentPlayer || currentPlayer.mp < ATTACK_MP.heavy_attack
                       ? 'bg-gray-600 opacity-50 cursor-not-allowed'
                       : 'bg-gradient-to-r from-error to-red-600 hover:from-red-600 hover:to-error'
-                    } text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
+                    } text-white py-3 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                   >
                     ⚔️ {classAttackName(currentPlayer?.class)} (d8, {ATTACK_MP.heavy_attack}🔵{currentPlayer && currentPlayer.mp < ATTACK_MP.heavy_attack ? ' · sem MP' : ''})
                   </button>
@@ -1446,7 +1487,7 @@ function CombatPageContent() {
                                 className={`w-full flex items-center justify-between gap-2 ${disabled
                                   ? 'bg-gray-600 opacity-50 cursor-not-allowed'
                                   : 'bg-gradient-to-r from-fuchsia-600 to-purple-600 hover:from-purple-600 hover:to-fuchsia-600'
-                                } text-white py-1.5 px-3 rounded-lg font-bold text-[11px] transition-all duration-200`}
+                                } text-white py-2.5 sm:py-1.5 px-3 rounded-lg font-bold text-xs sm:text-[11px] transition-all duration-200`}
                               >
                                 <span className="truncate">{ab.name}</span>
                                 <span className="shrink-0 opacity-90">{costLabel}</span>
@@ -1469,7 +1510,7 @@ function CombatPageContent() {
                             key={item.itemId}
                             onClick={() => handleUseConsumable(item)}
                             title={`${item.name}${item.hpRestore ? ` • +${item.hpRestore} HP` : ''}${item.mpRestore ? ` • +${item.mpRestore} MP` : ''}${item.staminaRestore ? ` • +${item.staminaRestore} ⚡` : ''}`}
-                            className="relative w-10 h-10 rounded-lg bg-emerald-900/40 border border-emerald-500/40 hover:border-emerald-400 hover:scale-110 transition-all flex items-center justify-center overflow-hidden shadow-lg"
+                            className="relative w-12 h-12 sm:w-10 sm:h-10 rounded-lg bg-emerald-900/40 border border-emerald-500/40 hover:border-emerald-400 hover:scale-110 transition-all flex items-center justify-center overflow-hidden shadow-lg"
                           >
                             {item.image ? (
                               // eslint-disable-next-line @next/next/no-img-element
@@ -1512,7 +1553,7 @@ function CombatPageContent() {
                         currentPlayer.mp < 20
                         ? 'bg-gray-600 opacity-50 cursor-not-allowed'
                         : 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-blue-600 hover:to-purple-600'
-                      } text-white py-2 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
+                      } text-white py-3 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                     >
                       {currentPlayer.isTransformed ?
                         '🐉 Já Transformado' :
@@ -1539,7 +1580,7 @@ function CombatPageContent() {
                     className={`w-full ${!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.DODGE]
                       ? 'bg-gray-600 opacity-50 cursor-not-allowed'
                       : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-blue-600 hover:to-cyan-600'
-                    } text-white py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
+                    } text-white py-3 sm:py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                   >
                     🌪️ Esquivar · evasão{currentPlayerDisplay?.levers ? ` ${Math.round((currentPlayerDisplay.levers.evade || 0) * 100)}%` : ''} ({STAMINA_COSTS[ActionType.DODGE]}⚡)
                   </button>
@@ -1549,7 +1590,7 @@ function CombatPageContent() {
                     className={`w-full ${!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.DEFEND]
                       ? 'bg-gray-600 opacity-50 cursor-not-allowed'
                       : 'bg-gradient-to-r from-emerald-600 to-green-600 hover:from-green-600 hover:to-emerald-600'
-                    } text-white py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
+                    } text-white py-3 sm:py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                   >
                     🛡️ Bloquear · armadura reforçada ({STAMINA_COSTS[ActionType.DEFEND]}⚡)
                   </button>
@@ -1568,6 +1609,62 @@ function CombatPageContent() {
         </div>
       </div>
       
+      {/* 📱 Bottom-sheet do Chat & Log (mobile) */}
+      {chatOpen && (
+        <div className="sm:hidden fixed inset-0 z-[60]" onClick={() => setChatOpen(false)}>
+          <div className="absolute inset-0 bg-black/50" />
+          <div
+            className="absolute inset-x-0 bottom-0 max-h-[60dvh] rounded-t-2xl bg-surface/95 backdrop-blur-xl border-t border-white/20 flex flex-col shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 pt-3 pb-2 flex-shrink-0">
+              <h3 className="font-bold text-text-primary text-sm">💬 Chat & Log</h3>
+              <button
+                onClick={() => setChatOpen(false)}
+                className="text-white/70 hover:text-white p-2 -m-1 rounded-lg"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div ref={sheetLogRef} className="flex-1 overflow-y-auto overscroll-contain space-y-2 px-3 pb-2 min-h-[160px]">
+              {combatRoom?.combatLog.map((log, index) => (
+                <div key={index} className={`rounded-lg p-2 ${
+                  log.type === 'chat' ? 'bg-blue-500/20 border border-blue-500/30' :
+                  log.type === 'system' ? 'bg-gray-500/20 border border-gray-500/30' :
+                  log.type === 'action' ? 'bg-yellow-500/20 border border-yellow-500/30' :
+                  log.type === 'result' ? 'bg-purple-500/20 border border-purple-500/30' :
+                  log.type === 'damage' ? 'bg-red-500/20 border border-red-500/30' :
+                  log.type === 'victory' ? 'bg-green-500/20 border border-green-500/30' :
+                  'bg-surface/40'
+                }`}>
+                  {log.player && <div className="text-xs text-text-secondary font-bold">{log.player}:</div>}
+                  <div className="text-xs text-text-primary break-words">{log.message}</div>
+                </div>
+              ))}
+            </div>
+            <div
+              className="flex flex-shrink-0 px-3 pt-2 border-t border-white/10"
+              style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+            >
+              <input
+                type="text"
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                placeholder="Digite sua mensagem..."
+                className="flex-1 min-h-[44px] bg-background/50 border border-white/20 rounded-l-lg px-3 py-2 text-sm text-text-primary placeholder-text-secondary focus:outline-none focus:ring-2 focus:ring-primary/50"
+              />
+              <button
+                onClick={sendMessage}
+                className="bg-primary hover:bg-primary-dark text-white px-4 py-2 min-h-[44px] rounded-r-lg transition-colors text-sm"
+              >
+                ➤
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Dialog de Transformação */}
       <TransformationDialog
         isOpen={showTransformationDialog}

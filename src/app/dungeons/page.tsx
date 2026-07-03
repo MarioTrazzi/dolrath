@@ -241,7 +241,7 @@ export default function DungeonsPage() {
   const canEnter = !!selectedCharacter && (selectedCharacter as any).isAlive !== false
 
   return (
-    <div className="min-h-screen p-4 sm:p-6">
+    <div className="min-h-[100dvh] p-4 sm:p-6">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-6 sm:mb-8 text-center">

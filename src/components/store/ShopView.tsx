@@ -459,7 +459,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
 
   if (!session) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-[100dvh] bg-background flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-text-primary mb-4">Acesso Restrito</h1>
           <p className="text-text-secondary">Você precisa estar logado para acessar a loja.</p>
@@ -469,7 +469,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
   }
 
   return (
-    <div className="relative min-h-screen text-white overflow-hidden">
+    <div className="relative min-h-[100dvh] text-white overflow-hidden">
       {/* Cenário animado do bazaar */}
       <div className="fixed inset-0 z-0">
         <BazaarBackdrop />
@@ -970,7 +970,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 20 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-lg max-h-[85vh] flex flex-col rounded-2xl border border-white/15 bg-[#15151f] shadow-2xl overflow-hidden"
+              className="w-full max-w-lg max-h-[85dvh] flex flex-col rounded-2xl border border-white/15 bg-[#15151f] shadow-2xl overflow-hidden"
             >
               {/* Cabeçalho */}
               <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">

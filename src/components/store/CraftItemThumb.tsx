@@ -72,7 +72,36 @@ export function CraftItemThumb({
   const wrapRef = useRef<HTMLSpanElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
 
+  // Touch: hover não existe; segurar o dedo (~400ms) abre o card. O tap curto
+  // continua livre para a ação do pai (colocar o ingrediente na bancada).
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressFired = useRef(false);
+  const startPress = () => {
+    longPressFired.current = false;
+    pressTimer.current = setTimeout(() => {
+      longPressFired.current = true;
+      setShow(true);
+    }, 400);
+  };
+  const cancelPress = () => {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+  };
+
   useEffect(() => setMounted(true), []);
+  useEffect(() => cancelPress, []);
+
+  // Tap fora fecha o card aberto por long-press (o card é pointer-events-none).
+  useEffect(() => {
+    if (!show) return;
+    const close = (e: PointerEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setShow(false);
+    };
+    document.addEventListener('pointerdown', close);
+    return () => document.removeEventListener('pointerdown', close);
+  }, [show]);
 
   useLayoutEffect(() => {
     if (!show || !wrapRef.current) return;
@@ -96,9 +125,28 @@ export function CraftItemThumb({
   return (
     <span
       ref={wrapRef}
-      className="grid place-items-center w-full h-full"
+      className="grid place-items-center w-full h-full select-none"
+      style={{ WebkitTouchCallout: 'none' }}
       onMouseEnter={() => setShow(true)}
       onMouseLeave={() => setShow(false)}
+      onTouchStart={startPress}
+      onTouchMove={cancelPress}
+      onTouchEnd={(e) => {
+        cancelPress();
+        // Long-press consumiu o gesto: não deixa virar o click do pai.
+        if (longPressFired.current) e.preventDefault();
+      }}
+      onTouchCancel={cancelPress}
+      onContextMenu={(e) => {
+        if (longPressFired.current) e.preventDefault();
+      }}
+      onClickCapture={(e) => {
+        if (longPressFired.current) {
+          e.preventDefault();
+          e.stopPropagation();
+          longPressFired.current = false;
+        }
+      }}
     >
       {failed ? (
         <span className={className}>{emoji}</span>

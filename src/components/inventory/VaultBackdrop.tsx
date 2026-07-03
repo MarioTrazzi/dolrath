@@ -19,7 +19,7 @@ function Particle({
 }) {
   return (
     <motion.div
-      className="absolute rounded-full pointer-events-none"
+      className="absolute rounded-full pointer-events-none hidden sm:block"
       style={{
         left: x,
         top: y,

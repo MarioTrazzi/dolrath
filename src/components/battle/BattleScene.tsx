@@ -206,7 +206,7 @@ function StatBar({ value, max, gradient, icon }: { value: number; max: number; g
           transition={{ type: 'spring', stiffness: 120, damping: 20 }}
         />
       </div>
-      <span className="text-[9px] text-white/80 w-12 text-right flex-shrink-0 font-mono">
+      <span className="text-[10px] text-white/80 w-14 text-right flex-shrink-0 font-mono">
         {value}/{max}
       </span>
     </div>
@@ -243,12 +243,23 @@ function EquipSlot({ slot, item }: { slot: string; item: EquippedItem }) {
     setHover(true)
   }
 
+  // Touch: tap alterna o card (não há hover no celular); tap fora fecha.
+  useEffect(() => {
+    if (!hover) return
+    const close = (e: PointerEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setHover(false)
+    }
+    document.addEventListener('pointerdown', close)
+    return () => document.removeEventListener('pointerdown', close)
+  }, [hover])
+
   return (
     <div
       ref={ref}
       onMouseEnter={show}
       onMouseLeave={() => setHover(false)}
-      className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-black/40 border border-amber-500/40 flex items-center justify-center overflow-hidden hover:border-amber-400 hover:scale-110 transition-all cursor-help shadow-lg shadow-black/50"
+      onClick={() => (hover ? setHover(false) : show())}
+      className="relative w-9 h-9 rounded-lg bg-black/40 border border-amber-500/40 flex items-center justify-center overflow-hidden hover:border-amber-400 hover:scale-110 transition-all cursor-help shadow-lg shadow-black/50"
     >
       {itemImage ? (
         // eslint-disable-next-line @next/next/no-img-element
@@ -408,7 +419,7 @@ function FighterFigure({
               cs.dp != null ? { label: L.dp ?? 'HP', val: cs.dp, delta: cs.dpDelta, color: '#7ab6e8' } : null,
             ].filter(Boolean) as { label: string; val: number; delta?: number; color: string }[]
             return (
-              <div className="mt-1 flex flex-wrap items-baseline justify-center gap-x-1.5 gap-y-0.5 text-[9px] sm:text-[10px] leading-none">
+              <div className="mt-1 flex flex-wrap items-baseline justify-center gap-x-1.5 gap-y-0.5 text-[10px] leading-none">
                 {pills.map((s) => (
                   <span key={s.label} className="flex items-baseline gap-0.5">
                     <span className="font-bold" style={{ color: s.color }}>{s.label}</span>
@@ -512,7 +523,7 @@ function FighterFigure({
             )}
             {/* Faixa inferior: nome + nível do monstro (pacote) ou raça • classe (padrão) */}
             <div className="absolute bottom-0 inset-x-0 bg-black/70 text-center py-0.5 px-1">
-              <span className="text-[9px] sm:text-[10px] text-white/85 font-bold truncate block">
+              <span className="text-[10px] text-white/85 font-bold truncate block">
                 {nameInCard ? `${fighter.name} • Nv.${fighter.level}` : `${fighter.race} • ${fighter.class}`}
               </span>
             </div>

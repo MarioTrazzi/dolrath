@@ -33,7 +33,7 @@ module.exports = {
         'dolrath-light': '#F3F4F6',
       },
       fontFamily: {
-        'primary': ['Inter', 'sans-serif'],
+        'primary': ['var(--font-inter)', 'Inter', 'sans-serif'],
         'game': ['Courier New', 'monospace'],
       },
       animation: {

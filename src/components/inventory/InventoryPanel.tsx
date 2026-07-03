@@ -70,7 +70,9 @@ export default function InventoryPanel({
   expanding = false,
   expandTitle = 'Expandir +5 slots',
   goldText,
-  gridTemplateColumns = 'repeat(8, 1fr)',
+  // auto-fill com piso de 56px: ~5-6 colunas no celular (alvo de toque decente)
+  // e 8+ no desktop — antes eram 8 colunas fixas (~38px de slot no mobile).
+  gridTemplateColumns = 'repeat(auto-fill, minmax(56px, 1fr))',
   dragSource,
   onItemDropped,
 }: InventoryPanelProps) {

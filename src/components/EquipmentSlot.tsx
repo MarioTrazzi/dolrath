@@ -133,6 +133,8 @@ export function EquipmentSlot({ type, item, enhancementLevel = 0, onEquip, onUne
                   onError={() => setImgError(true)}
                   className="w-full h-full object-cover group-hover:scale-110 transition-transform"
                   referrerPolicy="no-referrer"
+                  loading="lazy"
+                  decoding="async"
                 />
               ) : (
                 <ItemIcon type={item.type} size={24} className="group-hover:scale-110 transition-transform text-white" />
@@ -182,6 +184,8 @@ export function EquipmentSlot({ type, item, enhancementLevel = 0, onEquip, onUne
                 onError={() => setImgError(true)}
                 className="w-full h-full object-cover group-hover:scale-110 transition-transform"
                 referrerPolicy="no-referrer"
+                loading="lazy"
+                decoding="async"
               />
             ) : (
               <ItemIcon type={item.type} size={32} className="group-hover:scale-110 transition-transform" />

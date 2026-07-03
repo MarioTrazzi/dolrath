@@ -25,6 +25,7 @@ interface DraggableItemProps {
   onEnhance?: (inventoryId: string, itemName: string, stoneCategory?: 'WEAPON' | 'ARMOR') => void;
   onTransfer?: (itemId: string, quantity?: number) => void;
   onSendToGlobal?: (itemId: string, quantity?: number) => void;
+  onSell?: (inventoryId: string, quantity?: number) => void;
   characterId?: string;
   /** Modo compacto estilo Black Desert: slot pequeno, fundo escuro */
   compact?: boolean;
@@ -35,7 +36,7 @@ interface DraggableItemProps {
   dragSource?: 'character' | 'global';
 }
 
-export function DraggableItem({ item, isEquipped, enhancementLevel = 0, quantity = 1, inventoryId, onEquip, onUnequip, onConsume, onEnhance, onTransfer, onSendToGlobal, characterId, compact, accent, dragSource }: DraggableItemProps) {
+export function DraggableItem({ item, isEquipped, enhancementLevel = 0, quantity = 1, inventoryId, onEquip, onUnequip, onConsume, onEnhance, onTransfer, onSendToGlobal, onSell, characterId, compact, accent, dragSource }: DraggableItemProps) {
   // Imagem do item: banco (item.image) → asset estático por nome (/items/<slug>.webp)
   // → ícone genérico só se a arte 404 (ex.: item sem webp). Cobre registros antigos
   // (ingredientes/materiais) criados antes de gravarmos image no banco.
@@ -68,6 +69,7 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, quantity
         onEnhance={onEnhance}
         onTransfer={onTransfer}
         onSendToGlobal={onSendToGlobal}
+        onSell={onSell}
         characterId={characterId}
       >
         <div
@@ -141,6 +143,7 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, quantity
       onEnhance={onEnhance}
       onTransfer={onTransfer}
       onSendToGlobal={onSendToGlobal}
+      onSell={onSell}
       quantity={quantity}
       characterId={characterId}
     >

@@ -31,6 +31,8 @@ interface InventoryPanelProps {
   onEnhance?: (inventoryId: string, itemName: string, stoneCategory?: 'WEAPON' | 'ARMOR') => void;
   onSendToGlobal?: (itemId: string, quantity?: number) => void;
   onTransfer?: (itemId: string, quantity?: number) => void;
+  /** Vende o equipamento ao ferreiro (burn). Recebe a linha de inventário. */
+  onSell?: (inventoryId: string, quantity?: number) => void;
   /** Rótulo do rodapé de slots (ex.: "Slots do Inventário"). */
   slotLabel?: string;
   /** Quando definido, mostra o botão "+" de expandir slots. */
@@ -65,6 +67,7 @@ export default function InventoryPanel({
   onEnhance,
   onSendToGlobal,
   onTransfer,
+  onSell,
   slotLabel = 'Slots do Inventário',
   onExpand,
   expanding = false,
@@ -173,6 +176,7 @@ export default function InventoryPanel({
           onEnhance={onEnhance}
           onSendToGlobal={onSendToGlobal}
           onTransfer={onTransfer}
+          onSell={onSell}
         />
       </div>
 

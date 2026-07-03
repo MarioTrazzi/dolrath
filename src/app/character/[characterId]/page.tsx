@@ -370,6 +370,43 @@ export default function CharacterDetailsPage() {
     }
   };
 
+  // 🔥 Vender ao ferreiro (burn): destrói o equipamento por metade do preço; o gold
+  // vai pra carteira do personagem (Character.gold). Mesmo endpoint da RepairBench.
+  const handleSell = async (inventoryId: string) => {
+    if (!effectiveCharacterId) return;
+    const row = inventory.find((i: any) => i.id === inventoryId);
+    const name = row?.item?.name ?? 'item';
+    const price = Math.max(0, Math.floor((row?.item?.goldPrice ?? 0) / 2));
+    if (!window.confirm(`Vender ${name} ao ferreiro por ${price} gold?\nO item será destruído (não dá pra desfazer).`)) return;
+
+    try {
+      const response = await fetch(`/api/character/${effectiveCharacterId}/sell-item`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inventoryId }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const [characterResponse, inventoryResponse] = await Promise.all([
+          fetch(`/api/character/${effectiveCharacterId}`),
+          fetch(`/api/store/inventory?characterId=${effectiveCharacterId}`),
+        ]);
+        if (characterResponse.ok) setCharacter(await characterResponse.json());
+        if (inventoryResponse.ok) {
+          const inventoryData = await inventoryResponse.json();
+          setInventory(Array.isArray(inventoryData) ? inventoryData : (inventoryData.items || []));
+        }
+        toast.success(data?.message ?? `💰 Vendido por ${price} gold!`);
+      } else {
+        const error = await response.json().catch(() => ({}));
+        toast.error(`❌ ${error.error || 'Falha ao vender item'}`);
+      }
+    } catch (error) {
+      console.error('Error selling item:', error);
+      toast.error('💥 Erro inesperado ao vender item');
+    }
+  };
+
   const handleExpandInventory = async () => {
     if (!character || !effectiveCharacterId) return;
 
@@ -953,6 +990,7 @@ export default function CharacterDetailsPage() {
               onUnequip={handleUnequip}
               onConsume={handleConsume}
               onEnhance={(invId, name, category) => setEnhanceTarget({ inventoryId: invId, itemName: name, category })}
+              onSell={(inventoryId) => handleSell(inventoryId)}
               onExpand={handleExpandInventory}
               expanding={expandingSlots}
               expandTitle="Expandir +5 slots (custo: 1000 GOLD)"

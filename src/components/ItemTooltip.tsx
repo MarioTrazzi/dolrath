@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { Item } from '@/types/item';
 import { EquipmentSlotType } from '@prisma/client';
-import { getItemVisual, getItemTypeLabel } from '@/lib/itemVisuals';
+import { getItemVisual, getItemTypeLabel, getItemCategory } from '@/lib/itemVisuals';
 import { resolveImageUrl } from '@/lib/imageUrl';
 import { itemImagePath, isIngredientItem, isMaterialItem } from '@/lib/itemCatalog';
 import { applyEnhancementToStats, getLevelLabel } from '@/lib/enhancementSystem';
@@ -35,13 +35,17 @@ interface ItemTooltipProps {
   /** Inventário do personagem: envia o item de volta ao inventário global.
    *  Recebe a quantidade a enviar (1 = uma unidade; stack inteiro no "Enviar tudo"). */
   onSendToGlobal?: (itemId: string, quantity?: number) => void;
+  /** Vende o item (equipamento) ao ferreiro por metade do preço — "burn". Funciona
+   *  tanto no inventário do personagem quanto no Baú Geral (a página decide o destino
+   *  do gold via inventoryId + dragSource). Recebe a linha de inventário e a quantidade. */
+  onSell?: (inventoryId: string, quantity?: number) => void;
   /** Quantidade empilhada do item nesta linha de inventário (consumíveis). */
   quantity?: number;
   characterId?: string;
   children: React.ReactNode;
 }
 
-export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryId, onEquip, onUnequip, onConsume, onEnhance, onTransfer, onSendToGlobal, quantity = 1, characterId, children }: ItemTooltipProps) {
+export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryId, onEquip, onUnequip, onConsume, onEnhance, onTransfer, onSendToGlobal, onSell, quantity = 1, characterId, children }: ItemTooltipProps) {
   const router = useRouter();
   const [showTooltip, setShowTooltip] = useState(false);
   const [imgError, setImgError] = useState(false);
@@ -151,6 +155,13 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryI
   // Aprimoramento só faz sentido para equipamentos que estão no inventário.
   const canEnhance = !!onEnhance && !!inventoryId && item.type !== 'CONSUMABLE';
 
+  // Venda ao ferreiro (burn): só equipamento (consumíveis/ingredientes/materiais não
+  // entram na forja), por metade do preço base — mesma regra do sell-item/RepairBench.
+  const isSellable = getItemCategory(item.type) !== 'consumable';
+  // Não vende peça equipada (evita apagar a linha de inventário que o slot referencia).
+  const canSell = !!onSell && !!inventoryId && isSellable && !isEquipped;
+  const sellUnitPrice = Math.max(0, Math.floor((item.goldPrice ?? 0) / 2));
+
   // Identidade visual idêntica à da loja (cor de destaque, chips, cenário).
   const visual = getItemVisual(item.type);
   // Imagem do card: banco (item.image) → asset estático por nome (/items/<slug>.webp)
@@ -181,11 +192,17 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryI
     background: `linear-gradient(90deg, ${hex}cc, ${hex}77)`,
     boxShadow: `0 4px 20px ${soft}`,
   });
+  // Botões em grade 2 colunas → compactos (menos padding/fonte) p/ caber 2 por linha.
   const storeButtonClass =
-    'w-full px-4 py-2.5 rounded-xl font-black text-sm text-white transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed';
+    'w-full px-2 py-2 rounded-lg font-bold text-xs text-white transition-all hover:scale-[1.03] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap';
 
   const handleTransferClick = () => {
     if (onTransfer) onTransfer(item.id, quantity);
+    setShowTooltip(false);
+  };
+
+  const handleSellClick = () => {
+    if (onSell && inventoryId) onSell(inventoryId, quantity);
     setShowTooltip(false);
   };
 
@@ -329,82 +346,81 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryI
               💰 {item.goldPrice} gold
             </div>
 
-            {/* Botões — mesmo estilo da loja */}
-            <div className="mt-auto flex flex-col gap-2">
-              {onTransfer ? (
-                /* Inventário global: transferir para o personagem. Pilha > 1 abre
-                   o diálogo de quantidade (enviar tudo ou um valor escolhido). */
-                <button
-                  onClick={handleTransferClick}
-                  className={storeButtonClass}
-                  style={buttonStyle('#3b82f6', 'rgba(59,130,246,0.35)')}
-                >
-                  {quantity > 1 ? `🌐 Transferir… (x${quantity})` : '🌐 Transferir'}
-                </button>
-              ) : (
-                <>
-                  <button
-                    onClick={handleAction}
-                    className={storeButtonClass}
-                    style={
-                      isEnhancementStone
-                        ? buttonStyle('#f59e0b', 'rgba(245,158,11,0.35)')
-                        : isIngredient
-                        ? buttonStyle('#10b981', 'rgba(16,185,129,0.35)')
-                        : isMaterial
-                        ? buttonStyle('#f97316', 'rgba(249,115,22,0.35)')
-                        : isConsumable
-                        ? buttonStyle('#22c55e', 'rgba(34,197,94,0.35)')
-                        : isEquipped
-                        ? buttonStyle('#ef4444', 'rgba(239,68,68,0.35)')
-                        : buttonStyle(visual.accent, visual.accentSoft)
-                    }
-                  >
-                    {isEnhancementStone
-                      ? '⚒️ Aprimorar'
-                      : isIngredient
-                      ? '⚗️ Usar na Alquimia'
-                      : isMaterial
-                      ? '⚒️ Usar na Forja'
-                      : isConsumable
-                      ? '🧪 Consumir'
-                      : isEquipped
-                      ? '⚔️ Desequipar'
-                      : '🛡️ Equipar'}
-                  </button>
+            {/* Botões em grade de 2 colunas (máx. 2 linhas): cada par divide uma linha.
+                Um botão ímpar solto ocupa a linha inteira p/ não ficar meia-largura torto. */}
+            {(() => {
+              const btns: JSX.Element[] = [];
 
-                  {canEnhance && (
-                    <button
-                      onClick={handleEnhanceClick}
-                      className={storeButtonClass}
-                      style={buttonStyle('#f59e0b', 'rgba(245,158,11,0.35)')}
-                    >
+              if (onTransfer) {
+                // Inventário global: transferir para o personagem (pilha > 1 abre o diálogo).
+                btns.push(
+                  <button key="transfer" onClick={handleTransferClick} className={storeButtonClass} style={buttonStyle('#3b82f6', 'rgba(59,130,246,0.35)')}>
+                    {quantity > 1 ? `🌐 Transferir x${quantity}` : '🌐 Transferir'}
+                  </button>
+                );
+              } else {
+                const actionStyle =
+                  isEnhancementStone ? buttonStyle('#f59e0b', 'rgba(245,158,11,0.35)')
+                  : isIngredient ? buttonStyle('#10b981', 'rgba(16,185,129,0.35)')
+                  : isMaterial ? buttonStyle('#f97316', 'rgba(249,115,22,0.35)')
+                  : isConsumable ? buttonStyle('#22c55e', 'rgba(34,197,94,0.35)')
+                  : isEquipped ? buttonStyle('#ef4444', 'rgba(239,68,68,0.35)')
+                  : buttonStyle(visual.accent, visual.accentSoft);
+                const actionLabel =
+                  isEnhancementStone ? '⚒️ Aprimorar'
+                  : isIngredient ? '⚗️ Alquimia'
+                  : isMaterial ? '⚒️ Forja'
+                  : isConsumable ? '🧪 Consumir'
+                  : isEquipped ? '⚔️ Desequipar'
+                  : '🛡️ Equipar';
+                btns.push(
+                  <button key="action" onClick={handleAction} className={storeButtonClass} style={actionStyle}>
+                    {actionLabel}
+                  </button>
+                );
+
+                if (canEnhance) {
+                  btns.push(
+                    <button key="enhance" onClick={handleEnhanceClick} className={storeButtonClass} style={buttonStyle('#f59e0b', 'rgba(245,158,11,0.35)')}>
                       ⚒️ Aprimorar
                     </button>
-                  )}
-
-                  {onSendToGlobal && !isEquipped && (
-                    <button
-                      onClick={() => { onSendToGlobal(item.id, 1); setShowTooltip(false); }}
-                      className={storeButtonClass}
-                      style={buttonStyle('#3b82f6', 'rgba(59,130,246,0.35)')}
-                    >
-                      🌐 Enviar ao Global
+                  );
+                }
+                if (onSendToGlobal && !isEquipped) {
+                  btns.push(
+                    <button key="global" onClick={() => { onSendToGlobal(item.id, 1); setShowTooltip(false); }} className={storeButtonClass} style={buttonStyle('#3b82f6', 'rgba(59,130,246,0.35)')}>
+                      🌐 Ao Global
                     </button>
-                  )}
-
-                  {onSendToGlobal && !isEquipped && quantity > 1 && (
-                    <button
-                      onClick={() => { onSendToGlobal(item.id, quantity); setShowTooltip(false); }}
-                      className={storeButtonClass}
-                      style={buttonStyle('#3b82f6', 'rgba(59,130,246,0.35)')}
-                    >
-                      🌐 Enviar tudo (x{quantity})
+                  );
+                }
+                if (onSendToGlobal && !isEquipped && quantity > 1) {
+                  btns.push(
+                    <button key="all" onClick={() => { onSendToGlobal(item.id, quantity); setShowTooltip(false); }} className={storeButtonClass} style={buttonStyle('#3b82f6', 'rgba(59,130,246,0.35)')}>
+                      🌐 Tudo x{quantity}
                     </button>
+                  );
+                }
+              }
+
+              // 🔥 Vender ao ferreiro (burn): só equipamento; destrói por metade do preço.
+              if (canSell) {
+                btns.push(
+                  <button key="sell" onClick={handleSellClick} className={storeButtonClass} style={buttonStyle('#dc2626', 'rgba(220,38,38,0.35)')}>
+                    🔥 Vender {sellUnitPrice}🪙
+                  </button>
+                );
+              }
+
+              return (
+                <div className="mt-auto grid grid-cols-2 gap-2">
+                  {btns.map((b, i) =>
+                    btns.length % 2 === 1 && i === btns.length - 1
+                      ? <div key="last-wide" className="col-span-2">{b}</div>
+                      : b
                   )}
-                </>
-              )}
-            </div>
+                </div>
+              );
+            })()}
           </div>
         </div>,
         document.body

@@ -27,6 +27,8 @@ interface CharacterItemGridProps {
   /** Inventário global: transfere o item para o personagem ativo (opcional).
    *  Recebe a quantidade disponível na pilha (1 = uma unidade). */
   onTransfer?: (itemId: string, quantity?: number) => void;
+  /** Vende o equipamento ao ferreiro (burn). Recebe a linha de inventário. */
+  onSell?: (inventoryId: string, quantity?: number) => void;
   /** Texto de busca para filtrar por nome. */
   search?: string;
   gridTemplateColumns?: string;
@@ -51,6 +53,7 @@ export function CharacterItemGrid({
   onEnhance,
   onSendToGlobal,
   onTransfer,
+  onSell,
   search,
   gridTemplateColumns = 'repeat(auto-fill, minmax(50px, 1fr))',
   gap = 5,
@@ -80,6 +83,7 @@ export function CharacterItemGrid({
               onEnhance={onEnhance}
               onSendToGlobal={onSendToGlobal}
               onTransfer={onTransfer}
+              onSell={onSell}
               characterId={characterId}
               dragSource={dragSource}
             />

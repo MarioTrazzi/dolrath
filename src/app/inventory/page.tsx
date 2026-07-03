@@ -209,6 +209,72 @@ export default function InventoryPage() {
     setLoading(false);
   };
 
+  // 🔥 Vender ao ferreiro (burn) a partir do INVENTÁRIO DO PERSONAGEM: destrói a
+  // peça por metade do preço; o gold vai pra CARTEIRA do personagem (Character.gold).
+  const handleSellFromCharacter = async (inventoryId: string) => {
+    if (!selectedCharacter) {
+      toast.error('⚠️ Selecione um personagem primeiro', { duration: 3000 });
+      return;
+    }
+    const row = characterInventory.find((i) => i.id === inventoryId);
+    const name = row?.item?.name ?? 'item';
+    const price = Math.max(0, Math.floor((row?.item?.goldPrice ?? 0) / 2));
+    if (!window.confirm(`Vender ${name} ao ferreiro por ${price} gold?\nO item será destruído (não dá pra desfazer).`)) return;
+
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/character/${selectedCharacter}/sell-item`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inventoryId }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        fetchCharacterInventory(selectedCharacter);
+        refreshActiveCharacter();
+        toast.success(data?.message ?? `💰 Vendido por ${price} gold!`, { duration: 3000 });
+      } else {
+        const error = await res.json();
+        toast.error(`❌ ${error?.error ?? 'Falha ao vender'}`, { duration: 4000 });
+      }
+    } catch (error) {
+      console.error('Error selling item:', error);
+      toast.error('💥 Erro inesperado ao vender', { duration: 4000 });
+    }
+    setLoading(false);
+  };
+
+  // 🔥 Vender ao ferreiro (burn) a partir do BAÚ GERAL: destrói a peça por metade do
+  // preço; o gold vai pro BANCO da conta (User.goldBalance), exibido no rodapé do baú.
+  const handleSellFromGlobal = async (inventoryId: string) => {
+    const row = userInventory.find((i) => i.id === inventoryId);
+    const name = row?.item?.name ?? 'item';
+    const price = Math.max(0, Math.floor((row?.item?.goldPrice ?? 0) / 2));
+    if (!window.confirm(`Vender ${name} ao ferreiro por ${price} gold?\nO gold vai pro banco. O item será destruído (não dá pra desfazer).`)) return;
+
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/inventory/sell-item`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inventoryId }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        fetchUserInventory();
+        fetchBankGold();
+        toast.success(data?.message ?? `💰 Vendido por ${price} gold!`, { duration: 3000 });
+      } else {
+        const error = await res.json();
+        toast.error(`❌ ${error?.error ?? 'Falha ao vender'}`, { duration: 4000 });
+      }
+    } catch (error) {
+      console.error('Error selling global item:', error);
+      toast.error('💥 Erro inesperado ao vender', { duration: 4000 });
+    }
+    setLoading(false);
+  };
+
   // 🔀 Drag & drop entre inventários. O item arrastado carrega a quantidade
   // disponível na pilha de origem; pilhas (>1) abrem o diálogo de quantidade,
   // itens únicos (equipamento) transferem direto.
@@ -556,6 +622,7 @@ export default function InventoryPage() {
             onConsume={(itemId) => handleConsumeItem(itemId)}
             onEnhance={(invId, name, category) => setEnhanceTarget({ inventoryId: invId, itemName: name, category })}
             onSendToGlobal={(itemId, quantity) => handleTransferToGlobal(itemId, quantity)}
+            onSell={(inventoryId) => handleSellFromCharacter(inventoryId)}
             onExpand={selectedCharacter ? handleExpandCharacterInventory : undefined}
             expanding={expandingChar}
             expandTitle={`Expandir +${EXPAND_SLOTS} slots (custo: ${EXPAND_COST_GOLD} GOLD)`}
@@ -584,6 +651,7 @@ export default function InventoryPage() {
               }
               handleTransferToCharacter(itemId, 1);
             }}
+            onSell={(inventoryId) => handleSellFromGlobal(inventoryId)}
             onExpand={handleExpandGlobalInventory}
             expanding={expandingGlobal}
             expandTitle={`Expandir +${EXPAND_SLOTS} slots (custo: ${EXPAND_COST_GOLD} GOLD)`}

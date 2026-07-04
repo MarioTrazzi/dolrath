@@ -460,5 +460,35 @@
   },
   "Arco da Tormenta": {
     "file": "/items/arco-da-tormenta.webp"
+  },
+  "Adaga de Parada": {
+    "file": "/items/adaga-de-parada.webp"
+  },
+  "Mão-Esquerda do Duelista": {
+    "file": "/items/mao-esquerda-do-duelista.webp"
+  },
+  "Talismã do Discípulo": {
+    "file": "/items/talisma-do-discipulo.webp"
+  },
+  "Rosário de Jade": {
+    "file": "/items/rosario-de-jade.webp"
+  },
+  "Aparo da Mata Espectral": {
+    "file": "/items/aparo-da-mata-espectral.webp"
+  },
+  "Presa de Aço Gêmea": {
+    "file": "/items/presa-de-aco-gemea.webp"
+  },
+  "Fio do Crepúsculo": {
+    "file": "/items/fio-do-crepusculo.webp"
+  },
+  "Talismã da Fera Interior": {
+    "file": "/items/talisma-da-fera-interior.webp"
+  },
+  "Selo do Punho Sereno": {
+    "file": "/items/selo-do-punho-sereno.webp"
+  },
+  "Mandala do Cosmo": {
+    "file": "/items/mandala-do-cosmo.webp"
   }
 }

@@ -5,6 +5,7 @@ import { isRunLive } from '@/lib/dungeonRunServer'
 import { regenAndPersist } from '@/lib/staminaServer'
 import { getGatherField, GATHER_TICK_STAMINA } from '@/lib/gathering'
 import { findOpenGatheringSession } from '@/lib/gatheringServer'
+import { freeInventorySlots } from '@/lib/inventoryMutations'
 
 export const dynamic = 'force-dynamic'
 
@@ -80,12 +81,17 @@ export async function POST(req: Request) {
       data: { userId, characterId, fieldId: field.id },
     })
 
+    // Aviso proativo (como a masmorra): bag já cheia ao entrar não bloqueia o
+    // início, mas o próximo sync já pausa a coleta sem gastar stamina.
+    const { free } = await freeInventorySlots(prisma, characterId)
+
     return NextResponse.json({
       sessionId: created.id,
       fieldId: field.id,
       startedAt: created.startedAt,
       stamina: character.stamina,
       maxStamina: character.maxStamina,
+      inventoryFull: free <= 0,
     })
   } catch (error) {
     console.error('Error starting gathering session:', error)

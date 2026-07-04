@@ -6,11 +6,12 @@
 // o painel abaixo gerencia o selecionado. O relógio é do servidor
 // (/api/gather/status sincroniza os tiques lazy) — fechar a página não para nada.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { FieldGrid, SessionPanel, ProfessionBar } from '@/components/gathering/GatheringPanel'
+import { CharacterStatChips, computePower } from '@/components/character/CharacterStatChips'
 import { GATHER_FIELDS, GATHER_TICK_STAMINA, type GatherFieldId, type PendingYield } from '@/lib/gathering'
 import { getProfessionLevelInfo, type ProfessionLevelInfo } from '@/lib/professionSystem'
 import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider'
@@ -21,12 +22,16 @@ interface GatherCharacter {
   level: number
   avatar: string | null
   isAlive?: boolean
+  hp: number; maxHp: number; mp: number; maxMp: number; stamina: number; maxStamina: number
+  gatherXp: number
+  baseStats: any
 }
 
 interface OpenSession {
   characterId: string
   fieldId: string
   status: string
+  inventoryFull: boolean
 }
 
 interface StatusPayload {
@@ -35,6 +40,7 @@ interface StatusPayload {
   stamina: number
   maxStamina: number
   secondsToNextTick?: number
+  inventoryFull?: boolean
   gather: ProfessionLevelInfo
 }
 
@@ -51,6 +57,8 @@ export default function GatheringPage() {
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [countdown, setCountdown] = useState(0)
+  const [levelUpBanner, setLevelUpBanner] = useState<string | null>(null)
+  const lastGatherLevelRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (!session) {
@@ -69,6 +77,9 @@ export default function GatheringPage() {
         setCharacters(
           (Array.isArray(data) ? data : []).map((c: any) => ({
             id: c.id, name: c.name, level: c.level, avatar: c.avatar ?? null, isAlive: c.isAlive !== false,
+            hp: c.hp ?? 0, maxHp: c.maxHp ?? 0, mp: c.mp ?? 0, maxMp: c.maxMp ?? 0,
+            stamina: c.stamina ?? 0, maxStamina: c.maxStamina ?? 0,
+            gatherXp: c.gatherXp ?? 0, baseStats: c.baseStats,
           }))
         )
       }
@@ -97,12 +108,21 @@ export default function GatheringPage() {
       const data: StatusPayload = await res.json()
       setStatus(data)
       setCountdown(data.secondsToNextTick ?? 0)
+      // Nível de Coleta subiu desde o último retrato: avisa (mesmo espírito do
+      // levelUpAlert das masmorras, aqui para o XP de profissão).
+      const lvl = data.gather?.level ?? 1
+      if (lastGatherLevelRef.current != null && lvl > lastGatherLevelRef.current) {
+        setLevelUpBanner(`⛏️ Você subiu para o Nível ${lvl} de Coleta!`)
+        setTimeout(() => setLevelUpBanner(null), 6000)
+      }
+      lastGatherLevelRef.current = lvl
     } catch { /* rede: tenta no próximo poll */ }
   }, [])
 
   useEffect(() => {
     if (!selectedId) return
     setStatus(null)
+    lastGatherLevelRef.current = null // troca de herói: não é level-up, é outro personagem
     refreshStatus(selectedId)
     // Poll leve: o tique é de 15 min; 30s mantém o contador honesto sem pesar.
     const id = setInterval(() => refreshStatus(selectedId), 30_000)
@@ -187,6 +207,7 @@ export default function GatheringPage() {
             const s = sessionByChar.get(c.id)
             const field = s ? GATHER_FIELDS[s.fieldId as GatherFieldId] : null
             const isSel = c.id === selectedId
+            const charGatherLevel = getProfessionLevelInfo(c.gatherXp).level
             return (
               <button
                 key={c.id}
@@ -197,10 +218,13 @@ export default function GatheringPage() {
               >
                 <div className="text-white text-xs font-bold whitespace-nowrap">
                   {c.name} <span className="text-white/50">Nv.{c.level}</span>
+                  <span className="text-lime-300/90 ml-1">⛏️{charGatherLevel}</span>
                 </div>
-                <div className="text-[10px] whitespace-nowrap">
+                <div className="text-[10px] whitespace-nowrap mb-1">
                   {c.isAlive === false ? (
                     <span className="text-red-400">💀 morto</span>
+                  ) : s?.inventoryFull ? (
+                    <span className="text-amber-300">🎒 coleta pausada</span>
                   ) : s ? (
                     <span className="text-emerald-300">
                       {field?.emoji} {s.status === 'exhausted' ? 'espólio pronto' : 'coletando'}
@@ -209,6 +233,13 @@ export default function GatheringPage() {
                     <span className="text-white/40">livre</span>
                   )}
                 </div>
+                <CharacterStatChips
+                  size="xs"
+                  vitals={{
+                    hp: c.hp, maxHp: c.maxHp, mp: c.mp, maxMp: c.maxMp,
+                    stamina: c.stamina, maxStamina: c.maxStamina, power: computePower(c.baseStats),
+                  }}
+                />
               </button>
             )
           })}
@@ -216,6 +247,17 @@ export default function GatheringPage() {
             <div className="text-white/50 text-sm px-2 py-3">Crie um personagem primeiro para coletar.</div>
           )}
         </div>
+
+        {levelUpBanner && (
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0, y: -8 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            className="mb-4 max-w-md mx-auto flex items-center justify-center gap-2 rounded-2xl border-2 border-lime-400/60 bg-gradient-to-r from-lime-500/20 via-emerald-400/15 to-lime-500/20 px-5 py-3 text-center"
+          >
+            <span className="text-xl">⭐</span>
+            <span className="font-black text-lime-200 text-sm">{levelUpBanner}</span>
+          </motion.div>
+        )}
 
         {notice && (
           <div className="bg-black/60 border border-white/20 text-white/90 px-4 py-3 rounded-xl mb-4 text-sm text-center">
@@ -235,6 +277,7 @@ export default function GatheringPage() {
               secondsToNextTick={countdown}
               gather={gatherInfo}
               busy={busy}
+              inventoryFull={status.inventoryFull}
               onCollect={() => act('collect', {})}
               onStop={() => act('stop', {})}
             />

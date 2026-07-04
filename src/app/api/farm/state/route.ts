@@ -3,6 +3,7 @@ import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { regenAndPersist } from '@/lib/staminaServer'
 import { getFarmState } from '@/lib/farmServer'
+import { freeInventorySlots } from '@/lib/inventoryMutations'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,11 +46,17 @@ export async function GET(req: Request) {
       }
     }
 
+    // Mesma mecânica da masmorra/coleta: bag cheia avisa que a próxima colheita
+    // vai falhar (colher não gasta stamina sozinho — é ação manual — mas o aviso
+    // evita o jogador plantar/tentar colher achando que vai perder o item).
+    const { free } = await freeInventorySlots(prisma, characterId)
+
     return NextResponse.json({
       ...farm,
       inputCounts: counts,
       stamina: character.stamina,
       maxStamina: character.maxStamina,
+      inventoryFull: free <= 0,
     })
   } catch (error) {
     console.error('Error loading farm state:', error)

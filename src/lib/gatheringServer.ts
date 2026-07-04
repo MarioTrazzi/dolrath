@@ -28,6 +28,7 @@ import {
 } from './gathering'
 import { getProfessionLevel } from './professionSystem'
 import { addDropToInventoryTx } from './dungeonRunServer'
+import { freeInventorySlots } from './inventoryMutations'
 
 export type { PendingYield }
 
@@ -38,6 +39,8 @@ export interface SyncedGathering {
   stamina: number
   /** Segundos até o próximo tique render (0 se esgotada). */
   secondsToNextTick: number
+  /** Inventário sem slot livre: coleta pausada (nenhum tique/stamina gasto agora). */
+  inventoryFull: boolean
 }
 
 function readPending(session: GatheringSession): PendingYield {
@@ -66,6 +69,26 @@ export async function syncGatheringSession(
       pending: readPending(session),
       stamina: character?.stamina ?? 0,
       secondsToNextTick: 0,
+      inventoryFull: false,
+    }
+  }
+
+  // 🎒 Bag cheia: mesma mecânica da masmorra (piloto desliga sem consumir).
+  // Aqui não há dado a desligar — só PAUSA o relógio: avança a âncora para
+  // agora SEM tique nem stamina, então o tempo bloqueado não conta quando o
+  // jogador libera espaço (evita "ticks de graça" acumulados durante a pausa).
+  const { free } = await freeInventorySlots(prisma, session.characterId)
+  if (free <= 0) {
+    const updated = await prisma.gatheringSession.update({
+      where: { id: session.id },
+      data: { lastTickAt: now },
+    })
+    return {
+      session: updated,
+      pending: readPending(session),
+      stamina: character.stamina,
+      secondsToNextTick: 0,
+      inventoryFull: true,
     }
   }
 
@@ -78,7 +101,7 @@ export async function syncGatheringSession(
         where: { id: session.id },
         data: { status: 'exhausted' },
       })
-      return { session: updated, pending: readPending(updated), stamina: character.stamina, secondsToNextTick: 0 }
+      return { session: updated, pending: readPending(updated), stamina: character.stamina, secondsToNextTick: 0, inventoryFull: false }
     }
     const elapsed = (now.getTime() - session.lastTickAt.getTime()) / 1000
     return {
@@ -86,6 +109,7 @@ export async function syncGatheringSession(
       pending: readPending(session),
       stamina: character.stamina,
       secondsToNextTick: Math.max(0, Math.ceil(GATHER_TICK_SECONDS - elapsed)),
+      inventoryFull: false,
     }
   }
 
@@ -121,6 +145,7 @@ export async function syncGatheringSession(
     secondsToNextTick: tick.exhausted || stamina < GATHER_TICK_STAMINA
       ? 0
       : Math.max(0, Math.ceil(GATHER_TICK_SECONDS - (now.getTime() - tick.anchor.getTime()) / 1000)),
+    inventoryFull: false,
   }
 }
 

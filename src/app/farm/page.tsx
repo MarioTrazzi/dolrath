@@ -6,11 +6,13 @@
 // (alquimia), Água Pura (poço) e Couro (cercado). Estado 100% derivado no
 // servidor (/api/farm/state) — crescer não exige a página aberta.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { FarmBoard, type FarmVM } from '@/components/farm/FarmBoard'
+import { CharacterStatChips, computePower } from '@/components/character/CharacterStatChips'
+import { getProfessionLevelInfo } from '@/lib/professionSystem'
 import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider'
 
 interface FarmCharacter {
@@ -18,6 +20,9 @@ interface FarmCharacter {
   name: string
   level: number
   isAlive?: boolean
+  hp: number; maxHp: number; mp: number; maxMp: number; stamina: number; maxStamina: number
+  farmXp: number
+  baseStats: any
 }
 
 export default function FarmPage() {
@@ -31,6 +36,8 @@ export default function FarmPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  const [levelUpBanner, setLevelUpBanner] = useState<string | null>(null)
+  const lastFarmLevelRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (!session) router.push('/auth/login')
@@ -45,6 +52,9 @@ export default function FarmPage() {
           setCharacters(
             (Array.isArray(data) ? data : []).map((c: any) => ({
               id: c.id, name: c.name, level: c.level, isAlive: c.isAlive !== false,
+              hp: c.hp ?? 0, maxHp: c.maxHp ?? 0, mp: c.mp ?? 0, maxMp: c.maxMp ?? 0,
+              stamina: c.stamina ?? 0, maxStamina: c.maxStamina ?? 0,
+              farmXp: c.farmXp ?? 0, baseStats: c.baseStats,
             }))
           )
         }
@@ -63,13 +73,23 @@ export default function FarmPage() {
     try {
       const res = await fetch(`/api/farm/state?characterId=${characterId}`)
       if (!res.ok) return
-      setVm(await res.json())
+      const data: FarmVM = await res.json()
+      setVm(data)
+      // Nível de Fazenda subiu desde o último retrato: avisa (mesmo espírito
+      // do levelUpAlert das masmorras, aqui para o XP de profissão).
+      const lvl = data.farm?.level ?? 1
+      if (lastFarmLevelRef.current != null && lvl > lastFarmLevelRef.current) {
+        setLevelUpBanner(`🌾 Você subiu para o Nível ${lvl} de Fazenda!`)
+        setTimeout(() => setLevelUpBanner(null), 6000)
+      }
+      lastFarmLevelRef.current = lvl
     } catch { /* rede: tenta no próximo poll */ }
   }, [])
 
   useEffect(() => {
     if (!selectedId) return
     setVm(null)
+    lastFarmLevelRef.current = null // troca de herói: não é level-up, é outro personagem
     refresh(selectedId)
     // Poll de 30s: suficiente para os contadores de horas de crescimento.
     const id = setInterval(() => refresh(selectedId), 30_000)
@@ -155,23 +175,45 @@ export default function FarmPage() {
 
         {/* Seleção de herói (cada personagem tem a própria fazenda) */}
         <div className="flex gap-2 overflow-x-auto pb-2 mb-6">
-          {characters.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => setSelectedId(c.id)}
-              className={`shrink-0 px-3 py-2 rounded-xl border text-left transition-all ${
-                c.id === selectedId ? 'border-amber-400/70 bg-amber-500/10' : 'border-white/15 bg-black/40 hover:bg-white/5'
-              }`}
-            >
-              <div className="text-white text-xs font-bold whitespace-nowrap">
-                {c.name} <span className="text-white/50">Nv.{c.level}</span>
-              </div>
-            </button>
-          ))}
+          {characters.map((c) => {
+            const charFarmLevel = getProfessionLevelInfo(c.farmXp).level
+            return (
+              <button
+                key={c.id}
+                onClick={() => setSelectedId(c.id)}
+                className={`shrink-0 px-3 py-2 rounded-xl border text-left transition-all ${
+                  c.id === selectedId ? 'border-amber-400/70 bg-amber-500/10' : 'border-white/15 bg-black/40 hover:bg-white/5'
+                }`}
+              >
+                <div className="text-white text-xs font-bold whitespace-nowrap mb-1">
+                  {c.name} <span className="text-white/50">Nv.{c.level}</span>
+                  <span className="text-yellow-300/90 ml-1">🌾{charFarmLevel}</span>
+                </div>
+                <CharacterStatChips
+                  size="xs"
+                  vitals={{
+                    hp: c.hp, maxHp: c.maxHp, mp: c.mp, maxMp: c.maxMp,
+                    stamina: c.stamina, maxStamina: c.maxStamina, power: computePower(c.baseStats),
+                  }}
+                />
+              </button>
+            )
+          })}
           {characters.length === 0 && (
             <div className="text-white/50 text-sm px-2 py-3">Crie um personagem primeiro para cultivar.</div>
           )}
         </div>
+
+        {levelUpBanner && (
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0, y: -8 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            className="mb-4 max-w-md mx-auto flex items-center justify-center gap-2 rounded-2xl border-2 border-yellow-400/60 bg-gradient-to-r from-yellow-500/20 via-amber-400/15 to-yellow-500/20 px-5 py-3 text-center"
+          >
+            <span className="text-xl">⭐</span>
+            <span className="font-black text-yellow-200 text-sm">{levelUpBanner}</span>
+          </motion.div>
+        )}
 
         {notice && (
           <div className="bg-black/60 border border-white/20 text-white/90 px-4 py-3 rounded-xl mb-4 text-sm text-center">

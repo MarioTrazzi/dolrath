@@ -184,15 +184,18 @@ export interface SessionPanelProps {
   busy?: boolean
   onCollect: () => void
   onStop: () => void
+  /** Inventário sem slot livre: coleta pausada (mesma mecânica da masmorra). */
+  inventoryFull?: boolean
 }
 
 export function SessionPanel({
   fieldId, status, startedAt, pending, stamina, maxStamina,
-  secondsToNextTick, gather, busy, onCollect, onStop,
+  secondsToNextTick, gather, busy, onCollect, onStop, inventoryFull,
 }: SessionPanelProps) {
   const field = GATHER_FIELDS[fieldId]
   const accent = FIELD_ACCENT[fieldId]
   const exhausted = status === 'exhausted'
+  const paused = !!inventoryFull && !exhausted
   const totalItems = pending.drops.reduce((n, d) => n + d.qty, 0)
   const sinceMs = Date.now() - new Date(startedAt).getTime()
 
@@ -204,6 +207,11 @@ export function SessionPanel({
       style={{ borderColor: `${accent}66` }}
     >
       <div className="p-5 sm:p-6">
+        {paused && (
+          <div className="mb-4 rounded-xl border border-amber-500/50 bg-amber-950/40 px-3 py-2.5 text-amber-200 text-xs font-bold text-center">
+            🎒 Inventário cheio — coleta pausada, sem gastar stamina. Abra espaço no inventário para continuar.
+          </div>
+        )}
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
             <div className="text-4xl mb-1">{field.emoji}</div>
@@ -211,7 +219,9 @@ export function SessionPanel({
             <p className="text-white/50 text-xs">
               {exhausted
                 ? '💤 Stamina esgotada — colete o espólio para encerrar.'
-                : `Coletando há ${fmtDuration(sinceMs / 1000)} · ${pending.ticks} tique${pending.ticks === 1 ? '' : 's'} rendido${pending.ticks === 1 ? '' : 's'}`}
+                : paused
+                  ? 'Aguardando espaço no inventário...'
+                  : `Coletando há ${fmtDuration(sinceMs / 1000)} · ${pending.ticks} tique${pending.ticks === 1 ? '' : 's'} rendido${pending.ticks === 1 ? '' : 's'}`}
             </p>
           </div>
           <div className="text-right text-xs text-white/60 shrink-0">
@@ -219,6 +229,8 @@ export function SessionPanel({
             <div className="mt-1">
               {exhausted ? (
                 <span className="text-amber-300 font-bold">parado</span>
+              ) : paused ? (
+                <span className="text-amber-300 font-bold">🎒 pausado</span>
               ) : (
                 <>próximo em <span className="text-white font-bold">{fmtDuration(secondsToNextTick)}</span></>
               )}
@@ -227,7 +239,7 @@ export function SessionPanel({
         </div>
 
         {/* Progresso do tique atual */}
-        {!exhausted && (
+        {!exhausted && !paused && (
           <div className="h-1.5 rounded-full bg-white/10 overflow-hidden mb-4">
             <div
               className="h-full rounded-full transition-all"

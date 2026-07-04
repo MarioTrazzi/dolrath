@@ -63,6 +63,7 @@ export async function GET(req: Request) {
       stamina: synced.stamina,
       maxStamina: character.maxStamina,
       secondsToNextTick: synced.secondsToNextTick,
+      inventoryFull: synced.inventoryFull,
       gather: getProfessionLevelInfo(gatherXp?.gatherXp ?? character.gatherXp),
       tickSeconds: GATHER_TICK_SECONDS,
       tickStamina: GATHER_TICK_STAMINA,

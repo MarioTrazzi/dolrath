@@ -17,17 +17,22 @@ export default function GatheringMockPage() {
   const [stamina, setStamina] = useState(100)
   const [countdown, setCountdown] = useState(MOCK_TICK_SECONDS)
   const [startedAt, setStartedAt] = useState<Date>(new Date())
+  const [invFull, setInvFull] = useState(false)
   const staminaRef = useRef(stamina)
   staminaRef.current = stamina
+  const invFullRef = useRef(invFull)
+  invFullRef.current = invFull
 
   const gatherXp = 60 * Math.pow(GATHER_LEVEL - 1, 1.5) + 40
   const info = getProfessionLevelInfo(gatherXp)
   const exhausted = stamina < GATHER_TICK_STAMINA
 
-  // Relógio do mock: a cada MOCK_TICK_SECONDS rende 1 tique (se há stamina).
+  // Relógio do mock: a cada MOCK_TICK_SECONDS rende 1 tique (se há stamina e
+  // o inventário não estiver "cheio" — mesma pausa do servidor real).
   useEffect(() => {
     if (!fieldId) return
     const id = setInterval(() => {
+      if (invFullRef.current) return // pausado: nem stamina nem tique avançam
       setCountdown((c) => {
         if (c > 1) return c - 1
         if (staminaRef.current >= GATHER_TICK_STAMINA) {
@@ -57,18 +62,31 @@ export default function GatheringMockPage() {
             <FieldGrid gatherLevel={GATHER_LEVEL} onEnter={(f) => { setFieldId(f.id); setStartedAt(new Date()) }} />
           </>
         ) : (
-          <SessionPanel
-            fieldId={fieldId}
-            status={exhausted ? 'exhausted' : 'active'}
-            startedAt={startedAt}
-            pending={pending}
-            stamina={stamina}
-            maxStamina={100}
-            secondsToNextTick={countdown * (900 / MOCK_TICK_SECONDS)} // escala p/ barra parecer real
-            gather={info}
-            onCollect={() => setPending({ drops: [], xp: 0, ticks: 0 })}
-            onStop={() => { setFieldId(null); setPending({ drops: [], xp: 0, ticks: 0 }); setStamina(100) }}
-          />
+          <>
+            <div className="max-w-md mx-auto mb-3 flex justify-center">
+              <button
+                onClick={() => setInvFull((v) => !v)}
+                className={`text-[11px] font-bold px-3 py-1.5 rounded-lg border transition-colors ${
+                  invFull ? 'border-amber-400/60 bg-amber-500/20 text-amber-200' : 'border-white/15 bg-white/5 text-white/50'
+                }`}
+              >
+                🎒 {invFull ? 'Inventário CHEIO (clique p/ liberar)' : 'Simular inventário cheio'}
+              </button>
+            </div>
+            <SessionPanel
+              fieldId={fieldId}
+              status={exhausted ? 'exhausted' : 'active'}
+              startedAt={startedAt}
+              pending={pending}
+              stamina={stamina}
+              maxStamina={100}
+              secondsToNextTick={countdown * (900 / MOCK_TICK_SECONDS)} // escala p/ barra parecer real
+              gather={info}
+              inventoryFull={invFull}
+              onCollect={() => setPending({ drops: [], xp: 0, ticks: 0 })}
+              onStop={() => { setFieldId(null); setPending({ drops: [], xp: 0, ticks: 0 }); setStamina(100); setInvFull(false) }}
+            />
+          </>
         )}
       </div>
     </div>

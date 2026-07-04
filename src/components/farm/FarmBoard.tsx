@@ -36,6 +36,8 @@ export interface FarmVM {
   stamina: number
   maxStamina: number
   actionStamina: number
+  /** Inventário sem slot livre: colheitas vão falhar (mesma mecânica da masmorra/coleta). */
+  inventoryFull?: boolean
 }
 
 function fmtCountdown(totalSeconds: number): string {
@@ -137,6 +139,11 @@ export function FarmBoard({
 
   return (
     <div className="space-y-5">
+      {vm.inventoryFull && (
+        <div className="max-w-md mx-auto rounded-xl border border-amber-500/50 bg-amber-950/40 px-3 py-2.5 text-amber-200 text-xs font-bold text-center">
+          🎒 Inventário cheio — colheitas e coletas vão falhar. Abra espaço no inventário para continuar.
+        </div>
+      )}
       <div className="max-w-md mx-auto flex flex-col items-center gap-2">
         <ProfessionBar label="Fazenda" emoji="🌾" info={vm.farm} />
         <div className="text-white/50 text-xs">

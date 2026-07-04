@@ -60,6 +60,17 @@ export default function FarmMockPage() {
           </div>
         )}
 
+        <div className="flex justify-center mb-3">
+          <button
+            onClick={() => setVm((prev) => ({ ...prev, inventoryFull: !prev.inventoryFull }))}
+            className={`text-[11px] font-bold px-3 py-1.5 rounded-lg border transition-colors ${
+              vm.inventoryFull ? 'border-amber-400/60 bg-amber-500/20 text-amber-200' : 'border-white/15 bg-white/5 text-white/50'
+            }`}
+          >
+            🎒 {vm.inventoryFull ? 'Inventário CHEIO (clique p/ liberar)' : 'Simular inventário cheio'}
+          </button>
+        </div>
+
         <FarmBoard
           vm={vm}
           onPlant={(slotIndex, cropId) => {

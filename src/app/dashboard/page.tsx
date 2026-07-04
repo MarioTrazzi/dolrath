@@ -12,7 +12,9 @@ import XPProgressBar from '@/components/XPProgressBar';
 import CharacterStats from '@/components/CharacterStats';
 import KeepBackdrop from '@/components/dashboard/KeepBackdrop';
 import CreationCardBackdrop from '@/components/character/CreationCardBackdrop';
+import { CharacterStatChips, computePower } from '@/components/character/CharacterStatChips';
 import { getBlendedVisual } from '@/lib/creationVisuals';
+import { getProfessionLevel } from '@/lib/professionSystem';
 // ...existing code...
 import { Character } from '@/types/game';
 import { getRaceById, getClassById } from '@/lib/gameData';
@@ -39,7 +41,7 @@ export default function DashboardPage() {
   const [ownedNftContext, setOwnedNftContext] = useState<{ chainId?: number; contractAddress?: string } | null>(null);
   const [ownedNftsError, setOwnedNftsError] = useState<string>('');
   // ⛏️ Sessões de coleta em aberto por personagem (badge "coletando" no card).
-  const [gatheringByCharId, setGatheringByCharId] = useState<Record<string, { fieldId: string; status: string }>>({});
+  const [gatheringByCharId, setGatheringByCharId] = useState<Record<string, { fieldId: string; status: string; inventoryFull: boolean }>>({});
   const [loadingCharacter, setLoadingCharacter] = useState<boolean>(true);
   const [dolLoading, setDolLoading] = useState<boolean>(false);
   const [dolBalance, setDolBalance] = useState<string | null>(null);
@@ -350,8 +352,10 @@ export default function DashboardPage() {
       fetch('/api/gather/active')
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
-          const map: Record<string, { fieldId: string; status: string }> = {};
-          for (const s of data?.sessions ?? []) map[String(s.characterId)] = { fieldId: s.fieldId, status: s.status };
+          const map: Record<string, { fieldId: string; status: string; inventoryFull: boolean }> = {};
+          for (const s of data?.sessions ?? []) {
+            map[String(s.characterId)] = { fieldId: s.fieldId, status: s.status, inventoryFull: !!s.inventoryFull };
+          }
           setGatheringByCharId(map);
         })
         .catch(() => {});
@@ -486,6 +490,14 @@ export default function DashboardPage() {
                 const isSelected = selectedTokenId === tokenId;
                 const visual = getBlendedVisual(displayRace, displayClass);
 
+                // Vitals + poder total (str+def+int+agi): a rota já traz o Character
+                // completo por NFT (hp/mp/stamina/baseStats/gatherXp/farmXp) — sem fetch extra.
+                const charRow = it?.character;
+                const gatherLevel = charRow ? getProfessionLevel(charRow.gatherXp ?? 0) : 1;
+                const farmLevel = charRow ? getProfessionLevel(charRow.farmXp ?? 0) : 1;
+                const gatherInfo = characterId ? gatheringByCharId[characterId] : undefined;
+                const invFull = !!gatherInfo?.inventoryFull;
+
                 return (
                   <motion.div
                     key={tokenId}
@@ -558,17 +570,41 @@ export default function DashboardPage() {
                               Lv {displayLevel}
                             </span>
                           )}
-                          {characterId && gatheringByCharId[characterId] && (
+                          {gatherInfo && (
                             <span
                               className="px-2 py-0.5 text-[11px] font-semibold rounded-full text-emerald-200 bg-emerald-500/15 border border-emerald-400/40"
-                              title={gatheringByCharId[characterId].status === 'exhausted'
-                                ? 'Sessão esgotada — espólio aguardando coleta'
-                                : 'Este herói está numa sessão de coleta'}
+                              title={invFull
+                                ? 'Inventário cheio — coleta pausada sem gastar stamina'
+                                : gatherInfo.status === 'exhausted'
+                                  ? 'Sessão esgotada — espólio aguardando coleta'
+                                  : 'Este herói está numa sessão de coleta'}
                             >
-                              {gatheringByCharId[characterId].status === 'exhausted' ? '💤 Espólio pronto' : '⛏️ Coletando'}
+                              {invFull ? '🎒 Coleta pausada' : gatherInfo.status === 'exhausted' ? '💤 Espólio pronto' : '⛏️ Coletando'}
+                            </span>
+                          )}
+                          {charRow?.gatherXp > 0 && (
+                            <span className="px-2 py-0.5 text-[11px] font-semibold rounded-full text-lime-200 bg-lime-500/10 border border-lime-400/30">
+                              ⛏️ Nv.{gatherLevel}
+                            </span>
+                          )}
+                          {charRow?.farmXp > 0 && (
+                            <span className="px-2 py-0.5 text-[11px] font-semibold rounded-full text-yellow-200 bg-yellow-500/10 border border-yellow-400/30">
+                              🌾 Nv.{farmLevel}
                             </span>
                           )}
                         </div>
+                        {charRow && (
+                          <div className="mt-1.5">
+                            <CharacterStatChips
+                              vitals={{
+                                hp: charRow.hp ?? 0, maxHp: charRow.maxHp ?? 0,
+                                mp: charRow.mp ?? 0, maxMp: charRow.maxMp ?? 0,
+                                stamina: charRow.stamina ?? 0, maxStamina: charRow.maxStamina ?? 0,
+                                power: computePower(charRow.baseStats),
+                              }}
+                            />
+                          </div>
+                        )}
                         <div className="text-[11px] text-white/50 truncate mt-1">Token ID: {tokenId}</div>
                       </div>
 

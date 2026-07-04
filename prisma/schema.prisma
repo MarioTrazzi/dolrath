@@ -375,3 +375,20 @@ model AiGenPayment {
 
   @@index([userId])
 }
+
+// Recarga de GOLD on-chain → saldo off-chain. O jogador transfere GOLD (ERC-20)
+// para a tesouraria e o servidor credita o mesmo valor em Character.gold (a
+// compra do item em si segue off-chain — comprar item-NFT direto na loja fica
+// fora da lore; isso é papel do market). O txHash único impede que a mesma
+// transação credite gold mais de uma vez (replay = gold grátis).
+model GoldTopup {
+  id          String   @id @default(cuid())
+  txHash      String   @unique
+  userId      String
+  characterId String?
+  amount      Int
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([characterId])
+}

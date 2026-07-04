@@ -4,6 +4,8 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Info } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { buyGoldOnChain, parseNeededGold, isInsufficientGold } from '@/lib/buyGold';
+import { confirmBuyGold } from '@/lib/buyGoldPrompt';
 import { findRecipeByIngredients, recipesByRarity, expandRecipe, recipesUsingIngredient, type PotionRecipe } from '@/lib/alchemy';
 import { getIngredientByName, getConsumableByName, isIngredientItem, type Rarity } from '@/lib/itemCatalog';
 // Miniatura com card de detalhe ao passar o mouse (ver TODO ícone grande).
@@ -279,12 +281,29 @@ export default function AlchemyBench({
 
     let ok = false;
     try {
-      const res = await fetch(`/api/character/${selectedCharacterId}/craft-potion`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recipeId: recipe.id, quantity: qty }),
-      });
-      const json = await res.json().catch(() => ({}));
+      const doCraft = () =>
+        fetch(`/api/character/${selectedCharacterId}/craft-potion`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ recipeId: recipe.id, quantity: qty }),
+        });
+
+      let res = await doCraft();
+      let json = await res.json().catch(() => ({}));
+
+      // Sem GOLD na mão → pausa a barra, oferece recarga on-chain (compra de GOLD,
+      // não da poção) e refaz a transmutação. A poção nunca é comprada on-chain.
+      if (!res.ok && isInsufficientGold(json.error)) {
+        if (progressTimer.current) { clearInterval(progressTimer.current); progressTimer.current = null; }
+        const needed = parseNeededGold(json.error);
+        if (!needed || !(await confirmBuyGold(needed))) return;
+        const credited = await buyGoldOnChain({ characterId: selectedCharacterId, amountGold: needed });
+        if (!credited) return;
+        onCrafted?.();
+        res = await doCraft();
+        json = await res.json().catch(() => ({}));
+      }
+
       if (progressTimer.current) { clearInterval(progressTimer.current); progressTimer.current = null; }
       setProgress(100);
       if (!res.ok) {

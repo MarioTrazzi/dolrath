@@ -4,6 +4,8 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Info } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { buyGoldOnChain, parseNeededGold, isInsufficientGold } from '@/lib/buyGold';
+import { confirmBuyGold } from '@/lib/buyGoldPrompt';
 import { forgeRecipesByGroup, forgeMaterialEmoji, getForgeOutputCatalogItem, findForgeRecipeByMaterials, forgeRecipesUsingMaterial, type ForgeRecipe } from '@/lib/forge';
 import { getItemVisual } from '@/lib/itemVisuals';
 import { isMaterialItem, type Rarity } from '@/lib/itemCatalog';
@@ -219,12 +221,28 @@ export default function ForgeBench({
     if (!matched || !selectedCharacterId) return;
     setBusy(true);
     try {
-      const res = await fetch(`/api/character/${selectedCharacterId}/forge-item`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recipeId: matched.id, quantity }),
-      });
-      const json = await res.json().catch(() => ({}));
+      const doForge = () =>
+        fetch(`/api/character/${selectedCharacterId}/forge-item`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ recipeId: matched.id, quantity }),
+        });
+
+      let res = await doForge();
+      let json = await res.json().catch(() => ({}));
+
+      // Sem GOLD na mão → oferece recarga on-chain (compra de GOLD, não do item)
+      // e refaz a forja. O item nunca é comprado on-chain direto.
+      if (!res.ok && isInsufficientGold(json.error)) {
+        const needed = parseNeededGold(json.error);
+        if (!needed || !(await confirmBuyGold(needed))) return;
+        const credited = await buyGoldOnChain({ characterId: selectedCharacterId, amountGold: needed });
+        if (!credited) return;
+        onCrafted?.();
+        res = await doForge();
+        json = await res.json().catch(() => ({}));
+      }
+
       if (!res.ok) {
         toast.error(json.error || 'Erro ao forjar');
         return;

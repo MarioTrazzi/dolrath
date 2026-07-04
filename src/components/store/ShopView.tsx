@@ -5,6 +5,8 @@ import { useSession } from 'next-auth/react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
+import { buyGoldOnChain } from '@/lib/buyGold';
+import { confirmBuyGold } from '@/lib/buyGoldPrompt';
 import { Search, Filter, X, ShoppingCart, Trash2 } from 'lucide-react';
 import BazaarBackdrop from '@/components/store/BazaarBackdrop';
 import ItemCardBackdrop from '@/components/store/ItemCardBackdrop';
@@ -156,9 +158,14 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
       return;
     }
     if (cartEntries.length === 0) return;
+    // Sem GOLD na mão → oferece recarga on-chain (compra de GOLD, não dos itens)
+    // do valor exato que falta e segue com a compra off-chain.
     if ((characterGold ?? 0) < cartTotal) {
-      toast.error('Saldo do personagem insuficiente — saque do banco em /inventário.');
-      return;
+      const shortfall = cartTotal - (characterGold ?? 0);
+      if (!(await confirmBuyGold(shortfall))) return;
+      const credited = await buyGoldOnChain({ characterId: selectedCharacter, amountGold: shortfall });
+      if (!credited) return;
+      setCharacterGold(credited.characterGold);
     }
     setCheckingOut(true);
     let purchased = 0;
@@ -1080,8 +1087,8 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                   <span className="text-xl font-black text-amber-400">{cartTotal} 🪙</span>
                 </div>
                 {characterGold !== null && cartTotal > characterGold && (
-                  <div className="text-xs text-red-400">
-                    Saldo insuficiente — saque do banco em /inventário.
+                  <div className="text-xs text-amber-400/90">
+                    Sem GOLD na mão? Finalize e recarregue on-chain pela carteira.
                   </div>
                 )}
                 <div className="flex gap-2 pt-1">
@@ -1097,12 +1104,15 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                     disabled={
                       checkingOut ||
                       cartEntries.length === 0 ||
-                      !selectedCharacter ||
-                      (characterGold ?? 0) < cartTotal
+                      !selectedCharacter
                     }
                     className="flex-1 px-4 py-2.5 rounded-xl text-sm font-black text-white bg-gradient-to-r from-amber-500 to-amber-600 hover:scale-[1.02] transition-transform disabled:opacity-50 disabled:hover:scale-100"
                   >
-                    {checkingOut ? 'Finalizando…' : `Finalizar compra (${cartTotal} 🪙)`}
+                    {checkingOut
+                      ? 'Finalizando…'
+                      : (characterGold ?? 0) < cartTotal
+                        ? `Comprar GOLD e finalizar (${cartTotal} 🪙)`
+                        : `Finalizar compra (${cartTotal} 🪙)`}
                   </button>
                 </div>
               </div>

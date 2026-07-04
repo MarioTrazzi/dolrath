@@ -132,10 +132,10 @@ export interface MonsterSpecialEffect {
 }
 export const MONSTER_SPECIAL_EFFECTS: Record<string, MonsterSpecialEffect> = {
   'Lobo Faminto': { name: 'Mordida Selvagem', effect: 'bleed', chance: 0.3, bleedFrac: 0.04, bleedTurns: 3 },
-  'Aranha Gigante': { name: 'Presas Envenenadas', effect: 'poison', chance: 0.3, poisonDmg: 2 },
+  'Aranha Gigante': { name: 'Presas Envenenadas', effect: 'poison', chance: 0.3, poisonDmg: 4 },
   'Javali Furioso': { name: 'Presas Vorazes', effect: 'damage', chance: 0.3, dmgMult: 1.5 },
   'Ent Corrompido': { name: 'Raízes Rasteiras', effect: 'stun', chance: 0.3, stunTurns: 1 },
-  'Anciã da Mata': { name: 'Abraço da Floresta', effect: 'poison', chance: 0.35, poisonDmg: 2, dmgMult: 1.25 },
+  'Anciã da Mata': { name: 'Abraço da Floresta', effect: 'poison', chance: 0.35, poisonDmg: 4, dmgMult: 1.25 },
 }
 export function monsterSpecialEffect(name: string): MonsterSpecialEffect | undefined {
   const direct = MONSTER_SPECIAL_EFFECTS[name]

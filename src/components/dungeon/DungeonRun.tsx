@@ -655,7 +655,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
     ignoreEvadeNext: boolean; amplifyNext: number; counterNext: boolean
     cd: Record<string, number>
     // 🐍 Golpes secundários de MONSTRO contra o jogador (ver MONSTER_SPECIAL_EFFECTS).
-    poisoned: boolean                          // permanente até usar Antídoto: -2 HP/turno
+    poisoned: boolean                          // permanente até usar Antídoto: -4 HP/turno
     bleedFrac: number; bleedTurns: number       // % do HP máx/turno, por N turnos
     stunTurns: number                           // turnos do jogador perdidos (Raízes Rasteiras)
   }
@@ -1223,12 +1223,12 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
     } else if (transformCdRef.current > 0) {
       setTransformCd(transformCdRef.current - 1)
     }
-    // ☠️ Poison (permanente, -2 fixo) + sangramento (% do HP máx, N turnos) do jogador.
+    // ☠️ Poison (permanente, -4 fixo) + sangramento (% do HP máx, N turnos) do jogador.
     // Piso de 1 HP — o veneno não mata sozinho, igual ao DoT que o jogador aplica nos monstros.
     const pfx = combatFxRef.current
     let dot = 0
     const dotLabels: string[] = []
-    if (pfx.poisoned) { dot += 2; dotLabels.push('veneno') }
+    if (pfx.poisoned) { dot += 4; dotLabels.push('veneno') }
     if (pfx.bleedTurns > 0) { dot += Math.max(1, Math.round(effMaxHp * pfx.bleedFrac)); dotLabels.push('sangramento') }
     if (dot > 0) {
       const nh = Math.max(1, hpRef.current - dot)
@@ -1237,6 +1237,10 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
         pushFloat(`-${lost} ☠️`, '#7c3aed')
         pushLog(`☠️ Você sofre ${lost} de dano contínuo (${dotLabels.join(' + ')})`)
         setHp(nh)
+        // Anima o card a cada tique do DoT (veneno/sangramento) — antes o dano
+        // acontecia sem nenhum efeito visível. Prioriza o veneno quando os dois
+        // estão ativos (só cabe uma aura por vez no slot de battleEvent).
+        pushBattleEvent({ kind: 'status', actorId: character.id, action: pfx.poisoned ? 'poison' : 'bleed' })
       }
     }
     // expira buffs/debuffs do jogador e reduz recarga das habilidades
@@ -1250,7 +1254,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
       for (const k in n.cd) if (n.cd[k] > 0) n.cd[k]--
       return n
     })
-  }, [showBanner, pushLog, pushFloat, effMaxHp])
+  }, [showBanner, pushLog, pushFloat, effMaxHp, pushBattleEvent, character.id])
 
   // Levers do MONSTRO (classe desconhecida → fallback): poder/armadura dos stats
   // escalados, K pelo nível. Espelha o derive do socket-server e o dungeon-sim.

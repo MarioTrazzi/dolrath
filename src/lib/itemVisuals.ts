@@ -92,8 +92,11 @@ const TYPE_TO_CATEGORY: Record<string, ItemVisualCategory> = {
   AXE: 'weapon',
   DAGGER: 'weapon',
   BOW: 'weapon',
+  GAUNTLET: 'weapon', // manoplas do Monge
+  PARRY_DAGGER: 'weapon', // adaga de parada (offhand do Ladino)
   // Arcano
   STAFF: 'arcane',
+  ORB: 'arcane', // orbe secundário do Mago
   // Proteção (peitorais, elmos e escudo)
   LIGHT_ARMOR: 'armor',
   MEDIUM_ARMOR: 'armor',
@@ -112,6 +115,8 @@ const TYPE_TO_CATEGORY: Record<string, ItemVisualCategory> = {
   // Joias
   RING: 'jewelry',
   NECKLACE: 'jewelry',
+  BELT: 'jewelry',
+  TALISMAN: 'jewelry', // talismã/foco espiritual (offhand do Monge)
   // Consumíveis
   CONSUMABLE: 'consumable',
 }
@@ -149,6 +154,11 @@ export const ITEM_TYPE_LABELS: Record<string, string> = {
   RING: 'Anel',
   NECKLACE: 'Colar',
   SHIELD: 'Escudo',
+  GAUNTLET: 'Manoplas',
+  ORB: 'Orbe',
+  BELT: 'Cinto',
+  PARRY_DAGGER: 'Adaga de Parada',
+  TALISMAN: 'Talismã',
   CONSUMABLE: 'Consumível',
 }
 

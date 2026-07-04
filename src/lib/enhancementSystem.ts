@@ -27,7 +27,7 @@ export type GearCategory = 'WEAPON' | 'ARMOR' | 'ACCESSORY';
 
 // ⚠️ Mantenha em sincronia com ItemTypeStr / WEAPON_TYPES de itemCatalog.ts.
 // GAUNTLET = arma do Monge (manoplas); ORB = secundária do Mago (orbe).
-const WEAPON_TYPES = ['SWORD', 'AXE', 'DAGGER', 'STAFF', 'BOW', 'SHIELD', 'GAUNTLET', 'ORB'];
+const WEAPON_TYPES = ['SWORD', 'AXE', 'DAGGER', 'STAFF', 'BOW', 'SHIELD', 'GAUNTLET', 'ORB', 'PARRY_DAGGER', 'TALISMAN'];
 const ARMOR_TYPES = [
   'LIGHT_ARMOR', 'MEDIUM_ARMOR', 'HEAVY_ARMOR',
   'LIGHT_HELMET', 'MEDIUM_HELMET', 'HEAVY_HELMET',

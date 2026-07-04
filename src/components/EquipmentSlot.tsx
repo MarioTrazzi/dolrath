@@ -52,9 +52,9 @@ function canEquipInSlot(itemType: string, slotType: EquipmentSlotType): boolean 
     case EquipmentSlotType.ARMOR:
       return ['LIGHT_ARMOR', 'MEDIUM_ARMOR', 'HEAVY_ARMOR'].includes(itemType);
     case EquipmentSlotType.SHIELD:
-      // Secundária/offhand: escudo (guerreiro), orbe (mago), adaga (ladino, dual),
-      // manopla (monge, dual punhos)
-      return ['SHIELD', 'ORB', 'DAGGER', 'GAUNTLET'].includes(itemType);
+      // Secundária/offhand: escudo (guerreiro), orbe (mago),
+      // adaga de parada (ladino) e talismã (monge)
+      return ['SHIELD', 'ORB', 'PARRY_DAGGER', 'TALISMAN'].includes(itemType);
     case EquipmentSlotType.BELT:
       return itemType === 'BELT';
     case EquipmentSlotType.HELMET:

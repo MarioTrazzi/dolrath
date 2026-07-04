@@ -3,8 +3,8 @@ import type { EquipmentSlotType } from '@prisma/client';
 /** Mapeia o tipo do item pro slot de equipamento ao clicar em "Equipar" (fora do
  *  drag-and-drop, que já valida por slot em EquipmentSlot.tsx#canEquipInSlot).
  *  GAUNTLET (punhos do Monge) e DAGGER (adaga do Ladino) são armas primárias por
- *  padrão aqui; ORB (offhand do Mago) sempre vai pra secundária (SHIELD), nunca
- *  pra WEAPON — equipá-lo não pode substituir a arma principal. */
+ *  padrão aqui; ORB (Mago), PARRY_DAGGER (Ladino) e TALISMAN (Monge) são offhands e
+ *  sempre vão pra secundária (SHIELD), nunca pra WEAPON — não substituem a primária. */
 export function getSlotTypeFromItemType(itemType: string): EquipmentSlotType {
   switch (itemType) {
     case 'LIGHT_HELMET':
@@ -24,6 +24,8 @@ export function getSlotTypeFromItemType(itemType: string): EquipmentSlotType {
       return 'WEAPON';
     case 'SHIELD':
     case 'ORB':
+    case 'PARRY_DAGGER':
+    case 'TALISMAN':
       return 'SHIELD';
     case 'LIGHT_GLOVES':
     case 'MEDIUM_GLOVES':

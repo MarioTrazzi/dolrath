@@ -46,6 +46,8 @@ export const TYPE_STYLE: Record<string, string> = {
   GAUNTLET: 'A martial fist weapon (monk): reinforced metal knuckle gauntlets / a spiked cestus with hardened plating over the knuckles — a WEAPON for unarmed strikes, not simple gloves.',
   ORB: 'A mage offhand orb: a floating polished crystal sphere cradled in an ornate metal holder, swirling arcane energy and runic glyphs glowing inside the glass.',
   BELT: 'A belt/girdle: a wide waist belt with a prominent engraved metal buckle and hanging straps or pouches, laid out horizontally.',
+  PARRY_DAGGER: 'A parrying dagger / main-gauche (rogue offhand): a short left-hand blade with an ornate swept guard or side-ring built to catch and deflect enemy blades — slimmer and more defensive than a primary dagger.',
+  TALISMAN: 'A monk offhand talisman: a string of polished prayer beads or a jade charm / warded seal-tag bound with cord and hanging tassels, humming with a calm spiritual ki aura — a martial-spiritual focus, not a weapon.',
   CONSUMABLE: 'A consumable: a glass potion vial or alchemical flask with a glowing liquid and a corked or sealed top.',
   ENHANCEMENT_STONE: 'An enhancement stone (Black Desert "black stone" vibe): a single dark, polished obsidian-black stone fragment, faceted and floating, with glowing runic cracks of arcane energy running through it. A runic sigil is etched on its face. NO vial, NO bottle, NO liquid.',
   // Espólios de alquimia: matéria-prima crua, NÃO a poção pronta.

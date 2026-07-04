@@ -39,7 +39,8 @@ export type ItemTypeStr =
   | 'LIGHT_GLOVES' | 'MEDIUM_GLOVES' | 'HEAVY_GLOVES'
   | 'LIGHT_BOOTS' | 'MEDIUM_BOOTS' | 'HEAVY_BOOTS'
   | 'RING' | 'NECKLACE' | 'SHIELD'
-  | 'GAUNTLET' | 'ORB' | 'BELT';
+  | 'GAUNTLET' | 'ORB' | 'BELT'
+  | 'PARRY_DAGGER' | 'TALISMAN';
 
 export interface CatalogItem {
   name: string;
@@ -274,6 +275,31 @@ export const ITEM_CATALOG: CatalogItem[] = [
     name: 'Orbe Rúnico', description: 'Cristais menores orbitam o núcleo, sussurrando fórmulas arcanas.',
     type: 'ORB', level: 7, rarity: 'UNCOMMON', goldPrice: 450, source: 'shop', build: 'arcane', dungeons: [],
     stats: { int: 7, mp: 16 },
+  },
+
+  // ============================================================
+  // 🏪 LOJA — ADAGA DE PARADA (secundária do Ladino) e TALISMÃ (secundária do Monge)
+  //   Ambas vão no slot de secundária (offhand), como escudo/orbe.
+  // ============================================================
+  {
+    name: 'Adaga de Parada', description: 'Lâmina curta de mão-esquerda, feita tanto para aparar e desviar golpes quanto para ferir.',
+    type: 'PARRY_DAGGER', level: 1, rarity: 'COMMON', goldPrice: 90, source: 'shop', build: 'agile', dungeons: [],
+    stats: { agi: 6, def: 2 },
+  },
+  {
+    name: 'Mão-Esquerda do Duelista', description: 'Guarda em concha que prende a lâmina inimiga; o duelo vira dança.',
+    type: 'PARRY_DAGGER', level: 6, rarity: 'UNCOMMON', goldPrice: 410, source: 'shop', build: 'agile', dungeons: [],
+    stats: { agi: 12, def: 3 },
+  },
+  {
+    name: 'Talismã do Discípulo', description: 'Contas de oração amarradas ao pulso; firmam o espírito interior antes do golpe.',
+    type: 'TALISMAN', level: 1, rarity: 'COMMON', goldPrice: 90, source: 'shop', build: 'agile', dungeons: [],
+    stats: { agi: 6, mp: 8 },
+  },
+  {
+    name: 'Rosário de Jade', description: 'Esferas de jade polido que canalizam o fôlego e o foco do lutador.',
+    type: 'TALISMAN', level: 6, rarity: 'UNCOMMON', goldPrice: 430, source: 'shop', build: 'agile', dungeons: [],
+    stats: { agi: 12, mp: 16 },
   },
 
   // ============================================================
@@ -562,6 +588,40 @@ export const ITEM_CATALOG: CatalogItem[] = [
     name: 'Coração de Mana Eterno', description: 'Um cristal que pulsa como um coração vivo de pura energia arcana.',
     type: 'ORB', level: 29, rarity: 'LEGENDARY', goldPrice: 9400, source: 'dungeon_boss', dungeons: ['ruinas'],
     stats: { int: 58, mp: 65, specialEffect: 'Reduz o custo de mana e amplifica o dano mágico' },
+  },
+
+  // --- ADAGAS DE PARADA (secundária do Ladino) — Raro→Lendário ---
+  {
+    name: 'Aparo da Mata Espectral', description: 'Punhal enevoado que a floresta afia; a parada vem antes mesmo do olhar.',
+    type: 'PARRY_DAGGER', level: 13, rarity: 'RARE', goldPrice: 1400, source: 'dungeon', dungeons: ['floresta'],
+    stats: { agi: 24, def: 4 },
+  },
+  {
+    name: 'Presa de Aço Gêmea', description: 'Forjada para a mão livre do assassino; cada bloqueio abre uma brecha mortal.',
+    type: 'PARRY_DAGGER', level: 22, rarity: 'EPIC', goldPrice: 3300, source: 'dungeon_boss', dungeons: ['caverna'],
+    stats: { agi: 42, def: 5, specialEffect: 'Chance de aparar o golpe e contra-atacar' },
+  },
+  {
+    name: 'Fio do Crepúsculo', description: 'Lâmina que corta a fronteira entre luz e sombra; apara o destino e o devolve em sangue.',
+    type: 'PARRY_DAGGER', level: 29, rarity: 'LEGENDARY', goldPrice: 9300, source: 'dungeon_boss', dungeons: ['ruinas'],
+    stats: { agi: 62, def: 6, specialEffect: 'Aparar concede um contra-ataque crítico garantido' },
+  },
+
+  // --- TALISMÃS (secundária do Monge) — Raro→Lendário ---
+  {
+    name: 'Talismã da Fera Interior', description: 'Presas e cristais atados em couro; despertam o instinto marcial adormecido.',
+    type: 'TALISMAN', level: 13, rarity: 'RARE', goldPrice: 1400, source: 'dungeon', dungeons: ['caverna'],
+    stats: { agi: 24, hp: 16 },
+  },
+  {
+    name: 'Selo do Punho Sereno', description: 'Um selo que aquieta a mente; o golpe encontra o centro sozinho.',
+    type: 'TALISMAN', level: 22, rarity: 'EPIC', goldPrice: 3300, source: 'dungeon_boss', dungeons: ['pantano'],
+    stats: { agi: 42, mp: 24, specialEffect: 'Reduz o custo de energia dos golpes especiais' },
+  },
+  {
+    name: 'Mandala do Cosmo', description: 'Um círculo sagrado que gira com o cosmo do portador; cada golpe ressoa com o universo.',
+    type: 'TALISMAN', level: 29, rarity: 'LEGENDARY', goldPrice: 9300, source: 'dungeon_boss', dungeons: ['ruinas'],
+    stats: { agi: 62, mp: 30, specialEffect: 'Amplifica o dano dos golpes especiais e restaura energia ao acertar' },
   },
 
   // --- CINTOS (universais; 1 por masmorra) ---
@@ -1044,9 +1104,9 @@ const CLASS_ALLOWED_WEIGHT: Record<ClassId, Array<'LIGHT' | 'MEDIUM' | 'HEAVY'>>
 // Tipos de ARMA (primária + secundária) de cada classe.
 const CLASS_WEAPONS: Record<ClassId, ItemTypeStr[]> = {
   warrior: ['SWORD', 'AXE', 'SHIELD'],
-  rogue:   ['DAGGER', 'BOW'],
+  rogue:   ['DAGGER', 'BOW', 'PARRY_DAGGER'],
   mage:    ['STAFF', 'ORB'],
-  monk:    ['GAUNTLET'],
+  monk:    ['GAUNTLET', 'TALISMAN'],
 };
 
 const CLASS_LABEL: Record<ClassId, string> = {
@@ -1054,7 +1114,7 @@ const CLASS_LABEL: Record<ClassId, string> = {
 };
 
 // Tipos que são ARMA (sujeitos à restrição de arma por classe).
-const WEAPON_TYPES: ItemTypeStr[] = ['SWORD', 'AXE', 'DAGGER', 'STAFF', 'BOW', 'GAUNTLET', 'ORB', 'SHIELD'];
+const WEAPON_TYPES: ItemTypeStr[] = ['SWORD', 'AXE', 'DAGGER', 'STAFF', 'BOW', 'GAUNTLET', 'ORB', 'SHIELD', 'PARRY_DAGGER', 'TALISMAN'];
 
 function isClassId(v: string): v is ClassId {
   return v === 'warrior' || v === 'rogue' || v === 'mage' || v === 'monk';

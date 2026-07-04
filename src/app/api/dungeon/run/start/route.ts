@@ -49,6 +49,24 @@ export async function POST(req: Request) {
     const inventoryUsed = await prisma.characterInventory.count({ where: { characterId } })
     const inventoryFull = inventoryUsed >= character.inventorySlots
 
+    // ⛏️ Herói ocupado coletando não entra em masmorra (o inverso também vale —
+    // gather/start bloqueia herói em run viva). Sessão 'exhausted' (só aguardando
+    // coleta do espólio) não bloqueia: o herói já parou de trabalhar.
+    const gathering = await prisma.gatheringSession.findFirst({
+      where: { characterId, status: 'active' },
+      select: { fieldId: true },
+    })
+    if (gathering) {
+      return NextResponse.json(
+        {
+          error: 'Este herói está numa sessão de coleta. Encerre a coleta antes de entrar na masmorra.',
+          code: 'HERO_GATHERING',
+          fieldId: gathering.fieldId,
+        },
+        { status: 409 }
+      )
+    }
+
     // 🔒 Anti-duplicata entre abas: se a CONTA já tem alguma run VIVA (heartbeat
     // recente em outra aba/janela), bloqueia — não importa qual personagem, só dá
     // pra farmar um herói de cada vez. Runs órfãs (aba caiu) já passaram da janela

@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 import { buyGoldOnChain, parseNeededGold, isInsufficientGold } from '@/lib/buyGold';
 import { confirmBuyGold } from '@/lib/buyGoldPrompt';
 import { findRecipeByIngredients, recipesByRarity, expandRecipe, recipesUsingIngredient, type PotionRecipe } from '@/lib/alchemy';
-import { getIngredientByName, getConsumableByName, isIngredientItem, type Rarity } from '@/lib/itemCatalog';
+import { getIngredientByName, getConsumableByName, getForgeMaterialByName, isIngredientItem, isMaterialItem, type Rarity } from '@/lib/itemCatalog';
 // Miniatura com card de detalhe ao passar o mouse (ver TODO ícone grande).
 import { CraftItemThumb as ItemThumb } from './CraftItemThumb';
 
@@ -163,7 +163,11 @@ export default function AlchemyBench({
     const map = new Map<string, number>();
     for (const inv of inventory) {
       // Inclui registros antigos sem stats.kind (classificados pelo catálogo). [[dolrath-alchemy-crafting]]
-      if (isIngredientItem(inv.item)) {
+      // Materiais de forja também entram QUANDO alguma receita de poção os usa
+      // (ex.: Fibra de Linho na Bandagem) — o triângulo aceita insumos das duas mesas.
+      const usable = isIngredientItem(inv.item) ||
+        (isMaterialItem(inv.item) && recipesUsingIngredient(inv.item.name).length > 0);
+      if (usable) {
         map.set(inv.item.name, (map.get(inv.item.name) ?? 0) + inv.quantity);
       }
     }
@@ -176,7 +180,7 @@ export default function AlchemyBench({
   // Ingredientes disponíveis, ordenados por raridade depois nome.
   const palette = useMemo(() => {
     return Array.from(ingredientCounts.keys())
-      .map((name) => ({ name, info: getIngredientByName(name), total: ingredientCounts.get(name) ?? 0 }))
+      .map((name) => ({ name, info: getIngredientByName(name) ?? getForgeMaterialByName(name), total: ingredientCounts.get(name) ?? 0 }))
       .filter((p) => p.info)
       .sort((a, b) => {
         const ra = RARITY_ORDER.indexOf(a.info!.rarity);

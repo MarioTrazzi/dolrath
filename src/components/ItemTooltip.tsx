@@ -7,7 +7,7 @@ import { Item } from '@/types/item';
 import { EquipmentSlotType } from '@prisma/client';
 import { getItemVisual, getItemTypeLabel, getItemCategory } from '@/lib/itemVisuals';
 import { resolveImageUrl } from '@/lib/imageUrl';
-import { itemImagePath, isIngredientItem, isMaterialItem } from '@/lib/itemCatalog';
+import { itemImagePath, isIngredientItem, isMaterialItem, isSeedItem } from '@/lib/itemCatalog';
 import { applyEnhancementToStats, getLevelLabel } from '@/lib/enhancementSystem';
 import { formatItemStats } from '@/lib/itemStats';
 import { whatItemCanProduceSummary } from '@/lib/craftProduces';
@@ -186,6 +186,8 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
   // catálogo por nome quando o registro antigo não tem stats.kind. [[dolrath-alchemy-crafting]]
   const isIngredient = !isEnhancementStone && isIngredientItem(item);
   const isMaterial = !isEnhancementStone && isMaterialItem(item);
+  // Semente de cultivo → "Plantar" leva à fazenda (não é consumível nem insumo de bancada).
+  const isSeed = !isEnhancementStone && isSeedItem(item);
   // O que este ingrediente/material ajuda a produzir (receitas do alquimista/ferreiro
   // que o usam como insumo). Vazio para itens que não são insumo de nenhuma receita.
   const producesSummary = whatItemCanProduceSummary(item.name);
@@ -232,7 +234,12 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
       handleEnhanceClick();
       return;
     }
-    // Ingrediente de alquimia → alquimista; material de forja → ferreiro.
+    // Ingrediente de alquimia → alquimista; material de forja → ferreiro; semente → fazenda.
+    if (isSeed) {
+      router.push('/farm');
+      setShowTooltip(false);
+      return;
+    }
     if (isIngredient) {
       handleUseInCraft('/alchemist');
       return;
@@ -388,6 +395,7 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
               } else {
                 const actionStyle =
                   isEnhancementStone ? buttonStyle('#f59e0b', 'rgba(245,158,11,0.35)')
+                  : isSeed ? buttonStyle('#84cc16', 'rgba(132,204,22,0.35)')
                   : isIngredient ? buttonStyle('#10b981', 'rgba(16,185,129,0.35)')
                   : isMaterial ? buttonStyle('#f97316', 'rgba(249,115,22,0.35)')
                   : isConsumable ? buttonStyle('#22c55e', 'rgba(34,197,94,0.35)')
@@ -395,6 +403,7 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
                   : buttonStyle(visual.accent, visual.accentSoft);
                 const actionLabel =
                   isEnhancementStone ? '⚒️ Aprimorar'
+                  : isSeed ? '🌾 Plantar'
                   : isIngredient ? '⚗️ Alquimia'
                   : isMaterial ? '⚒️ Forja'
                   : isConsumable ? '🧪 Consumir'

@@ -100,6 +100,8 @@ export function Navbar() {
   const navLinks = [
     { label: 'Personagem', href: fichaHref },
     { label: 'Masmorras', href: '/dungeons' },
+    { label: 'Coleta', href: '/gathering' },
+    { label: 'Fazenda', href: '/farm' },
     { label: 'Combate', href: '/combat-lobby' },
     { label: 'Inventário', href: '/inventory' },
     { label: 'Mercado', href: '/marketplace' },

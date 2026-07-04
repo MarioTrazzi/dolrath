@@ -2,7 +2,7 @@ import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
 import { ConsumableSubtype } from '@prisma/client'
-import { getConsumableByName, isIngredientItem } from '@/lib/itemCatalog'
+import { getConsumableByName, isIngredientItem, isMaterialItem } from '@/lib/itemCatalog'
 import { getRecipeById } from '@/lib/alchemy'
 import { addHistoryEntry } from '@/lib/characterHistory'
 import { assertInventoryRoom } from '@/lib/inventoryMutations'
@@ -70,9 +70,11 @@ export async function POST(
         },
         include: { item: true },
       })
-      // Só conta o que é ingrediente (não poções de mesmo nome). Classifica pelo
-      // catálogo para também aceitar registros antigos sem stats.kind. [[dolrath-alchemy-crafting]]
-      const ingredientRows = rows.filter((r) => isIngredientItem(r.item))
+      // Só conta o que é insumo de craft (não poções de mesmo nome). Classifica pelo
+      // catálogo para também aceitar registros antigos sem stats.kind. Materiais de
+      // forja valem quando a receita os pede (ex.: Fibra de Linho na Bandagem) — o
+      // casamento por nome com recipe.ingredients já restringe o resto. [[dolrath-alchemy-crafting]]
+      const ingredientRows = rows.filter((r) => isIngredientItem(r.item) || isMaterialItem(r.item))
 
       const byName = new Map<string, typeof ingredientRows>()
       for (const r of ingredientRows) {

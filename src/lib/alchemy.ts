@@ -97,6 +97,20 @@ export const POTION_RECIPES: PotionRecipe[] = [
     { name: 'Flor de Mana', quantity: 1 },
   ]),
 
+  // ---------- COMUNS DE CULTIVO (insumos da fazenda/coleta) ----------
+  recipe('bandagem', 'Bandagem de Linho', 'COMMON', [
+    { name: 'Fibra de Linho', quantity: 2 },
+    { name: 'Erva Medicinal', quantity: 1 },
+  ]),
+  recipe('pao', 'Pão', 'COMMON', [
+    { name: 'Trigo', quantity: 2 },
+    { name: 'Raiz Vigorosa', quantity: 1 },
+  ]),
+  recipe('racao', 'Ração', 'COMMON', [
+    { name: 'Trigo', quantity: 2 },
+    { name: 'Água Pura', quantity: 1 },
+  ]),
+
   // ---------- RARAS (precisam de ingrediente raro — só de chefe) ----------
   // Exceção deliberada: a Poção de Reviver usa só ingredientes de chão da Floresta,
   // para o farm automático (auto-revive ao cair) ser sustentável desde o early-game.
@@ -180,7 +194,8 @@ export function pickIngredient(
   rarities: Rarity[],
   rng: () => number = Math.random,
 ): AlchemyIngredient | undefined {
-  const pool = rarities.flatMap((r) => getIngredientsByRarity(r));
+  // Ingredientes de fazenda (Trigo etc.) NÃO caem em masmorra — só cultivo.
+  const pool = rarities.flatMap((r) => getIngredientsByRarity(r)).filter((i) => i.source !== 'farm');
   if (pool.length === 0) return undefined;
   return pool[Math.floor(rng() * pool.length)];
 }

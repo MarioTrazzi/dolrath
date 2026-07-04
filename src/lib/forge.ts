@@ -120,6 +120,14 @@ export const FORGE_RECIPES: ForgeRecipe[] = [
   gear('arm_couraca_aco', 'Couraça de Aço', 'armor', [
     { name: 'Couro', quantity: 2 }, { name: 'Ferro', quantity: 4 }, { name: SHARD_A, quantity: 1 },
   ]),
+  // ---------- LINHO (fibra da fazenda) — a rota têxtil das vestes arcanas ----------
+  // Mesmo lever de raridade do couro: só linho = comum; linho + ferro = incomum.
+  gear('arm_tunica_linho', 'Túnica de Linho Arcano', 'armor', [
+    { name: 'Fibra de Linho', quantity: 4 }, { name: SHARD_A, quantity: 1 },
+  ]),
+  gear('arm_vestes_conjurador', 'Vestes do Conjurador', 'armor', [
+    { name: 'Fibra de Linho', quantity: 4 }, { name: 'Ferro', quantity: 1 }, { name: SHARD_A, quantity: 1 },
+  ]),
 
   // ============================================================
   // ARMAS — material especial do tipo = comum; + ferro = incomum

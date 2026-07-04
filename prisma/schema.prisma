@@ -124,6 +124,7 @@ model User {
   inventory     UserInventory[]
   itemNfts      ItemNft[]
   dungeonRuns   DungeonRun[]
+  gatheringSessions GatheringSession[]
 }
 
 model UserInventory {
@@ -167,6 +168,9 @@ model Character {
   // Sistema de stamina
   stamina       Int             @default(100)
   maxStamina    Int             @default(100)
+  // 🌾 XP de profissão (níveis derivados em professionSystem.ts)
+  gatherXp      Int             @default(0)   // Coleta (mineração/ervas/bosque)
+  farmXp        Int             @default(0)   // Fazenda (cultivo/poço/cercado)
   // Âncora do regen passivo: marca o último gasto de stamina. Regen só começa
   // 15 min depois deste instante, então acumula +2 a cada 15 min (lazy, sem cron).
   staminaUpdatedAt DateTime     @default(now())
@@ -190,6 +194,8 @@ model Character {
   inventory     CharacterInventory[]
   history       CharacterHistory[]
   dungeonRuns   DungeonRun[]
+  gatheringSessions GatheringSession[]
+  farmPlots     FarmPlot[]
 
   // On-chain payment for creation (testnet: fixed DOL fee; mainnet: will be oracle-priced)
   creationTxHash String?         @unique
@@ -364,6 +370,49 @@ model DungeonRun {
   @@index([userId])
   @@index([characterId])
   @@index([characterId, status])
+}
+
+// ⛏️ Sessão de COLETA idle, servidor-autoritativa (espelha DungeonRun).
+// Sem dados: rendimento derivado do tempo decorrido (ticks de 15 min, lazy como
+// o regen de stamina). Cada tick debita stamina e acumula itens em pendingYield;
+// o crédito ao inventário só acontece no collect. Vários personagens do mesmo
+// usuário podem coletar em paralelo — o lock é POR PERSONAGEM (vs masmorra).
+model GatheringSession {
+  id          String    @id @default(cuid())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  characterId String
+  fieldId     String                        // 'minerios' | 'ervas' | 'bosque'
+  status      String    @default("active")  // active | exhausted | collected
+  startedAt   DateTime  @default(now())
+  lastTickAt  DateTime  @default(now())     // âncora lazy: último tick já computado
+  // Acúmulo entre ticks: { drops: [{ name, qty }], xp, ticks }
+  pendingYield Json?    @db.JsonB
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId, status])
+  @@index([characterId, status])
+}
+
+// 🌾 Lote da FAZENDA do personagem. kind='crop' usa cropId+plantedAt (estado
+// growing/ready derivado lazy do tempo); kind='well'/'pen' usam plantedAt como
+// âncora de produção contínua/ciclo. Sem cron: tudo computado na leitura.
+model FarmPlot {
+  id          String    @id @default(cuid())
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  characterId String
+  slotIndex   Int                           // posição no grid da fazenda
+  kind        String                        // 'crop' | 'well' | 'pen'
+  cropId      String?                       // id da semente plantada (kind='crop') ou ciclo do cercado
+  plantedAt   DateTime?                     // âncora do crescimento/produção
+  state       String    @default("empty")   // empty | growing | ready (derivado, cache)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([characterId, slotIndex])
+  @@index([characterId])
 }
 
 // Pagamento on-chain (DOL → tesouraria) consumido por uma regeração de imagem

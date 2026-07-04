@@ -258,6 +258,7 @@ function consumableIcon(stats: any): string {
   const e = consumableEffect(stats)
   if (e.revive) return '🪶'
   if (e.cure === 'poison') return '🧉'
+  if (e.cure === 'bleed') return '🩹'
   if (e.atk) return '💪'
   if (e.def) return '🛡️'
   if (e.dodge) return '💨'
@@ -1617,6 +1618,11 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
       showBanner('✋', 'Você não está envenenado')
       return
     }
+    // 🩹 Bandagem de Linho: idem para o sangramento.
+    if (c.cure === 'bleed' && combatFxRef.current.bleedTurns <= 0) {
+      showBanner('✋', 'Você não está sangrando')
+      return
+    }
     // Buffs mapeados nos combatFx que as habilidades de forma já usam. O +1 nos turnos
     // compensa o tickPlayerTurn imediato abaixo (usar item consome o turno).
     if (isBuff) {
@@ -1645,6 +1651,10 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
     if (c.cure === 'poison') {
       setCombatFx(prev => ({ ...prev, poisoned: false }))
       pushFloat('Curado ✨', '#22d3ee')
+    }
+    if (c.cure === 'bleed') {
+      setCombatFx(prev => ({ ...prev, bleedFrac: 0, bleedTurns: 0 }))
+      pushFloat('Estancado 🩹', '#f87171')
     }
     pushLog(`🧪 Usou ${c.name}`)
     showBanner(c.icon, `${c.name} usada!`)
@@ -2478,6 +2488,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
                       (c.mp > 0 && c.hp === 0 && mpFull) ||
                       (c.hp > 0 && c.mp > 0 && hpFull && mpFull) ||
                       (c.cure === 'poison' && !combatFx.poisoned) ||
+                      (c.cure === 'bleed' && combatFx.bleedTurns <= 0) ||
                       (isBuff && phase !== 'combat') ||
                       c.revive > 0
                     return (
@@ -2493,6 +2504,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
                             <div className="text-textsec text-[11px]">
                               {c.hp > 0 ? `+${c.hp} ❤️` : ''}{c.hp > 0 && c.mp > 0 ? ' • ' : ''}{c.mp > 0 ? `+${c.mp} 🔮` : ''}
                               {c.cure === 'poison' ? 'Cura veneno' : ''}
+                              {c.cure === 'bleed' ? 'Estanca sangramento' : ''}
                               {c.atk > 0 ? `+${c.atk} ⚔️ por ${c.buffTurns || 3} turnos` : ''}
                               {c.def > 0 ? `+${c.def} 🛡️ por ${c.buffTurns || 3} turnos` : ''}
                               {c.dodge > 0 ? `+${c.dodge}% 💨 por ${c.buffTurns || 3} turnos` : ''}

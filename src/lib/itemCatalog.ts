@@ -22,8 +22,9 @@
 export type Rarity = 'COMMON' | 'UNCOMMON' | 'RARE' | 'EPIC' | 'LEGENDARY';
 export type RaceId = 'draconiano' | 'metamorfo' | 'humano' | 'elfo';
 
-// Como o item é obtido.
-export type ItemSource = 'shop' | 'dungeon' | 'dungeon_boss' | 'adventure_boss';
+// Como o item é obtido. 'farm' = produzido na fazenda (cultivo/poço/cercado);
+// 'craft' = só existe via receita (alquimia/forja) — não cai nem é vendido.
+export type ItemSource = 'shop' | 'dungeon' | 'dungeon_boss' | 'adventure_boss' | 'farm' | 'craft';
 
 // Arquétipo de build dos itens de loja (mesma potência, distribuição diferente).
 export type BuildArchetype = 'brute' | 'agile' | 'arcane' | 'guardian';
@@ -851,6 +852,25 @@ export const CONSUMABLE_CATALOG: ConsumableItem[] = [
     stats: { reviveHpPercent: 30, effect: 'revive', battleUsable: false },
   },
 
+  // ---------- 🌾 CRAFT/FAZENDA — só via receita (não caem nem são vendidos) ----------
+  {
+    // Contra-item do SANGRAMENTO (Lobo da Floresta), como o Antídoto é do veneno.
+    name: 'Bandagem de Linho', description: 'Faixas de linho limpas que estancam sangramentos.',
+    subtype: 'ANTIDOTE', level: 2, rarity: 'COMMON', goldPrice: 60, source: 'craft',
+    stats: { cure: 'bleed', effect: 'instant', battleUsable: true },
+  },
+  {
+    name: 'Pão', description: 'Pão de trigo da fazenda; restaura 20 HP fora de combate.',
+    subtype: 'HEALTH_POTION', level: 1, rarity: 'COMMON', goldPrice: 40, source: 'craft',
+    stats: { healAmount: 20, effect: 'instant', battleUsable: false },
+  },
+  {
+    // Não é usável pelo personagem: é o insumo do Cercado da fazenda (vira Couro).
+    name: 'Ração', description: 'Mistura de trigo para os animais do cercado. Alimenta um ciclo de produção de couro.',
+    subtype: 'TEMPORARY_BUFF', level: 1, rarity: 'COMMON', goldPrice: 30, source: 'craft',
+    stats: { farmFeed: true, effect: 'none', battleUsable: false },
+  },
+
   // ---------- 🗓️ AVENTURAS — únicos (drop de chefe semanal) ----------
   {
     name: 'Sangue de Dragão', description: 'Cura todo o HP e envolve a arma em fogo por vários turnos.',
@@ -887,8 +907,8 @@ export interface AlchemyIngredient {
   rarity: Rarity;
   /** Valor de venda ao alquimista (gold). */
   goldValue: number;
-  /** Onde cai: chão de masmorra (comum/incomum) ou só chefe (raro/épico). */
-  source: 'dungeon' | 'dungeon_boss';
+  /** Onde cai: chão de masmorra (comum/incomum), só chefe (raro/épico) ou fazenda (cultivo). */
+  source: 'dungeon' | 'dungeon_boss' | 'farm';
 }
 
 export const INGREDIENT_CATALOG: AlchemyIngredient[] = [
@@ -912,6 +932,9 @@ export const INGREDIENT_CATALOG: AlchemyIngredient[] = [
   // ---------- ÉPICO (só de chefe) ----------
   { name: 'Pena de Fênix', description: 'Brasa viva que carrega a centelha da ressurreição.', emoji: '🪶', rarity: 'EPIC', goldValue: 160, source: 'dungeon_boss' },
   { name: 'Essência Cristalina', description: 'Essência destilada de núcleos arcanos; cura impossível.', emoji: '✨', rarity: 'EPIC', goldValue: 170, source: 'dungeon_boss' },
+
+  // ---------- CULTIVO (só da fazenda — NÃO cai em masmorra) ----------
+  { name: 'Trigo', description: 'Grão dourado de cultivo; vira Ração para os animais e Pão de viagem.', emoji: '🌾', rarity: 'COMMON', goldValue: 5, source: 'farm' },
 ];
 
 // === CATÁLOGO DE MATERIAIS DE FORJA ===
@@ -929,8 +952,8 @@ export interface ForgeMaterial {
   rarity: Rarity;
   /** Valor de venda ao ferreiro (gold). */
   goldValue: number;
-  /** Onde cai: chão de masmorra (comum) ou só chefe (raro). */
-  source: 'dungeon' | 'dungeon_boss';
+  /** Onde cai: chão de masmorra (comum), só chefe (raro) ou fazenda (cultivo). */
+  source: 'dungeon' | 'dungeon_boss' | 'farm';
   /** Marca o material de reparo de alto nível (drop garantido em chefe). */
   memoryShard?: boolean;
 }
@@ -954,6 +977,30 @@ export const FORGE_MATERIAL_CATALOG: ForgeMaterial[] = [
 
   // ---------- REPARO DE ALTO NÍVEL (só de chefe; repara raro/épico/lendário) ----------
   { name: 'Estilhaço de Memória', description: 'Fragmento que guarda a forma original de um equipamento lendário; restaura +10 de durabilidade em peças raras, épicas e lendárias.', emoji: '🧠', rarity: 'RARE', goldValue: 80, source: 'dungeon_boss', memoryShard: true },
+
+  // ---------- CULTIVO (só da fazenda — NÃO cai em masmorra) ----------
+  { name: 'Fibra de Linho', description: 'Fios de linho fiados na fazenda; a base têxtil das vestes leves e das bandagens.', emoji: '🧵', rarity: 'COMMON', goldValue: 7, source: 'farm' },
+];
+
+// === CATÁLOGO DE SEMENTES (Fazenda) ===
+// Sementes SÓ caem na Coleta (Campos de Ervas — src/lib/gathering.ts) e são
+// plantadas nos canteiros da fazenda (src/lib/farming.ts). No banco viram
+// Item type=CONSUMABLE com stats.kind='seed' — não são usáveis nem vendidas
+// na loja; a raridade reflete a chance no drop de coleta.
+
+export interface SeedItem {
+  name: string;
+  description: string;
+  emoji: string;
+  rarity: Rarity;
+  /** Valor de venda (gold). */
+  goldValue: number;
+}
+
+export const SEED_CATALOG: SeedItem[] = [
+  { name: 'Semente de Trigo', description: 'Grãos de plantio rápido; a base da Ração e do Pão.', emoji: '🌾', rarity: 'COMMON', goldValue: 4 },
+  { name: 'Semente de Erva Medicinal', description: 'Muda da erva mais requisitada da alquimia.', emoji: '🌿', rarity: 'COMMON', goldValue: 5 },
+  { name: 'Semente de Linho', description: 'Sementes de linho; a colheita vira fibra têxtil para forja e bandagens.', emoji: '🫘', rarity: 'COMMON', goldValue: 5 },
 ];
 
 // === ÍNDICES E HELPERS ===
@@ -1010,9 +1057,16 @@ export function getForgeMaterialByName(name: string): ForgeMaterial | undefined 
   return FORGE_MATERIAL_BY_NAME.get(name);
 }
 
-/** Materiais de forja "de chão" (caem por sorteio normal; exclui o Estilhaço de Memória). */
+/** Materiais de forja "de chão" (caem por sorteio normal; exclui o Estilhaço de Memória e os de fazenda). */
 export function getCommonForgeMaterials(): ForgeMaterial[] {
-  return FORGE_MATERIAL_CATALOG.filter((m) => !m.memoryShard);
+  return FORGE_MATERIAL_CATALOG.filter((m) => !m.memoryShard && m.source !== 'farm');
+}
+
+const SEED_BY_NAME = new Map(SEED_CATALOG.map((s) => [s.name, s]));
+
+/** Semente pelo nome (para a coleta/plantio resolverem o item). */
+export function getSeedByName(name: string): SeedItem | undefined {
+  return SEED_BY_NAME.get(name);
 }
 
 // Forma mínima de um Item para classificar craft/transmutação (cliente e servidor).
@@ -1052,6 +1106,19 @@ export function isMaterialItem(item: CraftableLike): boolean {
   if (kind === 'material') return true;
   if (kind && kind !== 'material') return false;
   return !!item.name && FORGE_MATERIAL_BY_NAME.has(item.name);
+}
+
+/**
+ * Diz se um Item é uma SEMENTE da fazenda. Mesma lógica dos irmãos acima:
+ * `stats.kind === 'seed'` é cache; a verdade é o SEED_CATALOG.
+ */
+export function isSeedItem(item: CraftableLike): boolean {
+  if (!item) return false;
+  if (item.type && item.type !== 'CONSUMABLE') return false;
+  const kind = (item.stats as any)?.kind;
+  if (kind === 'seed') return true;
+  if (kind && kind !== 'seed') return false;
+  return !!item.name && SEED_BY_NAME.has(item.name);
 }
 
 export function getItemsForDungeon(dungeonId: string): CatalogItem[] {

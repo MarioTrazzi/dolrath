@@ -38,6 +38,8 @@ export default function DashboardPage() {
   const [nftMetaByTokenId, setNftMetaByTokenId] = useState<Record<string, any>>({});
   const [ownedNftContext, setOwnedNftContext] = useState<{ chainId?: number; contractAddress?: string } | null>(null);
   const [ownedNftsError, setOwnedNftsError] = useState<string>('');
+  // ⛏️ Sessões de coleta em aberto por personagem (badge "coletando" no card).
+  const [gatheringByCharId, setGatheringByCharId] = useState<Record<string, { fieldId: string; status: string }>>({});
   const [loadingCharacter, setLoadingCharacter] = useState<boolean>(true);
   const [dolLoading, setDolLoading] = useState<boolean>(false);
   const [dolBalance, setDolBalance] = useState<string | null>(null);
@@ -344,6 +346,16 @@ export default function DashboardPage() {
     if (status === 'authenticated') {
       fetchCharacters();
 
+      // ⛏️ Quais heróis estão coletando (leitura pura; 1 chamada pra conta toda).
+      fetch('/api/gather/active')
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          const map: Record<string, { fieldId: string; status: string }> = {};
+          for (const s of data?.sessions ?? []) map[String(s.characterId)] = { fieldId: s.fieldId, status: s.status };
+          setGatheringByCharId(map);
+        })
+        .catch(() => {});
+
       if (session?.user?.walletAddress) {
         setDolLoading(true);
         setDolError(null);
@@ -544,6 +556,16 @@ export default function DashboardPage() {
                           {displayLevel && (
                             <span className="px-2 py-0.5 text-[11px] font-semibold rounded-full text-white/90 bg-white/10 border border-white/20">
                               Lv {displayLevel}
+                            </span>
+                          )}
+                          {characterId && gatheringByCharId[characterId] && (
+                            <span
+                              className="px-2 py-0.5 text-[11px] font-semibold rounded-full text-emerald-200 bg-emerald-500/15 border border-emerald-400/40"
+                              title={gatheringByCharId[characterId].status === 'exhausted'
+                                ? 'Sessão esgotada — espólio aguardando coleta'
+                                : 'Este herói está numa sessão de coleta'}
+                            >
+                              {gatheringByCharId[characterId].status === 'exhausted' ? '💤 Espólio pronto' : '⛏️ Coletando'}
                             </span>
                           )}
                         </div>

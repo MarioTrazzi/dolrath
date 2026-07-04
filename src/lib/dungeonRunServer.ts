@@ -26,7 +26,7 @@ import {
   type LuckTier,
 } from './dungeonAdventures'
 import { normalizeCombatClass, type CombatClass } from './combatModel'
-import { getCatalogItemByName, getConsumableByName, getIngredientByName, getForgeMaterialByName, itemImagePath } from './itemCatalog'
+import { getCatalogItemByName, getConsumableByName, getIngredientByName, getForgeMaterialByName, getSeedByName, itemImagePath } from './itemCatalog'
 import { freeInventorySlots } from './inventoryMutations'
 
 // Custo de stamina por TIPO de nó (espelha DungeonRun.tsx: MINOR/MAIN/BOSS_STEP_COST).
@@ -215,12 +215,15 @@ function rarityValue(rarity: string): number {
 
 // Resolve/cria o Item do catálogo a partir do nome (mesma lógica de
 // add-exploration-reward) e o adiciona ao inventário do personagem.
-async function addDropToInventoryTx(
+// Exportada: a COLETA (gatheringServer.ts) e a FAZENDA depositam por aqui.
+// `qty` só vale para consumível (empilha); equipamento é sempre 1 peça/linha.
+export async function addDropToInventoryTx(
   tx: Prisma.TransactionClient,
   characterId: string,
-  drop: { name: string; rarity?: string; enhancement?: number },
+  drop: { name: string; rarity?: string; enhancement?: number; qty?: number },
 ) {
   const itemName = drop.name
+  const qty = Math.max(1, Math.floor(Number(drop.qty) || 1))
   let existingItem = await tx.item.findFirst({ where: { name: itemName } })
 
   // Cura registros legados: ingredientes/materiais criados antes do sistema de craft
@@ -262,7 +265,25 @@ async function addDropToInventoryTx(
     const consumable = catalogItem ? undefined : getConsumableByName(itemName)
     const ingredient = catalogItem || consumable ? undefined : getIngredientByName(itemName)
     const material = catalogItem || consumable || ingredient ? undefined : getForgeMaterialByName(itemName)
-    if (catalogItem) {
+    const seed = catalogItem || consumable || ingredient || material ? undefined : getSeedByName(itemName)
+    if (seed) {
+      existingItem = await tx.item.create({
+        data: {
+          name: seed.name,
+          description: seed.description,
+          type: 'CONSUMABLE',
+          image: itemImagePath(seed.name),
+          level: 1,
+          goldPrice: seed.goldValue,
+          stats: {
+            kind: 'seed',
+            rarity: seed.rarity,
+            emoji: seed.emoji,
+            sellPrice: Math.floor(seed.goldValue * 0.6),
+          },
+        },
+      })
+    } else if (catalogItem) {
       existingItem = await tx.item.create({
         data: {
           name: catalogItem.name,
@@ -348,7 +369,7 @@ async function addDropToInventoryTx(
 
   if (existingInv) {
     // Empilha numa linha existente: não gasta slot novo, sempre entra.
-    await tx.characterInventory.update({ where: { id: existingInv.id }, data: { quantity: { increment: 1 } } })
+    await tx.characterInventory.update({ where: { id: existingInv.id }, data: { quantity: { increment: qty } } })
     return true
   }
 
@@ -359,7 +380,7 @@ async function addDropToInventoryTx(
 
   const enhancementLevel = isConsumable ? 0 : Math.max(0, Math.floor(Number(drop.enhancement) || 0))
   await tx.characterInventory.create({
-    data: { characterId, itemId: existingItem.id, quantity: 1, enhancementLevel },
+    data: { characterId, itemId: existingItem.id, quantity: isConsumable ? qty : 1, enhancementLevel },
   })
   return true
 }

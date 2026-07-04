@@ -218,7 +218,9 @@ function StatBar({ value, max, gradient, icon }: { value: number; max: number; g
 
 // Slot de equipamento no combate: mostra o item, badge +N e, ao passar o mouse,
 // um card (via portal) com os stats já aprimorados — mesmo formato do inventário.
-function EquipSlot({ slot, item }: { slot: string; item: EquippedItem }) {
+// `size='lg'` = tile grande em destaque (arma em punho, à frente do card).
+function EquipSlot({ slot, item, size = 'sm' }: { slot: string; item: EquippedItem; size?: 'sm' | 'lg' }) {
+  const isLg = size === 'lg'
   const ref = useRef<HTMLDivElement>(null)
   const [hover, setHover] = useState(false)
   const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
@@ -262,7 +264,12 @@ function EquipSlot({ slot, item }: { slot: string; item: EquippedItem }) {
       onMouseEnter={show}
       onMouseLeave={() => setHover(false)}
       onClick={() => (hover ? setHover(false) : show())}
-      className="relative w-9 h-9 rounded-lg bg-black/40 border border-amber-500/40 flex items-center justify-center overflow-hidden hover:border-amber-400 hover:scale-110 transition-all cursor-help shadow-lg shadow-black/50"
+      className={`relative flex items-center justify-center overflow-hidden bg-black/40 border shadow-lg hover:border-amber-400 hover:scale-110 transition-all cursor-help ${
+        isLg
+          ? 'w-11 h-11 sm:w-16 sm:h-16 rounded-xl border-amber-400/60'
+          : 'w-9 h-9 rounded-lg border-amber-500/40 shadow-black/50'
+      }`}
+      style={isLg ? { boxShadow: '0 0 14px rgba(251,191,36,0.35)' } : undefined}
     >
       {itemImage ? (
         // eslint-disable-next-line @next/next/no-img-element
@@ -274,13 +281,13 @@ function EquipSlot({ slot, item }: { slot: string; item: EquippedItem }) {
           className="w-full h-full object-cover"
         />
       ) : item.type ? (
-        <ItemIcon type={item.type as any} size={18} className="text-amber-300" />
+        <ItemIcon type={item.type as any} size={isLg ? 30 : 18} className="text-amber-300" />
       ) : (
-        <span className="text-sm">{SLOT_EMOJI[slot] || '❔'}</span>
+        <span className={isLg ? 'text-2xl' : 'text-sm'}>{SLOT_EMOJI[slot] || '❔'}</span>
       )}
       {level > 0 && (
         <span
-          className="absolute right-0 bottom-0 text-[9px] font-black leading-none text-amber-300 px-0.5"
+          className={`absolute right-0 bottom-0 font-black leading-none text-amber-300 px-0.5 ${isLg ? 'text-xs' : 'text-[9px]'}`}
           style={{ textShadow: '0 1px 2px #000, 0 0 3px #000' }}
         >
           {getLevelLabel(level)}
@@ -312,10 +319,11 @@ function EquipSlot({ slot, item }: { slot: string; item: EquippedItem }) {
   )
 }
 
-function EquipmentColumn({ equipment, side }: { equipment?: EquipmentMap; side: 'left' | 'right' }) {
+function EquipmentColumn({ equipment, side, exclude = [] }: { equipment?: EquipmentMap; side: 'left' | 'right'; exclude?: string[] }) {
   return (
     <div className={`flex flex-col gap-1 ${side === 'left' ? 'items-start' : 'items-end'}`}>
       {SLOT_ORDER.map(slot => {
+        if (exclude.includes(slot)) return null
         const item = equipment?.[slot]
         if (!item) return null
         return <EquipSlot key={slot} slot={slot} item={item} />
@@ -323,6 +331,10 @@ function EquipmentColumn({ equipment, side }: { equipment?: EquipmentMap; side: 
     </div>
   )
 }
+
+// Armas "em punho": arma principal + secundária (offhand). Ganham destaque À FRENTE
+// do card na arena (igual ao mockup da landing) e saem da coluna lateral.
+const HELD_SLOTS = ['WEAPON', 'SHIELD']
 
 function FighterFigure({
   fighter,
@@ -386,10 +398,15 @@ function FighterFigure({
   const lungeX = side === 'left' ? 90 : -90
   const dodgeX = side === 'left' ? -45 : 45
 
+  // Armas em punho (principal + secundária) exibidas GRANDES à frente do card.
+  // Só no modo cheio — o pacote compacto de monstros não tem equipamento.
+  const heldSlots = compact ? [] : HELD_SLOTS.filter(s => fighter.equipmentMap?.[s])
+
   return (
     <div className={`flex items-end gap-1 sm:gap-2 ${side === 'right' ? 'flex-row-reverse' : ''}`}>
-      {/* Equipamentos ao lado externo do lutador (oculto na versão compacta) */}
-      {!compact && <EquipmentColumn equipment={fighter.equipmentMap} side={side} />}
+      {/* Equipamentos ao lado externo do lutador — arma/secundária saem daqui e vão
+          pra frente do card (oculto na versão compacta) */}
+      {!compact && <EquipmentColumn equipment={fighter.equipmentMap} side={side} exclude={HELD_SLOTS} />}
 
       <div className={`flex flex-col items-center gap-1 ${compact ? 'w-24 sm:w-28' : 'w-32 sm:w-44'}`}>
         {/* Placa de nome + barras (oculta nos cards do pacote — viram só a imagem) */}
@@ -542,6 +559,20 @@ function FighterFigure({
 
           {/* Sombra no chão */}
           <div className={`mx-auto mt-1 ${compact ? 'w-16 sm:w-24' : 'w-24 sm:w-32'} h-3 bg-black/50 rounded-[100%] blur-sm`} />
+
+          {/* Armas em punho À FRENTE do card, voltadas para o oponente (lado interno).
+              Ficam dentro do sprite, então acompanham a investida/tremor do golpe. */}
+          {heldSlots.length > 0 && (
+            <div
+              className={`absolute top-1/2 -translate-y-1/2 z-20 flex flex-col gap-1.5 ${
+                side === 'left' ? 'left-full ml-1 items-start' : 'right-full mr-1 items-end'
+              }`}
+            >
+              {heldSlots.map(slot => (
+                <EquipSlot key={slot} slot={slot} item={fighter.equipmentMap![slot]!} size="lg" />
+              ))}
+            </div>
+          )}
 
           {/* FX de habilidade sobre o corpo do lutador (acompanha o shake do card) */}
           {fxOverlay}

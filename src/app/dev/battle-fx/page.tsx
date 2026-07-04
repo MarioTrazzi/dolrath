@@ -15,6 +15,13 @@ const HERO_BASE: FighterView = {
   hp: 180, maxHp: 220, mp: 60, maxMp: 80, stamina: 40, maxStamina: 60,
   combatStats: { ad: 42, ap: 18, dp: 14 },
   combatStatLabels: { ad: 'ATK', ap: 'DEF', dp: 'STR' },
+  equipmentMap: {
+    WEAPON: { id: 'w', name: 'Manoplas do Sentinela', type: 'GLOVES', enhancementLevel: 3, stats: { attackDamage: 24 } },
+    SHIELD: { id: 's', name: 'Escudo do Guardião', type: 'SHIELD', enhancementLevel: 1, stats: { defense: 12 } },
+    HELMET: { id: 'h', name: 'Elmo de Ferro', type: 'HELMET', stats: { defense: 8 } },
+    ARMOR: { id: 'a', name: 'Peitoral de Ferro', type: 'ARMOR', stats: { defense: 14 } },
+    BOOTS: { id: 'b', name: 'Botas de Malha', type: 'BOOTS', stats: { defense: 5 } },
+  },
 }
 
 const FOE: FighterView = {

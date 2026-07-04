@@ -413,86 +413,100 @@ export default function CharacterDetailsPage() {
     const slotsToAdd = 5;
     const totalCostGold = 1000;
 
-    const eth = (window as any)?.ethereum;
-    if (!eth) {
-      toast.error('MetaMask não encontrada');
-      return;
-    }
-
     setExpandingSlots(true);
     try {
-      const cfgRes = await fetch('/api/gold/spend-config', { cache: 'no-store' });
-      const cfgJson = await cfgRes.json();
-      if (!cfgRes.ok) {
-        throw new Error(cfgJson?.error || 'Falha ao carregar config do GOLD');
-      }
-
-      const { contractAddress, chainId, treasuryAddress } = cfgJson as {
-        contractAddress: string;
-        chainId: number;
-        treasuryAddress: string;
-      };
-
-      const provider = new ethers.BrowserProvider(eth);
-      await provider.send('eth_requestAccounts', []);
-
-      const network = await provider.getNetwork();
-      if (Number(network.chainId) !== Number(chainId)) {
-        toast.error(`Troque a rede para chainId ${chainId} na MetaMask`);
-        return;
-      }
-
-      const signer = await provider.getSigner();
-      const from = await signer.getAddress();
-
-      const erc20Abi = [
-        'function decimals() view returns (uint8)',
-        'function balanceOf(address) view returns (uint256)',
-        'function transfer(address to, uint256 value) returns (bool)',
-      ] as const;
-
-      const gold = new ethers.Contract(contractAddress, erc20Abi, signer);
-      const decimals = Number(await gold.decimals());
-      const costWei = ethers.parseUnits(String(totalCostGold), decimals);
-      const balanceWei = (await gold.balanceOf(from)) as bigint;
-
-      if (balanceWei < costWei) {
-        toast.error(`💰 GOLD insuficiente on-chain! Você precisa de ${totalCostGold} GOLD.`);
-        return;
-      }
-
-      const payTx = await gold.transfer(treasuryAddress, costWei, await getPolygonFeeOverrides(provider));
-      toast.success('Pagamento enviado! Aguardando confirmação…');
-      const payReceipt = await payTx.wait();
-      if (!payReceipt || payReceipt.status !== 1) {
-        throw new Error('Pagamento falhou');
-      }
-
-      // RPCs can lag (especially on testnet). Try confirming the purchase a few times.
-      let response: Response | null = null;
+      // 1) Tenta pagar OFF-CHAIN com o GOLD "na mão" do personagem (sem txHash).
+      let response: Response | null = await fetch(`/api/character/${effectiveCharacterId}/expand-inventory`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slots: slotsToAdd }),
+      });
       let lastError: any = null;
-      for (let attempt = 0; attempt < 4; attempt++) {
-        response = await fetch(`/api/character/${effectiveCharacterId}/expand-inventory`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ slots: slotsToAdd, txHash: payTx.hash }),
-        });
 
-        if (response.ok) break;
+      // 2) Sem GOLD na mão → compra ON-CHAIN pela carteira (abre a MetaMask).
+      if (response.status === 402) {
+        lastError = await response.json().catch(() => null);
+        if (lastError?.requiresPayment) {
+          const eth = (window as any)?.ethereum;
+          if (!eth) {
+            toast.error('💰 Sem GOLD na mão e MetaMask não encontrada');
+            return;
+          }
+          toast('💰 Sem GOLD na mão — pagando on-chain pela carteira…');
 
-        try {
-          lastError = await response.json();
-        } catch {
-          lastError = null;
+          const cfgRes = await fetch('/api/gold/spend-config', { cache: 'no-store' });
+          const cfgJson = await cfgRes.json();
+          if (!cfgRes.ok) {
+            throw new Error(cfgJson?.error || 'Falha ao carregar config do GOLD');
+          }
+
+          const { contractAddress, chainId, treasuryAddress } = cfgJson as {
+            contractAddress: string;
+            chainId: number;
+            treasuryAddress: string;
+          };
+
+          const provider = new ethers.BrowserProvider(eth);
+          await provider.send('eth_requestAccounts', []);
+
+          const network = await provider.getNetwork();
+          if (Number(network.chainId) !== Number(chainId)) {
+            toast.error(`Troque a rede para chainId ${chainId} na MetaMask`);
+            return;
+          }
+
+          const signer = await provider.getSigner();
+          const from = await signer.getAddress();
+
+          const erc20Abi = [
+            'function decimals() view returns (uint8)',
+            'function balanceOf(address) view returns (uint256)',
+            'function transfer(address to, uint256 value) returns (bool)',
+          ] as const;
+
+          const gold = new ethers.Contract(contractAddress, erc20Abi, signer);
+          const decimals = Number(await gold.decimals());
+          const costWei = ethers.parseUnits(String(totalCostGold), decimals);
+          const balanceWei = (await gold.balanceOf(from)) as bigint;
+
+          if (balanceWei < costWei) {
+            toast.error(`💰 GOLD insuficiente on-chain! Você precisa de ${totalCostGold} GOLD.`);
+            return;
+          }
+
+          const payTx = await gold.transfer(treasuryAddress, costWei, await getPolygonFeeOverrides(provider));
+          toast.success('Pagamento enviado! Aguardando confirmação…');
+          const payReceipt = await payTx.wait();
+          if (!payReceipt || payReceipt.status !== 1) {
+            throw new Error('Pagamento falhou');
+          }
+
+          // RPCs can lag (especially on testnet). Try confirming the purchase a few times.
+          response = null;
+          for (let attempt = 0; attempt < 4; attempt++) {
+            response = await fetch(`/api/character/${effectiveCharacterId}/expand-inventory`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ slots: slotsToAdd, txHash: payTx.hash }),
+            });
+
+            if (response.ok) break;
+
+            try {
+              lastError = await response.json();
+            } catch {
+              lastError = null;
+            }
+
+            const msg = String(lastError?.error || '').toLowerCase();
+            const looksLikePropagation = msg.includes('ainda não encontrada') || msg.includes('not found');
+            if (!looksLikePropagation) break;
+
+            await new Promise((r) => setTimeout(r, 1200));
+          }
         }
-
-        const msg = String(lastError?.error || '').toLowerCase();
-        const looksLikePropagation = msg.includes('ainda não encontrada') || msg.includes('not found');
-        if (!looksLikePropagation) break;
-
-        await new Promise((r) => setTimeout(r, 1200));
       }
 
       if (!response) {
@@ -521,8 +535,8 @@ export default function CharacterDetailsPage() {
       } catch {
         // ignore
       }
+      setExpandingSlots(false);
     }
-    setExpandingSlots(false);
   };
 
   return (

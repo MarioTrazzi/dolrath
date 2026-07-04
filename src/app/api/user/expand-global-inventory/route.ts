@@ -29,9 +29,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid number of slots' }, { status: 400 });
     }
 
-    // Preço fixo (on-chain GOLD): +5 slots custa 1000 GOLD (espelha o do personagem).
+    // Preço fixo: +5 slots custa 1000 GOLD (espelha o do personagem).
     const expectedSlots = 5;
-    const goldCostHuman = '1000';
+    const goldCost = 1000;
+    const goldCostHuman = String(goldCost);
 
     if (Number(slots) !== expectedSlots) {
       return NextResponse.json(
@@ -40,21 +41,62 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const txHashStr = (typeof txHash === 'string' ? txHash : '').trim();
-    if (!txHashStr) {
-      return NextResponse.json(
-        { error: 'On-chain payment required', requiresPayment: true, amountGold: goldCostHuman },
-        { status: 402 }
-      );
-    }
-
-    if (!isHex32Bytes(txHashStr)) {
-      return NextResponse.json({ error: 'Invalid txHash' }, { status: 400 })
-    }
-
     const user = await prisma.user.findUnique({ where: { id: session.user.id } });
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const txHashStr = (typeof txHash === 'string' ? txHash : '').trim();
+
+    // ── Caminho OFF-CHAIN (sem txHash): paga com o GOLD do BANCO/Baú Geral
+    // (User.goldBalance). Se não tiver o suficiente, devolve 402 pedindo pagamento
+    // on-chain — o cliente então abre a tela de compra pela carteira. ──
+    if (!txHashStr) {
+      if (user.goldBalance < goldCost) {
+        return NextResponse.json(
+          {
+            error: `GOLD insuficiente no banco (tem ${user.goldBalance}, precisa de ${goldCost}). Compre on-chain.`,
+            requiresPayment: true,
+            amountGold: goldCostHuman,
+            bankGold: user.goldBalance,
+          },
+          { status: 402 }
+        );
+      }
+
+      const updated = await prisma.$transaction(async (tx) => {
+        const fresh = await tx.user.findUnique({
+          where: { id: session.user!.id },
+          select: { goldBalance: true },
+        });
+        if (!fresh || fresh.goldBalance < goldCost) {
+          throw new Error(`GOLD insuficiente no banco (precisa de ${goldCost}).`);
+        }
+        return tx.user.update({
+          where: { id: session.user!.id },
+          data: {
+            goldBalance: { decrement: goldCost },
+            globalInventorySlots: { increment: slots },
+          },
+          select: { globalInventorySlots: true, goldBalance: true },
+        });
+      });
+
+      return NextResponse.json(
+        jsonSafe({
+          globalInventorySlots: updated.globalInventorySlots,
+          cost: goldCost,
+          newSlots: updated.globalInventorySlots,
+          bankGold: updated.goldBalance,
+          paidWith: 'offchain',
+        })
+      );
+    }
+
+    // ── Caminho ON-CHAIN (txHash presente): verifica a transferência de GOLD
+    // para a treasury e só então expande. ──
+    if (!isHex32Bytes(txHashStr)) {
+      return NextResponse.json({ error: 'Invalid txHash' }, { status: 400 })
     }
 
     const walletAddress = String((user as any).walletAddress || '').trim();

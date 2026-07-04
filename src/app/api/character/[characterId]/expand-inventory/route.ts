@@ -34,31 +34,16 @@ export async function POST(
       );
     }
 
-    // Fixed pricing (on-chain GOLD): +5 slots costs 1000 GOLD
+    // Preço fixo: +5 slots custa 1000 GOLD.
     const expectedSlots = 5;
-    const goldCostHuman = '1000';
+    const goldCost = 1000;
+    const goldCostHuman = String(goldCost);
 
     if (Number(slots) !== expectedSlots) {
       return NextResponse.json(
         { error: `Invalid slots amount. Expected ${expectedSlots}.` },
         { status: 400 }
       );
-    }
-
-    const txHashStr = (typeof txHash === 'string' ? txHash : '').trim();
-    if (!txHashStr) {
-      return NextResponse.json(
-        {
-          error: 'On-chain payment required',
-          requiresPayment: true,
-          amountGold: goldCostHuman,
-        },
-        { status: 402 }
-      );
-    }
-
-    if (!isHex32Bytes(txHashStr)) {
-      return NextResponse.json({ error: 'Invalid txHash' }, { status: 400 })
     }
 
     // Verificar se o personagem pertence ao usuário
@@ -74,6 +59,66 @@ export async function POST(
         { error: 'Character not found' },
         { status: 404 }
       );
+    }
+
+    const currentSlots = character.inventorySlots;
+    const txHashStr = (typeof txHash === 'string' ? txHash : '').trim();
+
+    // ── Caminho OFF-CHAIN (sem txHash): paga com o GOLD "na mão" do personagem
+    // (Character.gold). Se não tiver o suficiente, devolve 402 pedindo pagamento
+    // on-chain — o cliente então abre a tela de compra pela carteira. ──
+    if (!txHashStr) {
+      if (character.gold < goldCost) {
+        return NextResponse.json(
+          {
+            error: `GOLD insuficiente na mão (tem ${character.gold}, precisa de ${goldCost}). Compre on-chain.`,
+            requiresPayment: true,
+            amountGold: goldCostHuman,
+            characterGold: character.gold,
+          },
+          { status: 402 }
+        );
+      }
+
+      // Transação atômica: revalida o gold e debita + expande de uma vez.
+      const result = await prisma.$transaction(async (tx) => {
+        const fresh = await tx.character.findUnique({
+          where: { id: params.characterId },
+          select: { gold: true },
+        });
+        if (!fresh || fresh.gold < goldCost) {
+          throw new Error(`GOLD insuficiente na mão (precisa de ${goldCost}).`);
+        }
+        return tx.character.update({
+          where: { id: params.characterId },
+          data: {
+            gold: { decrement: goldCost },
+            inventorySlots: { increment: slots },
+          },
+        });
+      });
+
+      try {
+        await recordInventoryExpansion(params.characterId, currentSlots, result.inventorySlots, goldCost);
+      } catch (historyError) {
+        console.error('Erro ao registrar histórico:', historyError);
+      }
+
+      return NextResponse.json(
+        jsonSafe({
+          character: result,
+          cost: goldCost,
+          newSlots: result.inventorySlots,
+          characterGold: result.gold,
+          paidWith: 'offchain',
+        })
+      );
+    }
+
+    // ── Caminho ON-CHAIN (txHash presente): verifica a transferência de GOLD
+    // para a treasury e só então expande. ──
+    if (!isHex32Bytes(txHashStr)) {
+      return NextResponse.json({ error: 'Invalid txHash' }, { status: 400 })
     }
 
     // Buscar o usuário para verificar o gold
@@ -122,8 +167,6 @@ export async function POST(
       const message = e instanceof Error ? e.message : 'Invalid payment'
       return NextResponse.json(jsonSafe({ error: message }), { status: 400 })
     }
-
-    const currentSlots = character.inventorySlots;
 
     // Usar uma transação para garantir atomicidade
     const result = await prisma.$transaction(async (tx) => {

@@ -395,13 +395,30 @@ export default function InventoryPage() {
     }
     setExpandingChar(true);
     try {
-      const txHash = await payGoldOnChain(EXPAND_COST_GOLD);
-      if (!txHash) return;
-
-      const response = await confirmExpansion(
+      // 1) Tenta pagar OFF-CHAIN, com o GOLD "na mão" do personagem (sem txHash).
+      let response: Response | null = await fetch(
         `/api/character/${selectedCharacter}/expand-inventory`,
-        txHash
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slots: EXPAND_SLOTS }),
+        }
       );
+
+      // 2) Sem GOLD na mão → cai pro fluxo ON-CHAIN (compra pela carteira).
+      if (response.status === 402) {
+        const info = await response.json().catch(() => null);
+        if (info?.requiresPayment) {
+          toast('💰 Sem GOLD na mão — pagando on-chain pela carteira…');
+          const txHash = await payGoldOnChain(EXPAND_COST_GOLD);
+          if (!txHash) return;
+          response = await confirmExpansion(
+            `/api/character/${selectedCharacter}/expand-inventory`,
+            txHash
+          );
+        }
+      }
+
       if (response?.ok) {
         toast.success(`📦 +${EXPAND_SLOTS} slots no personagem! (${EXPAND_COST_GOLD} GOLD)`);
         refreshActiveCharacter();
@@ -420,17 +437,31 @@ export default function InventoryPage() {
   const handleExpandGlobalInventory = async () => {
     setExpandingGlobal(true);
     try {
-      const txHash = await payGoldOnChain(EXPAND_COST_GOLD);
-      if (!txHash) return;
+      // 1) Tenta pagar OFF-CHAIN com o GOLD do banco/Baú Geral (sem txHash).
+      let response: Response | null = await fetch('/api/user/expand-global-inventory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slots: EXPAND_SLOTS }),
+      });
 
-      const response = await confirmExpansion('/api/user/expand-global-inventory', txHash);
+      // 2) Sem GOLD no banco → cai pro fluxo ON-CHAIN (compra pela carteira).
+      if (response.status === 402) {
+        const info = await response.json().catch(() => null);
+        if (info?.requiresPayment) {
+          toast('💰 Sem GOLD no banco — pagando on-chain pela carteira…');
+          const txHash = await payGoldOnChain(EXPAND_COST_GOLD);
+          if (!txHash) return;
+          response = await confirmExpansion('/api/user/expand-global-inventory', txHash);
+        }
+      }
+
       if (response?.ok) {
         const data = await response.json().catch(() => null);
         if (typeof data?.globalInventorySlots === 'number') {
           setGlobalSlots(data.globalInventorySlots);
-        } else {
-          fetchBankGold();
         }
+        // Re-sincroniza o saldo do banco (mudou se pagou off-chain).
+        fetchBankGold();
         toast.success(`🌐 +${EXPAND_SLOTS} slots no Baú Geral! (${EXPAND_COST_GOLD} GOLD)`);
       } else {
         const error = await response?.json().catch(() => null);

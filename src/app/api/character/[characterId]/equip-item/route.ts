@@ -59,9 +59,10 @@ export async function POST(
       include: {
         item: true,
       },
-      orderBy: {
-        enhancementLevel: 'desc',
-      },
+      orderBy: [
+        { enhancementLevel: 'desc' },
+        { durability: 'desc' },
+      ],
     });
 
     if (!characterInventoryItem) {
@@ -134,12 +135,14 @@ export async function POST(
           params.characterId,
           existingEquipment.itemId,
           existingEquipment.enhancementLevel,
+          existingEquipment.durability,
+          existingEquipment.maxDurability,
         );
         console.log(`Unequipped existing item from ${finalSlotType} back to inventory`);
       }
 
       // Resolve a exclusão mútua manopla ↔ luva (slots diferentes das mãos).
-      let mutexRows: { id: string; itemId: string; enhancementLevel: number }[] = [];
+      let mutexRows: { id: string; itemId: string; enhancementLevel: number; durability: number; maxDurability: number }[] = [];
       if (equippingType === 'GAUNTLET') {
         // Manopla nas mãos → tira qualquer luva equipada.
         mutexRows = await tx.characterEquipment.findMany({
@@ -156,20 +159,24 @@ export async function POST(
       }
       for (const row of mutexRows) {
         await tx.characterEquipment.delete({ where: { id: row.id } });
-        await restoreItemToInventory(tx, params.characterId, row.itemId, row.enhancementLevel);
+        await restoreItemToInventory(
+          tx, params.characterId, row.itemId, row.enhancementLevel, row.durability, row.maxDurability,
+        );
         console.log(`Mutex hands: unequipped ${row.itemId} back to inventory`);
       }
 
       // O item equipado sai do inventário.
       await removeOneFromInventory(tx, characterInventoryItem.id);
 
-      // Cria o equipamento com o nível de aprimoramento da instância escolhida.
+      // Cria o equipamento com o aprimoramento E a durabilidade da instância escolhida.
       return tx.characterEquipment.create({
         data: {
           characterId: params.characterId,
           itemId: itemId,
           slot: finalSlotType,
           enhancementLevel: characterInventoryItem.enhancementLevel,
+          durability: characterInventoryItem.durability,
+          maxDurability: characterInventoryItem.maxDurability,
         },
       });
     });

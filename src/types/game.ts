@@ -60,6 +60,9 @@ export interface CharacterEquipment {
   itemId: string
   slot: EquipmentSlotType
   enhancementLevel?: number
+  /** Desgasta com o uso na masmorra; 0 = quebrada (sem bônus até reparar). */
+  durability?: number
+  maxDurability?: number
   createdAt: Date
   updatedAt: Date
 }

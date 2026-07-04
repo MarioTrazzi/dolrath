@@ -12,6 +12,7 @@ import {
   pendingMonsters,
   type RunPending,
 } from '@/lib/dungeonRunServer'
+import { wearFor } from '@/lib/durability'
 
 export const dynamic = 'force-dynamic'
 
@@ -108,6 +109,11 @@ export async function POST(req: Request) {
       ? { gold: nodeLoot?.gold ?? 0, drops: [...killDrops, ...(nodeLoot?.drops ?? [])] }
       : null
 
+    // ⚔️ Desgaste por uso: cada abate consome durabilidade do gear equipado
+    // (arma desgasta mais; chefe dobra). Servidor é dono do débito — o cliente
+    // só fica sabendo pelo `equipmentWear` da resposta.
+    const bossKill = newlyKilled.some((m) => !!m.isBoss)
+
     const credited = await prisma.$transaction(async (tx) => {
       const killGold = await creditGoldTx(tx, userId, character.id, killGoldTotal)
       const lootResult = loot ? await applyLootTx(tx, userId, character.id, loot) : { gold: 0, skippedDrops: [] }
@@ -122,7 +128,30 @@ export async function POST(req: Request) {
             : { pending: { ...pending, killedIds: Array.from(killed) } as unknown as object }),
         },
       })
-      return { killGold, lootGold, skippedDrops: lootResult.skippedDrops }
+
+      const equipped = await tx.characterEquipment.findMany({
+        where: { characterId: character.id },
+        include: { item: { select: { name: true } } },
+      })
+      const equipmentWear = [] as {
+        slot: string; name: string; durability: number; maxDurability: number; justBroke: boolean
+      }[]
+      for (const eq of equipped) {
+        if (eq.durability <= 0) continue // já quebrada: não desgasta além de 0
+        const wear = wearFor(eq.slot, newlyKilled.length, bossKill)
+        const after = Math.max(0, eq.durability - wear)
+        if (after === eq.durability) continue
+        await tx.characterEquipment.update({ where: { id: eq.id }, data: { durability: after } })
+        equipmentWear.push({
+          slot: eq.slot,
+          name: eq.item.name,
+          durability: after,
+          maxDurability: eq.maxDurability,
+          justBroke: after === 0,
+        })
+      }
+
+      return { killGold, lootGold, skippedDrops: lootResult.skippedDrops, equipmentWear }
     })
 
     // XP creditado pelos abates deste request (faz seu próprio update de personagem).
@@ -138,6 +167,7 @@ export async function POST(req: Request) {
         skippedDrops: credited.skippedDrops,
       },
       cleared: allDead,
+      equipmentWear: credited.equipmentWear,
       cursor: allDead ? pending.nodeIdx : run.cursor,
       finished: allDead && isBoss,
       bossDefeated: allDead && isBoss,

@@ -8,8 +8,9 @@ import { Prisma } from '@prisma/client'
  * devolvemos a instância ao inventário, preservando o nível de aprimoramento.
  *
  * Regra de empilhamento: instâncias base (enhancementLevel === 0) empilham na
- * mesma linha (quantity); instâncias aprimoradas (enhancementLevel > 0) vivem
- * sempre em linhas próprias com quantity 1.
+ * mesma linha (quantity); instâncias aprimoradas (enhancementLevel > 0) OU
+ * desgastadas (durability < maxDurability) vivem sempre em linhas próprias com
+ * quantity 1 — empilhar uma peça desgastada apagaria a durabilidade dela.
  */
 
 /**
@@ -23,7 +24,7 @@ export async function restoreItemToInventory(
   durability = 100,
   maxDurability = 100,
 ) {
-  if (enhancementLevel === 0) {
+  if (enhancementLevel === 0 && durability >= maxDurability) {
     const existing = await tx.characterInventory.findFirst({
       where: { characterId, itemId, enhancementLevel: 0 },
     })

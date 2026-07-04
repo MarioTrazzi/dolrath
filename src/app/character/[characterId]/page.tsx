@@ -891,6 +891,8 @@ export default function CharacterDetailsPage() {
                             type={s.type as EquipmentSlotType}
                             item={displayed?.item}
                             enhancementLevel={displayed?.enhancementLevel || 0}
+                            durability={(displayed as any)?.durability}
+                            maxDurability={(displayed as any)?.maxDurability}
                             ghost={!!showGauntletGhost}
                             onEquip={handleEquip}
                             onUnequip={handleUnequip}

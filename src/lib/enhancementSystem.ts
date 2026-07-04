@@ -229,8 +229,10 @@ export function getRequiredMaterial(category: GearCategory, targetLevel: number)
   return { kind: 'STONE', name: concentrated ? STONE_NAMES.ARMOR_CONCENTRATED : STONE_NAMES.ARMOR_BASIC };
 }
 
-// Durabilidade recuperada por cópia do item ao reparar (como no BDO)
-export const REPAIR_PER_DUPLICATE = 10;
+// Durabilidade recuperada por cópia do item ao reparar (como no BDO).
+// 25 = reparo total em 4 cópias; com o desgaste por uso, +10 tornava reparar
+// sempre pior do que comprar peça nova (10 cópias pra encher a barra).
+export const REPAIR_PER_DUPLICATE = 25;
 
 // === RESOLUÇÃO DA TENTATIVA ===
 

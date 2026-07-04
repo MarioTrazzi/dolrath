@@ -11,7 +11,9 @@ const MEMORY_SHARD_NAME = 'Estilhaço de Memória'
 const HIGH_RARITIES = new Set(['RARE', 'EPIC', 'LEGENDARY'])
 
 // Repara a durabilidade de um item consumindo cópias base dele (estilo BDO) — ou
-// Estilhaço de Memória se a peça for rara+.
+// Estilhaço de Memória se a peça for rara+. Aceita item do INVENTÁRIO
+// (inventoryId) ou item EQUIPADO (equipmentId) — desgaste por uso acontece com a
+// peça no corpo, então dá pra reparar sem desequipar.
 // mode 'single' (padrão): consome 1 unidade (+REPAIR_PER_DUPLICATE de durabilidade).
 // mode 'full': consome o máximo necessário/disponível para reparar 100%.
 export async function POST(
@@ -26,9 +28,10 @@ export async function POST(
 
     const body = await request.json()
     const inventoryId: string | undefined = body?.inventoryId
+    const equipmentId: string | undefined = body?.equipmentId
     const mode: 'single' | 'full' = body?.mode === 'full' ? 'full' : 'single'
-    if (!inventoryId) {
-      return NextResponse.json({ error: 'inventoryId é obrigatório' }, { status: 400 })
+    if (!inventoryId && !equipmentId) {
+      return NextResponse.json({ error: 'inventoryId ou equipmentId é obrigatório' }, { status: 400 })
     }
 
     const character = await prisma.character.findFirst({
@@ -38,12 +41,18 @@ export async function POST(
       return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
     }
 
-    const inventoryItem = await prisma.characterInventory.findFirst({
-      where: { id: inventoryId, characterId: params.characterId },
-      include: { item: true },
-    })
+    // Alvo do reparo: linha do inventário OU peça equipada (mesmo shape relevante).
+    const inventoryItem = inventoryId
+      ? await prisma.characterInventory.findFirst({
+          where: { id: inventoryId, characterId: params.characterId },
+          include: { item: true },
+        })
+      : await prisma.characterEquipment.findFirst({
+          where: { id: equipmentId, characterId: params.characterId },
+          include: { item: true },
+        })
     if (!inventoryItem) {
-      return NextResponse.json({ error: 'Item não encontrado no inventário' }, { status: 404 })
+      return NextResponse.json({ error: 'Item não encontrado' }, { status: 404 })
     }
 
     if (inventoryItem.durability >= inventoryItem.maxDurability) {
@@ -75,7 +84,8 @@ export async function POST(
             itemId: inventoryItem.itemId,
             enhancementLevel: 0,
             quantity: { gte: 1 },
-            id: { not: inventoryItem.id },
+            // Reparando uma linha do inventário, ela mesma não serve de cópia.
+            ...(inventoryId ? { id: { not: inventoryItem.id } } : {}),
           },
           orderBy: { quantity: 'asc' },
         })).map((d) => ({ id: d.id, quantity: d.quantity }))
@@ -120,10 +130,17 @@ export async function POST(
         }
         remaining -= take
       }
-      await tx.characterInventory.update({
-        where: { id: inventoryItem.id },
-        data: { durability: newDurability },
-      })
+      if (inventoryId) {
+        await tx.characterInventory.update({
+          where: { id: inventoryItem.id },
+          data: { durability: newDurability },
+        })
+      } else {
+        await tx.characterEquipment.update({
+          where: { id: inventoryItem.id },
+          data: { durability: newDurability },
+        })
+      }
     })
 
     try {

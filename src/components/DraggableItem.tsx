@@ -15,6 +15,9 @@ interface DraggableItemProps {
   isEquipped?: boolean;
   /** Nível de aprimoramento da instância (+1, +2, ...). 0 = sem aprimoramento. */
   enhancementLevel?: number;
+  /** Durabilidade da instância (desgasta com o uso; 0 = quebrado, sem bônus). */
+  durability?: number;
+  maxDurability?: number;
   /** Quantidade empilhada (consumíveis). Exibe badge quando > 1. */
   quantity?: number;
   /** Id da linha de inventário (CharacterInventory). Necessário para aprimorar. */
@@ -36,7 +39,7 @@ interface DraggableItemProps {
   dragSource?: 'character' | 'global';
 }
 
-export function DraggableItem({ item, isEquipped, enhancementLevel = 0, quantity = 1, inventoryId, onEquip, onUnequip, onConsume, onEnhance, onTransfer, onSendToGlobal, onSell, characterId, compact, accent, dragSource }: DraggableItemProps) {
+export function DraggableItem({ item, isEquipped, enhancementLevel = 0, durability, maxDurability, quantity = 1, inventoryId, onEquip, onUnequip, onConsume, onEnhance, onTransfer, onSendToGlobal, onSell, characterId, compact, accent, dragSource }: DraggableItemProps) {
   // Imagem do item: banco (item.image) → asset estático por nome (/items/<slug>.webp)
   // → ícone genérico só se a arte 404 (ex.: item sem webp). Cobre registros antigos
   // (ingredientes/materiais) criados antes de gravarmos image no banco.
@@ -44,6 +47,21 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, quantity
   const itemImage = imgError ? null : (resolveImageUrl(item.image) ?? (item.name ? itemImagePath(item.name) : null));
   const showEnhancement = enhancementLevel > 0;
   const showQuantity = quantity > 1;
+
+  // Barra fina de durabilidade (só quando a instância informa e está desgastada).
+  const hasDurability = typeof durability === 'number' && typeof maxDurability === 'number' && maxDurability > 0;
+  const durabilityPct = hasDurability ? Math.max(0, Math.min(100, Math.round((durability! / maxDurability!) * 100))) : 100;
+  const broken = hasDurability && durability! <= 0;
+  const durabilityBar = hasDurability && durabilityPct < 100 ? (
+    <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 3, background: 'rgba(0,0,0,0.7)', zIndex: 1 }}>
+      <div
+        style={{
+          height: '100%', width: `${durabilityPct}%`,
+          background: durabilityPct < 30 ? '#ef4444' : durabilityPct < 70 ? '#f59e0b' : '#10b981',
+        }}
+      />
+    </div>
+  ) : null;
   const [{ isDragging }, drag] = useDrag({
     type: 'ITEM',
     // Além do item, carrega a origem/quantidade/linha para o painel de destino
@@ -61,6 +79,8 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, quantity
         item={item}
         isEquipped={isEquipped}
         enhancementLevel={enhancementLevel}
+        durability={durability}
+        maxDurability={maxDurability}
         quantity={quantity}
         inventoryId={inventoryId}
         onEquip={onEquip}
@@ -94,7 +114,7 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, quantity
                 src={itemImage}
                 alt={item.name}
                 onError={() => setImgError(true)}
-                className="w-full h-full object-cover art-bright group-hover:scale-110 transition-transform"
+                className={`w-full h-full object-cover art-bright group-hover:scale-110 transition-transform ${broken ? 'grayscale opacity-60' : ''}`}
                 referrerPolicy="no-referrer"
                 loading="lazy"
                 decoding="async"
@@ -103,6 +123,7 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, quantity
               <ItemIcon type={item.type} size={20} className="group-hover:scale-110 transition-transform text-white" />
             )}
           </div>
+          {durabilityBar}
           {showEnhancement && (
             <span
               style={{
@@ -136,6 +157,8 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, quantity
       item={item}
       isEquipped={isEquipped}
       enhancementLevel={enhancementLevel}
+      durability={durability}
+      maxDurability={maxDurability}
       inventoryId={inventoryId}
       onEquip={onEquip}
       onUnequip={onUnequip}
@@ -162,7 +185,7 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, quantity
               src={itemImage}
               alt={item.name}
               onError={() => setImgError(true)}
-              className="w-full h-full object-cover art-bright group-hover:scale-110 transition-transform"
+              className={`w-full h-full object-cover art-bright group-hover:scale-110 transition-transform ${broken ? 'grayscale opacity-60' : ''}`}
               referrerPolicy="no-referrer"
               loading="lazy"
               decoding="async"
@@ -171,6 +194,7 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, quantity
             <ItemIcon type={item.type} size={32} className="group-hover:scale-110 transition-transform" />
           )}
         </div>
+        {durabilityBar}
         {showEnhancement && (
           <div className="absolute bottom-1 right-1 text-xs font-bold text-[#f1d79a] bg-black/60 px-1 rounded">
             {getLevelLabel(enhancementLevel)}

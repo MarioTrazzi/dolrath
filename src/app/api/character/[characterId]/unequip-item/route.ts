@@ -52,6 +52,8 @@ export async function POST(
         params.characterId,
         equipment.itemId,
         equipment.enhancementLevel,
+        equipment.durability,
+        equipment.maxDurability,
       )
     })
 

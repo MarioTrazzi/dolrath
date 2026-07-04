@@ -4,13 +4,11 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { getItemVisual, getItemTypeLabel, getItemCategory } from '@/lib/itemVisuals';
 import { itemImagePath } from '@/lib/itemCatalog';
-import { getDisplayName, getLevelLabel } from '@/lib/enhancementSystem';
+import { getDisplayName, getLevelLabel, REPAIR_PER_DUPLICATE } from '@/lib/enhancementSystem';
 import { formatItemStats } from '@/lib/itemStats';
 import { resolveImageUrl } from '@/lib/imageUrl';
 import EnhancementDialog, { EnhanceablePickerItem } from '@/components/EnhancementDialog';
 import { getSlotTypeFromItemType } from '@/lib/equipmentSlot';
-
-const REPAIR_PER_DUPLICATE = 10;
 
 interface Character {
   id: string;
@@ -26,6 +24,9 @@ interface InventoryItem {
   enhancementLevel: number;
   durability: number;
   maxDurability: number;
+  /** true = peça EQUIPADA (id é da linha de CharacterEquipment, não do inventário). */
+  equipped?: boolean;
+  slot?: string;
   item: {
     id: string;
     name: string;
@@ -72,13 +73,25 @@ export default function RepairBench({
   const fetchInventory = useCallback(async (characterId: string) => {
     setLoadingInv(true);
     try {
-      const res = await fetch(`/api/store/inventory?characterId=${characterId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setInventory(Array.isArray(data) ? data : []);
-      } else {
-        setInventory([]);
-      }
+      // Inventário + peças EQUIPADAS (desgastam em uso e são reparadas sem desequipar).
+      const [invRes, eqRes] = await Promise.all([
+        fetch(`/api/store/inventory?characterId=${characterId}`),
+        fetch(`/api/character/${characterId}/equipment`),
+      ]);
+      const inv = invRes.ok ? await invRes.json() : [];
+      const eqRows = eqRes.ok ? await eqRes.json() : [];
+      const equippedAsInv: InventoryItem[] = (Array.isArray(eqRows) ? eqRows : []).map((eq: any) => ({
+        id: eq.id,
+        itemId: eq.itemId,
+        quantity: 1,
+        enhancementLevel: eq.enhancementLevel ?? 0,
+        durability: eq.durability ?? 100,
+        maxDurability: eq.maxDurability ?? 100,
+        equipped: true,
+        slot: eq.slot,
+        item: eq.item,
+      }));
+      setInventory([...equippedAsInv, ...(Array.isArray(inv) ? inv : [])]);
     } catch {
       setInventory([]);
     } finally {
@@ -107,7 +120,8 @@ export default function RepairBench({
   const displayGroups = useMemo(() => {
     const map = new Map<string, InventoryItem[]>();
     for (const inv of equipment) {
-      const key = `${inv.itemId}:${inv.enhancementLevel}:${inv.durability}:${inv.maxDurability}`;
+      // Peça equipada nunca agrupa com as do inventário (flag no fim da chave).
+      const key = `${inv.itemId}:${inv.enhancementLevel}:${inv.durability}:${inv.maxDurability}:${inv.equipped ? 'eq' : 'inv'}`;
       const arr = map.get(key);
       if (arr) arr.push(inv);
       else map.set(key, [inv]);
@@ -141,11 +155,13 @@ export default function RepairBench({
   const selectedCount = selectedGroup?.count ?? (selected ? 1 : 0);
 
   // Cópias base (nível 0) disponíveis do mesmo item, excluindo a peça selecionada.
+  // Só linhas do INVENTÁRIO servem de cópia (peça equipada não é combustível).
   const copiesAvailable = useMemo(() => {
     if (!selected) return 0;
     return inventory
       .filter(
         (inv) =>
+          !inv.equipped &&
           inv.itemId === selected.itemId &&
           inv.enhancementLevel === 0 &&
           inv.id !== selected.id
@@ -163,7 +179,7 @@ export default function RepairBench({
   const memoryShardsAvailable = useMemo(
     () =>
       inventory
-        .filter((inv) => inv.item.name === 'Estilhaço de Memória')
+        .filter((inv) => !inv.equipped && inv.item.name === 'Estilhaço de Memória')
         .reduce((sum, inv) => sum + inv.quantity, 0),
     [inventory]
   );
@@ -193,7 +209,9 @@ export default function RepairBench({
       const res = await fetch(`/api/character/${selectedCharacterId}/repair-item`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ inventoryId: selected.id, mode }),
+        body: JSON.stringify(
+          selected.equipped ? { equipmentId: selected.id, mode } : { inventoryId: selected.id, mode }
+        ),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -280,9 +298,10 @@ export default function RepairBench({
   };
 
   // Itens enhanceáveis do personagem para o seletor do diálogo de aprimoramento.
+  // (só linhas do inventário — a API de aprimoramento trabalha com inventoryId)
   const enhanceableItems: EnhanceablePickerItem[] = useMemo(
     () =>
-      equipment.map((inv) => ({
+      equipment.filter((inv) => !inv.equipped).map((inv) => ({
         id: inv.id,
         name: inv.item.name,
         type: inv.item.type,
@@ -321,9 +340,11 @@ export default function RepairBench({
       </div>
 
       <p className="text-sm text-white/60 mb-4">
-        Clique num item do inventário para ver os detalhes, repará-lo (queimando cópias nível 0,{' '}
+        Clique num item — inclusive nos <span className="text-sky-300 font-semibold">equipados ⚡</span> —
+        para ver os detalhes, repará-lo (queimando cópias nível 0,{' '}
         <span className="text-amber-300 font-semibold">+{REPAIR_PER_DUPLICATE}</span> cada) ou vendê-lo
-        ao ferreiro por metade do preço.
+        ao ferreiro por metade do preço. Equipamento desgasta a cada abate na masmorra; em 0 quebra e
+        não dá bônus até reparar.
       </p>
 
       {loadingInv && inventory.length === 0 ? (
@@ -370,7 +391,7 @@ export default function RepairBench({
                       <img
                         src={image}
                         alt={rep.item.name}
-                        className="w-full h-full object-cover art-bright group-hover:scale-110 transition-transform"
+                        className={`w-full h-full object-cover art-bright group-hover:scale-110 transition-transform ${pct === 0 ? 'grayscale opacity-60' : ''}`}
                         referrerPolicy="no-referrer"
                       />
                     ) : (
@@ -385,6 +406,17 @@ export default function RepairBench({
                       style={{ textShadow: '0 1px 2px #000, 0 0 3px #000' }}
                     >
                       x{count}
+                    </span>
+                  )}
+
+                  {/* Peça equipada no personagem (repara sem desequipar) */}
+                  {rep.equipped && (
+                    <span
+                      className="absolute top-0.5 left-1 text-[11px] leading-none"
+                      title="Equipado"
+                      style={{ filter: 'drop-shadow(0 1px 2px #000)' }}
+                    >
+                      {pct === 0 ? '💔' : '⚡'}
                     </span>
                   )}
 
@@ -464,6 +496,16 @@ export default function RepairBench({
                         x{selectedCount} no inventário
                       </span>
                     )}
+                    {selected.equipped && (
+                      <span className="text-xs font-semibold bg-sky-500/30 text-sky-300 px-2 py-0.5 rounded-full">
+                        ⚡ Equipado
+                      </span>
+                    )}
+                    {selected.durability <= 0 && (
+                      <span className="text-xs font-black bg-red-500/30 text-red-300 px-2 py-0.5 rounded-full">
+                        💔 Quebrado — sem bônus
+                      </span>
+                    )}
                   </div>
                   {selectedStats.length > 0 && (
                     <div className="flex flex-wrap gap-1.5">
@@ -498,23 +540,25 @@ export default function RepairBench({
                 </div>
               </div>
 
-              {/* Ações: equipar no personagem e aprimorar */}
-              <div className="mb-4 pb-4 border-b border-white/10 flex gap-3">
-                <button
-                  onClick={handleEquip}
-                  disabled={busy}
-                  className="flex-1 px-4 py-2.5 rounded-xl font-bold text-sm text-white bg-sky-700/70 hover:bg-sky-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  ⚡ Equipar
-                </button>
-                <button
-                  onClick={() => setEnhanceOpen(true)}
-                  disabled={busy}
-                  className="flex-1 px-4 py-2.5 rounded-xl font-black text-sm text-black bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  ⚒️ Aprimorar
-                </button>
-              </div>
+              {/* Ações: equipar no personagem e aprimorar (peça já equipada só repara) */}
+              {!selected.equipped && (
+                <div className="mb-4 pb-4 border-b border-white/10 flex gap-3">
+                  <button
+                    onClick={handleEquip}
+                    disabled={busy}
+                    className="flex-1 px-4 py-2.5 rounded-xl font-bold text-sm text-white bg-sky-700/70 hover:bg-sky-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    ⚡ Equipar
+                  </button>
+                  <button
+                    onClick={() => setEnhanceOpen(true)}
+                    disabled={busy}
+                    className="flex-1 px-4 py-2.5 rounded-xl font-black text-sm text-black bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    ⚒️ Aprimorar
+                  </button>
+                </div>
+              )}
 
               {/* Reparo (somente itens desgastados) */}
               {selectedDamaged && (
@@ -616,7 +660,9 @@ export default function RepairBench({
                 </div>
               )}
 
-              {/* Venda ao ferreiro (½ preço) — também serve de burn */}
+              {/* Venda ao ferreiro (½ preço) — também serve de burn. Peça equipada
+                  não vende daqui (desequipa primeiro). */}
+              {!selected.equipped && (
               <div className="flex flex-col gap-2">
                 <span className="text-[11px] text-white/40">
                   Vender ao ferreiro destrói o item por metade do preço (½ de {selected.item.goldPrice ?? 0} 🪙).
@@ -640,6 +686,7 @@ export default function RepairBench({
                   )}
                 </div>
               </div>
+              )}
             </div>
           )}
         </>
@@ -651,8 +698,8 @@ export default function RepairBench({
           open={enhanceOpen}
           onClose={() => setEnhanceOpen(false)}
           characterId={selectedCharacterId}
-          inventoryId={selected?.id}
-          itemName={selected?.item.name}
+          inventoryId={selected && !selected.equipped ? selected.id : undefined}
+          itemName={selected && !selected.equipped ? selected.item.name : undefined}
           items={enhanceableItems}
           onChanged={() => { fetchInventory(selectedCharacterId); onChanged?.(); }}
         />

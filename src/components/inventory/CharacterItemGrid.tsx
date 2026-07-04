@@ -8,6 +8,9 @@ export interface InventoryRow {
   id: string; // id da linha de inventário (CharacterInventory)
   quantity: number;
   enhancementLevel?: number;
+  /** Desgasta com o uso na masmorra; 0 = quebrado (sem bônus até reparar). */
+  durability?: number;
+  maxDurability?: number;
   item: Item;
 }
 
@@ -73,6 +76,8 @@ export function CharacterItemGrid({
               key={row.id}
               item={row.item}
               enhancementLevel={row.enhancementLevel || 0}
+              durability={row.durability}
+              maxDurability={row.maxDurability}
               quantity={row.quantity || 1}
               inventoryId={row.id}
               compact

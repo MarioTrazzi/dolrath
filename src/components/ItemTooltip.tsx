@@ -20,6 +20,9 @@ interface ItemTooltipProps {
   isEquipped?: boolean;
   /** Nível de aprimoramento da instância (+1, +2, ...). 0 = sem aprimoramento. */
   enhancementLevel?: number;
+  /** Durabilidade da instância (desgasta com o uso; 0 = quebrado, sem bônus). */
+  durability?: number;
+  maxDurability?: number;
   /** Id da linha de inventário (CharacterInventory). Necessário para aprimorar. */
   inventoryId?: string;
   onEquip?: (itemId: string, slotType: EquipmentSlotType) => void;
@@ -45,7 +48,7 @@ interface ItemTooltipProps {
   children: React.ReactNode;
 }
 
-export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryId, onEquip, onUnequip, onConsume, onEnhance, onTransfer, onSendToGlobal, onSell, quantity = 1, characterId, children }: ItemTooltipProps) {
+export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability, maxDurability, inventoryId, onEquip, onUnequip, onConsume, onEnhance, onTransfer, onSendToGlobal, onSell, quantity = 1, characterId, children }: ItemTooltipProps) {
   const router = useRouter();
   const [showTooltip, setShowTooltip] = useState(false);
   const [imgError, setImgError] = useState(false);
@@ -330,6 +333,30 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, inventoryI
                     {stat}
                   </span>
                 ))}
+              </div>
+            )}
+
+            {/* Durabilidade (equipamento desgasta com o uso; 0 = quebrado) */}
+            {typeof durability === 'number' && typeof maxDurability === 'number' && maxDurability > 0 && (
+              <div className="mb-3">
+                <div className="flex justify-between text-xs mb-1">
+                  <span className={durability <= 0 ? 'text-red-400 font-bold' : 'text-white/60'}>
+                    {durability <= 0 ? '💔 QUEBRADO' : 'Durabilidade'}
+                  </span>
+                  <span className="text-white/60">{durability}/{maxDurability}</span>
+                </div>
+                <div className="w-full h-1.5 bg-black/50 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${Math.round((durability / maxDurability) * 100)}%`,
+                      background: durability / maxDurability < 0.3 ? '#ef4444' : durability / maxDurability < 0.7 ? '#f59e0b' : '#10b981',
+                    }}
+                  />
+                </div>
+                {durability <= 0 && (
+                  <p className="text-xs text-red-300 mt-1">Sem bônus até reparar no ferreiro.</p>
+                )}
               </div>
             )}
 

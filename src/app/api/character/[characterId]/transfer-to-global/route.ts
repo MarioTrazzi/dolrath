@@ -39,17 +39,28 @@ export async function POST(
       );
     }
 
-    // Check if character has the item
+    // Check if character has the item. O Baú Geral empilha por itemId (sem
+    // aprimoramento nem durabilidade), então só instâncias ÍNTEGRAS (nível 0 e
+    // durabilidade cheia) podem ir — senão o estado da peça seria apagado.
     const characterInventoryItem = await prisma.characterInventory.findFirst({
       where: {
         characterId: params.characterId,
         itemId: itemId,
+        enhancementLevel: 0,
       },
+      orderBy: { quantity: 'desc' },
     });
 
     if (!characterInventoryItem || characterInventoryItem.quantity < quantity) {
       return NextResponse.json(
         { error: 'Not enough items in character inventory' },
+        { status: 400 }
+      );
+    }
+
+    if (characterInventoryItem.durability < characterInventoryItem.maxDurability) {
+      return NextResponse.json(
+        { error: 'Item desgastado não pode ir ao Baú Geral. Repare-o no ferreiro antes de transferir.' },
         { status: 400 }
       );
     }

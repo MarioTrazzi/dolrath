@@ -37,6 +37,7 @@ import {
   type SpecialDef,
 } from '@/lib/transformationSpecials'
 import { applyEnhancementToStats } from '@/lib/enhancementSystem'
+import { isBroken } from '@/lib/durability'
 import { itemImagePath } from '@/lib/itemCatalog'
 import {
   computeLevers,
@@ -214,9 +215,17 @@ interface CombatGrant {
   loot: NodeLoot
   skippedDrops?: LootDrop[]
 }
+interface EquipmentWear {
+  slot: string
+  name: string
+  durability: number
+  maxDurability: number
+  justBroke: boolean
+}
 interface CombatResponse {
   granted?: CombatGrant
   cleared?: boolean
+  equipmentWear?: EquipmentWear[]
   finished?: boolean
   bossDefeated?: boolean
   retreated?: boolean
@@ -428,6 +437,8 @@ function equipmentPower(equipArray: any[]): { attack: number; defense: number; h
   let defense = 0
   let hp = 0
   for (const eq of equipArray || []) {
+    // Peça QUEBRADA (durabilidade 0) não contribui com nada até ser reparada.
+    if (isBroken(eq)) continue
     const s = enhancedStats(eq)
     // ataque: melhor atributo ofensivo da peça (gear dá atributos REAIS — STR/AGI/INT)
     attack += Math.max(num(s.str), num(s.agi), num(s.int))
@@ -497,6 +508,13 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
   const [stamina, setStamina] = useState(character.stamina)
   const hpRef = useRef(hp)
   hpRef.current = hp
+
+  // ⚔️ Equipamento VIVO da run: o servidor debita durabilidade a cada abate e
+  // devolve `equipmentWear` — aplicamos aqui para que uma peça que QUEBRE no
+  // meio da run pare de contribuir imediatamente (gear/gearTier recalculam).
+  const [equipList, setEquipList] = useState<any[]>(() => character.equipment || [])
+  // Avisos de "quase quebrando" só 1x por peça (senão spamma o log a cada abate).
+  const wearWarnedRef = useRef<Set<string>>(new Set())
 
   // ---------- Estado geral da run ----------
   const [phase, setPhase] = useState<RunPhase>('explore')
@@ -835,13 +853,13 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
   // ---------- Levers de combate (MODELO ENXUTO) ----------
   // Gear conta via TIER (raridade × aprimoramento → escala de poder); atributos da
   // criação/nível via TILT; a transformação aplica o buff simétrico (×TRANSFORM_SCALE).
-  const gear = useMemo(() => equipmentPower(character.equipment), [character.equipment])
+  const gear = useMemo(() => equipmentPower(equipList), [equipList])
   const gearTier = useMemo(
-    () => deriveGearTier((character.equipment || []).map((e: any) => ({
+    () => deriveGearTier((equipList || []).filter((e: any) => !isBroken(e)).map((e: any) => ({
       rarity: e?.item?.rarity ?? e?.rarity,
       enhancementLevel: e?.enhancementLevel,
     }))),
-    [character.equipment]
+    [equipList]
   )
   const combatClass = useMemo(() => normalizeCombatClass(character.class) ?? 'warrior', [character.class])
   const baseLevers = useMemo<Levers>(
@@ -858,6 +876,8 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
   // HP da run = pool do jogo (atributos via maxHp + vida das peças). É o recurso que o
   // jogador gerencia entre lutas; a OFENSA/DEFESA do combate vêm dos levers.
   const effMaxHp = character.maxHp + gear.hp
+  // Peça com HP que quebra mid-run derruba o teto — o HP atual acompanha.
+  useEffect(() => { setHp((h) => Math.min(h, effMaxHp)) }, [effMaxHp])
   // Poder efetivo de um ataque = poder do lever × multiplicador do tipo.
   const playerPowerFor = (kind: AttackKind) => playerLevers.power * ATTACKS[kind].powerMult
   // Nome do ATAQUE DE CLASSE (o `weapon`, d8) por classe — Ataque Furtivo/Bola de Fogo/etc.
@@ -877,7 +897,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
     maxMp: character.maxMp,
     stamina,
     maxStamina: character.maxStamina,
-    equipmentMap: mapEquipment(character.equipment),
+    equipmentMap: mapEquipment(equipList),
     isAlive: hp > 0,
     isTransformed: !!transform,
     transformationType: transform?.type ?? null,
@@ -897,7 +917,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
       dpDelta: 0,
     },
     combatStatLabels: { ad: 'ATK', ap: 'DEF', dp: 'STR' },
-  }), [character, hp, mp, stamina, transform, effMaxHp, playerLevers, baseLevers])
+  }), [character, hp, mp, stamina, transform, effMaxHp, playerLevers, baseLevers, equipList])
 
   const monsterFighter: FighterView | null = useMemo(() => monster ? {
     id: monster.id,
@@ -1789,6 +1809,24 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
       if (res.ok) {
         grant = data.granted ?? null
         cleared = !!data.cleared
+        // ⚔️ Desgaste debitado pelo servidor neste abate: atualiza o gear vivo da
+        // run (peça que quebra para de contribuir já no próximo golpe) e avisa.
+        if (data.equipmentWear?.length) {
+          const wearBySlot = new Map(data.equipmentWear.map((w) => [w.slot, w]))
+          setEquipList((prev) => prev.map((eq: any) => {
+            const w = wearBySlot.get(eq.slot)
+            return w ? { ...eq, durability: w.durability, maxDurability: w.maxDurability } : eq
+          }))
+          for (const w of data.equipmentWear) {
+            if (w.justBroke) {
+              pushLog(`💔 ${w.name} QUEBROU! Sem bônus até reparar no ferreiro.`)
+              showBanner('💔', `${w.name} quebrou!`, 2600)
+            } else if (w.durability <= 15 && !wearWarnedRef.current.has(w.slot)) {
+              wearWarnedRef.current.add(w.slot)
+              pushLog(`⚠️ ${w.name} está quase quebrando (${w.durability}/${w.maxDurability}).`)
+            }
+          }
+        }
         if (data.leveledUp) {
           setLeveledUpThisRun(true)
           // Efeito de level up: HP e MP voltam ao cheio + flash brilhante na tela.

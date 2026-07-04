@@ -16,6 +16,9 @@ interface EquipmentSlotProps {
   item?: Item;
   /** Nível de aprimoramento da instância equipada (+1, +2, ...). 0 = sem aprimoramento. */
   enhancementLevel?: number;
+  /** Durabilidade da peça equipada (desgasta com o uso; 0 = quebrada, sem bônus). */
+  durability?: number;
+  maxDurability?: number;
   onEquip: (itemId: string, slotType: EquipmentSlotType) => void;
   onUnequip: (itemId: string) => void;
   /** Modo compacto estilo Black Desert: slot pequeno e quadrado, com emoji-placeholder */
@@ -73,7 +76,7 @@ function canEquipInSlot(itemType: string, slotType: EquipmentSlotType): boolean 
   }
 }
 
-export function EquipmentSlot({ type, item, enhancementLevel = 0, onEquip, onUnequip, compact, accent, ghost }: EquipmentSlotProps) {
+export function EquipmentSlot({ type, item, enhancementLevel = 0, durability, maxDurability, onEquip, onUnequip, compact, accent, ghost }: EquipmentSlotProps) {
   // Imagem: banco (item.image) → asset estático por nome (/items/<slug>.webp) →
   // ícone genérico só se a arte 404. Espelha DraggableItem/ItemTooltip e cobre
   // itens criados sem `image` no banco (ex.: acessórios novos), que antes caíam
@@ -83,6 +86,22 @@ export function EquipmentSlot({ type, item, enhancementLevel = 0, onEquip, onUne
     ? (resolveImageUrl(item.image) ?? (item.name ? itemImagePath(item.name) : null))
     : null;
   const showEnhancement = enhancementLevel > 0;
+
+  // Barra de durabilidade da peça equipada (só quando a instância informa o valor).
+  const hasDurability = typeof durability === 'number' && typeof maxDurability === 'number' && maxDurability > 0;
+  const durabilityPct = hasDurability ? Math.max(0, Math.min(100, Math.round((durability! / maxDurability!) * 100))) : 100;
+  const broken = hasDurability && durability! <= 0;
+  const durabilityColor = durabilityPct < 30 ? '#ef4444' : durabilityPct < 70 ? '#f59e0b' : '#10b981';
+  const durabilityBar = hasDurability && (broken || durabilityPct < 100) ? (
+    <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-black/70 z-10">
+      <div className="h-full" style={{ width: `${durabilityPct}%`, background: durabilityColor }} />
+    </div>
+  ) : null;
+  const brokenBadge = broken ? (
+    <span className="absolute top-0.5 left-0.5 text-[11px] z-10 select-none" title="Quebrado — sem bônus até reparar" style={{ filter: 'drop-shadow(0 1px 2px #000)' }}>
+      💔
+    </span>
+  ) : null;
 
   const ref = useRef<HTMLDivElement>(null);
   const [{ isOver, canDrop }, drop] = useDrop({
@@ -125,14 +144,14 @@ export function EquipmentSlot({ type, item, enhancementLevel = 0, onEquip, onUne
         }}
       >
         {item ? (
-          <ItemTooltip item={item} isEquipped={true} enhancementLevel={enhancementLevel} onUnequip={onUnequip}>
-            <div className={`w-full h-full cursor-pointer group flex items-center justify-center overflow-hidden ${ghost ? 'opacity-40' : ''}`}>
+          <ItemTooltip item={item} isEquipped={true} enhancementLevel={enhancementLevel} durability={durability} maxDurability={maxDurability} onUnequip={onUnequip}>
+            <div className={`relative w-full h-full cursor-pointer group flex items-center justify-center overflow-hidden ${ghost ? 'opacity-40' : ''}`}>
               {itemImage ? (
                 <img
                   src={itemImage}
                   alt={item.name}
                   onError={() => setImgError(true)}
-                  className="w-full h-full object-cover art-bright group-hover:scale-110 transition-transform"
+                  className={`w-full h-full object-cover art-bright group-hover:scale-110 transition-transform ${broken ? 'grayscale opacity-60' : ''}`}
                   referrerPolicy="no-referrer"
                   loading="lazy"
                   decoding="async"
@@ -140,6 +159,8 @@ export function EquipmentSlot({ type, item, enhancementLevel = 0, onEquip, onUne
               ) : (
                 <ItemIcon type={item.type} size={24} className="group-hover:scale-110 transition-transform text-white" />
               )}
+              {brokenBadge}
+              {durabilityBar}
               {showEnhancement && (
                 <span
                   style={{
@@ -175,15 +196,17 @@ export function EquipmentSlot({ type, item, enhancementLevel = 0, onEquip, onUne
           item={item}
           isEquipped={true}
           enhancementLevel={enhancementLevel}
+          durability={durability}
+          maxDurability={maxDurability}
           onUnequip={onUnequip}
         >
-          <div className="w-full h-full cursor-pointer group flex items-center justify-center overflow-hidden rounded-md">
+          <div className="relative w-full h-full cursor-pointer group flex items-center justify-center overflow-hidden rounded-md">
             {itemImage ? (
               <img
                 src={itemImage}
                 alt={item.name}
                 onError={() => setImgError(true)}
-                className="w-full h-full object-cover art-bright group-hover:scale-110 transition-transform"
+                className={`w-full h-full object-cover art-bright group-hover:scale-110 transition-transform ${broken ? 'grayscale opacity-60' : ''}`}
                 referrerPolicy="no-referrer"
                 loading="lazy"
                 decoding="async"
@@ -191,6 +214,8 @@ export function EquipmentSlot({ type, item, enhancementLevel = 0, onEquip, onUne
             ) : (
               <ItemIcon type={item.type} size={32} className="group-hover:scale-110 transition-transform" />
             )}
+            {brokenBadge}
+            {durabilityBar}
             {showEnhancement && (
               <div className="absolute bottom-1 right-1 text-xs font-bold text-[#f1d79a] bg-black/60 px-1 rounded">
                 {getLevelLabel(enhancementLevel)}

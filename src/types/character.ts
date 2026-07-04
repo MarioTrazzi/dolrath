@@ -70,6 +70,9 @@ export interface CharacterEquipment {
   item: Item;
   itemId: string;
   equipped: boolean;
+  /** Desgasta com o uso na masmorra; 0 = quebrada (sem bônus até reparar). */
+  durability?: number;
+  maxDurability?: number;
   createdAt: Date;
   updatedAt: Date;
 }

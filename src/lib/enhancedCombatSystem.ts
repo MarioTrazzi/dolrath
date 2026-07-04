@@ -2,6 +2,7 @@
 // Implementa dano crítico e modificadores de velocidade/resistência
 
 import { applyEnhancementToStats, getStatMultiplier } from './enhancementSystem';
+import { isBroken } from './durability';
 
 export interface CombatStats {
   str: number;
@@ -38,9 +39,11 @@ export function calculateCombatStats(character: any): CombatStats {
   const baseInt = (character.attributes?.int || character.baseStats?.int || 0);
   const baseRes = (character.attributes?.res || character.baseStats?.res || 0);
 
-  // Somar bônus de equipamentos se existirem (escalados pelo aprimoramento ⚒️)
+  // Somar bônus de equipamentos se existirem (escalados pelo aprimoramento ⚒️).
+  // Peça QUEBRADA (durability 0) não soma nada até ser reparada.
   const equipmentArray = Array.isArray(character.equipment) ? character.equipment : [];
   const equipmentBonus = equipmentArray.reduce((total: any, equipment: any) => {
+    if (isBroken(equipment)) return total;
     const stats = applyEnhancementToStats(equipment.item?.stats, equipment.enhancementLevel || 0);
     return {
       agi: total.agi + (stats.agi || 0),

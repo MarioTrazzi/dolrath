@@ -7,8 +7,12 @@
 // lutadores, faz todos lutarem contra todos e agrega win-rate
 // POR RAÇA e POR CLASSE — para ajustar bônus em src/lib/gameData.ts.
 //
-// As regras de combate espelham EXATAMENTE o server/socket-server.js
-// ao vivo (sem modo baseline; só o ruleset de produção atual).
+// ⚠️ HISTÓRICO (auditoria 2026-07-05): este sim modela o ruleset ANTIGO por
+// stats (light d6/heavy d10/special d20, custo de stamina 1/2/4). O PvP AO VIVO
+// migrou para o modelo de LEVERS (combatModel: computeLevers + resolveHit,
+// Golpe d6/Ataque de Classe d8/Especial d20 por MP) — o sim fiel ao PvP de
+// produção é scripts/pvp-lever-sim.js. Mantido como referência do balance de
+// stats/raça (que segue valendo no PvE via applyAttrTilt).
 //
 // Uso:
 //   node scripts/pvp-race-class-sim.js

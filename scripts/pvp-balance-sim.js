@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // ============================================================
 // DOLRATH — Simulador de balanceamento PvP
-// Espelha EXATAMENTE as regras do server/socket-server.js e a
-// progressão do distribute-points para medir win-rates entre
-// arquétipos em vários níveis.
+// ⚠️ HISTÓRICO (auditoria 2026-07-05): modela o ruleset ANTIGO por stats.
+// O PvP AO VIVO usa o modelo de LEVERS (combatModel via socket-server) —
+// o sim fiel à produção é scripts/pvp-lever-sim.js. Mantido como referência
+// da progressão distribute-points/arquétipos.
 //
 // Uso:
 //   node scripts/pvp-balance-sim.js            # regras atuais (baseline)

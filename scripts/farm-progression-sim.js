@@ -73,11 +73,12 @@ const xpMinor = (tier, share) => Math.floor((12 + Math.random() * 12) * tf(tier)
 const xpMain = (tier) => Math.floor((35 + Math.random() * 25) * tf(tier))
 const xpBoss = () => Math.floor((150 + Math.random() * 100) * tf(ROOMS))
 
-// ---- PROPOSTA: drop POR ABATE (a tunar aqui) ----
-const KILL_SHARD = Number(process.env.KILL_SHARD ?? 0.35)   // nó menor, por abate
-const KILL_SHARD_MAIN = Number(process.env.KILL_SHARD_MAIN ?? 0.5)
+// ---- Drop POR ABATE (JÁ NO JOGO: dungeonAdventures.ts KILL_SHARD_CHANCE/BOSS_KILL_STONES) ----
+// Auditoria 2026-07-05: defaults sincronizados com produção (eram a proposta antiga 0.35/0.5/1-2).
+const KILL_SHARD = Number(process.env.KILL_SHARD ?? 0.4)    // nó menor, por abate
+const KILL_SHARD_MAIN = Number(process.env.KILL_SHARD_MAIN ?? 0.6)
 const BOSS_STONES_MIN = Number(process.env.BOSS_STONES_MIN ?? 1) // Pedra Negra GARANTIDA no boss
-const BOSS_STONES_MAX = Number(process.env.BOSS_STONES_MAX ?? 2)
+const BOSS_STONES_MAX = Number(process.env.BOSS_STONES_MAX ?? 3)
 
 // ---- Derrota/re-run ----
 // Derrota depende de NÍVEL e GEAR (um alt nv1 não mata o boss — e o boss é quem

@@ -37,7 +37,7 @@ function getProfessionLevel(xp) {
   while (level < 50 && total >= professionXpForLevel(level + 1)) level++
   return level
 }
-function gatherYieldPerTick(level) { return 1 + 0.04 * Math.max(1, level) }
+function gatherYieldPerTick(level) { return 1.4 + 0.06 * Math.max(1, level) } // P1 2026-07-05
 function farmPlotCount(level) { return Math.min(6, 2 + Math.floor(Math.max(1, level) / 5)) }
 function farmGrowthMult(level) { return Math.max(0.75, 1 - 0.01 * Math.max(1, level)) }
 

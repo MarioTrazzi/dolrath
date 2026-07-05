@@ -917,12 +917,14 @@ export const INGREDIENT_CATALOG: AlchemyIngredient[] = [
   { name: 'Erva Medicinal', description: 'Folhas cicatrizantes que fecham feridas e acalmam o corpo.', emoji: '🌿', rarity: 'COMMON', goldValue: 8, source: 'dungeon' },
   { name: 'Flor de Mana', description: 'Pétalas que guardam um resíduo de energia arcana.', emoji: '💠', rarity: 'COMMON', goldValue: 8, source: 'dungeon' },
   { name: 'Raiz Vigorosa', description: 'Raiz fibrosa que devolve fôlego e disposição.', emoji: '🌱', rarity: 'COMMON', goldValue: 8, source: 'dungeon' },
-  { name: 'Cogumelo Lunar', description: 'Cresce só ao luar; base de toxinas e estimulantes.', emoji: '🍄', rarity: 'COMMON', goldValue: 10, source: 'dungeon' },
+  // ⚖️ P1 coleta (2026-07-05): itens gated por nível de Coleta valem mais —
+  // são a recompensa da profissão (Cogumelo/Seivas/Cristais/Fragmentos).
+  { name: 'Cogumelo Lunar', description: 'Cresce só ao luar; base de toxinas e estimulantes.', emoji: '🍄', rarity: 'COMMON', goldValue: 20, source: 'dungeon' },
 
   // ---------- INCOMUM (chão de masmorra, sorte melhor) ----------
-  { name: 'Seiva Ancestral', description: 'Resina de árvore milenar; concentra o poder curativo.', emoji: '🩸', rarity: 'UNCOMMON', goldValue: 22, source: 'dungeon' },
+  { name: 'Seiva Ancestral', description: 'Resina de árvore milenar; concentra o poder curativo.', emoji: '🩸', rarity: 'UNCOMMON', goldValue: 60, source: 'dungeon' },
   { name: 'Pó de Osso', description: 'Osso de monstro moído, reforça músculos e couraça.', emoji: '🦴', rarity: 'UNCOMMON', goldValue: 20, source: 'dungeon' },
-  { name: 'Cristal de Mana', description: 'Fragmento cristalino que amplifica efeitos mágicos.', emoji: '🔮', rarity: 'UNCOMMON', goldValue: 24, source: 'dungeon' },
+  { name: 'Cristal de Mana', description: 'Fragmento cristalino que amplifica efeitos mágicos.', emoji: '🔮', rarity: 'UNCOMMON', goldValue: 40, source: 'dungeon' },
   { name: 'Glândula de Veneno', description: 'Extraída de criaturas peçonhentas; isola e neutraliza toxinas.', emoji: '🟢', rarity: 'UNCOMMON', goldValue: 22, source: 'dungeon' },
 
   // ---------- RARO (só de chefe) ----------
@@ -960,8 +962,8 @@ export interface ForgeMaterial {
 
 export const FORGE_MATERIAL_CATALOG: ForgeMaterial[] = [
   // ---------- BASE DE ARMADURA (lever de raridade: só couro = comum; +ferro = incomum) ----------
-  { name: 'Couro', description: 'Couro curtido de feras; base flexível de toda armadura leve.', emoji: '🟫', rarity: 'COMMON', goldValue: 5, source: 'dungeon' },
-  { name: 'Ferro', description: 'Lingote de ferro forjável; transforma couro comum em proteção incomum.', emoji: '🔩', rarity: 'UNCOMMON', goldValue: 12, source: 'dungeon' },
+  { name: 'Couro', description: 'Couro curtido de feras; base flexível de toda armadura leve.', emoji: '🟫', rarity: 'COMMON', goldValue: 6, source: 'dungeon' },
+  { name: 'Ferro', description: 'Lingote de ferro forjável; transforma couro comum em proteção incomum.', emoji: '🔩', rarity: 'UNCOMMON', goldValue: 14, source: 'dungeon' },
 
   // ---------- LIGANTES (estilhaços de pedra negra: ligam toda receita + viram pedra) ----------
   { name: 'Estilhaço de Pedra Negra (Arma)', description: 'Caco de pedra negra de arma; ligante mágico das armas. 10 viram uma Pedra Negra (Arma).', emoji: '🔸', rarity: 'COMMON', goldValue: 8, source: 'dungeon' },
@@ -971,9 +973,9 @@ export const FORGE_MATERIAL_CATALOG: ForgeMaterial[] = [
   { name: 'Ferro Pesado', description: 'Bloco denso de ferro; base de espadas e machados pesados.', emoji: '🔨', rarity: 'COMMON', goldValue: 9, source: 'dungeon' },
   { name: 'Metal Leve', description: 'Liga leve e afiada; ideal para adagas rápidas.', emoji: '🗡️', rarity: 'COMMON', goldValue: 9, source: 'dungeon' },
   { name: 'Madeira Flexível', description: 'Vime resistente e elástico; corpo e corda de bons arcos.', emoji: '🪵', rarity: 'COMMON', goldValue: 9, source: 'dungeon' },
-  { name: 'Seiva de Ent', description: 'Resina viva de árvore ancestral; conduz mana pelos cajados.', emoji: '🌳', rarity: 'COMMON', goldValue: 9, source: 'dungeon' },
-  { name: 'Cristal Bruto', description: 'Cristal arcano não lapidado; o núcleo dos orbes conjuradores.', emoji: '🔷', rarity: 'COMMON', goldValue: 9, source: 'dungeon' },
-  { name: 'Fragmentos de Joias', description: 'Cacos de gema endurecidos; incrustam as manoplas do monge.', emoji: '💎', rarity: 'COMMON', goldValue: 9, source: 'dungeon' },
+  { name: 'Seiva de Ent', description: 'Resina viva de árvore ancestral; conduz mana pelos cajados.', emoji: '🌳', rarity: 'COMMON', goldValue: 24, source: 'dungeon' },
+  { name: 'Cristal Bruto', description: 'Cristal arcano não lapidado; o núcleo dos orbes conjuradores.', emoji: '🔷', rarity: 'COMMON', goldValue: 28, source: 'dungeon' },
+  { name: 'Fragmentos de Joias', description: 'Cacos de gema endurecidos; incrustam as manoplas do monge.', emoji: '💎', rarity: 'COMMON', goldValue: 48, source: 'dungeon' },
 
   // ---------- REPARO DE ALTO NÍVEL (só de chefe; repara raro/épico/lendário) ----------
   { name: 'Estilhaço de Memória', description: 'Fragmento que guarda a forma original de um equipamento lendário; restaura +10 de durabilidade em peças raras, épicas e lendárias.', emoji: '🧠', rarity: 'RARE', goldValue: 80, source: 'dungeon_boss', memoryShard: true },

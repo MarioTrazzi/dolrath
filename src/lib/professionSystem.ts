@@ -66,10 +66,15 @@ export function getProfessionLevelInfo(xp: number): ProfessionLevelInfo {
 
 /**
  * Itens rendidos por tique de coleta (fração resolvida probabilisticamente
- * por quem sorteia): nv1 ≈ 1, nv25 = 2, nv50 = 3.
+ * por quem sorteia): nv1 ≈ 1,5, nv25 ≈ 2,9, nv50 ≈ 4,4.
+ * ⚖️ Lançamento (P1 coleta, 2026-07-05): era 1+0,04L — a coleta rendia ~11% do
+ * gold/stamina da masmorra em qualquer nível. Com a curva nova + revalorização
+ * dos materiais gated por nível (itemCatalog), a rampa fica ~10% (nv1) → ~18%
+ * (nv10) → ~34% (nv25) → ~52% (nv50): idle vale menos que jogo ativo, mas a
+ * PROFISSÃO progride até virar relevante. [docs/balance-report-launch.md]
  */
 export function gatherYieldPerTick(gatherLevel: number): number {
-  return 1 + 0.04 * Math.max(1, gatherLevel);
+  return 1.4 + 0.06 * Math.max(1, gatherLevel);
 }
 
 /** Chance de uma semente extra por tique (só nos Campos de Ervas). */

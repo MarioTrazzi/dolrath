@@ -15,6 +15,7 @@ import CreationCardBackdrop from '@/components/character/CreationCardBackdrop';
 import { CharacterStatChips, computePower } from '@/components/character/CharacterStatChips';
 import { getBlendedVisual } from '@/lib/creationVisuals';
 import { getProfessionLevel } from '@/lib/professionSystem';
+import { getGatherField } from '@/lib/gathering';
 // ...existing code...
 import { Character } from '@/types/game';
 import { getRaceById, getClassById } from '@/lib/gameData';
@@ -570,18 +571,22 @@ export default function DashboardPage() {
                               Lv {displayLevel}
                             </span>
                           )}
-                          {gatherInfo && (
-                            <span
-                              className="px-2 py-0.5 text-[11px] font-semibold rounded-full text-emerald-200 bg-emerald-500/15 border border-emerald-400/40"
-                              title={invFull
-                                ? 'Inventário cheio — coleta pausada sem gastar stamina'
-                                : gatherInfo.status === 'exhausted'
-                                  ? 'Sessão esgotada — espólio aguardando coleta'
-                                  : 'Este herói está numa sessão de coleta'}
-                            >
-                              {invFull ? '🎒 Coleta pausada' : gatherInfo.status === 'exhausted' ? '💤 Espólio pronto' : '⛏️ Coletando'}
-                            </span>
-                          )}
+                          {gatherInfo && (() => {
+                            const field = getGatherField(gatherInfo.fieldId);
+                            const fieldLabel = field ? `${field.emoji} ${field.name}` : '⛏️ Coletando';
+                            return (
+                              <span
+                                className="px-2 py-0.5 text-[11px] font-semibold rounded-full text-emerald-200 bg-emerald-500/15 border border-emerald-400/40"
+                                title={invFull
+                                  ? `Inventário cheio — coleta pausada em ${field?.name ?? 'campo'} sem gastar stamina`
+                                  : gatherInfo.status === 'exhausted'
+                                    ? `Sessão esgotada em ${field?.name ?? 'campo'} — espólio aguardando coleta`
+                                    : `Este herói está coletando em ${field?.name ?? 'campo'}`}
+                              >
+                                {invFull ? '🎒 Coleta pausada' : gatherInfo.status === 'exhausted' ? '💤 Espólio pronto' : fieldLabel}
+                              </span>
+                            );
+                          })()}
                           {charRow?.gatherXp > 0 && (
                             <span className="px-2 py-0.5 text-[11px] font-semibold rounded-full text-lime-200 bg-lime-500/10 border border-lime-400/30">
                               ⛏️ Nv.{gatherLevel}

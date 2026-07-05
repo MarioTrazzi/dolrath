@@ -47,6 +47,9 @@ interface InventoryPanelProps {
   /** Chamado quando um item de OUTRO inventário é solto neste painel.
    *  Recebe o item arrastado e a quantidade disponível na pilha de origem. */
   onItemDropped?: (item: DraggedItem, availableQuantity: number) => void;
+  /** Encontra a peça equipada no mesmo slot de um item do inventário, para o
+   *  card mostrar a diferença de stats antes de trocar (ver ItemTooltip). */
+  getCompareTo?: (item: Item) => { item: Item; enhancementLevel?: number } | null;
 }
 
 /**
@@ -78,6 +81,7 @@ export default function InventoryPanel({
   gridTemplateColumns = 'repeat(auto-fill, minmax(56px, 1fr))',
   dragSource,
   onItemDropped,
+  getCompareTo,
 }: InventoryPanelProps) {
   const [search, setSearch] = useState('');
   const overCapacity = items.length > totalSlots;
@@ -177,6 +181,7 @@ export default function InventoryPanel({
           onSendToGlobal={onSendToGlobal}
           onTransfer={onTransfer}
           onSell={onSell}
+          getCompareTo={getCompareTo}
         />
       </div>
 

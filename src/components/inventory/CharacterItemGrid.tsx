@@ -38,6 +38,9 @@ interface CharacterItemGridProps {
   gap?: number;
   /** Painel de origem dos itens ('character' | 'global'), repassado ao drag. */
   dragSource?: 'character' | 'global';
+  /** Encontra a peça equipada no mesmo slot de um item do inventário, para o
+   *  card mostrar a diferença de stats antes de trocar (ver ItemTooltip). */
+  getCompareTo?: (item: Item) => { item: Item; enhancementLevel?: number } | null;
 }
 
 /**
@@ -61,6 +64,7 @@ export function CharacterItemGrid({
   gridTemplateColumns = 'repeat(auto-fill, minmax(50px, 1fr))',
   gap = 5,
   dragSource,
+  getCompareTo,
 }: CharacterItemGridProps) {
   const q = (search || '').trim().toLowerCase();
   const shown = q ? items.filter((i) => (i.item.name || '').toLowerCase().includes(q)) : items;
@@ -91,6 +95,7 @@ export function CharacterItemGrid({
               onSell={onSell}
               characterId={characterId}
               dragSource={dragSource}
+              compareTo={getCompareTo?.(row.item)}
             />
           );
         }

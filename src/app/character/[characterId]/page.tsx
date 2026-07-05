@@ -27,6 +27,7 @@ import { ethers } from 'ethers';
 import { getWalletTxErrorMessage } from '@/lib/walletErrors';
 import { getPolygonFeeOverrides } from '@/lib/gasFees';
 import { resolveImageUrl } from '@/lib/imageUrl';
+import { getSlotTypeFromItemType } from '@/lib/equipmentSlot';
 
 import { Item } from '@/types/item';
 
@@ -1012,6 +1013,15 @@ export default function CharacterDetailsPage() {
               expanding={expandingSlots}
               expandTitle="Expandir +5 slots (custo: 1000 GOLD)"
               goldText={goldOnchainText}
+              getCompareTo={(item) => {
+                if (item.type === 'CONSUMABLE') return null;
+                // Anel pode ir em RING_1 ou RING_2 — compara com qualquer um
+                // que já esteja equipado (não há um slot "canônico" pro tipo).
+                const equipped = item.type === 'RING'
+                  ? character.equipment?.find((e) => e.slot === 'RING_1') || character.equipment?.find((e) => e.slot === 'RING_2')
+                  : character.equipment?.find((e) => e.slot === getSlotTypeFromItemType(item.type));
+                return equipped ? { item: equipped.item, enhancementLevel: equipped.enhancementLevel || 0 } : null;
+              }}
             />
           </div>
         </div>

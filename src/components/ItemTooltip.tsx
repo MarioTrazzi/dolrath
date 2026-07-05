@@ -10,7 +10,7 @@ import { getItemVisual, getItemTypeLabel, getItemCategory } from '@/lib/itemVisu
 import { resolveImageUrl } from '@/lib/imageUrl';
 import { itemImagePath, isIngredientItem, isMaterialItem, isSeedItem } from '@/lib/itemCatalog';
 import { applyEnhancementToStats, getLevelLabel } from '@/lib/enhancementSystem';
-import { formatItemStats } from '@/lib/itemStats';
+import { diffItemStats, formatItemStats, formatStatValue } from '@/lib/itemStats';
 import { whatItemCanProduceSummary } from '@/lib/craftProduces';
 import { getSlotTypeFromItemType } from '@/lib/equipmentSlot';
 import ItemCardBackdrop from '@/components/store/ItemCardBackdrop';
@@ -46,10 +46,14 @@ interface ItemTooltipProps {
   /** Quantidade empilhada do item nesta linha de inventário (consumíveis). */
   quantity?: number;
   characterId?: string;
+  /** Peça atualmente equipada no mesmo slot, para comparar stats no card do
+   *  inventário (ex.: "essa espada é melhor ou pior que a equipada?"). Só faz
+   *  sentido quando o item do card ainda NÃO está equipado. */
+  compareTo?: { item: Item; enhancementLevel?: number } | null;
   children: React.ReactNode;
 }
 
-export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability, maxDurability, inventoryId, onEquip, onUnequip, onConsume, onEnhance, onTransfer, onSendToGlobal, onSell, quantity = 1, characterId, children }: ItemTooltipProps) {
+export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability, maxDurability, inventoryId, onEquip, onUnequip, onConsume, onEnhance, onTransfer, onSendToGlobal, onSell, quantity = 1, characterId, compareTo, children }: ItemTooltipProps) {
   const router = useRouter();
   const [showTooltip, setShowTooltip] = useState(false);
   const [imgError, setImgError] = useState(false);
@@ -265,6 +269,16 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
   const formatStats = () =>
     formatItemStats(applyEnhancementToStats(item.stats, enhancementLevel), item.type);
 
+  // Comparação vs. a peça equipada no mesmo slot (só no card do inventário,
+  // nunca no da própria peça equipada) — mostra se trocar é upgrade ou downgrade.
+  const statDiff = !isEquipped && compareTo
+    ? diffItemStats(
+        applyEnhancementToStats(item.stats, enhancementLevel),
+        applyEnhancementToStats(compareTo.item.stats, compareTo.enhancementLevel || 0),
+        item.type
+      )
+    : [];
+
   return (
     <div
       ref={containerRef}
@@ -341,6 +355,25 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
                     {stat}
                   </span>
                 ))}
+              </div>
+            )}
+
+            {/* Comparação vs. peça equipada no mesmo slot */}
+            {statDiff.length > 0 && (
+              <div className="mb-3">
+                <p className="text-[11px] font-semibold text-white/50 mb-1">Vs. equipado</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {statDiff.map((d) => (
+                    <span
+                      key={d.key}
+                      className={`text-xs font-bold px-2 py-1 rounded-full ${
+                        d.delta > 0 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'
+                      }`}
+                    >
+                      {d.label}: {d.delta > 0 ? '+' : ''}{formatStatValue(d.delta)}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
 

@@ -161,21 +161,22 @@ export function EquipmentSlot({ type, item, enhancementLevel = 0, durability, ma
               )}
               {brokenBadge}
               {durabilityBar}
-              {showEnhancement && (
-                <span
-                  style={{
-                    position: 'absolute', top: -7, right: -6, background: '#0e1318',
-                    border: `1px solid ${slotAccent}`, color: '#f1d79a', fontSize: '9.5px',
-                    fontWeight: 700, padding: '0 3px', lineHeight: '13px',
-                  }}
-                >
-                  {getLevelLabel(enhancementLevel)}
-                </span>
-              )}
             </div>
           </ItemTooltip>
         ) : (
           <span className="text-xl opacity-30 select-none">{SLOT_EMOJI[type] || '▫️'}</span>
+        )}
+        {item && showEnhancement && (
+          <span
+            className="pointer-events-none"
+            style={{
+              position: 'absolute', top: -7, right: -6, zIndex: 20, background: '#0e1318',
+              border: `1px solid ${slotAccent}`, color: '#f1d79a', fontSize: '9.5px',
+              fontWeight: 700, padding: '0 3px', lineHeight: '13px',
+            }}
+          >
+            {getLevelLabel(enhancementLevel)}
+          </span>
         )}
       </div>
     );

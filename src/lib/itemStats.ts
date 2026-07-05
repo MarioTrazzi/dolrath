@@ -76,3 +76,25 @@ export function itemStatEntries(
   }
   return out;
 }
+
+/**
+ * Compara os stats de um item candidato (ex.: peça no inventário) contra os de
+ * outra peça (ex.: a equipada no mesmo slot), já com aprimoramento aplicado nos
+ * dois lados pelo chamador. Usado no card do inventário para mostrar "esse item
+ * é melhor ou pior que o que já está equipado" antes de trocar.
+ */
+export function diffItemStats(
+  candidateStats: Record<string, any> | null | undefined,
+  compareStats: Record<string, any> | null | undefined,
+  type?: string
+): { key: string; label: string; delta: number }[] {
+  const candidate = new Map(itemStatEntries(candidateStats, type).map((e) => [e.key, e.value]));
+  const compare = new Map(itemStatEntries(compareStats, type).map((e) => [e.key, e.value]));
+  const out: { key: string; label: string; delta: number }[] = [];
+  for (const [key, label] of EQUIP_STAT_LABELS) {
+    if (!candidate.has(key) && !compare.has(key)) continue;
+    const delta = (candidate.get(key) || 0) - (compare.get(key) || 0);
+    if (delta !== 0) out.push({ key, label, delta });
+  }
+  return out;
+}

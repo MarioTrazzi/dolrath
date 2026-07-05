@@ -37,9 +37,11 @@ interface DraggableItemProps {
   /** Painel de origem do item ('character' | 'global'). Vai no payload do drag
    *  para o painel de destino saber que é um arraste entre inventários. */
   dragSource?: 'character' | 'global';
+  /** Peça equipada no mesmo slot, p/ comparar stats no card (ver ItemTooltip). */
+  compareTo?: { item: Item; enhancementLevel?: number } | null;
 }
 
-export function DraggableItem({ item, isEquipped, enhancementLevel = 0, durability, maxDurability, quantity = 1, inventoryId, onEquip, onUnequip, onConsume, onEnhance, onTransfer, onSendToGlobal, onSell, characterId, compact, accent, dragSource }: DraggableItemProps) {
+export function DraggableItem({ item, isEquipped, enhancementLevel = 0, durability, maxDurability, quantity = 1, inventoryId, onEquip, onUnequip, onConsume, onEnhance, onTransfer, onSendToGlobal, onSell, characterId, compact, accent, dragSource, compareTo }: DraggableItemProps) {
   // Imagem do item: banco (item.image) → asset estático por nome (/items/<slug>.webp)
   // → ícone genérico só se a arte 404 (ex.: item sem webp). Cobre registros antigos
   // (ingredientes/materiais) criados antes de gravarmos image no banco.
@@ -91,6 +93,7 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, durabili
         onSendToGlobal={onSendToGlobal}
         onSell={onSell}
         characterId={characterId}
+        compareTo={compareTo}
       >
         <div
           ref={drag as any}
@@ -169,6 +172,7 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, durabili
       onSell={onSell}
       quantity={quantity}
       characterId={characterId}
+      compareTo={compareTo}
     >
       <div
         ref={drag as any}

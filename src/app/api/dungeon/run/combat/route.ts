@@ -102,7 +102,7 @@ export async function POST(req: Request) {
     const charForRun = { id: character.id, level: character.level, race: character.race, class: character.class }
     // 💀 Drop POR ABATE: cada monstro morto rola material na hora (estilhaço; boss =
     // Pedra Negra garantida) — recuar depois de matar 1 de 3 ainda rende algo.
-    const killDrops = newlyKilled.flatMap((m) => rollKillLoot(pending.kind, !!m.isBoss))
+    const killDrops = newlyKilled.flatMap((m) => rollKillLoot(pending.kind, !!m.isBoss, dungeon.difficultyStars))
     // O espólio do NÓ segue saindo só quando o pacote inteiro cai (recompensa por limpar).
     const nodeLoot = allDead ? rollCombatLoot(dungeon, charForRun, pending) : null
     const loot = nodeLoot || killDrops.length

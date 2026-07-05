@@ -253,7 +253,7 @@ function runDungeon(v: Vault, led: Ledger, c: Char, capLeft: { v: number }): num
       credit(m.goldReward, true)
       gainXp(c, m.xpReward); led.xpDungeon += m.xpReward
       // drop POR ABATE (mesma chamada da rota dungeon/run/combat): estilhaço 40/60% + boss 1-3 Pedras
-      absorbDrops(v, led, rollKillLoot(pending.kind, isBoss), c, capLeft)
+      absorbDrops(v, led, rollKillLoot(pending.kind, isBoss, dungeon.difficultyStars), c, capLeft)
       // desgaste real (durability.ts): arma −2/abate (boss ×2), 5 peças −1
       c.wearWeapon += isBoss ? 4 : 2
       c.wearArmor += (isBoss ? 2 : 1) * 5

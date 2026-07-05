@@ -924,14 +924,27 @@ export function rollNodeLoot(
 // ============================================================
 const KILL_SHARD_CHANCE: Record<LootNodeKind, number> = { minor: 0.4, main: 0.6, boss: 0.6 }
 const BOSS_KILL_STONES = { min: 1, max: 3 }
+// ⚖️ Lançamento (P0 TET, 2026-07-05): em masmorra 3★+ (Pântano/Ruínas) o boss
+// garante 1-2 Pedras CONCENTRADAS além das básicas — sem isso a única fonte era
+// o pStone do chão (~1/run) e a escada de gear-alvo (TRI/TET) ficava a anos de
+// distância (enhancement-cost-sim: TET ~1.010 concentradas nas chances novas).
+const BOSS_KILL_CONCENTRATED = { min: 1, max: 2, minStars: 3 }
 
-export function rollKillLoot(nodeKind: LootNodeKind, isBoss: boolean): LootDrop[] {
+export function rollKillLoot(nodeKind: LootNodeKind, isBoss: boolean, difficultyStars = 1): LootDrop[] {
   const drops: LootDrop[] = []
   if (isBoss) {
     const n = BOSS_KILL_STONES.min + Math.floor(Math.random() * (BOSS_KILL_STONES.max - BOSS_KILL_STONES.min + 1))
     for (let i = 0; i < n; i++) {
       const stone = Math.random() < 0.5 ? STONE_NAMES.WEAPON_BASIC : STONE_NAMES.ARMOR_BASIC
       drops.push({ name: stone, kind: 'stone', rarity: 'UNCOMMON', emoji: '🪨' })
+    }
+    if (difficultyStars >= BOSS_KILL_CONCENTRATED.minStars) {
+      const c = BOSS_KILL_CONCENTRATED.min +
+        Math.floor(Math.random() * (BOSS_KILL_CONCENTRATED.max - BOSS_KILL_CONCENTRATED.min + 1))
+      for (let i = 0; i < c; i++) {
+        const stone = Math.random() < 0.5 ? STONE_NAMES.WEAPON_CONCENTRATED : STONE_NAMES.ARMOR_CONCENTRATED
+        drops.push({ name: stone, kind: 'stone', rarity: 'RARE', emoji: '💎' })
+      }
     }
     return drops
   }

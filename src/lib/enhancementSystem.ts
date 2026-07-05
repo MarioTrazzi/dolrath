@@ -46,7 +46,13 @@ export function getGearCategory(itemType: string): GearCategory | null {
 
 // === TABELAS DE CHANCE BASE (chance de alcançar o nível alvo) ===
 
-// Armas e armaduras: +8..+15 e PRI..PEN (valores do BDO)
+// Armas e armaduras: +8..+15 e PRI..PEN.
+// ⚖️ BALANCE DE LANÇAMENTO (2026-07-05, docs/balance-report-launch.md P0): os
+// valores do BDO em DUO..PEN tornavam o topo inalcançável POR CAUSA DA CASCATA
+// de regressão (falha em TET volta pro TRI, que custava ~323 concentradas →
+// TET ~3.330 ≈ 2 anos, sendo o gear-alvo das Ruínas). Tiers altos afrouxados
+// (DUO 0.075→0.10, TRI 0.04→0.08, TET 0.02→0.05, PEN 0.003→0.012) — validado
+// no scripts/enhancement-cost-sim.ts (meta: TET ≤ ~90 dias de farm dedicado).
 const GEAR_BASE_CHANCE: Record<number, number> = {
   8: 0.20,
   9: 0.175,
@@ -57,19 +63,20 @@ const GEAR_BASE_CHANCE: Record<number, number> = {
   14: 0.05,
   15: 0.025,
   [PRI]: 0.15,
-  [DUO]: 0.075,
-  [TRI]: 0.04,
-  [TET]: 0.02,
-  [PEN]: 0.003,
+  [DUO]: 0.10,
+  [TRI]: 0.08,
+  [TET]: 0.05,
+  [PEN]: 0.012,
 };
 
-// Acessórios: PRI..PEN (valores do BDO)
+// Acessórios: PRI..PEN (mesma passada de lançamento — acessório destrói na
+// falha, então o custo esperado explode ainda mais rápido que o de gear)
 const ACCESSORY_BASE_CHANCE: Record<number, number> = {
   [PRI]: 0.25,
-  [DUO]: 0.10,
-  [TRI]: 0.075,
-  [TET]: 0.025,
-  [PEN]: 0.005,
+  [DUO]: 0.125,
+  [TRI]: 0.09,
+  [TET]: 0.05,
+  [PEN]: 0.015,
 };
 
 const SOFTCAP_CHANCE = 0.70;

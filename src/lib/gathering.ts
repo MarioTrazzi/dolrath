@@ -63,8 +63,9 @@ export const GATHER_FIELDS: Record<GatherFieldId, GatherFieldDef> = {
       { name: 'Ferro Pesado', weight: 22 },
       { name: 'Metal Leve', weight: 18 },
       { name: 'Ferro', weight: 12 },
-      { name: 'Estilhaço de Pedra Negra (Arma)', weight: 12 },
-      { name: 'Estilhaço de Pedra Negra (Armadura)', weight: 12 },
+      // P2 pedras (2026-07-05): 30/70 arma/armadura — demanda do set é 1:5
+      { name: 'Estilhaço de Pedra Negra (Arma)', weight: 8 },
+      { name: 'Estilhaço de Pedra Negra (Armadura)', weight: 16 },
       { name: 'Cristal Bruto', weight: 14, minLevel: 10 },
       { name: 'Fragmentos de Joias', weight: 10, minLevel: 20 },
     ],

@@ -830,7 +830,7 @@ export function rollNodeLoot(
   // (10 viram 1 Pedra Negra). É o material de craft "corrente" — deve ser bem
   // frequente. Roll dedicado (não some no sorteio uniforme dos outros materiais).
   if (Math.random() < cfg.pShard * mult.all) {
-    const shard = Math.random() < 0.5
+    const shard = Math.random() < STONE_WEAPON_SHARE
       ? { name: 'Estilhaço de Pedra Negra (Arma)', emoji: '🔸' }
       : { name: 'Estilhaço de Pedra Negra (Armadura)', emoji: '🔹' }
     drops.push({ name: shard.name, kind: 'material', rarity: 'COMMON', emoji: shard.emoji })
@@ -902,10 +902,10 @@ export function rollNodeLoot(
   if (Math.random() < cfg.pStone * mult.stone) {
     const concentrated = dungeon.difficultyStars >= 3
     const stone = concentrated
-      ? Math.random() < 0.4
+      ? Math.random() < STONE_WEAPON_SHARE
         ? STONE_NAMES.WEAPON_CONCENTRATED
         : STONE_NAMES.ARMOR_CONCENTRATED
-      : Math.random() < 0.5
+      : Math.random() < STONE_WEAPON_SHARE
         ? STONE_NAMES.WEAPON_BASIC
         : STONE_NAMES.ARMOR_BASIC
     drops.push({ name: stone, kind: 'stone', rarity: 'COMMON', emoji: '⚒️' })
@@ -929,27 +929,31 @@ const BOSS_KILL_STONES = { min: 1, max: 3 }
 // o pStone do chão (~1/run) e a escada de gear-alvo (TRI/TET) ficava a anos de
 // distância (enhancement-cost-sim: TET ~1.010 concentradas nas chances novas).
 const BOSS_KILL_CONCENTRATED = { min: 1, max: 2, minStars: 3 }
+// ⚖️ P2 pedras (2026-07-05): o set aprimora 1 arma : 5 armaduras, mas o drop era
+// 50/50 — pedra de arma sobrava ~3× e a de armadura era o gargalo real do +15.
+// 30/70 aproxima a oferta da demanda mantendo folga p/ alts/venda.
+const STONE_WEAPON_SHARE = 0.3
 
 export function rollKillLoot(nodeKind: LootNodeKind, isBoss: boolean, difficultyStars = 1): LootDrop[] {
   const drops: LootDrop[] = []
   if (isBoss) {
     const n = BOSS_KILL_STONES.min + Math.floor(Math.random() * (BOSS_KILL_STONES.max - BOSS_KILL_STONES.min + 1))
     for (let i = 0; i < n; i++) {
-      const stone = Math.random() < 0.5 ? STONE_NAMES.WEAPON_BASIC : STONE_NAMES.ARMOR_BASIC
+      const stone = Math.random() < STONE_WEAPON_SHARE ? STONE_NAMES.WEAPON_BASIC : STONE_NAMES.ARMOR_BASIC
       drops.push({ name: stone, kind: 'stone', rarity: 'UNCOMMON', emoji: '🪨' })
     }
     if (difficultyStars >= BOSS_KILL_CONCENTRATED.minStars) {
       const c = BOSS_KILL_CONCENTRATED.min +
         Math.floor(Math.random() * (BOSS_KILL_CONCENTRATED.max - BOSS_KILL_CONCENTRATED.min + 1))
       for (let i = 0; i < c; i++) {
-        const stone = Math.random() < 0.5 ? STONE_NAMES.WEAPON_CONCENTRATED : STONE_NAMES.ARMOR_CONCENTRATED
+        const stone = Math.random() < STONE_WEAPON_SHARE ? STONE_NAMES.WEAPON_CONCENTRATED : STONE_NAMES.ARMOR_CONCENTRATED
         drops.push({ name: stone, kind: 'stone', rarity: 'RARE', emoji: '💎' })
       }
     }
     return drops
   }
   if (Math.random() < KILL_SHARD_CHANCE[nodeKind]) {
-    const shard = Math.random() < 0.5
+    const shard = Math.random() < STONE_WEAPON_SHARE
       ? { name: 'Estilhaço de Pedra Negra (Arma)', emoji: '🔸' }
       : { name: 'Estilhaço de Pedra Negra (Armadura)', emoji: '🔹' }
     drops.push({ name: shard.name, kind: 'material', rarity: 'COMMON', emoji: shard.emoji })

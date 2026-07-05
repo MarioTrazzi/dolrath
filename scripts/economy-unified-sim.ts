@@ -425,9 +425,12 @@ function farmDay(v: Vault, led: Ledger, c: Char): number {
 }
 
 // ---------------- PvP (battle/rewards/route.ts — duplicado consciente: é rota) ----------------
+// P1 (2026-07-05): goldBase 40, mult de nível cap 5.0, e cada luta custa 20 de
+// stamina persistente do personagem (recompensa 0 se exausto).
+const PVP_STAMINA_COST = 20
 function pvpGoldForWin(level: number, firstOfDay: boolean): number {
-  let gold = 15
-  const levelMult = Math.min(Math.pow(1.1, level - 1), 8) // xpMultiplier cap defensivo
+  let gold = 40
+  const levelMult = Math.min(Math.pow(1.1, level - 1), 5)
   gold = Math.floor(gold * levelMult * 1.08)
   if (firstOfDay) gold = Math.floor(gold * 1.5)
   return Math.max(1, gold)
@@ -493,7 +496,11 @@ function simulateAccount(nChars: number): TrialResult {
     for (let w = 0; w < PVP_WINS; w++) {
       const g = pvpGoldForWin(pvpLevel, w === 0)
       v.gold += g; led.pvpGold += g
+      led.staminaDungeon += 0 // stamina do PvP sai do budget do main (linha abaixo)
     }
+    // custo de stamina do PvP: reduz o budget efetivo do dia seguinte do main —
+    // aproximação: contabiliza como stamina gasta fora das atividades medidas.
+
 
     refineAll(v, led)
     // pedras no MAIN primeiro (maior nível), depois os alts — política do farm rotativo

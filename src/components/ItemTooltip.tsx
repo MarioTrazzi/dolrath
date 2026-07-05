@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { Item } from '@/types/item';
 import { EquipmentSlotType } from '@prisma/client';
+import { sellUnitPrice as sellPrice } from '@/lib/sellPricing';
 import { getItemVisual, getItemTypeLabel, getItemCategory } from '@/lib/itemVisuals';
 import { resolveImageUrl } from '@/lib/imageUrl';
 import { itemImagePath, isIngredientItem, isMaterialItem, isSeedItem } from '@/lib/itemCatalog';
@@ -163,7 +164,7 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
   const isSellable = getItemCategory(item.type) !== 'consumable';
   // Não vende peça equipada (evita apagar a linha de inventário que o slot referencia).
   const canSell = !!onSell && !!inventoryId && isSellable && !isEquipped;
-  const sellUnitPrice = Math.max(0, Math.floor((item.goldPrice ?? 0) / 2));
+  const sellUnitPrice = sellPrice(item); // sellPricing: consumível 25%, resto 50%
 
   // Identidade visual idêntica à da loja (cor de destaque, chips, cenário).
   const visual = getItemVisual(item.type);

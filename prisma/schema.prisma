@@ -445,3 +445,16 @@ model GoldTopup {
   @@index([userId])
   @@index([characterId])
 }
+
+// Ledger de GOLD ganho VENDENDO itens ao ferreiro (rotas sell-item). Entra na
+// mesma conta do teto diário de emissão da masmorra (dungeonRunServer):
+// antes a venda passava POR FORA do cap e era ~40% do faucet da conta
+// (docs/balance-report-launch.md, P0). Uma linha por venda; soma por dia (UTC).
+model GoldSale {
+  id        String   @id @default(cuid())
+  userId    String
+  amount    Int
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}

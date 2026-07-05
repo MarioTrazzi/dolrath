@@ -2,11 +2,14 @@ import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
 import { getDisplayName } from '@/lib/enhancementSystem'
+import { sellUnitPrice } from '@/lib/sellPricing'
+import { creditCappedSaleGoldTx } from '@/lib/dungeonRunServer'
 
-// Vende um item do BAÚ GERAL (UserInventory) para o ferreiro por METADE do preço
-// base. Espelha /api/character/[id]/sell-item, mas o item é da conta (não de um
-// personagem): o gold vai direto pro BANCO (User.goldBalance, claimável), que é o
-// mesmo saldo exibido no rodapé do Baú Geral. Serve como "burn" da conta.
+// Vende um item do BAÚ GERAL (UserInventory) para o ferreiro. Espelha
+// /api/character/[id]/sell-item: preço por TIPO (sellPricing) e o gold entra no
+// MESMO teto diário da masmorra (balance de lançamento, P0). O crédito vai
+// direto pro BANCO (User.goldBalance, claimável). Se o teto não cobre a venda
+// inteira, aborta e o item fica com o jogador.
 export async function POST(request: NextRequest) {
   try {
     const session = await auth()
@@ -30,35 +33,45 @@ export async function POST(request: NextRequest) {
     }
 
     const qty = Math.max(1, Math.min(inventoryItem.quantity, requestedQty || 1))
-    const unitPrice = Math.max(0, Math.floor((inventoryItem.item.goldPrice ?? 0) / 2))
-    const goldEarned = unitPrice * qty
+    const unitPrice = sellUnitPrice(inventoryItem.item)
+    const saleValue = unitPrice * qty
     const displayName = getDisplayName(inventoryItem.item.name, 0)
 
-    const updatedUser = await prisma.$transaction(async (tx) => {
-      if (inventoryItem.quantity > qty) {
-        await tx.userInventory.update({
-          where: { id: inventoryItem.id },
-          data: { quantity: { decrement: qty } },
-        })
-      } else {
-        await tx.userInventory.delete({ where: { id: inventoryItem.id } })
-      }
+    const CAP_ERROR = 'DAILY_GOLD_CAP'
+    let goldEarned = 0
+    let bankGold = 0
+    try {
+      const updatedUser = await prisma.$transaction(async (tx) => {
+        const credited = await creditCappedSaleGoldTx(tx, session.user!.id, { bank: true }, saleValue)
+        if (saleValue > 0 && credited < saleValue) throw new Error(CAP_ERROR)
+        goldEarned = credited
 
-      if (goldEarned > 0) {
-        return tx.user.update({
-          where: { id: session.user!.id },
-          data: { goldBalance: { increment: goldEarned } },
-          select: { goldBalance: true },
-        })
+        if (inventoryItem.quantity > qty) {
+          await tx.userInventory.update({
+            where: { id: inventoryItem.id },
+            data: { quantity: { decrement: qty } },
+          })
+        } else {
+          await tx.userInventory.delete({ where: { id: inventoryItem.id } })
+        }
+        return tx.user.findUnique({ where: { id: session.user!.id }, select: { goldBalance: true } })
+      })
+      bankGold = Number(updatedUser?.goldBalance ?? 0)
+    } catch (err) {
+      if (err instanceof Error && err.message === CAP_ERROR) {
+        return NextResponse.json(
+          { error: 'Teto diário de gold atingido — o ferreiro não compra mais hoje. Volte amanhã.' },
+          { status: 429 },
+        )
       }
-      return tx.user.findUnique({ where: { id: session.user!.id }, select: { goldBalance: true } })
-    })
+      throw err
+    }
 
     return NextResponse.json({
       success: true,
       sold: qty,
       goldEarned,
-      bankGold: Number(updatedUser?.goldBalance ?? 0),
+      bankGold,
       message: `💰 Vendeu ${qty}x ${displayName} por ${goldEarned} gold!`,
     })
   } catch (error) {

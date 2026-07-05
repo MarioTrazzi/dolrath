@@ -26,6 +26,7 @@ import {
   type LuckTier,
 } from './dungeonAdventures'
 import { normalizeCombatClass, type CombatClass } from './combatModel'
+import { SELL_FRACTION_GEAR, SELL_FRACTION_CRAFT_INPUT, SELL_FRACTION_CONSUMABLE } from './sellPricing'
 import { getCatalogItemByName, getConsumableByName, getIngredientByName, getForgeMaterialByName, getSeedByName, itemImagePath } from './itemCatalog'
 import { freeInventorySlots } from './inventoryMutations'
 
@@ -173,12 +174,16 @@ function startOfUtcDay(): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
 }
 
-async function dungeonGoldCreditedToday(tx: Prisma.TransactionClient, userId: string): Promise<number> {
-  const agg = await tx.dungeonRun.aggregate({
-    _sum: { goldEarned: true },
-    where: { userId, createdAt: { gte: startOfUtcDay() } },
-  })
-  return agg._sum.goldEarned ?? 0
+// Emissão de gold do DIA (UTC) por usuário = masmorra + VENDAS ao ferreiro.
+// ⚖️ Balance de lançamento (P0): a venda passava por fora do cap e era ~40% do
+// faucet da conta — agora as duas fontes dividem o MESMO teto diário.
+async function goldEmittedToday(tx: Prisma.TransactionClient, userId: string): Promise<number> {
+  const gte = startOfUtcDay()
+  const [runs, sales] = await Promise.all([
+    tx.dungeonRun.aggregate({ _sum: { goldEarned: true }, where: { userId, createdAt: { gte } } }),
+    tx.goldSale.aggregate({ _sum: { amount: true }, where: { userId, createdAt: { gte } } }),
+  ])
+  return (runs._sum.goldEarned ?? 0) + (sales._sum.amount ?? 0)
 }
 
 // Credita ouro na CARTEIRA DO PERSONAGEM (Character.gold — "dinheiro na mão"),
@@ -193,11 +198,36 @@ async function creditCappedGoldTx(
 ): Promise<number> {
   const want = Math.max(0, Math.floor(amount))
   if (want <= 0) return 0
-  const creditedToday = await dungeonGoldCreditedToday(tx, userId)
+  const creditedToday = await goldEmittedToday(tx, userId)
   const remaining = Math.max(0, dungeonDailyGoldCap() - creditedToday)
   const give = Math.min(want, remaining)
   if (give > 0) {
     await tx.character.update({ where: { id: characterId }, data: { gold: { increment: give } } })
+  }
+  return give
+}
+
+// Credita o gold de uma VENDA ao ferreiro, respeitando o teto diário compartilhado
+// com a masmorra, e registra no ledger GoldSale (é o registro que entra na soma do
+// dia). `target` decide o destino: carteira do personagem (venda do inventário) ou
+// banco da conta (venda do Baú Geral). Devolve quanto foi realmente creditado.
+export async function creditCappedSaleGoldTx(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  target: { characterId: string } | { bank: true },
+  amount: number,
+): Promise<number> {
+  const want = Math.max(0, Math.floor(amount))
+  if (want <= 0) return 0
+  const creditedToday = await goldEmittedToday(tx, userId)
+  const remaining = Math.max(0, dungeonDailyGoldCap() - creditedToday)
+  const give = Math.min(want, remaining)
+  if (give <= 0) return 0
+  await tx.goldSale.create({ data: { userId, amount: give } })
+  if ('characterId' in target) {
+    await tx.character.update({ where: { id: target.characterId }, data: { gold: { increment: give } } })
+  } else {
+    await tx.user.update({ where: { id: userId }, data: { goldBalance: { increment: give } } })
   }
   return give
 }
@@ -252,7 +282,7 @@ export async function addDropToInventoryTx(
               kind: meta.kind,
               rarity: stats.rarity ?? meta.rarity,
               emoji: stats.emoji ?? meta.emoji,
-              sellPrice: stats.sellPrice ?? Math.floor(meta.goldValue * 0.6),
+              sellPrice: stats.sellPrice ?? Math.floor(meta.goldValue * SELL_FRACTION_CRAFT_INPUT),
             },
           },
         })
@@ -279,7 +309,7 @@ export async function addDropToInventoryTx(
             kind: 'seed',
             rarity: seed.rarity,
             emoji: seed.emoji,
-            sellPrice: Math.floor(seed.goldValue * 0.6),
+            sellPrice: Math.floor(seed.goldValue * SELL_FRACTION_CRAFT_INPUT),
           },
         },
       })
@@ -296,7 +326,7 @@ export async function addDropToInventoryTx(
             rarity: catalogItem.rarity,
             raceRestriction: catalogItem.raceRestriction ?? null,
             dungeons: catalogItem.dungeons,
-            sellPrice: Math.floor(catalogItem.goldPrice * 0.6),
+            sellPrice: Math.floor(catalogItem.goldPrice * SELL_FRACTION_GEAR),
           },
         },
       })
@@ -309,7 +339,7 @@ export async function addDropToInventoryTx(
           subtype: consumable.subtype as ConsumableSubtype,
           level: consumable.level,
           goldPrice: consumable.goldPrice,
-          stats: { ...consumable.stats, rarity: consumable.rarity, sellPrice: Math.floor(consumable.goldPrice * 0.6) },
+          stats: { ...consumable.stats, rarity: consumable.rarity, sellPrice: Math.floor(consumable.goldPrice * SELL_FRACTION_CONSUMABLE) },
         },
       })
     } else if (ingredient) {
@@ -325,7 +355,7 @@ export async function addDropToInventoryTx(
             kind: 'ingredient',
             rarity: ingredient.rarity,
             emoji: ingredient.emoji,
-            sellPrice: Math.floor(ingredient.goldValue * 0.6),
+            sellPrice: Math.floor(ingredient.goldValue * SELL_FRACTION_CRAFT_INPUT),
           },
         },
       })
@@ -342,7 +372,7 @@ export async function addDropToInventoryTx(
             kind: 'material',
             rarity: material.rarity,
             emoji: material.emoji,
-            sellPrice: Math.floor(material.goldValue * 0.6),
+            sellPrice: Math.floor(material.goldValue * SELL_FRACTION_CRAFT_INPUT),
           },
         },
       })
@@ -355,7 +385,7 @@ export async function addDropToInventoryTx(
           type: 'CONSUMABLE',
           level: 1,
           goldPrice: rarityValue(rarity),
-          stats: { rarity, value: rarityValue(rarity), sellPrice: Math.floor(rarityValue(rarity) * 0.6) },
+          stats: { rarity, value: rarityValue(rarity), sellPrice: Math.floor(rarityValue(rarity) * SELL_FRACTION_GEAR) },
         },
       })
     }

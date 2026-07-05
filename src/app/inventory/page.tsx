@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import toast from 'react-hot-toast';
+import { sellUnitPrice as sellPrice } from '@/lib/sellPricing';
 import { ethers } from 'ethers';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -218,7 +219,7 @@ export default function InventoryPage() {
     }
     const row = characterInventory.find((i) => i.id === inventoryId);
     const name = row?.item?.name ?? 'item';
-    const price = Math.max(0, Math.floor((row?.item?.goldPrice ?? 0) / 2));
+    const price = row?.item ? sellPrice(row.item) : 0; // sellPricing (fonte única)
     if (!window.confirm(`Vender ${name} ao ferreiro por ${price} gold?\nO item será destruído (não dá pra desfazer).`)) return;
 
     setLoading(true);
@@ -249,7 +250,7 @@ export default function InventoryPage() {
   const handleSellFromGlobal = async (inventoryId: string) => {
     const row = userInventory.find((i) => i.id === inventoryId);
     const name = row?.item?.name ?? 'item';
-    const price = Math.max(0, Math.floor((row?.item?.goldPrice ?? 0) / 2));
+    const price = row?.item ? sellPrice(row.item) : 0; // sellPricing (fonte única)
     if (!window.confirm(`Vender ${name} ao ferreiro por ${price} gold?\nO gold vai pro banco. O item será destruído (não dá pra desfazer).`)) return;
 
     setLoading(true);

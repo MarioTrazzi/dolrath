@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { getItemVisual, getItemTypeLabel, getItemCategory } from '@/lib/itemVisuals';
 import { itemImagePath } from '@/lib/itemCatalog';
 import { getDisplayName, getLevelLabel, REPAIR_PER_DUPLICATE } from '@/lib/enhancementSystem';
+import { sellUnitPrice as sellPrice } from '@/lib/sellPricing';
 import { formatItemStats } from '@/lib/itemStats';
 import { resolveImageUrl } from '@/lib/imageUrl';
 import EnhancementDialog, { EnhanceablePickerItem } from '@/components/EnhancementDialog';
@@ -229,7 +230,7 @@ export default function RepairBench({
   };
 
   // Venda ao ferreiro por metade do preço (burn off-chain).
-  const sellUnitPrice = selected ? Math.max(0, Math.floor((selected.item.goldPrice ?? 0) / 2)) : 0;
+  const sellUnitPrice = selected ? sellPrice(selected.item) : 0; // sellPricing (fonte única)
 
   // Cada peça de equipamento é uma linha (quantity 1). Vender N significa
   // destruir N linhas idênticas do grupo selecionado.

@@ -64,6 +64,7 @@ import {
   getForgeMaterialByName, getSeedByName,
 } from '@/lib/itemCatalog'
 import { getXPForNextLevel } from '@/lib/experienceSystem'
+import { SELL_FRACTION_CRAFT_INPUT, SELL_FRACTION_CONSUMABLE } from '@/lib/sellPricing'
 
 // ---------------- Parâmetros ----------------
 const DAYS = Number(process.env.DAYS ?? 30)
@@ -75,7 +76,6 @@ const DAILY_GOLD_CAP = Number(process.env.CAP ?? 20000) // dungeonDailyGoldCap d
 const POTS_RUN = Number(process.env.POTS_RUN ?? 4)      // poções de vida consumidas por run
 const PVP_WINS = Number(process.env.PVP_WINS ?? 2)      // vitórias PvP/dia por conta
 const REVIVE = Number(process.env.REVIVE ?? 0.7)        // % das quedas cobertas (segue a run)
-const SELL_FRACTION = 0.6                               // sellPrice do catálogo (60% do valor)
 const EXPANSIONS = Number(process.env.EXPANSIONS ?? 2)  // expansões de inventário/char (1000g cada, amortizado)
 const CSV = process.env.CSV === '1'
 
@@ -96,7 +96,13 @@ function goldValueOf(name: string): number {
   const seed = getSeedByName(name); if (seed) return seed.goldValue
   return 5
 }
-const sellValueOf = (name: string) => Math.floor(goldValueOf(name) * SELL_FRACTION)
+// Fração de venda REAL (sellPricing, P0): consumível pronto 25%, insumo/gear 50%.
+function sellValueOf(name: string): number {
+  const con = getConsumableByName(name)
+  const isCraftInput = !!(getIngredientByName(name) || getForgeMaterialByName(name) || getSeedByName(name))
+  const frac = con && !isCraftInput ? SELL_FRACTION_CONSUMABLE : SELL_FRACTION_CRAFT_INPUT
+  return Math.floor(goldValueOf(name) * frac)
+}
 
 // Receitas reais usadas nas políticas
 const VIDA = POTION_RECIPES.find((r) => r.outputName === 'Poção de Vida')!
@@ -175,7 +181,7 @@ function gainProfXp(kind: 'gather' | 'farm', c: Char, xp: number) {
 // ---------------- Espólio → cofre (com política de venda) ----------------
 // Equipamento: guarda até formar o set (6 peças/char em aprimoramento); excedente VENDE.
 // Pedra/estilhaço: NUNCA vende (motor do aprimoramento). Resto: consome ou vende no fim do dia.
-function absorbDrops(v: Vault, led: Ledger, drops: LootDrop[], c: Char | null) {
+function absorbDrops(v: Vault, led: Ledger, drops: LootDrop[], c: Char | null, capLeft: { v: number }) {
   for (const d of drops) {
     if (d.kind === 'stone') {
       if (d.name.includes('(Arma)')) v.stonesW++; else v.stonesA++
@@ -189,7 +195,10 @@ function absorbDrops(v: Vault, led: Ledger, drops: LootDrop[], c: Char | null) {
         const weakest = c.pieces.indexOf(Math.min(...c.pieces))
         if (enh > c.pieces[weakest]) { c.pieces[weakest] = enh; continue }
       }
-      const gv = sellValueOf(d.name)
+      // P0: venda dentro do teto diário (rota real BLOQUEIA sem teto; aqui o item fica sem vender)
+      const gv = Math.floor(goldValueOf(d.name) * 0.5) // gear vende a 50%
+      if (capLeft.v < gv) continue
+      capLeft.v -= gv
       v.gold += gv; led.sellGold += gv; led.goldFromDungeonActivity += gv
       led.sellByKind.set('gear', (led.sellByKind.get('gear') ?? 0) + gv)
     } else if (d.name === 'Poção de Vida' || d.name === 'Poção de Vida Pequena') {
@@ -226,7 +235,7 @@ function runDungeon(v: Vault, led: Ledger, c: Char, capLeft: { v: number }): num
       const r = resolveExploreNode(dungeon, meAsRun, node, idx)
       if (r.type === 'find') {
         credit(r.loot.gold, false)
-        absorbDrops(v, led, r.loot.drops, c)
+        absorbDrops(v, led, r.loot.drops, c, capLeft)
         continue
       }
       pending = r.pending
@@ -244,7 +253,7 @@ function runDungeon(v: Vault, led: Ledger, c: Char, capLeft: { v: number }): num
       credit(m.goldReward, true)
       gainXp(c, m.xpReward); led.xpDungeon += m.xpReward
       // drop POR ABATE (mesma chamada da rota dungeon/run/combat): estilhaço 40/60% + boss 1-3 Pedras
-      absorbDrops(v, led, rollKillLoot(pending.kind, isBoss), c)
+      absorbDrops(v, led, rollKillLoot(pending.kind, isBoss), c, capLeft)
       // desgaste real (durability.ts): arma −2/abate (boss ×2), 5 peças −1
       c.wearWeapon += isBoss ? 4 : 2
       c.wearArmor += (isBoss ? 2 : 1) * 5
@@ -255,7 +264,7 @@ function runDungeon(v: Vault, led: Ledger, c: Char, capLeft: { v: number }): num
     if (pending.killedIds!.length === pending.monsters.length) {
       const loot = rollCombatLoot(dungeon, meAsRun, pending)
       credit(loot.gold, false)
-      absorbDrops(v, led, loot.drops, c)
+      absorbDrops(v, led, loot.drops, c, capLeft)
     }
   }
   return stamina
@@ -327,7 +336,7 @@ function enhance(v: Vault, c: Char) {
   }
 }
 
-function sellSurplus(v: Vault, led: Ledger, potIngredientBuffer: number) {
+function sellSurplus(v: Vault, led: Ledger, potIngredientBuffer: number, capLeft: { v: number }) {
   // ⚠️ Map.forEach (não for..of): target es5 sem downlevelIteration NÃO itera Map em for..of.
   v.items.forEach((qty, name) => {
     if (qty <= 0) return
@@ -335,9 +344,14 @@ function sellSurplus(v: Vault, led: Ledger, potIngredientBuffer: number) {
     const isPotIng = VIDA.ingredients.some((i) => i.name === name)
     const isSeed = !!getSeedByName(name)
     const keep = isPotIng ? potIngredientBuffer : isSeed ? qty : 0
-    const sell = Math.max(0, qty - keep)
+    let sell = Math.max(0, qty - keep)
     if (sell <= 0) return
-    const gv = sellValueOf(name) * sell
+    // P0: teto diário limita quantas unidades o ferreiro compra hoje (resto fica p/ amanhã)
+    const unit = sellValueOf(name)
+    if (unit > 0) sell = Math.min(sell, Math.floor(capLeft.v / unit))
+    if (sell <= 0) return
+    const gv = unit * sell
+    capLeft.v -= gv
     v.gold += gv; led.sellGold += gv
     const ing = getIngredientByName(name)
     const mat = getForgeMaterialByName(name)
@@ -484,7 +498,7 @@ function simulateAccount(nChars: number): TrialResult {
     refineAll(v, led)
     // pedras no MAIN primeiro (maior nível), depois os alts — política do farm rotativo
     ;[...chars].sort((a, b) => b.level - a.level).forEach((c) => enhance(v, c))
-    sellSurplus(v, led, 12)
+    sellSurplus(v, led, 12, capLeft)
     if (expansionDebt > 0 && v.gold > 2000) {
       const pay = Math.min(expansionDebt, 1000)
       v.gold -= pay; expansionDebt -= pay; led.expansion += pay
@@ -509,7 +523,7 @@ const per = (n: number, d: number) => (d > 0 ? ((100 * n) / d).toFixed(0) + '%' 
 
 console.log('💰 DOLRATH — SIMULADOR ECONÔMICO UNIFICADO (geradores reais do jogo)')
 console.log(`   masmorra ${dungeon.id} · ${DAYS} dias · ${TRIALS} trials · seed ${SEED} · budget ${DAY_BUDGET} stamina/char/dia`)
-console.log(`   políticas: venda 60% · poções/run ${POTS_RUN} (craft-first) · PvP ${PVP_WINS} win/dia · cap diário ${fmt(DAILY_GOLD_CAP)}`)
+console.log(`   políticas: venda 25% consumível / 50% resto (P0, dentro do cap) · poções/run ${POTS_RUN} (craft-first) · PvP ${PVP_WINS} win/dia · cap diário ${fmt(DAILY_GOLD_CAP)}`)
 console.log('')
 
 const csvRows: string[] = ['chars,faucet_total_dia,dungeon_chao,dungeon_abate,venda,pvp,sink_total_dia,pocoes,refino,reparo,expansao,net_dia,gpstam_dungeon,gpstam_coleta,gpstam_fazenda,dias_main_full,dias_all_full']

@@ -3,10 +3,13 @@ import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
 import { addHistoryEntry } from '@/lib/characterHistory'
 import { getDisplayName } from '@/lib/enhancementSystem'
+import { sellUnitPrice } from '@/lib/sellPricing'
+import { creditCappedSaleGoldTx } from '@/lib/dungeonRunServer'
 
-// Vende um item do inventário do personagem para o ferreiro por METADE do preço
-// base, creditando o GOLD off-chain (User.goldBalance, mesmo pote das recompensas).
-// Serve também como "burn" de itens que o jogador não quer armazenar.
+// Vende um item do inventário do personagem para o ferreiro. Preço por TIPO
+// (sellPricing: consumível 25%, insumo/equipamento 50%) e o gold creditado entra
+// no MESMO teto diário da masmorra (balance de lançamento, P0 — antes a venda
+// era um faucet sem teto). Serve também como "burn" de itens indesejados.
 export async function POST(
   request: NextRequest,
   { params }: { params: { characterId: string } }
@@ -47,31 +50,49 @@ export async function POST(
     }
 
     const qty = Math.max(1, Math.min(inventoryItem.quantity, requestedQty || 1))
-    const unitPrice = Math.max(0, Math.floor((inventoryItem.item.goldPrice ?? 0) / 2))
-    const goldEarned = unitPrice * qty
+    const unitPrice = sellUnitPrice(inventoryItem.item)
+    const saleValue = unitPrice * qty
     const displayName = getDisplayName(inventoryItem.item.name, inventoryItem.enhancementLevel)
 
-    // O gold da venda vai pra CARTEIRA DO PERSONAGEM (Character.gold). Para dar
-    // claim, o jogador deposita no banco em /inventory. [[bank — Opção B]]
-    const updatedChar = await prisma.$transaction(async (tx) => {
-      if (inventoryItem.quantity > qty) {
-        await tx.characterInventory.update({
-          where: { id: inventoryItem.id },
-          data: { quantity: { decrement: qty } },
-        })
-      } else {
-        await tx.characterInventory.delete({ where: { id: inventoryItem.id } })
-      }
+    // O gold da venda vai pra CARTEIRA DO PERSONAGEM (Character.gold) e entra no
+    // teto diário compartilhado com a masmorra. Se o teto não cobre a venda
+    // INTEIRA, a transação é abortada e o item FICA com o jogador (nada de
+    // queimar item por gold parcial). [[bank — Opção B]]
+    const CAP_ERROR = 'DAILY_GOLD_CAP'
+    let goldEarned = 0
+    let updatedChar: { gold: number } | null = null
+    try {
+      const result = await prisma.$transaction(async (tx) => {
+        const credited = await creditCappedSaleGoldTx(
+          tx,
+          session.user!.id,
+          { characterId: params.characterId },
+          saleValue,
+        )
+        if (saleValue > 0 && credited < saleValue) throw new Error(CAP_ERROR)
 
-      if (goldEarned > 0) {
-        return tx.character.update({
-          where: { id: params.characterId },
-          data: { gold: { increment: goldEarned } },
-          select: { gold: true },
-        })
+        if (inventoryItem.quantity > qty) {
+          await tx.characterInventory.update({
+            where: { id: inventoryItem.id },
+            data: { quantity: { decrement: qty } },
+          })
+        } else {
+          await tx.characterInventory.delete({ where: { id: inventoryItem.id } })
+        }
+        const c = await tx.character.findUnique({ where: { id: params.characterId }, select: { gold: true } })
+        return { credited, c }
+      })
+      goldEarned = result.credited
+      updatedChar = result.c
+    } catch (err) {
+      if (err instanceof Error && err.message === CAP_ERROR) {
+        return NextResponse.json(
+          { error: 'Teto diário de gold atingido — o ferreiro não compra mais hoje. Volte amanhã.' },
+          { status: 429 },
+        )
       }
-      return tx.character.findUnique({ where: { id: params.characterId }, select: { gold: true } })
-    })
+      throw err
+    }
 
     try {
       await addHistoryEntry({

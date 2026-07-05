@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, Sword, Zap, Brain, Star, HelpCircle, RefreshCw } from 'lucide-react';
 import { Character } from '@/types/game';
+import { sellUnitPrice as sellPrice } from '@/lib/sellPricing';
 import { EquipmentSlotType } from '@prisma/client';
 import { getRaceById, getClassById } from '@/lib/gameData';
 import { applyEnhancementToStats } from '@/lib/enhancementSystem';
@@ -376,7 +377,7 @@ export default function CharacterDetailsPage() {
     if (!effectiveCharacterId) return;
     const row = inventory.find((i: any) => i.id === inventoryId);
     const name = row?.item?.name ?? 'item';
-    const price = Math.max(0, Math.floor((row?.item?.goldPrice ?? 0) / 2));
+    const price = row?.item ? sellPrice(row.item) : 0; // sellPricing (fonte única)
     if (!window.confirm(`Vender ${name} ao ferreiro por ${price} gold?\nO item será destruído (não dá pra desfazer).`)) return;
 
     try {

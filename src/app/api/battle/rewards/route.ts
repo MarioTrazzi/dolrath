@@ -184,6 +184,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized for these characters' }, { status: 403 });
     }
 
+    // 🔁 DEDUP (pendência 2 do balance): a mesma luta pode chegar aqui DUAS
+    // vezes (cliente do vencedor E do perdedor chamam a rota) — sem isto o
+    // crédito dobrava. O registro de histórico "PvP Victory vs <nome>" é
+    // escrito nesta própria rota, então uma segunda chamada do MESMO confronto
+    // dentro da janela encontra o rastro da primeira e vira no-op.
+    const dedupWindow = new Date(Date.now() - 120_000);
+    const alreadyCredited = await prisma.characterHistory.findFirst({
+      where: {
+        characterId: battleResult.winnerId,
+        description: { startsWith: `PvP Victory vs ${loser.name}` },
+        createdAt: { gte: dedupWindow },
+      },
+      select: { id: true },
+    });
+    if (alreadyCredited) {
+      return NextResponse.json({
+        success: true,
+        deduped: true,
+        winner: { id: battleResult.winnerId, xpGained: 0, goldGained: 0, leveledUp: false, newLevel: winner.level },
+        loser: { id: battleResult.loserId, xpGained: 0, goldGained: 0, leveledUp: false, newLevel: loser.level },
+      });
+    }
+
     // 🔒 Níveis do BANCO, não do body (o cliente escolhia o multiplicador ×5 de
     // nível mandando winnerLevel=50). O body segue mandando os níveis só por
     // compat de payload; os valores dele não entram mais na conta.

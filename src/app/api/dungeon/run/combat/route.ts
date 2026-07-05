@@ -13,6 +13,7 @@ import {
   type RunPending,
 } from '@/lib/dungeonRunServer'
 import { wearFor } from '@/lib/durability'
+import { firstBossBonusStones, FIRST_BOSS_BONUS } from '@/lib/dungeonAdventures'
 
 export const dynamic = 'force-dynamic'
 
@@ -103,6 +104,16 @@ export async function POST(req: Request) {
     // 💀 Drop POR ABATE: cada monstro morto rola material na hora (estilhaço; boss =
     // Pedra Negra garantida) — recuar depois de matar 1 de 3 ainda rende algo.
     const killDrops = newlyKilled.flatMap((m) => rollKillLoot(pending.kind, !!m.isBoss, dungeon.difficultyStars))
+    // 🌅 Bônus solo: os primeiros bosses do DIA da CONTA rendem pedras extras
+    // (conta runs 'finished' de hoje — a run só finaliza matando o boss).
+    if (newlyKilled.some((m) => !!m.isBoss)) {
+      const startOfDay = new Date()
+      startOfDay.setUTCHours(0, 0, 0, 0)
+      const bossesToday = await prisma.dungeonRun.count({
+        where: { userId, status: 'finished', updatedAt: { gte: startOfDay } },
+      })
+      if (bossesToday < FIRST_BOSS_BONUS.bossesPerDay) killDrops.push(...firstBossBonusStones())
+    }
     // O espólio do NÓ segue saindo só quando o pacote inteiro cai (recompensa por limpar).
     const nodeLoot = allDead ? rollCombatLoot(dungeon, charForRun, pending) : null
     const loot = nodeLoot || killDrops.length

@@ -934,6 +934,21 @@ const BOSS_KILL_CONCENTRATED = { min: 1, max: 2, minStars: 3 }
 // 30/70 aproxima a oferta da demanda mantendo folga p/ alts/venda.
 const STONE_WEAPON_SHARE = 0.3
 
+// 🌅 BÔNUS SOLO (pendência 1 do balance, 2026-07-05): os PRIMEIROS bosses do
+// DIA da CONTA rendem pedras extras. Por que por conta e não por personagem:
+// o jogador solo faz ~3-4 bosses/dia (bônus ≈ +60% de pedra) enquanto o
+// esquadrão de 10 chars faz ~20-35 (bônus ≈ +11%) — fecha o gap solo 32-37d →
+// ~28d até o set +15 sem acelerar o farm rotativo (que já estava em 15-16d).
+export const FIRST_BOSS_BONUS = { bossesPerDay: 2, stones: 3 }
+export function firstBossBonusStones(): LootDrop[] {
+  const drops: LootDrop[] = []
+  for (let i = 0; i < FIRST_BOSS_BONUS.stones; i++) {
+    const stone = Math.random() < STONE_WEAPON_SHARE ? STONE_NAMES.WEAPON_BASIC : STONE_NAMES.ARMOR_BASIC
+    drops.push({ name: stone, kind: 'stone', rarity: 'UNCOMMON', emoji: '🌅' })
+  }
+  return drops
+}
+
 export function rollKillLoot(nodeKind: LootNodeKind, isBoss: boolean, difficultyStars = 1): LootDrop[] {
   const drops: LootDrop[] = []
   if (isBoss) {

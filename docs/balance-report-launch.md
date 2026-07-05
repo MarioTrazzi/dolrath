@@ -6,7 +6,7 @@
 >
 > | Chars | Faucet/dia | venda | NET/dia | Set +15 main |
 > |---|---|---|---|---|
-> | 1 | 7,2k (era 9,2k) | 43% | +4,9k | ~37d ⚠️ |
+> | 1 | 7,2k (era 9,2k) | 43% | +4,9k | **27d** ✅ (c/ bônus 🌅) |
 > | 3 | 14,8k | 46% | +10,3k | 23d ✅ |
 > | 5 | 19,9k (era 28,2k) | 42% | +13,2k | 16d ✅ |
 > | 10 | 20,4k (era 52,1k) | 20% | +8,6k | 15d |
@@ -16,18 +16,20 @@
 > com rampa (~10% nv1 → ~52% nv50) · PvP ~420/dia c/ custo de 20 stamina/luta
 > e rota endurecida (níveis do DB + 1ª-vitória do servidor).
 >
-> **Pendências pós-aplicação (decisão de design / follow-up):**
-> 1. ⚖️ **Solo vs esquadrão**: 1 char 32-37d (meta 21-28) mas 10 chars 4-15d —
->    acelerar pedra no boss ajudaria o solo E aceleraria o esquadrão. Decidir
->    se a meta solo relaxa ou se entra um bônus só-solo (ex.: 1º boss do dia).
-> 2. 📊 Venda 42-46% do faucet em 1-5 chars (meta ≤30%) — já dentro do cap e
->    NET na meta; apertar mais = mexer no pConsumable do chão. Reavaliar com
->    telemetria real.
-> 3. 🔁 battle/rewards não tem dedup por batalha (winner E loser chamando a
->    rota podem duplicar crédito) — pré-existente, exige battleId; fazer antes
->    do lançamento.
-> 4. 🪙 Token: re-rodar token-economy-sim com NET medido (5-13k/dia/conta)
->    após o redeploy dos contratos v2.
+> **Pendências — RESOLVIDAS na mesma sessão (2ª passada):**
+> 1. ✅ **Solo vs esquadrão**: bônus 🌅 dos 2 PRIMEIROS bosses do dia da CONTA
+>    (+3 Pedras cada, FIRST_BOSS_BONUS em dungeonAdventures + rota combat).
+>    Solo 37d → **27d** (meta 21-28 ✅); esquadrão 16d → 13d (quase parado, como
+>    desenhado — o bônus é por conta, não por personagem).
+> 2. ✅ **Dedup do battle/rewards**: janela de 120s por confronto (o rastro
+>    "PvP Victory vs <nome>" do histórico vira guarda) — winner E loser
+>    chamando a rota não duplicam mais o crédito.
+>
+> **Follow-ups pós-lançamento (telemetria):**
+> - 📊 Venda 42-46% do faucet em 1-5 chars (meta ≤30%) — cap segura e NET está
+>   na meta; reavaliar pConsumable com dados reais.
+> - 🪙 Token: re-rodar token-economy-sim com NET medido (5-13k/dia/conta) após
+>   o redeploy dos contratos v2.
 
 **Data:** 2026-07-05 · **Fase:** testes (relatório original abaixo — números PRÉ-ajuste)
 **Ferramentas:** `scripts/economy-unified-sim.ts` (novo — geradores reais do jogo),

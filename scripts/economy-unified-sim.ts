@@ -46,7 +46,7 @@ function mulberry32(a: number) {
 Math.random = mulberry32(SEED)
 
 import {
-  DUNGEON_LIST, scaleMonsterGroup, luckTier,
+  DUNGEON_LIST, scaleMonsterGroup, luckTier, firstBossBonusStones, FIRST_BOSS_BONUS,
   type DungeonDef, type LootDrop, type ScaledMonster,
 } from '@/lib/dungeonAdventures'
 import {
@@ -210,7 +210,7 @@ function absorbDrops(v: Vault, led: Ledger, drops: LootDrop[], c: Char | null, c
 }
 
 // ---------------- Uma RUN (trilha real do servidor) ----------------
-function runDungeon(v: Vault, led: Ledger, c: Char, capLeft: { v: number }): number {
+function runDungeon(v: Vault, led: Ledger, c: Char, capLeft: { v: number }, bossesToday: { n: number }): number {
   const trail = buildTrail(dungeon)
   const meAsRun: CharacterForRun = { id: 'sim', level: c.level, race: 'elfo', class: 'rogue' }
   let stamina = 0
@@ -249,7 +249,13 @@ function runDungeon(v: Vault, led: Ledger, c: Char, capLeft: { v: number }): num
         if (Math.random() < REVIVE) continue // coberto: tenta o próximo do pacote
         fell = true; break
       }
-      led.kills++; if (isBoss) led.bossKills++
+      led.kills++
+      if (isBoss) {
+        led.bossKills++
+        // 🌅 bônus dos primeiros bosses do dia da CONTA (rota combat)
+        if (bossesToday.n < FIRST_BOSS_BONUS.bossesPerDay) absorbDrops(v, led, firstBossBonusStones(), c, capLeft)
+        bossesToday.n++
+      }
       credit(m.goldReward, true)
       gainXp(c, m.xpReward); led.xpDungeon += m.xpReward
       // drop POR ABATE (mesma chamada da rota dungeon/run/combat): estilhaço 40/60% + boss 1-3 Pedras
@@ -467,6 +473,7 @@ function simulateAccount(nChars: number): TrialResult {
 
   for (let day = 1; day <= DAYS; day++) {
     const capLeft = { v: DAILY_GOLD_CAP }
+    const bossesToday = { n: 0 }
     let capWasHit = false
 
     chars.forEach((c, i) => {
@@ -482,7 +489,7 @@ function simulateAccount(nChars: number): TrialResult {
       while (budget >= 30) { // custo mínimo de uma run parcial útil
         craftOrBuyPotions(v, led, POTS_RUN)
         v.potions = Math.max(0, v.potions - POTS_RUN)
-        const spent = runDungeon(v, led, c, capLeft)
+        const spent = runDungeon(v, led, c, capLeft, bossesToday)
         led.staminaDungeon += spent
         led.runs++
         budget -= Math.max(spent, 20)

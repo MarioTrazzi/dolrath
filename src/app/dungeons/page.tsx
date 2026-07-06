@@ -6,8 +6,11 @@ import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import DungeonRun, { DungeonCharacter } from '@/components/dungeon/DungeonRun'
 import DungeonBackdrop from '@/components/dungeon/DungeonBackdrop'
-import { DUNGEON_LIST, DungeonDef, monsterImagePath } from '@/lib/dungeonAdventures'
+import { DUNGEON_LIST, DungeonDef, monsterImagePath, MAX_DUNGEON_TIER, CONCENTRATED_MIN_TIER } from '@/lib/dungeonAdventures'
 import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider'
+
+// Numerais dos tiers (1..5 → I..V).
+const ROMAN = ['I', 'II', 'III', 'IV', 'V']
 
 // Miniatura do bestiário: arte do monstro (DB → /monsters/<slug>.webp) e cai no
 // emoji se a imagem 404. Substitui os emojis-placeholder no card da masmorra.
@@ -51,6 +54,10 @@ export default function DungeonsPage() {
   // 🔁 Re-run: incrementa a key da DungeonRun (remonta do zero) preservando o piloto.
   const [runSeq, setRunSeq] = useState(0)
   const [resumeAuto, setResumeAuto] = useState(false)
+  // 🏆 Tiers: maior tier desbloqueado por masmorra ({dungeonId: maxTier}) e o tier
+  // ESCOLHIDO em cada card (default = o maior desbloqueado).
+  const [tierProgress, setTierProgress] = useState<Record<string, number>>({})
+  const [selectedTier, setSelectedTier] = useState<Record<string, number>>({})
 
   useEffect(() => {
     if (!session) {
@@ -128,6 +135,22 @@ export default function DungeonsPage() {
       return prev && prev.id === match.id ? prev : match
     })
   }, [activeCharacterId, characters])
+
+  // 🏆 Carrega o progresso de TIER do herói selecionado. Recarrega ao VOLTAR de uma run
+  // (activeDungeon → null) — vencer o boss pode ter desbloqueado um tier novo.
+  useEffect(() => {
+    const charId = selectedCharacter?.id
+    if (!charId || activeDungeon) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/dungeon/progress?characterId=${charId}`)
+        const data = await res.json().catch(() => null)
+        if (!cancelled && data?.progress) setTierProgress(data.progress)
+      } catch { /* silencioso: sem progresso = tudo no Tier I */ }
+    })()
+    return () => { cancelled = true }
+  }, [selectedCharacter?.id, activeDungeon])
 
   // Detecta se QUALQUER personagem da conta já está rodando em OUTRA aba/janela (lock
   // vivo no servidor) e bloqueia o "Entrar" — não importa qual herói está selecionado
@@ -230,6 +253,7 @@ export default function DungeonsPage() {
         key={`${activeDungeon.id}-${runSeq}`}
         dungeon={activeDungeon}
         character={selectedCharacter}
+        tier={selectedTier[activeDungeon.id] ?? tierProgress[activeDungeon.id] ?? 1}
         onExit={handleRunExit}
         onRestart={handleRunRestart}
         initialAuto={resumeAuto}
@@ -370,17 +394,50 @@ export default function DungeonsPage() {
                     <div className="text-white/60 text-[10px] mt-0.5">
                       {dungeon.rooms} salas + 👑
                     </div>
-                    <div
-                      className={`text-[10px] mt-0.5 font-bold ${selectedCharacter && selectedCharacter.level < dungeon.levelReq ? 'text-red-400' : 'text-white/50'}`}
-                    >
-                      Nv. {dungeon.levelReq}+
+                    <div className="text-[10px] mt-0.5 font-bold text-white/50" title="Nível recomendado — a masmorra é acessível em qualquer nível, mas o boss exige estar por perto.">
+                      Nv. {dungeon.levelReq}+ recom.
                     </div>
                   </div>
                 </div>
 
-                <p className="text-white/60 text-xs mt-3 mb-4 max-w-md drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
+                <p className="text-white/60 text-xs mt-3 mb-3 max-w-md drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
                   {dungeon.description}
                 </p>
+
+                {/* 🏆 Abas de Tier: desbloqueadas ≤ maxTier; escolher define a dificuldade da run. */}
+                <div className="flex items-center flex-wrap gap-1.5 mb-3">
+                  <span className="text-[10px] font-bold text-white/50 uppercase tracking-wide mr-0.5">Tier</span>
+                  {Array.from({ length: MAX_DUNGEON_TIER }).map((_, i) => {
+                    const t = i + 1
+                    const maxT = tierProgress[dungeon.id] ?? 1
+                    const unlocked = t <= maxT
+                    const chosen = (selectedTier[dungeon.id] ?? maxT) === t
+                    return (
+                      <button
+                        key={t}
+                        disabled={!unlocked}
+                        onClick={() => setSelectedTier((p) => ({ ...p, [dungeon.id]: t }))}
+                        title={
+                          unlocked
+                            ? `Tier ${ROMAN[i]}${t >= CONCENTRATED_MIN_TIER ? ' — dropa Pedra Concentrada' : ''}`
+                            : `Vença o boss no Tier ${ROMAN[maxT - 1]} para desbloquear`
+                        }
+                        className={`min-w-[26px] h-6 px-1.5 rounded-md text-[11px] font-black border transition-all ${
+                          chosen
+                            ? 'bg-white text-black border-white'
+                            : unlocked
+                              ? 'bg-black/50 text-white/80 border-white/25 hover:border-white/60'
+                              : 'bg-black/40 text-white/30 border-white/10 cursor-not-allowed'
+                        }`}
+                      >
+                        {unlocked ? ROMAN[i] : '🔒'}
+                      </button>
+                    )
+                  })}
+                  {((selectedTier[dungeon.id] ?? tierProgress[dungeon.id] ?? 1) >= CONCENTRATED_MIN_TIER) && (
+                    <span className="text-[10px] text-amber-300/90 ml-1">💎 Concentrada</span>
+                  )}
+                </div>
 
                 <div className="mt-auto flex items-end justify-between gap-2">
                   {/* Bestiário */}
@@ -403,15 +460,16 @@ export default function DungeonsPage() {
                   </div>
 
                   {(() => {
-                    const meetsLevel = !!selectedCharacter && selectedCharacter.level >= dungeon.levelReq
-                    const enter = canEnter && meetsLevel && !heroInUse
+                    // Sem gate de nível: toda masmorra é entrável. A dificuldade e o boss
+                    // (ancorado no clearLevel) gateiam quem está sub-nivelado.
+                    const enter = canEnter && !heroInUse
                     return (
                       <button
                         onClick={() => enter && setActiveDungeon(dungeon)}
                         disabled={!enter}
                         title={
                           heroInUse ? `${lockedCharacterName ?? 'Outro personagem'} já está em uma masmorra em outra aba ou janela. Só um herói por vez.`
-                          : !meetsLevel ? `Requer nível ${dungeon.levelReq}` : undefined
+                          : undefined
                         }
                         className={`px-5 py-2.5 rounded-xl font-black text-sm text-white shadow-lg transition-all ${
                           enter ? 'hover:scale-105' : 'opacity-50 cursor-not-allowed'
@@ -421,8 +479,7 @@ export default function DungeonsPage() {
                           boxShadow: `0 4px 20px ${dungeon.accentSoft}`,
                         }}
                       >
-                        {heroInUse ? '🔒 Em outra aba'
-                          : canEnter && !meetsLevel ? `🔒 Nv. ${dungeon.levelReq}` : '🚪 Entrar'}
+                        {heroInUse ? '🔒 Em outra aba' : '🚪 Entrar'}
                       </button>
                     )
                   })()}

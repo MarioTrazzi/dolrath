@@ -113,7 +113,7 @@ const BOSS_POW_MULT = 0.9, BOSS_ARM_MULT = 0.8, MON_ARMOR = 96
 // NÃO resolvida de novo aqui: o objetivo é auditar o balanceamento que já está no ar.
 const HPSCALE = process.env.HPSCALE !== undefined ? Number(process.env.HPSCALE) : 1 // knob p/ tunar o HP do boss
 // Valores JÁ em produção (dungeonAdventures.ts BOSS_HP_MULT.floresta, pós-retune p/ ~75%).
-const BOSS_HP_MULT_FLORESTA_BASE = { warrior: 2.76, rogue: 2.74, mage: 2.62, monk: 2.90 }
+const BOSS_HP_MULT_FLORESTA_BASE = { warrior: 2.36, rogue: 2.24, mage: 2.23, monk: 2.43 } // curva 2026-07-06: floresta ~88% (trivial)
 const BOSS_HP_MULT_FLORESTA = Object.fromEntries(Object.entries(BOSS_HP_MULT_FLORESTA_BASE).map(([k, v]) => [k, v * HPSCALE]))
 const BOSS_EVADE = 0.08 // Anciã da Mata: baseEvade real (dungeonAdventures.ts)
 const CLEAR_LEVEL = 10

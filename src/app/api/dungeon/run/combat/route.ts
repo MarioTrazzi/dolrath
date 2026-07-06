@@ -13,7 +13,7 @@ import {
   type RunPending,
 } from '@/lib/dungeonRunServer'
 import { wearFor } from '@/lib/durability'
-import { firstBossBonusStones, FIRST_BOSS_BONUS } from '@/lib/dungeonAdventures'
+import { firstBossBonusStones, FIRST_BOSS_BONUS, MAX_DUNGEON_TIER, clampDungeonTier } from '@/lib/dungeonAdventures'
 
 export const dynamic = 'force-dynamic'
 
@@ -103,7 +103,7 @@ export async function POST(req: Request) {
     const charForRun = { id: character.id, level: character.level, race: character.race, class: character.class }
     // 💀 Drop POR ABATE: cada monstro morto rola material na hora (estilhaço; boss =
     // Pedra Negra garantida) — recuar depois de matar 1 de 3 ainda rende algo.
-    const killDrops = newlyKilled.flatMap((m) => rollKillLoot(pending.kind, !!m.isBoss, dungeon.difficultyStars))
+    const killDrops = newlyKilled.flatMap((m) => rollKillLoot(pending.kind, !!m.isBoss, dungeon.difficultyStars, run.tier))
     // 🌅 Bônus solo: os primeiros bosses do DIA da CONTA rendem pedras extras
     // (conta runs 'finished' de hoje — a run só finaliza matando o boss).
     if (newlyKilled.some((m) => !!m.isBoss)) {
@@ -115,7 +115,7 @@ export async function POST(req: Request) {
       if (bossesToday < FIRST_BOSS_BONUS.bossesPerDay) killDrops.push(...firstBossBonusStones())
     }
     // O espólio do NÓ segue saindo só quando o pacote inteiro cai (recompensa por limpar).
-    const nodeLoot = allDead ? rollCombatLoot(dungeon, charForRun, pending) : null
+    const nodeLoot = allDead ? rollCombatLoot(dungeon, charForRun, pending, run.tier) : null
     const loot = nodeLoot || killDrops.length
       ? { gold: nodeLoot?.gold ?? 0, drops: [...killDrops, ...(nodeLoot?.drops ?? [])] }
       : null
@@ -139,6 +139,21 @@ export async function POST(req: Request) {
             : { pending: { ...pending, killedIds: Array.from(killed) } as unknown as object }),
         },
       })
+
+      // 🏆 Desbloqueio de TIER: vencer o boss no tier == maxTier atual sobe o maxTier
+      // (até MAX_DUNGEON_TIER). Garante a linha do progresso e faz o bump idempotente.
+      if (isBoss && allDead) {
+        const key = { characterId_dungeonId: { characterId: character.id, dungeonId: dungeon.id } }
+        const prog = await tx.dungeonProgress.upsert({
+          where: key,
+          create: { characterId: character.id, dungeonId: dungeon.id, maxTier: 1 },
+          update: {},
+        })
+        const beat = clampDungeonTier(run.tier)
+        if (beat >= prog.maxTier && prog.maxTier < MAX_DUNGEON_TIER) {
+          await tx.dungeonProgress.update({ where: key, data: { maxTier: prog.maxTier + 1 } })
+        }
+      }
 
       const equipped = await tx.characterEquipment.findMany({
         where: { characterId: character.id },

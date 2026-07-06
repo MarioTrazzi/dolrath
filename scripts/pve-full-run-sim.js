@@ -59,7 +59,7 @@ const PLAYER_GEAR = { rarity: 'UNCOMMON', enh: PRI } // gear-ALVO da Floresta ("
 const GEAR_TIER_FLOOR = 0.25
 const BOSS_POW_MULT = 0.9, BOSS_ARM_MULT = 0.8, MON_ARMOR = 96
 const ROOM_HP_LO = 1.4, ROOM_HP_HI = 3.0, MINOR_HP_FAC = 0.7, MINOR_STR_FAC = 0.78
-const BOSS_HP_MULT_FLORESTA = { warrior: 2.76, rogue: 2.74, mage: 2.62, monk: 2.90 } // == produção (pós-retune)
+const BOSS_HP_MULT_FLORESTA = { warrior: 2.36, rogue: 2.24, mage: 2.23, monk: 2.43 } // == produção (curva 2026-07-06: floresta ~88%)
 const BOSS_EVADE = 0.08 // Anciã da Mata
 
 // ============================================================

@@ -80,7 +80,7 @@ export async function POST(req: Request) {
 
     // BOSS: rola o boss, grava pending, cobra stamina (cursor só avança na vitória).
     if (node.kind === 'boss') {
-      const pending = resolveBossNode(dungeon, charForRun, nextIdx)
+      const pending = resolveBossNode(dungeon, charForRun, nextIdx, run.tier)
       const updated = await prisma.$transaction(async (tx) => {
         const c = await tx.character.update({ where: { id: character.id }, data: staminaSpend })
         await tx.dungeonRun.update({ where: { id: run.id }, data: { pending: pending as unknown as object } })
@@ -90,7 +90,7 @@ export async function POST(req: Request) {
     }
 
     // Nó de exploração: rola o d20 no servidor.
-    const resolved = resolveExploreNode(dungeon, charForRun, node, nextIdx)
+    const resolved = resolveExploreNode(dungeon, charForRun, node, nextIdx, run.tier)
 
     if (resolved.type === 'monster') {
       const updated = await prisma.$transaction(async (tx) => {

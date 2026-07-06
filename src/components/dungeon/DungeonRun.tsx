@@ -98,6 +98,8 @@ export interface DungeonCharacter {
 interface DungeonRunProps {
   dungeon: DungeonDef
   character: DungeonCharacter
+  /** 🏆 Tier da masmorra escolhido (1..5). Default 1. Escala monstro + drops no servidor. */
+  tier?: number
   onExit: (updates: { hp: number; mp: number; stamina: number; leveledUp?: boolean }) => void
   /** Re-run: o pai remonta a run do zero (mesma masmorra), preservando o piloto via initialAuto. */
   onRestart?: (updates: { hp: number; mp: number; stamina: number; leveledUp?: boolean; auto: boolean }) => void
@@ -503,7 +505,7 @@ function defenseVerb(): string {
   return Math.random() < 0.3 ? 'defendeu' : 'esquivou'
 }
 
-export default function DungeonRun({ dungeon, character, onExit, onRestart, initialAuto }: DungeonRunProps) {
+export default function DungeonRun({ dungeon, character, tier = 1, onExit, onRestart, initialAuto }: DungeonRunProps) {
   // ---------- Recursos locais do personagem (durante a run) ----------
   // HP e MP começam cheios: a stamina diária é o que limita as tentativas.
   const [hp, setHp] = useState(() => character.maxHp + equipmentPower(character.equipment).hp)
@@ -741,7 +743,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
         const res = await fetch('/api/dungeon/run/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ characterId: character.id, dungeonId: dungeon.id }),
+          body: JSON.stringify({ characterId: character.id, dungeonId: dungeon.id, tier }),
         })
         const data = await res.json()
         if (!res.ok) {
@@ -2258,7 +2260,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
       return fire(() => startCombat(
         serverPackRef.current ??
         serverMonsterRef.current ??
-        scaleMonster(dungeon.boss, dungeon, character.level, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass)
+        scaleMonster(dungeon.boss, dungeon, character.level, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass, tier)
       ), 1100)
     }
     if (!runReady) return
@@ -2903,7 +2905,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
                         <h2 className="text-3xl font-black text-white leading-none">{dungeon.boss.name}</h2>
                         <p className="text-sm text-error/90 font-bold uppercase tracking-wider mt-1 mb-5">{dungeon.boss.title}</p>
                         <button
-                          onClick={() => startCombat(serverPackRef.current ?? serverMonsterRef.current ?? scaleMonster(dungeon.boss, dungeon, character.level, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass))}
+                          onClick={() => startCombat(serverPackRef.current ?? serverMonsterRef.current ?? scaleMonster(dungeon.boss, dungeon, character.level, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass, tier))}
                           className="w-full py-4 rounded-lg font-black text-white text-lg inline-flex items-center justify-center gap-2 transition-transform active:scale-[0.98] hover:scale-[1.02]"
                           style={{ background: 'linear-gradient(90deg, #e94560, #b91c1c)', boxShadow: '0 0 28px rgba(233,69,96,0.5)' }}
                         >
@@ -3033,7 +3035,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
                 <button
                   onClick={
                     atBoss
-                      ? () => startCombat(serverPackRef.current ?? serverMonsterRef.current ?? scaleMonster(dungeon.boss, dungeon, character.level, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass))
+                      ? () => startCombat(serverPackRef.current ?? serverMonsterRef.current ?? scaleMonster(dungeon.boss, dungeon, character.level, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass, tier))
                       : advance
                   }
                   disabled={exploreRolling || moving || !!eventCard || !!lootCard}

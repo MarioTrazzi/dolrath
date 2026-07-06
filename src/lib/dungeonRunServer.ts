@@ -108,6 +108,7 @@ export function resolveExploreNode(
   character: CharacterForRun,
   node: TrailNode,
   nodeIdx: number,
+  tier: number = 1,
 ):
   | { type: 'monster'; roll: number; pending: RunPending }
   | { type: 'find'; roll: number; loot: NodeLoot } {
@@ -119,7 +120,7 @@ export function resolveExploreNode(
   const monsterEncounter = isMain || Math.random() < MINOR_MONSTER_CHANCE_BY_TIER[luckTier(roll)]
   if (monsterEncounter) {
     // Sala principal = guardião SOLO; nó menor pode trazer um pacote de 1..3 (mais fracos).
-    const monsters = scaleMonsterGroup(dungeon, character.level, scaling, klass)
+    const monsters = scaleMonsterGroup(dungeon, character.level, scaling, klass, tier)
     return { type: 'monster', roll, pending: { nodeIdx, kind: isMain ? 'main' : 'minor', lootRoll: roll, monsters, killedIds: [] } }
   }
 
@@ -132,7 +133,7 @@ export function resolveExploreNode(
     return { type: 'find', roll, loot: { gold: 0, drops: [], fountain: true } }
   }
 
-  const loot = rollNodeLoot(dungeon, roll, isMain ? 'main' : 'minor', character.level, character.race, character.class)
+  const loot = rollNodeLoot(dungeon, roll, isMain ? 'main' : 'minor', character.level, character.race, character.class, tier)
   return { type: 'find', roll, loot }
 }
 
@@ -141,16 +142,17 @@ export function resolveBossNode(
   dungeon: DungeonDef,
   character: CharacterForRun,
   nodeIdx: number,
+  tier: number = 1,
 ): RunPending {
   const klass = combatClassOf(character.class)
-  const monster = scaleMonster(dungeon.boss, dungeon, character.level, { tier: dungeon.rooms, isMain: true, isBoss: true }, klass)
+  const monster = scaleMonster(dungeon.boss, dungeon, character.level, { tier: dungeon.rooms, isMain: true, isBoss: true }, klass, tier)
   return { nodeIdx, kind: 'boss', lootRoll: 20, monsters: [monster], killedIds: [] }
 }
 
 // Espólio pós-combate (mesma regra do cliente: boss = sorte máxima e mais drops).
-export function rollCombatLoot(dungeon: DungeonDef, character: CharacterForRun, pending: RunPending): NodeLoot {
+export function rollCombatLoot(dungeon: DungeonDef, character: CharacterForRun, pending: RunPending, tier: number = 1): NodeLoot {
   const roll = pending.kind === 'boss' ? 20 : pending.lootRoll
-  return rollNodeLoot(dungeon, roll, pending.kind, character.level, character.race, character.class)
+  return rollNodeLoot(dungeon, roll, pending.kind, character.level, character.race, character.class, tier)
 }
 
 export { rollKillLoot }

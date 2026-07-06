@@ -20,6 +20,7 @@
 
 import { SEED_CATALOG } from './itemCatalog';
 import { gatherSeedChance, gatherYieldPerTick } from './professionSystem';
+import { STONE_NAMES } from './enhancementSystem';
 
 export type GatherFieldId = 'minerios' | 'ervas' | 'bosque';
 
@@ -68,6 +69,10 @@ export const GATHER_FIELDS: Record<GatherFieldId, GatherFieldDef> = {
       { name: 'Estilhaço de Pedra Negra (Armadura)', weight: 16 },
       { name: 'Cristal Bruto', weight: 14, minLevel: 10 },
       { name: 'Fragmentos de Joias', weight: 10, minLevel: 20 },
+      // 💎 Pedra Concentrada: coletor experiente (nv30+) acha raramente — fonte
+      // alternativa ao boss/tier alto/refino 10:1 pro aprimoramento TRI/TET. 30/70 arma/armadura.
+      { name: STONE_NAMES.WEAPON_CONCENTRATED, weight: 2, minLevel: 30 },
+      { name: STONE_NAMES.ARMOR_CONCENTRATED, weight: 4, minLevel: 30 },
     ],
   },
   ervas: {

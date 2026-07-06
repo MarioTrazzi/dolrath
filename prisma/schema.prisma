@@ -194,6 +194,7 @@ model Character {
   inventory     CharacterInventory[]
   history       CharacterHistory[]
   dungeonRuns   DungeonRun[]
+  dungeonProgress DungeonProgress[]
   gatheringSessions GatheringSession[]
   farmPlots     FarmPlot[]
 
@@ -356,6 +357,7 @@ model DungeonRun {
   character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
   characterId String
   dungeonId   String
+  tier        Int       @default(1)         // tier escolhido da run (1..5); ↑ = mais difícil + drops melhores
   status      String    @default("active") // active | finished | defeated | abandoned
   cursor      Int       @default(0)         // índice do último nó RESOLVIDO (0 = entrada)
   nodeCount   Int                           // total de nós da trilha (inclui o boss)
@@ -370,6 +372,22 @@ model DungeonRun {
   @@index([userId])
   @@index([characterId])
   @@index([characterId, status])
+}
+
+// 🏆 Progresso de TIER por personagem × masmorra (estilo Diablo 4). maxTier = maior tier
+// DESBLOQUEADO (começa em 1). Vencer o boss no tier == maxTier (e < 5) sobe o maxTier.
+// O jogador pode rodar qualquer tier ≤ maxTier (abas na UI).
+model DungeonProgress {
+  id          String    @id @default(cuid())
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  characterId String
+  dungeonId   String
+  maxTier     Int       @default(1)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([characterId, dungeonId])
+  @@index([characterId])
 }
 
 // ⛏️ Sessão de COLETA idle, servidor-autoritativa (espelha DungeonRun).

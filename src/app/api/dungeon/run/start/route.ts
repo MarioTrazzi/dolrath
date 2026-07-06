@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { buildTrail, getDungeon, isRunLive } from '@/lib/dungeonRunServer'
+import { clampDungeonTier } from '@/lib/dungeonAdventures'
 import { regenAndPersist } from '@/lib/staminaServer'
 
 export const dynamic = 'force-dynamic'
@@ -17,10 +18,11 @@ export async function POST(req: Request) {
   const userId = session.user.id
 
   try {
-    const { characterId, dungeonId } = await req.json()
+    const { characterId, dungeonId, tier: rawTier } = await req.json()
     if (!characterId || !dungeonId) {
       return NextResponse.json({ error: 'characterId e dungeonId são obrigatórios' }, { status: 400 })
     }
+    const tier = clampDungeonTier(rawTier)
 
     const dungeon = getDungeon(String(dungeonId))
     if (!dungeon) {
@@ -34,10 +36,20 @@ export async function POST(req: Request) {
     // Stamina viva ao abrir a sessão (regen passivo aplicado e persistido).
     const character = await regenAndPersist(rawCharacter)
 
-    // Gating de progressão: nível mínimo da masmorra.
-    if (character.level < dungeon.levelReq) {
+    // Sem gate de nível na ENTRADA: toda masmorra é acessível. Quem está sub-nivelado
+    // limpa as salas (que acompanham seu nível) mas apanha do BOSS (ancorado no
+    // clearLevel + gear-alvo) — a dificuldade e o boss são o gate, não o levelReq.
+
+    // 🏆 Gate de TIER: só dá pra rodar um tier já DESBLOQUEADO (≤ maxTier). O maxTier
+    // começa em 1 (Tier I sempre disponível) e sobe vencendo o boss (ver combat route).
+    const progress = await prisma.dungeonProgress.findUnique({
+      where: { characterId_dungeonId: { characterId, dungeonId: dungeon.id } },
+      select: { maxTier: true },
+    })
+    const maxTier = progress?.maxTier ?? 1
+    if (tier > maxTier) {
       return NextResponse.json(
-        { error: `Nível ${dungeon.levelReq} necessário para entrar em ${dungeon.name}.`, levelReq: dungeon.levelReq },
+        { error: `Tier ${tier} ainda não desbloqueado (máximo: ${maxTier}). Vença o boss no tier ${maxTier} para liberar o próximo.`, maxTier },
         { status: 403 }
       )
     }
@@ -103,6 +115,7 @@ export async function POST(req: Request) {
           userId,
           characterId,
           dungeonId: dungeon.id,
+          tier,
           nodeCount: trail.length,
           cursor: 0,
           status: 'active',

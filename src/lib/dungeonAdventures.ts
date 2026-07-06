@@ -5,8 +5,7 @@
 // - Usado pela experiência nova de masmorras (DungeonRun + BattleScene)
 // ============================================================
 
-import { getDungeonConsumables, rollEquipmentDrop, getCommonForgeMaterials, type Rarity } from './itemCatalog'
-import { pickIngredient } from './alchemy'
+import { getDungeonConsumables, rollEquipmentDrop, type Rarity } from './itemCatalog'
 import { STONE_NAMES } from './enhancementSystem'
 import { computeLevers, powerScale, deriveGearTier, type CombatClass } from './combatModel'
 
@@ -412,17 +411,32 @@ export interface ScaledMonster {
 const BOSS_POW_MULT = 0.9    // poder do boss = âncora.power × isto
 const BOSS_ARM_MULT = 0.8    // armadura do boss = MON_ARMOR × S × isto
 const MON_ARMOR = 96         // armadura neutra de referência (média dos PROFILEs do nv50)
-const TIER_POWER_STEP = 0.6  // p/ recompensas (gold/xp) por sala — não afeta o combate
+const TIER_POWER_STEP = 0.6  // p/ recompensas (gold/xp) por SALA (s.tier) — não afeta o combate
+
+// 🏆 TIER DA MASMORRA (Diablo 4): 1..MAX_DUNGEON_TIER. Tier ↑ = monstro mais forte
+// (poder/HP) e recompensa/drops melhores. Concentrada só a partir de CONCENTRATED_MIN_TIER.
+// Os passos são a ALAVANCA — os valores finais saem do sim (Fase E / dungeon-difficulty-sim).
+export const MAX_DUNGEON_TIER = 5
+export const CONCENTRATED_MIN_TIER = 3
+const DUNGEON_TIER_POWER_STEP = 0.18  // +18% em poder/HP do monstro por tier acima de 1
+const DUNGEON_TIER_REWARD_STEP = 0.15 // +15% em gold/xp por tier acima de 1
+export const clampDungeonTier = (t: unknown) =>
+  Math.max(1, Math.min(MAX_DUNGEON_TIER, Math.floor(Number(t) || 1)))
+const dungeonTierPowerMult = (tier: number) => 1 + (clampDungeonTier(tier) - 1) * DUNGEON_TIER_POWER_STEP
+const dungeonTierRewardMult = (tier: number) => 1 + (clampDungeonTier(tier) - 1) * DUNGEON_TIER_REWARD_STEP
 
 // HP do boss = âncora.hp × BOSS_HP_MULT[masmorra][classe] (resolvido no sim p/ ~65% no
 // gear-alvo). Recalibrado 2026-06-30 pro modelo dado-como-plus (resolveHit/
 // resolveMonsterHit) — o spread entre classes encolheu bastante vs. o modelo antigo de
 // disputa de margem (ex.: floresta era 4.70/2.85/3.32/3.88, guerreiro≫ladino).
+// 🎚️ CURVA DE DIFICULDADE (2026-07-06): win-alvo no gear-ALVO cresce em degraus —
+// 1ª masmorra trivial → 4ª bem difícil. Resolvido por classe no dungeon-difficulty-sim
+// (TARGET_WIN por masmorra: floresta ~88% · caverna ~78% · pantano ~63% · ruinas ~52%).
 const BOSS_HP_MULT: Record<DungeonId, Record<CombatClass, number>> = {
-  floresta: { warrior: 2.76, rogue: 2.74, mage: 2.62, monk: 2.90 }, // ×0.93 p/ subir o win-alvo de ~65%→~75% (sim: scripts/pve-race-class-sim.js)
-  caverna:  { warrior: 2.73, rogue: 2.95, mage: 2.93, monk: 2.93 },
-  pantano:  { warrior: 2.89, rogue: 2.93, mage: 2.82, monk: 3.03 },
-  ruinas:   { warrior: 3.03, rogue: 3.00, mage: 2.70, monk: 3.25 },
+  floresta: { warrior: 2.36, rogue: 2.24, mage: 2.23, monk: 2.43 }, // ~88% — muito fácil (onboarding)
+  caverna:  { warrior: 2.43, rogue: 2.56, mage: 2.54, monk: 2.54 }, // ~78% — moderada, ainda fácil
+  pantano:  { warrior: 2.92, rogue: 3.13, mage: 2.94, monk: 3.11 }, // ~63% — moderada, um pouco difícil
+  ruinas:   { warrior: 3.34, rogue: 3.61, mage: 3.13, monk: 3.65 }, // ~52% — bem difícil
 }
 // Rampa das salas/nós: o HP-mult cresce ao longo do band (1ª sala fácil → última perto do
 // boss). Nó menor = fração extra mais fraca. (Boss usa a tabela acima.)
@@ -508,8 +522,11 @@ export function scaleMonster(
   dungeon: DungeonDef,
   characterLevel: number,
   s: NodeScaling,
-  combatClass: CombatClass = 'warrior'
+  combatClass: CombatClass = 'warrior',
+  tier: number = 1,
 ): ScaledMonster {
+  const tierPow = dungeonTierPowerMult(tier)   // monstro mais forte em tier alto
+  const tierReward = dungeonTierRewardMult(tier) // recompensa melhor em tier alto
   const tg = TARGET_GEAR[dungeon.id]
   const targetTier = targetGearTierOf(tg)
   const targetHp = refGearHp(tg.enh)
@@ -548,17 +565,21 @@ export function scaleMonster(
   const rAtk = s.isBoss ? 1 : def.baseAttack / meanBy(ms, m => m.baseAttack)
   const rDef = s.isBoss ? 1 : def.baseDefense / meanBy(ms, m => m.baseDefense)
 
-  const attack = Math.max(1, Math.floor(anchor.power * BOSS_POW_MULT * strFac * rAtk))
-  const defense = Math.max(0, Math.floor(MON_ARMOR * S * BOSS_ARM_MULT * strFac * rDef))
-  const hp = Math.max(1, Math.floor(anchor.hp * hpMult * rHp))
+  const attack = Math.max(1, Math.floor(anchor.power * BOSS_POW_MULT * strFac * rAtk * tierPow))
+  const defense = Math.max(0, Math.floor(MON_ARMOR * S * BOSS_ARM_MULT * strFac * rDef * tierPow))
+  const hp = Math.max(1, Math.floor(anchor.hp * hpMult * rHp * tierPow))
 
   const bossTitle = s.isBoss && 'title' in def ? ` • ${(def as DungeonBossDef).title}` : ''
   // Especial: o boss e as salas PRINCIPAIS mais próximas dele (cresce com a dificuldade);
   // nós menores nunca têm.
   const specialFromTier = dungeon.rooms - (dungeon.difficultyStars - 1)
   const hasSpecial = !!s.isBoss || (!!s.isMain && s.tier >= specialFromTier)
-  // Recompensas (gold/xp) seguem dificuldade × tier da sala (independem do combate).
-  const d = dungeon.difficulty
+  // Recompensas (gold/xp): o BOSS segue a dificuldade da masmorra (é o clímax); as SALAS
+  // seguem o NÍVEL EFETIVO do monstro (= nível do jogador, já que as salas o acompanham).
+  // Assim, farmar salas de uma masmorra dura estando SUB-NIVELADO não infla o ganho — o
+  // fator por nível (0.9 + level·0.011) reproduz a antiga curva de dificuldade, mas por
+  // NÍVEL (nv10≈1.01, nv25≈1.18, nv50≈1.45) em vez de por masmorra.
+  const rewardScale = s.isBoss ? dungeon.difficulty : 0.9 + level * 0.011
   const tierFactor = 1 + (s.tier - 1) * TIER_POWER_STEP
   return {
     id: `${s.isBoss ? 'boss' : 'monster'}-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
@@ -573,8 +594,8 @@ export function scaleMonster(
     // AP um pouco acima do ataque físico para o especial ser ameaçador.
     magicPower: hasSpecial ? Math.floor(attack * 1.2) : 0,
     hasSpecial,
-    goldReward: Math.floor((s.isBoss ? 150 + Math.random() * 150 : s.isMain ? 25 + Math.random() * 25 : 6 + Math.random() * 10) * d * tierFactor),
-    xpReward: Math.floor((s.isBoss ? 150 + Math.random() * 100 : s.isMain ? 35 + Math.random() * 25 : 12 + Math.random() * 12) * d * tierFactor),
+    goldReward: Math.floor((s.isBoss ? 150 + Math.random() * 150 : s.isMain ? 25 + Math.random() * 25 : 6 + Math.random() * 10) * rewardScale * tierFactor * tierReward),
+    xpReward: Math.floor((s.isBoss ? 150 + Math.random() * 100 : s.isMain ? 35 + Math.random() * 25 : 12 + Math.random() * 12) * rewardScale * tierFactor * tierReward),
     isBoss: !!s.isBoss,
     scale: S,
     // Invariante de escala (igual ao evade do PROFILE do jogador) — vem direto do
@@ -627,14 +648,15 @@ export function scaleMonsterGroup(
   dungeon: DungeonDef,
   characterLevel: number,
   s: NodeScaling,
-  combatClass: CombatClass = 'warrior'
+  combatClass: CombatClass = 'warrior',
+  tier: number = 1,
 ): ScaledMonster[] {
   const size = s.isMain || s.isBoss ? 1 : rollPackSize()
   const hpShare = PACK_SHARE[size] ?? 1
   const atkShare = PACK_ATK_SHARE[size] ?? 1
   const out: ScaledMonster[] = []
   for (let i = 0; i < size; i++) {
-    const m = scaleMonster(pickMonster(dungeon), dungeon, characterLevel, s, combatClass)
+    const m = scaleMonster(pickMonster(dungeon), dungeon, characterLevel, s, combatClass, tier)
     if (size > 1) {
       m.hp = Math.max(1, Math.floor(m.hp * hpShare))
       m.maxHp = m.hp
@@ -752,22 +774,10 @@ const CROSS_CLASS_CHANCE = 0.2
 // Só armas/armaduras podem vir com +N embutido.
 const ACCESSORY_TYPES = new Set(['RING', 'NECKLACE', 'BELT'])
 
-// Floresta empurra pra alquimia: Pó de Fênix (revive) quase não se usa nesse
-// início, então só passa a cair a partir da Caverna. Em troca, ingrediente de
-// alquimia cai bem mais na Floresta (ver DUNGEON_INGREDIENT_MULT) pra bancar
-// craft de poção de vida/mana.
+// Pó de Fênix (revive) quase não se usa no início, então só passa a cair a partir
+// da Caverna (2★+).
 const CONSUMABLE_MIN_DIFFICULTY_STARS: Record<string, number> = {
   'Pó de Fênix': 2,
-}
-
-// Multiplica a chance de ingrediente de alquimia (não afeta material de forja,
-// que usa o mesmo cfg.pMaterial). Floresta ganha mais pra sustentar o craft de
-// poção de vida/mana logo cedo.
-const DUNGEON_INGREDIENT_MULT: Record<DungeonId, number> = {
-  floresta: 1.8,
-  caverna: 1,
-  pantano: 1,
-  ruinas: 1,
 }
 
 // Aprimoramento JÁ embutido no drop, por masmorra. A floresta entrega itens +4..+7
@@ -799,6 +809,7 @@ export function rollNodeLoot(
   level: number,
   race?: string | null,
   charClass?: string | null,
+  dungeonTier: number = 1,
 ): NodeLoot {
   // roll é o d20 da exploração que determina a qualidade (tier) dos drops
   // RARE e EPIC só aparecem em BOSS
@@ -807,30 +818,17 @@ export function rollNodeLoot(
   const mult = NODE_LOOT_MULT[nodeKind]
   const drops: LootDrop[] = []
   const isBoss = nodeKind === 'boss'
+  const tierReward = dungeonTierRewardMult(dungeonTier)          // gold/pedra melhores no tier alto
+  const dropsConcentrated = clampDungeonTier(dungeonTier) >= CONCENTRATED_MIN_TIER // concentrada nos tiers altos
 
   const gold = Math.max(
     0,
-    Math.floor((cfg.goldBase + Math.random() * cfg.goldVar) * mult.gold * dungeon.difficulty * (1 + level * 0.04))
+    Math.floor((cfg.goldBase + Math.random() * cfg.goldVar) * mult.gold * dungeon.difficulty * (1 + level * 0.04) * tierReward)
   )
 
-  // ingrediente de alquimia (espólio de craft de poção).
-  // Nó normal → COMUM/INCOMUM; chefe → também RARO/ÉPICO.
-  if (Math.random() < cfg.pMaterial * mult.all * DUNGEON_INGREDIENT_MULT[dungeon.id]) {
-    const rarities = isBoss
-      ? (['COMMON', 'UNCOMMON', 'RARE', 'EPIC'] as const)
-      : (['COMMON', 'UNCOMMON'] as const)
-    const ing = pickIngredient([...rarities])
-    if (ing) drops.push({ name: ing.name, kind: 'ingredient', rarity: rarityOf(ing), emoji: ing.emoji })
-  }
-  // material de forja (couro/ferro/estilhaços/especiais de arma). Cai em exploração e
-  // luta; chão dá só COMUM, sorte mid/high libera o Ferro (INCOMUM).
-  if (Math.random() < cfg.pMaterial * mult.all) {
-    const pool = getCommonForgeMaterials().filter(
-      (m) => m.rarity === 'COMMON' || (tier !== 'low' && m.rarity === 'UNCOMMON'),
-    )
-    const mat = pickFrom(pool)
-    if (mat) drops.push({ name: mat.name, kind: 'material', rarity: rarityOf(mat), emoji: mat.emoji })
-  }
+  // 🌾 Ingrediente de alquimia e material de forja NÃO caem mais na masmorra: agora
+  // são rendimento da COLETA e da MINERAÇÃO. A masmorra é foco de ouro/XP/pedras/gear.
+  // (O Estilhaço de Pedra Negra abaixo permanece — é feedstock direto do aprimoramento.)
   // Estilhaço de Pedra Negra (Arma/Armadura): ligante de TODA receita de forja
   // (10 viram 1 Pedra Negra). É o material de craft "corrente" — deve ser bem
   // frequente. Roll dedicado (não some no sorteio uniforme dos outros materiais).
@@ -903,17 +901,15 @@ export function rollNodeLoot(
     }
   }
 
-  // pedra de aprimoramento
-  if (Math.random() < cfg.pStone * mult.stone) {
-    const concentrated = dungeon.difficultyStars >= 3
-    const stone = concentrated
-      ? Math.random() < STONE_WEAPON_SHARE
-        ? STONE_NAMES.WEAPON_CONCENTRATED
-        : STONE_NAMES.ARMOR_CONCENTRATED
-      : Math.random() < STONE_WEAPON_SHARE
-        ? STONE_NAMES.WEAPON_BASIC
-        : STONE_NAMES.ARMOR_BASIC
-    drops.push({ name: stone, kind: 'stone', rarity: 'COMMON', emoji: '⚒️' })
+  // pedra de aprimoramento. BÁSICA por padrão; a CONCENTRADA só cai em TIER alto
+  // (≥ CONCENTRATED_MIN_TIER). Fora isso, a concentrada vem do BOSS, do refino 10:1
+  // na forja e da Coleta. Taxa e chance sobem com o tier (drops melhores).
+  if (Math.random() < cfg.pStone * mult.stone * tierReward) {
+    const weapon = Math.random() < STONE_WEAPON_SHARE
+    const stone = dropsConcentrated
+      ? (weapon ? STONE_NAMES.WEAPON_CONCENTRATED : STONE_NAMES.ARMOR_CONCENTRATED)
+      : (weapon ? STONE_NAMES.WEAPON_BASIC : STONE_NAMES.ARMOR_BASIC)
+    drops.push({ name: stone, kind: 'stone', rarity: dropsConcentrated ? 'RARE' : 'COMMON', emoji: '⚒️' })
   }
 
   return { gold, drops }
@@ -954,16 +950,23 @@ export function firstBossBonusStones(): LootDrop[] {
   return drops
 }
 
-export function rollKillLoot(nodeKind: LootNodeKind, isBoss: boolean, difficultyStars = 1): LootDrop[] {
+export function rollKillLoot(nodeKind: LootNodeKind, isBoss: boolean, difficultyStars = 1, dungeonTier = 1): LootDrop[] {
   const drops: LootDrop[] = []
+  const dt = clampDungeonTier(dungeonTier)
   if (isBoss) {
-    const n = BOSS_KILL_STONES.min + Math.floor(Math.random() * (BOSS_KILL_STONES.max - BOSS_KILL_STONES.min + 1))
+    // Pedras BÁSICAS: base + 1 extra a cada 2 tiers acima do 1 (tier alto = mais pedra).
+    const tierBonus = Math.floor((dt - 1) / 2)
+    const n = BOSS_KILL_STONES.min + tierBonus +
+      Math.floor(Math.random() * (BOSS_KILL_STONES.max - BOSS_KILL_STONES.min + 1))
     for (let i = 0; i < n; i++) {
       const stone = Math.random() < STONE_WEAPON_SHARE ? STONE_NAMES.WEAPON_BASIC : STONE_NAMES.ARMOR_BASIC
       drops.push({ name: stone, kind: 'stone', rarity: 'UNCOMMON', emoji: '🪨' })
     }
-    if (difficultyStars >= BOSS_KILL_CONCENTRATED.minStars) {
-      const c = BOSS_KILL_CONCENTRATED.min +
+    // CONCENTRADA: masmorra 3★+ (como antes) OU tier alto (≥ CONCENTRATED_MIN_TIER).
+    // A contagem cresce +1 por tier acima do gate — o tier vira o farm de concentrada.
+    if (difficultyStars >= BOSS_KILL_CONCENTRATED.minStars || dt >= CONCENTRATED_MIN_TIER) {
+      const tierExtra = Math.max(0, dt - CONCENTRATED_MIN_TIER)
+      const c = BOSS_KILL_CONCENTRATED.min + tierExtra +
         Math.floor(Math.random() * (BOSS_KILL_CONCENTRATED.max - BOSS_KILL_CONCENTRATED.min + 1))
       for (let i = 0; i < c; i++) {
         const stone = Math.random() < STONE_WEAPON_SHARE ? STONE_NAMES.WEAPON_CONCENTRATED : STONE_NAMES.ARMOR_CONCENTRATED

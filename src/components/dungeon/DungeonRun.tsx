@@ -645,8 +645,10 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
   const [runReady, setRunReady] = useState(false)
   // Herói já em uso em outra aba (lock vivo): bloqueia a run com um aviso.
   const [blocked, setBlocked] = useState<string | null>(null)
+  // Só o BOSS usa estes refs (o encontro comum guarda o monstro no próprio
+  // eventCard) — nunca escrever aqui fora do branch `data.type === 'boss'` em
+  // advance(), senão o botão de lutar com o chefe pode pegar um monstro errado.
   const serverMonsterRef = useRef<ScaledMonster | null>(null)
-  // Pacote completo (1..3) que o servidor rolou para o nó atual, p/ iniciar o combate.
   const serverPackRef = useRef<ScaledMonster[] | null>(null)
   const startedRef = useRef(false)
 
@@ -991,8 +993,6 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
       const ev = dungeon.events.find(e => e.kind === 'monster')!
       const group = data.monsters?.length ? data.monsters : [data.monster!]
       const scaled = group[0]
-      serverMonsterRef.current = scaled
-      serverPackRef.current = group
       setNodeEvents(prev => ({ ...prev, [atIdx]: { kind: 'monster', emoji: scaled.emoji } }))
       const many = group.length > 1
       pushLog(
@@ -1064,7 +1064,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
   // Botão principal: pede o próximo nó ao SERVIDOR (ele cobra stamina, rola o
   // d20 e decide monstro/achado/boss), depois anima o resultado recebido.
   const advance = async () => {
-    if (phase !== 'explore' || exploreRolling || moving || eventCard || atBoss) return
+    if (phase !== 'explore' || exploreRolling || moving || eventCard || lootCard || atBoss) return
     if (!runReady || !runIdRef.current) return
     const dest = tokenIdx + 1
 
@@ -2828,7 +2828,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
                   </motion.div>
                 )}
 
-                {atBoss && !eventCard && (
+                {atBoss && !eventCard && !lootCard && (
                   <motion.div
                     key="boss-overlay"
                     className="absolute inset-0 z-30 grid place-items-center px-5"
@@ -3007,7 +3007,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
                       ? () => startCombat(serverPackRef.current ?? serverMonsterRef.current ?? scaleMonster(dungeon.boss, dungeon, character.level, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass))
                       : advance
                   }
-                  disabled={exploreRolling || moving || !!eventCard}
+                  disabled={exploreRolling || moving || !!eventCard || !!lootCard}
                   className="flex-1 h-[52px] rounded-xl font-black text-lg text-white inline-flex items-center justify-center gap-2.5 transition-all active:scale-[0.98] hover:scale-[1.01] disabled:opacity-50 disabled:cursor-wait disabled:hover:scale-100"
                   style={{
                     background: atBoss

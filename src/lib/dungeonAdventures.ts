@@ -506,7 +506,7 @@ function nodeProgress(s: NodeScaling, rooms: number): number {
 export function scaleMonster(
   def: DungeonMonsterDef,
   dungeon: DungeonDef,
-  _characterLevel: number,
+  characterLevel: number,
   s: NodeScaling,
   combatClass: CombatClass = 'warrior'
 ): ScaledMonster {
@@ -523,9 +523,14 @@ export function scaleMonster(
     hpMult = BOSS_HP_MULT[dungeon.id]?.[combatClass] ?? 4.0
     strFac = 1
   } else {
-    // RAMPA: nível/gear esperados interpolam do levelReq (pelado) ao clearLevel (gear-alvo).
+    // RAMPA: gear esperado interpola do levelReq (pelado) ao clearLevel (gear-alvo).
     const p = nodeProgress(s, dungeon.rooms)
-    level = Math.round(lerp(dungeon.levelReq, dungeon.clearLevel, p))
+    // O NÍVEL da sala ACOMPANHA o jogador (não é a faixa fixa): encontra o jogador onde
+    // ele está, com TETO na rampa do nó (over-leveled → farm) e PISO no levelReq. Assim
+    // não existe "muro de nível" nas salas — quem está under-geared sente o atrito pelo
+    // GEAR, não por um bicho de nível muito acima. O BOSS continua ancorado no clearLevel.
+    const bandLevel = Math.round(lerp(dungeon.levelReq, dungeon.clearLevel, p))
+    level = Math.max(dungeon.levelReq, Math.min(bandLevel, Math.round(characterLevel || 0)))
     gearTier = lerp(GEAR_TIER_FLOOR, targetTier, p)
     gearHp = Math.floor(lerp(0, targetHp, p))
     hpMult = lerp(ROOM_HP_LO, ROOM_HP_HI, p) * (s.isMain ? 1 : MINOR_HP_FAC)

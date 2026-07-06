@@ -71,9 +71,14 @@ export const CRIT_MULT = 1.6  // bônus extra ao rolar o máximo (crítico)
 export const K50 = 220        // constante de mitigação no nv50 (escala com S)
 
 // === ESCALA DE PODER (S) ===
-export const WEIGHT_LEVEL = 0.5 // quanto do poder vem do NÍVEL
-export const WEIGHT_GEAR = 0.5  // quanto vem do GEAR (loop de progressão)
-export const GEAR_FLOOR = 0.25  // gear mínimo presumido (ninguém está 100% pelado)
+// Peso puxado pro GEAR (0.4/0.6) + piso baixo (0.10): o gear é a progressão que se SENTE.
+// Antes (0.5/0.5 + piso 0.25) todo gear abaixo de incomum+16 caía no piso e valia = pelado.
+// Com o piso baixo, cada raridade/+N acima do pelado já mexe no poder; o peso maior amplia
+// o salto pelado→PRI (~1.2× → ~1.5-1.6×). O boss (BOSS_HP_MULT) é re-tunado no sim p/ manter
+// o gate de nível+gear. Ver docs/combate + scripts/dungeon-difficulty-sim.js.
+export const WEIGHT_LEVEL = 0.4 // quanto do poder vem do NÍVEL
+export const WEIGHT_GEAR = 0.6  // quanto vem do GEAR (loop de progressão)
+export const GEAR_FLOOR = 0.10  // gear mínimo presumido (ninguém está 100% pelado)
 export const MAX_LEVEL_REF = 50 // nível de referência onde S(level)=1 com BiS
 
 // === DEFESA ===

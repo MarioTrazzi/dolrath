@@ -16,9 +16,9 @@ const LUCK_LO = 0.55
 const LUCK_HI = 1.75
 const CRIT_MULT = 1.6
 const K50 = 220
-const WEIGHT_LEVEL = 0.5
-const WEIGHT_GEAR = 0.5
-const GEAR_FLOOR = 0.25
+const WEIGHT_LEVEL = 0.4 // espelho de src/lib/combatModel.ts (gear = progressão sentida)
+const WEIGHT_GEAR = 0.6
+const GEAR_FLOOR = 0.10
 const MAX_LEVEL_REF = 50
 const DODGE_STAMINA_COST = 3
 const BLOCK_ARMOR_MULT = 2.5

@@ -185,12 +185,12 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     exploreHint: 'Role o d20 para explorar as galerias',
     enterText: 'O eco dos seus passos se mistura ao gotejar distante. Cristais iluminam o caminho...',
     monsters: [
-      { name: 'Morcego Sombrio', emoji: '🦇', baseHp: 34, baseAttack: 10, baseDefense: 2, baseEvade: 0.18 },
-      { name: 'Goblin Minerador', emoji: '👺', baseHp: 45, baseAttack: 9, baseDefense: 4, baseEvade: 0.10 },
-      { name: 'Slime de Cristal', emoji: '🟣', baseHp: 50, baseAttack: 8, baseDefense: 6, baseEvade: 0.02 },
-      { name: 'Golem de Pedra', emoji: '🗿', baseHp: 78, baseAttack: 11, baseDefense: 9, baseEvade: 0.03 },
+      { name: 'Morcego Sombrio', emoji: '🦇', image: '/monsters/morcego-sombrio.webp', baseHp: 34, baseAttack: 10, baseDefense: 2, baseEvade: 0.18 },
+      { name: 'Goblin Minerador', emoji: '👺', image: '/monsters/goblin-minerador.webp', baseHp: 45, baseAttack: 9, baseDefense: 4, baseEvade: 0.10 },
+      { name: 'Slime de Cristal', emoji: '🟣', image: '/monsters/slime-de-cristal.webp', baseHp: 50, baseAttack: 8, baseDefense: 6, baseEvade: 0.02 },
+      { name: 'Golem de Pedra', emoji: '🗿', image: '/monsters/golem-de-pedra.webp', baseHp: 78, baseAttack: 11, baseDefense: 9, baseEvade: 0.03 },
     ],
-    boss: { name: 'Wyrm Cristalino', title: 'Senhor das Profundezas', emoji: '🐉', baseHp: 130, baseAttack: 14, baseDefense: 9, baseEvade: 0.08 },
+    boss: { name: 'Wyrm Cristalino', title: 'Senhor das Profundezas', emoji: '🐉', image: '/monsters/wyrm-cristalino.webp', baseHp: 130, baseAttack: 14, baseDefense: 9, baseEvade: 0.08 },
     events: [
       {
         kind: 'trap', min: 1, max: 3, icon: '🪨', title: 'Desabamento!',
@@ -250,12 +250,12 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     exploreHint: 'Role o d20 para avançar pela névoa',
     enterText: 'A lama engole suas botas. Luzes azuladas piscam na névoa, chamando você...',
     monsters: [
-      { name: 'Sapo Venenoso', emoji: '🐸', baseHp: 36, baseAttack: 12, baseDefense: 2, baseEvade: 0.14 },
-      { name: 'Serpente do Lodo', emoji: '🐍', baseHp: 44, baseAttack: 13, baseDefense: 3, baseEvade: 0.13 },
-      { name: 'Bruxa do Brejo', emoji: '🧙‍♀️', baseHp: 52, baseAttack: 15, baseDefense: 4, baseEvade: 0.10 },
-      { name: 'Crocodilo Ancião', emoji: '🐊', baseHp: 68, baseAttack: 14, baseDefense: 6, baseEvade: 0.04 },
+      { name: 'Sapo Venenoso', emoji: '🐸', image: '/monsters/sapo-venenoso.webp', baseHp: 36, baseAttack: 12, baseDefense: 2, baseEvade: 0.14 },
+      { name: 'Serpente do Lodo', emoji: '🐍', image: '/monsters/serpente-do-lodo.webp', baseHp: 44, baseAttack: 13, baseDefense: 3, baseEvade: 0.13 },
+      { name: 'Bruxa do Brejo', emoji: '🧙‍♀️', image: '/monsters/bruxa-do-brejo.webp', baseHp: 52, baseAttack: 15, baseDefense: 4, baseEvade: 0.10 },
+      { name: 'Crocodilo Ancião', emoji: '🐊', image: '/monsters/crocodilo-anciao.webp', baseHp: 68, baseAttack: 14, baseDefense: 6, baseEvade: 0.04 },
     ],
-    boss: { name: 'Hidra do Pântano', title: 'Terror de Três Cabeças', emoji: '🐲', baseHp: 150, baseAttack: 16, baseDefense: 10, baseEvade: 0.07 },
+    boss: { name: 'Hidra do Pântano', title: 'Terror de Três Cabeças', emoji: '🐲', image: '/monsters/hidra-do-pantano.webp', baseHp: 150, baseAttack: 16, baseDefense: 10, baseEvade: 0.07 },
     events: [
       {
         kind: 'trap', min: 1, max: 4, icon: '☠️', title: 'Gás Pantanoso!',
@@ -314,12 +314,12 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     exploreHint: 'Role o d20 para investigar as ruínas',
     enterText: 'Poeira de séculos cobre o salão. Runas mortas acendem à sua passagem...',
     monsters: [
-      { name: 'Esqueleto Guerreiro', emoji: '💀', baseHp: 48, baseAttack: 13, baseDefense: 5, baseEvade: 0.06 },
-      { name: 'Espectro Errante', emoji: '👻', baseHp: 40, baseAttack: 16, baseDefense: 3, baseEvade: 0.18 },
-      { name: 'Múmia Real', emoji: '🧟', baseHp: 64, baseAttack: 14, baseDefense: 7, baseEvade: 0.03 },
-      { name: 'Gárgula de Obsidiana', emoji: '🦅', baseHp: 74, baseAttack: 15, baseDefense: 9, baseEvade: 0.08 },
+      { name: 'Esqueleto Guerreiro', emoji: '💀', image: '/monsters/esqueleto-guerreiro.webp', baseHp: 48, baseAttack: 13, baseDefense: 5, baseEvade: 0.06 },
+      { name: 'Espectro Errante', emoji: '👻', image: '/monsters/espectro-errante.webp', baseHp: 40, baseAttack: 16, baseDefense: 3, baseEvade: 0.18 },
+      { name: 'Múmia Real', emoji: '🧟', image: '/monsters/mumia-real.webp', baseHp: 64, baseAttack: 14, baseDefense: 7, baseEvade: 0.03 },
+      { name: 'Gárgula de Obsidiana', emoji: '🦅', image: '/monsters/gargula-de-obsidiana.webp', baseHp: 74, baseAttack: 15, baseDefense: 9, baseEvade: 0.08 },
     ],
-    boss: { name: 'Lich Imperador', title: 'O Que Não Morre', emoji: '👑', baseHp: 170, baseAttack: 18, baseDefense: 11, baseEvade: 0.09 },
+    boss: { name: 'Lich Imperador', title: 'O Que Não Morre', emoji: '👑', image: '/monsters/lich-imperador.webp', baseHp: 170, baseAttack: 18, baseDefense: 11, baseEvade: 0.09 },
     events: [
       {
         kind: 'trap', min: 1, max: 3, icon: '🏹', title: 'Armadilha de Flechas!',

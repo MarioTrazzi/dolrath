@@ -16,6 +16,7 @@ import { CharacterStatChips, computePower } from '@/components/character/Charact
 import { getBlendedVisual } from '@/lib/creationVisuals';
 import { getProfessionLevel } from '@/lib/professionSystem';
 import { getGatherField } from '@/lib/gathering';
+import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider';
 // ...existing code...
 import { Character } from '@/types/game';
 import { getRaceById, getClassById } from '@/lib/gameData';
@@ -48,6 +49,10 @@ export default function DashboardPage() {
   const [dolBalance, setDolBalance] = useState<string | null>(null);
   const [dolSymbol, setDolSymbol] = useState<string | null>(null);
   const [dolError, setDolError] = useState<string | null>(null);
+  // Saldo do token GOLD on-chain, exibido lado a lado com o DOL.
+  const [goldOnchain, setGoldOnchain] = useState<string | null>(null);
+  // Ativar o herói antes de abrir a ficha (mesmo comportamento da navbar).
+  const { setActiveCharacterId } = useActiveCharacter();
   const [isLinkingWallet, setIsLinkingWallet] = useState<boolean>(false);
   const [walletLinkError, setWalletLinkError] = useState<string>('');
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; item?: any; input: string }>({ open: false, item: null, input: '' });
@@ -281,6 +286,13 @@ export default function DashboardPage() {
     }
   };
 
+  // Abre a ficha ATIVANDO o herói antes — mesmo comportamento do seletor da
+  // navbar (CharacterSwitcherDialog), para o resto do app já operar sobre ele.
+  const openSheet = (charId: string, fallbackId?: string) => {
+    if (charId) setActiveCharacterId(charId);
+    router.push(`/character/${charId || fallbackId || ''}`);
+  };
+
   const openDeleteDialog = (item: any) => {
     setDeleteDialog({ open: true, item, input: '' });
     setTimeout(() => inputRef.current?.focus(), 100);
@@ -382,10 +394,20 @@ export default function DashboardPage() {
             setDolError(e instanceof Error ? e.message : 'Erro ao buscar saldo on-chain');
           })
           .finally(() => setDolLoading(false));
+
+        // 🪙 Token GOLD on-chain, exibido junto do DOL (falha em silêncio).
+        fetch('/api/wallet/gold-balance', { cache: 'no-store' })
+          .then((res) => (res.ok ? res.json() : null))
+          .then((json) => {
+            const n = Number(json?.formatted);
+            setGoldOnchain(json?.walletLinked && Number.isFinite(n) ? n.toLocaleString('pt-BR') : null);
+          })
+          .catch(() => setGoldOnchain(null));
       } else {
         setDolBalance(null);
         setDolSymbol(null);
         setDolError(null);
+        setGoldOnchain(null);
       }
     } else if (status === 'unauthenticated') {
       router.push('/auth/login');
@@ -450,6 +472,10 @@ export default function DashboardPage() {
                 ) : (
                   '—'
                 )}
+              </div>
+              {/* Token GOLD (mintado via claim) lado a lado com o DOL */}
+              <div className="text-amber-300 font-bold">
+                {session?.user?.walletAddress ? `${goldOnchain ?? '0'} GOLD` : ''}
               </div>
             </div>
           </div>
@@ -597,6 +623,16 @@ export default function DashboardPage() {
                               🌾 Nv.{farmLevel}
                             </span>
                           )}
+                          {charRow && (
+                            <span className="px-2 py-0.5 text-[11px] font-semibold rounded-full text-sky-200 bg-sky-500/10 border border-sky-400/30">
+                              🎒 Inventário: {Number(charRow?._count?.inventory ?? 0)}/{Number(charRow?.inventorySlots ?? 20)}
+                            </span>
+                          )}
+                          {charRow && (
+                            <span className="px-2 py-0.5 text-[11px] font-semibold rounded-full text-amber-200 bg-amber-500/10 border border-amber-400/30">
+                              💰 Bolso: {Number(charRow?.gold ?? 0).toLocaleString('pt-BR')}g
+                            </span>
+                          )}
                         </div>
                         {charRow && (
                           <div className="mt-1.5">
@@ -614,14 +650,29 @@ export default function DashboardPage() {
                       </div>
 
                       <div className="flex flex-col gap-2 flex-shrink-0">
-                        <Link href={`/character/${characterId || tokenId}`} onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openSheet(characterId, tokenId);
+                          }}
+                          className="w-full px-4 py-2 rounded-xl font-black text-xs text-white shadow-lg transition-transform hover:scale-105"
+                          style={{ background: `linear-gradient(90deg, ${visual.raceVisual.accent}cc, ${visual.classVisual.accent}cc)` }}
+                        >
+                          Abrir
+                        </button>
+                        {gatherInfo && characterId && (
                           <button
-                            className="w-full px-4 py-2 rounded-xl font-black text-xs text-white shadow-lg transition-transform hover:scale-105"
-                            style={{ background: `linear-gradient(90deg, ${visual.raceVisual.accent}cc, ${visual.classVisual.accent}cc)` }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              // Atalho: leva à página de coleta com este herói já
+                              // selecionado — a finalização acontece só lá.
+                              router.push(`/gathering?focus=${characterId}`);
+                            }}
+                            className="px-4 py-2 rounded-xl font-bold text-xs text-emerald-200 border border-emerald-500/40 hover:border-emerald-400 hover:bg-emerald-500/10 transition-colors"
                           >
-                            Abrir
+                            ⛏️ Encerrar coleta
                           </button>
-                        </Link>
+                        )}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -766,17 +817,16 @@ export default function DashboardPage() {
                       )}
 
                       <div className="flex flex-col sm:flex-row gap-2 mb-4 items-center justify-center md:justify-start">
-                        <Link href={`/character/${character.id}`}>
-                          <button
-                            className="px-5 py-2.5 rounded-xl font-black text-sm text-white shadow-lg transition-transform hover:scale-105"
-                            style={{
-                              background: `linear-gradient(90deg, ${visual.raceVisual.accent}cc, ${visual.classVisual.accent}cc)`,
-                              boxShadow: `0 4px 20px ${visual.raceVisual.accentSoft}`,
-                            }}
-                          >
-                            Ver Ficha Completa
-                          </button>
-                        </Link>
+                        <button
+                          onClick={() => openSheet(String(character.id))}
+                          className="px-5 py-2.5 rounded-xl font-black text-sm text-white shadow-lg transition-transform hover:scale-105"
+                          style={{
+                            background: `linear-gradient(90deg, ${visual.raceVisual.accent}cc, ${visual.classVisual.accent}cc)`,
+                            boxShadow: `0 4px 20px ${visual.raceVisual.accentSoft}`,
+                          }}
+                        >
+                          Ver Ficha Completa
+                        </button>
                         {/* Botões de teste para XP */}
                         <div className="flex gap-1.5">
                           {[50, 200, 1000].map((xp) => (
@@ -808,14 +858,13 @@ export default function DashboardPage() {
                             <span className="text-white font-bold text-sm">
                               📊 {character.availablePoints} pontos para distribuir
                             </span>
-                            <Link href={`/character/${character.id}`}>
-                              <button
-                                className="px-4 py-2 rounded-xl font-black text-xs text-white shadow-lg transition-transform hover:scale-105"
-                                style={{ background: `linear-gradient(90deg, ${visual.raceVisual.accent}cc, ${visual.classVisual.accent}cc)` }}
-                              >
-                                Distribuir Pontos
-                              </button>
-                            </Link>
+                            <button
+                              onClick={() => openSheet(String(character.id))}
+                              className="px-4 py-2 rounded-xl font-black text-xs text-white shadow-lg transition-transform hover:scale-105"
+                              style={{ background: `linear-gradient(90deg, ${visual.raceVisual.accent}cc, ${visual.classVisual.accent}cc)` }}
+                            >
+                              Distribuir Pontos
+                            </button>
                           </div>
                         </div>
                       )}

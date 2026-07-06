@@ -97,9 +97,14 @@ export function EquipmentSlot({ type, item, enhancementLevel = 0, durability, ma
       <div className="h-full" style={{ width: `${durabilityPct}%`, background: durabilityColor }} />
     </div>
   ) : null;
+  // Quebrado (sem bônus) ou durabilidade crítica (<10%): avisa no próprio slot.
   const brokenBadge = broken ? (
     <span className="absolute top-0.5 left-0.5 text-[11px] z-10 select-none" title="Quebrado — sem bônus até reparar" style={{ filter: 'drop-shadow(0 1px 2px #000)' }}>
       💔
+    </span>
+  ) : hasDurability && durabilityPct < 10 ? (
+    <span className="absolute top-0.5 left-0.5 text-[11px] z-10 select-none" title={`Durabilidade crítica (${durabilityPct}%) — repare antes que quebre`} style={{ filter: 'drop-shadow(0 1px 2px #000)' }}>
+      ⚠️
     </span>
   ) : null;
 

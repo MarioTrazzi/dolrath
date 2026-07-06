@@ -181,6 +181,8 @@ export async function GET() {
         userId: session.user.id,
         nftTokenId: { not: null },
       },
+      // Ocupação do inventário para o card do dashboard (1 linha = 1 slot usado).
+      include: { _count: { select: { inventory: true } } },
     })
   } catch {
     // DB is optional here; NFTs should still be returned even if Neon/Prisma is down.

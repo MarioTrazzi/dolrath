@@ -64,6 +64,15 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, durabili
       />
     </div>
   ) : null;
+  // Aviso no card: quebrado (sem bônus) ou durabilidade crítica (<10%).
+  const durabilityWarning = hasDurability && (broken || durabilityPct < 10) ? (
+    <span
+      title={broken ? 'Quebrado — sem bônus até reparar' : `Durabilidade crítica (${durabilityPct}%) — repare antes que quebre`}
+      style={{ position: 'absolute', top: 1, left: 2, fontSize: '11px', zIndex: 2, filter: 'drop-shadow(0 1px 2px #000)', userSelect: 'none' }}
+    >
+      {broken ? '💔' : '⚠️'}
+    </span>
+  ) : null;
   const [{ isDragging }, drag] = useDrag({
     type: 'ITEM',
     // Além do item, carrega a origem/quantidade/linha para o painel de destino
@@ -127,6 +136,7 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, durabili
             )}
           </div>
           {durabilityBar}
+          {durabilityWarning}
           {showEnhancement && (
             <span
               style={{
@@ -199,6 +209,7 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, durabili
           )}
         </div>
         {durabilityBar}
+        {durabilityWarning}
         {showEnhancement && (
           <div className="absolute bottom-1 right-1 text-xs font-bold text-[#f1d79a] bg-black/60 px-1 rounded">
             {getLevelLabel(enhancementLevel)}

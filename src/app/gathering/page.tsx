@@ -73,6 +73,23 @@ export default function GatheringPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
+  // Foco vindo do dashboard (?focus=<characterId>): pré-seleciona o nó da
+  // sessão aberta desse herói e expande o card dele — o jogador só precisa
+  // apertar "Encerrar" aqui. Lido de window.location para não puxar
+  // useSearchParams (exigiria Suspense no build).
+  const focusHandledRef = useRef(false)
+  useEffect(() => {
+    if (focusHandledRef.current || isLoading) return
+    focusHandledRef.current = true
+    const focusId = new URLSearchParams(window.location.search).get('focus')
+    if (!focusId) return
+    const sess = openSessions.find((s) => s.characterId === focusId)
+    if (!sess) return
+    const node = MAP_NODES.find((n) => n.fieldId === sess.fieldId)
+    if (node) setSelectedKey(node.key)
+    setExpandedId(focusId)
+  }, [isLoading, openSessions])
+
   // Estado vivo do herói expandido (o GET computa os tiques no servidor).
   const refreshStatus = useCallback(async (characterId: string) => {
     try {

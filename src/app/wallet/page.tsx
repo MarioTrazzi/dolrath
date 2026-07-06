@@ -5,9 +5,8 @@ import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import { Coins, Wallet, Mail } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { ethers } from 'ethers'
-import { decodeContractCustomErrorMessage, getWalletTxErrorMessage } from '@/lib/walletErrors'
-import { getPolygonFeeOverrides } from '@/lib/gasFees'
+import { getWalletTxErrorMessage } from '@/lib/walletErrors'
+import { claimGoldOnChain } from '@/lib/goldClaimClient'
 
 type GoldStatus = {
   walletLinked: boolean
@@ -34,10 +33,6 @@ type TokenBalance = {
   raw?: string
   error?: string
 }
-
-const GOLD_CLAIM_ABI = [
-  'function claimWithSig(address to, uint256 amount, uint256 nonce, uint256 deadline, bytes signature)',
-] as const
 
 export default function WalletPage() {
   const { data: session, status, update } = useSession()
@@ -112,80 +107,9 @@ export default function WalletPage() {
       return
     }
 
-    const eth = (window as any)?.ethereum
-    if (!eth) {
-      toast.error('MetaMask não encontrada')
-      return
-    }
-
     setClaiming(true)
     try {
-      const intentRes = await fetch('/api/gold/claim-intent', { method: 'POST' })
-      const intentJson = await intentRes.json()
-      if (!intentRes.ok) {
-        throw new Error(intentJson?.error || 'Falha ao criar claim')
-      }
-
-      const {
-        contractAddress,
-        chainId,
-        to,
-        amountWei,
-        nonce,
-        deadline,
-        signature,
-      } = intentJson as {
-        contractAddress: string
-        chainId: number
-        to: string
-        amountWei: string
-        nonce: string
-        deadline: string
-        signature: string
-      }
-
-      const provider = new ethers.BrowserProvider(eth)
-      await provider.send('eth_requestAccounts', [])
-
-      const network = await provider.getNetwork()
-      if (Number(network.chainId) !== Number(chainId)) {
-        toast.error(`Troque a rede para chainId ${chainId} na MetaMask`)
-        return
-      }
-
-      const signer = await provider.getSigner()
-      const contract = new ethers.Contract(contractAddress, GOLD_CLAIM_ABI, signer)
-
-      // Preflight to improve user-facing errors
-      let gasLimit: bigint | undefined = undefined
-      try {
-        const est = (await contract.claimWithSig.estimateGas(to, amountWei, nonce, deadline, signature)) as bigint
-        gasLimit = (est * 12n) / 10n
-      } catch (preErr: any) {
-        const decoded = decodeContractCustomErrorMessage({ contractInterface: contract.interface, err: preErr })
-        if (decoded) throw new Error(decoded)
-        throw new Error(getWalletTxErrorMessage(preErr))
-      }
-
-      const feeOverrides = await getPolygonFeeOverrides(provider)
-      const tx = await contract.claimWithSig(to, amountWei, nonce, deadline, signature, { ...feeOverrides, ...(gasLimit ? { gasLimit } : {}) })
-      toast.success('Transação enviada! Aguardando confirmação…')
-
-      const receipt = await tx.wait()
-      if (!receipt || receipt.status !== 1) {
-        throw new Error('Transação falhou')
-      }
-
-      const confirmRes = await fetch('/api/gold/claim-confirm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ txHash: tx.hash }),
-      })
-      const confirmJson = await confirmRes.json()
-      if (!confirmRes.ok) {
-        throw new Error(confirmJson?.error || 'Falha ao confirmar claim')
-      }
-
+      await claimGoldOnChain((msg) => toast.success(msg))
       toast.success('GOLD claimado on-chain!')
       await refresh()
     } catch (e) {

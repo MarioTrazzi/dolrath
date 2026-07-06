@@ -65,8 +65,11 @@ export default function InventoryPage() {
     maxQuantity: number;
     destination: 'character' | 'global';
   } | null>(null);
-  // Gold da poupança da conta (User.goldBalance), exibido na barra de moedas do baú global.
+  // Gold da poupança da conta (User.goldBalance) — reservado a caminho do claim.
   const [bankGold, setBankGold] = useState<number | null>(null);
+  // Saldo GOLD on-chain: o Baú Geral representa a carteira do jogador, então a
+  // barra de moedas dele mostra o token GOLD de verdade (mintado via claim).
+  const [onchainGold, setOnchainGold] = useState<string | null>(null);
   // Slots do Baú Geral (User.globalInventorySlots) — expansível como o do personagem.
   const [globalSlots, setGlobalSlots] = useState<number>(GLOBAL_SLOTS_DEFAULT);
   // Flags de "expandindo…" para desabilitar o botão durante o pagamento on-chain.
@@ -76,6 +79,7 @@ export default function InventoryPage() {
   useEffect(() => {
     fetchUserInventory();
     fetchBankGold();
+    fetchOnchainGold();
   }, []);
 
   useEffect(() => {
@@ -108,6 +112,19 @@ export default function InventoryPage() {
       }
     } catch (error) {
       console.error('Error fetching bank gold:', error);
+    }
+  };
+
+  const fetchOnchainGold = async () => {
+    try {
+      const response = await fetch('/api/wallet/gold-balance', { cache: 'no-store' });
+      if (response.ok) {
+        const data = await response.json();
+        const n = Number(data?.formatted);
+        setOnchainGold(data?.walletLinked && Number.isFinite(n) ? n.toLocaleString('pt-BR') : null);
+      }
+    } catch (error) {
+      console.error('Error fetching on-chain gold:', error);
     }
   };
 
@@ -634,8 +651,8 @@ export default function InventoryPage() {
           <p className="text-text-secondary">Gerencie seus itens e equipamentos</p>
         </div>
 
-        {/* 🏦 Banco: poupança da conta + carteira do personagem ativo */}
-        <BankPanel characterId={activeCharacterId} onChanged={fetchBankGold} />
+        {/* ⛓️ Claim de GOLD: bolso do herói → token on-chain na carteira */}
+        <BankPanel characterId={activeCharacterId} onChanged={() => { fetchBankGold(); fetchOnchainGold(); }} />
 
         {!selectedCharacter && (
           <p className="mb-3 text-xs text-amber-300/80">Selecione um personagem na navbar para equipar e transferir itens.</p>
@@ -687,7 +704,9 @@ export default function InventoryPage() {
             onExpand={handleExpandGlobalInventory}
             expanding={expandingGlobal}
             expandTitle={`Expandir +${EXPAND_SLOTS} slots (custo: ${EXPAND_COST_GOLD} GOLD)`}
-            goldText={bankGold != null ? bankGold.toLocaleString('pt-BR') : '0'}
+            // O Baú Geral é a carteira on-chain: a barra de moedas mostra o token
+            // GOLD mintado via claim (— sem carteira vinculada).
+            goldText={onchainGold ?? '—'}
             dragSource="global"
             onItemDropped={handleDropToGlobal}
           />

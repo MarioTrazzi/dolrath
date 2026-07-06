@@ -18,17 +18,22 @@ export default function GatheringMockPage() {
   const [countdown, setCountdown] = useState(MOCK_TICK_SECONDS)
   const [startedAt, setStartedAt] = useState<Date>(new Date())
   const [invFull, setInvFull] = useState(false)
+  const [stopRequested, setStopRequested] = useState(false)
   const staminaRef = useRef(stamina)
   staminaRef.current = stamina
   const invFullRef = useRef(invFull)
   invFullRef.current = invFull
+  const stopRequestedRef = useRef(stopRequested)
+  stopRequestedRef.current = stopRequested
 
   const gatherXp = 60 * Math.pow(GATHER_LEVEL - 1, 1.5) + 40
   const info = getProfessionLevelInfo(gatherXp)
   const exhausted = stamina < GATHER_TICK_STAMINA
 
   // Relógio do mock: a cada MOCK_TICK_SECONDS rende 1 tique (se há stamina e
-  // o inventário não estiver "cheio" — mesma pausa do servidor real).
+  // o inventário não estiver "cheio" — mesma pausa do servidor real). Com
+  // "aguardar último ciclo" pendente, o tique que fecha agora encerra sozinho
+  // (mesma lógica do finishStopRequested do servidor).
   useEffect(() => {
     if (!fieldId) return
     const id = setInterval(() => {
@@ -39,6 +44,14 @@ export default function GatheringMockPage() {
           const y = rollGatherYield(fieldId, GATHER_LEVEL, 1)
           setPending((prev) => mergePendingYield(prev, y, 1))
           setStamina((s) => s - GATHER_TICK_STAMINA)
+          if (stopRequestedRef.current) {
+            // Fecha e deposita — mesmo reset do onStopNow, pra próxima sessão começar limpa.
+            setFieldId(null)
+            setStopRequested(false)
+            setPending({ drops: [], xp: 0, ticks: 0 })
+            setStamina(100)
+            setInvFull(false)
+          }
         }
         return MOCK_TICK_SECONDS
       })
@@ -77,6 +90,7 @@ export default function GatheringMockPage() {
               fieldId={fieldId}
               status={exhausted ? 'exhausted' : 'active'}
               startedAt={startedAt}
+              stopRequested={stopRequested}
               pending={pending}
               stamina={stamina}
               maxStamina={100}
@@ -84,7 +98,9 @@ export default function GatheringMockPage() {
               gather={info}
               inventoryFull={invFull}
               onCollect={() => setPending({ drops: [], xp: 0, ticks: 0 })}
-              onStop={() => { setFieldId(null); setPending({ drops: [], xp: 0, ticks: 0 }); setStamina(100); setInvFull(false) }}
+              onStopNow={() => { setFieldId(null); setPending({ drops: [], xp: 0, ticks: 0 }); setStamina(100); setInvFull(false); setStopRequested(false) }}
+              onStopAfterCycle={() => setStopRequested(true)}
+              onCancelStop={() => setStopRequested(false)}
             />
           </>
         )}

@@ -35,13 +35,22 @@ interface OpenSession {
 }
 
 interface StatusPayload {
-  session: { id: string; fieldId: GatherFieldId; status: 'active' | 'exhausted'; startedAt: string } | null
+  session: { id: string; fieldId: GatherFieldId; status: 'active' | 'exhausted'; startedAt: string; stopRequested?: boolean } | null
   pending?: PendingYield
   stamina: number
   maxStamina: number
   secondsToNextTick?: number
   inventoryFull?: boolean
   gather: ProfessionLevelInfo
+  /** Um "aguardar último ciclo" agendado fechou sozinho entre um poll e outro. */
+  autoStopped?: { deposited: { name: string; qty: number }[]; skipped: { name: string; qty: number }[]; xpGained: number }
+}
+
+function formatDepositNotice(deposited: { name: string; qty: number }[], xpGained: number, skipped: number): string {
+  const got = deposited.map((d) => `${d.qty}× ${d.name}`).join(', ')
+  return got
+    ? `🎒 Coletado: ${got} (+${xpGained} XP)${skipped > 0 ? ` — ⚠️ ${skipped} item(ns) não couberam no inventário` : ''}`
+    : '🎒 Nada para coletar ainda.'
 }
 
 export default function GatheringPage() {
@@ -108,6 +117,18 @@ export default function GatheringPage() {
       const data: StatusPayload = await res.json()
       setStatus(data)
       setCountdown(data.secondsToNextTick ?? 0)
+      // Encerramento agendado ("aguardar último ciclo") fechou sozinho entre
+      // um poll e outro — avisa e atualiza a faixa de heróis (stamina/XP).
+      if (data.autoStopped) {
+        setNotice(
+          `⏳ Encerramento agendado concluído — ${formatDepositNotice(
+            data.autoStopped.deposited,
+            data.autoStopped.xpGained,
+            data.autoStopped.skipped.length
+          )}`
+        )
+        loadCharacters()
+      }
       // Nível de Coleta subiu desde o último retrato: avisa (mesmo espírito do
       // levelUpAlert das masmorras, aqui para o XP de profissão).
       const lvl = data.gather?.level ?? 1
@@ -117,7 +138,7 @@ export default function GatheringPage() {
       }
       lastGatherLevelRef.current = lvl
     } catch { /* rede: tenta no próximo poll */ }
-  }, [])
+  }, [loadCharacters])
 
   useEffect(() => {
     if (!selectedId) return
@@ -154,14 +175,12 @@ export default function GatheringPage() {
       const data = await res.json().catch(() => null)
       if (!res.ok) {
         setNotice(`❌ ${data?.error ?? 'Erro ao executar a ação'}`)
+      } else if (data?.waiting) {
+        setNotice('⏳ Encerramento agendado — a coleta termina o ciclo atual e fecha sozinha, sem gastar stamina num ciclo novo.')
+      } else if (data?.cancelled) {
+        setNotice('▶️ Encerramento agendado cancelado — a coleta continua normalmente.')
       } else if (path === 'collect' || path === 'stop') {
-        const got = (data?.deposited ?? []).map((d: any) => `${d.qty}× ${d.name}`).join(', ')
-        const skipped = (data?.skipped ?? []).length
-        setNotice(
-          got
-            ? `🎒 Coletado: ${got} (+${data.xpGained} XP)${skipped > 0 ? ` — ⚠️ ${skipped} item(ns) não couberam no inventário` : ''}`
-            : '🎒 Nada para coletar ainda.'
-        )
+        setNotice(formatDepositNotice(data?.deposited ?? [], data?.xpGained ?? 0, (data?.skipped ?? []).length))
       }
       await Promise.all([refreshStatus(selectedId), loadCharacters()])
     } finally {
@@ -271,6 +290,7 @@ export default function GatheringPage() {
               fieldId={open.fieldId}
               status={open.status}
               startedAt={open.startedAt}
+              stopRequested={open.stopRequested}
               pending={status.pending ?? { drops: [], xp: 0, ticks: 0 }}
               stamina={status.stamina}
               maxStamina={status.maxStamina}
@@ -279,7 +299,9 @@ export default function GatheringPage() {
               busy={busy}
               inventoryFull={status.inventoryFull}
               onCollect={() => act('collect', {})}
-              onStop={() => act('stop', {})}
+              onStopNow={() => act('stop', { mode: 'now' })}
+              onStopAfterCycle={() => act('stop', { mode: 'after_cycle' })}
+              onCancelStop={() => act('stop', { mode: 'cancel' })}
             />
           ) : (
             <>

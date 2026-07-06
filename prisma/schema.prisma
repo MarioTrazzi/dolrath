@@ -389,6 +389,10 @@ model GatheringSession {
   lastTickAt  DateTime  @default(now())     // âncora lazy: último tick já computado
   // Acúmulo entre ticks: { drops: [{ name, qty }], xp, ticks }
   pendingYield Json?    @db.JsonB
+  // "Aguardar último ciclo": true quando o jogador pediu encerramento mas o
+  // tique corrente ainda não fechou. O próximo sync que render um tique (ou
+  // detectar esgotamento) deposita tudo e fecha sozinho — sem novo tique.
+  stopRequested Boolean @default(false)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 

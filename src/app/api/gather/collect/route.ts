@@ -34,6 +34,27 @@ export async function POST(req: Request) {
     }
 
     const synced = await syncGatheringSession(open)
+
+    // Um "aguardar último ciclo" pendente já fechou a sessão sozinho nesta
+    // sincronização — nada mais a coletar, ela não está mais 'active'.
+    if (synced.autoStopped) {
+      const itens = synced.autoStopped.deposited.map((d) => `${d.qty}× ${d.name}`).join(', ')
+      addHistoryEntry({
+        characterId,
+        activityType: 'ITEM_GAINED',
+        description: `⛏️ Coletou ${itens || 'nada'} (+${synced.autoStopped.xpGained} XP de Coleta).`,
+      }).catch(() => {})
+
+      return NextResponse.json({
+        deposited: synced.autoStopped.deposited,
+        skipped: synced.autoStopped.skipped,
+        xpGained: synced.autoStopped.xpGained,
+        gather: getProfessionLevelInfo(synced.autoStopped.gatherXp),
+        sessionClosed: true,
+        stamina: synced.stamina,
+      })
+    }
+
     const result = await collectGatheringSession(synced.session, 'collect')
 
     if (result.deposited.length > 0 || result.xpGained > 0) {

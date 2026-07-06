@@ -46,6 +46,26 @@ export async function GET(req: Request) {
     }
 
     const synced = await syncGatheringSession(open)
+
+    // "Aguardar último ciclo" fechou sozinho nesta sincronização: para o
+    // cliente, é como se não houvesse mais sessão aberta — mas com o aviso
+    // do que foi depositado automaticamente.
+    if (synced.autoStopped) {
+      return NextResponse.json({
+        session: null,
+        stamina: synced.stamina,
+        maxStamina: character.maxStamina,
+        gather: getProfessionLevelInfo(synced.autoStopped.gatherXp),
+        tickSeconds: GATHER_TICK_SECONDS,
+        tickStamina: GATHER_TICK_STAMINA,
+        autoStopped: {
+          deposited: synced.autoStopped.deposited,
+          skipped: synced.autoStopped.skipped,
+          xpGained: synced.autoStopped.xpGained,
+        },
+      })
+    }
+
     const gatherXp = await prisma.character.findUnique({
       where: { id: characterId },
       select: { gatherXp: true },
@@ -58,6 +78,7 @@ export async function GET(req: Request) {
         status: synced.session.status,
         startedAt: synced.session.startedAt,
         lastTickAt: synced.session.lastTickAt,
+        stopRequested: synced.session.stopRequested,
       },
       pending: synced.pending,
       stamina: synced.stamina,

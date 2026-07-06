@@ -5,7 +5,8 @@
 // /api/gather/*; o mock /dev/gathering-mock injeta estado simulado. Mesmo
 // espírito da separação usada no /dev/dungeon-mock.
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import {
   GATHER_FIELDS,
@@ -169,6 +170,78 @@ export function FieldGrid({
 }
 
 // ============================================================
+// Diálogo de confirmação do "Encerrar"
+// ============================================================
+
+function StopConfirmDialog({
+  open, accent, secondsToNextTick, onStopNow, onStopAfterCycle, onClose,
+}: {
+  open: boolean
+  accent: string
+  secondsToNextTick: number
+  onStopNow: () => void
+  onStopAfterCycle: () => void
+  onClose: () => void
+}) {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, onClose])
+
+  if (!open || !mounted) return null
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[10000] flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.6)' }}
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl border-2 overflow-hidden shadow-2xl"
+        style={{ background: 'linear-gradient(180deg, #1c232b, #11161b)', borderColor: `${accent}66` }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-4" style={{ borderBottom: '1px solid #2a323b' }}>
+          <h3 className="font-black text-white text-base">🚪 Encerrar a coleta?</h3>
+          <p className="text-xs text-white/60 mt-1">
+            Você pode encerrar agora (perde o progresso do ciclo em curso) ou esperar o ciclo atual
+            terminar — o último espólio cai sozinho e o herói é liberado sem gastar stamina num ciclo novo.
+          </p>
+        </div>
+        <div className="p-4 flex flex-col gap-2">
+          <button
+            onClick={() => { onStopAfterCycle(); onClose() }}
+            className="w-full px-4 py-2.5 rounded-xl font-black text-sm text-white transition-all hover:scale-[1.02]"
+            style={{ background: `linear-gradient(90deg, ${accent}cc, ${accent}77)` }}
+          >
+            ⏳ Aguardar último ciclo ({fmtDuration(secondsToNextTick)})
+          </button>
+          <button
+            onClick={() => { onStopNow(); onClose() }}
+            className="w-full px-4 py-2.5 rounded-xl font-bold text-sm text-white/90 transition-all hover:scale-[1.02]"
+            style={{ background: '#2f3842', border: '1px solid #46505c' }}
+          >
+            🚪 Encerrar agora
+          </button>
+          <button
+            onClick={onClose}
+            className="w-full px-4 py-2 rounded-xl font-semibold text-sm text-white/60 hover:text-white/90 transition-colors"
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  )
+}
+
+// ============================================================
 // Painel da sessão ativa/esgotada
 // ============================================================
 
@@ -183,14 +256,22 @@ export interface SessionPanelProps {
   gather: ProfessionLevelInfo
   busy?: boolean
   onCollect: () => void
-  onStop: () => void
+  /** Encerra imediatamente, perdendo o progresso do ciclo em curso. */
+  onStopNow: () => void
+  /** Agenda o encerramento: fecha sozinho ao final do ciclo em curso. */
+  onStopAfterCycle: () => void
+  /** Desiste de um encerramento agendado — a coleta segue normal. */
+  onCancelStop: () => void
+  /** Encerramento agendado em curso (aguardando o ciclo atual terminar). */
+  stopRequested?: boolean
   /** Inventário sem slot livre: coleta pausada (mesma mecânica da masmorra). */
   inventoryFull?: boolean
 }
 
 export function SessionPanel({
   fieldId, status, startedAt, pending, stamina, maxStamina,
-  secondsToNextTick, gather, busy, onCollect, onStop, inventoryFull,
+  secondsToNextTick, gather, busy, onCollect, onStopNow, onStopAfterCycle, onCancelStop,
+  stopRequested, inventoryFull,
 }: SessionPanelProps) {
   const field = GATHER_FIELDS[fieldId]
   const accent = FIELD_ACCENT[fieldId]
@@ -198,6 +279,7 @@ export function SessionPanel({
   const paused = !!inventoryFull && !exhausted
   const totalItems = pending.drops.reduce((n, d) => n + d.qty, 0)
   const sinceMs = Date.now() - new Date(startedAt).getTime()
+  const [showStopDialog, setShowStopDialog] = useState(false)
 
   return (
     <motion.div
@@ -210,6 +292,11 @@ export function SessionPanel({
         {paused && (
           <div className="mb-4 rounded-xl border border-amber-500/50 bg-amber-950/40 px-3 py-2.5 text-amber-200 text-xs font-bold text-center">
             🎒 Inventário cheio — coleta pausada, sem gastar stamina. Abra espaço no inventário para continuar.
+          </div>
+        )}
+        {!exhausted && stopRequested && (
+          <div className="mb-4 rounded-xl border border-sky-500/50 bg-sky-950/40 px-3 py-2.5 text-sky-200 text-xs font-bold text-center">
+            ⏳ Encerrando sozinho ao final deste ciclo ({fmtDuration(secondsToNextTick)}) — sem gastar stamina num ciclo novo.
           </div>
         )}
         <div className="flex items-start justify-between gap-3 mb-4">
@@ -293,19 +380,38 @@ export function SessionPanel({
           >
             🎒 Coletar espólio
           </button>
-          <button
-            onClick={onStop}
-            disabled={busy}
-            className="px-4 py-2.5 rounded-xl font-bold text-sm text-white/80 bg-white/10 hover:bg-white/20 disabled:opacity-40 transition-colors"
-          >
-            🚪 Encerrar
-          </button>
+          {!exhausted && stopRequested ? (
+            <button
+              onClick={onCancelStop}
+              disabled={busy}
+              className="px-4 py-2.5 rounded-xl font-bold text-sm text-sky-200 bg-sky-500/15 hover:bg-sky-500/25 disabled:opacity-40 transition-colors"
+            >
+              ↩️ Cancelar encerramento
+            </button>
+          ) : (
+            <button
+              onClick={() => (exhausted ? onStopNow() : setShowStopDialog(true))}
+              disabled={busy}
+              className="px-4 py-2.5 rounded-xl font-bold text-sm text-white/80 bg-white/10 hover:bg-white/20 disabled:opacity-40 transition-colors"
+            >
+              🚪 Encerrar
+            </button>
+          )}
         </div>
         <p className="text-white/30 text-[10px] mt-3">
           Cada tique de 15 min custa {GATHER_TICK_STAMINA} ⚡ e o regen fica pausado enquanto trabalha.
           Coletar não interrompe a sessão; encerrar deposita tudo e libera o herói.
         </p>
       </div>
+
+      <StopConfirmDialog
+        open={showStopDialog}
+        accent={accent}
+        secondsToNextTick={secondsToNextTick}
+        onStopNow={onStopNow}
+        onStopAfterCycle={onStopAfterCycle}
+        onClose={() => setShowStopDialog(false)}
+      />
     </motion.div>
   )
 }

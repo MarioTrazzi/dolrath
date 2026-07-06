@@ -41,6 +41,17 @@ export interface SyncedGathering {
   secondsToNextTick: number
   /** Inventário sem slot livre: coleta pausada (nenhum tique/stamina gasto agora). */
   inventoryFull: boolean
+  /**
+   * Preenchido quando esta sincronização FECHOU a sessão sozinha por causa de
+   * um "aguardar último ciclo" pendente (stopRequested) — o chamador não deve
+   * chamar collectGatheringSession de novo, a sessão já está 'collected'.
+   */
+  autoStopped?: {
+    deposited: { name: string; qty: number }[]
+    skipped: { name: string; qty: number }[]
+    xpGained: number
+    gatherXp: number
+  }
 }
 
 function readPending(session: GatheringSession): PendingYield {
@@ -48,6 +59,65 @@ function readPending(session: GatheringSession): PendingYield {
   return p && Array.isArray(p.drops)
     ? p
     : { drops: [], xp: 0, ticks: 0 }
+}
+
+/** Deposita cada drop (pilha inteira ou nada — mesma regra do addDropToInventoryTx). */
+async function depositPendingItems(
+  tx: Prisma.TransactionClient,
+  characterId: string,
+  drops: { name: string; qty: number }[],
+): Promise<{ deposited: { name: string; qty: number }[]; skipped: { name: string; qty: number }[] }> {
+  const deposited: { name: string; qty: number }[] = []
+  const skipped: { name: string; qty: number }[] = []
+  for (const drop of drops) {
+    const ok = await addDropToInventoryTx(tx, characterId, { name: drop.name, qty: drop.qty })
+    if (ok) deposited.push(drop)
+    else skipped.push(drop)
+  }
+  return { deposited, skipped }
+}
+
+/**
+ * Fecha uma sessão com "aguardar último ciclo" pendente: credita o tique que
+ * acabou de render (se houver), deposita o espólio acumulado e marca
+ * 'collected' — tudo numa tacada, sem abrir uma nova âncora de tique. Itens
+ * que não couberem são descartados (mesma regra do encerramento manual).
+ */
+async function finishStopRequested(
+  session: GatheringSession,
+  pending: PendingYield,
+  tick?: { staminaSpent: number; anchor: Date },
+): Promise<SyncedGathering> {
+  const [depositInfo, character, updatedSession] = await prisma.$transaction(async (tx) => {
+    const { deposited, skipped } = await depositPendingItems(tx, session.characterId, pending.drops)
+    const updatedCharacter = await tx.character.update({
+      where: { id: session.characterId },
+      data: {
+        gatherXp: { increment: pending.xp },
+        ...(tick ? { stamina: { decrement: tick.staminaSpent }, staminaUpdatedAt: tick.anchor } : {}),
+      },
+      select: { stamina: true, gatherXp: true },
+    })
+    const updated = await tx.gatheringSession.update({
+      where: { id: session.id },
+      data: {
+        pendingYield: { drops: [], xp: 0, ticks: 0 } as unknown as Prisma.InputJsonValue,
+        status: 'collected',
+        stopRequested: false,
+        ...(tick ? { lastTickAt: tick.anchor } : {}),
+      },
+    })
+    return [{ deposited, skipped, xpGained: pending.xp, gatherXp: updatedCharacter.gatherXp }, updatedCharacter, updated] as const
+  })
+
+  return {
+    session: updatedSession,
+    pending: readPending(updatedSession),
+    stamina: character.stamina,
+    secondsToNextTick: 0,
+    inventoryFull: false,
+    autoStopped: depositInfo,
+  }
 }
 
 /**
@@ -97,6 +167,9 @@ export async function syncGatheringSession(
   if (tick.ticks <= 0) {
     // Sem tique novo; ainda assim marca esgotamento se a stamina não paga o próximo.
     if (tick.exhausted) {
+      if (session.stopRequested) {
+        return finishStopRequested(session, readPending(session))
+      }
       const updated = await prisma.gatheringSession.update({
         where: { id: session.id },
         data: { status: 'exhausted' },
@@ -116,6 +189,12 @@ export async function syncGatheringSession(
   const gatherLevel = getProfessionLevel(character.gatherXp)
   const yielded = rollGatherYield(session.fieldId as GatherFieldId, gatherLevel, tick.ticks)
   const pending = mergePendingYield(readPending(session), yielded, tick.ticks)
+
+  // "Aguardar último ciclo": este tique que acabou de render É o último —
+  // deposita e fecha agora, sem abrir uma nova âncora para o próximo tique.
+  if (session.stopRequested) {
+    return finishStopRequested(session, pending, { staminaSpent: tick.staminaSpent, anchor: tick.anchor })
+  }
 
   const [updated] = await prisma.$transaction([
     prisma.gatheringSession.update({
@@ -181,16 +260,7 @@ export async function collectGatheringSession(
   const pending = readPending(session)
 
   return prisma.$transaction(async (tx) => {
-    const deposited: { name: string; qty: number }[] = []
-    const skipped: { name: string; qty: number }[] = []
-
-    for (const drop of pending.drops) {
-      // Tenta a pilha inteira; addDropToInventoryTx empilha consumível numa
-      // linha só, então ou entra tudo (1 slot no máximo) ou não entra nada.
-      const ok = await addDropToInventoryTx(tx, session.characterId, { name: drop.name, qty: drop.qty })
-      if (ok) deposited.push(drop)
-      else skipped.push(drop)
-    }
+    const { deposited, skipped } = await depositPendingItems(tx, session.characterId, pending.drops)
 
     const xpGained = pending.xp
     const character = await tx.character.update({

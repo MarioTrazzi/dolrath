@@ -99,10 +99,15 @@ type Subject = { name: string; dungeon: DungeonId }
 
 const subjects: Subject[] = []
 for (const id of Object.keys(DUNGEONS) as DungeonId[]) {
-  for (const m of DUNGEONS[id].monsters) {
-    // só geramos os que têm arte definida em MONSTER_ART (hoje: floresta)
+  const dungeon = DUNGEONS[id]
+  // só geramos os que têm arte definida em MONSTER_ART (hoje: floresta já tem asset
+  // próprio pronto; caverna/pântano/ruínas ainda pendentes de geração).
+  for (const m of dungeon.monsters) {
     if (MONSTER_ART[m.name]) subjects.push({ name: m.name, dungeon: id })
   }
+  // boss: floresta reaproveita /boss-ancia-da-mata.webp (fora deste gerador); os
+  // demais bosses (caverna/pântano/ruínas) também têm arte em MONSTER_ART.
+  if (MONSTER_ART[dungeon.boss.name]) subjects.push({ name: dungeon.boss.name, dungeon: id })
 }
 
 async function main() {

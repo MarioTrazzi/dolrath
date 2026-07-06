@@ -237,3 +237,67 @@
     animation: none !important;
   }
 }
+
+/* ============================================================
+   MAPA DO REINO — COLETA (pergaminho medieval — handoff Claude Design)
+   Nós = regiões de coleta. Painel-pergaminho envia heróis. Cores de
+   destaque por região via --acc / --acc-soft (inline no nó).
+   ============================================================ */
+.font-map  { font-family: var(--font-cinzel), Georgia, serif; }
+.font-mapd { font-family: var(--font-cinzel-dec), var(--font-cinzel), Georgia, serif; }
+.ink      { color: #4a3418; }
+.ink-soft { color: #6b4f28; }
+
+.parchment {
+  background-color: #e6d3a3;
+  background-image:
+    radial-gradient(ellipse 120% 90% at 50% 0%, rgba(255,247,224,0.55), transparent 60%),
+    radial-gradient(circle at 18% 22%, rgba(150,110,60,0.16), transparent 26%),
+    radial-gradient(circle at 82% 34%, rgba(150,110,60,0.14), transparent 24%),
+    radial-gradient(circle at 30% 78%, rgba(120,86,44,0.18), transparent 30%),
+    radial-gradient(circle at 74% 84%, rgba(120,86,44,0.14), transparent 26%),
+    radial-gradient(ellipse 140% 120% at 50% 55%, transparent 55%, rgba(94,66,30,0.45) 100%);
+  box-shadow:
+    inset 0 0 60px 10px rgba(94,64,26,0.42),
+    inset 0 0 140px 30px rgba(70,46,18,0.30),
+    0 30px 60px -18px rgba(0,0,0,0.75),
+    0 0 0 1px rgba(0,0,0,0.35);
+}
+.parchment::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background-image:
+    repeating-linear-gradient(50deg, rgba(120,88,44,0.05) 0 2px, transparent 2px 5px),
+    repeating-linear-gradient(-38deg, rgba(120,88,44,0.04) 0 2px, transparent 2px 6px);
+  mix-blend-mode: multiply; opacity: 0.7;
+}
+.parch-frame {
+  border: 2px solid rgba(74,52,24,0.7);
+  outline: 1px solid rgba(74,52,24,0.35); outline-offset: -7px;
+}
+
+@keyframes region-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--acc-soft), inset 0 1px 2px rgba(255,255,255,0.4); }
+  50%      { box-shadow: 0 0 0 7px transparent, 0 0 16px 3px var(--acc), inset 0 1px 2px rgba(255,255,255,0.4); }
+}
+.region-pulse { animation: region-pulse 2.4s ease-in-out infinite; }
+
+@keyframes ready-throb {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.12); }
+}
+@keyframes mote-drift {
+  0%   { transform: translate(0,0); opacity: 0; }
+  20%  { opacity: 0.8; }
+  80%  { opacity: 0.5; }
+  100% { transform: translate(var(--mx), var(--my)); opacity: 0; }
+}
+@keyframes candle-flicker {
+  0%,100% { opacity: 0.5; } 45% { opacity: 0.85; } 60% { opacity: 0.35; } 80% { opacity: 0.7; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .region-pulse,
+  [style*="ready-throb"], [style*="mote-drift"], [style*="candle-flicker"] {
+    animation: none !important;
+  }
+}

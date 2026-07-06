@@ -1,6 +1,6 @@
 import './globals.css'
 import type { Metadata, Viewport } from 'next'
-import { Inter } from 'next/font/google'
+import { Inter, Cinzel, Cinzel_Decorative } from 'next/font/google'
 import { AuthProvider } from '@/components/providers/AuthProvider'
 import { DragAndDropProvider } from '@/components/providers/DragAndDropProvider'
 import { GoldProvider } from '@/components/providers/GoldProvider'
@@ -12,6 +12,20 @@ const inter = Inter({
   subsets: ['latin'],
   weight: ['300', '400', '500', '600', '700'],
   variable: '--font-inter',
+  display: 'swap',
+})
+
+// ⛏️ Fontes do Mapa do Reino (Coleta): títulos gravados no pergaminho.
+const cinzel = Cinzel({
+  subsets: ['latin'],
+  weight: ['500', '600', '700', '800'],
+  variable: '--font-cinzel',
+  display: 'swap',
+})
+const cinzelDecorative = Cinzel_Decorative({
+  subsets: ['latin'],
+  weight: ['700'],
+  variable: '--font-cinzel-dec',
   display: 'swap',
 })
 
@@ -32,7 +46,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="pt-BR" className={inter.variable}>
+    <html lang="pt-BR" className={`${inter.variable} ${cinzel.variable} ${cinzelDecorative.variable}`}>
       <body className="bg-background text-text-primary min-h-[100dvh] font-primary">
         <AuthProvider>
           <GoldProvider>

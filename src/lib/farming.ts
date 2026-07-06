@@ -103,8 +103,36 @@ export const PEN = {
   farmXp: 12,
 };
 
-/** Stamina cobrada por AÇÃO na fazenda (plantar, colher, coletar, alimentar). */
+/** Stamina cobrada por AÇÃO na fazenda (coletar poço, alimentar/colher cercado). */
 export const FARM_ACTION_STAMINA = 2;
+
+/** Stamina de plantar um canteiro (canteiro v2, mockup Fazenda.html). */
+export const FARM_PLANT_STAMINA = 2;
+
+/** Stamina de colher um canteiro pronto (mais barato que plantar). */
+export const FARM_HARVEST_STAMINA = 1;
+
+/**
+ * Chance (%) de a colheita de um canteiro render um Estilhaço de Pedra Negra
+ * junto do cultivo — bônus raro do canteiro v2. Cresce com o nível de Fazenda,
+ * teto 60% (mesmo formato de curva do mockup Fazenda.html).
+ */
+export function farmStoneChance(farmLevel: number): number {
+  return Math.min(60, 4 + 2 * (Math.max(1, farmLevel) - 1));
+}
+
+/** XP de Fazenda extra quando a colheita rende um estilhaço. */
+export const FARM_STONE_BONUS_XP = 10;
+
+/** Estilhaços de Pedra Negra que podem cair na colheita (sorteio 50/50). */
+export const FARM_STONE_SHARDS = [
+  'Estilhaço de Pedra Negra (Arma)',
+  'Estilhaço de Pedra Negra (Armadura)',
+] as const;
+
+export function rollFarmStoneShard(rng: () => number = Math.random): string {
+  return FARM_STONE_SHARDS[rng() < 0.5 ? 0 : 1];
+}
 
 // ============================================================
 // Estado derivado (funções puras — o servidor decide, o cliente exibe)

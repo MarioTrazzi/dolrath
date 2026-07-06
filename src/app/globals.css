@@ -301,3 +301,31 @@
     animation: none !important;
   }
 }
+
+/* ============================================================
+   FAZENDA v2 — canteiro de 16 slots (handoff Claude Design, Fazenda.html)
+   ============================================================ */
+
+/* Pulso do slot pronto para colher (cor via --pr) */
+@keyframes plot-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--pr), 0 0 14px 0 var(--pr); }
+  50%      { box-shadow: 0 0 0 6px transparent, 0 0 22px 4px var(--pr); }
+}
+.plot-ready { animation: plot-pulse 1.8s ease-in-out infinite; }
+
+/* Brilho que varre a linha do Estilhaço de Pedra Negra no resultado da colheita */
+@keyframes stone-sweep {
+  0%   { transform: translateX(-120%); }
+  100% { transform: translateX(220%); }
+}
+.stone-shine {
+  background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.35) 50%, transparent 60%);
+  width: 60%;
+  animation: stone-sweep 2.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plot-ready, .stone-shine {
+    animation: none !important;
+  }
+}

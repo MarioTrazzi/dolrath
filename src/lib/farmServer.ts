@@ -23,6 +23,7 @@ import {
   isPenReady,
   penSecondsLeft,
   wellPending,
+  farmStoneChance,
   FARM_ACTION_STAMINA,
 } from './farming'
 import { farmPlotCount, getProfessionLevel, getProfessionLevelInfo, FARM_PEN_MIN_LEVEL } from './professionSystem'
@@ -52,6 +53,8 @@ export interface FarmState {
   }
   crops: typeof CROPS
   actionStamina: number
+  /** Chance (%) de a colheita de um canteiro render um Estilhaço de Pedra Negra. */
+  stoneChance: number
 }
 
 /** Estado derivado da fazenda (cria o poço na primeira visita). */
@@ -108,6 +111,7 @@ export async function getFarmState(characterId: string, farmXp: number, now: Dat
     },
     crops: CROPS,
     actionStamina: FARM_ACTION_STAMINA,
+    stoneChance: farmStoneChance(farmLevel),
   }
 }
 
@@ -118,16 +122,17 @@ export async function getFarmState(characterId: string, farmXp: number, now: Dat
 export async function spendFarmActionStaminaTx(
   tx: Prisma.TransactionClient,
   characterId: string,
+  cost: number = FARM_ACTION_STAMINA,
 ): Promise<number> {
   const c = await tx.character.findUnique({ where: { id: characterId }, select: { stamina: true } })
-  if (!c || c.stamina < FARM_ACTION_STAMINA) {
-    throw new Error(`Stamina insuficiente (a ação custa ${FARM_ACTION_STAMINA}).`)
+  if (!c || c.stamina < cost) {
+    throw new Error(`Stamina insuficiente (a ação custa ${cost}).`)
   }
   await tx.character.update({
     where: { id: characterId },
-    data: { stamina: { decrement: FARM_ACTION_STAMINA }, staminaUpdatedAt: new Date() },
+    data: { stamina: { decrement: cost }, staminaUpdatedAt: new Date() },
   })
-  return c.stamina - FARM_ACTION_STAMINA
+  return c.stamina - cost
 }
 
 /** Linha do plot (ou null) — conveniência das rotas. */

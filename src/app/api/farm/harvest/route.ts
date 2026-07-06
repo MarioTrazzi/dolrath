@@ -3,7 +3,10 @@ import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { regenAndPersist } from '@/lib/staminaServer'
 import { spendFarmActionStaminaTx } from '@/lib/farmServer'
-import { getCropById, isCropReady, isPenReady, rollCropYield, PEN, PEN_SLOT_INDEX } from '@/lib/farming'
+import {
+  getCropById, isCropReady, isPenReady, rollCropYield, PEN, PEN_SLOT_INDEX,
+  farmStoneChance, rollFarmStoneShard, FARM_STONE_BONUS_XP, FARM_ACTION_STAMINA, FARM_HARVEST_STAMINA,
+} from '@/lib/farming'
 import { getProfessionLevel, getProfessionLevelInfo } from '@/lib/professionSystem'
 import { addDropToInventoryTx } from '@/lib/dungeonRunServer'
 import { addHistoryEntry } from '@/lib/characterHistory'
@@ -72,7 +75,26 @@ export async function POST(req: Request) {
         throw new Error('Inventário cheio — libere um slot e colha de novo (nada foi perdido).')
       }
 
-      const stamina = await spendFarmActionStaminaTx(tx, characterId)
+      // 💎 Canteiro v2: colheita de cultivo (não o cercado) tem chance rara de
+      // render um Estilhaço de Pedra Negra junto — silenciosamente ignorado se
+      // o inventário estiver cheio (o cultivo em si já foi entregue acima).
+      let gotStone = false
+      let stoneName: string | undefined
+      if (slot !== PEN_SLOT_INDEX) {
+        const chance = farmStoneChance(farmLevel)
+        if (Math.random() * 100 < chance) {
+          const candidate = rollFarmStoneShard()
+          const stoneOk = await addDropToInventoryTx(tx, characterId, { name: candidate, qty: 1 })
+          if (stoneOk) {
+            gotStone = true
+            stoneName = candidate
+            farmXp += FARM_STONE_BONUS_XP
+          }
+        }
+      }
+
+      const staminaCost = slot === PEN_SLOT_INDEX ? FARM_ACTION_STAMINA : FARM_HARVEST_STAMINA
+      const stamina = await spendFarmActionStaminaTx(tx, characterId, staminaCost)
 
       const updated = await tx.character.update({
         where: { id: characterId },
@@ -84,13 +106,15 @@ export async function POST(req: Request) {
         data: { cropId: null, plantedAt: null, state: 'empty' },
       })
 
-      return { outputName, qty, farmXp, totalFarmXp: updated.farmXp, stamina }
+      return { outputName, qty, farmXp, totalFarmXp: updated.farmXp, stamina, gotStone, stoneName }
     })
 
     addHistoryEntry({
       characterId,
       activityType: 'ITEM_GAINED',
-      description: `🌾 Colheu ${result.qty}× ${result.outputName} (+${result.farmXp} XP de Fazenda).`,
+      description: result.gotStone
+        ? `🌾 Colheu ${result.qty}× ${result.outputName} + 💎 ${result.stoneName} (+${result.farmXp} XP de Fazenda).`
+        : `🌾 Colheu ${result.qty}× ${result.outputName} (+${result.farmXp} XP de Fazenda).`,
     }).catch(() => {})
 
     return NextResponse.json({
@@ -100,6 +124,8 @@ export async function POST(req: Request) {
       xpGained: result.farmXp,
       farm: getProfessionLevelInfo(result.totalFarmXp),
       stamina: result.stamina,
+      gotStone: result.gotStone,
+      stoneName: result.stoneName,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Erro interno do servidor'

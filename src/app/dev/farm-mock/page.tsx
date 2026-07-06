@@ -4,23 +4,31 @@
 // crescimento ACELERADO (segundos em vez de horas). Espírito do /dev/dungeon-mock.
 
 import { useEffect, useState } from 'react'
-import { FarmBoard, type FarmVM } from '@/components/farm/FarmBoard'
-import { CROPS, rollCropYield, PEN } from '@/lib/farming'
-import { getProfessionLevelInfo } from '@/lib/professionSystem'
+import { FarmBoard, type FarmVM, type HarvestResultVM } from '@/components/farm/FarmBoard'
+import { CROPS, rollCropYield, farmStoneChance, rollFarmStoneShard, FARM_STONE_BONUS_XP, PEN } from '@/lib/farming'
+import { getProfessionLevelInfo, farmPlotCount } from '@/lib/professionSystem'
 
 const MOCK_GROW_SECONDS = 10 // todo cultivo/ciclo fica pronto em 10s
+const MOCK_FARM_LEVEL = 7 // cercado aberto (Nv. 5+)
 
-const initialVm = (): FarmVM => ({
-  farm: getProfessionLevelInfo(60 * Math.pow(7 - 1, 1.5) + 10), // Nv. 7 (cercado aberto)
-  unlockedPlots: 3,
-  plots: [0, 1, 2].map((slotIndex) => ({ slotIndex, cropId: null, state: 'empty', secondsLeft: 0, outputName: null })),
-  well: { pending: 4, cap: 12, intervalSeconds: 1800 },
-  pen: { unlocked: true, minLevel: 5, state: 'empty', secondsLeft: 0, feedName: 'Ração', outputName: 'Couro', yield: PEN.yield },
-  inputCounts: { 'Semente de Trigo': 3, 'Semente de Erva Medicinal': 2, 'Semente de Linho': 1, 'Ração': 2 },
-  stamina: 88,
-  maxStamina: 100,
-  actionStamina: 2,
-})
+const initialVm = (): FarmVM => {
+  const farm = getProfessionLevelInfo(60 * Math.pow(MOCK_FARM_LEVEL - 1, 1.5) + 10)
+  const unlockedPlots = farmPlotCount(farm.level)
+  return {
+    farm,
+    unlockedPlots,
+    plots: Array.from({ length: unlockedPlots }, (_, slotIndex) => ({
+      slotIndex, cropId: null, state: 'empty' as const, secondsLeft: 0, outputName: null,
+    })),
+    well: { pending: 4, cap: 12, intervalSeconds: 1800 },
+    pen: { unlocked: true, minLevel: 5, state: 'empty', secondsLeft: 0, feedName: 'Ração', outputName: 'Couro', yield: PEN.yield },
+    inputCounts: { 'Semente de Trigo': 3, 'Semente de Erva Medicinal': 2, 'Semente de Linho': 1, 'Ração': 2 },
+    stamina: 88,
+    maxStamina: 100,
+    actionStamina: 2,
+    stoneChance: farmStoneChance(farm.level),
+  }
+}
 
 export default function FarmMockPage() {
   const [vm, setVm] = useState<FarmVM>(initialVm)
@@ -51,7 +59,7 @@ export default function FarmMockPage() {
       <div className="max-w-4xl mx-auto">
         <h1 className="text-2xl font-black text-white text-center mb-1">🌾 Fazenda — MOCK</h1>
         <p className="text-white/40 text-xs text-center mb-6">
-          Crescimento acelerado: {MOCK_GROW_SECONDS}s (real: horas) · Nv. 7 de Fazenda · sem DB
+          Crescimento acelerado: {MOCK_GROW_SECONDS}s (real: horas) · Nv. {MOCK_FARM_LEVEL} de Fazenda · sem DB
         </p>
 
         {log.length > 0 && (
@@ -87,24 +95,32 @@ export default function FarmMockPage() {
             }))
             push(`🫘 Plantou ${crop.outputName}`)
           }}
-          onHarvest={(slotIndex) => {
+          onHarvest={async (slotIndex): Promise<HarvestResultVM> => {
             if (slotIndex === 101) {
               setVm((prev) => ({ ...prev, stamina: prev.stamina - prev.actionStamina, pen: { ...prev.pen, state: 'empty', secondsLeft: 0 } }))
               push(`🧺 Colheu ${PEN.yield}× Couro (+${PEN.farmXp} XP)`)
-              return
+              return { outputName: PEN.outputName, qty: PEN.yield, xpGained: PEN.farmXp }
             }
-            setVm((prev) => {
-              const plot = prev.plots.find((p) => p.slotIndex === slotIndex)
-              const crop = plot?.cropId ? CROPS[plot.cropId as keyof typeof CROPS] : null
-              if (crop) push(`🧺 Colheu ${rollCropYield(crop)}× ${crop.outputName} (+${crop.farmXp} XP)`)
-              return {
-                ...prev,
-                stamina: prev.stamina - prev.actionStamina,
-                plots: prev.plots.map((p) =>
-                  p.slotIndex === slotIndex ? { ...p, cropId: null, state: 'empty', secondsLeft: 0, outputName: null } : p
-                ),
-              }
-            })
+
+            const plot = vm.plots.find((p) => p.slotIndex === slotIndex)
+            const crop = plot?.cropId ? CROPS[plot.cropId as keyof typeof CROPS] : null
+            if (!crop) throw new Error('Cultivo inválido neste canteiro.')
+
+            const qty = rollCropYield(crop)
+            const gotStone = Math.random() * 100 < farmStoneChance(vm.farm.level)
+            const stoneName = gotStone ? rollFarmStoneShard() : undefined
+            const xpGained = crop.farmXp + (gotStone ? FARM_STONE_BONUS_XP : 0)
+
+            setVm((prev) => ({
+              ...prev,
+              stamina: prev.stamina - prev.actionStamina,
+              plots: prev.plots.map((p) =>
+                p.slotIndex === slotIndex ? { ...p, cropId: null, state: 'empty', secondsLeft: 0, outputName: null } : p
+              ),
+            }))
+            push(gotStone ? `🧺 Colheu ${qty}× ${crop.outputName} + 💎 ${stoneName} (+${xpGained} XP)` : `🧺 Colheu ${qty}× ${crop.outputName} (+${xpGained} XP)`)
+
+            return { outputName: crop.outputName, qty, xpGained, gotStone, stoneName }
           }}
           onWellCollect={() => {
             setVm((prev) => ({ ...prev, stamina: prev.stamina - prev.actionStamina, well: { ...prev.well, pending: 0 } }))

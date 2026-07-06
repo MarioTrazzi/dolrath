@@ -3,7 +3,7 @@ import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { regenAndPersist } from '@/lib/staminaServer'
 import { spendFarmActionStaminaTx } from '@/lib/farmServer'
-import { getCropById } from '@/lib/farming'
+import { getCropById, FARM_PLANT_STAMINA } from '@/lib/farming'
 import { farmPlotCount, getProfessionLevel } from '@/lib/professionSystem'
 import { isSeedItem } from '@/lib/itemCatalog'
 
@@ -65,7 +65,7 @@ export async function POST(req: Request) {
         await tx.characterInventory.delete({ where: { id: seedRow.id } })
       }
 
-      const stamina = await spendFarmActionStaminaTx(tx, characterId)
+      const stamina = await spendFarmActionStaminaTx(tx, characterId, FARM_PLANT_STAMINA)
 
       const now = new Date()
       const plot = existing

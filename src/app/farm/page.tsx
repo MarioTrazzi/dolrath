@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { FarmBoard, type FarmVM } from '@/components/farm/FarmBoard'
+import { FarmBoard, type FarmVM, type HarvestResultVM } from '@/components/farm/FarmBoard'
 import { CharacterStatChips, computePower } from '@/components/character/CharacterStatChips'
 import { getProfessionLevelInfo } from '@/lib/professionSystem'
 import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider'
@@ -134,8 +134,6 @@ export default function FarmPage() {
       const data = await res.json().catch(() => null)
       if (!res.ok) {
         setNotice(`❌ ${data?.error ?? 'Erro ao executar a ação'}`)
-      } else if (path === 'harvest') {
-        setNotice(`🧺 Colheu ${data.qty}× ${data.outputName} (+${data.xpGained} XP de Fazenda)`)
       } else if (path === 'well-collect') {
         setNotice(`💧 Coletou ${data.qty}× ${data.outputName}`)
       }
@@ -144,6 +142,38 @@ export default function FarmPage() {
       setBusy(false)
     }
   }
+
+  // Colher tem UI própria (dialog confirm→working→done no FarmBoard), que
+  // precisa do resultado real pra mostrar qty/XP/pedra — por isso não usa o
+  // `act` genérico acima (fire-and-forget) e devolve (ou lança) a resposta.
+  const harvest = useCallback(async (slotIndex: number): Promise<HarvestResultVM> => {
+    if (!selectedId) throw new Error('Selecione um personagem primeiro.')
+    setBusy(true)
+    setNotice(null)
+    try {
+      const res = await fetch('/api/farm/harvest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ characterId: selectedId, slotIndex }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        const message: string = data?.error ?? 'Erro ao colher'
+        setNotice(`❌ ${message}`)
+        throw new Error(message)
+      }
+      await refresh(selectedId)
+      return {
+        outputName: data.outputName,
+        qty: data.qty,
+        xpGained: data.xpGained,
+        gotStone: data.gotStone,
+        stoneName: data.stoneName,
+      }
+    } finally {
+      setBusy(false)
+    }
+  }, [selectedId, refresh])
 
   if (isLoading) {
     return (
@@ -226,7 +256,7 @@ export default function FarmPage() {
             vm={vm}
             busy={busy}
             onPlant={(slotIndex, cropId) => act('plant', { slotIndex, cropId })}
-            onHarvest={(slotIndex) => act('harvest', { slotIndex })}
+            onHarvest={harvest}
             onWellCollect={() => act('well-collect', {})}
             onPenFeed={() => act('pen-feed', {})}
           />

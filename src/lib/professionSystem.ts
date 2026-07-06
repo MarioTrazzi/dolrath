@@ -86,9 +86,17 @@ export function gatherSeedChance(gatherLevel: number): number {
 // Perks de FAZENDA
 // ============================================================
 
-/** Nº de canteiros de cultivo: 2 no nv1, +1 a cada 5 níveis, teto 6. */
+/** Total de canteiros do canteiro único (layout v2, mockup Fazenda.html). */
+export const FARM_TOTAL_PLOTS = 16;
+
+/** Nº de canteiros liberados: 8 no nv1, +1 por nível até o teto de 16 (nv9). */
 export function farmPlotCount(farmLevel: number): number {
-  return Math.min(6, 2 + Math.floor(Math.max(1, farmLevel) / 5));
+  return Math.min(FARM_TOTAL_PLOTS, 7 + Math.max(1, farmLevel));
+}
+
+/** Nível de Fazenda que libera o slot `slotIndex` (0-based) — inverso de farmPlotCount. */
+export function farmPlotUnlockLevel(slotIndex: number): number {
+  return Math.max(1, slotIndex - 6);
 }
 
 /** Multiplicador do tempo de crescimento (−1%/nível, piso −25%). */

@@ -668,13 +668,28 @@ export default function BattleScene({
 
   // Coreografia dos eventos de batalha
   useEffect(() => {
-    if (!event || event.id === lastEventId.current) return
+    if (!event) return
+    if (event.id === lastEventId.current) {
+      // Dois pushBattleEvent com o mesmo id = 2º nunca anima. Não devia acontecer
+      // (contador monotônico), mas se acontecer isso explica um "dano sem efeito".
+      console.warn('[BattleScene] evento repetido descartado (id duplicado)', event)
+      return
+    }
     lastEventId.current = event.id
 
     if (event.kind === 'resolve') {
       const atkId = event.attackerId
       const defId = event.defenderId
-      if (!atkId || !defId || !sideOf(atkId) || !sideOf(defId)) return
+      if (!atkId || !defId || !sideOf(atkId) || !sideOf(defId)) {
+        // Descarte silencioso de um golpe: id do atacante/defensor não bate com
+        // nenhum lutador conhecido no momento (identidade dessincronizada — mesma
+        // classe de bug do boss trocado pelo guardião anterior, commit 57e6b1c).
+        console.warn('[BattleScene] evento "resolve" descartado — id não reconhecido', {
+          atkId, defId, sideOfAtk: sideOf(atkId), sideOfDef: sideOf(defId),
+          leftId: left?.id, rightId: right?.id, rightGroupIds: rightGroup?.map(f => f.id),
+        })
+        return
+      }
 
       // FX da habilidade: impacto no defensor OU aura no conjurador (buff de forma no PvP
       // chega como resolve com dano 0 — vira aura, sem investida nem "ESQUIVOU!").
@@ -722,28 +737,40 @@ export default function BattleScene({
       }, 280)
     } else if (event.kind === 'item') {
       const id = event.actorId
-      if (!id || !sideOf(id)) return
+      if (!id || !sideOf(id)) {
+        console.warn('[BattleScene] evento "item" descartado — id não reconhecido', { id, event })
+        return
+      }
       if (event.hpRestored) showAura(id, 'heal')
       if (event.hpRestored) pushText(id, `+${event.hpRestored} HP`, 'text-green-400', true)
       if (event.mpRestored) later(() => pushText(id, `+${event.mpRestored} MP`, 'text-blue-400'), 200)
       if (event.staminaRestored) later(() => pushText(id, `+${event.staminaRestored} ⚡`, 'text-yellow-300'), 400)
     } else if (event.kind === 'transform') {
       const id = event.actorId
-      if (!id || !sideOf(id)) return
+      if (!id || !sideOf(id)) {
+        console.warn('[BattleScene] evento "transform" descartado — id não reconhecido', { id, event })
+        return
+      }
       const glow = getTransformationGlow(fighterById(id)?.transformationType)
       showAura(id, 'transform', glow.hex)
       pushText(id, 'TRANSFORMAÇÃO!', 'text-purple-300', true)
     } else if (event.kind === 'buff') {
       // Habilidade utilitária usada no PvE (o PvP manda como 'resolve' com o id da habilidade)
       const id = event.actorId
-      if (!id || !sideOf(id)) return
+      if (!id || !sideOf(id)) {
+        console.warn('[BattleScene] evento "buff" descartado — id não reconhecido', { id, event })
+        return
+      }
       const fx = resolveActionFx(event.action, fighterById(id)?.class)
       showAura(id, 'aura' in fx ? fx.aura : 'focus')
     } else if (event.kind === 'status') {
       // Status aplicado no lutador (veneno/sangramento/stun dos golpes de monstro)
       const id = event.actorId
       const kind = event.action as AuraKind
-      if (!id || !sideOf(id) || !['poison', 'bleed', 'stun'].includes(kind)) return
+      if (!id || !sideOf(id) || !['poison', 'bleed', 'stun'].includes(kind)) {
+        console.warn('[BattleScene] evento "status" descartado — id/kind não reconhecido', { id, kind, event })
+        return
+      }
       showAura(id, kind)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

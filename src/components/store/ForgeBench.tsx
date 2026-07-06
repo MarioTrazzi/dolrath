@@ -100,6 +100,8 @@ export default function ForgeBench({
   // Materiais colocados na bigorna: nome → quantidade.
   const [placed, setPlaced] = useState<Record<string, number>>({});
   const [dragOver, setDragOver] = useState(false);
+  // Quantidade escolhida para forjar de uma vez (1..maxCraftable).
+  const [craftQty, setCraftQty] = useState(1);
 
   useEffect(() => {
     if (!controlled && !internalCharacterId && characters.length > 0) {
@@ -170,8 +172,14 @@ export default function ForgeBench({
   // (não só o que está na bigorna — a bigorna guarda 1x da receita).
   const maxCraftable = useMemo(() => {
     if (!matched) return 0;
-    return matched.materials.reduce((max, m) => Math.min(max, Math.floor(have(m.name) / m.quantity)), Infinity);
+    const n = matched.materials.reduce((max, m) => Math.min(max, Math.floor(have(m.name) / m.quantity)), Infinity);
+    return Math.max(0, Math.min(99, n));
   }, [matched, have]);
+
+  // Mantém a quantidade escolhida dentro do que dá pra forjar.
+  useEffect(() => {
+    setCraftQty((q) => Math.min(Math.max(1, q), Math.max(1, maxCraftable)));
+  }, [maxCraftable]);
 
   const addMaterial = useCallback((name: string) => {
     setPlaced((p) => {
@@ -390,23 +398,60 @@ export default function ForgeBench({
                   </p>
                 )}
 
+                {matched && maxCraftable > 1 && (
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs text-white/50">Quantidade:</span>
+                    <button
+                      type="button"
+                      onClick={() => setCraftQty((q) => Math.max(1, q - 1))}
+                      disabled={busy || craftQty <= 1}
+                      className="w-7 h-7 grid place-items-center rounded-lg bg-white/10 hover:bg-white/15 disabled:opacity-30 disabled:cursor-not-allowed text-white font-bold text-sm transition-colors"
+                    >
+                      −
+                    </button>
+                    <input
+                      type="number"
+                      min={1}
+                      max={maxCraftable}
+                      value={craftQty}
+                      onChange={(e) => {
+                        const v = Math.round(Number(e.target.value));
+                        setCraftQty(Number.isFinite(v) ? Math.min(maxCraftable, Math.max(1, v)) : 1);
+                      }}
+                      disabled={busy}
+                      className="w-14 text-center rounded-lg bg-black/30 border border-white/10 py-1 text-sm text-white"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setCraftQty((q) => Math.min(maxCraftable, q + 1))}
+                      disabled={busy || craftQty >= maxCraftable}
+                      className="w-7 h-7 grid place-items-center rounded-lg bg-white/10 hover:bg-white/15 disabled:opacity-30 disabled:cursor-not-allowed text-white font-bold text-sm transition-colors"
+                    >
+                      +
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCraftQty(maxCraftable)}
+                      disabled={busy || craftQty === maxCraftable}
+                      className="text-xs font-semibold text-amber-300 hover:text-amber-200 disabled:opacity-40 disabled:cursor-not-allowed underline underline-offset-2"
+                    >
+                      máx {maxCraftable}
+                    </button>
+                  </div>
+                )}
+
                 <div className="flex flex-wrap gap-2">
                   <button
-                    onClick={() => handleForge(1)}
+                    onClick={() => handleForge(craftQty)}
                     disabled={busy || !matched || !selectedCharacterId}
                     className="flex-1 min-w-[140px] px-4 py-2.5 rounded-xl font-black text-sm text-white transition-all hover:scale-[1.02] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 bg-gradient-to-r from-orange-600 to-amber-500"
                   >
-                    {busy ? 'Forjando…' : matched ? `⚒️ Pagar e Forjar (${matched.goldCost} 🪙)` : '⚒️ Sem receita'}
+                    {busy
+                      ? 'Forjando…'
+                      : matched
+                        ? `⚒️ Pagar e Forjar${craftQty > 1 ? ` ${craftQty}x` : ''} (${matched.goldCost * craftQty} 🪙)`
+                        : '⚒️ Sem receita'}
                   </button>
-                  {matched && maxCraftable > 1 && (
-                    <button
-                      onClick={() => handleForge(maxCraftable)}
-                      disabled={busy || !selectedCharacterId}
-                      className="flex-1 min-w-[140px] px-4 py-2.5 rounded-xl font-black text-sm text-white transition-all hover:scale-[1.02] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 bg-gradient-to-r from-amber-600 to-orange-700"
-                    >
-                      {busy ? 'Forjando…' : `⚒️ Pagar e Forjar ${maxCraftable}x (${matched.goldCost * maxCraftable} 🪙)`}
-                    </button>
-                  )}
                   <button
                     onClick={() => setPlaced({})}
                     disabled={busy}

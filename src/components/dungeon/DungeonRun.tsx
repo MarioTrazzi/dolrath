@@ -191,6 +191,8 @@ interface Banner {
   key: number
   icon: string
   text: string
+  /** Não some sozinho — precisa de clique pra fechar (avisos que o jogador pode perder, ex: piloto desligado). */
+  sticky?: boolean
 }
 
 // Respostas das rotas servidor-autoritativas (/api/dungeon/run/*).
@@ -677,13 +679,13 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
     cd: Record<string, number>
     // 🐍 Golpes secundários de MONSTRO contra o jogador (ver MONSTER_SPECIAL_EFFECTS).
     poisoned: boolean                          // permanente até usar Antídoto: -4 HP/turno
-    bleedFrac: number; bleedTurns: number       // % do HP máx/turno, por N turnos
+    bleeding: boolean; bleedFrac: number        // permanente até usar Bandagem de Linho: % do HP máx/turno
     stunTurns: number                           // turnos do jogador perdidos (Raízes Rasteiras)
   }
   const FX0: CombatFx = {
     dmgDealtMult: 1, dmgDealtTurns: 0, dmgTakenMult: 1, dmgTakenTurns: 0, enemyDmgMult: 1, enemyDmgTurns: 0,
     evadeBuff: 0, evadeBuffTurns: 0, ignoreEvadeNext: false, amplifyNext: 1, counterNext: false, cd: {},
-    poisoned: false, bleedFrac: 0, bleedTurns: 0, stunTurns: 0,
+    poisoned: false, bleeding: false, bleedFrac: 0, stunTurns: 0,
   }
   const [combatFx, setCombatFx] = useState<CombatFx>(FX0)
   const combatFxRef = useRef(combatFx); combatFxRef.current = combatFx
@@ -715,11 +717,13 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
     later(() => setFloats(prev => prev.filter(f => f.id !== id)), 1500)
   }, [later])
 
-  const showBanner = useCallback((icon: string, text: string, duration = 2400) => {
+  const showBanner = useCallback((icon: string, text: string, duration = 2400, opts?: { sticky?: boolean }) => {
     bannerKey.current += 1
     const key = bannerKey.current
-    setBanner({ key, icon, text })
-    later(() => setBanner(prev => (prev?.key === key ? null : prev)), duration)
+    setBanner({ key, icon, text, sticky: opts?.sticky })
+    if (!opts?.sticky) {
+      later(() => setBanner(prev => (prev?.key === key ? null : prev)), duration)
+    }
   }, [later])
 
   const pushBattleEvent = useCallback((data: Omit<BattleEvent, 'id'>) => {
@@ -757,7 +761,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
         if (data.inventoryFull) {
           if (autoRef.current) {
             setAuto(false)
-            later(() => showBanner('🎒', 'Inventário cheio — piloto desligado. Abra espaço para voltar a farmar.', 3600), 400)
+            later(() => showBanner('🎒', 'Inventário cheio — piloto desligado. Abra espaço para voltar a farmar.', 3600, { sticky: true }), 400)
           } else {
             later(() => showBanner('🎒', 'Seu inventário está cheio! Itens encontrados não serão coletados.', 3200), 400)
           }
@@ -821,7 +825,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
       // Sem slot livre o farm vira queima de stamina — o piloto desliga sozinho.
       if (autoRef.current) {
         setAuto(false)
-        showBanner('🎒', 'Inventário cheio — piloto desligado. Abra espaço para voltar a farmar.', 3600)
+        showBanner('🎒', 'Inventário cheio — piloto desligado. Abra espaço para voltar a farmar.', 3600, { sticky: true })
       } else {
         showBanner('🎒', 'Inventário cheio! Alguns itens não foram coletados.')
       }
@@ -1250,14 +1254,19 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
     let dot = 0
     const dotLabels: string[] = []
     if (pfx.poisoned) { dot += 4; dotLabels.push('veneno') }
-    if (pfx.bleedTurns > 0) { dot += Math.max(1, Math.round(effMaxHp * pfx.bleedFrac)); dotLabels.push('sangramento') }
+    if (pfx.bleeding) { dot += Math.max(1, Math.round(effMaxHp * pfx.bleedFrac)); dotLabels.push('sangramento') }
     if (dot > 0) {
+      // Estimativa só para o texto/log — a atualização REAL de baixo é relativa
+      // de propósito: se um item (ex. Elixir Supremo) curou HP no mesmo turno,
+      // antes desta chamada, um `setHp(valorAbsoluto)` aqui apagaria a cura (as
+      // duas ficam no mesmo lote do React, sem re-render entre elas pra atualizar
+      // hpRef). Com `setHp(prev => ...)` a cura e o DoT compõem corretamente.
       const nh = Math.max(1, hpRef.current - dot)
       const lost = hpRef.current - nh
       if (lost > 0) {
         pushFloat(`-${lost} ☠️`, '#7c3aed')
         pushLog(`☠️ Você sofre ${lost} de dano contínuo (${dotLabels.join(' + ')})`)
-        setHp(nh)
+        setHp(prev => Math.max(1, prev - dot))
         // Anima o card a cada tique do DoT (veneno/sangramento) — antes o dano
         // acontecia sem nenhum efeito visível. Prioriza o veneno quando os dois
         // estão ativos (só cabe uma aura por vez no slot de battleEvent).
@@ -1271,7 +1280,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
       if (n.dmgTakenTurns > 0 && --n.dmgTakenTurns <= 0) n.dmgTakenMult = 1
       if (n.enemyDmgTurns > 0 && --n.enemyDmgTurns <= 0) n.enemyDmgMult = 1
       if (n.evadeBuffTurns > 0 && --n.evadeBuffTurns <= 0) n.evadeBuff = 0
-      if (n.bleedTurns > 0 && --n.bleedTurns <= 0) n.bleedFrac = 0
+      // Sangramento NÃO expira sozinho — permanente igual o veneno, só sai com Bandagem de Linho.
       for (const k in n.cd) if (n.cd[k] > 0) n.cd[k]--
       return n
     })
@@ -1302,7 +1311,9 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
       setHasRolled(false)
       const playerFirst = mine.total >= theirs.total
       showBanner(playerFirst ? '⚡' : '😈', playerFirst ? 'Você começa!' : `${monsterRef.current?.name} começa!`)
-      later(() => setDiceResults({}), 500)
+      // Limpa JUNTO com a troca de stage — senão o resultado do adversário fica
+      // "solto" (mini-dado) em cima do card dele até este later separado disparar.
+      setDiceResults({})
       later(() => {
         if (playerFirst) {
           setCurrentTurnId(character.id)
@@ -1619,7 +1630,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
       return
     }
     // 🩹 Bandagem de Linho: idem para o sangramento.
-    if (c.cure === 'bleed' && combatFxRef.current.bleedTurns <= 0) {
+    if (c.cure === 'bleed' && !combatFxRef.current.bleeding) {
       showBanner('✋', 'Você não está sangrando')
       return
     }
@@ -1653,7 +1664,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
       pushFloat('Curado ✨', '#22d3ee')
     }
     if (c.cure === 'bleed') {
-      setCombatFx(prev => ({ ...prev, bleedFrac: 0, bleedTurns: 0 }))
+      setCombatFx(prev => ({ ...prev, bleeding: false, bleedFrac: 0 }))
       pushFloat('Estancado 🩹', '#f87171')
     }
     pushLog(`🧪 Usou ${c.name}`)
@@ -1740,7 +1751,10 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
       setCombatFx(prev => ({ ...prev, counterNext: false }))
     }
     const newHp = Math.max(0, hpRef.current - inDmg)
-    later(() => setHp(newHp), 500)
+    // Aplicação RELATIVA (não o `newHp` absoluto): entre agora e os 500ms daqui,
+    // nada mais deve mexer no HP, mas se mexer (cura, DoT), a atualização funcional
+    // compõe certo em vez de sobrescrever — mesma classe de bug do tique de veneno.
+    later(() => setHp(prev => Math.max(0, prev - inDmg)), 500)
     if (newHp <= 0) {
       // 🪶 Poção de Reviver: consumida SOZINHA ao cair — volta com % do HP máx e a
       // luta continua (fase inimiga segue). É o que sustenta o farm automático.
@@ -1778,10 +1792,10 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
         later(() => pushBattleEvent({ kind: 'status', actorId: character.id, action: 'poison' }), 1100)
         pushLog(`☠️ ${proc.name} te envenenou! Perde ${proc.poisonDmg ?? 2} HP por turno até usar um Antídoto.`)
         showBanner('☠️', 'Envenenado!')
-      } else if (proc.effect === 'bleed') {
-        setCombatFx(prev => ({ ...prev, bleedFrac: proc.bleedFrac ?? 0.04, bleedTurns: proc.bleedTurns ?? 3 }))
+      } else if (proc.effect === 'bleed' && !dfx.bleeding) {
+        setCombatFx(prev => ({ ...prev, bleeding: true, bleedFrac: proc.bleedFrac ?? 0.04 }))
         later(() => pushBattleEvent({ kind: 'status', actorId: character.id, action: 'bleed' }), 1100)
-        pushLog(`🩸 ${proc.name} abriu um corte! Você está sangrando.`)
+        pushLog(`🩸 ${proc.name} abriu um corte! Você está sangrando até usar uma Bandagem de Linho.`)
       } else if (proc.effect === 'stun') {
         setCombatFx(prev => ({ ...prev, stunTurns: prev.stunTurns + (proc.stunTurns ?? 1) }))
         later(() => pushBattleEvent({ kind: 'status', actorId: character.id, action: 'stun' }), 1100)
@@ -1801,9 +1815,15 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
   const onMonsterKilled = async (m: ScaledMonster) => {
     // Remove o abatido do pacote (estado + ref) antes de escolher o próximo alvo.
     const remaining = packRef.current.filter(x => x.id !== m.id && x.hp > 0)
-    packRef.current = remaining
-    setPack(remaining)
     const willClear = remaining.length === 0
+    // Se é o ÚLTIMO do pacote, NÃO esvazia `pack` ainda — isso faria a arena trocar
+    // da cascata compacta pro card solo (maior) no meio da animação de queda, dando
+    // a impressão de "morre, levanta maior, morre de novo". `pack` só some lá embaixo,
+    // junto com `setMonster(null)`, no cleanup final (2800ms).
+    if (!willClear) {
+      packRef.current = remaining
+      setPack(remaining)
+    }
     // Só "encerra" o combate visualmente quando o nó limpa; senão o duelo segue.
     if (willClear) { setCombatEnded(true); setWinnerId(character.id) }
 
@@ -2450,11 +2470,20 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
                 animate={{ y: 0, opacity: 1, scale: 1 }}
                 exit={{ y: -15, opacity: 0 }}
                 transition={{ type: 'spring', stiffness: 260, damping: 18 }}
-                className="bg-black/80 backdrop-blur-md border rounded-2xl px-5 py-2.5 shadow-2xl"
+                className={`bg-black/80 backdrop-blur-md border rounded-2xl px-5 py-2.5 shadow-2xl flex items-center ${banner.sticky ? 'pointer-events-auto' : ''}`}
                 style={{ borderColor: dungeon.accentSoft, boxShadow: `0 0 30px ${dungeon.accentSoft}` }}
               >
                 <span className="text-lg mr-2">{banner.icon}</span>
                 <span className="text-white font-bold text-sm sm:text-base">{banner.text}</span>
+                {banner.sticky && (
+                  <button
+                    onClick={() => setBanner(prev => (prev?.key === banner.key ? null : prev))}
+                    className="ml-3 text-white/50 hover:text-white text-base leading-none"
+                    aria-label="Fechar aviso"
+                  >
+                    ✕
+                  </button>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
@@ -2488,7 +2517,7 @@ export default function DungeonRun({ dungeon, character, onExit, onRestart, init
                       (c.mp > 0 && c.hp === 0 && mpFull) ||
                       (c.hp > 0 && c.mp > 0 && hpFull && mpFull) ||
                       (c.cure === 'poison' && !combatFx.poisoned) ||
-                      (c.cure === 'bleed' && combatFx.bleedTurns <= 0) ||
+                      (c.cure === 'bleed' && !combatFx.bleeding) ||
                       (isBuff && phase !== 'combat') ||
                       c.revive > 0
                     return (

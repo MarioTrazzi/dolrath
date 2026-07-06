@@ -163,8 +163,10 @@ export default function InventoryPanel({
         </div>
       </div>
 
-      {/* Grade de itens */}
-      <div className="flex-1" style={{ padding: '2px 14px 8px' }}>
+      {/* Grade de itens — rola por dentro (min-h-0 é essencial: sem ele o flex-1
+          não encolhe abaixo do conteúdo e o overflow-hidden do painel corta as
+          linhas extras em vez de deixar rolar, quando o personagem tem muitos itens). */}
+      <div className="flex-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:hidden" style={{ padding: '2px 14px 8px', scrollbarWidth: 'none' }}>
         <CharacterItemGrid
           items={items}
           totalSlots={totalSlots}

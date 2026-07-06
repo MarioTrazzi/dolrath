@@ -110,6 +110,8 @@ export default function AlchemyBench({
   const animTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   // Os 3 vértices do triângulo (nome do ingrediente ou null).
   const [slots, setSlots] = useState<(string | null)[]>([null, null, null]);
+  // Quantidade escolhida para fabricar de uma vez (1..maxCraftable).
+  const [craftQty, setCraftQty] = useState(1);
   // Livro de receitas (modal) + popover de ingredientes ao passar o mouse.
   const [recipesOpen, setRecipesOpen] = useState(false);
   const [hover, setHover] = useState<HoverInfo | null>(null);
@@ -222,6 +224,11 @@ export default function AlchemyBench({
     }
     return Math.max(0, Math.min(99, n));
   }, [matchedRecipe, have, characterGold]);
+
+  // Mantém a quantidade escolhida dentro do que dá pra fabricar.
+  useEffect(() => {
+    setCraftQty((q) => Math.min(Math.max(1, q), Math.max(1, maxCraftable)));
+  }, [maxCraftable]);
 
   // Começar uma nova receita apaga o item transmutado que estava no centro.
   const clearCraftedResult = () => {
@@ -579,24 +586,57 @@ export default function AlchemyBench({
               )}
             </div>
 
+            {matchedRecipe && maxCraftable > 1 && (
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs text-white/50">Quantidade:</span>
+                <button
+                  type="button"
+                  onClick={() => setCraftQty((q) => Math.max(1, q - 1))}
+                  disabled={busy || craftQty <= 1}
+                  className="w-7 h-7 grid place-items-center rounded-lg bg-white/10 hover:bg-white/15 disabled:opacity-30 disabled:cursor-not-allowed text-white font-bold text-sm transition-colors"
+                >
+                  −
+                </button>
+                <input
+                  type="number"
+                  min={1}
+                  max={maxCraftable}
+                  value={craftQty}
+                  onChange={(e) => {
+                    const v = Math.round(Number(e.target.value));
+                    setCraftQty(Number.isFinite(v) ? Math.min(maxCraftable, Math.max(1, v)) : 1);
+                  }}
+                  disabled={busy}
+                  className="w-14 text-center rounded-lg bg-black/30 border border-white/10 py-1 text-sm text-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => setCraftQty((q) => Math.min(maxCraftable, q + 1))}
+                  disabled={busy || craftQty >= maxCraftable}
+                  className="w-7 h-7 grid place-items-center rounded-lg bg-white/10 hover:bg-white/15 disabled:opacity-30 disabled:cursor-not-allowed text-white font-bold text-sm transition-colors"
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCraftQty(maxCraftable)}
+                  disabled={busy || craftQty === maxCraftable}
+                  className="text-xs font-semibold text-amber-300 hover:text-amber-200 disabled:opacity-40 disabled:cursor-not-allowed underline underline-offset-2"
+                >
+                  máx {maxCraftable}
+                </button>
+              </div>
+            )}
+
             <div className="flex gap-2 mb-2">
               <button
-                onClick={() => handleTransmute(1)}
+                onClick={() => handleTransmute(craftQty)}
                 disabled={busy || !matchedRecipe || !selectedCharacterId}
+                title={matchedRecipe && craftQty > 1 ? `Gasta ${matchedRecipe.goldCost * craftQty} 🪙` : undefined}
                 className="flex-1 px-4 py-2.5 rounded-xl font-black text-sm text-white transition-all hover:scale-[1.02] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 bg-gradient-to-r from-emerald-600 to-teal-500"
               >
-                {busy ? 'Transmutando…' : '⚗️ Transmutar'}
+                {busy ? 'Transmutando…' : craftQty > 1 ? `⚗️ Transmutar ×${craftQty}` : '⚗️ Transmutar'}
               </button>
-              {matchedRecipe && maxCraftable > 1 && (
-                <button
-                  onClick={() => handleTransmute(maxCraftable)}
-                  disabled={busy || !selectedCharacterId}
-                  title={`Fabrica ${maxCraftable} de uma vez (gasta ${matchedRecipe.goldCost * maxCraftable} 🪙)`}
-                  className="px-4 py-2.5 rounded-xl font-black text-sm text-white transition-all hover:scale-[1.02] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 bg-gradient-to-r from-amber-600 to-orange-500"
-                >
-                  Fabricar ×{maxCraftable}
-                </button>
-              )}
               <button
                 onClick={() => { clearCraftedResult(); setSlots([null, null, null]); }}
                 disabled={busy || (filled.length === 0 && !craftedResult)}

@@ -320,7 +320,7 @@ export default function RepairBench({
   const selectedStats = selected ? formatItemStats(selected.item.stats ?? undefined, selected.item.type) : [];
 
   return (
-    <div className="relative h-full overflow-hidden rounded-2xl border-2 border-amber-500/40 bg-gradient-to-br from-amber-950/40 to-black/50 p-5 backdrop-blur-sm">
+    <div className="relative flex h-full flex-col overflow-hidden rounded-2xl border-2 border-amber-500/40 bg-gradient-to-br from-amber-950/40 to-black/50 p-5 backdrop-blur-sm">
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
         <h2 className="text-2xl font-black text-amber-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
           🔧 Bancada de Reparo
@@ -355,7 +355,7 @@ export default function RepairBench({
           🎒 Este personagem não possui equipamentos.
         </div>
       ) : (
-        <>
+        <div className="flex-1 min-h-0 overflow-y-auto pr-1 [&::-webkit-scrollbar]:hidden">
           {/* Inventário do personagem (estilo /inventory) */}
           <label className="block text-xs font-semibold text-amber-200/80 mb-2">
             Inventário do personagem — clique num item para reparar ou vender
@@ -690,7 +690,7 @@ export default function RepairBench({
               )}
             </div>
           )}
-        </>
+        </div>
       )}
 
       {/* Diálogo de aprimoramento (estilo BDO), partilhado com /inventory */}

@@ -2,14 +2,17 @@
 // FAZENDA SERVIDOR-AUTORITATIVA — núcleo compartilhado pelas rotas
 // /api/farm/{state,plant,harvest,well-collect,pen-feed}.
 //
-// Cada personagem tem sua fazenda: canteiros (FarmPlot kind='crop'),
-// um poço (kind='well') e um cercado (kind='pen'). O estado "pronto/crescendo"
+// A fazenda é GLOBAL da conta: os canteiros (FarmPlot kind='crop'), o poço
+// (kind='well') e o cercado (kind='pen') pertencem ao User, e todos os
+// personagens cultivam nos mesmos slots. O NÍVEL da fazenda deriva da SOMA do
+// farmXp de todos os personagens (todo mundo desenvolve a mesma fazenda); o XP
+// de cada ação é creditado no personagem que agiu. O estado "pronto/crescendo"
 // é DERIVADO dos timestamps na leitura (lazy, sem cron) — o campo state do
-// FarmPlot é só cache de conveniência. Ações custam stamina (FARM_ACTION_STAMINA);
-// o crescimento em si é grátis (a fazenda trabalha, não o personagem).
+// FarmPlot é só cache de conveniência. Colher/coletar/alimentar custam stamina
+// do personagem ativo; plantar e o crescimento em si são grátis.
 // ============================================================
 
-import type { Prisma, FarmPlot } from '@prisma/client'
+import type { Prisma } from '@prisma/client'
 import { prisma } from './prisma'
 import {
   CROPS,
@@ -57,17 +60,23 @@ export interface FarmState {
   stoneChance: number
 }
 
-/** Estado derivado da fazenda (cria o poço na primeira visita). */
-export async function getFarmState(characterId: string, farmXp: number, now: Date = new Date()): Promise<FarmState> {
-  const farmLevel = getProfessionLevel(farmXp)
-  const rows = await prisma.farmPlot.findMany({ where: { characterId } })
+/** XP de Fazenda da CONTA: soma do farmXp de todos os personagens do usuário. */
+export async function getUserFarmXp(userId: string): Promise<number> {
+  const agg = await prisma.character.aggregate({ where: { userId }, _sum: { farmXp: true } })
+  return agg._sum.farmXp ?? 0
+}
+
+/** Estado derivado da fazenda da conta (cria o poço na primeira visita). */
+export async function getFarmState(userId: string, userFarmXp: number, now: Date = new Date()): Promise<FarmState> {
+  const farmLevel = getProfessionLevel(userFarmXp)
+  const rows = await prisma.farmPlot.findMany({ where: { userId } })
   const bySlot = new Map(rows.map((r) => [r.slotIndex, r]))
 
   // Poço nasce ancorado na primeira visita (começa a gotejar dali).
   let well = bySlot.get(WELL_SLOT_INDEX)
   if (!well) {
     well = await prisma.farmPlot.create({
-      data: { characterId, slotIndex: WELL_SLOT_INDEX, kind: 'well', plantedAt: now, state: 'growing' },
+      data: { userId, slotIndex: WELL_SLOT_INDEX, kind: 'well', plantedAt: now, state: 'growing' },
     })
   }
 
@@ -96,7 +105,7 @@ export async function getFarmState(characterId: string, farmXp: number, now: Dat
   const penState: 'empty' | 'growing' | 'ready' = !penFed ? 'empty' : isPenReady(penFed, now) ? 'ready' : 'growing'
 
   return {
-    farm: getProfessionLevelInfo(farmXp),
+    farm: getProfessionLevelInfo(userFarmXp),
     unlockedPlots,
     plots,
     well: { pending: wellPending(well.plantedAt, now), cap: WELL.cap, intervalSeconds: WELL.intervalSeconds },
@@ -116,8 +125,8 @@ export async function getFarmState(characterId: string, farmXp: number, now: Dat
 }
 
 /**
- * Debita a stamina de uma AÇÃO de fazenda (plantar/colher/coletar/alimentar)
- * dentro da transação. Lança erro de validação quando não há stamina.
+ * Debita a stamina de uma AÇÃO de fazenda (colher/coletar/alimentar) dentro
+ * da transação. Lança erro de validação quando não há stamina.
  */
 export async function spendFarmActionStaminaTx(
   tx: Prisma.TransactionClient,
@@ -133,11 +142,4 @@ export async function spendFarmActionStaminaTx(
     data: { stamina: { decrement: cost }, staminaUpdatedAt: new Date() },
   })
   return c.stamina - cost
-}
-
-/** Linha do plot (ou null) — conveniência das rotas. */
-export async function findPlot(characterId: string, slotIndex: number): Promise<FarmPlot | null> {
-  return prisma.farmPlot.findUnique({
-    where: { characterId_slotIndex: { characterId, slotIndex } },
-  })
 }

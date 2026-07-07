@@ -32,8 +32,9 @@ export async function POST(req: Request) {
     const character = await regenAndPersist(rawCharacter)
 
     const result = await prisma.$transaction(async (tx) => {
+      // O poço é da fazenda da CONTA — quem coleta gasta a stamina e leva o XP.
       const well = await tx.farmPlot.findUnique({
-        where: { characterId_slotIndex: { characterId, slotIndex: WELL_SLOT_INDEX } },
+        where: { userId_slotIndex: { userId, slotIndex: WELL_SLOT_INDEX } },
       })
       const now = new Date()
       const pending = wellPending(well?.plantedAt ?? null, now)

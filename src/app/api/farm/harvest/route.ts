@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { regenAndPersist } from '@/lib/staminaServer'
-import { spendFarmActionStaminaTx } from '@/lib/farmServer'
+import { spendFarmActionStaminaTx, getUserFarmXp } from '@/lib/farmServer'
 import {
   getCropById, isCropReady, isPenReady, rollCropYield, PEN, PEN_SLOT_INDEX,
   farmStoneChance, rollFarmStoneShard, FARM_STONE_BONUS_XP, FARM_ACTION_STAMINA, FARM_HARVEST_STAMINA,
@@ -13,10 +13,12 @@ import { addHistoryEntry } from '@/lib/characterHistory'
 
 export const dynamic = 'force-dynamic'
 
-// 🌾 Colhe um canteiro pronto (ou o ciclo do cercado, slotIndex 101).
-// O servidor decide a quantidade e credita o farmXp; se o inventário não tem
-// espaço para a pilha, a colheita FALHA inteira (nada é perdido — libere
-// espaço e colha de novo).
+// 🌾 Colheita da fazenda da CONTA. Sem slotIndex (ou com slot de canteiro):
+// colhe TODOS os canteiros prontos de uma vez — 1⚡ por canteiro, XP e itens
+// para o personagem que clicou. Com slotIndex 101, colhe o ciclo do cercado.
+// Se a stamina não cobre todos, colhe o que der (o resto fica plantado); se o
+// inventário lotar no meio, para ali (nada é perdido — libere espaço e colha
+// de novo).
 export async function POST(req: Request) {
   const session = await auth()
   if (!session?.user?.id) {
@@ -26,110 +28,158 @@ export async function POST(req: Request) {
 
   try {
     const { characterId, slotIndex } = await req.json()
-    const slot = Number(slotIndex)
-    if (!characterId || !Number.isInteger(slot)) {
-      return NextResponse.json({ error: 'characterId e slotIndex são obrigatórios' }, { status: 400 })
+    if (!characterId) {
+      return NextResponse.json({ error: 'characterId é obrigatório' }, { status: 400 })
     }
+    const isPen = Number(slotIndex) === PEN_SLOT_INDEX
 
     const rawCharacter = await prisma.character.findFirst({ where: { id: characterId, userId } })
     if (!rawCharacter) {
       return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
     }
     const character = await regenAndPersist(rawCharacter)
-    const farmLevel = getProfessionLevel(character.farmXp)
+    const farmLevel = getProfessionLevel(await getUserFarmXp(userId))
 
     const result = await prisma.$transaction(async (tx) => {
-      const plot = await tx.farmPlot.findUnique({
-        where: { characterId_slotIndex: { characterId, slotIndex: slot } },
-      })
-      if (!plot?.plantedAt) {
-        throw new Error('Nada plantado aqui.')
-      }
-
-      let outputName: string
-      let qty: number
-      let farmXp: number
-
-      if (slot === PEN_SLOT_INDEX) {
-        if (!isPenReady(plot.plantedAt)) {
+      // ── Cercado (ciclo único, custo de AÇÃO normal) ─────────────────────
+      if (isPen) {
+        const pen = await tx.farmPlot.findUnique({
+          where: { userId_slotIndex: { userId, slotIndex: PEN_SLOT_INDEX } },
+        })
+        if (!pen?.plantedAt) {
+          throw new Error('Nada plantado aqui.')
+        }
+        if (!isPenReady(pen.plantedAt)) {
           throw new Error('Os animais ainda estão no ciclo. Volte mais tarde.')
         }
-        outputName = PEN.outputName
-        qty = PEN.yield
-        farmXp = PEN.farmXp
-      } else {
-        const crop = plot.cropId ? getCropById(plot.cropId) : undefined
-        if (!crop) {
-          throw new Error('Cultivo inválido neste canteiro.')
+        const ok = await addDropToInventoryTx(tx, characterId, { name: PEN.outputName, qty: PEN.yield })
+        if (!ok) {
+          throw new Error('Inventário cheio — libere um slot e colha de novo (nada foi perdido).')
         }
-        if (!isCropReady(plot.plantedAt, crop, farmLevel)) {
-          throw new Error('Este cultivo ainda está crescendo.')
+        const stamina = await spendFarmActionStaminaTx(tx, characterId, FARM_ACTION_STAMINA)
+        const updated = await tx.character.update({
+          where: { id: characterId },
+          data: { farmXp: { increment: PEN.farmXp } },
+          select: { farmXp: true },
+        })
+        await tx.farmPlot.update({ where: { id: pen.id }, data: { cropId: null, plantedAt: null, state: 'empty' } })
+        return {
+          items: [{ outputName: PEN.outputName, qty: PEN.yield }],
+          stoneNames: [] as string[],
+          xpGained: PEN.farmXp,
+          harvested: 1,
+          skippedNoStamina: 0,
+          skippedNoSpace: 0,
+          totalFarmXp: updated.farmXp,
+          stamina,
+          staminaSpent: FARM_ACTION_STAMINA,
         }
-        outputName = crop.outputName
-        qty = rollCropYield(crop)
-        farmXp = crop.farmXp
       }
 
-      const ok = await addDropToInventoryTx(tx, characterId, { name: outputName, qty })
-      if (!ok) {
-        throw new Error('Inventário cheio — libere um slot e colha de novo (nada foi perdido).')
+      // ── Canteiros: colhe todos os prontos, 1⚡ cada ─────────────────────
+      const rows = await tx.farmPlot.findMany({
+        where: { userId, kind: 'crop', plantedAt: { not: null } },
+        orderBy: { slotIndex: 'asc' },
+      })
+      const ready = rows.filter((r) => {
+        const crop = r.cropId ? getCropById(r.cropId) : undefined
+        return !!crop && !!r.plantedAt && isCropReady(r.plantedAt, crop, farmLevel)
+      })
+      if (ready.length === 0) {
+        throw new Error('Nenhum canteiro pronto para colher.')
       }
 
-      // 💎 Canteiro v2: colheita de cultivo (não o cercado) tem chance rara de
-      // render um Estilhaço de Pedra Negra junto — silenciosamente ignorado se
-      // o inventário estiver cheio (o cultivo em si já foi entregue acima).
-      let gotStone = false
-      let stoneName: string | undefined
-      if (slot !== PEN_SLOT_INDEX) {
-        const chance = farmStoneChance(farmLevel)
-        if (Math.random() * 100 < chance) {
+      const affordable = Math.floor(character.stamina / FARM_HARVEST_STAMINA)
+      if (affordable <= 0) {
+        throw new Error(`Stamina insuficiente (colher custa ${FARM_HARVEST_STAMINA}⚡ por canteiro).`)
+      }
+
+      const qtyByOutput: Record<string, number> = {}
+      const stoneNames: string[] = []
+      let xpGained = 0
+      let harvested = 0
+      let skippedNoSpace = 0
+      const stoneChance = farmStoneChance(farmLevel)
+
+      for (const plot of ready.slice(0, affordable)) {
+        const crop = getCropById(plot.cropId!)!
+        const qty = rollCropYield(crop)
+        const ok = await addDropToInventoryTx(tx, characterId, { name: crop.outputName, qty })
+        if (!ok) {
+          // Inventário lotou: o que já foi colhido fica; este canteiro (e os
+          // seguintes) continuam plantados e prontos.
+          skippedNoSpace = ready.length - harvested
+          break
+        }
+        qtyByOutput[crop.outputName] = (qtyByOutput[crop.outputName] ?? 0) + qty
+        xpGained += crop.farmXp
+
+        // 💎 Chance rara de Estilhaço de Pedra Negra por canteiro colhido —
+        // silenciosamente ignorado se o inventário estiver cheio.
+        if (Math.random() * 100 < stoneChance) {
           const candidate = rollFarmStoneShard()
           const stoneOk = await addDropToInventoryTx(tx, characterId, { name: candidate, qty: 1 })
           if (stoneOk) {
-            gotStone = true
-            stoneName = candidate
-            farmXp += FARM_STONE_BONUS_XP
+            stoneNames.push(candidate)
+            xpGained += FARM_STONE_BONUS_XP
           }
         }
+
+        await tx.farmPlot.update({
+          where: { id: plot.id },
+          data: { cropId: null, plantedAt: null, state: 'empty' },
+        })
+        harvested++
       }
 
-      const staminaCost = slot === PEN_SLOT_INDEX ? FARM_ACTION_STAMINA : FARM_HARVEST_STAMINA
-      const stamina = await spendFarmActionStaminaTx(tx, characterId, staminaCost)
+      if (harvested === 0) {
+        throw new Error('Inventário cheio — libere um slot e colha de novo (nada foi perdido).')
+      }
 
+      const staminaSpent = harvested * FARM_HARVEST_STAMINA
+      const stamina = await spendFarmActionStaminaTx(tx, characterId, staminaSpent)
       const updated = await tx.character.update({
         where: { id: characterId },
-        data: { farmXp: { increment: farmXp } },
+        data: { farmXp: { increment: xpGained } },
         select: { farmXp: true },
       })
-      await tx.farmPlot.update({
-        where: { id: plot.id },
-        data: { cropId: null, plantedAt: null, state: 'empty' },
-      })
 
-      return { outputName, qty, farmXp, totalFarmXp: updated.farmXp, stamina, gotStone, stoneName }
+      return {
+        items: Object.entries(qtyByOutput).map(([outputName, qty]) => ({ outputName, qty })),
+        stoneNames,
+        xpGained,
+        harvested,
+        skippedNoStamina: Math.max(0, ready.length - harvested - skippedNoSpace),
+        skippedNoSpace,
+        totalFarmXp: updated.farmXp,
+        stamina,
+        staminaSpent,
+      }
     })
 
+    const itemsDesc = result.items.map((i) => `${i.qty}× ${i.outputName}`).join(', ')
     addHistoryEntry({
       characterId,
       activityType: 'ITEM_GAINED',
-      description: result.gotStone
-        ? `🌾 Colheu ${result.qty}× ${result.outputName} + 💎 ${result.stoneName} (+${result.farmXp} XP de Fazenda).`
-        : `🌾 Colheu ${result.qty}× ${result.outputName} (+${result.farmXp} XP de Fazenda).`,
+      description: result.stoneNames.length > 0
+        ? `🌾 Colheu ${itemsDesc} + 💎 ${result.stoneNames.join(', ')} (+${result.xpGained} XP de Fazenda).`
+        : `🌾 Colheu ${itemsDesc} (+${result.xpGained} XP de Fazenda).`,
     }).catch(() => {})
 
     return NextResponse.json({
-      slotIndex: slot,
-      outputName: result.outputName,
-      qty: result.qty,
-      xpGained: result.farmXp,
-      farm: getProfessionLevelInfo(result.totalFarmXp),
+      items: result.items,
+      stoneNames: result.stoneNames,
+      xpGained: result.xpGained,
+      harvested: result.harvested,
+      skippedNoStamina: result.skippedNoStamina,
+      skippedNoSpace: result.skippedNoSpace,
+      staminaSpent: result.staminaSpent,
+      farm: getProfessionLevelInfo(await getUserFarmXp(userId)),
       stamina: result.stamina,
-      gotStone: result.gotStone,
-      stoneName: result.stoneName,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Erro interno do servidor'
-    const isValidation = /insuficiente|Nada plantado|crescendo|ciclo|cheio|inválido/i.test(message)
+    const isValidation = /insuficiente|Nada plantado|Nenhum canteiro|crescendo|ciclo|cheio|inválido/i.test(message)
     if (!isValidation) console.error('Error harvesting:', error)
     return NextResponse.json({ error: message }, { status: isValidation ? 400 : 500 })
   }

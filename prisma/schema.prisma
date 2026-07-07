@@ -125,6 +125,7 @@ model User {
   itemNfts      ItemNft[]
   dungeonRuns   DungeonRun[]
   gatheringSessions GatheringSession[]
+  farmPlots     FarmPlot[]
 }
 
 model UserInventory {
@@ -196,7 +197,6 @@ model Character {
   dungeonRuns   DungeonRun[]
   dungeonProgress DungeonProgress[]
   gatheringSessions GatheringSession[]
-  farmPlots     FarmPlot[]
 
   // On-chain payment for creation (testnet: fixed DOL fee; mainnet: will be oracle-priced)
   creationTxHash String?         @unique
@@ -418,13 +418,14 @@ model GatheringSession {
   @@index([characterId, status])
 }
 
-// 🌾 Lote da FAZENDA do personagem. kind='crop' usa cropId+plantedAt (estado
-// growing/ready derivado lazy do tempo); kind='well'/'pen' usam plantedAt como
-// âncora de produção contínua/ciclo. Sem cron: tudo computado na leitura.
+// 🌾 Lote da FAZENDA — GLOBAL da conta (todos os personagens cultivam a mesma).
+// kind='crop' usa cropId+plantedAt (estado growing/ready derivado lazy do tempo);
+// kind='well'/'pen' usam plantedAt como âncora de produção contínua/ciclo.
+// Sem cron: tudo computado na leitura.
 model FarmPlot {
   id          String    @id @default(cuid())
-  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
-  characterId String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
   slotIndex   Int                           // posição no grid da fazenda
   kind        String                        // 'crop' | 'well' | 'pen'
   cropId      String?                       // id da semente plantada (kind='crop') ou ciclo do cercado
@@ -433,8 +434,8 @@ model FarmPlot {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  @@unique([characterId, slotIndex])
-  @@index([characterId])
+  @@unique([userId, slotIndex])
+  @@index([userId])
 }
 
 // Pagamento on-chain (DOL → tesouraria) consumido por uma regeração de imagem

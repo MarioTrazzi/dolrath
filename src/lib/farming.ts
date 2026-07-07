@@ -12,8 +12,10 @@
 //  - CERCADO (kind='pen', nível 5): consome 1 Ração e devolve Couro após um
 //    ciclo. É a fonte renovável de couro (a masmorra/bosque seguem dropando).
 //
-// Plantar/colher custa stamina de AÇÃO; o crescimento em si é grátis — é a
-// fazenda trabalhando, não o personagem. XP de Fazenda vem da colheita.
+// A fazenda é GLOBAL da conta: todos os personagens plantam/colhem nos mesmos
+// canteiros, e o nível de Fazenda é a soma do farmXp de todos eles. Plantar é
+// grátis (só XP para quem planta); COLHER é a ação que custa stamina — 1⚡ por
+// canteiro para o personagem que clicou, que também leva o XP da colheita.
 
 import { farmGrowthMult } from './professionSystem';
 
@@ -106,11 +108,13 @@ export const PEN = {
 /** Stamina cobrada por AÇÃO na fazenda (coletar poço, alimentar/colher cercado). */
 export const FARM_ACTION_STAMINA = 2;
 
-/** Stamina de plantar um canteiro (canteiro v2, mockup Fazenda.html). */
-export const FARM_PLANT_STAMINA = 2;
-
-/** Stamina de colher um canteiro pronto (mais barato que plantar). */
+/** Stamina por CANTEIRO colhido (a colheita pega todos os prontos de uma vez). */
 export const FARM_HARVEST_STAMINA = 1;
+
+/** XP de Fazenda de PLANTAR (grátis em stamina — o custo mora na colheita). */
+export function cropPlantXp(crop: CropDef): number {
+  return Math.ceil(crop.farmXp / 2);
+}
 
 /**
  * Chance (%) de a colheita de um canteiro render um Estilhaço de Pedra Negra

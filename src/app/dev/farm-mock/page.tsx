@@ -2,10 +2,14 @@
 
 // Página DEV: valida o layout da Fazenda sem DB/auth — estado local com
 // crescimento ACELERADO (segundos em vez de horas). Espírito do /dev/dungeon-mock.
+// Fazenda global: plantar é grátis (+XP), colher pega TODOS os prontos (1⚡ cada).
 
 import { useEffect, useState } from 'react'
 import { FarmBoard, type FarmVM, type HarvestResultVM } from '@/components/farm/FarmBoard'
-import { CROPS, rollCropYield, farmStoneChance, rollFarmStoneShard, FARM_STONE_BONUS_XP, PEN } from '@/lib/farming'
+import {
+  CROPS, rollCropYield, farmStoneChance, rollFarmStoneShard, cropPlantXp,
+  FARM_STONE_BONUS_XP, FARM_HARVEST_STAMINA, PEN,
+} from '@/lib/farming'
 import { getProfessionLevelInfo, farmPlotCount } from '@/lib/professionSystem'
 
 const MOCK_GROW_SECONDS = 10 // todo cultivo/ciclo fica pronto em 10s
@@ -22,7 +26,7 @@ const initialVm = (): FarmVM => {
     })),
     well: { pending: 4, cap: 12, intervalSeconds: 1800 },
     pen: { unlocked: true, minLevel: 5, state: 'empty', secondsLeft: 0, feedName: 'Ração', outputName: 'Couro', yield: PEN.yield },
-    inputCounts: { 'Semente de Trigo': 3, 'Semente de Erva Medicinal': 2, 'Semente de Linho': 1, 'Ração': 2 },
+    inputCounts: { 'Semente de Trigo': 5, 'Semente de Erva Medicinal': 3, 'Semente de Linho': 2, 'Ração': 2 },
     stamina: 88,
     maxStamina: 100,
     actionStamina: 2,
@@ -59,7 +63,7 @@ export default function FarmMockPage() {
       <div className="max-w-4xl mx-auto">
         <h1 className="text-2xl font-black text-white text-center mb-1">🌾 Fazenda — MOCK</h1>
         <p className="text-white/40 text-xs text-center mb-6">
-          Crescimento acelerado: {MOCK_GROW_SECONDS}s (real: horas) · Nv. {MOCK_FARM_LEVEL} de Fazenda · sem DB
+          Crescimento acelerado: {MOCK_GROW_SECONDS}s (real: horas) · Nv. {MOCK_FARM_LEVEL} de Fazenda · fazenda global · sem DB
         </p>
 
         {log.length > 0 && (
@@ -83,9 +87,9 @@ export default function FarmMockPage() {
           vm={vm}
           onPlant={(slotIndex, cropId) => {
             const crop = CROPS[cropId as keyof typeof CROPS]
+            const xp = cropPlantXp(crop)
             setVm((prev) => ({
               ...prev,
-              stamina: prev.stamina - prev.actionStamina,
               inputCounts: { ...prev.inputCounts, [crop.seedName]: Math.max(0, (prev.inputCounts[crop.seedName] ?? 0) - 1) },
               plots: prev.plots.map((p) =>
                 p.slotIndex === slotIndex
@@ -93,34 +97,53 @@ export default function FarmMockPage() {
                   : p
               ),
             }))
-            push(`🫘 Plantou ${crop.outputName}`)
+            push(`🫘 Plantou ${crop.outputName} (grátis · +${xp} XP)`)
           }}
-          onHarvest={async (slotIndex): Promise<HarvestResultVM> => {
+          onHarvest={async (slotIndex?: number): Promise<HarvestResultVM> => {
             if (slotIndex === 101) {
               setVm((prev) => ({ ...prev, stamina: prev.stamina - prev.actionStamina, pen: { ...prev.pen, state: 'empty', secondsLeft: 0 } }))
               push(`🧺 Colheu ${PEN.yield}× Couro (+${PEN.farmXp} XP)`)
-              return { outputName: PEN.outputName, qty: PEN.yield, xpGained: PEN.farmXp }
+              return { items: [{ outputName: PEN.outputName, qty: PEN.yield }], xpGained: PEN.farmXp, harvested: 1 }
             }
 
-            const plot = vm.plots.find((p) => p.slotIndex === slotIndex)
-            const crop = plot?.cropId ? CROPS[plot.cropId as keyof typeof CROPS] : null
-            if (!crop) throw new Error('Cultivo inválido neste canteiro.')
+            // Colhe TODOS os prontos, limitado pela stamina (1⚡ por canteiro).
+            const ready = vm.plots.filter((p) => p.state === 'ready' && p.cropId)
+            if (ready.length === 0) throw new Error('Nenhum canteiro pronto para colher.')
+            const affordable = Math.floor(vm.stamina / FARM_HARVEST_STAMINA)
+            if (affordable <= 0) throw new Error('Stamina insuficiente.')
+            const toHarvest = ready.slice(0, affordable)
 
-            const qty = rollCropYield(crop)
-            const gotStone = Math.random() * 100 < farmStoneChance(vm.farm.level)
-            const stoneName = gotStone ? rollFarmStoneShard() : undefined
-            const xpGained = crop.farmXp + (gotStone ? FARM_STONE_BONUS_XP : 0)
+            const qtyByOutput: Record<string, number> = {}
+            const stoneNames: string[] = []
+            let xpGained = 0
+            for (const p of toHarvest) {
+              const crop = CROPS[p.cropId as keyof typeof CROPS]
+              qtyByOutput[crop.outputName] = (qtyByOutput[crop.outputName] ?? 0) + rollCropYield(crop)
+              xpGained += crop.farmXp
+              if (Math.random() * 100 < farmStoneChance(vm.farm.level)) {
+                stoneNames.push(rollFarmStoneShard())
+                xpGained += FARM_STONE_BONUS_XP
+              }
+            }
 
+            const harvestedSlots = new Set(toHarvest.map((p) => p.slotIndex))
             setVm((prev) => ({
               ...prev,
-              stamina: prev.stamina - prev.actionStamina,
+              stamina: prev.stamina - toHarvest.length * FARM_HARVEST_STAMINA,
               plots: prev.plots.map((p) =>
-                p.slotIndex === slotIndex ? { ...p, cropId: null, state: 'empty', secondsLeft: 0, outputName: null } : p
+                harvestedSlots.has(p.slotIndex) ? { ...p, cropId: null, state: 'empty', secondsLeft: 0, outputName: null } : p
               ),
             }))
-            push(gotStone ? `🧺 Colheu ${qty}× ${crop.outputName} + 💎 ${stoneName} (+${xpGained} XP)` : `🧺 Colheu ${qty}× ${crop.outputName} (+${xpGained} XP)`)
+            const itemsDesc = Object.entries(qtyByOutput).map(([n, q]) => `${q}× ${n}`).join(', ')
+            push(stoneNames.length > 0 ? `🧺 Colheu ${itemsDesc} + 💎 ${stoneNames.join(', ')} (+${xpGained} XP)` : `🧺 Colheu ${itemsDesc} (+${xpGained} XP)`)
 
-            return { outputName: crop.outputName, qty, xpGained, gotStone, stoneName }
+            return {
+              items: Object.entries(qtyByOutput).map(([outputName, qty]) => ({ outputName, qty })),
+              xpGained,
+              stoneNames,
+              harvested: toHarvest.length,
+              skippedNoStamina: ready.length - toHarvest.length,
+            }
           }}
           onWellCollect={() => {
             setVm((prev) => ({ ...prev, stamina: prev.stamina - prev.actionStamina, well: { ...prev.well, pending: 0 } }))

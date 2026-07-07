@@ -2,12 +2,14 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { regenAndPersist } from '@/lib/staminaServer'
-import { getFarmState } from '@/lib/farmServer'
+import { getFarmState, getUserFarmXp } from '@/lib/farmServer'
 import { freeInventorySlots } from '@/lib/inventoryMutations'
 
 export const dynamic = 'force-dynamic'
 
-// 🌾 Estado derivado da fazenda do personagem (canteiros + poço + cercado).
+// 🌾 Estado derivado da fazenda da CONTA (canteiros + poço + cercado, globais
+// para todos os personagens). O characterId é o personagem ATIVO na página:
+// dele vêm a stamina exibida, as sementes/ração e o aviso de inventário cheio.
 // Tudo computado lazy dos timestamps — esta rota não muda nada além de criar
 // o poço na primeira visita e aplicar o regen passivo de stamina.
 export async function GET(req: Request) {
@@ -30,9 +32,10 @@ export async function GET(req: Request) {
     }
     const character = await regenAndPersist(rawCharacter)
 
-    const farm = await getFarmState(characterId, character.farmXp)
+    const farm = await getFarmState(userId, await getUserFarmXp(userId))
 
-    // Sementes e Ração disponíveis, para a UI habilitar plantio/alimentação.
+    // Sementes e Ração disponíveis (do personagem ativo), para a UI habilitar
+    // plantio/alimentação.
     const inputs = await prisma.characterInventory.findMany({
       where: { characterId, item: { type: 'CONSUMABLE' } },
       include: { item: { select: { name: true, stats: true } } },

@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { regenAndPersist } from '@/lib/staminaServer'
 import { spendFarmActionStaminaTx } from '@/lib/farmServer'
 import { PEN, PEN_SLOT_INDEX } from '@/lib/farming'
+import { getUserFarmXp } from '@/lib/farmServer'
 import { getProfessionLevel, FARM_PEN_MIN_LEVEL } from '@/lib/professionSystem'
 
 export const dynamic = 'force-dynamic'
@@ -29,7 +30,8 @@ export async function POST(req: Request) {
     }
     const character = await regenAndPersist(rawCharacter)
 
-    if (getProfessionLevel(character.farmXp) < FARM_PEN_MIN_LEVEL) {
+    // O cercado destrava pelo nível da fazenda da CONTA (soma do farmXp).
+    if (getProfessionLevel(await getUserFarmXp(userId)) < FARM_PEN_MIN_LEVEL) {
       return NextResponse.json(
         { error: `O cercado destrava no nível ${FARM_PEN_MIN_LEVEL} de Fazenda.` },
         { status: 403 }
@@ -38,7 +40,7 @@ export async function POST(req: Request) {
 
     const result = await prisma.$transaction(async (tx) => {
       const pen = await tx.farmPlot.findUnique({
-        where: { characterId_slotIndex: { characterId, slotIndex: PEN_SLOT_INDEX } },
+        where: { userId_slotIndex: { userId, slotIndex: PEN_SLOT_INDEX } },
       })
       if (pen?.plantedAt) {
         throw new Error('O cercado já está num ciclo. Colha o couro quando terminar.')
@@ -66,7 +68,7 @@ export async function POST(req: Request) {
       const plot = pen
         ? await tx.farmPlot.update({ where: { id: pen.id }, data: { plantedAt: now, state: 'growing' } })
         : await tx.farmPlot.create({
-            data: { characterId, slotIndex: PEN_SLOT_INDEX, kind: 'pen', plantedAt: now, state: 'growing' },
+            data: { userId, slotIndex: PEN_SLOT_INDEX, kind: 'pen', plantedAt: now, state: 'growing' },
           })
       return { plot, stamina }
     })

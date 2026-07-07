@@ -1,16 +1,16 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
-import { regenAndPersist } from '@/lib/staminaServer'
-import { spendFarmActionStaminaTx } from '@/lib/farmServer'
-import { getCropById, FARM_PLANT_STAMINA } from '@/lib/farming'
+import { getUserFarmXp } from '@/lib/farmServer'
+import { getCropById, cropPlantXp } from '@/lib/farming'
 import { farmPlotCount, getProfessionLevel } from '@/lib/professionSystem'
 import { isSeedItem } from '@/lib/itemCatalog'
 
 export const dynamic = 'force-dynamic'
 
-// 🌾 Planta uma semente num canteiro vazio. Consome 1 semente do inventário +
-// stamina da ação; o crescimento corre sozinho (lazy, por timestamp).
+// 🌾 Planta uma semente num canteiro vazio da fazenda da CONTA. Consome 1
+// semente do inventário do personagem ativo e credita um XP pequeno a ele —
+// plantar NÃO custa stamina (o custo mora na colheita: 1⚡ por canteiro).
 export async function POST(req: Request) {
   const session = await auth()
   if (!session?.user?.id) {
@@ -30,20 +30,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Cultivo inválido' }, { status: 400 })
     }
 
-    const rawCharacter = await prisma.character.findFirst({ where: { id: characterId, userId } })
-    if (!rawCharacter) {
+    const character = await prisma.character.findFirst({ where: { id: characterId, userId } })
+    if (!character) {
       return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
     }
-    const character = await regenAndPersist(rawCharacter)
 
-    const unlocked = farmPlotCount(getProfessionLevel(character.farmXp))
+    const unlocked = farmPlotCount(getProfessionLevel(await getUserFarmXp(userId)))
     if (slot < 0 || slot >= unlocked) {
-      return NextResponse.json({ error: `Canteiro bloqueado (você tem ${unlocked}).` }, { status: 403 })
+      return NextResponse.json({ error: `Canteiro bloqueado (a fazenda tem ${unlocked}).` }, { status: 403 })
     }
 
+    const plantXp = cropPlantXp(crop)
     const result = await prisma.$transaction(async (tx) => {
       const existing = await tx.farmPlot.findUnique({
-        where: { characterId_slotIndex: { characterId, slotIndex: slot } },
+        where: { userId_slotIndex: { userId, slotIndex: slot } },
       })
       if (existing?.plantedAt) {
         throw new Error('Este canteiro já está plantado.')
@@ -65,7 +65,10 @@ export async function POST(req: Request) {
         await tx.characterInventory.delete({ where: { id: seedRow.id } })
       }
 
-      const stamina = await spendFarmActionStaminaTx(tx, characterId, FARM_PLANT_STAMINA)
+      await tx.character.update({
+        where: { id: characterId },
+        data: { farmXp: { increment: plantXp } },
+      })
 
       const now = new Date()
       const plot = existing
@@ -74,16 +77,16 @@ export async function POST(req: Request) {
             data: { kind: 'crop', cropId: crop.id, plantedAt: now, state: 'growing' },
           })
         : await tx.farmPlot.create({
-            data: { characterId, slotIndex: slot, kind: 'crop', cropId: crop.id, plantedAt: now, state: 'growing' },
+            data: { userId, slotIndex: slot, kind: 'crop', cropId: crop.id, plantedAt: now, state: 'growing' },
           })
-      return { plot, stamina }
+      return { plot }
     })
 
     return NextResponse.json({
       slotIndex: slot,
       cropId: crop.id,
       plantedAt: result.plot.plantedAt,
-      stamina: result.stamina,
+      xpGained: plantXp,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Erro interno do servidor'

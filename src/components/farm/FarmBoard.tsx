@@ -9,10 +9,14 @@
 // de plantar (em vez de escolher por slot), e colher abre um dialog com timer
 // de colheita — que também é onde a chance rara de Estilhaço de Pedra Negra
 // (💎) é revelada.
+//
+// v3 (fazenda global): a fazenda é da CONTA — plantar é grátis (+XP) e a
+// colheita pega TODOS os canteiros prontos de uma vez, 1⚡ por canteiro para
+// o personagem ativo (que leva itens e XP).
 
 import { useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CROPS, cropGrowSeconds, FARM_PLANT_STAMINA, FARM_HARVEST_STAMINA, type CropDef } from '@/lib/farming'
+import { CROPS, cropGrowSeconds, FARM_HARVEST_STAMINA, type CropDef } from '@/lib/farming'
 import { farmPlotUnlockLevel, FARM_TOTAL_PLOTS, type ProfessionLevelInfo } from '@/lib/professionSystem'
 import { GatherItemThumb, ProfessionBar } from '@/components/gathering/GatheringPanel'
 
@@ -49,11 +53,14 @@ export interface FarmVM {
 }
 
 export interface HarvestResultVM {
-  outputName: string
-  qty: number
+  /** Itens colhidos, agregados por nome (a colheita pega todos os canteiros prontos). */
+  items: { outputName: string; qty: number }[]
   xpGained: number
-  gotStone?: boolean
-  stoneName?: string
+  stoneNames?: string[]
+  harvested: number
+  /** Canteiros prontos que ficaram para trás (stamina/inventário não cobriram). */
+  skippedNoStamina?: number
+  skippedNoSpace?: number
 }
 
 const FLAVOR = [
@@ -173,18 +180,17 @@ function PlotCell({
 }
 
 // ============================================================
-// Dialog de colheita (confirm → working → done)
+// Dialog de colheita (confirm → working → done) — colhe TODOS os prontos
 // ============================================================
 
 function HarvestDialog({
-  slotIndex, plot, stamina, stoneChance, busy, onHarvest, onClose,
+  readyPlots, stamina, stoneChance, busy, onHarvest, onClose,
 }: {
-  slotIndex: number
-  plot: FarmPlotVM
+  readyPlots: FarmPlotVM[]
   stamina: number
   stoneChance: number
   busy?: boolean
-  onHarvest: (slotIndex: number) => Promise<HarvestResultVM>
+  onHarvest: () => Promise<HarvestResultVM>
   onClose: () => void
 }) {
   const [phase, setPhase] = useState<'confirm' | 'working' | 'done' | 'error'>('confirm')
@@ -192,20 +198,34 @@ function HarvestDialog({
   const [result, setResult] = useState<HarvestResultVM | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
-  // Instantâneo do plot no momento em que o dialog abriu: a colheita real já
-  // limpa o slot (cropId: null) assim que o servidor responde, bem antes do
-  // timer cosmético de "working" terminar — sem este snapshot o `plot` (prop
-  // ao vivo) fica vazio no meio da animação e o dialog desaparece sozinho.
-  const [snapshotPlot] = useState(plot)
-  const crop = snapshotPlot.cropId ? (CROPS as Record<string, CropDef>)[snapshotPlot.cropId] : null
-  if (!crop) return null
+  // Instantâneo dos canteiros prontos quando o dialog abriu: a colheita real
+  // já limpa os slots assim que o servidor responde, bem antes do timer
+  // cosmético de "working" terminar — sem este snapshot a lista (prop ao vivo)
+  // esvazia no meio da animação e o dialog desaparece sozinho.
+  const [snapshot] = useState(readyPlots)
+  const readyCrops = useMemo(() => {
+    const byId = new Map<string, { crop: CropDef; count: number }>()
+    for (const p of snapshot) {
+      const crop = p.cropId ? (CROPS as Record<string, CropDef>)[p.cropId] : null
+      if (!crop) continue
+      const entry = byId.get(crop.id) ?? { crop, count: 0 }
+      entry.count++
+      byId.set(crop.id, entry)
+    }
+    return Array.from(byId.values())
+  }, [snapshot])
+  const readyCount = snapshot.length
+  // Quanto a stamina do personagem ativo cobre (o servidor aplica o mesmo corte).
+  const harvestable = Math.min(readyCount, Math.floor(stamina / FARM_HARVEST_STAMINA))
+  const cost = harvestable * FARM_HARVEST_STAMINA
+  if (readyCount === 0) return null
 
   const start = async () => {
     setPhase('working')
     const flavorTimer = setInterval(() => setFlavorIdx((i) => (i + 1) % FLAVOR.length), 700)
     try {
       const [res] = await Promise.all([
-        onHarvest(slotIndex),
+        onHarvest(),
         new Promise((r) => setTimeout(r, HARVEST_ANIM_MS)),
       ])
       clearInterval(flavorTimer)
@@ -232,36 +252,49 @@ function HarvestDialog({
       >
         {phase === 'confirm' && (
           <div className="text-center">
-            <div className="text-4xl mb-2">{crop.emoji}</div>
-            <h2 className="text-white font-black text-lg mb-1">{crop.outputName} pronta!</h2>
-            <p className="text-white/50 text-xs mb-4">
-              Rende {crop.yieldMin}–{crop.yieldMax}× {crop.outputName} · −{FARM_HARVEST_STAMINA}⚡
+            <div className="text-4xl mb-2">🧺</div>
+            <h2 className="text-white font-black text-lg mb-1">
+              {readyCount} canteiro{readyCount > 1 ? 's' : ''} pronto{readyCount > 1 ? 's' : ''}!
+            </h2>
+            <div className="flex flex-col gap-1.5 mb-3">
+              {readyCrops.map(({ crop, count }) => (
+                <div key={crop.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-xs">
+                  <span className="text-white/85">{crop.emoji} {crop.outputName}</span>
+                  <span className="text-white/50">{count}× canteiro · rende {crop.yieldMin}–{crop.yieldMax} cada</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-white/50 text-xs mb-3">
+              Colher tudo custa <span className="font-bold text-white/80">−{FARM_HARVEST_STAMINA}⚡ por canteiro</span>
+              {harvestable < readyCount && harvestable > 0 && (
+                <> — sua stamina cobre <span className="font-bold text-amber-300">{harvestable} de {readyCount}</span> (o resto fica plantado)</>
+              )}
             </p>
             <div className="rounded-xl border border-fuchsia-400/25 bg-fuchsia-500/10 px-3 py-2 mb-4 text-[11px] text-fuchsia-200/90">
-              💎 Chance rara de Estilhaço de Pedra Negra: <span className="font-bold">{stoneChance}%</span>
+              💎 Chance de Estilhaço de Pedra Negra por canteiro: <span className="font-bold">{stoneChance}%</span>
             </div>
             <div className="flex gap-2">
               <button onClick={onClose} className="flex-1 rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 text-white/70 text-sm font-bold py-3 transition-all">
-                Deixar plantada
+                Deixar plantadas
               </button>
               <button
                 onClick={start}
-                disabled={busy || stamina < FARM_HARVEST_STAMINA}
+                disabled={busy || harvestable <= 0}
                 className="flex-1 rounded-lg text-white text-sm font-black py-3 transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-emerald-600 hover:bg-emerald-500"
               >
-                Colher · −{FARM_HARVEST_STAMINA}⚡
+                Colher {harvestable > 0 ? harvestable : ''} · −{cost}⚡
               </button>
             </div>
-            {stamina < FARM_HARVEST_STAMINA && <div className="text-red-400 text-[11px] mt-2">⚡ Stamina insuficiente.</div>}
+            {harvestable <= 0 && <div className="text-red-400 text-[11px] mt-2">⚡ Stamina insuficiente.</div>}
           </div>
         )}
 
         {phase === 'working' && (
           <div className="text-center py-2">
             <motion.div animate={{ rotate: [0, -8, 8, 0] }} transition={{ repeat: Infinity, duration: 0.9 }} className="text-4xl mb-3">
-              {crop.emoji}
+              {readyCrops[0]?.crop.emoji ?? '🌾'}
             </motion.div>
-            <h2 className="text-white font-black text-base mb-1">Colhendo {crop.outputName}…</h2>
+            <h2 className="text-white font-black text-base mb-1">Colhendo os canteiros…</h2>
             <AnimatePresence mode="wait">
               <motion.p key={flavorIdx} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="text-white/45 text-xs mb-4 h-4">
                 {FLAVOR[flavorIdx]}
@@ -285,24 +318,36 @@ function HarvestDialog({
             </motion.div>
             <h2 className="text-white font-black text-lg mb-4">Colheita concluída!</h2>
             <div className="flex flex-col gap-2 mb-4">
-              <motion.div initial={{ opacity: 0, x: -14 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 }} className="flex items-center justify-between rounded-xl border border-white/10 bg-black/40 px-4 py-3">
-                <span className="text-sm text-white/85">{crop.emoji} {result.outputName}</span>
-                <span className="font-bold text-white">×{result.qty}</span>
-              </motion.div>
-              {result.gotStone && (
+              {result.items.map((item, i) => {
+                const itemCrop = (Object.values(CROPS) as CropDef[]).find((c) => c.outputName === item.outputName)
+                return (
+                  <motion.div key={item.outputName} initial={{ opacity: 0, x: -14 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 + i * 0.12 }} className="flex items-center justify-between rounded-xl border border-white/10 bg-black/40 px-4 py-3">
+                    <span className="text-sm text-white/85">{itemCrop?.emoji ?? '🌾'} {item.outputName}</span>
+                    <span className="font-bold text-white">×{item.qty}</span>
+                  </motion.div>
+                )
+              })}
+              {(result.stoneNames ?? []).map((stoneName, i) => (
                 <motion.div
-                  initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.45, type: 'spring', damping: 10 }}
+                  key={`${stoneName}-${i}`}
+                  initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.45 + i * 0.15, type: 'spring', damping: 10 }}
                   className="relative flex items-center justify-between rounded-xl border border-fuchsia-400/60 px-4 py-3 overflow-hidden"
                   style={{ background: 'linear-gradient(120deg, rgba(217,70,239,0.18), rgba(139,92,246,0.14))' }}
                 >
-                  <span className="text-sm font-bold text-fuchsia-200">💎 {result.stoneName}</span>
+                  <span className="text-sm font-bold text-fuchsia-200">💎 {stoneName}</span>
                   <span className="font-bold text-fuchsia-100">×1</span>
                   <span className="stone-shine absolute inset-0 pointer-events-none"></span>
                 </motion.div>
-              )}
-              <motion.div initial={{ opacity: 0, x: -14 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: result.gotStone ? 0.65 : 0.3 }} className="text-[11px] text-white/45">
-                +<span className="text-amber-300 font-bold">{result.xpGained} XP</span> de Fazenda
+              ))}
+              <motion.div initial={{ opacity: 0, x: -14 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 }} className="text-[11px] text-white/45">
+                {result.harvested} canteiro{result.harvested > 1 ? 's' : ''} · +<span className="text-amber-300 font-bold">{result.xpGained} XP</span> de Fazenda
               </motion.div>
+              {(result.skippedNoStamina ?? 0) > 0 && (
+                <div className="text-[11px] text-amber-300/80">⚡ {result.skippedNoStamina} canteiro{result.skippedNoStamina! > 1 ? 's ficaram' : ' ficou'} plantado{result.skippedNoStamina! > 1 ? 's' : ''} (stamina acabou).</div>
+              )}
+              {(result.skippedNoSpace ?? 0) > 0 && (
+                <div className="text-[11px] text-amber-300/80">🎒 {result.skippedNoSpace} canteiro{result.skippedNoSpace! > 1 ? 's ficaram' : ' ficou'} plantado{result.skippedNoSpace! > 1 ? 's' : ''} (inventário cheio).</div>
+              )}
             </div>
             <button onClick={onClose} className="w-full rounded-lg text-white text-sm font-black py-3 transition-all bg-emerald-600 hover:bg-emerald-500">
               Guardar no inventário
@@ -335,19 +380,20 @@ export function FarmBoard({
   vm: FarmVM
   busy?: boolean
   onPlant: (slotIndex: number, cropId: string) => void
-  onHarvest: (slotIndex: number) => Promise<HarvestResultVM>
+  /** Sem slotIndex: colhe TODOS os canteiros prontos. Com 101: colhe o cercado. */
+  onHarvest: (slotIndex?: number) => Promise<HarvestResultVM>
   onWellCollect: () => void
   onPenFeed: () => void
 }) {
   const cropList = useMemo(() => Object.values(CROPS) as CropDef[], [])
   const [selectedCrop, setSelectedCrop] = useState<string>(cropList[0]?.id ?? 'trigo')
-  const [dialogSlot, setDialogSlot] = useState<number | null>(null)
+  const [harvestDialogOpen, setHarvestDialogOpen] = useState(false)
   const feedCount = vm.inputCounts[vm.pen.feedName] ?? 0
   const farmLevel = vm.farm.level
 
   const plotBySlot = useMemo(() => new Map(vm.plots.map((p) => [p.slotIndex, p])), [vm.plots])
-  const readyCount = vm.plots.filter((p) => p.state === 'ready').length
-  const dialogPlot = dialogSlot != null ? plotBySlot.get(dialogSlot) : undefined
+  const readyPlots = useMemo(() => vm.plots.filter((p) => p.state === 'ready'), [vm.plots])
+  const readyCount = readyPlots.length
 
   return (
     <div className="space-y-5">
@@ -393,7 +439,7 @@ export function FarmBoard({
           })}
         </div>
         <div className="text-white/35 text-[10px] mt-1.5">
-          toque num slot vazio para plantar (−{FARM_PLANT_STAMINA}⚡)
+          toque num slot vazio para plantar (grátis · +XP pra quem planta)
         </div>
       </div>
 
@@ -416,7 +462,7 @@ export function FarmBoard({
               farmLevel={farmLevel}
               busy={busy}
               onPlant={(slot) => onPlant(slot, selectedCrop)}
-              onOpenHarvest={setDialogSlot}
+              onOpenHarvest={() => setHarvestDialogOpen(true)}
             />
           ))}
         </div>
@@ -486,17 +532,16 @@ export function FarmBoard({
         </div>
       </div>
 
-      {/* Dialog de colheita */}
+      {/* Dialog de colheita (todos os canteiros prontos de uma vez) */}
       <AnimatePresence>
-        {dialogSlot != null && dialogPlot && (
+        {harvestDialogOpen && readyPlots.length > 0 && (
           <HarvestDialog
-            slotIndex={dialogSlot}
-            plot={dialogPlot}
+            readyPlots={readyPlots}
             stamina={vm.stamina}
             stoneChance={vm.stoneChance}
             busy={busy}
-            onHarvest={onHarvest}
-            onClose={() => setDialogSlot(null)}
+            onHarvest={() => onHarvest()}
+            onClose={() => setHarvestDialogOpen(false)}
           />
         )}
       </AnimatePresence>

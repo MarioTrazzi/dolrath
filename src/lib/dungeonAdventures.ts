@@ -404,9 +404,10 @@ export interface ScaledMonster {
 // clearLevel FIXO (não no nível do jogador) → under-leveled trava, over-leveled vira farm.
 // Boss = GATE de gear, NORMALIZADO POR CLASSE (PvE single-player) p/ cada classe vencer
 // ~65% no gear-ALVO (Floresta PRI · Caverna DUO · Pântano TRI · Ruínas TET).
-// As SALAS/NÓS são uma RAMPA: os primeiros (2 menores + 1ª principal) são vencíveis por
-// PELADO no levelReq; cada degrau sobe o nível/gear esperado até a última sala (perto do
-// boss). As salas gateiam o NÍVEL; o boss gateia o GEAR.
+// As SALAS/NÓS são uma RAMPA do gear de ENTRADA (= alvo da masmorra anterior; floresta
+// = pelado) ao gear-ALVO: a 1ª sala já espera quem FECHOU a masmorra anterior, e cada
+// degrau sobe até a última sala (perto do boss). As salas gateiam o NÍVEL+gear da banda;
+// o boss gateia o GEAR-alvo. Ver ROOM_RAMP/ENTRY_GEAR (fase de SALAS do sim).
 // ============================================================
 const BOSS_POW_MULT = 0.9    // poder do boss = âncora.power × isto
 const BOSS_ARM_MULT = 0.8    // armadura do boss = MON_ARMOR × S × isto
@@ -438,10 +439,21 @@ const BOSS_HP_MULT: Record<DungeonId, Record<CombatClass, number>> = {
   pantano:  { warrior: 2.92, rogue: 3.13, mage: 2.94, monk: 3.11 }, // ~63% — moderada, um pouco difícil
   ruinas:   { warrior: 3.34, rogue: 3.61, mage: 3.13, monk: 3.65 }, // ~52% — bem difícil
 }
-// Rampa das salas/nós: o HP-mult cresce ao longo do band (1ª sala fácil → última perto do
-// boss). Nó menor = fração extra mais fraca. (Boss usa a tabela acima.)
-const ROOM_HP_LO = 1.4, ROOM_HP_HI = 3.0
-const MINOR_HP_FAC = 0.7, MINOR_STR_FAC = 0.78
+// 🎚️ RAMPA DAS SALAS POR MASMORRA (fase de SALAS do dungeon-difficulty-sim, 2026-07-06).
+// Antes eram escalares únicos (hp 1.4→3.0, minor 0.7/0.78, poder 0.9 do boss) estimados à
+// mão — junto com a rampa de gear "pelada", as salas de Caverna/Pântano/Ruínas saíam
+// triviais (nv4 matava "monstro nv40"). Agora cada sala tem um jogador-GATE explícito
+// (nível lerp(levelReq−3, clearLevel−2, p) com gear lerp(entrada, alvo, p)) que vence
+// ~60%; o sim resolve hpLo/hpHi por binary-search e o alívio do nó menor p/ o jogador
+// UMA-BANDA-ATRÁS vencer ~45% no 1º nó (arranha XP, não farma). `pow` das salas novas é
+// 1.15 (> boss 0.9): golpe mais perigoso + hpMult menor = mesmo win% com luta mais curta
+// (o boss é a maratona; a sala é o susto). Floresta = valores antigos (onboarding OK).
+const ROOM_RAMP: Record<DungeonId, { pow: number; hpLo: number; hpHi: number; minorHp: number; minorStr: number }> = {
+  floresta: { pow: 0.90, hpLo: 1.40, hpHi: 3.00, minorHp: 0.70, minorStr: 0.78 },
+  caverna:  { pow: 1.15, hpLo: 2.30, hpHi: 2.45, minorHp: 0.73, minorStr: 0.85 },
+  pantano:  { pow: 1.15, hpLo: 2.40, hpHi: 2.50, minorHp: 0.80, minorStr: 0.90 },
+  ruinas:   { pow: 1.15, hpLo: 2.50, hpHi: 2.50, minorHp: 0.89, minorStr: 0.94 },
+}
 const GEAR_TIER_FLOOR = 0.25 // piso de gear "pelado" (= GEAR_FLOOR do modelo)
 
 // Gear-ALVO (raridade × aprimoramento) por masmorra → tier + HP sintético (espelha o sim).
@@ -450,6 +462,16 @@ const TARGET_GEAR: Record<DungeonId, { rarity: string; enh: number }> = {
   caverna:  { rarity: 'RARE', enh: 17 },       // DUO
   pantano:  { rarity: 'EPIC', enh: 18 },       // TRI
   ruinas:   { rarity: 'LEGENDARY', enh: 19 },  // TET
+}
+
+// Gear de ENTRADA por masmorra = o ALVO da masmorra ANTERIOR (null = pelado). A rampa
+// das salas interpola entrada→alvo: quem chega na Ruína enfrenta desde a 1ª sala um
+// "nv40 de verdade" (épico TRI), não um nv40 pelado — o muro que motiva voltar depois.
+const ENTRY_GEAR: Record<DungeonId, { rarity: string; enh: number } | null> = {
+  floresta: null,
+  caverna:  { rarity: 'UNCOMMON', enh: 16 },  // PRI (alvo da Floresta)
+  pantano:  { rarity: 'RARE', enh: 17 },       // DUO (alvo da Caverna)
+  ruinas:   { rarity: 'EPIC', enh: 18 },       // TRI (alvo do Pântano)
 }
 
 // Build de REFERÊNCIA por classe (âncora "jogador típico", NÃO o jogador real) — espelha o
@@ -531,7 +553,7 @@ export function scaleMonster(
   const targetTier = targetGearTierOf(tg)
   const targetHp = refGearHp(tg.enh)
 
-  let level: number, gearTier: number, gearHp: number, hpMult: number, strFac: number
+  let level: number, gearTier: number, gearHp: number, hpMult: number, strFac: number, powMult: number
   if (s.isBoss) {
     // Boss ancora no TOPO do band (fixo) com o gear-ALVO; HP normalizado por classe.
     level = dungeon.clearLevel
@@ -539,8 +561,10 @@ export function scaleMonster(
     gearHp = targetHp
     hpMult = BOSS_HP_MULT[dungeon.id]?.[combatClass] ?? 4.0
     strFac = 1
+    powMult = BOSS_POW_MULT
   } else {
-    // RAMPA: gear esperado interpola do levelReq (pelado) ao clearLevel (gear-alvo).
+    // RAMPA: gear esperado interpola do gear de ENTRADA (alvo da masmorra anterior;
+    // floresta = pelado) ao gear-ALVO no clearLevel — ver ENTRY_GEAR/ROOM_RAMP.
     const p = nodeProgress(s, dungeon.rooms)
     // O NÍVEL da sala ACOMPANHA o jogador (não é a faixa fixa): encontra o jogador onde
     // ele está, com TETO na rampa do nó (over-leveled → farm) e PISO no levelReq. Assim
@@ -548,10 +572,15 @@ export function scaleMonster(
     // GEAR, não por um bicho de nível muito acima. O BOSS continua ancorado no clearLevel.
     const bandLevel = Math.round(lerp(dungeon.levelReq, dungeon.clearLevel, p))
     level = Math.max(dungeon.levelReq, Math.min(bandLevel, Math.round(characterLevel || 0)))
-    gearTier = lerp(GEAR_TIER_FLOOR, targetTier, p)
-    gearHp = Math.floor(lerp(0, targetHp, p))
-    hpMult = lerp(ROOM_HP_LO, ROOM_HP_HI, p) * (s.isMain ? 1 : MINOR_HP_FAC)
-    strFac = s.isMain ? 1 : MINOR_STR_FAC
+    const entry = ENTRY_GEAR[dungeon.id]
+    const entryTier = entry ? targetGearTierOf(entry) : GEAR_TIER_FLOOR
+    const entryHp = entry ? refGearHp(entry.enh) : 0
+    gearTier = lerp(entryTier, targetTier, p)
+    gearHp = Math.floor(lerp(entryHp, targetHp, p))
+    const ramp = ROOM_RAMP[dungeon.id]
+    hpMult = lerp(ramp.hpLo, ramp.hpHi, p) * (s.isMain ? 1 : ramp.minorHp)
+    strFac = s.isMain ? 1 : ramp.minorStr
+    powMult = ramp.pow
   }
 
   const anchor = anchorAt(level, gearTier, gearHp)
@@ -565,7 +594,7 @@ export function scaleMonster(
   const rAtk = s.isBoss ? 1 : def.baseAttack / meanBy(ms, m => m.baseAttack)
   const rDef = s.isBoss ? 1 : def.baseDefense / meanBy(ms, m => m.baseDefense)
 
-  const attack = Math.max(1, Math.floor(anchor.power * BOSS_POW_MULT * strFac * rAtk * tierPow))
+  const attack = Math.max(1, Math.floor(anchor.power * powMult * strFac * rAtk * tierPow))
   const defense = Math.max(0, Math.floor(MON_ARMOR * S * BOSS_ARM_MULT * strFac * rDef * tierPow))
   const hp = Math.max(1, Math.floor(anchor.hp * hpMult * rHp * tierPow))
 

@@ -164,7 +164,9 @@ export default function AlchemyDialog({
     }
   }, [characterId, fetchInfoOverride]);
 
-  // (Re)abrir: estado limpo + dados frescos.
+  // (Re)abrir: estado limpo + dados frescos. Reset SÓ na abertura — os
+  // callbacks mudam de identidade quando o pai re-renderiza (ex.: overrides
+  // inline) e não podem reiniciar a dialog no meio do uso.
   useEffect(() => {
     if (!open) return;
     setSlots([null, null, null]);
@@ -175,7 +177,8 @@ export default function AlchemyDialog({
     placedFromLinkRef.current = false;
     fetchInfo();
     fetchInventory();
-  }, [open, fetchInfo, fetchInventory]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // Ingredientes do inventário: nome → quantidade total (insumos das duas mesas;
   // materiais de forja valem quando alguma receita de poção os usa).

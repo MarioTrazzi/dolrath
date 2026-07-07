@@ -248,7 +248,7 @@ export default function EnhancementDialog({
 
   // Imagem do item para a moldura (banco → asset por nome → ícone genérico).
   const headerImg = info
-    ? resolveImageUrl(info.itemImage) ?? (info.itemName ? itemImagePath(info.itemName) : null)
+    ? (resolveImageUrl(info.itemImage) ?? (info.itemName ? itemImagePath(info.itemName) : null))
     : null;
 
   // Imagem do material: pedra pelo nome do catálogo; cópia usa a arte do próprio item.
@@ -273,9 +273,7 @@ export default function EnhancementDialog({
           const next = applyEnhancementToStats(info.itemStats, info.targetLevel);
           const curEntries = itemStatEntries(cur, info.itemType);
           const nextEntries = itemStatEntries(next, info.itemType);
-          const keys = Array.from(
-            new Set([...curEntries, ...nextEntries].map((e) => e.key))
-          );
+          const keys = Array.from(new Set([...curEntries, ...nextEntries].map((e) => e.key)));
           return keys.map((key) => {
             const c = curEntries.find((e) => e.key === key);
             const n = nextEntries.find((e) => e.key === key);
@@ -353,257 +351,297 @@ export default function EnhancementDialog({
 
             {!loading && info && (
               <>
-                {/* ✦ Circuito de aprimoramento: material ── chance ──▶ ◆ item */}
-                {!result?.destroyed && (
-                  <div className="relative px-5 pb-3 pt-6">
-                    {/* Névoa dourada atrás da moldura */}
-                    <div
-                      className="pointer-events-none absolute right-2 top-2 h-32 w-32"
-                      style={{
-                        background:
-                          'radial-gradient(circle, rgba(201,162,95,0.16) 0%, transparent 65%)',
-                      }}
-                    />
-                    <div className="flex items-center gap-1">
-                      {/* Material (à esquerda, com contagem) */}
-                      {!info.maxLevel && info.material ? (
-                        <div className="flex w-[74px] shrink-0 flex-col items-center gap-1.5">
-                          <div
-                            className={`relative h-14 w-14 rounded-[3px] border p-px shadow-[inset_0_0_10px_rgba(0,0,0,0.8)] ${
+                {/* ✦ Circuito de aprimoramento: material ── chance ──▶ ◆ item
+                    (na destruição o slot permanece: a arte apaga e o vermelho fica) */}
+                <div className="relative px-5 pb-3 pt-6">
+                  {/* Névoa dourada atrás da moldura */}
+                  <div
+                    className="pointer-events-none absolute right-2 top-2 h-32 w-32"
+                    style={{
+                      background:
+                        'radial-gradient(circle, rgba(201,162,95,0.16) 0%, transparent 65%)',
+                    }}
+                  />
+                  <div className="flex items-center gap-1">
+                    {/* Material (à esquerda, com contagem) */}
+                    {!info.maxLevel && info.material ? (
+                      <div className="flex w-[74px] shrink-0 flex-col items-center gap-1.5">
+                        <div
+                          className={`relative h-14 w-14 rounded-[3px] border p-px shadow-[inset_0_0_10px_rgba(0,0,0,0.8)] ${
+                            info.materialAvailable
+                              ? 'border-[#8a6d3b] bg-gradient-to-b from-[#26262a] to-[#101013]'
+                              : 'border-[#5a2e2e] bg-gradient-to-b from-[#241a1a] to-[#100c0c]'
+                          }`}
+                        >
+                          {materialImg ? (
+                            <img
+                              src={materialImg}
+                              alt={info.material.name}
+                              className={`h-full w-full rounded-[2px] object-cover art-bright ${
+                                info.materialAvailable ? '' : 'opacity-40 grayscale'
+                              }`}
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <span className="flex h-full w-full items-center justify-center text-white">
+                              <ItemIcon type={(info.itemType as any) || 'SWORD'} size={22} />
+                            </span>
+                          )}
+                          <span
+                            className={`absolute -bottom-1.5 -right-1.5 rounded-[2px] border border-black/80 px-1 text-[10px] font-bold ${
                               info.materialAvailable
-                                ? 'border-[#8a6d3b] bg-gradient-to-b from-[#26262a] to-[#101013]'
-                                : 'border-[#5a2e2e] bg-gradient-to-b from-[#241a1a] to-[#100c0c]'
+                                ? 'bg-[#101012] text-[#e7c682]'
+                                : 'bg-[#1c0f0f] text-red-400'
                             }`}
                           >
-                            {materialImg ? (
-                              <img
-                                src={materialImg}
-                                alt={info.material.name}
-                                className={`h-full w-full rounded-[2px] object-cover art-bright ${
-                                  info.materialAvailable ? '' : 'opacity-40 grayscale'
-                                }`}
-                                referrerPolicy="no-referrer"
-                              />
-                            ) : (
-                              <span className="flex h-full w-full items-center justify-center text-white">
-                                <ItemIcon type={(info.itemType as any) || 'SWORD'} size={22} />
-                              </span>
-                            )}
-                            <span
-                              className={`absolute -bottom-1.5 -right-1.5 rounded-[2px] border border-black/80 px-1 text-[10px] font-bold ${
-                                info.materialAvailable
-                                  ? 'bg-[#101012] text-[#e7c682]'
-                                  : 'bg-[#1c0f0f] text-red-400'
-                              }`}
-                            >
-                              {info.materialCount ?? (info.materialAvailable ? 1 : 0)}
-                            </span>
-                            {/* Pedra pulsando enquanto a luz é canalizada */}
-                            {phase === 'charging' && (
-                              <motion.div
-                                animate={{ opacity: [0.15, 0.75, 0.15] }}
-                                transition={{ duration: 0.75, repeat: Infinity }}
-                                className="pointer-events-none absolute -inset-2 z-10"
-                                style={{
-                                  background:
-                                    'radial-gradient(circle, rgba(231,198,130,0.5) 0%, transparent 70%)',
-                                }}
-                              />
-                            )}
-                          </div>
-                          <span className="w-[74px] text-center text-[10px] leading-tight text-[#9a9aa0]">
-                            {info.material.kind === 'DUPLICATE' ? 'Cópia do item' : info.material.name}
+                            {info.materialCount ?? (info.materialAvailable ? 1 : 0)}
                           </span>
-                        </div>
-                      ) : (
-                        <div className="w-[74px] shrink-0" />
-                      )}
-
-                      {/* Linha-circuito com nó em losango e a chance flutuando */}
-                      <div className="relative min-w-0 flex-1 self-stretch">
-                        {!info.maxLevel && (
-                          <>
-                            <div
-                              className="absolute left-0 right-0 top-1/2 h-px"
+                          {/* Pedra pulsando enquanto a luz é canalizada */}
+                          {phase === 'charging' && (
+                            <motion.div
+                              animate={{ opacity: [0.15, 0.75, 0.15] }}
+                              transition={{ duration: 0.75, repeat: Infinity }}
+                              className="pointer-events-none absolute -inset-2 z-10"
                               style={{
-                                background: `linear-gradient(to right, rgba(201,162,95,0.12), rgba(201,162,95,0.55), rgba(201,162,95,0.8))`,
+                                background:
+                                  'radial-gradient(circle, rgba(231,198,130,0.5) 0%, transparent 70%)',
                               }}
                             />
-                            <span
-                              className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rotate-45 border bg-[#1e1e21]"
-                              style={{ borderColor: GOLD }}
-                            />
-                            {chancePct && (
-                              <div className="absolute inset-x-0 top-1/2 -translate-y-[calc(100%+10px)] text-center">
-                                <span className={`text-2xl font-bold tabular-nums ${chanceColor}`}>
-                                  {chancePct}%
-                                </span>
-                              </div>
-                            )}
-                            <div className="absolute inset-x-0 top-1/2 translate-y-[10px] text-center text-[10px] uppercase tracking-[0.14em] text-[#77777d]">
-                              chance
+                          )}
+                        </div>
+                        <span className="w-[74px] text-center text-[10px] leading-tight text-[#9a9aa0]">
+                          {info.material.kind === 'DUPLICATE'
+                            ? 'Cópia do item'
+                            : info.material.name}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="w-[74px] shrink-0" />
+                    )}
+
+                    {/* Linha-circuito com nó em losango e a chance flutuando */}
+                    <div className="relative min-w-0 flex-1 self-stretch">
+                      {!info.maxLevel && (
+                        <>
+                          <div
+                            className="absolute left-0 right-0 top-1/2 h-px"
+                            style={{
+                              background: `linear-gradient(to right, rgba(201,162,95,0.12), rgba(201,162,95,0.55), rgba(201,162,95,0.8))`,
+                            }}
+                          />
+                          <span
+                            className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rotate-45 border bg-[#1e1e21]"
+                            style={{ borderColor: GOLD }}
+                          />
+                          {chancePct && (
+                            <div className="absolute inset-x-0 top-1/2 -translate-y-[calc(100%+10px)] text-center">
+                              <span className={`text-2xl font-bold tabular-nums ${chanceColor}`}>
+                                {chancePct}%
+                              </span>
                             </div>
-                            {/* 💫 Luz que sai da pedra e percorre o circuito até o item */}
-                            {phase === 'charging' && (
-                              <motion.span
-                                key={chargeId}
-                                initial={{ left: '-2%', opacity: 0 }}
-                                animate={{ left: ['-2%', '98%'], opacity: [0, 1, 1] }}
-                                transition={{ duration: 0.75, repeat: Infinity, ease: 'easeIn' }}
-                                className="absolute top-1/2 z-10 h-2 w-2 -translate-y-1/2 rounded-full"
+                          )}
+                          <div className="absolute inset-x-0 top-1/2 translate-y-[10px] text-center text-[10px] uppercase tracking-[0.14em] text-[#77777d]">
+                            chance
+                          </div>
+                          {/* 💫 Cometa de luz que sai da pedra e percorre o circuito até o item */}
+                          {phase === 'charging' && (
+                            <motion.div
+                              key={chargeId}
+                              initial={{ left: '-12%', opacity: 0 }}
+                              animate={{
+                                left: ['-12%', '90%'],
+                                opacity: [0, 1, 1],
+                              }}
+                              transition={{
+                                duration: 0.75,
+                                repeat: Infinity,
+                                ease: 'easeIn',
+                              }}
+                              className="absolute top-1/2 z-10 flex -translate-y-1/2 items-center"
+                            >
+                              <span
+                                className="h-[2px] w-8"
+                                style={{
+                                  background:
+                                    'linear-gradient(to right, transparent, rgba(231,198,130,0.9))',
+                                }}
+                              />
+                              <span
+                                className="h-2 w-2 rounded-full"
                                 style={{
                                   background: GOLD_BRIGHT,
                                   boxShadow:
                                     '0 0 10px 4px rgba(231,198,130,0.85), 0 0 22px 8px rgba(201,162,95,0.35)',
                                 }}
                               />
-                            )}
-                          </>
-                        )}
-                      </div>
-
-                      {/* ◆ Moldura em losango com o item (elemento-assinatura) */}
-                      <motion.div
-                        animate={
-                          phase === 'done' && result && !result.success
-                            ? { x: [0, -7, 7, -5, 5, -2, 2, 0] }
-                            : { x: 0 }
-                        }
-                        transition={{ duration: 0.5 }}
-                        className="relative grid h-32 w-32 shrink-0 place-items-center"
-                      >
-                        {/* Moldura externa (a borda brilha quando a luz chega) */}
-                        <motion.div
-                          className="absolute inset-[19px] rotate-45 rounded-[3px] border bg-gradient-to-br from-[#2c2620] to-[#141210]"
-                          animate={
-                            phase === 'done' && result?.success
-                              ? {
-                                  borderColor: '#e7c682',
-                                  boxShadow: [
-                                    '0 0 22px rgba(201,162,95,0.28)',
-                                    '0 0 48px rgba(231,198,130,0.95)',
-                                    '0 0 26px rgba(201,162,95,0.5)',
-                                  ],
-                                }
-                              : phase === 'done' && result
-                                ? {
-                                    borderColor: '#7a2222',
-                                    boxShadow: [
-                                      '0 0 22px rgba(201,162,95,0.28)',
-                                      '0 0 26px rgba(120,15,15,0.6)',
-                                      '0 0 16px rgba(120,15,15,0.35)',
-                                    ],
-                                  }
-                                : {
-                                    borderColor: '#8a6d3b',
-                                    boxShadow: '0 0 22px rgba(201,162,95,0.28)',
-                                  }
-                          }
-                          transition={{ duration: 0.9 }}
-                        />
-                        {/* Janela interna que recorta a arte */}
-                        <div
-                          className="absolute inset-[30px] rotate-45 overflow-hidden rounded-[2px] border bg-black"
-                          style={{ borderColor: 'rgba(201,162,95,0.55)' }}
-                        >
-                          {headerImg ? (
-                            <img
-                              src={headerImg}
-                              alt={info.itemName || ''}
-                              className="absolute left-1/2 top-1/2 h-[142%] w-[142%] max-w-none -translate-x-1/2 -translate-y-1/2 -rotate-45 object-cover art-bright"
-                              referrerPolicy="no-referrer"
-                            />
-                          ) : (
-                            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-45 text-white">
-                              <ItemIcon type={(info.itemType as any) || 'SWORD'} size={30} />
-                            </span>
+                            </motion.div>
                           )}
-                        </div>
-                        {/* Cravos nos 4 vértices */}
-                        {[
-                          'left-1/2 top-[13px] -translate-x-1/2',
-                          'left-1/2 bottom-[13px] -translate-x-1/2',
-                          'top-1/2 left-[13px] -translate-y-1/2',
-                          'top-1/2 right-[13px] -translate-y-1/2',
-                        ].map((pos) => (
-                          <span
-                            key={pos}
-                            className={`absolute ${pos} h-[7px] w-[7px] rotate-45 border border-[#8a6d3b] bg-[#1e1e21]`}
-                          />
-                        ))}
-                        {/* Placa do nível ATUAL no vértice inferior — só troca quando a luz chega */}
-                        {plateLabel && (
-                          <motion.span
-                            key={plateLabel}
-                            initial={{ scale: 1.7, filter: 'brightness(2.2)' }}
-                            animate={{ scale: 1, filter: 'brightness(1)' }}
-                            transition={{ type: 'spring', stiffness: 380, damping: 18 }}
-                            className="absolute bottom-1 left-1/2 z-10 -translate-x-1/2 rounded-[2px] border px-1.5 text-[11px] font-black"
-                            style={{
-                              borderColor: '#8a6d3b',
-                              background: '#141210',
-                              color: GOLD_BRIGHT,
-                            }}
-                          >
-                            {plateLabel}
-                          </motion.span>
-                        )}
-                        {/* Veredito no próprio slot: explosão dourada ou vermelho p/ dentro */}
-                        <AnimatePresence>
-                          {phase === 'done' && result?.success && (
-                            <motion.div
-                              key={`burst-${chargeId}`}
-                              initial={{ opacity: 0, scale: 0.4 }}
-                              animate={{ opacity: [0, 1, 0], scale: [0.4, 1.5, 2.1] }}
-                              transition={{ duration: 1 }}
-                              className="pointer-events-none absolute -inset-8 z-20"
-                              style={{
-                                background:
-                                  'radial-gradient(circle, rgba(231,198,130,0.9) 0%, rgba(201,162,95,0.35) 40%, transparent 70%)',
-                              }}
-                            />
-                          )}
-                          {phase === 'done' && result && !result.success && (
-                            <motion.div
-                              key={`fail-${chargeId}`}
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: [0, 1, 0.7, 0] }}
-                              transition={{ duration: 1.6, times: [0, 0.25, 0.6, 1] }}
-                              className="pointer-events-none absolute inset-[19px] z-20 rotate-45 rounded-[3px]"
-                              style={{
-                                boxShadow: 'inset 0 0 28px 12px rgba(120,12,12,0.85)',
-                                background:
-                                  'radial-gradient(circle, transparent 30%, rgba(90,10,10,0.45) 100%)',
-                              }}
-                            />
-                          )}
-                        </AnimatePresence>
-                      </motion.div>
-                    </div>
-
-                    {/* Nome do item + progressão de nível */}
-                    <div className="mt-2 text-center">
-                      <div className={`text-[15px] font-semibold leading-tight ${nameColor}`}>
-                        {info.itemName || info.displayName}
-                      </div>
-                      {!info.maxLevel ? (
-                        <div className="mt-1 text-sm font-bold">
-                          <span className="text-[#8a8a90]">
-                            {getLevelLabel(info.currentLevel) || 'Base'}
-                          </span>
-                          <span className="mx-2" style={{ color: GOLD }}>
-                            ❯❯
-                          </span>
-                          <span style={{ color: GOLD_BRIGHT }}>{info.targetLabel}</span>
-                        </div>
-                      ) : (
-                        <div className="mt-1 text-sm font-semibold text-orange-400">
-                          🏆 Nível máximo alcançado (V)
-                        </div>
+                        </>
                       )}
                     </div>
+
+                    {/* ◆ Moldura em losango com o item (elemento-assinatura) */}
+                    <motion.div
+                      animate={
+                        phase === 'done' && result && !result.success
+                          ? { x: [0, -7, 7, -5, 5, -2, 2, 0] }
+                          : { x: 0 }
+                      }
+                      transition={{ duration: 0.5 }}
+                      className="relative grid h-32 w-32 shrink-0 place-items-center"
+                    >
+                      {/* Moldura externa (a borda brilha quando a luz chega) */}
+                      <motion.div
+                        className="absolute inset-[19px] rotate-45 rounded-[3px] border bg-gradient-to-br from-[#2c2620] to-[#141210]"
+                        animate={
+                          phase === 'done' && result?.success
+                            ? {
+                                borderColor: '#e7c682',
+                                boxShadow: [
+                                  '0 0 22px rgba(201,162,95,0.28)',
+                                  '0 0 48px rgba(231,198,130,0.95)',
+                                  '0 0 26px rgba(201,162,95,0.5)',
+                                ],
+                              }
+                            : phase === 'done' && result
+                              ? {
+                                  borderColor: '#7a2222',
+                                  boxShadow: [
+                                    '0 0 22px rgba(201,162,95,0.28)',
+                                    '0 0 26px rgba(120,15,15,0.6)',
+                                    '0 0 16px rgba(120,15,15,0.35)',
+                                  ],
+                                }
+                              : {
+                                  borderColor: '#8a6d3b',
+                                  boxShadow: '0 0 22px rgba(201,162,95,0.28)',
+                                }
+                        }
+                        transition={{ duration: 0.9 }}
+                      />
+                      {/* Janela interna que recorta a arte */}
+                      <div
+                        className="absolute inset-[30px] rotate-45 overflow-hidden rounded-[2px] border bg-black"
+                        style={{ borderColor: 'rgba(201,162,95,0.55)' }}
+                      >
+                        {headerImg ? (
+                          <img
+                            src={headerImg}
+                            alt={info.itemName || ''}
+                            className="absolute left-1/2 top-1/2 h-[142%] w-[142%] max-w-none -translate-x-1/2 -translate-y-1/2 -rotate-45 object-cover art-bright"
+                            style={{
+                              transition: 'filter 1.2s ease',
+                              filter: result?.destroyed
+                                ? 'grayscale(1) brightness(0.45)'
+                                : undefined,
+                            }}
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-45 text-white">
+                            <ItemIcon type={(info.itemType as any) || 'SWORD'} size={30} />
+                          </span>
+                        )}
+                      </div>
+                      {/* Cravos nos 4 vértices */}
+                      {[
+                        'left-1/2 top-[13px] -translate-x-1/2',
+                        'left-1/2 bottom-[13px] -translate-x-1/2',
+                        'top-1/2 left-[13px] -translate-y-1/2',
+                        'top-1/2 right-[13px] -translate-y-1/2',
+                      ].map((pos) => (
+                        <span
+                          key={pos}
+                          className={`absolute ${pos} h-[7px] w-[7px] rotate-45 border border-[#8a6d3b] bg-[#1e1e21]`}
+                        />
+                      ))}
+                      {/* Placa do nível ATUAL no vértice inferior — só troca quando a luz chega */}
+                      {plateLabel && !result?.destroyed && (
+                        <motion.span
+                          key={plateLabel}
+                          initial={{ scale: 1.7, filter: 'brightness(2.2)' }}
+                          animate={{ scale: 1, filter: 'brightness(1)' }}
+                          transition={{
+                            type: 'spring',
+                            stiffness: 380,
+                            damping: 18,
+                          }}
+                          className="absolute bottom-1 left-1/2 z-10 -translate-x-1/2 rounded-[2px] border px-1.5 text-[11px] font-black"
+                          style={{
+                            borderColor: '#8a6d3b',
+                            background: '#141210',
+                            color: GOLD_BRIGHT,
+                          }}
+                        >
+                          {plateLabel}
+                        </motion.span>
+                      )}
+                      {/* Veredito no próprio slot: explosão dourada ou vermelho p/ dentro */}
+                      <AnimatePresence>
+                        {phase === 'done' && result?.success && (
+                          <motion.div
+                            key={`burst-${chargeId}`}
+                            initial={{ opacity: 0, scale: 0.4 }}
+                            animate={{
+                              opacity: [0, 1, 0],
+                              scale: [0.4, 1.5, 2.1],
+                            }}
+                            transition={{ duration: 1 }}
+                            className="pointer-events-none absolute -inset-8 z-20"
+                            style={{
+                              background:
+                                'radial-gradient(circle, rgba(231,198,130,0.9) 0%, rgba(201,162,95,0.35) 40%, transparent 70%)',
+                            }}
+                          />
+                        )}
+                        {phase === 'done' && result && !result.success && (
+                          <motion.div
+                            key={`fail-${chargeId}`}
+                            initial={{ opacity: 0 }}
+                            animate={
+                              result.destroyed
+                                ? { opacity: [0, 1, 0.9] } // destruído: o vermelho fica
+                                : { opacity: [0, 1, 0.7, 0] } // falha: pulsa e se dissipa
+                            }
+                            transition={
+                              result.destroyed
+                                ? { duration: 1.2 }
+                                : { duration: 1.6, times: [0, 0.25, 0.6, 1] }
+                            }
+                            className="pointer-events-none absolute inset-[19px] z-20 rotate-45 rounded-[3px]"
+                            style={{
+                              boxShadow: 'inset 0 0 28px 12px rgba(120,12,12,0.85)',
+                              background:
+                                'radial-gradient(circle, transparent 30%, rgba(90,10,10,0.45) 100%)',
+                            }}
+                          />
+                        )}
+                      </AnimatePresence>
+                    </motion.div>
                   </div>
-                )}
+
+                  {/* Nome do item + progressão de nível */}
+                  <div className="mt-2 text-center">
+                    <div className={`text-[15px] font-semibold leading-tight ${nameColor}`}>
+                      {info.itemName || info.displayName}
+                    </div>
+                    {!info.maxLevel ? (
+                      <div className="mt-1 text-sm font-bold">
+                        <span className="text-[#8a8a90]">
+                          {getLevelLabel(info.currentLevel) || 'Base'}
+                        </span>
+                        <span className="mx-2" style={{ color: GOLD }}>
+                          ❯❯
+                        </span>
+                        <span style={{ color: GOLD_BRIGHT }}>{info.targetLabel}</span>
+                      </div>
+                    ) : (
+                      <div className="mt-1 text-sm font-semibold text-orange-400">
+                        🏆 Nível máximo alcançado (V)
+                      </div>
+                    )}
+                  </div>
+                </div>
 
                 {!info.maxLevel && !result?.destroyed && (
                   <>
@@ -611,12 +649,16 @@ export default function EnhancementDialog({
                     <div className="space-y-1 px-5 pb-4 text-[12.5px] leading-snug">
                       <p style={{ color: isAccessory ? '#e05252' : WARN }}>{info.risk}</p>
                       <p className="text-[#77777d]">
-                        Consome 1× {info.material?.kind === 'DUPLICATE'
+                        Consome 1×{' '}
+                        {info.material?.kind === 'DUPLICATE'
                           ? `cópia de ${info.material.name}`
                           : info.material?.name}{' '}
                         por tentativa.
                         {!info.materialAvailable && (
-                          <span className="font-semibold text-red-400"> Você não possui o material.</span>
+                          <span className="font-semibold text-red-400">
+                            {' '}
+                            Você não possui o material.
+                          </span>
                         )}
                       </p>
                     </div>
@@ -824,7 +866,9 @@ export default function EnhancementDialog({
               if (pickable.length === 0) {
                 return filterCategory ? (
                   <div className="border-t border-black/60 bg-[#19191c] px-4 py-4 text-center text-sm text-[#8a8a90]">
-                    Nenhum{filterCategory === 'WEAPON' ? 'a arma' : 'a armadura'} no inventário para esta pedra.
+                    Nenhum
+                    {filterCategory === 'WEAPON' ? 'a arma' : 'a armadura'} no inventário para esta
+                    pedra.
                   </div>
                 ) : null;
               }
@@ -837,7 +881,8 @@ export default function EnhancementDialog({
                   </div>
                   <div className="grid grid-cols-5 gap-2 sm:grid-cols-6">
                     {pickable.map((it) => {
-                      const img = resolveImageUrl(it.image) ?? (it.name ? itemImagePath(it.name) : null);
+                      const img =
+                        resolveImageUrl(it.image) ?? (it.name ? itemImagePath(it.name) : null);
                       const isSel = it.id === selectedId;
                       return (
                         <button
@@ -849,17 +894,27 @@ export default function EnhancementDialog({
                               ? 'border-[#c9a25f] shadow-[0_0_10px_rgba(201,162,95,0.4)]'
                               : 'border-[#3c3c41] hover:border-[#8a6d3b]'
                           }`}
-                          style={{ background: 'linear-gradient(160deg, #232327, #101013)' }}
+                          style={{
+                            background: 'linear-gradient(160deg, #232327, #101013)',
+                          }}
                         >
                           {img ? (
-                            <img src={img} alt={it.name} className="h-full w-full object-cover art-bright" referrerPolicy="no-referrer" />
+                            <img
+                              src={img}
+                              alt={it.name}
+                              className="h-full w-full object-cover art-bright"
+                              referrerPolicy="no-referrer"
+                            />
                           ) : (
                             <span className="flex h-full w-full items-center justify-center text-white">
                               <ItemIcon type={it.type as any} size={22} />
                             </span>
                           )}
                           {it.enhancementLevel > 0 && (
-                            <span className="absolute right-0.5 bottom-0.5 text-[10px] font-black text-[#f1d79a]" style={{ textShadow: '0 1px 2px #000' }}>
+                            <span
+                              className="absolute right-0.5 bottom-0.5 text-[10px] font-black text-[#f1d79a]"
+                              style={{ textShadow: '0 1px 2px #000' }}
+                            >
                               {getLevelLabel(it.enhancementLevel)}
                             </span>
                           )}

@@ -108,7 +108,8 @@ export default function EnhancementDialog({
   const [attempting, setAttempting] = useState(false);
   const [result, setResult] = useState<EnhanceResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Fases da animação estilo BDO: a barra carrega e, ao encher, brilha (sucesso) ou apaga (falha)
+  // Fases da animação estilo BDO: uma luz sai da pedra, percorre o circuito e,
+  // ao chegar no item, ele brilha dourado (sucesso) ou avermelha (falha)
   const [phase, setPhase] = useState<'idle' | 'charging' | 'done'>('idle');
   const [chargeId, setChargeId] = useState(0);
 
@@ -288,6 +289,14 @@ export default function EnhancementDialog({
         })()
       : [];
 
+  // Placa do slot: mostra o tier ATUAL do item. Só troca quando a luz chega
+  // (fase 'done'): sobe no sucesso, mantém/decresce na falha.
+  const plateLabel = info
+    ? phase === 'done' && result
+      ? result.newLevelLabel
+      : getLevelLabel(info.currentLevel)
+    : '';
+
   const nameColor =
     info && info.currentLevel >= 16
       ? 'text-orange-400'
@@ -389,6 +398,18 @@ export default function EnhancementDialog({
                             >
                               {info.materialCount ?? (info.materialAvailable ? 1 : 0)}
                             </span>
+                            {/* Pedra pulsando enquanto a luz é canalizada */}
+                            {phase === 'charging' && (
+                              <motion.div
+                                animate={{ opacity: [0.15, 0.75, 0.15] }}
+                                transition={{ duration: 0.75, repeat: Infinity }}
+                                className="pointer-events-none absolute -inset-2 z-10"
+                                style={{
+                                  background:
+                                    'radial-gradient(circle, rgba(231,198,130,0.5) 0%, transparent 70%)',
+                                }}
+                              />
+                            )}
                           </div>
                           <span className="w-[74px] text-center text-[10px] leading-tight text-[#9a9aa0]">
                             {info.material.kind === 'DUPLICATE' ? 'Cópia do item' : info.material.name}
@@ -422,19 +443,63 @@ export default function EnhancementDialog({
                             <div className="absolute inset-x-0 top-1/2 translate-y-[10px] text-center text-[10px] uppercase tracking-[0.14em] text-[#77777d]">
                               chance
                             </div>
+                            {/* 💫 Luz que sai da pedra e percorre o circuito até o item */}
+                            {phase === 'charging' && (
+                              <motion.span
+                                key={chargeId}
+                                initial={{ left: '-2%', opacity: 0 }}
+                                animate={{ left: ['-2%', '98%'], opacity: [0, 1, 1] }}
+                                transition={{ duration: 0.75, repeat: Infinity, ease: 'easeIn' }}
+                                className="absolute top-1/2 z-10 h-2 w-2 -translate-y-1/2 rounded-full"
+                                style={{
+                                  background: GOLD_BRIGHT,
+                                  boxShadow:
+                                    '0 0 10px 4px rgba(231,198,130,0.85), 0 0 22px 8px rgba(201,162,95,0.35)',
+                                }}
+                              />
+                            )}
                           </>
                         )}
                       </div>
 
                       {/* ◆ Moldura em losango com o item (elemento-assinatura) */}
-                      <div className="relative grid h-32 w-32 shrink-0 place-items-center">
-                        {/* Moldura externa */}
-                        <div
+                      <motion.div
+                        animate={
+                          phase === 'done' && result && !result.success
+                            ? { x: [0, -7, 7, -5, 5, -2, 2, 0] }
+                            : { x: 0 }
+                        }
+                        transition={{ duration: 0.5 }}
+                        className="relative grid h-32 w-32 shrink-0 place-items-center"
+                      >
+                        {/* Moldura externa (a borda brilha quando a luz chega) */}
+                        <motion.div
                           className="absolute inset-[19px] rotate-45 rounded-[3px] border bg-gradient-to-br from-[#2c2620] to-[#141210]"
-                          style={{
-                            borderColor: '#8a6d3b',
-                            boxShadow: '0 0 22px rgba(201,162,95,0.28)',
-                          }}
+                          animate={
+                            phase === 'done' && result?.success
+                              ? {
+                                  borderColor: '#e7c682',
+                                  boxShadow: [
+                                    '0 0 22px rgba(201,162,95,0.28)',
+                                    '0 0 48px rgba(231,198,130,0.95)',
+                                    '0 0 26px rgba(201,162,95,0.5)',
+                                  ],
+                                }
+                              : phase === 'done' && result
+                                ? {
+                                    borderColor: '#7a2222',
+                                    boxShadow: [
+                                      '0 0 22px rgba(201,162,95,0.28)',
+                                      '0 0 26px rgba(120,15,15,0.6)',
+                                      '0 0 16px rgba(120,15,15,0.35)',
+                                    ],
+                                  }
+                                : {
+                                    borderColor: '#8a6d3b',
+                                    boxShadow: '0 0 22px rgba(201,162,95,0.28)',
+                                  }
+                          }
+                          transition={{ duration: 0.9 }}
                         />
                         {/* Janela interna que recorta a arte */}
                         <div
@@ -466,9 +531,13 @@ export default function EnhancementDialog({
                             className={`absolute ${pos} h-[7px] w-[7px] rotate-45 border border-[#8a6d3b] bg-[#1e1e21]`}
                           />
                         ))}
-                        {/* Placa do nível alvo no vértice inferior */}
-                        {!info.maxLevel && info.targetLabel && (
-                          <span
+                        {/* Placa do nível ATUAL no vértice inferior — só troca quando a luz chega */}
+                        {plateLabel && (
+                          <motion.span
+                            key={plateLabel}
+                            initial={{ scale: 1.7, filter: 'brightness(2.2)' }}
+                            animate={{ scale: 1, filter: 'brightness(1)' }}
+                            transition={{ type: 'spring', stiffness: 380, damping: 18 }}
                             className="absolute bottom-1 left-1/2 z-10 -translate-x-1/2 rounded-[2px] border px-1.5 text-[11px] font-black"
                             style={{
                               borderColor: '#8a6d3b',
@@ -476,10 +545,40 @@ export default function EnhancementDialog({
                               color: GOLD_BRIGHT,
                             }}
                           >
-                            {info.targetLabel}
-                          </span>
+                            {plateLabel}
+                          </motion.span>
                         )}
-                      </div>
+                        {/* Veredito no próprio slot: explosão dourada ou vermelho p/ dentro */}
+                        <AnimatePresence>
+                          {phase === 'done' && result?.success && (
+                            <motion.div
+                              key={`burst-${chargeId}`}
+                              initial={{ opacity: 0, scale: 0.4 }}
+                              animate={{ opacity: [0, 1, 0], scale: [0.4, 1.5, 2.1] }}
+                              transition={{ duration: 1 }}
+                              className="pointer-events-none absolute -inset-8 z-20"
+                              style={{
+                                background:
+                                  'radial-gradient(circle, rgba(231,198,130,0.9) 0%, rgba(201,162,95,0.35) 40%, transparent 70%)',
+                              }}
+                            />
+                          )}
+                          {phase === 'done' && result && !result.success && (
+                            <motion.div
+                              key={`fail-${chargeId}`}
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: [0, 1, 0.7, 0] }}
+                              transition={{ duration: 1.6, times: [0, 0.25, 0.6, 1] }}
+                              className="pointer-events-none absolute inset-[19px] z-20 rotate-45 rounded-[3px]"
+                              style={{
+                                boxShadow: 'inset 0 0 28px 12px rgba(120,12,12,0.85)',
+                                background:
+                                  'radial-gradient(circle, transparent 30%, rgba(90,10,10,0.45) 100%)',
+                              }}
+                            />
+                          )}
+                        </AnimatePresence>
+                      </motion.div>
                     </div>
 
                     {/* Nome do item + progressão de nível */}
@@ -616,108 +715,50 @@ export default function EnhancementDialog({
                   </>
                 )}
 
-                {/* ⚒️ Barra de aprimoramento estilo BDO: carrega e, ao encher, brilha ou apaga */}
+                {/* ⚒️ Veredito da forja: a animação acontece no próprio slot; aqui só o texto */}
                 {phase !== 'idle' && (
-                  <div className="relative px-5 pb-2 pt-1">
-                    {/* Explosão de luz dourada ao ter sucesso */}
-                    <AnimatePresence>
-                      {phase === 'done' && result?.success && (
-                        <motion.div
-                          initial={{ opacity: 0, scale: 0.4 }}
-                          animate={{ opacity: [0, 1, 0], scale: [0.4, 1.6, 2.2] }}
-                          transition={{ duration: 1 }}
-                          className="pointer-events-none absolute -inset-8 z-10"
-                          style={{
-                            background:
-                              'radial-gradient(circle, rgba(231,198,130,0.9) 0%, rgba(201,162,95,0.35) 40%, transparent 70%)',
-                          }}
-                        />
-                      )}
-                    </AnimatePresence>
-
-                    <div className="relative z-20">
-                      <div className="mb-1 text-center text-sm font-semibold">
-                        {phase === 'charging' && (
-                          <motion.span
-                            animate={{ opacity: [0.5, 1, 0.5] }}
-                            transition={{ repeat: Infinity, duration: 0.7 }}
-                            style={{ color: GOLD_BRIGHT }}
-                          >
-                            ⚒ Forjando...
-                          </motion.span>
-                        )}
-                        {phase === 'done' && result?.success && (
-                          <span style={{ color: GOLD_BRIGHT }}>✨ SUCESSO!</span>
-                        )}
-                        {phase === 'done' && !result?.success && (
-                          <span className={result?.destroyed ? 'text-red-400' : 'text-orange-400'}>
-                            {result?.destroyed ? '💔 DESTRUÍDO!' : '💥 FALHOU!'}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Trilho + preenchimento */}
-                      <motion.div
-                        animate={
-                          phase === 'done' && !result?.success
-                            ? { x: [0, -8, 8, -6, 6, -3, 3, 0] }
-                            : {}
-                        }
-                        transition={{ duration: 0.5 }}
-                        className={`relative h-6 overflow-hidden rounded-[3px] border bg-[#101013] ${
-                          phase === 'done' && result?.success
-                            ? 'border-[#e7c682] shadow-[0_0_25px_rgba(231,198,130,0.7)]'
-                            : phase === 'done'
-                              ? 'border-red-800/60'
-                              : 'border-[#8a6d3b]/60'
-                        }`}
-                      >
-                        <motion.div
-                          key={chargeId}
-                          initial={{ width: '0%' }}
-                          animate={{ width: '100%' }}
-                          transition={{ duration: CHARGE_MS / 1000, ease: [0.45, 0, 0.55, 1] }}
-                          className={`h-full ${
-                            phase === 'done'
-                              ? result?.success
-                                ? 'bg-gradient-to-r from-[#c9a25f] via-[#f3e0ae] to-[#c9a25f]'
-                                : 'bg-gradient-to-r from-red-900 to-red-700'
-                              : 'bg-gradient-to-r from-[#6b5430] via-[#c9a25f] to-[#e7c682]'
-                          }`}
-                        />
-                        {/* Brilho que percorre a barra enquanto carrega */}
-                        {phase === 'charging' && (
-                          <motion.div
-                            initial={{ x: '-120%' }}
-                            animate={{ x: '500%' }}
-                            transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
-                            className="absolute inset-y-0 left-0 w-1/4 bg-gradient-to-r from-transparent via-white/50 to-transparent"
-                          />
-                        )}
-                      </motion.div>
-
-                      {/* Mensagem do resultado */}
-                      {phase === 'done' && result && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 6 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className={`mt-2 text-center text-sm font-bold ${
-                            result.success
-                              ? 'text-emerald-300'
-                              : result.destroyed
-                                ? 'text-red-300'
-                                : 'text-orange-300'
-                          }`}
+                  <div className="px-5 pb-2 pt-1">
+                    <div className="mb-1 text-center text-sm font-semibold">
+                      {phase === 'charging' && (
+                        <motion.span
+                          animate={{ opacity: [0.5, 1, 0.5] }}
+                          transition={{ repeat: Infinity, duration: 0.7 }}
+                          style={{ color: GOLD_BRIGHT }}
                         >
-                          {result.message}
-                          {!result.success && !result.destroyed && (
-                            <div className="mt-0.5 text-xs font-normal text-purple-300">
-                              Failstacks acumulados: 🔥 {result.failstacks}
-                            </div>
-                          )}
-                        </motion.div>
+                          ⚒ Forjando...
+                        </motion.span>
+                      )}
+                      {phase === 'done' && result?.success && (
+                        <span style={{ color: GOLD_BRIGHT }}>✨ SUCESSO!</span>
+                      )}
+                      {phase === 'done' && !result?.success && (
+                        <span className={result?.destroyed ? 'text-red-400' : 'text-orange-400'}>
+                          {result?.destroyed ? '💔 DESTRUÍDO!' : '💥 FALHOU!'}
+                        </span>
                       )}
                     </div>
+
+                    {/* Mensagem do resultado */}
+                    {phase === 'done' && result && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`text-center text-sm font-bold ${
+                          result.success
+                            ? 'text-emerald-300'
+                            : result.destroyed
+                              ? 'text-red-300'
+                              : 'text-orange-300'
+                        }`}
+                      >
+                        {result.message}
+                        {!result.success && !result.destroyed && (
+                          <div className="mt-0.5 text-xs font-normal text-purple-300">
+                            Failstacks acumulados: 🔥 {result.failstacks}
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
                   </div>
                 )}
 

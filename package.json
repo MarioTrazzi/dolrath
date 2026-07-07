@@ -37,7 +37,8 @@
     "chain:deploy:character-market:polygon": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network polygon web3/scripts/deploy-character-market.ts",
     "chain:mint:amoy": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network polygonAmoy web3/scripts/mint-dol.ts",
     "cloudinary:upload-test-assets": "node scripts/upload-cloudinary-test-assets.js",
-    "sim:economy": "TS_NODE_TRANSPILE_ONLY=1 ts-node --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\",\"esModuleInterop\":true,\"jsx\":\"react-jsx\"}' -r tsconfig-paths/register scripts/economy-unified-sim.ts"
+    "sim:economy": "TS_NODE_TRANSPILE_ONLY=1 ts-node --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\",\"esModuleInterop\":true,\"jsx\":\"react-jsx\"}' -r tsconfig-paths/register scripts/economy-unified-sim.ts",
+    "sim:crafting": "TS_NODE_TRANSPILE_ONLY=1 ts-node --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\",\"esModuleInterop\":true,\"jsx\":\"react-jsx\"}' -r tsconfig-paths/register scripts/crafting-profession-sim.ts"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

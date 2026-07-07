@@ -172,6 +172,8 @@ model Character {
   // 🌾 XP de profissão (níveis derivados em professionSystem.ts)
   gatherXp      Int             @default(0)   // Coleta (mineração/ervas/bosque)
   farmXp        Int             @default(0)   // Fazenda (cultivo/poço/cercado)
+  forgeXp       Int             @default(0)   // Forja (craft de equipamento/refino) — nível GLOBAL da conta (craftingServer.ts)
+  alchemyXp     Int             @default(0)   // Alquimia (craft de poções) — nível GLOBAL da conta (craftingServer.ts)
   // Âncora do regen passivo: marca o último gasto de stamina. Regen só começa
   // 15 min depois deste instante, então acumula +2 a cada 15 min (lazy, sem cron).
   staminaUpdatedAt DateTime     @default(now())

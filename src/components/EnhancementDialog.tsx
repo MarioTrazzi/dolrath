@@ -1,13 +1,19 @@
 'use client';
 
 // ⚒️ Diálogo de Aprimoramento de Itens — estilo Black Desert
-// Mostra chance de sucesso (com failstacks), durabilidade, material necessário
-// e os riscos da tentativa (perda de durabilidade, downgrade ou destruição).
+// Painel chumbo com faixas (sem cards flutuantes): material → linha-circuito com a
+// chance → moldura em losango ornamentada com o item. Aviso de risco em laranja,
+// faixa de stats com "Chance adicionada" dos failstacks e botões em bisel.
 
 import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getLevelLabel, applyEnhancementToStats, getGearCategory } from '@/lib/enhancementSystem';
+import {
+  getLevelLabel,
+  applyEnhancementToStats,
+  getGearCategory,
+  getBaseChance,
+} from '@/lib/enhancementSystem';
 import { itemStatEntries, formatStatValue } from '@/lib/itemStats';
 import ItemIcon from './ItemIcon';
 import { resolveImageUrl } from '@/lib/imageUrl';
@@ -77,6 +83,11 @@ interface EnhancementDialogProps {
   repairOverride?: () => Promise<{ success: boolean; durability: number; message: string }>;
   onChanged?: () => void;
 }
+
+// Paleta do painel (chumbo + ouro envelhecido, tirada da referência)
+const GOLD = '#c9a25f';
+const GOLD_BRIGHT = '#e7c682';
+const WARN = '#e09a3a';
 
 export default function EnhancementDialog({
   open,
@@ -222,16 +233,35 @@ export default function EnhancementDialog({
   if (!open || typeof document === 'undefined') return null;
 
   const chancePct = info?.chance !== undefined ? (info.chance * 100).toFixed(1) : null;
+  const chanceColor =
+    (info?.chance ?? 0) >= 0.7
+      ? 'text-emerald-300'
+      : (info?.chance ?? 0) >= 0.3
+        ? 'text-amber-300'
+        : 'text-red-400';
   const durabilityPct =
     info?.durability !== undefined && info?.maxDurability
       ? Math.round((info.durability / info.maxDurability) * 100)
       : null;
   const isAccessory = info?.category === 'ACCESSORY';
 
-  // Imagem do item para o cabeçalho (banco → asset por nome → ícone genérico).
+  // Imagem do item para a moldura (banco → asset por nome → ícone genérico).
   const headerImg = info
     ? resolveImageUrl(info.itemImage) ?? (info.itemName ? itemImagePath(info.itemName) : null)
     : null;
+
+  // Imagem do material: pedra pelo nome do catálogo; cópia usa a arte do próprio item.
+  const materialImg = info?.material
+    ? info.material.kind === 'DUPLICATE'
+      ? headerImg
+      : itemImagePath(info.material.name)
+    : null;
+
+  // Bônus dos failstacks sobre a chance base ("Chance adicionada", como na referência).
+  const addedChance =
+    info && !info.maxLevel && info.category && info.targetLevel != null && info.chance != null
+      ? Math.max(0, info.chance - getBaseChance(info.category, info.targetLevel))
+      : null;
 
   // Prévia "atual → projetado": aplica o multiplicador do nível atual e do nível
   // alvo aos stats base, para o jogador decidir com informação.
@@ -258,6 +288,13 @@ export default function EnhancementDialog({
         })()
       : [];
 
+  const nameColor =
+    info && info.currentLevel >= 16
+      ? 'text-orange-400'
+      : info && info.currentLevel > 0
+        ? 'text-cyan-300'
+        : 'text-white';
+
   // Renderiza num portal no body: o card da bancada (e outros pais) usa
   // backdrop-filter, que cria bloco de contenção para position:fixed e cortaria
   // o diálogo (quebrando a rolagem). No body ele fica sempre na frente de tudo.
@@ -271,105 +308,247 @@ export default function EnhancementDialog({
         onClick={onClose}
       >
         <motion.div
-          initial={{ scale: 0.9, y: 20 }}
+          initial={{ scale: 0.95, y: 16 }}
           animate={{ scale: 1, y: 0 }}
-          exit={{ scale: 0.9, y: 20 }}
-          className="w-full max-w-md max-h-[90dvh] overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden rounded-xl border border-amber-500/30 bg-gradient-to-b from-gray-900 to-gray-950 p-6 shadow-2xl shadow-amber-900/30"
+          exit={{ scale: 0.95, y: 16 }}
+          className="flex max-h-[90dvh] w-full max-w-md flex-col overflow-hidden rounded-[4px] border border-[#46464c] bg-[#1e1e21] shadow-2xl shadow-black/80"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Cabeçalho */}
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-bold text-amber-400">⚒️ Aprimoramento</h2>
+          {/* Barra de título (faixa em bisel, como na referência) */}
+          <div className="flex shrink-0 items-center justify-between border-b border-black/70 bg-gradient-to-b from-[#2b2b2f] to-[#1a1a1d] px-4 py-2.5">
+            <h2 className="flex items-center gap-2 text-[15px] font-semibold tracking-wide text-[#dcdce0]">
+              <span style={{ color: GOLD }}>⚒</span> Aprimoramento
+            </h2>
             <button
               onClick={onClose}
-              className="rounded-lg px-2 py-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+              className="px-2 py-0.5 text-[#8a8a90] transition-colors hover:text-white"
             >
               ✕
             </button>
           </div>
 
-          {loading && (
-            <div className="py-10 text-center text-gray-400">Consultando o Espírito Negro...</div>
-          )}
+          {/* Corpo rolável */}
+          <div className="overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {loading && (
+              <div className="py-12 text-center text-sm text-[#9a9aa0]">
+                Consultando o Espírito Negro...
+              </div>
+            )}
 
-          {!loading && !selectedId && (
-            <div className="rounded-lg border border-white/10 bg-black/40 p-6 text-center text-gray-300">
-              <div className="mb-1 text-3xl">⚒️</div>
-              Selecione abaixo o item que deseja aprimorar.
-            </div>
-          )}
+            {!loading && !selectedId && (
+              <div className="px-6 py-10 text-center text-sm text-[#b8b8be]">
+                <div className="mb-2 text-3xl">⚒</div>
+                Selecione abaixo o item que deseja aprimorar.
+              </div>
+            )}
 
-          {!loading && info && (
-            <>
-              {/* Card único: arma + progressão à esquerda, prévia de stats à
-                  direita (mesma altura). Oculto se o item foi destruído. */}
-              {!result?.destroyed && (() => {
-                const hasStats = !info.maxLevel && statComparison.length > 0;
-                return (
-                <div className="mb-4 rounded-lg border border-white/10 bg-black/40 p-4">
-                  <div className="flex items-stretch gap-4">
-                    {/* Coluna esquerda: arma + nível atual → alvo */}
-                    <div className={`flex flex-col justify-center text-center ${hasStats ? 'flex-1' : 'w-full'}`}>
-                      <div className="flex items-center justify-center gap-2.5">
-                        <span className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/15 bg-gradient-to-br from-[#1c232b] to-[#0d1116]">
+            {!loading && info && (
+              <>
+                {/* ✦ Circuito de aprimoramento: material ── chance ──▶ ◆ item */}
+                {!result?.destroyed && (
+                  <div className="relative px-5 pb-3 pt-6">
+                    {/* Névoa dourada atrás da moldura */}
+                    <div
+                      className="pointer-events-none absolute right-2 top-2 h-32 w-32"
+                      style={{
+                        background:
+                          'radial-gradient(circle, rgba(201,162,95,0.16) 0%, transparent 65%)',
+                      }}
+                    />
+                    <div className="flex items-center gap-1">
+                      {/* Material (à esquerda, com contagem) */}
+                      {!info.maxLevel && info.material ? (
+                        <div className="flex w-[74px] shrink-0 flex-col items-center gap-1.5">
+                          <div
+                            className={`relative h-14 w-14 rounded-[3px] border p-px shadow-[inset_0_0_10px_rgba(0,0,0,0.8)] ${
+                              info.materialAvailable
+                                ? 'border-[#8a6d3b] bg-gradient-to-b from-[#26262a] to-[#101013]'
+                                : 'border-[#5a2e2e] bg-gradient-to-b from-[#241a1a] to-[#100c0c]'
+                            }`}
+                          >
+                            {materialImg ? (
+                              <img
+                                src={materialImg}
+                                alt={info.material.name}
+                                className={`h-full w-full rounded-[2px] object-cover art-bright ${
+                                  info.materialAvailable ? '' : 'opacity-40 grayscale'
+                                }`}
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              <span className="flex h-full w-full items-center justify-center text-white">
+                                <ItemIcon type={(info.itemType as any) || 'SWORD'} size={22} />
+                              </span>
+                            )}
+                            <span
+                              className={`absolute -bottom-1.5 -right-1.5 rounded-[2px] border border-black/80 px-1 text-[10px] font-bold ${
+                                info.materialAvailable
+                                  ? 'bg-[#101012] text-[#e7c682]'
+                                  : 'bg-[#1c0f0f] text-red-400'
+                              }`}
+                            >
+                              {info.materialCount ?? (info.materialAvailable ? 1 : 0)}
+                            </span>
+                          </div>
+                          <span className="w-[74px] text-center text-[10px] leading-tight text-[#9a9aa0]">
+                            {info.material.kind === 'DUPLICATE' ? 'Cópia do item' : info.material.name}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="w-[74px] shrink-0" />
+                      )}
+
+                      {/* Linha-circuito com nó em losango e a chance flutuando */}
+                      <div className="relative min-w-0 flex-1 self-stretch">
+                        {!info.maxLevel && (
+                          <>
+                            <div
+                              className="absolute left-0 right-0 top-1/2 h-px"
+                              style={{
+                                background: `linear-gradient(to right, rgba(201,162,95,0.12), rgba(201,162,95,0.55), rgba(201,162,95,0.8))`,
+                              }}
+                            />
+                            <span
+                              className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rotate-45 border bg-[#1e1e21]"
+                              style={{ borderColor: GOLD }}
+                            />
+                            {chancePct && (
+                              <div className="absolute inset-x-0 top-1/2 -translate-y-[calc(100%+10px)] text-center">
+                                <span className={`text-2xl font-bold tabular-nums ${chanceColor}`}>
+                                  {chancePct}%
+                                </span>
+                              </div>
+                            )}
+                            <div className="absolute inset-x-0 top-1/2 translate-y-[10px] text-center text-[10px] uppercase tracking-[0.14em] text-[#77777d]">
+                              chance
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      {/* ◆ Moldura em losango com o item (elemento-assinatura) */}
+                      <div className="relative grid h-32 w-32 shrink-0 place-items-center">
+                        {/* Moldura externa */}
+                        <div
+                          className="absolute inset-[19px] rotate-45 rounded-[3px] border bg-gradient-to-br from-[#2c2620] to-[#141210]"
+                          style={{
+                            borderColor: '#8a6d3b',
+                            boxShadow: '0 0 22px rgba(201,162,95,0.28)',
+                          }}
+                        />
+                        {/* Janela interna que recorta a arte */}
+                        <div
+                          className="absolute inset-[30px] rotate-45 overflow-hidden rounded-[2px] border bg-black"
+                          style={{ borderColor: 'rgba(201,162,95,0.55)' }}
+                        >
                           {headerImg ? (
-                            <img src={headerImg} alt={info.itemName || ''} className="h-full w-full object-cover art-bright" referrerPolicy="no-referrer" />
+                            <img
+                              src={headerImg}
+                              alt={info.itemName || ''}
+                              className="absolute left-1/2 top-1/2 h-[142%] w-[142%] max-w-none -translate-x-1/2 -translate-y-1/2 -rotate-45 object-cover art-bright"
+                              referrerPolicy="no-referrer"
+                            />
                           ) : (
-                            <ItemIcon type={(info.itemType as any) || 'SWORD'} size={22} />
-                          )}
-                          {info.currentLevel > 0 && (
-                            <span className="absolute right-0.5 bottom-0 text-[10px] font-black text-[#f1d79a]" style={{ textShadow: '0 1px 2px #000' }}>
-                              {getLevelLabel(info.currentLevel)}
+                            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-45 text-white">
+                              <ItemIcon type={(info.itemType as any) || 'SWORD'} size={30} />
                             </span>
                           )}
-                        </span>
-                        <div
-                          className={`text-left text-base font-semibold leading-tight ${
-                            info.currentLevel >= 16
-                              ? 'text-orange-400'
-                              : info.currentLevel > 0
-                                ? 'text-cyan-300'
-                                : 'text-white'
-                          }`}
-                        >
-                          {info.itemName || info.displayName}
                         </div>
+                        {/* Cravos nos 4 vértices */}
+                        {[
+                          'left-1/2 top-[13px] -translate-x-1/2',
+                          'left-1/2 bottom-[13px] -translate-x-1/2',
+                          'top-1/2 left-[13px] -translate-y-1/2',
+                          'top-1/2 right-[13px] -translate-y-1/2',
+                        ].map((pos) => (
+                          <span
+                            key={pos}
+                            className={`absolute ${pos} h-[7px] w-[7px] rotate-45 border border-[#8a6d3b] bg-[#1e1e21]`}
+                          />
+                        ))}
+                        {/* Placa do nível alvo no vértice inferior */}
+                        {!info.maxLevel && info.targetLabel && (
+                          <span
+                            className="absolute bottom-1 left-1/2 z-10 -translate-x-1/2 rounded-[2px] border px-1.5 text-[11px] font-black"
+                            style={{
+                              borderColor: '#8a6d3b',
+                              background: '#141210',
+                              color: GOLD_BRIGHT,
+                            }}
+                          >
+                            {info.targetLabel}
+                          </span>
+                        )}
                       </div>
-                      {!info.maxLevel && (
-                        <div className="mt-2 flex items-center justify-center gap-2 text-xl font-bold">
-                          <span className="text-gray-400">
+                    </div>
+
+                    {/* Nome do item + progressão de nível */}
+                    <div className="mt-2 text-center">
+                      <div className={`text-[15px] font-semibold leading-tight ${nameColor}`}>
+                        {info.itemName || info.displayName}
+                      </div>
+                      {!info.maxLevel ? (
+                        <div className="mt-1 text-sm font-bold">
+                          <span className="text-[#8a8a90]">
                             {getLevelLabel(info.currentLevel) || 'Base'}
                           </span>
-                          <span className="text-amber-400">→</span>
-                          <span className="text-amber-300">{info.targetLabel}</span>
+                          <span className="mx-2" style={{ color: GOLD }}>
+                            ❯❯
+                          </span>
+                          <span style={{ color: GOLD_BRIGHT }}>{info.targetLabel}</span>
                         </div>
-                      )}
-                      {info.maxLevel && (
-                        <div className="mt-2 text-sm font-semibold text-orange-400">
+                      ) : (
+                        <div className="mt-1 text-sm font-semibold text-orange-400">
                           🏆 Nível máximo alcançado (V)
                         </div>
                       )}
                     </div>
+                  </div>
+                )}
 
-                    {/* Coluna direita: prévia de stats atual → projetado */}
-                    {hasStats && (
-                      <div className="flex-1 border-l border-white/10 pl-4">
-                        <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                          Após aprimorar
-                        </div>
-                        <div className="space-y-1.5">
+                {!info.maxLevel && !result?.destroyed && (
+                  <>
+                    {/* Avisos de risco (texto corrido em laranja, como na referência) */}
+                    <div className="space-y-1 px-5 pb-4 text-[12.5px] leading-snug">
+                      <p style={{ color: isAccessory ? '#e05252' : WARN }}>{info.risk}</p>
+                      <p className="text-[#77777d]">
+                        Consome 1× {info.material?.kind === 'DUPLICATE'
+                          ? `cópia de ${info.material.name}`
+                          : info.material?.name}{' '}
+                        por tentativa.
+                        {!info.materialAvailable && (
+                          <span className="font-semibold text-red-400"> Você não possui o material.</span>
+                        )}
+                      </p>
+                    </div>
+
+                    {/* Faixa de valores: prévia de stats + failstacks + chance adicionada */}
+                    <div className="border-y border-black/60 bg-[#19191c] px-5 py-3">
+                      {statComparison.length > 0 && (
+                        <div className="mb-1 space-y-1">
                           {statComparison.map((s) => {
                             const delta = Math.round((s.to - s.from) * 10) / 10;
                             return (
-                              <div key={s.key} className="flex items-center justify-between gap-2 text-sm">
-                                <span className="text-gray-300">{s.label}</span>
+                              <div
+                                key={s.key}
+                                className="flex items-center justify-between gap-2 border-b border-white/5 pb-1 text-[13px] last:border-0"
+                              >
+                                <span className="flex items-center gap-1.5 text-[#c9c9ce]">
+                                  <span className="text-[9px]" style={{ color: GOLD }}>
+                                    ✦
+                                  </span>
+                                  {s.label}
+                                </span>
                                 <span className="flex items-center gap-1.5 font-semibold tabular-nums">
-                                  <span className="text-gray-400">{formatStatValue(s.from)}</span>
-                                  <span className="text-amber-400">→</span>
+                                  <span className="text-[#8a8a90]">{formatStatValue(s.from)}</span>
+                                  <span style={{ color: GOLD }}>→</span>
                                   <span className="text-emerald-300">{formatStatValue(s.to)}</span>
                                   {delta !== 0 && (
-                                    <span className={`text-xs ${delta > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                      ({delta > 0 ? '+' : ''}{formatStatValue(delta)})
+                                    <span
+                                      className={`text-[11px] ${delta > 0 ? 'text-emerald-400' : 'text-red-400'}`}
+                                    >
+                                      ({delta > 0 ? '+' : ''}
+                                      {formatStatValue(delta)})
                                     </span>
                                   )}
                                 </span>
@@ -377,322 +556,280 @@ export default function EnhancementDialog({
                             );
                           })}
                         </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                );
-              })()}
+                      )}
 
-              {!info.maxLevel && !result?.destroyed && (
-                <>
-                  {/* Chance e failstacks */}
-                  <div className="mb-4 grid grid-cols-2 gap-3">
-                    <div className="rounded-lg border border-white/10 bg-black/40 p-3 text-center">
-                      <div className="text-xs uppercase tracking-wide text-gray-500">
-                        Chance de sucesso
+                      <div className="flex items-center justify-between pt-1 text-[13px]">
+                        <span className="text-[#c9c9ce]">Failstacks</span>
+                        <span className="font-bold text-purple-300">🔥 {info.failstacks}</span>
                       </div>
-                      <div
-                        className={`mt-1 text-2xl font-bold ${
-                          (info.chance ?? 0) >= 0.7
-                            ? 'text-green-400'
-                            : (info.chance ?? 0) >= 0.3
-                              ? 'text-yellow-400'
-                              : 'text-red-400'
-                        }`}
-                      >
-                        {chancePct}%
-                      </div>
-                    </div>
-                    <div className="rounded-lg border border-white/10 bg-black/40 p-3 text-center">
-                      <div className="text-xs uppercase tracking-wide text-gray-500">Failstacks</div>
-                      <div className="mt-1 text-2xl font-bold text-purple-400">
-                        🔥 {info.failstacks}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Durabilidade (não se aplica a acessórios) */}
-                  {!isAccessory && durabilityPct !== null && (
-                    <div className="mb-4">
-                      <div className="mb-1 flex justify-between text-xs text-gray-400">
-                        <span>Durabilidade</span>
-                        <span>
-                          {info.durability}/{info.maxDurability}
-                        </span>
-                      </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-gray-800">
-                        <div
-                          className={`h-full rounded-full transition-all ${
-                            durabilityPct > 50
-                              ? 'bg-green-500'
-                              : durabilityPct > 20
-                                ? 'bg-yellow-500'
-                                : 'bg-red-500'
-                          }`}
-                          style={{ width: `${durabilityPct}%` }}
-                        />
-                      </div>
-                      {!info.enoughDurability && (
-                        <div className="mt-2 flex items-center justify-between gap-2">
-                          <span className="text-xs text-red-400">
-                            Durabilidade insuficiente para tentar!
+                      {addedChance !== null && addedChance > 0 && (
+                        <div className="mt-1.5 flex items-center justify-between border-t border-white/5 pt-1.5 text-[13px]">
+                          <span className="font-semibold" style={{ color: GOLD_BRIGHT }}>
+                            Chance adicionada
                           </span>
-                          <button
-                            onClick={handleRepair}
-                            className="rounded-lg bg-blue-600 px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-blue-500"
-                          >
-                            🔧 Reparar (1 cópia)
-                          </button>
+                          <span className="flex items-center gap-2 font-bold tabular-nums">
+                            <span style={{ color: GOLD }}>❯❯❯</span>
+                            <span style={{ color: GOLD_BRIGHT }}>
+                              +{(addedChance * 100).toFixed(1)}%
+                            </span>
+                          </span>
                         </div>
                       )}
                     </div>
-                  )}
 
-                  {/* Material necessário */}
-                  <div
-                    className={`mb-4 rounded-lg border p-3 text-sm ${
-                      info.materialAvailable
-                        ? 'border-green-500/30 bg-green-500/10 text-green-300'
-                        : 'border-red-500/30 bg-red-500/10 text-red-300'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span>
-                        <span className="font-semibold">Material: </span>
-                        {info.material?.kind === 'DUPLICATE'
-                          ? `1× cópia de ${info.material.name}`
-                          : `1× ${info.material?.name}`}
-                      </span>
-                      {/* Quantidade disponível — diminui a cada uso (refetch pós-tentativa). */}
-                      <span className="shrink-0 rounded-md bg-black/40 px-2 py-0.5 text-xs font-bold">
-                        {info.materialCount ?? (info.materialAvailable ? 1 : 0)}× disponível
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Aviso de risco */}
-                  <div
-                    className={`mb-4 rounded-lg border p-3 text-sm ${
-                      isAccessory
-                        ? 'border-red-500/40 bg-red-950/40 text-red-300'
-                        : 'border-amber-500/30 bg-amber-950/30 text-amber-200'
-                    }`}
-                  >
-                    {info.risk}
-                  </div>
-                </>
-              )}
-
-              {/* ⚒️ Barra de aprimoramento estilo BDO: carrega e, ao encher, brilha ou apaga */}
-              {phase !== 'idle' && (
-                <div className="relative mb-4">
-                  {/* Explosão de luz dourada ao ter sucesso */}
-                  <AnimatePresence>
-                    {phase === 'done' && result?.success && (
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.4 }}
-                        animate={{ opacity: [0, 1, 0], scale: [0.4, 1.6, 2.2] }}
-                        transition={{ duration: 1 }}
-                        className="pointer-events-none absolute -inset-8 z-10"
-                        style={{
-                          background:
-                            'radial-gradient(circle, rgba(253,224,71,0.9) 0%, rgba(245,158,11,0.35) 40%, transparent 70%)',
-                        }}
-                      />
-                    )}
-                  </AnimatePresence>
-
-                  <div className="relative z-20">
-                    <div className="mb-1 text-center text-sm font-semibold">
-                      {phase === 'charging' && (
-                        <motion.span
-                          animate={{ opacity: [0.5, 1, 0.5] }}
-                          transition={{ repeat: Infinity, duration: 0.7 }}
-                          className="text-amber-300"
-                        >
-                          ⚒️ Forjando...
-                        </motion.span>
-                      )}
-                      {phase === 'done' && result?.success && (
-                        <span className="text-yellow-300">✨ SUCESSO!</span>
-                      )}
-                      {phase === 'done' && !result?.success && (
-                        <span className={result?.destroyed ? 'text-red-400' : 'text-orange-400'}>
-                          {result?.destroyed ? '💔 DESTRUÍDO!' : '💥 FALHOU!'}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Trilho + preenchimento */}
-                    <motion.div
-                      animate={
-                        phase === 'done' && !result?.success
-                          ? { x: [0, -8, 8, -6, 6, -3, 3, 0] }
-                          : {}
-                      }
-                      transition={{ duration: 0.5 }}
-                      className={`relative h-7 overflow-hidden rounded-full border bg-gray-900 ${
-                        phase === 'done' && result?.success
-                          ? 'border-yellow-300/70 shadow-[0_0_25px_rgba(253,224,71,0.8)]'
-                          : phase === 'done'
-                            ? 'border-red-600/50'
-                            : 'border-amber-500/40'
-                      }`}
-                    >
-                      <motion.div
-                        key={chargeId}
-                        initial={{ width: '0%' }}
-                        animate={{ width: '100%' }}
-                        transition={{ duration: CHARGE_MS / 1000, ease: [0.45, 0, 0.55, 1] }}
-                        className={`h-full ${
-                          phase === 'done'
-                            ? result?.success
-                              ? 'bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-300'
-                              : 'bg-gradient-to-r from-red-800 to-red-600'
-                            : 'bg-gradient-to-r from-amber-700 via-amber-500 to-amber-400'
-                        }`}
-                      />
-                      {/* Brilho que percorre a barra enquanto carrega */}
-                      {phase === 'charging' && (
-                        <motion.div
-                          initial={{ x: '-120%' }}
-                          animate={{ x: '500%' }}
-                          transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
-                          className="absolute inset-y-0 left-0 w-1/4 bg-gradient-to-r from-transparent via-white/50 to-transparent"
-                        />
-                      )}
-                    </motion.div>
-
-                    {/* Mensagem do resultado */}
-                    {phase === 'done' && result && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className={`mt-2 text-center text-sm font-bold ${
-                          result.success
-                            ? 'text-green-300'
-                            : result.destroyed
-                              ? 'text-red-300'
-                              : 'text-orange-300'
-                        }`}
-                      >
-                        {result.message}
-                        {!result.success && !result.destroyed && (
-                          <div className="mt-0.5 text-xs font-normal text-purple-300">
-                            Failstacks acumulados: 🔥 {result.failstacks}
+                    {/* Durabilidade (não se aplica a acessórios) */}
+                    {!isAccessory && durabilityPct !== null && (
+                      <div className="px-5 py-3">
+                        <div className="mb-1 flex justify-between text-[11px] uppercase tracking-wide text-[#8a8a90]">
+                          <span>Durabilidade</span>
+                          <span className="tabular-nums">
+                            {info.durability}/{info.maxDurability}
+                          </span>
+                        </div>
+                        <div className="h-[7px] overflow-hidden rounded-[2px] border border-black/70 bg-[#101013]">
+                          <div
+                            className={`h-full transition-all ${
+                              durabilityPct > 50
+                                ? 'bg-gradient-to-r from-[#8a6d3b] to-[#c9a25f]'
+                                : durabilityPct > 20
+                                  ? 'bg-gradient-to-r from-amber-700 to-amber-500'
+                                  : 'bg-gradient-to-r from-red-800 to-red-600'
+                            }`}
+                            style={{ width: `${durabilityPct}%` }}
+                          />
+                        </div>
+                        {!info.enoughDurability && (
+                          <div className="mt-2 flex items-center justify-between gap-2">
+                            <span className="text-xs text-red-400">
+                              Durabilidade insuficiente para tentar!
+                            </span>
+                            <button
+                              onClick={handleRepair}
+                              className="rounded-[3px] border border-[#46464c] bg-gradient-to-b from-[#2b2b2f] to-[#1c1c1f] px-3 py-1 text-xs font-semibold text-[#c9c9ce] transition-colors hover:border-[#8a6d3b] hover:text-white"
+                            >
+                              🔧 Reparar (1 cópia)
+                            </button>
                           </div>
                         )}
-                      </motion.div>
+                      </div>
                     )}
-                  </div>
-                </div>
-              )}
+                  </>
+                )}
 
-              {error && (
-                <div className="mb-4 rounded-lg border border-red-500/40 bg-red-950/40 p-3 text-sm text-red-300">
-                  {error}
-                </div>
-              )}
-
-              {/* Botão de aprimorar */}
-              {!info.maxLevel && !(result?.destroyed) && (
-                <button
-                  onClick={handleEnhance}
-                  disabled={attempting || !info.canEnhance}
-                  className={`w-full rounded-lg py-3 text-lg font-bold transition-all ${
-                    attempting
-                      ? 'cursor-wait bg-amber-700/50 text-amber-200'
-                      : info.canEnhance
-                        ? 'bg-gradient-to-r from-amber-600 to-amber-500 text-black shadow-lg shadow-amber-900/50 hover:from-amber-500 hover:to-amber-400'
-                        : 'cursor-not-allowed bg-gray-800 text-gray-500'
-                  }`}
-                >
-                  {attempting ? (
-                    <motion.span
-                      animate={{ opacity: [1, 0.4, 1] }}
-                      transition={{ repeat: Infinity, duration: 0.8 }}
-                    >
-                      ⚒️ Aprimorando...
-                    </motion.span>
-                  ) : (
-                    '⚒️ Aprimorar'
-                  )}
-                </button>
-              )}
-
-              {result?.destroyed && (
-                <button
-                  onClick={onClose}
-                  className="w-full rounded-lg bg-gray-800 py-3 font-bold text-gray-300 transition-colors hover:bg-gray-700"
-                >
-                  Fechar
-                </button>
-              )}
-            </>
-          )}
-
-          {!loading && !info && error && (
-            <div className="rounded-lg border border-red-500/40 bg-red-950/40 p-3 text-sm text-red-300">
-              {error}
-            </div>
-          )}
-
-          {/* Seletor: inventário do personagem para escolher o item a aprimorar.
-              Vindo de uma Pedra Negra, filtra pela categoria que a pedra aprimora. */}
-          {(() => {
-            const pickable = filterCategory
-              ? (items || []).filter((it) => getGearCategory(it.type) === filterCategory)
-              : items || [];
-            if (pickable.length === 0) {
-              return filterCategory ? (
-                <div className="mt-5 border-t border-white/10 pt-4 text-center text-sm text-gray-400">
-                  Nenhum{filterCategory === 'WEAPON' ? 'a arma' : 'a armadura'} no inventário para esta pedra.
-                </div>
-              ) : null;
-            }
-            return (
-            <div className="mt-5 border-t border-white/10 pt-4">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
-                {filterCategory
-                  ? `Escolha ${filterCategory === 'WEAPON' ? 'a arma' : 'a peça'} para a pedra`
-                  : 'Itens do inventário'}
-              </div>
-              <div className="grid grid-cols-5 gap-2 sm:grid-cols-6">
-                {pickable.map((it) => {
-                  const img = resolveImageUrl(it.image) ?? (it.name ? itemImagePath(it.name) : null);
-                  const isSel = it.id === selectedId;
-                  return (
-                    <button
-                      key={it.id}
-                      onClick={() => setSelectedId(it.id)}
-                      title={`${it.name}${it.enhancementLevel > 0 ? ` ${getLevelLabel(it.enhancementLevel)}` : ''}`}
-                      className={`relative aspect-square overflow-hidden rounded-lg border transition-all ${
-                        isSel
-                          ? 'border-amber-400 ring-2 ring-amber-400/60'
-                          : 'border-white/15 hover:border-amber-400/60'
-                      }`}
-                      style={{ background: 'linear-gradient(160deg, #1c232b, #0d1116)' }}
-                    >
-                      {img ? (
-                        <img src={img} alt={it.name} className="h-full w-full object-cover art-bright" referrerPolicy="no-referrer" />
-                      ) : (
-                        <span className="flex h-full w-full items-center justify-center text-white">
-                          <ItemIcon type={it.type as any} size={22} />
-                        </span>
+                {/* ⚒️ Barra de aprimoramento estilo BDO: carrega e, ao encher, brilha ou apaga */}
+                {phase !== 'idle' && (
+                  <div className="relative px-5 pb-2 pt-1">
+                    {/* Explosão de luz dourada ao ter sucesso */}
+                    <AnimatePresence>
+                      {phase === 'done' && result?.success && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.4 }}
+                          animate={{ opacity: [0, 1, 0], scale: [0.4, 1.6, 2.2] }}
+                          transition={{ duration: 1 }}
+                          className="pointer-events-none absolute -inset-8 z-10"
+                          style={{
+                            background:
+                              'radial-gradient(circle, rgba(231,198,130,0.9) 0%, rgba(201,162,95,0.35) 40%, transparent 70%)',
+                          }}
+                        />
                       )}
-                      {it.enhancementLevel > 0 && (
-                        <span className="absolute right-0.5 bottom-0.5 text-[10px] font-black text-[#f1d79a]" style={{ textShadow: '0 1px 2px #000' }}>
-                          {getLevelLabel(it.enhancementLevel)}
-                        </span>
+                    </AnimatePresence>
+
+                    <div className="relative z-20">
+                      <div className="mb-1 text-center text-sm font-semibold">
+                        {phase === 'charging' && (
+                          <motion.span
+                            animate={{ opacity: [0.5, 1, 0.5] }}
+                            transition={{ repeat: Infinity, duration: 0.7 }}
+                            style={{ color: GOLD_BRIGHT }}
+                          >
+                            ⚒ Forjando...
+                          </motion.span>
+                        )}
+                        {phase === 'done' && result?.success && (
+                          <span style={{ color: GOLD_BRIGHT }}>✨ SUCESSO!</span>
+                        )}
+                        {phase === 'done' && !result?.success && (
+                          <span className={result?.destroyed ? 'text-red-400' : 'text-orange-400'}>
+                            {result?.destroyed ? '💔 DESTRUÍDO!' : '💥 FALHOU!'}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Trilho + preenchimento */}
+                      <motion.div
+                        animate={
+                          phase === 'done' && !result?.success
+                            ? { x: [0, -8, 8, -6, 6, -3, 3, 0] }
+                            : {}
+                        }
+                        transition={{ duration: 0.5 }}
+                        className={`relative h-6 overflow-hidden rounded-[3px] border bg-[#101013] ${
+                          phase === 'done' && result?.success
+                            ? 'border-[#e7c682] shadow-[0_0_25px_rgba(231,198,130,0.7)]'
+                            : phase === 'done'
+                              ? 'border-red-800/60'
+                              : 'border-[#8a6d3b]/60'
+                        }`}
+                      >
+                        <motion.div
+                          key={chargeId}
+                          initial={{ width: '0%' }}
+                          animate={{ width: '100%' }}
+                          transition={{ duration: CHARGE_MS / 1000, ease: [0.45, 0, 0.55, 1] }}
+                          className={`h-full ${
+                            phase === 'done'
+                              ? result?.success
+                                ? 'bg-gradient-to-r from-[#c9a25f] via-[#f3e0ae] to-[#c9a25f]'
+                                : 'bg-gradient-to-r from-red-900 to-red-700'
+                              : 'bg-gradient-to-r from-[#6b5430] via-[#c9a25f] to-[#e7c682]'
+                          }`}
+                        />
+                        {/* Brilho que percorre a barra enquanto carrega */}
+                        {phase === 'charging' && (
+                          <motion.div
+                            initial={{ x: '-120%' }}
+                            animate={{ x: '500%' }}
+                            transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
+                            className="absolute inset-y-0 left-0 w-1/4 bg-gradient-to-r from-transparent via-white/50 to-transparent"
+                          />
+                        )}
+                      </motion.div>
+
+                      {/* Mensagem do resultado */}
+                      {phase === 'done' && result && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className={`mt-2 text-center text-sm font-bold ${
+                            result.success
+                              ? 'text-emerald-300'
+                              : result.destroyed
+                                ? 'text-red-300'
+                                : 'text-orange-300'
+                          }`}
+                        >
+                          {result.message}
+                          {!result.success && !result.destroyed && (
+                            <div className="mt-0.5 text-xs font-normal text-purple-300">
+                              Failstacks acumulados: 🔥 {result.failstacks}
+                            </div>
+                          )}
+                        </motion.div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {error && (
+                  <div className="mx-4 mb-3 rounded-[3px] border border-red-900/70 bg-red-950/40 px-3 py-2 text-sm text-red-300">
+                    {error}
+                  </div>
+                )}
+
+                {/* Botão principal em bisel (faixa inferior, como na referência) */}
+                {!info.maxLevel && !result?.destroyed && (
+                  <div className="px-4 pb-4 pt-1">
+                    <button
+                      onClick={handleEnhance}
+                      disabled={attempting || !info.canEnhance}
+                      className={`w-full rounded-[3px] border py-2.5 text-[15px] font-semibold tracking-wide transition-all ${
+                        attempting
+                          ? 'cursor-wait border-[#8a6d3b]/50 bg-[#241f16] text-[#c9a25f]'
+                          : info.canEnhance
+                            ? 'border-[#8a6d3b] bg-gradient-to-b from-[#3a3325] to-[#241f16] text-[#e7c682] shadow-[inset_0_1px_0_rgba(231,198,130,0.25),0_0_14px_rgba(201,162,95,0.2)] hover:border-[#c9a25f] hover:from-[#4a4030] hover:to-[#2c261a]'
+                            : 'cursor-not-allowed border-[#3c3c41] bg-[#1a1a1d] text-[#57575c]'
+                      }`}
+                    >
+                      {attempting ? (
+                        <motion.span
+                          animate={{ opacity: [1, 0.4, 1] }}
+                          transition={{ repeat: Infinity, duration: 0.8 }}
+                        >
+                          ⚒ Aprimorando...
+                        </motion.span>
+                      ) : (
+                        '⚒ Aprimoramento'
                       )}
                     </button>
-                  );
-                })}
+                  </div>
+                )}
+
+                {result?.destroyed && (
+                  <div className="px-4 pb-4 pt-1">
+                    <button
+                      onClick={onClose}
+                      className="w-full rounded-[3px] border border-[#46464c] bg-gradient-to-b from-[#2b2b2f] to-[#1c1c1f] py-2.5 font-semibold text-[#c9c9ce] transition-colors hover:border-[#8a8a90] hover:text-white"
+                    >
+                      Fechar
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {!loading && !info && error && (
+              <div className="mx-4 my-4 rounded-[3px] border border-red-900/70 bg-red-950/40 px-3 py-2 text-sm text-red-300">
+                {error}
               </div>
-            </div>
-            );
-          })()}
+            )}
+
+            {/* Seletor: inventário do personagem para escolher o item a aprimorar.
+                Vindo de uma Pedra Negra, filtra pela categoria que a pedra aprimora. */}
+            {(() => {
+              const pickable = filterCategory
+                ? (items || []).filter((it) => getGearCategory(it.type) === filterCategory)
+                : items || [];
+              if (pickable.length === 0) {
+                return filterCategory ? (
+                  <div className="border-t border-black/60 bg-[#19191c] px-4 py-4 text-center text-sm text-[#8a8a90]">
+                    Nenhum{filterCategory === 'WEAPON' ? 'a arma' : 'a armadura'} no inventário para esta pedra.
+                  </div>
+                ) : null;
+              }
+              return (
+                <div className="border-t border-black/60 bg-[#19191c] px-4 py-3">
+                  <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8a8a90]">
+                    {filterCategory
+                      ? `Escolha ${filterCategory === 'WEAPON' ? 'a arma' : 'a peça'} para a pedra`
+                      : 'Itens do inventário'}
+                  </div>
+                  <div className="grid grid-cols-5 gap-2 sm:grid-cols-6">
+                    {pickable.map((it) => {
+                      const img = resolveImageUrl(it.image) ?? (it.name ? itemImagePath(it.name) : null);
+                      const isSel = it.id === selectedId;
+                      return (
+                        <button
+                          key={it.id}
+                          onClick={() => setSelectedId(it.id)}
+                          title={`${it.name}${it.enhancementLevel > 0 ? ` ${getLevelLabel(it.enhancementLevel)}` : ''}`}
+                          className={`relative aspect-square overflow-hidden rounded-[3px] border transition-all ${
+                            isSel
+                              ? 'border-[#c9a25f] shadow-[0_0_10px_rgba(201,162,95,0.4)]'
+                              : 'border-[#3c3c41] hover:border-[#8a6d3b]'
+                          }`}
+                          style={{ background: 'linear-gradient(160deg, #232327, #101013)' }}
+                        >
+                          {img ? (
+                            <img src={img} alt={it.name} className="h-full w-full object-cover art-bright" referrerPolicy="no-referrer" />
+                          ) : (
+                            <span className="flex h-full w-full items-center justify-center text-white">
+                              <ItemIcon type={it.type as any} size={22} />
+                            </span>
+                          )}
+                          {it.enhancementLevel > 0 && (
+                            <span className="absolute right-0.5 bottom-0.5 text-[10px] font-black text-[#f1d79a]" style={{ textShadow: '0 1px 2px #000' }}>
+                              {getLevelLabel(it.enhancementLevel)}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
         </motion.div>
       </motion.div>
     </AnimatePresence>,

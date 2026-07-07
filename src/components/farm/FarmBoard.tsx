@@ -14,7 +14,7 @@
 // colheita pega TODOS os canteiros prontos de uma vez, 1⚡ por canteiro para
 // o personagem ativo (que leva itens e XP).
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { CROPS, cropGrowSeconds, FARM_HARVEST_STAMINA, type CropDef } from '@/lib/farming'
 import { farmPlotUnlockLevel, FARM_TOTAL_PLOTS, type ProfessionLevelInfo } from '@/lib/professionSystem'
@@ -53,10 +53,9 @@ export interface FarmVM {
 }
 
 export interface HarvestResultVM {
-  /** Itens colhidos, agregados por nome (a colheita pega todos os canteiros prontos). */
-  items: { outputName: string; qty: number }[]
+  /** Um item por CANTEIRO colhido, na ordem processada (a UI anima nessa sequência). */
+  results: { outputName: string; qty: number; stoneName?: string }[]
   xpGained: number
-  stoneNames?: string[]
   harvested: number
   /** Canteiros prontos que ficaram para trás (stamina/inventário não cobriram). */
   skippedNoStamina?: number
@@ -71,7 +70,12 @@ const FLAVOR = [
   'Guardando tudo no cesto…',
 ]
 
-const HARVEST_ANIM_MS = 2200
+/** Duração da animação de colheita de CADA canteiro (a "working" pausa esse tempo por item). */
+const HARVEST_ITEM_ANIM_MS = 3000
+
+function cropByOutputName(outputName: string): CropDef | undefined {
+  return (Object.values(CROPS) as CropDef[]).find((c) => c.outputName === outputName)
+}
 
 function fmtCountdown(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds))
@@ -196,12 +200,14 @@ function HarvestDialog({
   const [phase, setPhase] = useState<'confirm' | 'working' | 'done' | 'error'>('confirm')
   const [flavorIdx, setFlavorIdx] = useState(0)
   const [result, setResult] = useState<HarvestResultVM | null>(null)
+  // Nº de canteiros já revelados na lista de "working" (0..result.results.length).
+  const [revealedCount, setRevealedCount] = useState(0)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   // Instantâneo dos canteiros prontos quando o dialog abriu: a colheita real
-  // já limpa os slots assim que o servidor responde, bem antes do timer
-  // cosmético de "working" terminar — sem este snapshot a lista (prop ao vivo)
-  // esvazia no meio da animação e o dialog desaparece sozinho.
+  // já limpa os slots assim que o servidor responde, bem antes da animação
+  // item a item terminar — sem este snapshot a lista (prop ao vivo) esvazia
+  // no meio da animação e o dialog desaparece sozinho.
   const [snapshot] = useState(readyPlots)
   const readyCrops = useMemo(() => {
     const byId = new Map<string, { crop: CropDef; count: number }>()
@@ -218,25 +224,37 @@ function HarvestDialog({
   // Quanto a stamina do personagem ativo cobre (o servidor aplica o mesmo corte).
   const harvestable = Math.min(readyCount, Math.floor(stamina / FARM_HARVEST_STAMINA))
   const cost = harvestable * FARM_HARVEST_STAMINA
-  if (readyCount === 0) return null
 
   const start = async () => {
     setPhase('working')
-    const flavorTimer = setInterval(() => setFlavorIdx((i) => (i + 1) % FLAVOR.length), 700)
     try {
-      const [res] = await Promise.all([
-        onHarvest(),
-        new Promise((r) => setTimeout(r, HARVEST_ANIM_MS)),
-      ])
-      clearInterval(flavorTimer)
+      const res = await onHarvest()
       setResult(res)
-      setPhase('done')
     } catch (err) {
-      clearInterval(flavorTimer)
       setErrorMsg(err instanceof Error ? err.message : 'Erro ao colher')
       setPhase('error')
     }
   }
+
+  // Flavor text rotativo enquanto aguarda a resposta do servidor (antes do resultado chegar).
+  useEffect(() => {
+    if (phase !== 'working' || result) return
+    const id = setInterval(() => setFlavorIdx((i) => (i + 1) % FLAVOR.length), 700)
+    return () => clearInterval(id)
+  }, [phase, result])
+
+  // Reveal canteiro a canteiro: ~3s por item (HARVEST_ITEM_ANIM_MS), depois vai pro resumo final.
+  useEffect(() => {
+    if (!result || phase !== 'working') return
+    if (revealedCount >= result.results.length) {
+      const t = setTimeout(() => setPhase('done'), 500)
+      return () => clearTimeout(t)
+    }
+    const t = setTimeout(() => setRevealedCount((c) => c + 1), HARVEST_ITEM_ANIM_MS)
+    return () => clearTimeout(t)
+  }, [result, revealedCount, phase])
+
+  if (readyCount === 0) return null
 
   return (
     <motion.div
@@ -289,7 +307,7 @@ function HarvestDialog({
           </div>
         )}
 
-        {phase === 'working' && (
+        {phase === 'working' && !result && (
           <div className="text-center py-2">
             <motion.div animate={{ rotate: [0, -8, 8, 0] }} transition={{ repeat: Infinity, duration: 0.9 }} className="text-4xl mb-3">
               {readyCrops[0]?.crop.emoji ?? '🌾'}
@@ -300,26 +318,76 @@ function HarvestDialog({
                 {FLAVOR[flavorIdx]}
               </motion.p>
             </AnimatePresence>
-            <div className="h-2.5 rounded-full bg-black/60 border border-white/10 overflow-hidden">
-              <motion.div
-                initial={{ width: '0%' }} animate={{ width: '100%' }}
-                transition={{ duration: HARVEST_ANIM_MS / 1000, ease: 'linear' }}
-                className="h-full rounded-full bg-gradient-to-r from-amber-400 to-primary"
-              />
-            </div>
             <div className="text-white/30 text-[10px] mt-2">não feche — a colheita está em andamento</div>
           </div>
         )}
 
-        {phase === 'done' && result && (
+        {phase === 'working' && result && (() => {
+          const total = result.results.length
+          const currentIdx = Math.min(revealedCount, total - 1)
+          const current = result.results[currentIdx]
+          const currentCrop = cropByOutputName(current.outputName)
+          const stillAnimating = revealedCount < total
+          return (
+            <div className="text-center py-2">
+              {stillAnimating && (
+                <>
+                  <motion.div key={currentIdx} initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: [1, 1.08, 1], opacity: 1, rotate: [0, -6, 6, 0] }} transition={{ duration: HARVEST_ITEM_ANIM_MS / 1000, repeat: Infinity }} className="text-4xl mb-2">
+                    {currentCrop?.emoji ?? '🌾'}
+                  </motion.div>
+                  <h2 className="text-white font-black text-base mb-1">
+                    Colhendo {currentCrop?.outputName ?? current.outputName}… <span className="text-white/40 font-bold">({currentIdx + 1}/{total})</span>
+                  </h2>
+                  <AnimatePresence mode="wait">
+                    <motion.p key={`${currentIdx}-${flavorIdx}`} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="text-white/45 text-xs mb-3 h-4">
+                      {FLAVOR[flavorIdx]}
+                    </motion.p>
+                  </AnimatePresence>
+                  <div className="h-2 rounded-full bg-black/60 border border-white/10 overflow-hidden mb-4">
+                    <motion.div
+                      key={currentIdx}
+                      initial={{ width: '0%' }} animate={{ width: '100%' }}
+                      transition={{ duration: HARVEST_ITEM_ANIM_MS / 1000, ease: 'linear' }}
+                      className="h-full rounded-full bg-gradient-to-r from-amber-400 to-primary"
+                    />
+                  </div>
+                </>
+              )}
+              {revealedCount > 0 && (
+                <div className="flex flex-col gap-1.5 max-h-44 overflow-y-auto text-left mb-1">
+                  {result.results.slice(0, revealedCount).map((item, i) => {
+                    const itemCrop = cropByOutputName(item.outputName)
+                    return (
+                      <motion.div key={i} initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} className="flex items-center justify-between rounded-lg border border-white/10 bg-black/40 px-3 py-1.5 text-xs">
+                        <span className="text-white/80">{itemCrop?.emoji ?? '🌾'} {item.outputName}</span>
+                        <span className="font-bold text-white flex items-center gap-1.5">
+                          ×{item.qty}
+                          {item.stoneName && <span className="text-fuchsia-300">💎</span>}
+                        </span>
+                      </motion.div>
+                    )
+                  })}
+                </div>
+              )}
+              <div className="text-white/30 text-[10px] mt-2">não feche — a colheita está em andamento</div>
+            </div>
+          )
+        })()}
+
+        {phase === 'done' && result && (() => {
+          const aggregated = new Map<string, number>()
+          for (const r of result.results) aggregated.set(r.outputName, (aggregated.get(r.outputName) ?? 0) + r.qty)
+          const aggregatedItems = Array.from(aggregated.entries()).map(([outputName, qty]) => ({ outputName, qty }))
+          const stoneNames = result.results.filter((r) => r.stoneName).map((r) => r.stoneName!)
+          return (
           <div className="text-center">
             <motion.div initial={{ scale: 0.6 }} animate={{ scale: 1 }} transition={{ type: 'spring', damping: 12 }} className="text-4xl mb-2">
               🧺
             </motion.div>
             <h2 className="text-white font-black text-lg mb-4">Colheita concluída!</h2>
             <div className="flex flex-col gap-2 mb-4">
-              {result.items.map((item, i) => {
-                const itemCrop = (Object.values(CROPS) as CropDef[]).find((c) => c.outputName === item.outputName)
+              {aggregatedItems.map((item, i) => {
+                const itemCrop = cropByOutputName(item.outputName)
                 return (
                   <motion.div key={item.outputName} initial={{ opacity: 0, x: -14 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 + i * 0.12 }} className="flex items-center justify-between rounded-xl border border-white/10 bg-black/40 px-4 py-3">
                     <span className="text-sm text-white/85">{itemCrop?.emoji ?? '🌾'} {item.outputName}</span>
@@ -327,7 +395,7 @@ function HarvestDialog({
                   </motion.div>
                 )
               })}
-              {(result.stoneNames ?? []).map((stoneName, i) => (
+              {stoneNames.map((stoneName, i) => (
                 <motion.div
                   key={`${stoneName}-${i}`}
                   initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.45 + i * 0.15, type: 'spring', damping: 10 }}
@@ -353,7 +421,8 @@ function HarvestDialog({
               Guardar no inventário
             </button>
           </div>
-        )}
+          )
+        })()}
 
         {phase === 'error' && (
           <div className="text-center">

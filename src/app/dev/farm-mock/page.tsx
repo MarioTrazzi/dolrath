@@ -103,7 +103,7 @@ export default function FarmMockPage() {
             if (slotIndex === 101) {
               setVm((prev) => ({ ...prev, stamina: prev.stamina - prev.actionStamina, pen: { ...prev.pen, state: 'empty', secondsLeft: 0 } }))
               push(`🧺 Colheu ${PEN.yield}× Couro (+${PEN.farmXp} XP)`)
-              return { items: [{ outputName: PEN.outputName, qty: PEN.yield }], xpGained: PEN.farmXp, harvested: 1 }
+              return { results: [{ outputName: PEN.outputName, qty: PEN.yield }], xpGained: PEN.farmXp, harvested: 1 }
             }
 
             // Colhe TODOS os prontos, limitado pela stamina (1⚡ por canteiro).
@@ -113,17 +113,20 @@ export default function FarmMockPage() {
             if (affordable <= 0) throw new Error('Stamina insuficiente.')
             const toHarvest = ready.slice(0, affordable)
 
-            const qtyByOutput: Record<string, number> = {}
-            const stoneNames: string[] = []
+            // Resultado POR CANTEIRO (não agregado) — a mesma forma que a API real
+            // devolve, pra HarvestDialog animar item a item.
+            const results: HarvestResultVM['results'] = []
             let xpGained = 0
             for (const p of toHarvest) {
               const crop = CROPS[p.cropId as keyof typeof CROPS]
-              qtyByOutput[crop.outputName] = (qtyByOutput[crop.outputName] ?? 0) + rollCropYield(crop)
+              const qty = rollCropYield(crop)
               xpGained += crop.farmXp
+              let stoneName: string | undefined
               if (Math.random() * 100 < farmStoneChance(vm.farm.level)) {
-                stoneNames.push(rollFarmStoneShard())
+                stoneName = rollFarmStoneShard()
                 xpGained += FARM_STONE_BONUS_XP
               }
+              results.push({ outputName: crop.outputName, qty, stoneName })
             }
 
             const harvestedSlots = new Set(toHarvest.map((p) => p.slotIndex))
@@ -134,13 +137,13 @@ export default function FarmMockPage() {
                 harvestedSlots.has(p.slotIndex) ? { ...p, cropId: null, state: 'empty', secondsLeft: 0, outputName: null } : p
               ),
             }))
-            const itemsDesc = Object.entries(qtyByOutput).map(([n, q]) => `${q}× ${n}`).join(', ')
+            const itemsDesc = results.map((r) => `${r.qty}× ${r.outputName}`).join(', ')
+            const stoneNames = results.filter((r) => r.stoneName).map((r) => r.stoneName!)
             push(stoneNames.length > 0 ? `🧺 Colheu ${itemsDesc} + 💎 ${stoneNames.join(', ')} (+${xpGained} XP)` : `🧺 Colheu ${itemsDesc} (+${xpGained} XP)`)
 
             return {
-              items: Object.entries(qtyByOutput).map(([outputName, qty]) => ({ outputName, qty })),
+              results,
               xpGained,
-              stoneNames,
               harvested: toHarvest.length,
               skippedNoStamina: ready.length - toHarvest.length,
             }

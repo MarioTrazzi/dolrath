@@ -13,6 +13,13 @@ import { addHistoryEntry } from '@/lib/characterHistory'
 
 export const dynamic = 'force-dynamic'
 
+/** Um canteiro colhido: nome/qtd do cultivo + estilhaço raro se caiu. */
+interface HarvestItemResult {
+  outputName: string
+  qty: number
+  stoneName?: string
+}
+
 // 🌾 Colheita da fazenda da CONTA. Sem slotIndex (ou com slot de canteiro):
 // colhe TODOS os canteiros prontos de uma vez — 1⚡ por canteiro, XP e itens
 // para o personagem que clicou. Com slotIndex 101, colhe o ciclo do cercado.
@@ -64,8 +71,7 @@ export async function POST(req: Request) {
         })
         await tx.farmPlot.update({ where: { id: pen.id }, data: { cropId: null, plantedAt: null, state: 'empty' } })
         return {
-          items: [{ outputName: PEN.outputName, qty: PEN.yield }],
-          stoneNames: [] as string[],
+          results: [{ outputName: PEN.outputName, qty: PEN.yield }] as HarvestItemResult[],
           xpGained: PEN.farmXp,
           harvested: 1,
           skippedNoStamina: 0,
@@ -94,8 +100,9 @@ export async function POST(req: Request) {
         throw new Error(`Stamina insuficiente (colher custa ${FARM_HARVEST_STAMINA}⚡ por canteiro).`)
       }
 
-      const qtyByOutput: Record<string, number> = {}
-      const stoneNames: string[] = []
+      // Resultado POR CANTEIRO (não agregado) — o cliente anima a colheita
+      // canteiro a canteiro, então precisa da sequência, não só o total.
+      const results: HarvestItemResult[] = []
       let xpGained = 0
       let harvested = 0
       let skippedNoSpace = 0
@@ -111,19 +118,21 @@ export async function POST(req: Request) {
           skippedNoSpace = ready.length - harvested
           break
         }
-        qtyByOutput[crop.outputName] = (qtyByOutput[crop.outputName] ?? 0) + qty
         xpGained += crop.farmXp
 
         // 💎 Chance rara de Estilhaço de Pedra Negra por canteiro colhido —
         // silenciosamente ignorado se o inventário estiver cheio.
+        let stoneName: string | undefined
         if (Math.random() * 100 < stoneChance) {
           const candidate = rollFarmStoneShard()
           const stoneOk = await addDropToInventoryTx(tx, characterId, { name: candidate, qty: 1 })
           if (stoneOk) {
-            stoneNames.push(candidate)
+            stoneName = candidate
             xpGained += FARM_STONE_BONUS_XP
           }
         }
+
+        results.push({ outputName: crop.outputName, qty, stoneName })
 
         await tx.farmPlot.update({
           where: { id: plot.id },
@@ -145,8 +154,7 @@ export async function POST(req: Request) {
       })
 
       return {
-        items: Object.entries(qtyByOutput).map(([outputName, qty]) => ({ outputName, qty })),
-        stoneNames,
+        results,
         xpGained,
         harvested,
         skippedNoStamina: Math.max(0, ready.length - harvested - skippedNoSpace),
@@ -157,18 +165,18 @@ export async function POST(req: Request) {
       }
     })
 
-    const itemsDesc = result.items.map((i) => `${i.qty}× ${i.outputName}`).join(', ')
+    const itemsDesc = result.results.map((i) => `${i.qty}× ${i.outputName}`).join(', ')
+    const stoneNames = result.results.filter((r) => r.stoneName).map((r) => r.stoneName!)
     addHistoryEntry({
       characterId,
       activityType: 'ITEM_GAINED',
-      description: result.stoneNames.length > 0
-        ? `🌾 Colheu ${itemsDesc} + 💎 ${result.stoneNames.join(', ')} (+${result.xpGained} XP de Fazenda).`
+      description: stoneNames.length > 0
+        ? `🌾 Colheu ${itemsDesc} + 💎 ${stoneNames.join(', ')} (+${result.xpGained} XP de Fazenda).`
         : `🌾 Colheu ${itemsDesc} (+${result.xpGained} XP de Fazenda).`,
     }).catch(() => {})
 
     return NextResponse.json({
-      items: result.items,
-      stoneNames: result.stoneNames,
+      results: result.results,
       xpGained: result.xpGained,
       harvested: result.harvested,
       skippedNoStamina: result.skippedNoStamina,

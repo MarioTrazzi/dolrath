@@ -126,9 +126,8 @@ export default function FarmPage() {
       }
       await refresh(activeCharacterId)
       return {
-        items: data.items ?? [],
+        results: data.results ?? [],
         xpGained: data.xpGained,
-        stoneNames: data.stoneNames ?? [],
         harvested: data.harvested ?? 0,
         skippedNoStamina: data.skippedNoStamina ?? 0,
         skippedNoSpace: data.skippedNoSpace ?? 0,

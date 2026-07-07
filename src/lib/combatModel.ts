@@ -135,12 +135,35 @@ export interface MonsterSpecialEffect {
   stunTurns?: number      // stun: turnos do jogador perdidos
   dmgMult?: number        // damage: multiplicador extra sobre o dano do golpe
 }
+// Padrão por masmorra: 1 monstro de cada efeito (bleed/poison/damage/stun) + chefe com
+// efeito + dmgMult. poisonDmg cresce com o tier (o HP do jogador também cresce);
+// bleedFrac é % do HP máx, então escala sozinho — só um leve aumento nos tiers altos.
 export const MONSTER_SPECIAL_EFFECTS: Record<string, MonsterSpecialEffect> = {
+  // 🌲 Floresta Sombria
   'Lobo Faminto': { name: 'Mordida Selvagem', effect: 'bleed', chance: 0.3, bleedFrac: 0.04, bleedTurns: 3 },
   'Aranha Gigante': { name: 'Presas Envenenadas', effect: 'poison', chance: 0.3, poisonDmg: 4 },
   'Javali Furioso': { name: 'Presas Vorazes', effect: 'damage', chance: 0.3, dmgMult: 1.5 },
   'Ent Corrompido': { name: 'Raízes Rasteiras', effect: 'stun', chance: 0.3, stunTurns: 1 },
   'Anciã da Mata': { name: 'Abraço da Floresta', effect: 'poison', chance: 0.35, poisonDmg: 4, dmgMult: 1.25 },
+  // 💎 Caverna de Cristal
+  'Morcego Sombrio': { name: 'Mordida Sanguessuga', effect: 'bleed', chance: 0.3, bleedFrac: 0.04, bleedTurns: 3 },
+  'Goblin Minerador': { name: 'Golpe de Picareta', effect: 'damage', chance: 0.3, dmgMult: 1.5 },
+  'Slime de Cristal': { name: 'Gosma Corrosiva', effect: 'poison', chance: 0.3, poisonDmg: 5 },
+  'Golem de Pedra': { name: 'Esmagamento Sísmico', effect: 'stun', chance: 0.3, stunTurns: 1 },
+  'Wyrm Cristalino': { name: 'Estilhaços Cristalinos', effect: 'bleed', chance: 0.35, bleedFrac: 0.05, bleedTurns: 3, dmgMult: 1.25 },
+  // 🐸 Pântano Maldito
+  'Sapo Venenoso': { name: 'Cuspe Tóxico', effect: 'poison', chance: 0.3, poisonDmg: 6 },
+  'Serpente do Lodo': { name: 'Bote Dilacerante', effect: 'bleed', chance: 0.3, bleedFrac: 0.05, bleedTurns: 3 },
+  'Bruxa do Brejo': { name: 'Feitiço Paralisante', effect: 'stun', chance: 0.3, stunTurns: 1 },
+  'Crocodilo Ancião': { name: 'Mandíbula Esmagadora', effect: 'damage', chance: 0.3, dmgMult: 1.5 },
+  'Hidra do Pântano': { name: 'Hálito Pestilento', effect: 'poison', chance: 0.35, poisonDmg: 7, dmgMult: 1.25 },
+  // 🏛️ Ruínas Arcanas
+  'Esqueleto Guerreiro': { name: 'Lâmina Enferrujada', effect: 'bleed', chance: 0.3, bleedFrac: 0.05, bleedTurns: 3 },
+  'Espectro Errante': { name: 'Toque Gélido', effect: 'stun', chance: 0.3, stunTurns: 1 },
+  'Múmia Real': { name: 'Maldição da Podridão', effect: 'poison', chance: 0.3, poisonDmg: 7 },
+  'Gárgula de Obsidiana': { name: 'Mergulho Devastador', effect: 'damage', chance: 0.3, dmgMult: 1.5 },
+  // Stun em chefe é o proc mais punitivo — chance um pouco menor que a dos outros chefes.
+  'Lich Imperador': { name: 'Olhar da Morte', effect: 'stun', chance: 0.3, stunTurns: 1, dmgMult: 1.25 },
 }
 export function monsterSpecialEffect(name: string): MonsterSpecialEffect | undefined {
   const direct = MONSTER_SPECIAL_EFFECTS[name]

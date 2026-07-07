@@ -680,14 +680,14 @@ export default function DungeonRun({ dungeon, character, tier = 1, onExit, onRes
     ignoreEvadeNext: boolean; amplifyNext: number; counterNext: boolean
     cd: Record<string, number>
     // 🐍 Golpes secundários de MONSTRO contra o jogador (ver MONSTER_SPECIAL_EFFECTS).
-    poisoned: boolean                          // permanente até usar Antídoto: -4 HP/turno
+    poisoned: boolean; poisonDmg: number       // permanente até usar Antídoto: -poisonDmg HP/turno (escala por masmorra)
     bleeding: boolean; bleedFrac: number        // permanente até usar Bandagem de Linho: % do HP máx/turno
-    stunTurns: number                           // turnos do jogador perdidos (Raízes Rasteiras)
+    stunTurns: number                           // turnos do jogador perdidos (Raízes Rasteiras etc.)
   }
   const FX0: CombatFx = {
     dmgDealtMult: 1, dmgDealtTurns: 0, dmgTakenMult: 1, dmgTakenTurns: 0, enemyDmgMult: 1, enemyDmgTurns: 0,
     evadeBuff: 0, evadeBuffTurns: 0, ignoreEvadeNext: false, amplifyNext: 1, counterNext: false, cd: {},
-    poisoned: false, bleeding: false, bleedFrac: 0, stunTurns: 0,
+    poisoned: false, poisonDmg: 0, bleeding: false, bleedFrac: 0, stunTurns: 0,
   }
   const [combatFx, setCombatFx] = useState<CombatFx>(FX0)
   const combatFxRef = useRef(combatFx); combatFxRef.current = combatFx
@@ -1250,12 +1250,12 @@ export default function DungeonRun({ dungeon, character, tier = 1, onExit, onRes
     } else if (transformCdRef.current > 0) {
       setTransformCd(transformCdRef.current - 1)
     }
-    // ☠️ Poison (permanente, -4 fixo) + sangramento (% do HP máx, N turnos) do jogador.
+    // ☠️ Poison (permanente, flat do golpe que envenenou) + sangramento (% do HP máx) do jogador.
     // Piso de 1 HP — o veneno não mata sozinho, igual ao DoT que o jogador aplica nos monstros.
     const pfx = combatFxRef.current
     let dot = 0
     const dotLabels: string[] = []
-    if (pfx.poisoned) { dot += 4; dotLabels.push('veneno') }
+    if (pfx.poisoned) { dot += pfx.poisonDmg || 4; dotLabels.push('veneno') }
     if (pfx.bleeding) { dot += Math.max(1, Math.round(effMaxHp * pfx.bleedFrac)); dotLabels.push('sangramento') }
     if (dot > 0) {
       // Estimativa só para o texto/log — a atualização REAL de baixo é relativa
@@ -1662,7 +1662,7 @@ export default function DungeonRun({ dungeon, character, tier = 1, onExit, onRes
       pushFloat(`+${c.mp} 🔮`, '#3b82f6')
     }
     if (c.cure === 'poison') {
-      setCombatFx(prev => ({ ...prev, poisoned: false }))
+      setCombatFx(prev => ({ ...prev, poisoned: false, poisonDmg: 0 }))
       pushFloat('Curado ✨', '#22d3ee')
     }
     if (c.cure === 'bleed') {
@@ -1790,9 +1790,9 @@ export default function DungeonRun({ dungeon, character, tier = 1, onExit, onRes
     // do impacto do golpe — por isso o atraso (o slot de battleEvent é único).
     if (proc && outcome.hit) {
       if (proc.effect === 'poison' && !dfx.poisoned) {
-        setCombatFx(prev => ({ ...prev, poisoned: true }))
+        setCombatFx(prev => ({ ...prev, poisoned: true, poisonDmg: proc.poisonDmg ?? 4 }))
         later(() => pushBattleEvent({ kind: 'status', actorId: character.id, action: 'poison' }), 1100)
-        pushLog(`☠️ ${proc.name} te envenenou! Perde ${proc.poisonDmg ?? 2} HP por turno até usar um Antídoto.`)
+        pushLog(`☠️ ${proc.name} te envenenou! Perde ${proc.poisonDmg ?? 4} HP por turno até usar um Antídoto.`)
         showBanner('☠️', 'Envenenado!')
       } else if (proc.effect === 'bleed' && !dfx.bleeding) {
         setCombatFx(prev => ({ ...prev, bleeding: true, bleedFrac: proc.bleedFrac ?? 0.04 }))
@@ -1801,9 +1801,9 @@ export default function DungeonRun({ dungeon, character, tier = 1, onExit, onRes
       } else if (proc.effect === 'stun') {
         setCombatFx(prev => ({ ...prev, stunTurns: prev.stunTurns + (proc.stunTurns ?? 1) }))
         later(() => pushBattleEvent({ kind: 'status', actorId: character.id, action: 'stun' }), 1100)
-        pushLog(`🌿 ${proc.name} prendeu seus pés! Você perde o próximo turno.`)
+        pushLog(`💫 ${proc.name} te atordoou! Você perde o próximo turno.`)
       } else if (proc.effect === 'damage') {
-        pushLog(`🐗 ${proc.name}! Um golpe brutal.`)
+        pushLog(`💥 ${proc.name}! Um golpe brutal.`)
       }
     }
     // Próximo inimigo da fila ataca; se acabou a fila, volta ao jogador.

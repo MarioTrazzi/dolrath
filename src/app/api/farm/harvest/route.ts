@@ -110,7 +110,7 @@ export async function POST(req: Request) {
 
       for (const plot of ready.slice(0, affordable)) {
         const crop = getCropById(plot.cropId!)!
-        const qty = rollCropYield(crop)
+        const qty = rollCropYield(crop, farmLevel)
         const ok = await addDropToInventoryTx(tx, characterId, { name: crop.outputName, qty })
         if (!ok) {
           // Inventário lotou: o que já foi colhido fica; este canteiro (e os

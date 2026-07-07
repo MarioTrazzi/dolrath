@@ -104,5 +104,15 @@ export function farmGrowthMult(farmLevel: number): number {
   return Math.max(0.75, 1 - 0.01 * Math.max(1, farmLevel));
 }
 
+/**
+ * Multiplicador do RENDIMENTO da colheita (nv1 = 40% do range do cultivo,
+ * sobe +4%/nível até 100% no nv16+). Nv1 num Trigo (3–5) vira 1–2 — combina
+ * com a curva de progressão idle da Fazenda: cedo rende pouco, o range cheio
+ * do cultivo (as constantes em CROPS) só sai depois de investir em nível.
+ */
+export function farmYieldMult(farmLevel: number): number {
+  return Math.min(1, 0.4 + 0.04 * (Math.max(1, farmLevel) - 1));
+}
+
 /** Nível de Fazenda que destrava o Cercado (Ração → Couro). */
 export const FARM_PEN_MIN_LEVEL = 5;

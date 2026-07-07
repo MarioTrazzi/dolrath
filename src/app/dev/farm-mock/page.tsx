@@ -119,7 +119,7 @@ export default function FarmMockPage() {
             let xpGained = 0
             for (const p of toHarvest) {
               const crop = CROPS[p.cropId as keyof typeof CROPS]
-              const qty = rollCropYield(crop)
+              const qty = rollCropYield(crop, vm.farm.level)
               xpGained += crop.farmXp
               let stoneName: string | undefined
               if (Math.random() * 100 < farmStoneChance(vm.farm.level)) {

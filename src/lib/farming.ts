@@ -17,7 +17,7 @@
 // grátis (só XP para quem planta); COLHER é a ação que custa stamina — 1⚡ por
 // canteiro para o personagem que clicou, que também leva o XP da colheita.
 
-import { farmGrowthMult } from './professionSystem';
+import { farmGrowthMult, farmYieldMult } from './professionSystem';
 
 export type CropId = 'trigo' | 'erva' | 'linho';
 
@@ -159,9 +159,18 @@ export function cropSecondsLeft(plantedAt: Date, crop: CropDef, farmLevel: numbe
   return Math.max(0, Math.ceil(total - elapsed));
 }
 
-/** Quantidade colhida (aleatória no intervalo do cultivo). */
-export function rollCropYield(crop: CropDef, rng: () => number = Math.random): number {
-  return crop.yieldMin + Math.floor(rng() * (crop.yieldMax - crop.yieldMin + 1));
+/** Intervalo de rendimento REAL no nível de Fazenda dado (escalado por farmYieldMult, piso 1). */
+export function cropYieldRange(crop: CropDef, farmLevel: number): { min: number; max: number } {
+  const mult = farmYieldMult(farmLevel);
+  const min = Math.max(1, Math.round(crop.yieldMin * mult));
+  const max = Math.max(min, Math.round(crop.yieldMax * mult));
+  return { min, max };
+}
+
+/** Quantidade colhida (aleatória no intervalo do cultivo, escalado pelo nível de Fazenda). */
+export function rollCropYield(crop: CropDef, farmLevel: number, rng: () => number = Math.random): number {
+  const { min, max } = cropYieldRange(crop, farmLevel);
+  return min + Math.floor(rng() * (max - min + 1));
 }
 
 /** Águas acumuladas no poço desde a última coleta (`anchor`), limitado ao teto. */

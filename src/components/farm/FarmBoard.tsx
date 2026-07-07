@@ -16,7 +16,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CROPS, cropGrowSeconds, FARM_HARVEST_STAMINA, type CropDef } from '@/lib/farming'
+import { CROPS, cropGrowSeconds, cropYieldRange, FARM_HARVEST_STAMINA, type CropDef } from '@/lib/farming'
 import { farmPlotUnlockLevel, FARM_TOTAL_PLOTS, type ProfessionLevelInfo } from '@/lib/professionSystem'
 import { GatherItemThumb, ProfessionBar } from '@/components/gathering/GatheringPanel'
 
@@ -188,11 +188,12 @@ function PlotCell({
 // ============================================================
 
 function HarvestDialog({
-  readyPlots, stamina, stoneChance, busy, onHarvest, onClose,
+  readyPlots, stamina, stoneChance, farmLevel, busy, onHarvest, onClose,
 }: {
   readyPlots: FarmPlotVM[]
   stamina: number
   stoneChance: number
+  farmLevel: number
   busy?: boolean
   onHarvest: () => Promise<HarvestResultVM>
   onClose: () => void
@@ -275,12 +276,17 @@ function HarvestDialog({
               {readyCount} canteiro{readyCount > 1 ? 's' : ''} pronto{readyCount > 1 ? 's' : ''}!
             </h2>
             <div className="flex flex-col gap-1.5 mb-3">
-              {readyCrops.map(({ crop, count }) => (
-                <div key={crop.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-xs">
-                  <span className="text-white/85">{crop.emoji} {crop.outputName}</span>
-                  <span className="text-white/50">{count}× canteiro · rende {crop.yieldMin}–{crop.yieldMax} cada</span>
-                </div>
-              ))}
+              {readyCrops.map(({ crop, count }) => {
+                const range = cropYieldRange(crop, farmLevel)
+                return (
+                  <div key={crop.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-xs">
+                    <span className="text-white/85">{crop.emoji} {crop.outputName}</span>
+                    <span className="text-white/50">
+                      {count}× canteiro · rende {range.min === range.max ? range.min : `${range.min}–${range.max}`} cada
+                    </span>
+                  </div>
+                )
+              })}
             </div>
             <p className="text-white/50 text-xs mb-3">
               Colher tudo custa <span className="font-bold text-white/80">−{FARM_HARVEST_STAMINA}⚡ por canteiro</span>
@@ -608,6 +614,7 @@ export function FarmBoard({
             readyPlots={readyPlots}
             stamina={vm.stamina}
             stoneChance={vm.stoneChance}
+            farmLevel={farmLevel}
             busy={busy}
             onHarvest={() => onHarvest()}
             onClose={() => setHarvestDialogOpen(false)}

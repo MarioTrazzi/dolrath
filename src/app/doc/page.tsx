@@ -21,6 +21,7 @@ import { TRANSFORMATION_CONFIG } from '@/lib/transformationSystem'
 import { ITEM_CATALOG, CONSUMABLE_CATALOG, INGREDIENT_CATALOG, FORGE_MATERIAL_CATALOG, RARITY_DROP_WEIGHT, getIngredientByName, itemImagePath, type CatalogItem } from '@/lib/itemCatalog'
 import { POTION_RECIPES } from '@/lib/alchemy'
 import { FORGE_RECIPES } from '@/lib/forge'
+import { CRAFT_BASE_CHANCE, CRAFT_MIN_LEVEL, CRAFT_XP } from '@/lib/craftingProfession'
 import { DUNGEON_LIST } from '@/lib/dungeonAdventures'
 import { getXPForNextLevel } from '@/lib/experienceSystem'
 import { getBaseChance, getStatMultiplier, PRI, DUO, TRI, TET, PEN, SAFE_ENHANCE_MAX } from '@/lib/enhancementSystem'
@@ -878,12 +879,23 @@ até +${SAFE_ENHANCE_MAX}: chance = 100% (seguro)`}</Formula>
 
             {/* Crafting */}
             <Section id="crafting" kicker="Economia" title="Forja & Alquimia">
-              <p>O <strong className="text-white">Ferreiro</strong> tem a <strong className="text-white">Mesa de Forja</strong> (forjar equipamento + refinar pedra) e a <strong className="text-white">Bancada de Reparo</strong>; a <strong className="text-white">Alquimista</strong> destila poções. Materiais e ingredientes caem em masmorras — <strong className="text-white">exploração e luta</strong>. <Tag tone="ok">fonte: forge.ts · alchemy.ts</Tag></p>
+              <p>Forja e Alquimia são <strong className="text-white">profissões do jogador</strong> com nível e XP (o NPC ferreiro só vende e repara; a alquimista só vende). O nível é <strong className="text-white">da conta inteira</strong> (como a Fazenda: todo craft de qualquer herói soma). Cada craft rola uma <strong className="text-white">chance de sucesso</strong> pela raridade da receita + seu nível — <strong className="text-orange-300">a falha consome os materiais e a taxa</strong>, mas ainda dá XP reduzido. Receitas de raridade maior <strong className="text-white">destravam por nível</strong>: comum nv1, incomum nv5, rara nv12, épica nv20. Materiais e ingredientes caem em masmorras — <strong className="text-white">exploração e luta</strong>. <Tag tone="ok">fonte: craftingProfession.ts · forge.ts · alchemy.ts</Tag></p>
+
+              <Table
+                head={['Raridade', 'Destrava', 'Chance base', 'Teto', 'XP (sucesso / falha)']}
+                rows={(['COMMON', 'UNCOMMON', 'RARE', 'EPIC'] as const).map((r) => [
+                  <Pill key="p" rarity={r} />,
+                  <span key="l" className="text-white">nível {CRAFT_MIN_LEVEL[r]}</span>,
+                  <span key="b">{Math.round(CRAFT_BASE_CHANCE[r] * 100)}% <span className="text-xs text-textsec">(+1%/nível)</span></span>,
+                  <span key="t">{Math.round(Math.min(0.95, CRAFT_BASE_CHANCE[r] + 0.01 * (50 - CRAFT_MIN_LEVEL[r])) * 100)}%</span>,
+                  <span key="x" className="text-amber-300">{CRAFT_XP[r]} / {Math.round(CRAFT_XP[r] * 0.4)} XP</span>,
+                ])}
+              />
 
               {/* ⚒️ Forja (fonte: forge.ts) */}
               <h3 className="pt-2 text-lg font-semibold text-white">⚒️ Forja (Ferreiro)</h3>
               <p className="text-sm">
-                Forja peças <Pill rarity="COMMON" /> / <Pill rarity="UNCOMMON" /> a partir de materiais: <strong className="text-white">só couro</strong> = comum, <strong className="text-white">couro + ferro</strong> = incomum, e cada arma usa seu material especial (Ferro Pesado, Seiva de Ent…). O <strong className="text-white">Estilhaço de Pedra Negra</strong> liga toda receita e também refina: <strong className="text-white">10 estilhaços → 1 Pedra Negra</strong> e <strong className="text-white">10 Pedras → 1 Concentrada</strong>. O <strong className="text-white">Estilhaço de Memória</strong> (só de chefe) repara peças raras, épicas e lendárias (+10 durabilidade cada).
+                Forja peças <Pill rarity="COMMON" /> / <Pill rarity="UNCOMMON" /> a partir de materiais: <strong className="text-white">só couro</strong> = comum, <strong className="text-white">couro + ferro</strong> = incomum, e cada arma usa seu material especial (Ferro Pesado, Seiva de Ent…). O <strong className="text-white">Estilhaço de Pedra Negra</strong> liga toda receita e também refina: <strong className="text-white">10 estilhaços → 1 Pedra Negra</strong> e <strong className="text-white">10 Pedras → 1 Concentrada</strong> — o refino é <strong className="text-white">conversão garantida</strong> (sem chance de falha; Concentrada pede Forja nv10). O <strong className="text-white">Estilhaço de Memória</strong> (só de chefe) repara peças raras, épicas e lendárias (+10 durabilidade cada).
               </p>
 
               <h4 className="pt-2 text-sm font-semibold text-textsec uppercase tracking-wide">Materiais de forja</h4>
@@ -914,8 +926,9 @@ até +${SAFE_ENHANCE_MAX}: chance = 100% (seguro)`}</Formula>
               {/* ⚗️ Alquimia & Poções — livro de receitas (fonte: alchemy.ts) */}
               <h3 className="pt-4 text-lg font-semibold text-white">⚗️ Alquimia &amp; Poções</h3>
               <p className="text-sm">
-                A <strong className="text-white">Alquimista</strong> destila poções a partir de <strong className="text-white">ingredientes</strong> obtidos como espólio nas masmorras.
-                Cada craft consome os ingredientes da receita + uma <strong className="text-white">taxa em gold</strong> (sempre dá certo).
+
+                Poções são destiladas no <strong className="text-white">Triângulo de Transmutação</strong> a partir de <strong className="text-white">ingredientes</strong> obtidos como espólio nas masmorras.
+                Cada tentativa consome os ingredientes da receita + uma <strong className="text-white">taxa em gold</strong> e rola a chance do seu nível de Alquimia.
                 Ingredientes <Pill rarity="COMMON" /> / <Pill rarity="UNCOMMON" /> caem no chão (já na Floresta); <Pill rarity="RARE" /> / <Pill rarity="EPIC" /> só de <strong className="text-white">chefe</strong>.
                 <Tag tone="ok"> fonte: alchemy.ts</Tag>
               </p>

@@ -32,6 +32,9 @@ interface ItemTooltipProps {
   /** Abre o diálogo de aprimoramento. Ao vir de uma Pedra Negra, inventoryId vem
    *  vazio e `stoneCategory` indica a categoria de gear que a pedra aprimora. */
   onEnhance?: (inventoryId: string, itemName: string, stoneCategory?: 'WEAPON' | 'ARMOR') => void;
+  /** Abre a dialog de profissão (Forja/Alquimia) com o insumo já posicionado,
+   *  sem sair da página — mesmo padrão do onEnhance. */
+  onOpenCraft?: (craft: 'alchemy' | 'forge', itemName: string) => void;
   /** Inventário global: transfere o item para o personagem selecionado.
    *  Recebe a quantidade disponível na pilha (1 = uma unidade; stack > 1 abre
    *  o diálogo de quantidade no chamador). */
@@ -53,7 +56,7 @@ interface ItemTooltipProps {
   children: React.ReactNode;
 }
 
-export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability, maxDurability, inventoryId, onEquip, onUnequip, onConsume, onEnhance, onTransfer, onSendToGlobal, onSell, quantity = 1, characterId, compareTo, children }: ItemTooltipProps) {
+export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability, maxDurability, inventoryId, onEquip, onUnequip, onConsume, onEnhance, onOpenCraft, onTransfer, onSendToGlobal, onSell, quantity = 1, characterId, compareTo, children }: ItemTooltipProps) {
   const router = useRouter();
   const [showTooltip, setShowTooltip] = useState(false);
   const [imgError, setImgError] = useState(false);
@@ -185,9 +188,9 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
   const stoneCategory: 'WEAPON' | 'ARMOR' | undefined = stoneKind
     ? stoneKind.startsWith('WEAPON') ? 'WEAPON' : 'ARMOR'
     : undefined;
-  // Insumos de craft: ingrediente de alquimia (triângulo do alquimista) e material
-  // de forja (bigorna do ferreiro). "Usar" leva à bancada certa com o item já posto,
-  // em vez de "Consumir" (que não faz nada para estes itens). A classificação cai no
+  // Insumos de craft: ingrediente de alquimia (triângulo) e material de forja.
+  // "Usar" abre a dialog de profissão (via onOpenCraft) com o item já posto, em
+  // vez de "Consumir" (que não faz nada para estes itens). A classificação cai no
   // catálogo por nome quando o registro antigo não tem stats.kind. [[dolrath-alchemy-crafting]]
   const isIngredient = !isEnhancementStone && isIngredientItem(item);
   const isMaterial = !isEnhancementStone && isMaterialItem(item);
@@ -225,11 +228,10 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
     setShowTooltip(false);
   };
 
-  // Leva o jogador à bancada de craft com o item já posicionado (?place=<nome>).
-  // O alquimista lê o parâmetro e coloca o ingrediente num vértice do triângulo;
-  // o ferreiro coloca o material na bigorna. Ambos aguardam mais itens da receita.
-  const handleUseInCraft = (path: '/alchemist' | '/blacksmith') => {
-    router.push(`${path}?place=${encodeURIComponent(item.name)}`);
+  // Abre a dialog de profissão com o insumo já posicionado (Alquimia: vértice do
+  // triângulo; Forja: receita que usa o material pré-selecionada).
+  const handleUseInCraft = (craft: 'alchemy' | 'forge') => {
+    onOpenCraft?.(craft, item.name);
     setShowTooltip(false);
   };
 
@@ -239,18 +241,18 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
       handleEnhanceClick();
       return;
     }
-    // Ingrediente de alquimia → alquimista; material de forja → ferreiro; semente → fazenda.
+    // Ingrediente → dialog de Alquimia; material → dialog de Forja; semente → fazenda.
     if (isSeed) {
       router.push('/farm');
       setShowTooltip(false);
       return;
     }
     if (isIngredient) {
-      handleUseInCraft('/alchemist');
+      handleUseInCraft('alchemy');
       return;
     }
     if (isMaterial) {
-      handleUseInCraft('/blacksmith');
+      handleUseInCraft('forge');
       return;
     }
     // Para itens consumíveis, consumir ao invés de equipar

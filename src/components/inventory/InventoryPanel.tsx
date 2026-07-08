@@ -29,6 +29,8 @@ interface InventoryPanelProps {
   onUnequip?: (itemId: string) => void;
   onConsume?: (itemId: string) => void;
   onEnhance?: (inventoryId: string, itemName: string, stoneCategory?: 'WEAPON' | 'ARMOR') => void;
+  /** Abre a dialog de profissão (Forja/Alquimia) com o insumo já posicionado. */
+  onOpenCraft?: (craft: 'alchemy' | 'forge', itemName: string) => void;
   onSendToGlobal?: (itemId: string, quantity?: number) => void;
   onTransfer?: (itemId: string, quantity?: number) => void;
   /** Vende o equipamento ao ferreiro (burn). Recebe a linha de inventário. */
@@ -68,6 +70,7 @@ export default function InventoryPanel({
   onUnequip,
   onConsume,
   onEnhance,
+  onOpenCraft,
   onSendToGlobal,
   onTransfer,
   onSell,
@@ -180,6 +183,7 @@ export default function InventoryPanel({
           onUnequip={onUnequip}
           onConsume={onConsume}
           onEnhance={onEnhance}
+          onOpenCraft={onOpenCraft}
           onSendToGlobal={onSendToGlobal}
           onTransfer={onTransfer}
           onSell={onSell}

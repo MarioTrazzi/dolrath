@@ -24,6 +24,8 @@ interface CharacterItemGridProps {
   onUnequip?: (itemId: string) => void;
   onConsume?: (itemId: string) => void;
   onEnhance?: (inventoryId: string, itemName: string, stoneCategory?: 'WEAPON' | 'ARMOR') => void;
+  /** Abre a dialog de profissão (Forja/Alquimia) com o insumo já posicionado. */
+  onOpenCraft?: (craft: 'alchemy' | 'forge', itemName: string) => void;
   /** Envia o item de volta ao inventário global (opcional — usado em /inventory).
    *  Recebe a quantidade (1 = uma unidade; stack inteiro no "Enviar tudo"). */
   onSendToGlobal?: (itemId: string, quantity?: number) => void;
@@ -57,6 +59,7 @@ export function CharacterItemGrid({
   onUnequip,
   onConsume,
   onEnhance,
+  onOpenCraft,
   onSendToGlobal,
   onTransfer,
   onSell,
@@ -90,6 +93,7 @@ export function CharacterItemGrid({
               onUnequip={onUnequip}
               onConsume={onConsume}
               onEnhance={onEnhance}
+              onOpenCraft={onOpenCraft}
               onSendToGlobal={onSendToGlobal}
               onTransfer={onTransfer}
               onSell={onSell}

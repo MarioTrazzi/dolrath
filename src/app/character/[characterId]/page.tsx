@@ -16,6 +16,8 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import { EquipmentSlot } from '@/components/EquipmentSlot';
 import InventoryPanel from '@/components/inventory/InventoryPanel';
 import EnhancementDialog from '@/components/EnhancementDialog';
+import ForgeDialog from '@/components/crafting/ForgeDialog';
+import AlchemyDialog from '@/components/crafting/AlchemyDialog';
 import AttributeDistributionPanel from '@/components/AttributeDistributionPanel';
 import CharacterHistory from '@/components/CharacterHistory';
 import CreationCardBackdrop from '@/components/character/CreationCardBackdrop';
@@ -50,6 +52,9 @@ export default function CharacterDetailsPage() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [goldOnchainText, setGoldOnchainText] = useState<string>('—');
   const [enhanceTarget, setEnhanceTarget] = useState<{ inventoryId: string; itemName: string; category?: 'WEAPON' | 'ARMOR' } | null>(null);
+  // Dialogs de profissão (Forja/Alquimia) abertas pelo card do insumo — mesmo
+  // padrão do aprimoramento: nada de redirecionar para a loja do NPC.
+  const [craftTarget, setCraftTarget] = useState<{ craft: 'alchemy' | 'forge'; itemName: string } | null>(null);
   // Índice da forma exibida na figura central (0 = forma original; demais = transformações).
   const [appearanceIndex, setAppearanceIndex] = useState(0);
 
@@ -1008,6 +1013,7 @@ export default function CharacterDetailsPage() {
               onUnequip={handleUnequip}
               onConsume={handleConsume}
               onEnhance={(invId, name, category) => setEnhanceTarget({ inventoryId: invId, itemName: name, category })}
+              onOpenCraft={(craft, itemName) => setCraftTarget({ craft, itemName })}
               onSell={(inventoryId) => handleSell(inventoryId)}
               onExpand={handleExpandInventory}
               expanding={expandingSlots}
@@ -1057,6 +1063,24 @@ export default function CharacterDetailsPage() {
           onChanged={refreshCharacterAndInventory}
         />
       )}
+
+      {/* Dialogs de profissão ⚒️⚗️ — abertas pelo card do material/ingrediente */}
+      <ForgeDialog
+        open={craftTarget?.craft === 'forge'}
+        onClose={() => setCraftTarget(null)}
+        characterId={effectiveCharacterId || undefined}
+        characterGold={typeof character?.gold === 'number' ? character.gold : null}
+        initialMaterialName={craftTarget?.craft === 'forge' ? craftTarget.itemName : undefined}
+        onChanged={refreshCharacterAndInventory}
+      />
+      <AlchemyDialog
+        open={craftTarget?.craft === 'alchemy'}
+        onClose={() => setCraftTarget(null)}
+        characterId={effectiveCharacterId || undefined}
+        characterGold={typeof character?.gold === 'number' ? character.gold : null}
+        initialPlaceName={craftTarget?.craft === 'alchemy' ? craftTarget.itemName : undefined}
+        onChanged={refreshCharacterAndInventory}
+      />
     </DndProvider>
   );
 }

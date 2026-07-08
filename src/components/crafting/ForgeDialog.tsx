@@ -10,13 +10,14 @@
 // é pelo livro de receitas (o modo "arrastar materiais" da bench foi cortado —
 // o livro + prévia cobre o caso de uso melhor). Refino de pedra não tem falha.
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import { buyGoldOnChain, parseNeededGold, isInsufficientGold } from '@/lib/buyGold';
 import { confirmBuyGold } from '@/lib/buyGoldPrompt';
 import {
   forgeRecipesByGroup,
+  forgeRecipesUsingMaterial,
   getForgeOutputCatalogItem,
   forgeMaterialEmoji,
   type ForgeRecipe,
@@ -75,6 +76,8 @@ interface ForgeDialogProps {
   onClose: () => void;
   characterId?: string;
   characterGold?: number | null;
+  /** "⚒️ Forja" no card do material: pré-seleciona uma receita que usa o insumo. */
+  initialMaterialName?: string;
   // Overrides para páginas de mock/teste (sem DB)
   fetchInfoOverride?: () => Promise<ForgeProfessionInfo>;
   fetchInventoryOverride?: () => Promise<ForgeInventoryItem[]>;
@@ -108,6 +111,7 @@ export default function ForgeDialog({
   onClose,
   characterId,
   characterGold,
+  initialMaterialName,
   fetchInfoOverride,
   fetchInventoryOverride,
   attemptOverride,
@@ -124,6 +128,7 @@ export default function ForgeDialog({
   const [result, setResult] = useState<ForgeCraftResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [bookOpen, setBookOpen] = useState(false);
+  const pickedFromLinkRef = useRef(false);
 
   const level = levelInfo?.level ?? 1;
 
@@ -168,6 +173,7 @@ export default function ForgeDialog({
     setError(null);
     setPhase('idle');
     setCraftQty(1);
+    pickedFromLinkRef.current = false;
     fetchInfo();
     fetchInventory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -221,6 +227,19 @@ export default function ForgeDialog({
     setPhase('idle');
     setBookOpen(false);
   };
+
+  // "⚒️ Forja" no card do material: assim que o inventário chegar, pré-seleciona
+  // a receita que usa o insumo (preferindo uma craftável e desbloqueada).
+  useEffect(() => {
+    if (!open || pickedFromLinkRef.current || loadingInv || !initialMaterialName) return;
+    const candidates = forgeRecipesUsingMaterial(initialMaterialName);
+    if (candidates.length === 0) return;
+    const best =
+      candidates.find((r) => canCraftRecipe(r) && level >= recipeMinLevel(r)) ?? candidates[0];
+    loadRecipe(best);
+    pickedFromLinkRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, loadingInv, initialMaterialName, canCraftRecipe, level]);
 
   const handleForge = async () => {
     if (!recipe || busy || !unlocked || maxCraftable < 1) return;

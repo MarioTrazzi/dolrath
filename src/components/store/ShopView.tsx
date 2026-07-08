@@ -11,8 +11,6 @@ import { Search, Filter, X, ShoppingCart, Trash2 } from 'lucide-react';
 import BazaarBackdrop from '@/components/store/BazaarBackdrop';
 import ItemCardBackdrop from '@/components/store/ItemCardBackdrop';
 import RepairBench from '@/components/store/RepairBench';
-import AlchemyDialog from '@/components/crafting/AlchemyDialog';
-import ForgeDialog from '@/components/crafting/ForgeDialog';
 import { getItemVisual, getItemTypeLabel, getItemCategory } from '@/lib/itemVisuals';
 import { formatItemStats } from '@/lib/itemStats';
 import { useGold } from '@/components/providers/GoldProvider';
@@ -20,6 +18,8 @@ import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvid
 
 // Configuração de cada "loja NPC". O ferreiro vende equipamento (armas/armaduras
 // e acessórios) e tem a bancada de reparo; o alquimista vende consumíveis.
+// O craft (Forja/Alquimia) NÃO mora mais aqui: virou profissão do jogador,
+// aberta pelo card do insumo no inventário (ForgeDialog/AlchemyDialog).
 export type ShopKind = 'blacksmith' | 'alchemist';
 
 const SHOP_CONFIG: Record<
@@ -30,17 +30,15 @@ const SHOP_CONFIG: Record<
     /** Mostra apenas itens cuja categoria casa com este predicado. */
     showItem: (type?: string | null) => boolean;
     hasRepairBench: boolean;
-    hasCraftingBench: boolean;
     emptyEmoji: string;
     emptyLabel: string;
   }
 > = {
   blacksmith: {
     title: '⚒️ Ferreiro de Dolrath',
-    subtitle: 'Forje, compre e repare armas, armaduras e equipamentos!',
+    subtitle: 'Compre e repare armas, armaduras e equipamentos!',
     showItem: (type) => getItemCategory(type) !== 'consumable',
     hasRepairBench: true,
-    hasCraftingBench: true,
     emptyEmoji: '⚒️',
     emptyLabel: 'A forja está fria',
   },
@@ -49,7 +47,6 @@ const SHOP_CONFIG: Record<
     subtitle: 'Poções, elixires e consumíveis para sua jornada!',
     showItem: (type) => getItemCategory(type) === 'consumable',
     hasRepairBench: false,
-    hasCraftingBench: true,
     emptyEmoji: '⚗️',
     emptyLabel: 'As prateleiras estão vazias',
   },
@@ -207,25 +204,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
   // Sinaliza à Bancada de Reparo que o inventário do personagem mudou (compra/transferência).
   const [inventoryRefreshKey, setInventoryRefreshKey] = useState(0);
 
-  // Dialogs de profissão (Forja/Alquimia) — substituem as bancadas inline.
-  const [forgeOpen, setForgeOpen] = useState(false);
-  const [alchemyOpen, setAlchemyOpen] = useState(false);
-  // Deep-link "⚗️ Usar na Alquimia" (/alchemist?place=<nome>): abre a dialog já
-  // com o ingrediente num vértice e limpa a URL para não repetir no reload.
-  const [alchemyPlaceName, setAlchemyPlaceName] = useState<string | undefined>(undefined);
-  useEffect(() => {
-    if (kind !== 'alchemist' || typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
-    const name = params.get('place');
-    if (!name) return;
-    setAlchemyPlaceName(name);
-    setAlchemyOpen(true);
-    params.delete('place');
-    const qs = params.toString();
-    window.history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
-  }, [kind]);
-
-  // Forja/alquimia/reparo gastam Character.gold no servidor. Além de recarregar o
+  // Reparo gasta Character.gold no servidor. Além de recarregar o
   // inventário das bancadas, precisamos atualizar o gold do personagem ativo na
   // navbar (useActiveCharacter) e o saldo local da loja — senão o número fica preso.
   const handleBenchChanged = useCallback(() => {
@@ -509,7 +488,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
         </div>
 
         {/* Bancada de reparo (só o ferreiro) — o craft saiu dos NPCs e virou
-            profissão do jogador, aberta pelo card-vitrine abaixo. */}
+            profissão do jogador, aberta pelo card do insumo no inventário. */}
         {config.hasRepairBench && (
           <div className="mb-8">
             <RepairBench
@@ -520,51 +499,6 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
             />
           </div>
         )}
-
-        {/* Card-vitrine da profissão: abre a dialog estilo BDO (Forja/Alquimia). */}
-        {config.hasCraftingBench && (
-          <button
-            type="button"
-            onClick={() => (kind === 'blacksmith' ? setForgeOpen(true) : setAlchemyOpen(true))}
-            className="group mb-8 flex w-full items-center gap-4 rounded-[4px] border border-[#8a6d3b] bg-gradient-to-b from-[#26262a] to-[#141215] p-4 text-left shadow-[inset_0_1px_0_rgba(231,198,130,0.15),0_0_18px_rgba(201,162,95,0.15)] transition-all hover:border-[#c9a25f] hover:shadow-[inset_0_1px_0_rgba(231,198,130,0.25),0_0_26px_rgba(201,162,95,0.3)]"
-          >
-            <span className="grid h-14 w-14 shrink-0 rotate-45 place-items-center rounded-[3px] border border-[#8a6d3b] bg-gradient-to-br from-[#2c2620] to-[#141210] shadow-[0_0_16px_rgba(201,162,95,0.3)]">
-              <span className="-rotate-45 text-2xl">{kind === 'blacksmith' ? '⚒️' : '⚗️'}</span>
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-lg font-bold text-[#e7c682]">
-                {kind === 'blacksmith' ? 'Mesa de Forja' : 'Círculo de Transmutação'}
-              </span>
-              <span className="block text-sm text-[#9a9aa0]">
-                {kind === 'blacksmith'
-                  ? 'Forje equipamento e refine pedras. A chance de sucesso cresce com seu nível de Forja.'
-                  : 'Combine 3 ingredientes no triângulo. A chance de sucesso cresce com seu nível de Alquimia.'}
-              </span>
-            </span>
-            <span className="shrink-0 rounded-[3px] border border-[#8a6d3b] bg-gradient-to-b from-[#3a3325] to-[#241f16] px-4 py-2 text-sm font-semibold text-[#e7c682] transition-colors group-hover:border-[#c9a25f]">
-              {kind === 'blacksmith' ? '⚒ Forjar' : '⚗ Transmutar'}
-            </span>
-          </button>
-        )}
-
-        <ForgeDialog
-          open={forgeOpen}
-          onClose={() => setForgeOpen(false)}
-          characterId={selectedCharacter || undefined}
-          characterGold={characterGold}
-          onChanged={handleBenchChanged}
-        />
-        <AlchemyDialog
-          open={alchemyOpen}
-          onClose={() => {
-            setAlchemyOpen(false);
-            setAlchemyPlaceName(undefined);
-          }}
-          characterId={selectedCharacter || undefined}
-          characterGold={characterGold}
-          initialPlaceName={alchemyPlaceName}
-          onChanged={handleBenchChanged}
-        />
 
         {/* Barra de Busca */}
         <div className="mb-6">

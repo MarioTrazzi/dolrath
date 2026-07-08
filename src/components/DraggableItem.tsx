@@ -26,6 +26,7 @@ interface DraggableItemProps {
   onUnequip?: (itemId: string) => void;
   onConsume?: (itemId: string) => void;
   onEnhance?: (inventoryId: string, itemName: string, stoneCategory?: 'WEAPON' | 'ARMOR') => void;
+  onOpenCraft?: (craft: 'alchemy' | 'forge', itemName: string) => void;
   onTransfer?: (itemId: string, quantity?: number) => void;
   onSendToGlobal?: (itemId: string, quantity?: number) => void;
   onSell?: (inventoryId: string, quantity?: number) => void;
@@ -41,7 +42,7 @@ interface DraggableItemProps {
   compareTo?: { item: Item; enhancementLevel?: number } | null;
 }
 
-export function DraggableItem({ item, isEquipped, enhancementLevel = 0, durability, maxDurability, quantity = 1, inventoryId, onEquip, onUnequip, onConsume, onEnhance, onTransfer, onSendToGlobal, onSell, characterId, compact, accent, dragSource, compareTo }: DraggableItemProps) {
+export function DraggableItem({ item, isEquipped, enhancementLevel = 0, durability, maxDurability, quantity = 1, inventoryId, onEquip, onUnequip, onConsume, onEnhance, onOpenCraft, onTransfer, onSendToGlobal, onSell, characterId, compact, accent, dragSource, compareTo }: DraggableItemProps) {
   // Imagem do item: banco (item.image) → asset estático por nome (/items/<slug>.webp)
   // → ícone genérico só se a arte 404 (ex.: item sem webp). Cobre registros antigos
   // (ingredientes/materiais) criados antes de gravarmos image no banco.
@@ -98,6 +99,7 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, durabili
         onUnequip={onUnequip}
         onConsume={onConsume}
         onEnhance={onEnhance}
+        onOpenCraft={onOpenCraft}
         onTransfer={onTransfer}
         onSendToGlobal={onSendToGlobal}
         onSell={onSell}
@@ -177,6 +179,7 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, durabili
       onUnequip={onUnequip}
       onConsume={onConsume}
       onEnhance={onEnhance}
+      onOpenCraft={onOpenCraft}
       onTransfer={onTransfer}
       onSendToGlobal={onSendToGlobal}
       onSell={onSell}

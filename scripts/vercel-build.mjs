@@ -112,12 +112,7 @@ async function main() {
     // Allow forcing locally
     process.env.RUN_PRISMA_MIGRATE_DEPLOY === 'true'
 
-  // Skip prisma generate on Vercel to avoid database connection timeout
-  if (!isCiLike) {
-    await run('npx', ['prisma', 'generate'])
-  } else {
-    console.warn('Skipping prisma generate on CI/Vercel (pre-generated client expected)')
-  }
+  await run('npx', ['prisma', 'generate'])
 
   if (shouldRunMigrations) {
     await migrateWithRetry()

@@ -11,7 +11,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
     "prisma:reset": "prisma migrate reset --force",
-    "postinstall": "",
+    "postinstall": "prisma generate",
     "socket:dev": "node server/socket-server.js",
     "dev:full": "concurrently \"npm run dev\" \"npm run socket:dev\"",
     "chain:compile": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat compile --config web3/hardhat.config.ts",

@@ -465,8 +465,8 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
     return (
       <div className="min-h-[100dvh] bg-background flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-text-primary mb-4">Acesso Restrito</h1>
-          <p className="text-text-secondary">Você precisa estar logado para acessar a loja.</p>
+          <h1 className="text-2xl font-bold text-[#ece7da] mb-4">Acesso Restrito</h1>
+          <p className="text-[#8a8a90]">Você precisa estar logado para acessar a loja.</p>
         </div>
       </div>
     );
@@ -479,12 +479,12 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
         <BazaarBackdrop />
       </div>
 
-      <div className="relative z-10 container mx-auto p-4 pt-20">
+      <div className="relative z-10 container mx-auto p-4 pt-20" style={{ fontFamily: "'Barlow', sans-serif" }}>
         <div className="mb-8">
-          <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary-dark mb-2">
+          <h1 className="text-4xl font-black text-[#ece7da] mb-2" style={{ letterSpacing: '0.5px' }}>
             {config.title}
           </h1>
-          <p className="text-text-secondary">{config.subtitle}</p>
+          <p className="text-[#8a8a90]">{config.subtitle}</p>
         </div>
 
         {/* Bancada de reparo (só o ferreiro) — o craft saiu dos NPCs e virou
@@ -503,13 +503,13 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
         {/* Barra de Busca */}
         <div className="mb-6">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-text-secondary w-5 h-5" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[#8a8a90] w-5 h-5" />
             <input
               type="text"
               placeholder="Buscar itens..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-surface/50 border border-white/20 rounded-lg text-text-primary placeholder-text-secondary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              className="w-full pl-10 pr-4 py-3 rounded-[3px] border border-[#3c3c41] bg-[#101013] text-[#ece7da] placeholder:text-[#57575c] outline-none transition-colors focus:border-[#8a6d3b]"
             />
           </div>
         </div>
@@ -518,9 +518,9 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
         <div className="mb-6">
           {/* Indicadores de filtros ativos */}
           {(searchQuery || selectedType !== 'ALL' || priceFilter.min > 0 || priceFilter.max < maxPrice || levelFilter.min > 1 || levelFilter.max < maxLevel) && (
-            <div className="mb-4 p-3 bg-primary/10 border border-primary/20 rounded-lg">
+            <div className="mb-4 p-3 rounded-[3px] border border-[#8a6d3b]/60 bg-[#241f16]/80">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-primary font-medium">🔍 Filtros ativos:</span>
+                <span className="text-sm font-medium text-[#e7c682]">🔍 Filtros ativos:</span>
                 <button
                   onClick={() => {
                     setSearchQuery('');
@@ -528,29 +528,29 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                     setPriceFilter({ min: 0, max: maxPrice });
                     setLevelFilter({ min: 1, max: maxLevel });
                   }}
-                  className="text-xs text-primary hover:text-primary-dark underline"
+                  className="text-xs text-[#e7c682] underline hover:text-white"
                 >
                   Remover todos
                 </button>
               </div>
               <div className="flex flex-wrap gap-2 mt-2">
                 {searchQuery && (
-                  <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded">
+                  <span className="text-xs rounded-[3px] border border-[#8a6d3b]/50 bg-[#3a3325]/60 px-2 py-1 text-[#e7c682]">
                     Busca: &quot;{searchQuery}&quot;
                   </span>
                 )}
                 {selectedType !== 'ALL' && (
-                  <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded">
+                  <span className="text-xs rounded-[3px] border border-[#8a6d3b]/50 bg-[#3a3325]/60 px-2 py-1 text-[#e7c682]">
                     Tipo: {selectedType}
                   </span>
                 )}
                 {(priceFilter.min > 0 || priceFilter.max < maxPrice) && (
-                  <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded">
+                  <span className="text-xs rounded-[3px] border border-[#8a6d3b]/50 bg-[#3a3325]/60 px-2 py-1 text-[#e7c682]">
                     Preço: {priceFilter.min}-{priceFilter.max}🪙
                   </span>
                 )}
                 {(levelFilter.min > 1 || levelFilter.max < maxLevel) && (
-                  <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded">
+                  <span className="text-xs rounded-[3px] border border-[#8a6d3b]/50 bg-[#3a3325]/60 px-2 py-1 text-[#e7c682]">
                     Level: {levelFilter.min}-{levelFilter.max}
                   </span>
                 )}
@@ -561,7 +561,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
           <div className="flex flex-wrap gap-4 items-center justify-between">
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center gap-2 px-4 py-2 bg-surface/50 border border-white/20 rounded-lg text-text-primary hover:bg-surface/70 transition-colors"
+              className="flex items-center gap-2 rounded-[3px] border border-[#46464c] bg-gradient-to-b from-[#2b2b2f] to-[#1c1c1f] px-4 py-2 font-semibold text-[#c9c9ce] transition-colors hover:border-[#8a6d3b] hover:text-white"
             >
               <Filter className="w-4 h-4" />
               Filtros
@@ -572,7 +572,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
-                className="px-3 py-2 bg-surface/50 border border-white/20 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+                className="rounded-[3px] border border-[#3c3c41] bg-[#101013] px-3 py-2 text-[#ece7da] outline-none transition-colors focus:border-[#8a6d3b]"
               >
                 <option value="name">Nome</option>
                 <option value="price">Preço</option>
@@ -582,28 +582,28 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
               
               <button
                 onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-                className="px-3 py-2 bg-surface/50 border border-white/20 rounded-lg text-text-primary hover:bg-surface/70 transition-colors"
+                className="rounded-[3px] border border-[#46464c] bg-gradient-to-b from-[#2b2b2f] to-[#1c1c1f] px-3 py-2 text-[#c9c9ce] transition-colors hover:border-[#8a6d3b] hover:text-white"
               >
                 {sortOrder === 'asc' ? '↑' : '↓'}
               </button>
             </div>
             
-            <div className="text-text-secondary">
+            <div className="text-[#8a8a90]">
               {itemsLoading ? 'Carregando...' : `${filteredItems.length} de ${items.length} itens`}
             </div>
           </div>
 
           {/* Painel de Filtros Expansível */}
           {showFilters && (
-            <div className="mt-4 p-4 bg-surface/30 border border-white/10 rounded-lg space-y-4">
+            <div className="mt-4 p-4 rounded-[3px] border border-black/60 bg-[#19191c] space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Filtro de Tipo */}
                 <div>
-                  <label className="block text-sm font-medium mb-2 text-text-secondary">Tipo</label>
+                  <label className="block text-sm font-medium mb-2 text-[#8a8a90]">Tipo</label>
                   <select
                     value={selectedType}
                     onChange={(e) => setSelectedType(e.target.value)}
-                    className="w-full px-3 py-2 bg-surface/50 border border-white/20 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="w-full rounded-[3px] border border-[#3c3c41] bg-[#101013] px-3 py-2 text-[#ece7da] outline-none transition-colors focus:border-[#8a6d3b]"
                   >
                     <option value="ALL">Todos os tipos</option>
                     {itemTypes.map(type => (
@@ -614,7 +614,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
 
                 {/* Filtro de Preço */}
                 <div>
-                  <label className="block text-sm font-medium mb-2 text-text-secondary">
+                  <label className="block text-sm font-medium mb-2 text-[#8a8a90]">
                     Preço: {priceFilter.min} - {priceFilter.max} 🪙
                   </label>
                   <div className="space-y-2">
@@ -639,7 +639,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
 
                 {/* Filtro de Level */}
                 <div>
-                  <label className="block text-sm font-medium mb-2 text-text-secondary">
+                  <label className="block text-sm font-medium mb-2 text-[#8a8a90]">
                     Level: {levelFilter.min} - {levelFilter.max}
                   </label>
                   <div className="space-y-2">
@@ -671,7 +671,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                       setPriceFilter({ min: 0, max: maxPrice });
                       setLevelFilter({ min: 1, max: maxLevel });
                     }}
-                    className="w-full px-4 py-2 bg-red-500/20 border border-red-500/30 rounded-lg text-red-400 hover:bg-red-500/30 transition-colors"
+                    className="w-full rounded-[3px] border border-[#8a3b3b] bg-gradient-to-b from-[#3a2525] to-[#241616] px-4 py-2 font-semibold text-red-300 transition-all hover:brightness-125"
                   >
                     Limpar Filtros
                   </button>
@@ -685,22 +685,22 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
         {activeCharacter && (
           <div className="mb-6">
             <div className="flex flex-wrap items-center gap-4">
-              <span className="text-sm font-semibold text-white bg-surface/50 border border-white/15 rounded-lg px-3 py-2">
+              <span className="text-sm font-semibold text-[#ece7da] rounded-[3px] border border-[#46464c] bg-[#19191c] px-3 py-2">
                 ⚔️ {activeCharacter.name}
-                <span className="ml-1 text-text-secondary capitalize">({activeClass})</span>
+                <span className="ml-1 text-[#8a8a90] capitalize">({activeClass})</span>
               </span>
 
-              <span className="text-sm font-semibold text-amber-300 bg-amber-500/10 border border-amber-400/30 rounded-lg px-3 py-2">
+              <span className="text-sm font-semibold rounded-[3px] border border-[#8a6d3b] px-3 py-2 text-[#e7c682] tabular-nums" style={{ background: 'linear-gradient(180deg, #3a3325, #241f16)' }}>
                 Carteira: {characterGold === null ? '…' : characterGold} 🪙
               </span>
 
               {/* Toggle de filtro por raça e level */}
-              <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer select-none">
+              <label className="flex items-center gap-2 text-sm text-[#8a8a90] cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={showAll}
                   onChange={(e) => setShowAll(e.target.checked)}
-                  className="accent-primary w-4 h-4"
+                  className="accent-[#c9a25f] w-4 h-4"
                 />
                 Mostrar todos (ignorar raça e level)
               </label>
@@ -708,7 +708,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
 
             {/* Indicador do filtro por raça e level ativo */}
             {activeRace && !showAll && (
-              <div className="mt-2 inline-flex items-center gap-2 text-xs bg-primary/15 border border-primary/25 text-primary px-3 py-1.5 rounded-full">
+              <div className="mt-2 inline-flex items-center gap-2 text-xs rounded-[3px] border border-[#8a6d3b]/60 bg-[#241f16]/80 px-3 py-1.5 text-[#e7c682]">
                 🛡️ Mostrando só o que <span className="font-semibold capitalize">{activeRace}</span>
                 {activeLevel != null && (
                   <> de até <span className="font-semibold">level {activeLevel}</span></>
@@ -723,7 +723,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
         {itemsLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {[...Array(8)].map((_, index) => (
-              <div key={index} className="bg-surface/50 border border-white/20 rounded-lg p-4 shadow-lg animate-pulse">
+              <div key={index} className="rounded-[4px] border border-[#3c3c41] bg-[#19191c] p-4 shadow-lg animate-pulse">
                 <div className="w-full h-32 bg-surface/70 rounded mb-3"></div>
                 <div className="h-6 bg-surface/70 rounded mb-2"></div>
                 <div className="h-4 bg-surface/70 rounded w-3/4 mb-2"></div>
@@ -745,8 +745,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                 <motion.div
                   key={item.id}
                   whileHover={{ scale: 1.02 }}
-                  className="relative overflow-hidden rounded-2xl border-2 group"
-                  style={{ borderColor: visual.accent + '55' }}
+                  className="relative overflow-hidden rounded-[4px] border border-[#46464c] shadow-2xl shadow-black/60 group transition-colors hover:border-[#8a6d3b]"
                 >
                   {/* Backdrop animado por categoria */}
                   <div className="absolute inset-0">
@@ -757,7 +756,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                   {/* Conteúdo */}
                   <div className="relative p-4 flex flex-col h-full min-h-[280px]">
                     {resolvedImageUrl && (
-                      <div className="w-full aspect-square relative mb-3 rounded-xl overflow-hidden bg-black/40 ring-1 ring-white/10">
+                      <div className="w-full aspect-square relative mb-3 rounded-[3px] overflow-hidden bg-black/40 ring-1 ring-black/60">
                         <Image
                           src={resolvedImageUrl}
                           alt={item.name}
@@ -770,11 +769,11 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
 
                     <h3 className="font-black text-lg mb-2 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">{item.name}</h3>
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      <span className={`text-xs font-semibold px-2 py-1 rounded-full ${visual.chipBg} ${visual.chipText}`}>
+                      <span className={`text-xs font-semibold px-2 py-1 rounded-[3px] ${visual.chipBg} ${visual.chipText}`}>
                         {visual.emoji} {getItemTypeLabel(item.type)}
                       </span>
                       {item.level && (
-                        <span className="text-xs font-semibold bg-amber-500/30 text-amber-300 px-2 py-1 rounded-full">
+                        <span className="text-xs font-semibold bg-amber-500/30 text-[#e7c682] px-2 py-1 rounded-[3px]">
                           Lv.{item.level}
                         </span>
                       )}
@@ -788,7 +787,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                     {formatItemStats(item.stats, item.type).length > 0 && (
                       <div className="flex flex-wrap gap-1.5 mb-3">
                         {formatItemStats(item.stats, item.type).map((stat, i) => (
-                          <span key={i} className="text-xs font-semibold bg-emerald-500/20 text-emerald-300 px-2 py-1 rounded-full">
+                          <span key={i} className="text-xs font-semibold bg-emerald-500/20 text-emerald-300 px-2 py-1 rounded-[3px]">
                             {stat}
                           </span>
                         ))}
@@ -796,12 +795,12 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                     )}
 
                     <div className="mt-auto flex flex-col gap-2 pt-2">
-                      <div className="text-base font-semibold text-amber-400 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
+                      <div className="text-base font-semibold text-[#e7c682] drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
                         💰 {item.goldPrice} gold
                       </div>
 
                       {ownedQuantity > 0 && (
-                        <div className="text-sm text-amber-300">
+                        <div className="text-sm text-[#e7c682]">
                           ✓ Você possui: {ownedQuantity}
                         </div>
                       )}
@@ -809,7 +808,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                       {/* Seletor de quantidade */}
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-white/60">Qtd:</span>
-                        <div className="flex items-center rounded-lg overflow-hidden border border-white/20">
+                        <div className="flex items-center rounded-[3px] overflow-hidden border border-[#3c3c41]">
                           <button
                             type="button"
                             onClick={() => setQty(item.id, getQty(item.id) - 1)}
@@ -836,7 +835,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                           </button>
                         </div>
                         {getQty(item.id) > 1 && (
-                          <span className="text-xs text-amber-300/90 font-semibold">
+                          <span className="text-xs text-[#e7c682]/90 font-semibold">
                             = {item.goldPrice * getQty(item.id)} 🪙
                           </span>
                         )}
@@ -846,16 +845,17 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                         onClick={() => addToCart(item, getQty(item.id))}
                         disabled={loading}
                         title="Adiciona ao carrinho — feche tudo no checkout"
-                        className="w-full px-4 py-2.5 rounded-xl font-black text-sm text-white transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full px-4 py-2.5 rounded-[3px] border font-semibold tracking-wide text-sm text-[#ece7da] transition-all hover:brightness-125 disabled:opacity-50 disabled:cursor-not-allowed"
                         style={{
-                          background: `linear-gradient(90deg, ${visual.accent}cc, ${visual.accent}77)`,
-                          boxShadow: `0 4px 20px ${visual.accentSoft}`,
+                          borderColor: `${visual.accent}aa`,
+                          background: `linear-gradient(180deg, ${visual.accent}40, ${visual.accent}14)`,
+                          boxShadow: `inset 0 1px 0 ${visual.accent}44, 0 0 14px ${visual.accentSoft}`,
                         }}
                       >
                         🛒 Adicionar{getQty(item.id) > 1 ? ` ${getQty(item.id)}×` : ''} ({item.goldPrice * getQty(item.id)} 🪙)
                       </button>
                       {cart[item.id] && (
-                        <div className="text-xs text-center text-amber-300/90">
+                        <div className="text-xs text-center text-[#e7c682]/90">
                           No carrinho: {cart[item.id].quantity}
                         </div>
                       )}
@@ -864,10 +864,11 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                         <button
                           onClick={() => handleQuickEquip(item.id)}
                           disabled={loading}
-                          className="w-full px-4 py-2.5 rounded-xl font-black text-sm text-white transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="w-full px-4 py-2.5 rounded-[3px] border font-semibold tracking-wide text-sm text-[#ece7da] transition-all hover:brightness-125 disabled:opacity-50 disabled:cursor-not-allowed"
                           style={{
-                            background: `linear-gradient(90deg, ${visual.accent}99, ${visual.accent}55)`,
-                            boxShadow: `0 4px 14px ${visual.accentSoft}`,
+                            borderColor: `${visual.accent}77`,
+                            background: `linear-gradient(180deg, ${visual.accent}2b, ${visual.accent}0f)`,
+                            boxShadow: `inset 0 1px 0 ${visual.accent}33, 0 0 10px ${visual.accentSoft}`,
                           }}
                         >
                           ⚡ Equipar Rápido
@@ -884,8 +885,8 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
         {!itemsLoading && filteredItems.length === 0 && items.length > 0 && (
           <div className="text-center py-12">
             <div className="text-6xl mb-4">🔍</div>
-            <h3 className="text-xl font-semibold text-text-primary mb-2">Nenhum item encontrado</h3>
-            <p className="text-text-secondary mb-4">Tente ajustar seus filtros de busca</p>
+            <h3 className="text-xl font-semibold text-[#ece7da] mb-2">Nenhum item encontrado</h3>
+            <p className="text-[#8a8a90] mb-4">Tente ajustar seus filtros de busca</p>
             <button
               onClick={() => {
                 setSearchQuery('');
@@ -893,7 +894,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                 setPriceFilter({ min: 0, max: maxPrice });
                 setLevelFilter({ min: 1, max: maxLevel });
               }}
-              className="px-4 py-2 bg-primary/80 text-white rounded-lg hover:bg-primary transition-colors"
+              className="rounded-[3px] border border-[#8a6d3b] bg-gradient-to-b from-[#3a3325] to-[#241f16] px-4 py-2 font-semibold text-[#e7c682] transition-all hover:brightness-125"
             >
               Limpar Filtros
             </button>
@@ -903,8 +904,8 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
         {!itemsLoading && items.length === 0 && (
           <div className="text-center py-12">
             <div className="text-6xl mb-4">{config.emptyEmoji}</div>
-            <h3 className="text-xl font-semibold text-text-primary mb-2">{config.emptyLabel}</h3>
-            <p className="text-text-secondary">Não há itens disponíveis no momento</p>
+            <h3 className="text-xl font-semibold text-[#ece7da] mb-2">{config.emptyLabel}</h3>
+            <p className="text-[#8a8a90]">Não há itens disponíveis no momento</p>
           </div>
         )}
       </div>
@@ -917,7 +918,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 40, scale: 0.9 }}
             onClick={() => setCartOpen(true)}
-            className="fixed bottom-6 right-6 z-30 flex items-center gap-3 px-5 py-3 rounded-2xl font-black text-white shadow-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:scale-105 transition-transform"
+            className="fixed bottom-6 right-6 z-30 flex items-center gap-3 rounded-[3px] border border-[#8a6d3b] bg-gradient-to-b from-[#3a3325] to-[#241f16] px-5 py-3 font-black text-[#e7c682] shadow-[0_0_22px_rgba(201,162,95,0.35)] transition-all hover:brightness-125"
           >
             <span className="relative">
               <ShoppingCart className="w-6 h-6" />
@@ -945,18 +946,18 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 20 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-lg max-h-[85dvh] flex flex-col rounded-2xl border border-white/15 bg-[#15151f] shadow-2xl overflow-hidden"
+              className="w-full max-w-lg max-h-[85dvh] flex flex-col rounded-[4px] border border-[#46464c] bg-[#1e1e21] shadow-2xl shadow-black/80 overflow-hidden"
             >
               {/* Cabeçalho */}
-              <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
-                <h2 className="flex items-center gap-2 text-lg font-black text-white">
-                  <ShoppingCart className="w-5 h-5 text-amber-400" />
+              <div className="flex items-center justify-between px-4 py-2.5 border-b border-black/70 bg-gradient-to-b from-[#2b2b2f] to-[#1a1a1d]">
+                <h2 className="flex items-center gap-2 text-[15px] font-semibold tracking-wide text-[#dcdce0]">
+                  <ShoppingCart className="w-5 h-5 text-[#e7c682]" />
                   Carrinho
-                  <span className="text-sm font-semibold text-text-secondary">({cartCount})</span>
+                  <span className="text-sm font-semibold text-[#8a8a90]">({cartCount})</span>
                 </h2>
                 <button
                   onClick={() => !checkingOut && setCartOpen(false)}
-                  className="text-text-secondary hover:text-white transition-colors"
+                  className="text-[#8a8a90] hover:text-white transition-colors"
                   aria-label="Fechar"
                 >
                   <X className="w-5 h-5" />
@@ -966,16 +967,16 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
               {/* Lista de itens */}
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
                 {cartEntries.length === 0 ? (
-                  <div className="text-center py-10 text-text-secondary">Seu carrinho está vazio.</div>
+                  <div className="text-center py-10 text-[#8a8a90]">Seu carrinho está vazio.</div>
                 ) : (
                   cartEntries.map(({ item, quantity }) => {
                     const visual = getItemVisual(item.type);
                     return (
                       <div
                         key={item.id}
-                        className="flex items-center gap-3 p-2.5 rounded-xl bg-surface/40 border border-white/10"
+                        className="flex items-center gap-3 p-2.5 rounded-[3px] border border-black/60 bg-[#19191c]"
                       >
-                        <div className="w-12 h-12 shrink-0 rounded-lg overflow-hidden bg-black/40 ring-1 ring-white/10 relative flex items-center justify-center text-xl">
+                        <div className="w-12 h-12 shrink-0 rounded-[3px] overflow-hidden bg-black/40 ring-1 ring-black/60 relative flex items-center justify-center text-xl">
                           {item.image ? (
                             <Image
                               src={item.image}
@@ -991,11 +992,11 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
 
                         <div className="flex-1 min-w-0">
                           <div className="font-bold text-sm text-white truncate">{item.name}</div>
-                          <div className="text-xs text-amber-400">{item.goldPrice} 🪙 / un.</div>
+                          <div className="text-xs text-[#e7c682]">{item.goldPrice} 🪙 / un.</div>
                         </div>
 
                         {/* Quantidade */}
-                        <div className="flex items-center rounded-lg overflow-hidden border border-white/20">
+                        <div className="flex items-center rounded-[3px] overflow-hidden border border-[#3c3c41]">
                           <button
                             type="button"
                             onClick={() => setCartQty(item.id, quantity - 1)}
@@ -1023,14 +1024,14 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                           </button>
                         </div>
 
-                        <div className="w-16 text-right text-sm font-bold text-amber-300">
+                        <div className="w-16 text-right text-sm font-bold text-[#e7c682]">
                           {item.goldPrice * quantity} 🪙
                         </div>
 
                         <button
                           onClick={() => removeFromCart(item.id)}
                           disabled={checkingOut}
-                          className="text-text-secondary hover:text-red-400 transition-colors disabled:opacity-40"
+                          className="text-[#8a8a90] hover:text-red-400 transition-colors disabled:opacity-40"
                           aria-label="Remover"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -1042,19 +1043,19 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
               </div>
 
               {/* Rodapé com total e ações */}
-              <div className="px-5 py-4 border-t border-white/10 space-y-3">
+              <div className="px-5 py-4 border-t border-black/60 bg-[#19191c] space-y-3">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-text-secondary">Carteira do personagem</span>
-                  <span className="font-semibold text-amber-300">
+                  <span className="text-[#8a8a90]">Carteira do personagem</span>
+                  <span className="font-semibold text-[#e7c682]">
                     {characterGold === null ? '…' : characterGold} 🪙
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="font-black text-white">Total</span>
-                  <span className="text-xl font-black text-amber-400">{cartTotal} 🪙</span>
+                  <span className="font-black text-[#ece7da]">Total</span>
+                  <span className="text-xl font-black text-[#e7c682]">{cartTotal} 🪙</span>
                 </div>
                 {characterGold !== null && cartTotal > characterGold && (
-                  <div className="text-xs text-amber-400/90">
+                  <div className="text-xs text-[#e7c682]/90">
                     Sem GOLD na mão? Finalize e recarregue on-chain pela carteira.
                   </div>
                 )}
@@ -1062,7 +1063,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                   <button
                     onClick={clearCart}
                     disabled={checkingOut || cartEntries.length === 0}
-                    className="px-4 py-2.5 rounded-xl text-sm font-bold text-red-400 bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 transition-colors disabled:opacity-40"
+                    className="rounded-[3px] border border-[#8a3b3b] bg-gradient-to-b from-[#3a2525] to-[#241616] px-4 py-2.5 text-sm font-semibold text-red-300 transition-all hover:brightness-125 disabled:opacity-40"
                   >
                     Limpar
                   </button>
@@ -1073,7 +1074,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                       cartEntries.length === 0 ||
                       !selectedCharacter
                     }
-                    className="flex-1 px-4 py-2.5 rounded-xl text-sm font-black text-white bg-gradient-to-r from-amber-500 to-amber-600 hover:scale-[1.02] transition-transform disabled:opacity-50 disabled:hover:scale-100"
+                    className="flex-1 rounded-[3px] border border-[#8a6d3b] bg-gradient-to-b from-[#3a3325] to-[#241f16] px-4 py-2.5 text-sm font-semibold tracking-wide text-[#e7c682] shadow-[inset_0_1px_0_rgba(231,198,130,0.25)] transition-all hover:border-[#c9a25f] hover:brightness-125 disabled:opacity-50"
                   >
                     {checkingOut
                       ? 'Finalizando…'

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Users, Sword, Plus, RefreshCw, Crown, Clock, X, Shield } from 'lucide-react'
 import ArenaBackdrop from '@/components/combat/ArenaBackdrop'
 import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider'
+import { GOLD, GOLD_BRIGHT, PANEL_BG, TITLEBAR_BG, BEVEL_BTN_CLASS, BEVEL_COLOR_BTN_CLASS, BEVEL_VARIANTS } from '@/components/crafting/bdoTheme'
 
 interface CombatRoom {
   id: string
@@ -357,10 +358,10 @@ export default function CombatLobbyPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'waiting': return 'text-success bg-success/15 border border-success/30'
-      case 'in_progress': return 'text-warning bg-warning/15 border border-warning/30'
-      case 'finished': return 'text-textsec bg-white/5 border border-white/10'
-      default: return 'text-textsec bg-white/5 border border-white/10'
+      case 'waiting': return 'text-emerald-300 bg-emerald-950/50 border-emerald-700/60'
+      case 'in_progress': return 'text-[#e7c682] bg-[#241f16] border-[#8a6d3b]/60'
+      case 'finished': return 'text-[#8a8a90] bg-[#1a1a1d] border-[#3c3c41]'
+      default: return 'text-[#8a8a90] bg-[#1a1a1d] border-[#3c3c41]'
     }
   }
 
@@ -409,48 +410,51 @@ export default function CombatLobbyPage() {
         <ArenaBackdrop />
       </div>
 
-      <div className="relative z-10 max-w-6xl mx-auto p-4 sm:p-6">
-        {/* Header - vidro translúcido sobre a arena */}
-        <div className="bg-black/30 backdrop-blur-md border-2 border-amber-500/40 text-white p-6 rounded-t-3xl shadow-2xl">
-          <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
-            <div>
-              <h1 className="text-3xl sm:text-4xl font-black flex items-center drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]">
-                <Sword className="mr-3 text-amber-400" size={32} />
-                Arena de Combate PvP
+      <div className="relative z-10 max-w-6xl mx-auto p-4 sm:p-6" style={{ fontFamily: "'Barlow', sans-serif" }}>
+        {/* Janela chumbo: barra de título + cabeçalho. Layout fixo (linha com wrap),
+            sem re-alinhamento entre breakpoints. */}
+        <div className="overflow-hidden rounded-t-[4px] border border-b-0 border-[#46464c] shadow-2xl shadow-black/60" style={{ background: PANEL_BG }}>
+          <div className="flex items-center gap-2 px-4 py-2.5" style={{ background: TITLEBAR_BG, borderBottom: '1px solid rgba(0,0,0,0.7)' }}>
+            <Sword size={17} style={{ color: GOLD }} />
+            <span className="text-[15px] font-semibold tracking-wide text-[#dcdce0]">Arena de Combate PvP</span>
+          </div>
+
+          <div className="flex flex-row flex-wrap items-start justify-between gap-4 p-5">
+            <div className="min-w-0">
+              <h1 className="text-2xl sm:text-3xl font-black text-[#ece7da]" style={{ letterSpacing: '0.5px' }}>
+                Escolha sua arena
               </h1>
-              <p className="text-white/60 mt-2 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">Escolha uma sala ou crie a sua própria arena!</p>
+              <p className="text-[#8a8a90] mt-1 text-sm">Entre numa sala existente ou crie a sua própria!</p>
             </div>
-            <div className="text-left md:text-right">
-              {/* Personagem ativo (definido na navbar — sem seletor aqui) */}
-              {selectedCharacter && (
-                <div className="inline-flex flex-col items-start md:items-end bg-black/40 border border-white/10 rounded-xl px-4 py-2.5">
-                  <div className="font-bold text-lg drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">{selectedCharacter.name}</div>
-                  <div className="text-sm text-white/70">
-                    Nv.{selectedCharacter.level} • {selectedCharacter.race} {selectedCharacter.class}
-                  </div>
-                  <div className="text-sm text-white/70 flex items-center gap-3 mt-0.5">
-                    <span>❤️ {selectedCharacter.hp}/{selectedCharacter.maxHp}</span>
-                    <span>🔮 {selectedCharacter.mp}/{selectedCharacter.maxMp}</span>
-                    {!selectedCharacter.isAlive && (
-                      <span className="text-red-400 font-bold">💀 MORTO</span>
-                    )}
-                  </div>
+            {/* Personagem ativo (definido na navbar — sem seletor aqui) */}
+            {selectedCharacter && (
+              <div className="inline-flex flex-col items-start rounded-[3px] border border-[#46464c] bg-[#19191c] px-4 py-2.5">
+                <div className="font-bold text-lg text-[#ece7da]">{selectedCharacter.name}</div>
+                <div className="text-sm text-[#8a8a90]">
+                  Nv.{selectedCharacter.level} • {selectedCharacter.race} {selectedCharacter.class}
                 </div>
-              )}
-            </div>
+                <div className="text-sm text-[#c9c9ce] flex items-center gap-3 mt-0.5 tabular-nums">
+                  <span>❤️ {selectedCharacter.hp}/{selectedCharacter.maxHp}</span>
+                  <span>🔮 {selectedCharacter.mp}/{selectedCharacter.maxMp}</span>
+                  {!selectedCharacter.isAlive && (
+                    <span className="text-red-400 font-bold">💀 MORTO</span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="bg-black/20 backdrop-blur-md border-2 border-t-0 border-amber-500/40 rounded-b-3xl shadow-2xl">
-          
+        <div className="overflow-hidden rounded-b-[4px] border border-t border-[#46464c] shadow-2xl shadow-black/60" style={{ background: PANEL_BG, borderTopColor: 'rgba(0,0,0,0.6)' }}>
+
           {/* Aviso se personagem está morto */}
           {selectedCharacter && !selectedCharacter.isAlive && (
-            <div className="bg-error/20 border-b border-error/30 p-4">
+            <div className="border-b border-red-900/70 bg-red-950/40 p-4">
               <div className="flex items-center">
-                <span className="text-error text-xl mr-3">💀</span>
+                <span className="text-xl mr-3">💀</span>
                 <div>
-                  <p className="text-error font-bold">Personagem Morto</p>
-                  <p className="text-text-secondary text-sm">
+                  <p className="text-red-300 font-bold">Personagem Morto</p>
+                  <p className="text-[#8a8a90] text-sm">
                     Use uma Poção de Reviver antes de entrar em combate PvP.
                   </p>
                 </div>
@@ -460,12 +464,12 @@ export default function CombatLobbyPage() {
 
           {/* Aviso se não há personagens */}
           {characters.length === 0 && (
-            <div className="bg-warning/20 border-b border-warning/30 p-4">
+            <div className="border-b p-4" style={{ borderColor: 'rgba(224,154,58,0.4)', background: 'rgba(58,45,22,0.5)' }}>
               <div className="flex items-center">
-                <span className="text-warning text-xl mr-3">⚠️</span>
+                <span className="text-xl mr-3">⚠️</span>
                 <div>
-                  <p className="text-warning font-bold">Nenhum personagem encontrado</p>
-                  <p className="text-text-secondary text-sm">
+                  <p className="font-bold" style={{ color: '#e09a3a' }}>Nenhum personagem encontrado</p>
+                  <p className="text-[#8a8a90] text-sm">
                     Crie um personagem primeiro para poder participar de combates PvP.
                   </p>
                 </div>
@@ -474,14 +478,14 @@ export default function CombatLobbyPage() {
           )}
 
           {/* Create Room Section */}
-          <div className="bg-white/[0.03] border-b border-white/10 p-6">
-            <h2 className="text-xl font-bold text-text-primary mb-4 flex items-center">
-              <Plus className="mr-2" size={24} />
+          <div className="border-b border-black/60 bg-[#19191c] p-6">
+            <h2 className="text-lg font-semibold text-[#dcdce0] mb-4 flex items-center tracking-wide">
+              <Plus className="mr-2" size={20} style={{ color: GOLD }} />
               Criar Nova Sala
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-text-secondary mb-2">
+                <label className="block text-[11px] uppercase tracking-[0.14em] text-[#77777d] mb-2">
                   Nome da Sala
                 </label>
                 <input
@@ -489,7 +493,7 @@ export default function CombatLobbyPage() {
                   value={newRoomName}
                   onChange={(e) => setNewRoomName(e.target.value)}
                   placeholder="Ex: Arena dos Campeões"
-                  className="w-full px-4 py-2 bg-background/50 border border-white/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-text-primary"
+                  className="w-full rounded-[3px] border border-[#3c3c41] bg-[#101013] px-4 py-2 text-[#ece7da] outline-none transition-colors focus:border-[#8a6d3b]"
                   maxLength={50}
                 />
               </div>
@@ -499,16 +503,17 @@ export default function CombatLobbyPage() {
                   id="privateRoom"
                   checked={isPrivateRoom}
                   onChange={(e) => setIsPrivateRoom(e.target.checked)}
-                  className="mr-2"
+                  className="mr-2 accent-[#c9a25f]"
                 />
-                <label htmlFor="privateRoom" className="text-sm text-text-secondary">
+                <label htmlFor="privateRoom" className="text-sm text-[#c9c9ce]">
                   Sala Privada
                 </label>
               </div>
               <button
                 onClick={createRoom}
                 disabled={!newRoomName.trim() || isCreatingRoom || !selectedCharacter || !selectedCharacter.isAlive}
-                className="bg-success hover:bg-success-dark disabled:bg-surface/50 text-white px-6 py-2 rounded-lg font-bold transition-colors flex items-center justify-center"
+                className={`${BEVEL_COLOR_BTN_CLASS} px-6 py-2 flex items-center justify-center disabled:cursor-not-allowed disabled:opacity-40`}
+                style={BEVEL_VARIANTS.gold}
                 title={!selectedCharacter ? 'Selecione um personagem' : !selectedCharacter.isAlive ? 'Personagem deve estar vivo' : ''}
               >
                 {isCreatingRoom ? (
@@ -526,13 +531,13 @@ export default function CombatLobbyPage() {
           {/* Rooms List */}
           <div className="p-6">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-text-primary flex items-center">
-                <Users className="mr-2" size={24} />
+              <h2 className="text-lg font-semibold text-[#dcdce0] flex items-center tracking-wide">
+                <Users className="mr-2" size={20} style={{ color: GOLD }} />
                 Salas Disponíveis ({rooms.filter(r => r.status === 'waiting').length})
               </h2>
               <button
                 onClick={loadRooms}
-                className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm transition-colors flex items-center"
+                className={`${BEVEL_BTN_CLASS} px-4 py-2 text-sm flex items-center`}
               >
                 <RefreshCw className="mr-2" size={16} />
                 Atualizar
@@ -542,14 +547,15 @@ export default function CombatLobbyPage() {
             {rooms.length === 0 ? (
               <div className="text-center py-12">
                 <div className="text-6xl mb-4">⚔️</div>
-                <h3 className="text-xl font-bold text-text-primary mb-2">Nenhuma sala encontrada</h3>
-                <p className="text-text-secondary mb-6">Seja o primeiro a criar uma arena de combate!</p>
+                <h3 className="text-xl font-bold text-[#ece7da] mb-2">Nenhuma sala encontrada</h3>
+                <p className="text-[#8a8a90] mb-6">Seja o primeiro a criar uma arena de combate!</p>
                 <button
                   onClick={() => {
                     const input = document.querySelector('input[type="text"]') as HTMLInputElement
                     input?.focus()
                   }}
-                  className="bg-primary hover:bg-primary-dark text-white px-6 py-3 rounded-lg font-bold transition-colors"
+                  className={`${BEVEL_COLOR_BTN_CLASS} px-6 py-3`}
+                  style={BEVEL_VARIANTS.gold}
                 >
                   Criar Primeira Sala
                 </button>
@@ -559,58 +565,55 @@ export default function CombatLobbyPage() {
                 {rooms.map((room) => (
                   <div
                     key={room.id}
-                    className={`bg-black/40 backdrop-blur-xl border rounded-2xl p-4 transition-all hover:shadow-lg hover:scale-[1.02] ${
+                    className={`rounded-[4px] border p-4 transition-all hover:shadow-lg ${
                       room.status === 'waiting'
-                        ? 'border-success/40 hover:border-success/60'
+                        ? 'border-emerald-700/60 hover:border-emerald-500/70'
                         : room.status === 'in_progress'
-                        ? 'border-warning/40'
-                        : 'border-white/10'
+                        ? 'border-[#8a6d3b]/60'
+                        : 'border-[#3c3c41]'
                     }`}
+                    style={{ background: 'linear-gradient(160deg, #232327, #101013)' }}
                   >
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex-1">
-                        <h3 className="font-bold text-lg text-text-primary mb-1 flex items-center">
-                          {room.isPrivate && <Crown className="mr-2 text-warning" size={16} />}
+                        <h3 className="font-bold text-lg text-[#ece7da] mb-1 flex items-center">
+                          {room.isPrivate && <Crown className="mr-2" size={16} style={{ color: GOLD }} />}
                           {room.name}
                         </h3>
-                        <p className="text-sm text-text-secondary">
+                        <p className="text-sm text-[#8a8a90]">
                           por {room.createdByName}
                         </p>
                       </div>
-                      <span className={`px-2 py-1 rounded text-xs font-bold border ${getStatusColor(room.status)}`}>
+                      <span className={`px-2 py-1 rounded-[3px] text-xs font-bold border ${getStatusColor(room.status)}`}>
                         {getStatusText(room.status)}
                       </span>
                     </div>
 
                     <div className="space-y-2 mb-4">
                       <div className="flex justify-between text-sm">
-                        <span className="text-text-secondary">Participantes:</span>
-                        <span className="font-bold text-text-primary">
+                        <span className="text-[#8a8a90]">Participantes:</span>
+                        <span className="font-bold tabular-nums text-[#ece7da]">
                           {getTotalParticipants(room)}/{getMaxParticipants()}
                         </span>
                       </div>
                       {room.participants && (
                         <div className="text-xs space-y-1">
                           <div className="flex justify-between">
-                            <span className="text-text-secondary">⚔️ Lutadores:</span>
-                            <span className="text-text-primary">{room.participants.fighters.length}/{ROLE_LIMITS[RoomRole.FIGHTER]}</span>
+                            <span className="text-[#8a8a90]">⚔️ Lutadores:</span>
+                            <span className="tabular-nums text-[#c9c9ce]">{room.participants.fighters.length}/{ROLE_LIMITS[RoomRole.FIGHTER]}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-text-secondary">👁️ Espectadores:</span>
-                            <span className="text-text-primary">{room.participants.spectators.length}/{ROLE_LIMITS[RoomRole.SPECTATOR]}</span>
+                            <span className="text-[#8a8a90]">👁️ Espectadores:</span>
+                            <span className="tabular-nums text-[#c9c9ce]">{room.participants.spectators.length}/{ROLE_LIMITS[RoomRole.SPECTATOR]}</span>
                           </div>
-                          {/* <div className="flex justify-between">
-                            <span className="text-text-secondary">🛡️ Moderadores:</span>
-                            <span className="text-text-primary">{room.participants.moderators.length}/{ROLE_LIMITS[RoomRole.MODERATOR]}</span>
-                          </div> */}
                         </div>
                       )}
                       <div className="flex justify-between text-sm">
-                        <span className="text-text-secondary flex items-center">
+                        <span className="text-[#8a8a90] flex items-center">
                           <Clock className="mr-1" size={12} />
                           Criada:
                         </span>
-                        <span className="text-text-secondary">
+                        <span className="text-[#8a8a90]">
                           {formatTimeAgo(room.createdAt)}
                         </span>
                       </div>
@@ -618,8 +621,8 @@ export default function CombatLobbyPage() {
 
                     {/* Role Selector */}
                     {showRoleSelector === room.id ? (
-                      <div className="space-y-2 mb-4 p-3 bg-background/30 rounded-lg border border-primary/30">
-                        <h4 className="text-sm font-bold text-text-primary text-center">Escolha seu role:</h4>
+                      <div className="space-y-2 mb-4 p-3 rounded-[3px] border border-[#8a6d3b]/60 bg-[#19191c]">
+                        <h4 className="text-sm font-bold text-[#dcdce0] text-center">Escolha seu role:</h4>
                         <div className="space-y-2">
                           {getAvailableRoles(room).map(role => (
                             <button
@@ -630,20 +633,20 @@ export default function CombatLobbyPage() {
                                 joinRoom(room.id, role)
                               }}
                               disabled={role === RoomRole.MODERATOR}
-                              className={`w-full p-2 rounded-lg text-left text-sm transition-colors border ${
+                              className={`w-full p-2 rounded-[3px] text-left text-sm transition-colors border ${
                                 role === RoomRole.MODERATOR
-                                  ? 'bg-gray-600/20 border-gray-600/30 text-gray-400 cursor-not-allowed'
-                                  : 'bg-primary/10 border-primary/30 text-text-primary hover:bg-primary/20'
+                                  ? 'border-[#3c3c41] bg-[#1a1a1d] text-[#57575c] cursor-not-allowed'
+                                  : 'border-[#46464c] bg-gradient-to-b from-[#2b2b2f] to-[#1c1c1f] text-[#dcdce0] hover:border-[#8a6d3b]'
                               }`}
                             >
                               <div className="font-bold">{getRoleDisplayName(role)}</div>
-                              <div className="text-xs text-text-secondary">{getRoleDescription(role)}</div>
+                              <div className="text-xs text-[#8a8a90]">{getRoleDescription(role)}</div>
                             </button>
                           ))}
                         </div>
                         <button
                           onClick={() => setShowRoleSelector(null)}
-                          className="w-full py-1 px-3 text-xs bg-surface/50 hover:bg-surface/70 text-text-secondary rounded transition-colors"
+                          className="w-full py-1 px-3 text-xs text-[#8a8a90] rounded-[3px] transition-colors hover:text-white"
                         >
                           Cancelar
                         </button>
@@ -666,13 +669,13 @@ export default function CombatLobbyPage() {
                           !selectedCharacter || 
                           !selectedCharacter.isAlive
                         }
-                        className={`w-full py-2 px-4 rounded-lg font-bold transition-colors ${
-                          room.status === 'waiting' && 
+                        className={`w-full py-2 px-4 rounded-[3px] border font-semibold tracking-wide transition-all ${
+                          room.status === 'waiting' &&
                           getAvailableRoles(room).length > 0 &&
-                          selectedCharacter && 
+                          selectedCharacter &&
                           selectedCharacter.isAlive
-                            ? 'bg-primary hover:bg-primary-dark text-white'
-                            : 'bg-surface/30 text-text-secondary cursor-not-allowed'
+                            ? 'border-[#8a6d3b] bg-gradient-to-b from-[#3a3325] to-[#241f16] text-[#e7c682] shadow-[inset_0_1px_0_rgba(231,198,130,0.25)] hover:border-[#c9a25f] hover:brightness-125'
+                            : 'border-[#3c3c41] bg-[#1a1a1d] text-[#57575c] cursor-not-allowed'
                         }`}
                         title={
                           !selectedCharacter 
@@ -707,26 +710,23 @@ export default function CombatLobbyPage() {
           </div>
 
           {/* 🐉 Modo Treino */}
-          <div className="bg-white/[0.03] border-t border-white/10 p-6">
+          <div className="border-t border-black/60 bg-[#19191c] p-6">
             <div className="flex justify-between items-center mb-2">
-              <h2 className="text-xl font-bold text-text-primary flex items-center">
-                <Shield className="mr-2" size={24} />
+              <h2 className="text-lg font-semibold text-[#dcdce0] flex items-center tracking-wide">
+                <Shield className="mr-2" size={20} style={{ color: GOLD }} />
                 🏟️ Modo Treino
               </h2>
               <button
                 onClick={() => setShowTrainingPicker(!showTrainingPicker)}
                 disabled={!selectedCharacter || !selectedCharacter.isAlive}
-                className={`px-6 py-2 rounded-lg font-bold transition-colors flex items-center ${
-                  selectedCharacter && selectedCharacter.isAlive
-                    ? 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-indigo-600 hover:to-purple-600 text-white'
-                    : 'bg-surface/30 text-text-secondary cursor-not-allowed border border-white/10'
-                }`}
+                className={`${BEVEL_COLOR_BTN_CLASS} px-6 py-2 flex items-center disabled:cursor-not-allowed disabled:opacity-40`}
+                style={BEVEL_VARIANTS.purple}
                 title={!selectedCharacter ? 'Selecione um personagem' : !selectedCharacter.isAlive ? 'Personagem deve estar vivo' : ''}
               >
                 {showTrainingPicker ? 'Fechar' : '🐉 Escolher Monstro'}
               </button>
             </div>
-            <p className="text-sm text-text-secondary mb-4">
+            <p className="text-sm text-[#8a8a90] mb-4">
               Lute contra monstros para testar suas habilidades. O monstro escala com seu nível. Sem recompensas nem penalidades.
             </p>
 
@@ -736,10 +736,11 @@ export default function CombatLobbyPage() {
                   <button
                     key={m.key}
                     onClick={() => startTraining(m.key)}
-                    className="bg-black/40 backdrop-blur-sm border border-purple-500/30 hover:border-purple-400 hover:bg-purple-500/10 rounded-xl p-4 text-center transition-all hover:scale-[1.03] group"
+                    className="rounded-[3px] border border-[#3c3c41] hover:border-[#8a6d3b] p-4 text-center transition-all group"
+                    style={{ background: 'linear-gradient(160deg, #232327, #101013)' }}
                   >
                     <div className="text-4xl mb-2 group-hover:scale-110 transition-transform">{m.emoji}</div>
-                    <div className="font-bold text-text-primary text-sm mb-1">{m.name}</div>
+                    <div className="font-bold text-[#ece7da] text-sm mb-1">{m.name}</div>
                     <div className={`text-xs font-bold mb-2 ${
                       m.difficulty === 'Fácil' ? 'text-green-400'
                       : m.difficulty === 'Médio' ? 'text-yellow-400'
@@ -748,7 +749,7 @@ export default function CombatLobbyPage() {
                     }`}>
                       {m.difficulty}
                     </div>
-                    <div className="text-[11px] text-text-secondary leading-tight">{m.description}</div>
+                    <div className="text-[11px] text-[#8a8a90] leading-tight">{m.description}</div>
                   </button>
                 ))}
               </div>
@@ -756,11 +757,11 @@ export default function CombatLobbyPage() {
           </div>
 
           {/* Quick Actions */}
-          <div className="bg-white/[0.03] border-t border-white/10 p-6">
+          <div className="border-t border-black/60 p-6">
             <div className="flex justify-center space-x-4">
               <button
                 onClick={() => router.push('/dashboard')}
-                className="bg-surface/50 hover:bg-surface/70 text-text-primary px-6 py-2 rounded-lg transition-colors flex items-center border border-white/20"
+                className={`${BEVEL_BTN_CLASS} px-6 py-2 flex items-center`}
               >
                 <X className="mr-2" size={16} />
                 Voltar ao Dashboard

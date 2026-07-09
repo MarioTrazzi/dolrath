@@ -149,23 +149,24 @@ export default function FarmPage() {
   }
 
   return (
-    <div className="min-h-[100dvh] p-4 sm:p-6">
+    <div className="min-h-[100dvh] p-4 sm:p-6" style={{ fontFamily: "'Barlow', sans-serif" }}>
       <div className="max-w-4xl mx-auto">
         <div className="mb-6 text-center">
           <motion.h1
             initial={{ y: -12, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            className="text-3xl sm:text-4xl font-black text-white mb-2"
+            className="text-3xl sm:text-4xl font-black text-[#ece7da] mb-2"
+            style={{ letterSpacing: '0.5px' }}
           >
             🌾 Fazenda
           </motion.h1>
-          <p className="text-white/50 text-sm max-w-2xl mx-auto">
+          <p className="text-[#8a8a90] text-sm max-w-2xl mx-auto">
             A fazenda é uma só para todos os seus heróis: qualquer um planta de graça (e leva um XP de Fazenda),
             e quem colhe gasta 1⚡ por canteiro e fica com os itens e o XP. Crescer não gasta nada — a fazenda trabalha por você.
           </p>
           {activeCharacter && (
-            <p className="text-white/40 text-xs mt-2">
-              Gerenciando com <span className="text-amber-300/90 font-bold">{activeCharacter.name}</span> — troque o herói ativo na barra do topo.
+            <p className="text-[#77777d] text-xs mt-2">
+              Gerenciando com <span className="font-bold" style={{ color: '#e7c682' }}>{activeCharacter.name}</span> — troque o herói ativo na barra do topo.
             </p>
           )}
         </div>
@@ -174,15 +175,23 @@ export default function FarmPage() {
           <motion.div
             initial={{ scale: 0.9, opacity: 0, y: -8 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
-            className="mb-4 max-w-md mx-auto flex items-center justify-center gap-2 rounded-2xl border-2 border-yellow-400/60 bg-gradient-to-r from-yellow-500/20 via-amber-400/15 to-yellow-500/20 px-5 py-3 text-center"
+            className="mb-4 max-w-md mx-auto flex items-center justify-center gap-2 rounded-[3px] border px-5 py-3 text-center"
+            style={{
+              borderColor: '#c9a25f',
+              background: 'linear-gradient(180deg, #3a3325, #241f16)',
+              boxShadow: 'inset 0 1px 0 rgba(231,198,130,0.25), 0 0 22px rgba(201,162,95,0.3)',
+            }}
           >
             <span className="text-xl">⭐</span>
-            <span className="font-black text-yellow-200 text-sm">{levelUpBanner}</span>
+            <span className="font-black text-sm" style={{ color: '#e7c682' }}>{levelUpBanner}</span>
           </motion.div>
         )}
 
         {notice && (
-          <div className="bg-black/60 border border-white/20 text-white/90 px-4 py-3 rounded-xl mb-4 text-sm text-center">
+          <div
+            className="rounded-[3px] border border-[#46464c] px-4 py-3 mb-4 text-sm text-center text-[#c9c9ce]"
+            style={{ background: 'linear-gradient(180deg, rgba(32,32,36,0.94), rgba(24,24,27,0.96))' }}
+          >
             {notice}
           </div>
         )}

@@ -648,12 +648,12 @@ export default function InventoryPage() {
         <VaultBackdrop />
       </div>
 
-      <div className="relative z-10 container mx-auto p-4 pt-20">
+      <div className="relative z-10 container mx-auto p-4 pt-20" style={{ fontFamily: "'Barlow', sans-serif" }}>
         <div className="mb-8">
-          <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary-dark mb-2">
+          <h1 className="text-4xl font-black text-[#ece7da] mb-2" style={{ letterSpacing: '0.5px' }}>
             📦 Inventário
           </h1>
-          <p className="text-text-secondary">Gerencie seus itens e equipamentos</p>
+          <p className="text-[#8a8a90]">Gerencie seus itens e equipamentos</p>
         </div>
 
         {/* ⛓️ Claim de GOLD: bolso do herói → token on-chain na carteira */}

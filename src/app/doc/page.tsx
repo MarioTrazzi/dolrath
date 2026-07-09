@@ -72,7 +72,7 @@ function Section({ id, title, kicker, children }: { id: string; title: string; k
 }
 
 function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <div className={`rounded-2xl border border-white/10 bg-surface/40 backdrop-blur-xl p-5 shadow-xl ${className}`}>{children}</div>
+  return <div className={`rounded-[4px] border border-[#46464c] bg-[#1e1e21]/95 p-5 shadow-xl shadow-black/40 ${className}`}>{children}</div>
 }
 
 function Code({ children }: { children: React.ReactNode }) {
@@ -81,7 +81,7 @@ function Code({ children }: { children: React.ReactNode }) {
 
 function Formula({ children }: { children: React.ReactNode }) {
   return (
-    <pre className="overflow-x-auto rounded-xl border border-white/10 bg-black/50 p-4 font-game text-[13px] leading-relaxed text-emerald-200">
+    <pre className="overflow-x-auto rounded-[3px] border border-black/60 bg-[#101013] p-4 font-game text-[13px] leading-relaxed text-emerald-200">
       {children}
     </pre>
   )
@@ -89,7 +89,7 @@ function Formula({ children }: { children: React.ReactNode }) {
 
 function Table({ head, rows }: { head: string[]; rows: React.ReactNode[][] }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-white/10">
+    <div className="overflow-x-auto rounded-[3px] border border-black/60">
       <table className="w-full text-left text-sm">
         <thead className="bg-white/5 text-xs uppercase tracking-wide text-textsec">
           <tr>{head.map((h, i) => <th key={i} className="whitespace-nowrap px-3 py-2 font-semibold">{h}</th>)}</tr>
@@ -133,7 +133,7 @@ function ItemArtCard({
 }) {
   const r = RARITY[rarity]
   return (
-    <div className={`group relative flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-surface/40 ring-1 ${r.ring} shadow-lg`}>
+    <div className={`group relative flex flex-col overflow-hidden rounded-[4px] border border-[#3c3c41] bg-[#19191c] ring-1 ${r.ring} shadow-lg`}>
       <div className="relative aspect-square overflow-hidden bg-black/50">
         {/* asset estático /items/<slug>.webp — img simples (sem next/image) */}
         {/* eslint-disable-next-line @next/next/no-img-element */}

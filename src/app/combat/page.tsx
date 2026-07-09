@@ -1148,7 +1148,7 @@ function CombatPageContent() {
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 overscroll-none p-0 sm:p-2">
-      <div className="bg-surface/95 backdrop-blur-xl border border-white/20 rounded-none sm:rounded-2xl shadow-2xl w-full h-full sm:h-[95dvh] sm:max-w-6xl flex flex-col">
+      <div className="bg-[#1e1e21]/95 backdrop-blur-xl border border-[#46464c] rounded-none sm:rounded-[4px] shadow-2xl w-full h-full sm:h-[95dvh] sm:max-w-6xl flex flex-col">
         {/* Header */}
         <div className="bg-gradient-to-r from-primary to-primary-dark text-white p-2 sm:p-3 rounded-t-none sm:rounded-t-2xl flex justify-between items-center flex-shrink-0">
           <div className="flex items-center">
@@ -1255,7 +1255,7 @@ function CombatPageContent() {
             <div className="bg-background/20 border-b border-white/10 p-2 sm:p-3 flex-shrink-0">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                 {/* Lutadores */}
-                <div className="bg-surface/30 rounded-lg p-2">
+                <div className="rounded-[3px] border border-black/60 bg-[#19191c] p-2">
                   <h4 className="font-bold text-red-400 mb-1">⚔️ Lutadores ({combatRoom.participants.fighters.length}/2)</h4>
                   {combatRoom.participants.fighters.map((fighter, index) => (
                     <div key={fighter.id} className="text-text-secondary">
@@ -1265,7 +1265,7 @@ function CombatPageContent() {
                 </div>
                 
                 {/* Espectadores */}
-                <div className="bg-surface/30 rounded-lg p-2">
+                <div className="rounded-[3px] border border-black/60 bg-[#19191c] p-2">
                   <h4 className="font-bold text-blue-400 mb-1">👁️ Espectadores ({combatRoom.participants.spectators.length}/8)</h4>
                   <div className="max-h-16 overflow-y-auto">
                     {combatRoom.participants.spectators.map((spectator, index) => (
@@ -1277,7 +1277,7 @@ function CombatPageContent() {
                 </div>
                 
                 {/* Moderadores */}
-                <div className="bg-surface/30 rounded-lg p-2">
+                <div className="rounded-[3px] border border-black/60 bg-[#19191c] p-2">
                   <h4 className="font-bold text-purple-400 mb-1">🛡️ Moderadores ({combatRoom.participants.moderators.length}/2)</h4>
                   {combatRoom.participants.moderators.map((moderator, index) => (
                     <div key={moderator.id} className="text-text-secondary">
@@ -1316,7 +1316,7 @@ function CombatPageContent() {
             {/* Mobile: só as ações (chat no sheet), Desktop: lado a lado */}
 
             {/* Chat/Log Unificado - painel fixo só no desktop */}
-            <div className="hidden sm:flex order-2 sm:order-2 flex-1 sm:w-80 bg-surface/30 p-2 sm:p-4 flex-col min-h-0">
+            <div className="hidden sm:flex order-2 sm:order-2 flex-1 sm:w-80 bg-[#19191c] p-2 sm:p-4 flex-col min-h-0">
               <h3 className="font-bold text-text-primary mb-2 sm:mb-3 text-xs sm:text-sm text-center">💬 Chat & Log</h3>
               <div className="flex-1 bg-background/50 backdrop-blur-xl border border-white/10 rounded-xl p-2 sm:p-3 flex flex-col min-h-0">
                 <div
@@ -1363,7 +1363,7 @@ function CombatPageContent() {
                 fixa a arena inteira pulava a cada turno); o scroll interno é a válvula de
                 escape quando transformado (mais botões). */}
             <div
-              className="order-1 sm:order-3 w-full sm:w-64 bg-surface/30 p-2 sm:p-4 flex flex-col sm:flex-shrink-0 h-[256px] sm:h-auto min-h-0 space-y-4 overflow-y-auto overscroll-contain"
+              className="order-1 sm:order-3 w-full sm:w-64 bg-[#19191c] p-2 sm:p-4 flex flex-col sm:flex-shrink-0 h-[256px] sm:h-auto min-h-0 space-y-4 overflow-y-auto overscroll-contain"
               style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
             >
               <h3 className="hidden sm:block font-bold text-text-primary mb-2 sm:mb-3 text-xs sm:text-sm text-center">
@@ -1616,7 +1616,7 @@ function CombatPageContent() {
         <div className="sm:hidden fixed inset-0 z-[60]" onClick={() => setChatOpen(false)}>
           <div className="absolute inset-0 bg-black/50" />
           <div
-            className="absolute inset-x-0 bottom-0 max-h-[60dvh] rounded-t-2xl bg-surface/95 backdrop-blur-xl border-t border-white/20 flex flex-col shadow-2xl"
+            className="absolute inset-x-0 bottom-0 max-h-[60dvh] rounded-t-[4px] bg-[#1e1e21]/95 backdrop-blur-xl border-t border-[#46464c] flex flex-col shadow-2xl"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 pt-3 pb-2 flex-shrink-0">

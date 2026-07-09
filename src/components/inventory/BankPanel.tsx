@@ -143,33 +143,45 @@ export default function BankPanel({ characterId, onChanged }: { characterId?: st
   const hasBankGold = (bankGold ?? 0) > 0
 
   return (
-    <div className="mb-6 rounded-xl border border-amber-400/25 bg-black/30 p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <h2 className="text-lg font-bold text-amber-200">⛓️ Reivindicar GOLD</h2>
+    <div
+      className="mb-6 overflow-hidden rounded-[4px] border border-[#46464c] shadow-2xl shadow-black/60"
+      style={{ background: 'linear-gradient(180deg, rgba(32,32,36,0.94), rgba(24,24,27,0.96))' }}
+    >
+      {/* Barra de título em bisel (mesma das demais janelas chumbo+ouro) */}
+      <div
+        className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5"
+        style={{ background: 'linear-gradient(180deg, #2b2b2f, #1a1a1d)', borderBottom: '1px solid rgba(0,0,0,0.7)' }}
+      >
+        <h2 className="flex items-center gap-2 text-[15px] font-semibold tracking-wide text-[#dcdce0]">
+          <span style={{ color: '#c9a25f' }}>⛓️</span> Reivindicar GOLD
+        </h2>
         <div className="text-right">
-          <div className="text-xs text-text-secondary">GOLD on-chain (sua carteira)</div>
-          <div className="text-2xl font-black text-amber-300">
-            {walletLinked ? (onchainGold ?? '…') : '—'} <span className="text-sm font-bold">GOLD</span>
-          </div>
+          <span className="mr-2 text-[11px] uppercase tracking-[0.14em] text-[#77777d]">on-chain</span>
+          <span className="text-lg font-black tabular-nums" style={{ color: '#e7c682' }}>
+            {walletLinked ? (onchainGold ?? '…') : '—'} <span className="text-xs font-bold">GOLD</span>
+          </span>
         </div>
       </div>
-      <p className="text-xs text-text-secondary mb-2">
-        <b>Reivindicar</b> transforma o ouro do herói em token <b>GOLD on-chain</b> na sua carteira —
+
+      <div className="p-5">
+      <p className="text-xs text-[#8a8a90] mb-2">
+        <b className="text-[#c9c9ce]">Reivindicar</b> transforma o ouro do herói em token <b className="text-[#c9c9ce]">GOLD on-chain</b> na sua carteira —
         é assim que você saca o que ganhou nas masmorras e no PvP (você assina a transação e paga o gas).
-        O ouro na mão do herói serve para <b>comprar</b> no ferreiro/alquimista.
+        O ouro na mão do herói serve para <b className="text-[#c9c9ce]">comprar</b> no ferreiro/alquimista.
       </p>
       {!walletLinked && (
-        <p className="text-xs text-amber-300/90 mb-2">⚠️ Vincule sua carteira no painel para reivindicar GOLD on-chain.</p>
+        <p className="text-xs mb-2" style={{ color: '#e09a3a' }}>⚠️ Vincule sua carteira no painel para reivindicar GOLD on-chain.</p>
       )}
       {hasBankGold && (
-        <div className="flex flex-wrap items-center gap-2 mb-3 rounded-lg border border-amber-400/20 bg-amber-500/5 px-3 py-2">
-          <span className="text-xs text-amber-200">
+        <div className="flex flex-wrap items-center gap-2 mb-3 rounded-[3px] border px-3 py-2" style={{ borderColor: '#8a6d3b', background: 'linear-gradient(180deg, rgba(58,51,37,0.7), rgba(36,31,22,0.7))' }}>
+          <span className="text-xs" style={{ color: '#e7c682' }}>
             🏦 {bankGold} 🪙 no banco aguardando claim
           </span>
           <button
             onClick={claimBank}
             disabled={busy || !walletLinked}
-            className="ml-auto px-3 py-1 rounded-lg text-xs font-bold text-white bg-emerald-700/70 border border-emerald-400/30 disabled:opacity-40"
+            className="ml-auto rounded-[3px] border px-3 py-1 text-xs font-semibold text-emerald-200 transition-all hover:brightness-125 disabled:opacity-40"
+            style={{ borderColor: '#2f6b3a', background: 'linear-gradient(180deg, #25351f, #161f12)' }}
           >
             ⛓️ Reivindicar saldo do banco
           </button>
@@ -180,27 +192,28 @@ export default function BankPanel({ characterId, onChanged }: { characterId?: st
         // Com herói ativo definido, opera só sobre ele; senão, lista todos (fallback).
         const visibleChars = characterId ? chars.filter((c) => c.id === characterId) : chars
         return visibleChars.length === 0 ? (
-        <p className="text-sm text-text-secondary">Nenhum personagem.</p>
+        <p className="text-sm text-[#8a8a90]">Nenhum personagem.</p>
       ) : (
         <div className="space-y-2">
           {visibleChars.map((c) => (
-            <div key={c.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-white/10 bg-slate-900/50 p-3">
+            <div key={c.id} className="flex flex-wrap items-center gap-2 rounded-[3px] border border-black/60 bg-[#19191c] p-3">
               <div className="flex-1 min-w-[140px]">
-                <div className="font-semibold text-white">{c.name} <span className="text-xs text-text-secondary">({c.class})</span></div>
-                <div className="text-sm text-amber-300">{c.gold} 🪙 na mão</div>
+                <div className="font-semibold text-[#ece7da]">{c.name} <span className="text-xs text-[#8a8a90]">({c.class})</span></div>
+                <div className="text-sm tabular-nums" style={{ color: '#e7c682' }}>{c.gold} 🪙 na mão</div>
               </div>
               <input
                 type="number" min={1} placeholder="quantia"
                 value={amounts[c.id] || ''}
                 onChange={(e) => setAmounts((p) => ({ ...p, [c.id]: e.target.value }))}
-                className="w-28 bg-slate-950 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white"
+                className="w-28 rounded-[3px] border border-[#3c3c41] bg-[#101013] px-2 py-1.5 text-sm text-[#ece7da] outline-none transition-colors focus:border-[#8a6d3b]"
               />
               {hasBankGold && (
                 <button
                   onClick={() => withdraw(c.id)}
                   disabled={busy}
                   title="Banco → personagem (habilita compras off-chain)"
-                  className="px-3 py-1.5 rounded-lg text-sm font-bold text-amber-50 bg-amber-700/70 border border-amber-400/40 disabled:opacity-40"
+                  className="rounded-[3px] border px-3 py-1.5 text-sm font-semibold transition-all hover:brightness-125 disabled:opacity-40"
+                  style={{ borderColor: '#8a6d3b', background: 'linear-gradient(180deg, #3a3325, #241f16)', color: '#e7c682' }}
                 >
                   ↓ Sacar
                 </button>
@@ -209,7 +222,8 @@ export default function BankPanel({ characterId, onChanged }: { characterId?: st
                 onClick={() => claim(c.id)}
                 disabled={busy || !walletLinked}
                 title="Personagem → GOLD on-chain na sua carteira (assinatura + gas)"
-                className="px-3 py-1.5 rounded-lg text-sm font-bold text-white bg-emerald-700/70 border border-emerald-400/30 disabled:opacity-40"
+                className="rounded-[3px] border px-3 py-1.5 text-sm font-semibold text-emerald-200 transition-all hover:brightness-125 disabled:opacity-40"
+                style={{ borderColor: '#2f6b3a', background: 'linear-gradient(180deg, #25351f, #161f12)' }}
               >
                 ⛓️ Reivindicar GOLD
               </button>
@@ -218,6 +232,7 @@ export default function BankPanel({ characterId, onChanged }: { characterId?: st
         </div>
       )
       })()}
+      </div>
     </div>
   )
 }

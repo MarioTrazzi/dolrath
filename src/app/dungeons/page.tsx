@@ -8,6 +8,7 @@ import DungeonRun, { DungeonCharacter } from '@/components/dungeon/DungeonRun'
 import DungeonBackdrop from '@/components/dungeon/DungeonBackdrop'
 import { DUNGEON_LIST, DungeonDef, monsterImagePath, MAX_DUNGEON_TIER, CONCENTRATED_MIN_TIER } from '@/lib/dungeonAdventures'
 import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider'
+import { GOLD, GOLD_BRIGHT, BORDER_GOLD, PANEL_BG } from '@/components/crafting/bdoTheme'
 
 // Numerais dos tiers (1..5 → I..V).
 const ROMAN = ['I', 'II', 'III', 'IV', 'V']
@@ -264,32 +265,40 @@ export default function DungeonsPage() {
   const canEnter = !!selectedCharacter && (selectedCharacter as any).isAlive !== false
 
   return (
-    <div className="min-h-[100dvh] p-4 sm:p-6">
+    <div className="min-h-[100dvh] p-4 sm:p-6" style={{ fontFamily: "'Barlow', sans-serif" }}>
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-6 sm:mb-8 text-center">
           <motion.h1
             initial={{ y: -12, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            className="text-3xl sm:text-4xl font-black text-white mb-2"
+            className="text-3xl sm:text-4xl font-black text-[#ece7da] mb-2"
+            style={{ letterSpacing: '0.5px' }}
           >
             ⚔️ Masmorras de Dolrath
           </motion.h1>
-          <p className="text-white/50 text-sm">
+          <p className="text-[#8a8a90] text-sm">
             Quatro terras perigosas, um boss em cada uma. Explore com o d20, lute na arena e volte rico — ou não volte.
           </p>
         </div>
 
-        {/* Personagem ativo (definido na navbar — sem seletor aqui) */}
-        <div className="mb-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+        {/* Personagem ativo (definido na navbar — sem seletor aqui). Linha única
+            com wrap: nada re-centraliza entre breakpoints. */}
+        <div className="mb-6 flex flex-row flex-wrap items-center justify-center gap-3">
           {selectedCharacter ? (
             <>
-              <div className="px-4 py-2.5 rounded-xl bg-black/60 border border-white/20 text-white text-sm font-bold">
-                {selectedCharacter.name} <span className="text-white/60">(Nv.{selectedCharacter.level})</span>
-                <span className="text-white/60 capitalize"> — {selectedCharacter.race} {selectedCharacter.class}</span>
+              <div
+                className="px-4 py-2.5 rounded-[3px] border border-[#46464c] text-sm font-bold text-[#ece7da]"
+                style={{ background: PANEL_BG }}
+              >
+                {selectedCharacter.name} <span style={{ color: GOLD_BRIGHT }}>(Nv.{selectedCharacter.level})</span>
+                <span className="text-[#8a8a90] capitalize"> — {selectedCharacter.race} {selectedCharacter.class}</span>
               </div>
               {selectedCharacter && (
-                <div className="flex items-center gap-3 text-xs text-white/70 bg-black/40 border border-white/10 rounded-xl px-4 py-2.5">
+                <div
+                  className="flex items-center gap-3 text-xs text-[#c9c9ce] rounded-[3px] border border-[#46464c] px-4 py-2.5 tabular-nums"
+                  style={{ background: PANEL_BG }}
+                >
                   <span>❤️ {selectedCharacter.hp}/{selectedCharacter.maxHp}</span>
                   <span>🔮 {selectedCharacter.mp}/{selectedCharacter.maxMp}</span>
                   <span>⚡ {selectedCharacter.stamina}/{selectedCharacter.maxStamina}</span>
@@ -303,9 +312,9 @@ export default function DungeonsPage() {
               )}
             </>
           ) : (
-            <div className="bg-yellow-950/60 border border-yellow-700/50 rounded-xl px-6 py-4 text-center">
-              <p className="text-yellow-300 font-bold text-sm mb-1">Nenhum personagem encontrado</p>
-              <p className="text-yellow-500/80 text-xs">Crie um personagem primeiro para explorar as masmorras.</p>
+            <div className="rounded-[3px] border px-6 py-4 text-center" style={{ borderColor: '#8a6d3b', background: 'linear-gradient(180deg, rgba(58,51,37,0.85), rgba(36,31,22,0.85))' }}>
+              <p className="font-bold text-sm mb-1" style={{ color: GOLD_BRIGHT }}>Nenhum personagem encontrado</p>
+              <p className="text-xs text-[#8a8a90]">Crie um personagem primeiro para explorar as masmorras.</p>
             </div>
           )}
         </div>
@@ -316,7 +325,12 @@ export default function DungeonsPage() {
             animate={{ scale: 1, opacity: 1, y: 0 }}
             transition={{ type: 'spring', stiffness: 240, damping: 16 }}
             onClick={() => router.push(`/character/${levelUpAlert.characterId}`)}
-            className="group relative w-full max-w-2xl mx-auto mb-6 flex items-center justify-center gap-2 overflow-hidden rounded-2xl border-2 border-yellow-400/60 bg-gradient-to-r from-amber-500/20 via-yellow-400/15 to-amber-500/20 px-5 py-3.5 text-center shadow-[0_0_30px_rgba(253,224,71,0.25)] transition-all hover:scale-[1.02] hover:shadow-[0_0_40px_rgba(253,224,71,0.4)]"
+            className="group relative w-full max-w-2xl mx-auto mb-6 flex items-center justify-center gap-2 overflow-hidden rounded-[3px] border px-5 py-3.5 text-center transition-all hover:brightness-125"
+            style={{
+              borderColor: GOLD,
+              background: 'linear-gradient(180deg, #3a3325, #241f16)',
+              boxShadow: 'inset 0 1px 0 rgba(231,198,130,0.25), 0 0 22px rgba(201,162,95,0.3)',
+            }}
           >
             <motion.span
               className="text-2xl"
@@ -325,33 +339,33 @@ export default function DungeonsPage() {
             >
               ⭐
             </motion.span>
-            <span className="font-black text-yellow-200 text-sm sm:text-base">
+            <span className="font-black text-sm sm:text-base" style={{ color: GOLD_BRIGHT }}>
               Você subiu de nível!{' '}
               {levelUpAlert.points > 0
                 ? `${levelUpAlert.points} ponto${levelUpAlert.points > 1 ? 's' : ''} a distribuir`
                 : 'Veja seus novos atributos'}
             </span>
-            <span className="font-black text-yellow-300 text-base group-hover:translate-x-1 transition-transform">→</span>
+            <span className="font-black text-base group-hover:translate-x-1 transition-transform" style={{ color: GOLD }}>→</span>
           </motion.button>
         )}
 
         {error && (
-          <div className="bg-red-950/60 border border-red-700/50 text-red-300 px-4 py-3 rounded-xl mb-6 text-sm text-center">
+          <div className="rounded-[3px] border border-red-900/70 bg-red-950/40 text-red-300 px-4 py-3 mb-6 text-sm text-center">
             ❌ {error}
           </div>
         )}
 
         {selectedCharacter && (selectedCharacter as any).isAlive === false && (
-          <div className="bg-red-950/60 border border-red-700/50 rounded-xl p-4 mb-6 text-center">
+          <div className="rounded-[3px] border border-red-900/70 bg-red-950/40 p-4 mb-6 text-center">
             <p className="text-red-300 font-bold text-sm">💀 Personagem morto</p>
             <p className="text-red-400/80 text-xs">Use uma Poção de Reviver antes de entrar em masmorras.</p>
           </div>
         )}
 
         {heroInUse && (
-          <div className="bg-amber-950/60 border border-amber-600/50 rounded-xl p-4 mb-6 text-center">
-            <p className="text-amber-300 font-bold text-sm">🔒 Herói em uso em outra aba</p>
-            <p className="text-amber-400/80 text-xs">
+          <div className="rounded-[3px] border p-4 mb-6 text-center" style={{ borderColor: 'rgba(224,154,58,0.5)', background: 'rgba(58,45,22,0.5)' }}>
+            <p className="font-bold text-sm" style={{ color: '#e09a3a' }}>🔒 Herói em uso em outra aba</p>
+            <p className="text-xs text-[#8a8a90]">
               {lockedCharacterName ?? 'Outro personagem'} já está numa masmorra em outra aba/janela. Só dá pra explorar com um herói por vez — saia daquela sessão para liberá-lo (libera sozinho ~1 min após fechar).
             </p>
           </div>
@@ -365,9 +379,8 @@ export default function DungeonsPage() {
               initial={{ y: 24, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: idx * 0.1, type: 'spring', stiffness: 180, damping: 20 }}
-              whileHover={{ scale: 1.02 }}
-              className="relative overflow-hidden rounded-3xl border-2 group"
-              style={{ borderColor: `${dungeon.accent}55` }}
+              whileHover={{ scale: 1.01 }}
+              className="relative overflow-hidden rounded-[4px] border border-[#46464c] shadow-2xl shadow-black/60 group transition-colors hover:border-[#8a6d3b]"
             >
               {/* Cenário em miniatura */}
               <div className="absolute inset-0">
@@ -422,12 +435,12 @@ export default function DungeonsPage() {
                             ? `Tier ${ROMAN[i]}${t >= CONCENTRATED_MIN_TIER ? ' — dropa Pedra Concentrada' : ''}`
                             : `Vença o boss no Tier ${ROMAN[maxT - 1]} para desbloquear`
                         }
-                        className={`min-w-[26px] h-6 px-1.5 rounded-md text-[11px] font-black border transition-all ${
+                        className={`min-w-[26px] h-6 px-1.5 rounded-[3px] text-[11px] font-black border transition-all ${
                           chosen
-                            ? 'bg-white text-black border-white'
+                            ? 'border-[#c9a25f] bg-gradient-to-b from-[#3a3325] to-[#241f16] text-[#e7c682] shadow-[0_0_8px_rgba(201,162,95,0.4)]'
                             : unlocked
-                              ? 'bg-black/50 text-white/80 border-white/25 hover:border-white/60'
-                              : 'bg-black/40 text-white/30 border-white/10 cursor-not-allowed'
+                              ? 'border-[#46464c] bg-gradient-to-b from-[#2b2b2f] to-[#1c1c1f] text-[#c9c9ce] hover:border-[#8a6d3b]'
+                              : 'border-[#3c3c41] bg-[#1a1a1d] text-[#57575c] cursor-not-allowed'
                         }`}
                       >
                         {unlocked ? ROMAN[i] : '🔒'}
@@ -446,14 +459,16 @@ export default function DungeonsPage() {
                       <span
                         key={m.name}
                         title={m.name}
-                        className="w-12 h-12 rounded-lg bg-black/50 border border-white/15 flex items-center justify-center text-xl overflow-hidden"
+                        className="w-12 h-12 rounded-[3px] border border-[#3c3c41] flex items-center justify-center text-xl overflow-hidden"
+                        style={{ background: 'linear-gradient(160deg, #232327, #101013)' }}
                       >
                         <BeastThumb name={m.name} image={m.image} emoji={m.emoji} />
                       </span>
                     ))}
                     <span
                       title={`Boss: ${dungeon.boss.name}`}
-                      className="w-14 h-14 rounded-lg bg-amber-950/70 border border-amber-500/50 flex items-center justify-center text-2xl overflow-hidden"
+                      className="w-14 h-14 rounded-[3px] border flex items-center justify-center text-2xl overflow-hidden"
+                      style={{ borderColor: BORDER_GOLD, background: 'linear-gradient(160deg, #2c2620, #141210)', boxShadow: '0 0 8px rgba(201,162,95,0.3)' }}
                     >
                       <BeastThumb name={dungeon.boss.name} image={dungeon.boss.image} emoji={dungeon.boss.emoji} />
                     </span>
@@ -471,12 +486,14 @@ export default function DungeonsPage() {
                           heroInUse ? `${lockedCharacterName ?? 'Outro personagem'} já está em uma masmorra em outra aba ou janela. Só um herói por vez.`
                           : undefined
                         }
-                        className={`px-5 py-2.5 rounded-xl font-black text-sm text-white shadow-lg transition-all ${
-                          enter ? 'hover:scale-105' : 'opacity-50 cursor-not-allowed'
+                        className={`px-5 py-2.5 rounded-[3px] border font-semibold tracking-wide text-sm transition-all ${
+                          enter ? 'hover:brightness-125' : 'opacity-50 cursor-not-allowed'
                         }`}
                         style={{
-                          background: `linear-gradient(90deg, ${dungeon.accent}cc, ${dungeon.accent}77)`,
-                          boxShadow: `0 4px 20px ${dungeon.accentSoft}`,
+                          borderColor: `${dungeon.accent}aa`,
+                          background: `linear-gradient(180deg, ${dungeon.accent}40, ${dungeon.accent}14)`,
+                          color: '#ece7da',
+                          boxShadow: `inset 0 1px 0 ${dungeon.accent}44, 0 0 14px ${dungeon.accentSoft}`,
                         }}
                       >
                         {heroInUse ? '🔒 Em outra aba' : '🚪 Entrar'}

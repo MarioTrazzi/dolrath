@@ -99,7 +99,7 @@ export default function ItemDetailsPage() {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-gray-800 rounded-lg p-6 shadow-lg"
+        className="rounded-[4px] border border-[#46464c] bg-[#1e1e21]/95 p-6 shadow-2xl shadow-black/60"
       >
         <div className="flex items-start justify-between mb-6">
           <div>
@@ -136,7 +136,7 @@ export default function ItemDetailsPage() {
               {Object.entries(item.stats).map(([stat, value]) => (
                 <div
                   key={stat}
-                  className="bg-gray-700 p-4 rounded-lg flex justify-between items-center"
+                  className="rounded-[3px] border border-black/60 bg-[#19191c] p-4 flex justify-between items-center"
                 >
                   <span className="text-gray-300 capitalize">{stat}</span>
                   <span className={value > 0 ? 'text-green-400' : 'text-red-400'}>

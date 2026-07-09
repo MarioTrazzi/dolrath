@@ -320,7 +320,7 @@ export default function RepairBench({
   const selectedStats = selected ? formatItemStats(selected.item.stats ?? undefined, selected.item.type) : [];
 
   return (
-    <div className="relative flex h-full flex-col overflow-hidden rounded-2xl border-2 border-amber-500/40 bg-gradient-to-br from-amber-950/40 to-black/50 p-5 backdrop-blur-sm">
+    <div className="relative flex h-full flex-col overflow-hidden rounded-[4px] border border-[#46464c] shadow-2xl shadow-black/60 p-5" style={{ background: 'linear-gradient(180deg, rgba(32,32,36,0.94), rgba(24,24,27,0.96))' }}>
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
         <h2 className="text-2xl font-black text-amber-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
           🔧 Bancada de Reparo
@@ -329,7 +329,7 @@ export default function RepairBench({
           <select
             value={selectedCharacterId}
             onChange={(e) => setInternalCharacterId(e.target.value)}
-            className="px-3 py-2 bg-black/40 border border-amber-500/30 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="rounded-[3px] border border-[#3c3c41] bg-[#101013] px-3 py-2 text-sm text-[#ece7da] outline-none transition-colors focus:border-[#8a6d3b]"
           >
             {characters.map((c) => (
               <option key={c.id} value={c.id}>
@@ -448,11 +448,11 @@ export default function RepairBench({
               👆 Selecione um item acima para ver detalhes, reparar ou vender.
             </div>
           ) : (
-            <div className="rounded-xl border border-amber-500/30 bg-black/30 p-4">
+            <div className="rounded-[3px] border border-black/60 bg-[#19191c] p-4">
               {/* Cabeçalho: imagem + infos do item */}
               <div className="flex gap-4 mb-4">
                 <div
-                  className="w-24 h-24 shrink-0 rounded-xl border-2 flex items-center justify-center overflow-hidden bg-black/40 relative"
+                  className="w-24 h-24 shrink-0 rounded-[3px] border-2 flex items-center justify-center overflow-hidden bg-black/40 relative"
                   style={{ borderColor: (visual?.accent ?? '#f59e0b') + '99' }}
                 >
                   {selectedImage ? (
@@ -482,28 +482,28 @@ export default function RepairBench({
                   </h3>
                   <div className="flex items-center gap-2 mt-1 mb-2 flex-wrap">
                     <span
-                      className="text-xs font-semibold px-2 py-0.5 rounded-full text-white"
+                      className="text-xs font-semibold px-2 py-0.5 rounded-[3px] text-white"
                       style={{ background: (visual?.accent ?? '#f59e0b') + '33' }}
                     >
                       {visual?.emoji} {getItemTypeLabel(selected.item.type)}
                     </span>
                     {selected.item.level != null && (
-                      <span className="text-xs font-semibold bg-amber-500/30 text-amber-300 px-2 py-0.5 rounded-full">
+                      <span className="text-xs font-semibold bg-amber-500/30 text-amber-300 px-2 py-0.5 rounded-[3px]">
                         Lv.{selected.item.level}
                       </span>
                     )}
                     {selectedCount > 1 && (
-                      <span className="text-xs font-semibold bg-white/10 text-white/80 px-2 py-0.5 rounded-full">
+                      <span className="text-xs font-semibold bg-white/10 text-white/80 px-2 py-0.5 rounded-[3px]">
                         x{selectedCount} no inventário
                       </span>
                     )}
                     {selected.equipped && (
-                      <span className="text-xs font-semibold bg-sky-500/30 text-sky-300 px-2 py-0.5 rounded-full">
+                      <span className="text-xs font-semibold bg-sky-500/30 text-sky-300 px-2 py-0.5 rounded-[3px]">
                         ⚡ Equipado
                       </span>
                     )}
                     {selected.durability <= 0 && (
-                      <span className="text-xs font-black bg-red-500/30 text-red-300 px-2 py-0.5 rounded-full">
+                      <span className="text-xs font-black bg-red-500/30 text-red-300 px-2 py-0.5 rounded-[3px]">
                         💔 Quebrado — sem bônus
                       </span>
                     )}
@@ -513,7 +513,7 @@ export default function RepairBench({
                       {selectedStats.map((stat, i) => (
                         <span
                           key={i}
-                          className="text-xs font-semibold bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full"
+                          className="text-xs font-semibold bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-[3px]"
                         >
                           {stat}
                         </span>
@@ -543,18 +543,18 @@ export default function RepairBench({
 
               {/* Ações: equipar no personagem e aprimorar (peça já equipada só repara) */}
               {!selected.equipped && (
-                <div className="mb-4 pb-4 border-b border-white/10 flex gap-3">
+                <div className="mb-4 pb-4 border-b border-black/60 flex gap-3">
                   <button
                     onClick={handleEquip}
                     disabled={busy}
-                    className="flex-1 px-4 py-2.5 rounded-xl font-bold text-sm text-white bg-sky-700/70 hover:bg-sky-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    className="flex-1 rounded-[3px] border border-[#3b5a8a] bg-gradient-to-b from-[#25303a] to-[#161c24] px-4 py-2.5 text-sm font-semibold text-sky-200 transition-all hover:brightness-125 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     ⚡ Equipar
                   </button>
                   <button
                     onClick={() => setEnhanceOpen(true)}
                     disabled={busy}
-                    className="flex-1 px-4 py-2.5 rounded-xl font-black text-sm text-black bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    className="flex-1 rounded-[3px] border border-[#8a6d3b] bg-gradient-to-b from-[#3a3325] to-[#241f16] px-4 py-2.5 text-sm font-semibold tracking-wide text-[#e7c682] shadow-[inset_0_1px_0_rgba(231,198,130,0.25)] transition-all hover:border-[#c9a25f] hover:brightness-125 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     ⚒️ Aprimorar
                   </button>
@@ -563,13 +563,13 @@ export default function RepairBench({
 
               {/* Reparo (somente itens desgastados) */}
               {selectedDamaged && (
-                <div className="mb-4 pb-4 border-b border-white/10">
+                <div className="mb-4 pb-4 border-b border-black/60">
                   {/* Os dois slots da forja */}
                   <div className="flex items-center justify-center gap-4 mb-3">
                     {/* Slot: item a reparar */}
                     <div className="flex flex-col items-center gap-1">
                       <div
-                        className="w-20 h-20 rounded-xl border-2 flex items-center justify-center overflow-hidden bg-black/40 relative"
+                        className="w-20 h-20 rounded-[3px] border-2 flex items-center justify-center overflow-hidden bg-black/40 relative"
                         style={{ borderColor: (visual?.accent ?? '#f59e0b') + '99' }}
                       >
                         {selectedImage ? (
@@ -646,14 +646,14 @@ export default function RepairBench({
                     <button
                       onClick={() => handleRepair('single')}
                       disabled={busy || repairUnitsAvailable < 1}
-                      className="flex-1 px-4 py-2.5 rounded-xl font-bold text-sm text-white bg-amber-600/80 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      className="flex-1 rounded-[3px] border border-[#8a6d3b] bg-gradient-to-b from-[#3a3325] to-[#241f16] px-4 py-2.5 text-sm font-semibold text-[#e7c682] transition-all hover:brightness-125 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       🔧 Reparar +{REPAIR_PER_DUPLICATE} (1 {repairMatLabel})
                     </button>
                     <button
                       onClick={() => handleRepair('full')}
                       disabled={busy || repairUnitsAvailable < 1}
-                      className="flex-1 px-4 py-2.5 rounded-xl font-black text-sm text-white bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      className="flex-1 rounded-[3px] border border-[#c9a25f] bg-gradient-to-b from-[#4a4030] to-[#2c261a] px-4 py-2.5 text-sm font-semibold tracking-wide text-[#e7c682] shadow-[0_0_14px_rgba(201,162,95,0.3)] transition-all hover:brightness-125 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       ⚒️ Reparar 100% ({Math.min(repairUnitsNeeded, repairUnitsAvailable)} un.)
                     </button>
@@ -672,7 +672,7 @@ export default function RepairBench({
                   <button
                     onClick={() => handleSell([selected.id])}
                     disabled={busy}
-                    className="flex-1 px-4 py-2.5 rounded-xl font-bold text-sm text-white bg-rose-700/70 hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    className="flex-1 rounded-[3px] border border-[#8a3b3b] bg-gradient-to-b from-[#3a2525] to-[#241616] px-4 py-2.5 text-sm font-semibold text-red-300 transition-all hover:brightness-125 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     💰 Vender 1 por {sellUnitPrice} 🪙
                   </button>
@@ -680,7 +680,7 @@ export default function RepairBench({
                     <button
                       onClick={() => handleSell(selectedGroup.rows.map((r) => r.id))}
                       disabled={busy}
-                      className="flex-1 px-4 py-2.5 rounded-xl font-bold text-sm text-white bg-rose-800/70 hover:bg-rose-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      className="flex-1 rounded-[3px] border border-[#8a3b3b] bg-gradient-to-b from-[#3a2525] to-[#241616] px-4 py-2.5 text-sm font-semibold text-red-300 transition-all hover:brightness-125 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       💰 Vender {selectedCount} por {sellUnitPrice * selectedCount} 🪙
                     </button>

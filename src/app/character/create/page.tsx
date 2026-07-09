@@ -301,12 +301,12 @@ export default function CharacterCreationPage() {
     return (
       <div className="min-h-screen text-white p-8">
         <div className="max-w-3xl mx-auto py-12">
-          <div className="bg-surface/30 backdrop-blur-lg rounded-xl p-8 shadow-2xl border border-white/10">
+          <div className="rounded-[4px] border border-[#46464c] bg-[#1e1e21]/95 p-8 shadow-2xl shadow-black/60">
             <h1 className="text-2xl font-bold mb-2">Faça login para criar seu personagem</h1>
             <p className="text-text-secondary mb-6">Você pode entrar com Google ou credenciais.</p>
             <button
               onClick={() => signIn()}
-              className="px-6 py-3 bg-gradient-to-r from-primary to-primary-dark text-white rounded-lg font-medium"
+              className="rounded-[3px] border border-[#8a6d3b] bg-gradient-to-b from-[#3a3325] to-[#241f16] px-6 py-3 font-semibold tracking-wide text-[#e7c682] shadow-[inset_0_1px_0_rgba(231,198,130,0.25),0_0_14px_rgba(201,162,95,0.2)] transition-all hover:border-[#c9a25f] hover:brightness-125"
             >
               Entrar
             </button>
@@ -324,12 +324,12 @@ export default function CharacterCreationPage() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="text-4xl font-extrabold text-center mb-12 bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary-dark"
+            className="text-4xl font-black text-center mb-12 text-[#ece7da]"
           >
             Criação de Personagem
           </motion.h1>
 
-          <div className="bg-surface/30 backdrop-blur-lg rounded-xl p-8 shadow-2xl border border-white/10">
+          <div className="rounded-[4px] border border-[#46464c] bg-[#1e1e21]/95 p-8 shadow-2xl shadow-black/60">
             <h2 className="text-2xl font-bold text-text-primary mb-2">Vincule sua carteira</h2>
             <p className="text-text-secondary mb-6">
               Para criar um personagem, precisamos vincular uma carteira EVM (ex: MetaMask) à sua conta.
@@ -342,7 +342,7 @@ export default function CharacterCreationPage() {
             <button
               onClick={handleLinkWallet}
               disabled={isLinkingWallet}
-              className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-primary to-primary-dark text-white rounded-lg font-medium disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2 rounded-[3px] border border-[#8a6d3b] bg-gradient-to-b from-[#3a3325] to-[#241f16] px-6 py-3 font-semibold tracking-wide text-[#e7c682] shadow-[inset_0_1px_0_rgba(231,198,130,0.25),0_0_14px_rgba(201,162,95,0.2)] transition-all hover:border-[#c9a25f] hover:brightness-125 disabled:opacity-50"
             >
               <Wallet className="w-5 h-5" />
               {isLinkingWallet ? 'Vinculando...' : 'Conectar e assinar'}
@@ -362,12 +362,12 @@ export default function CharacterCreationPage() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="text-4xl font-extrabold text-center mb-12 bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary-dark"
+            className="text-4xl font-black text-center mb-12 text-[#ece7da]"
           >
             Criação de Personagem
           </motion.h1>
 
-          <div className="bg-surface/30 backdrop-blur-lg rounded-xl p-8 shadow-2xl border border-white/10">
+          <div className="rounded-[4px] border border-[#46464c] bg-[#1e1e21]/95 p-8 shadow-2xl shadow-black/60">
             <h2 className="text-2xl font-bold text-text-primary mb-2">Taxa de criação</h2>
             <p className="text-text-secondary mb-6">
               Para criar um personagem nesta testnet, é necessário pagar {creationCostDol} DOL.
@@ -378,7 +378,7 @@ export default function CharacterCreationPage() {
             <button
               onClick={handlePayCreationFee}
               disabled={isPaying}
-              className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-primary to-primary-dark text-white rounded-lg font-medium disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2 rounded-[3px] border border-[#8a6d3b] bg-gradient-to-b from-[#3a3325] to-[#241f16] px-6 py-3 font-semibold tracking-wide text-[#e7c682] shadow-[inset_0_1px_0_rgba(231,198,130,0.25),0_0_14px_rgba(201,162,95,0.2)] transition-all hover:border-[#c9a25f] hover:brightness-125 disabled:opacity-50"
             >
               {isPaying ? 'Processando pagamento...' : `Pagar ${creationCostDol} DOL`}
             </button>
@@ -389,14 +389,14 @@ export default function CharacterCreationPage() {
           </div>
 
           {/* Owned NFTs (on-chain) - shown ONLY before paying */}
-          <div className="mt-8 bg-surface/20 backdrop-blur-lg rounded-xl p-6 shadow-2xl border border-white/10">
+          <div className="mt-8 rounded-[4px] border border-[#46464c] bg-[#1e1e21]/95 p-6 shadow-2xl shadow-black/60">
             <div className="flex items-center justify-between gap-4 mb-4">
               <h2 className="text-xl font-bold text-text-primary">Suas NFTs</h2>
               <button
                 type="button"
                 onClick={refreshOwnedNfts}
                 disabled={ownedNftsLoading}
-                className="px-3 py-2 bg-surface border border-white/20 rounded-lg text-text-secondary hover:text-text-primary disabled:opacity-50"
+                className="rounded-[3px] border border-[#46464c] bg-gradient-to-b from-[#2b2b2f] to-[#1c1c1f] px-3 py-2 font-semibold text-[#c9c9ce] transition-colors hover:border-[#8a6d3b] hover:text-white disabled:opacity-50"
               >
                 {ownedNftsLoading ? 'Atualizando...' : 'Atualizar'}
               </button>
@@ -455,7 +455,7 @@ export default function CharacterCreationPage() {
 
                       <Link
                         href={`/character/${characterId || tokenId}`}
-                        className="px-3 py-2 bg-surface border border-white/20 rounded-lg text-text-secondary hover:text-text-primary"
+                        className="rounded-[3px] border border-[#46464c] bg-gradient-to-b from-[#2b2b2f] to-[#1c1c1f] px-3 py-2 font-semibold text-[#c9c9ce] transition-colors hover:border-[#8a6d3b] hover:text-white"
                       >
                         Abrir
                       </Link>
@@ -470,7 +470,7 @@ export default function CharacterCreationPage() {
                             alert(e instanceof Error ? e.message : 'Erro ao excluir NFT');
                           }
                         }}
-                        className="px-3 py-2 bg-surface border border-white/20 rounded-lg text-text-secondary hover:text-text-primary"
+                        className="rounded-[3px] border border-[#46464c] bg-gradient-to-b from-[#2b2b2f] to-[#1c1c1f] px-3 py-2 font-semibold text-[#c9c9ce] transition-colors hover:border-[#8a6d3b] hover:text-white"
                       >
                         Excluir
                       </button>
@@ -492,7 +492,7 @@ export default function CharacterCreationPage() {
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="text-4xl font-extrabold text-center mb-12 bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary-dark"
+          className="text-4xl font-black text-center mb-12 text-[#ece7da]"
         >
           Criação de Personagem
         </motion.h1>
@@ -542,7 +542,7 @@ export default function CharacterCreationPage() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -20 }}
           transition={{ duration: 0.3 }}
-          className="bg-surface/30 backdrop-blur-lg rounded-xl p-8 shadow-2xl border border-white/10"
+          className="rounded-[4px] border border-[#46464c] bg-[#1e1e21]/95 p-8 shadow-2xl shadow-black/60"
         >
           {CurrentStepComponent && <CurrentStepComponent />}
         </motion.div>
@@ -552,7 +552,7 @@ export default function CharacterCreationPage() {
           <button
             onClick={prevStep}
             disabled={currentStep === 0}
-            className="flex items-center gap-2 px-6 py-3 bg-surface border border-white/20 rounded-lg text-text-secondary hover:text-text-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center gap-2 rounded-[3px] border border-[#46464c] bg-gradient-to-b from-[#2b2b2f] to-[#1c1c1f] px-6 py-3 font-semibold text-[#c9c9ce] transition-colors hover:border-[#8a6d3b] hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <ArrowLeft className="w-5 h-5" />
             Anterior
@@ -561,7 +561,7 @@ export default function CharacterCreationPage() {
           <button
             onClick={nextStep}
             disabled={isNextButtonDisabled || currentStep === creationSteps.length - 1}
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary to-primary-dark text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center gap-2 rounded-[3px] border border-[#8a6d3b] bg-gradient-to-b from-[#3a3325] to-[#241f16] px-6 py-3 font-semibold tracking-wide text-[#e7c682] shadow-[inset_0_1px_0_rgba(231,198,130,0.25),0_0_14px_rgba(201,162,95,0.2)] transition-all hover:border-[#c9a25f] hover:brightness-125 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Próximo
             <ArrowRight className="w-5 h-5" />

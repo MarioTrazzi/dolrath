@@ -39,7 +39,7 @@ export default function CharacterPage() {
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold text-text-primary mb-8">Meus Personagens</h1>
         
-        <div className="glass-card p-6">
+        <div className="rounded-[4px] border border-[#46464c] bg-[#1e1e21]/95 p-6 shadow-2xl shadow-black/60">
           <p className="text-text-secondary mb-4">
             Sistema de personagens em manutenção para deployment.
           </p>
@@ -47,14 +47,14 @@ export default function CharacterPage() {
           <div className="space-y-4">
             <button
               onClick={() => router.push('/dashboard')}
-              className="w-full bg-primary text-white py-2 px-4 rounded-lg hover:bg-primary/80 transition-colors"
+              className="w-full rounded-[3px] border border-[#8a6d3b] bg-gradient-to-b from-[#3a3325] to-[#241f16] py-2 px-4 font-semibold text-[#e7c682] transition-all hover:brightness-125"
             >
               Voltar ao Dashboard
             </button>
             
             <button
               onClick={() => router.push('/character/create')}
-              className="w-full bg-secondary text-white py-2 px-4 rounded-lg hover:bg-secondary/80 transition-colors"
+              className="w-full rounded-[3px] border border-[#46464c] bg-gradient-to-b from-[#2b2b2f] to-[#1c1c1f] py-2 px-4 font-semibold text-[#c9c9ce] transition-colors hover:border-[#8a6d3b] hover:text-white"
             >
               Criar Novo Personagem
             </button>

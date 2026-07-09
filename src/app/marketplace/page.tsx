@@ -442,14 +442,14 @@ export default function MarketplacePage() {
   }
 
   if (!session) {
-    return <div className="max-w-5xl mx-auto p-8 text-center text-textsec">Faça login para acessar o mercado.</div>
+    return <div className="max-w-5xl mx-auto p-8 text-center text-[#8a8a90]">Faça login para acessar o mercado.</div>
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-4 sm:p-8 space-y-10">
+    <div className="max-w-6xl mx-auto p-4 sm:p-8 space-y-10" style={{ fontFamily: "'Barlow', sans-serif" }}>
       <header>
-        <h1 className="text-3xl font-black text-amber-300">🏪 Mercado</h1>
-        <p className="text-textsec text-sm mt-1">
+        <h1 className="text-3xl font-black text-[#ece7da]">🏪 Mercado</h1>
+        <p className="text-[#8a8a90] text-sm mt-1">
           {tab === 'items'
             ? 'Compre e venda equipamentos entre jogadores em GOLD. Itens ganhos só viram NFT quando você os lista (lazy-mint) — você paga apenas o gás.'
             : 'Compre e venda personagens entre jogadores em DOL. A NFT vai só com o nível e os atributos — esvazie o inventário antes de listar.'}
@@ -460,13 +460,13 @@ export default function MarketplacePage() {
       <div className="flex gap-2">
         <button
           onClick={() => setTab('items')}
-          className={`px-4 py-2 rounded-xl text-sm font-bold border ${tab === 'items' ? 'bg-amber-700/70 border-amber-400/40 text-amber-50' : 'bg-slate-900/50 border-white/10 text-textsec'}`}
+          className={`px-4 py-2 rounded-[3px] text-sm font-semibold border transition-all ${tab === 'items' ? 'border-[#8a6d3b] bg-gradient-to-b from-[#3a3325] to-[#241f16] text-[#e7c682] shadow-[0_0_10px_rgba(201,162,95,0.3)]' : 'border-[#46464c] bg-gradient-to-b from-[#2b2b2f] to-[#1c1c1f] text-[#8a8a90] hover:border-[#8a6d3b]'}`}
         >
           ⚔️ Itens
         </button>
         <button
           onClick={() => setTab('characters')}
-          className={`px-4 py-2 rounded-xl text-sm font-bold border ${tab === 'characters' ? 'bg-indigo-700/70 border-indigo-400/40 text-indigo-50' : 'bg-slate-900/50 border-white/10 text-textsec'}`}
+          className={`px-4 py-2 rounded-[3px] text-sm font-semibold border transition-all ${tab === 'characters' ? 'border-[#5b3b8a] bg-gradient-to-b from-[#2e2540] to-[#1c1626] text-[#c9b3ec] shadow-[0_0_10px_rgba(139,92,246,0.3)]' : 'border-[#46464c] bg-gradient-to-b from-[#2b2b2f] to-[#1c1c1f] text-[#8a8a90] hover:border-[#8a6d3b]'}`}
         >
           🧙 Personagens
         </button>
@@ -474,48 +474,48 @@ export default function MarketplacePage() {
 
       {tab === 'items' && (<>
       {/* VENDER */}
-      <section className="rounded-2xl border border-amber-400/20 bg-black/30 p-5">
-        <h2 className="text-xl font-bold text-amber-200 mb-3">Vender um item</h2>
+      <section className="overflow-hidden rounded-[4px] border border-[#46464c] shadow-2xl shadow-black/60 bg-[#1e1e21]/95 p-5">
+        <h2 className="text-lg font-semibold tracking-wide text-[#e7c682] mb-3">Vender um item</h2>
         {config?.marketFee && config.marketFee.totalBps > 0 ? (
-          <p className="text-textsec text-xs mb-3">
+          <p className="text-[#8a8a90] text-xs mb-3">
             Taxa de mercado: <span className="text-amber-300 font-semibold">{(config.marketFee.totalBps / 100).toFixed(1).replace('.0', '')}%</span> do preço
             ({(config.marketFee.burnBps / 100).toFixed(1).replace('.0', '')}% queimado + {(config.marketFee.treasuryBps / 100).toFixed(1).replace('.0', '')}% treasury) — o restante vai direto para o vendedor.
           </p>
         ) : null}
         <div className="flex items-center gap-3 mb-4">
-          <label className="text-sm text-textsec">Personagem:</label>
+          <label className="text-sm text-[#8a8a90]">Personagem:</label>
           <select
             value={selectedChar}
             onChange={(e) => setSelectedChar(e.target.value)}
-            className="bg-slate-900 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white"
+            className="rounded-[3px] border border-[#3c3c41] bg-[#101013] px-3 py-1.5 text-sm text-[#ece7da] outline-none transition-colors focus:border-[#8a6d3b]"
           >
             {characters.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
         {inventory.length === 0 ? (
-          <p className="text-textsec text-sm">Nenhum equipamento neste personagem para vender.</p>
+          <p className="text-[#8a8a90] text-sm">Nenhum equipamento neste personagem para vender.</p>
         ) : (
           <div className="grid gap-2 sm:grid-cols-2">
             {inventory.map((row) => (
-              <div key={row.id} className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/50 p-3">
+              <div key={row.id} className="flex items-center gap-2 rounded-[3px] border border-black/60 bg-[#19191c] p-3">
                 <ItemThumb image={row.item.image} name={row.item.name} type={row.item.type} enhancement={row.enhancementLevel} />
                 <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-white truncate">
+                  <div className="font-semibold text-[#ece7da] truncate">
                     {row.item.name}
                     {row.enhancementLevel > 0 ? <span className="text-amber-300"> +{row.enhancementLevel}</span> : null}
                   </div>
-                  <div className="text-xs text-textsec">valor base {row.item.goldPrice} 🪙</div>
+                  <div className="text-xs text-[#8a8a90]">valor base {row.item.goldPrice} 🪙</div>
                 </div>
                 <input
                   type="number" min={1} placeholder="preço"
                   value={prices[row.id] || ''}
                   onChange={(e) => setPrices((p) => ({ ...p, [row.id]: e.target.value }))}
-                  className="w-24 bg-slate-950 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white"
+                  className="w-24 rounded-[3px] border border-[#3c3c41] bg-[#101013] px-2 py-1.5 text-sm text-[#ece7da] outline-none transition-colors focus:border-[#8a6d3b]"
                 />
                 <button
                   onClick={() => handleSell(row)}
                   disabled={busy}
-                  className="px-3 py-1.5 rounded-lg text-sm font-bold text-amber-50 bg-amber-700/70 border border-amber-400/40 disabled:opacity-40"
+                  className="rounded-[3px] border border-[#8a6d3b] bg-gradient-to-b from-[#3a3325] to-[#241f16] px-3 py-1.5 text-sm font-semibold text-[#e7c682] transition-all hover:brightness-125 disabled:opacity-40"
                 >
                   Listar
                 </button>
@@ -527,32 +527,32 @@ export default function MarketplacePage() {
 
       {/* COMPRAR */}
       <section>
-        <h2 className="text-xl font-bold text-amber-200 mb-3">À venda</h2>
+        <h2 className="text-lg font-semibold tracking-wide text-[#e7c682] mb-3">À venda</h2>
         {loadingList ? (
-          <p className="text-textsec text-sm">Carregando listagens…</p>
+          <p className="text-[#8a8a90] text-sm">Carregando listagens…</p>
         ) : listings.length === 0 ? (
-          <p className="text-textsec text-sm">Nenhum item à venda no momento.</p>
+          <p className="text-[#8a8a90] text-sm">Nenhum item à venda no momento.</p>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {listings.map((l) => (
-              <div key={l.listingId} className="rounded-2xl border border-white/10 bg-slate-900/50 p-4 flex flex-col gap-2">
+              <div key={l.listingId} className="rounded-[4px] border border-[#3c3c41] bg-[#19191c] p-4 flex flex-col gap-2">
                 <div className="flex items-center gap-3">
                   <ItemThumb image={l.item?.image} name={l.item?.name} type={l.item?.type ?? ''} enhancement={l.item?.enhancementLevel} />
                   <div className="min-w-0">
-                    <div className="font-bold text-white truncate">
+                    <div className="font-bold text-[#ece7da] truncate">
                       {l.item?.name ?? `Token #${l.tokenId}`}
                       {l.item?.enhancementLevel ? <span className="text-amber-300"> +{l.item.enhancementLevel}</span> : null}
                     </div>
-                    <div className="text-xs text-textsec">
+                    <div className="text-xs text-[#8a8a90]">
                       {l.item ? `${getItemTypeLabel(l.item.type)} • Nv.${l.item.level}` : 'Item fora do catálogo'}
                     </div>
                   </div>
                 </div>
-                <div className="text-amber-300 font-black mt-auto">{l.priceGold.formatted} {config?.gold.symbol || 'GOLD'}</div>
+                <div className="font-black text-[#e7c682] mt-auto">{l.priceGold.formatted} {config?.gold.symbol || 'GOLD'}</div>
                 <button
                   onClick={() => handleBuy(l)}
                   disabled={busy || l.dbOwner?.userId === session.user?.id}
-                  className="px-3 py-2 rounded-lg text-sm font-bold text-white bg-emerald-700/70 border border-emerald-400/30 disabled:opacity-40"
+                  className="rounded-[3px] border border-[#2f6b3a] bg-gradient-to-b from-[#25351f] to-[#161f12] px-3 py-2 text-sm font-semibold text-emerald-200 transition-all hover:brightness-125 disabled:opacity-40"
                   title={l.dbOwner?.userId === session.user?.id ? 'Sua própria listagem' : ''}
                 >
                   {l.dbOwner?.userId === session.user?.id ? 'Sua listagem' : '💰 Comprar'}
@@ -566,9 +566,9 @@ export default function MarketplacePage() {
 
       {tab === 'characters' && (<>
       {/* VENDER PERSONAGEM */}
-      <section className="rounded-2xl border border-indigo-400/20 bg-black/30 p-5">
-        <h2 className="text-xl font-bold text-indigo-200 mb-1">Vender um personagem</h2>
-        <p className="text-textsec text-xs mb-4">
+      <section className="overflow-hidden rounded-[4px] border border-[#46464c] shadow-2xl shadow-black/60 bg-[#1e1e21]/95 p-5">
+        <h2 className="text-lg font-semibold tracking-wide text-[#c9b3ec] mb-1">Vender um personagem</h2>
+        <p className="text-[#8a8a90] text-xs mb-4">
           A NFT vai só com o nível e os atributos. Desequipe e mande todos os itens para o inventário global antes de listar.
           {charConfig?.marketFee && charConfig.marketFee.totalBps > 0 ? (
             <> Taxa de mercado: <span className="text-indigo-300 font-semibold">{(charConfig.marketFee.totalBps / 100).toFixed(1).replace('.0', '')}%</span> do preço
@@ -576,15 +576,15 @@ export default function MarketplacePage() {
           ) : null}
         </p>
         {myCharacters.length === 0 ? (
-          <p className="text-textsec text-sm">Você não tem personagens.</p>
+          <p className="text-[#8a8a90] text-sm">Você não tem personagens.</p>
         ) : (
           <div className="grid gap-2 sm:grid-cols-2">
             {myCharacters.map((c) => (
-              <div key={c.id} className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/50 p-3">
+              <div key={c.id} className="flex items-center gap-2 rounded-[3px] border border-black/60 bg-[#19191c] p-3">
                 <CharThumb avatar={c.avatar} />
                 <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-white truncate">{c.name}</div>
-                  <div className="text-xs text-textsec capitalize">{c.race} • {c.class} • Nv.{c.level}</div>
+                  <div className="font-semibold text-[#ece7da] truncate">{c.name}</div>
+                  <div className="text-xs text-[#8a8a90] capitalize">{c.race} • {c.class} • Nv.{c.level}</div>
                   {!c.nftTokenId ? (
                     <div className="text-[11px] text-amber-300/80">Ainda não é NFT — registre on-chain antes de vender</div>
                   ) : null}
@@ -593,12 +593,12 @@ export default function MarketplacePage() {
                   type="number" min={1} placeholder="DOL"
                   value={charPrices[c.id] || ''}
                   onChange={(e) => setCharPrices((p) => ({ ...p, [c.id]: e.target.value }))}
-                  className="w-24 bg-slate-950 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white"
+                  className="w-24 rounded-[3px] border border-[#3c3c41] bg-[#101013] px-2 py-1.5 text-sm text-[#ece7da] outline-none transition-colors focus:border-[#8a6d3b]"
                 />
                 <button
                   onClick={() => handleSellCharacter(c)}
                   disabled={busy || !c.nftTokenId}
-                  className="px-3 py-1.5 rounded-lg text-sm font-bold text-indigo-50 bg-indigo-700/70 border border-indigo-400/40 disabled:opacity-40"
+                  className="rounded-[3px] border border-[#5b3b8a] bg-gradient-to-b from-[#2e2540] to-[#1c1626] px-3 py-1.5 text-sm font-semibold text-[#c9b3ec] transition-all hover:brightness-125 disabled:opacity-40"
                   title={!c.nftTokenId ? 'Registre o personagem on-chain primeiro' : ''}
                 >
                   Listar
@@ -611,34 +611,34 @@ export default function MarketplacePage() {
 
       {/* COMPRAR PERSONAGEM */}
       <section>
-        <h2 className="text-xl font-bold text-indigo-200 mb-3">À venda</h2>
+        <h2 className="text-lg font-semibold tracking-wide text-[#c9b3ec] mb-3">À venda</h2>
         {loadingCharList ? (
-          <p className="text-textsec text-sm">Carregando personagens…</p>
+          <p className="text-[#8a8a90] text-sm">Carregando personagens…</p>
         ) : charListings.length === 0 ? (
-          <p className="text-textsec text-sm">Nenhum personagem à venda no momento.</p>
+          <p className="text-[#8a8a90] text-sm">Nenhum personagem à venda no momento.</p>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {charListings.map((l) => {
               const mine = l.dbOwner?.userId === session.user?.id
               return (
-                <div key={l.listingId} className="rounded-2xl border border-white/10 bg-slate-900/50 p-4 flex flex-col gap-2">
+                <div key={l.listingId} className="rounded-[4px] border border-[#3c3c41] bg-[#19191c] p-4 flex flex-col gap-2">
                   <div className="flex items-center gap-3">
                     <CharThumb avatar={l.character?.avatar} />
                     <div className="min-w-0">
-                      <div className="font-bold text-white truncate">
+                      <div className="font-bold text-[#ece7da] truncate">
                         {l.character?.name ?? `Personagem #${l.tokenId}`}
                       </div>
-                      <div className="text-xs text-textsec capitalize">
+                      <div className="text-xs text-[#8a8a90] capitalize">
                         {l.character ? `${l.character.race} • ${l.character.class} • Nv.${l.character.level}` : 'Fora do banco'}
                       </div>
                     </div>
                   </div>
-                  <div className="text-indigo-300 font-black mt-auto">{l.priceDol.formatted} {charConfig?.dol.symbol || 'DOL'}</div>
+                  <div className="font-black text-[#c9b3ec] mt-auto">{l.priceDol.formatted} {charConfig?.dol.symbol || 'DOL'}</div>
                   {mine ? (
                     <button
                       onClick={() => handleCancelCharListing(l)}
                       disabled={busy}
-                      className="px-3 py-2 rounded-lg text-sm font-bold text-white bg-rose-800/70 border border-rose-400/30 disabled:opacity-40"
+                      className="rounded-[3px] border border-[#8a3b3b] bg-gradient-to-b from-[#3a2525] to-[#241616] px-3 py-2 text-sm font-semibold text-red-300 transition-all hover:brightness-125 disabled:opacity-40"
                     >
                       Cancelar listagem
                     </button>
@@ -646,7 +646,7 @@ export default function MarketplacePage() {
                     <button
                       onClick={() => handleBuyCharacter(l)}
                       disabled={busy}
-                      className="px-3 py-2 rounded-lg text-sm font-bold text-white bg-emerald-700/70 border border-emerald-400/30 disabled:opacity-40"
+                      className="rounded-[3px] border border-[#2f6b3a] bg-gradient-to-b from-[#25351f] to-[#161f12] px-3 py-2 text-sm font-semibold text-emerald-200 transition-all hover:brightness-125 disabled:opacity-40"
                     >
                       💎 Comprar
                     </button>

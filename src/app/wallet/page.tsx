@@ -7,6 +7,7 @@ import { Coins, Wallet, Mail } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { getWalletTxErrorMessage } from '@/lib/walletErrors'
 import { claimGoldOnChain } from '@/lib/goldClaimClient'
+import { BdoWindow, GOLD_BRIGHT, BEVEL_BTN_CLASS, BEVEL_COLOR_BTN_CLASS, BEVEL_VARIANTS } from '@/components/crafting/bdoTheme'
 
 type GoldStatus = {
   walletLinked: boolean
@@ -151,53 +152,49 @@ export default function WalletPage() {
   if (status === 'loading') {
     return (
       <div className="max-w-3xl mx-auto px-4 pt-24">
-        <div className="text-text-secondary">Carregando…</div>
+        <div className="text-[#8a8a90]">Carregando…</div>
       </div>
     )
   }
 
   if (!session) {
     return (
-      <div className="max-w-3xl mx-auto px-4 pt-24">
-        <div className="bg-surface/50 border border-white/10 rounded-xl p-6">
-          <h1 className="text-2xl font-bold text-text-primary">Wallet</h1>
-          <p className="text-text-secondary mt-2">Você precisa estar logado.</p>
+      <div className="max-w-3xl mx-auto px-4 pt-24" style={{ fontFamily: "'Barlow', sans-serif" }}>
+        <BdoWindow icon={<Wallet size={16} />} title="Wallet" bodyClassName="p-6">
+          <p className="text-[#8a8a90]">Você precisa estar logado.</p>
           <Link
             href="/auth/login"
-            className="inline-flex mt-4 bg-gradient-to-r from-primary to-primary-dark text-white px-4 py-2 rounded-lg font-semibold"
+            className={`${BEVEL_COLOR_BTN_CLASS} inline-flex mt-4 px-4 py-2`}
+            style={BEVEL_VARIANTS.gold}
           >
             Entrar
           </Link>
-        </div>
+        </BdoWindow>
       </div>
     )
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-4 pt-24 pb-16">
+    <div className="max-w-3xl mx-auto px-4 pt-24 pb-16" style={{ fontFamily: "'Barlow', sans-serif" }}>
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-text-primary">Wallet</h1>
-          <p className="text-text-secondary mt-1">
+          <h1 className="text-2xl font-black text-[#ece7da]" style={{ letterSpacing: '0.5px' }}>Wallet</h1>
+          <p className="text-[#8a8a90] mt-1">
             Veja seu saldo on-chain e faça claim do GOLD acumulado.
           </p>
         </div>
         <button
           onClick={refresh}
           disabled={loading}
-          className="bg-surface/50 border border-white/20 text-text-primary px-4 py-2 rounded-lg font-semibold hover:border-primary hover:text-primary transition-all"
+          className={`${BEVEL_BTN_CLASS} px-4 py-2 disabled:opacity-50`}
         >
           {loading ? 'Atualizando…' : 'Atualizar'}
         </button>
       </div>
 
       <div className="mt-6 space-y-4">
-        <div className="bg-surface/50 border border-white/10 rounded-xl p-5">
-          <div className="flex items-center gap-2 text-text-primary font-semibold">
-            <Coins className="w-4 h-4 text-yellow-500" />
-            DOL (on-chain)
-          </div>
-          <div className="mt-2 text-yellow-400 font-semibold">
+        <BdoWindow icon={<Coins size={16} />} title="DOL (on-chain)" bodyClassName="p-5">
+          <div className="font-semibold tabular-nums" style={{ color: GOLD_BRIGHT }}>
             {dolOnchain?.walletLinked ? (
               dolOnchain?.formatted ? `${dolOnchain.formatted} ${dolOnchain.symbol || 'DOL'}` : '…'
             ) : (
@@ -205,23 +202,18 @@ export default function WalletPage() {
             )}
           </div>
           {!walletAddress && (
-            <div className="text-text-secondary text-sm mt-2 inline-flex items-center gap-2">
+            <div className="text-[#8a8a90] text-sm mt-2 inline-flex items-center gap-2">
               <Wallet className="w-4 h-4" />
               Conecte sua wallet para ver o saldo.
             </div>
           )}
-        </div>
+        </BdoWindow>
 
-        <div className="bg-surface/50 border border-white/10 rounded-xl p-5">
-          <div className="flex items-center gap-2 text-text-primary font-semibold">
-            <Coins className="w-4 h-4 text-yellow-500" />
-            GOLD
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
-            <div className="border border-white/10 rounded-lg p-4">
-              <div className="text-text-secondary text-sm">On-chain</div>
-              <div className="text-yellow-400 font-semibold mt-1">
+        <BdoWindow icon={<Coins size={16} />} title="GOLD" bodyClassName="p-5">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="rounded-[3px] border border-black/60 bg-[#19191c] p-4">
+              <div className="text-[11px] uppercase tracking-[0.14em] text-[#77777d]">On-chain</div>
+              <div className="font-semibold tabular-nums mt-1" style={{ color: GOLD_BRIGHT }}>
                 {goldOnchain?.walletLinked ? (
                   goldOnchain?.formatted ? `${goldOnchain.formatted} ${goldOnchain.symbol || 'GOLD'}` : '…'
                 ) : (
@@ -230,13 +222,13 @@ export default function WalletPage() {
               </div>
             </div>
 
-            <div className="border border-white/10 rounded-lg p-4">
-              <div className="text-text-secondary text-sm">Pode dar claim</div>
-              <div className="text-yellow-400 font-semibold mt-1">
+            <div className="rounded-[3px] border border-black/60 bg-[#19191c] p-4">
+              <div className="text-[11px] uppercase tracking-[0.14em] text-[#77777d]">Pode dar claim</div>
+              <div className="font-semibold tabular-nums mt-1" style={{ color: GOLD_BRIGHT }}>
                 {goldStatus ? `${goldStatus.claimable} GOLD` : '…'}
               </div>
               {goldStatus?.pending && !goldStatus.pending.expired && (
-                <div className="text-text-secondary text-xs mt-2">
+                <div className="text-[#8a8a90] text-xs mt-2">
                   Claim pendente: {goldStatus.pending.amount} GOLD (expira em{' '}
                   {new Date(goldStatus.pending.deadline).toLocaleString()})
                 </div>
@@ -248,55 +240,52 @@ export default function WalletPage() {
             <button
               onClick={handleClaim}
               disabled={!canClaim || claiming}
-              className="bg-gradient-to-r from-primary to-primary-dark text-white px-4 py-2 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`${BEVEL_COLOR_BTN_CLASS} px-4 py-2 disabled:cursor-not-allowed disabled:opacity-40`}
+              style={BEVEL_VARIANTS.gold}
             >
               {claiming ? 'Claimando…' : 'Claim GOLD'}
             </button>
 
             {!walletAddress && (
-              <div className="text-text-secondary text-sm">
+              <div className="text-[#8a8a90] text-sm">
                 Conecte sua wallet para claimar.
               </div>
             )}
           </div>
-        </div>
+        </BdoWindow>
 
         {/* Optional: add an email later (newsletter / account recovery) */}
-        <div className="bg-surface/50 border border-white/10 rounded-xl p-5">
-          <div className="flex items-center gap-2 text-text-primary font-semibold">
-            <Mail className="w-4 h-4 text-primary" />
-            Receber novidades
-          </div>
-
+        <BdoWindow icon={<Mail size={16} />} title="Receber novidades" bodyClassName="p-5">
           {currentEmail ? (
-            <p className="text-text-secondary text-sm mt-2">
-              Email cadastrado: <span className="text-text-primary">{currentEmail}</span>
+            <p className="text-[#8a8a90] text-sm">
+              Email cadastrado: <span className="text-[#ece7da]">{currentEmail}</span>
             </p>
           ) : (
             <>
-              <p className="text-text-secondary text-sm mt-1">
+              <p className="text-[#8a8a90] text-sm">
                 Opcional. Adicione um email para receber novidades do Dolrath e poder
                 recuperar sua conta.
               </p>
-              <div className="mt-3 flex flex-col sm:flex-row gap-3">
+              <div className="mt-3 flex flex-row gap-3">
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="seu@email.com"
-                  className="flex-1 bg-background/50 border border-white/20 rounded-lg px-3 py-2 text-text-primary placeholder:text-text-secondary focus:outline-none focus:border-primary"
+                  className="min-w-0 flex-1 rounded-[3px] border border-[#3c3c41] bg-[#101013] px-3 py-2 text-[#ece7da] placeholder:text-[#57575c] outline-none transition-colors focus:border-[#8a6d3b]"
                 />
                 <button
                   onClick={handleSaveEmail}
                   disabled={savingEmail}
-                  className="bg-gradient-to-r from-primary to-primary-dark text-white px-4 py-2 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className={`${BEVEL_COLOR_BTN_CLASS} px-4 py-2 disabled:cursor-not-allowed disabled:opacity-40`}
+                  style={BEVEL_VARIANTS.gold}
                 >
                   {savingEmail ? 'Salvando…' : 'Salvar'}
                 </button>
               </div>
             </>
           )}
-        </div>
+        </BdoWindow>
       </div>
     </div>
   )

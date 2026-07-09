@@ -21,6 +21,89 @@ export const BG_STRIP = '#19191c';
 export const BORDER = '#46464c';
 export const BORDER_GOLD = '#8a6d3b';
 
+// ============================================================
+// Tokens de PÁGINA (janelas fora de dialog) — usados na ficha do personagem,
+// dashboard e demais páginas que adotaram o estilo. Fundo levemente translúcido
+// para o cenário animado atrás respirar.
+// ============================================================
+export const PANEL_BG = 'linear-gradient(180deg, rgba(32,32,36,0.94), rgba(24,24,27,0.96))';
+export const TITLEBAR_BG = 'linear-gradient(180deg, #2b2b2f, #1a1a1d)';
+
+/** Classes do painel-janela (combine com style={{ background: PANEL_BG }}). */
+export const PANEL_CLASS =
+  'overflow-hidden rounded-[4px] border border-[#46464c] shadow-2xl shadow-black/60';
+
+/** Botão em bisel neutro (secundário) — classes prontas para <button>. */
+export const BEVEL_BTN_CLASS =
+  'rounded-[3px] border border-[#46464c] bg-gradient-to-b from-[#2b2b2f] to-[#1c1c1f] font-semibold text-[#c9c9ce] transition-colors hover:border-[#8a6d3b] hover:text-white';
+
+/** Estilos inline dos botões em bisel coloridos (ouro/vermelho/roxo/verde). */
+export const BEVEL_VARIANTS = {
+  gold: {
+    borderColor: BORDER_GOLD,
+    background: 'linear-gradient(180deg, #3a3325, #241f16)',
+    color: GOLD_BRIGHT,
+    boxShadow: 'inset 0 1px 0 rgba(231,198,130,0.25), 0 0 14px rgba(201,162,95,0.2)',
+  },
+  red: {
+    borderColor: '#8a3b3b',
+    background: 'linear-gradient(180deg, #3a2525, #241616)',
+    color: '#f0a8a8',
+    boxShadow: 'inset 0 1px 0 rgba(240,168,168,0.2), 0 0 14px rgba(201,70,70,0.15)',
+  },
+  purple: {
+    borderColor: '#5b3b8a',
+    background: 'linear-gradient(180deg, #2e2540, #1c1626)',
+    color: '#c9b3ec',
+    boxShadow: 'inset 0 1px 0 rgba(201,179,236,0.2), 0 0 14px rgba(139,92,246,0.15)',
+  },
+  green: {
+    borderColor: '#2f6b3a',
+    background: 'linear-gradient(180deg, #25351f, #161f12)',
+    color: '#a7e8b4',
+    boxShadow: 'inset 0 1px 0 rgba(167,232,180,0.2), 0 0 14px rgba(74,180,94,0.15)',
+  },
+} as const;
+
+/** Classes comuns dos botões coloridos (usar junto de BEVEL_VARIANTS[v] no style). */
+export const BEVEL_COLOR_BTN_CLASS =
+  'rounded-[3px] border font-semibold tracking-wide transition-all hover:brightness-125';
+
+/**
+ * 🪟 Janela chumbo de página: painel + barra de título em bisel.
+ * `right` renderiza no canto direito da barra (botões/ações).
+ */
+export function BdoWindow({
+  icon,
+  title,
+  right,
+  children,
+  className = '',
+  bodyClassName = '',
+}: {
+  icon?: ReactNode;
+  title: string;
+  right?: ReactNode;
+  children: ReactNode;
+  className?: string;
+  bodyClassName?: string;
+}) {
+  return (
+    <div className={`${PANEL_CLASS} ${className}`} style={{ background: PANEL_BG }}>
+      <div
+        className="flex items-center gap-2 px-4 py-2.5"
+        style={{ background: TITLEBAR_BG, borderBottom: '1px solid rgba(0,0,0,0.7)' }}
+      >
+        {icon != null && <span style={{ color: GOLD }}>{icon}</span>}
+        <span className="text-[15px] font-semibold tracking-wide text-[#dcdce0]">{title}</span>
+        <div className="flex-1" />
+        {right}
+      </div>
+      <div className={bodyClassName}>{children}</div>
+    </div>
+  );
+}
+
 // Cores por raridade (espelha o /doc e as bancadas antigas).
 export const RARITY_UI: Record<Rarity, { label: string; text: string; ring: string; glow: string }> = {
   COMMON: { label: 'Comum', text: 'text-zinc-300', ring: '#a1a1aa', glow: 'rgba(161,161,170,0.6)' },

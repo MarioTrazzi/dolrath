@@ -140,7 +140,7 @@ export default function AttributeDistributionPanel({
   }
 
   return (
-    <div className="glass-card p-6 mb-6">
+    <div className="rounded-[4px] border border-[#46464c] bg-[#1e1e21]/95 p-6 mb-6 shadow-2xl shadow-black/60">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-xl font-bold text-text-primary">
           📊 Distribuir Pontos de Atributo

@@ -8,6 +8,13 @@ import { EquipmentSlotType } from '@prisma/client';
 import { Item } from '@/types/item';
 import { CharacterItemGrid, InventoryRow } from '@/components/inventory/CharacterItemGrid';
 
+// Paleta chumbo + ouro envelhecido — a mesma da EnhancementDialog, para que as
+// janelas de inventário e a dialog de aprimoramento leiam como um só conjunto.
+const GOLD = '#c9a25f';
+const GOLD_BRIGHT = '#e7c682';
+const FRAME = '#8a6d3b';
+const TITLEBAR_BG = 'linear-gradient(180deg, #2b2b2f, #1a1a1d)';
+
 /** Payload do drag: o item + metadados de origem injetados pelo DraggableItem. */
 type DraggedItem = Item & {
   __dragSource?: 'character' | 'global';
@@ -111,10 +118,10 @@ export default function InventoryPanel({
   return (
     <div
       ref={dropRef}
-      className="relative flex flex-col w-full rounded-2xl overflow-hidden border-2 backdrop-blur-md shadow-xl transition-colors"
+      className="relative flex flex-col w-full rounded-[4px] overflow-hidden border shadow-2xl shadow-black/70 transition-colors"
       style={{
-        background: 'linear-gradient(180deg, rgba(26,32,38,0.78), rgba(20,25,30,0.82))',
-        borderColor: dropActive ? '#22c55e' : `${accent}40`,
+        background: 'linear-gradient(180deg, rgba(32,32,36,0.94), rgba(24,24,27,0.96))',
+        borderColor: dropActive ? '#22c55e' : '#46464c',
         boxShadow: dropActive ? '0 0 0 2px #22c55e88, 0 0 22px rgba(34,197,94,0.35)' : undefined,
       }}
     >
@@ -128,9 +135,9 @@ export default function InventoryPanel({
       )}
 
       {/* Barra de título */}
-      <div className="flex items-center gap-2" style={{ height: 38, padding: '0 12px', background: 'linear-gradient(180deg, #2b333c, #232a31)', borderBottom: '1px solid #11161a' }}>
-        <Box size={17} style={{ color: accent }} />
-        <span style={{ fontSize: 16, fontWeight: 600, color: '#ece7da', letterSpacing: '0.3px' }}>{title}</span>
+      <div className="flex items-center gap-2" style={{ height: 38, padding: '0 12px', background: TITLEBAR_BG, borderBottom: '1px solid rgba(0,0,0,0.7)' }}>
+        <Box size={17} style={{ color: GOLD }} />
+        <span style={{ fontSize: 15, fontWeight: 600, color: '#dcdce0', letterSpacing: '0.4px' }}>{title}</span>
         <div className="flex-1" />
         <Link
           href="/doc#items"
@@ -143,26 +150,26 @@ export default function InventoryPanel({
       </div>
 
       {/* Abas */}
-      <div className="flex items-end" style={{ gap: 26, padding: '8px 16px 0', borderBottom: '1px solid #2a323b' }}>
-        <div className="relative" style={{ paddingBottom: 9, fontSize: 14, fontWeight: 600, color: '#f1d79a' }}>
+      <div className="flex items-end" style={{ gap: 26, padding: '8px 16px 0', borderBottom: '1px solid rgba(0,0,0,0.6)' }}>
+        <div className="relative" style={{ paddingBottom: 9, fontSize: 14, fontWeight: 600, color: GOLD_BRIGHT }}>
           {title}
-          <div className="absolute" style={{ left: 0, right: 0, bottom: -1, height: 2, background: accent }} />
+          <div className="absolute" style={{ left: 0, right: 0, bottom: -1, height: 2, background: GOLD }} />
         </div>
       </div>
 
       {/* Barra de ferramentas */}
       <div className="flex items-center gap-2" style={{ padding: '11px 14px' }}>
-        <div className="flex-1 flex items-center gap-2" style={{ height: 30, padding: '0 10px', background: '#0f141a', border: '1px solid #313a44' }}>
+        <div className="flex-1 flex items-center gap-2 rounded-[3px]" style={{ height: 30, padding: '0 10px', background: '#101013', border: '1px solid #3c3c41' }}>
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar no inventário"
-            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: '#c4cad1', fontSize: '12.5px' }}
+            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: '#c9c9ce', fontSize: '12.5px' }}
           />
-          <Search size={14} style={{ color: '#7e8893' }} />
+          <Search size={14} style={{ color: '#8a8a90' }} />
         </div>
-        <div className="flex items-center justify-center" style={{ width: 30, height: 30, background: `linear-gradient(180deg, ${accent}33, ${accent}14)`, border: `1px solid ${accent}` }}>
-          <LayoutGrid size={15} style={{ color: '#f1d79a' }} />
+        <div className="flex items-center justify-center rounded-[3px]" style={{ width: 30, height: 30, background: 'linear-gradient(180deg, #3a3325, #241f16)', border: `1px solid ${FRAME}` }}>
+          <LayoutGrid size={15} style={{ color: GOLD_BRIGHT }} />
         </div>
       </div>
 
@@ -192,39 +199,39 @@ export default function InventoryPanel({
       </div>
 
       {/* Rodapé: slots / expandir */}
-      <div style={{ padding: '4px 16px 0', borderTop: '1px solid #2a323b' }}>
+      <div style={{ padding: '4px 16px 0', borderTop: '1px solid rgba(0,0,0,0.6)', background: '#19191c' }}>
         <div className="flex items-center gap-2" style={{ padding: '9px 0' }}>
-          <LayoutGrid size={16} style={{ color: '#8d96a1' }} />
-          <span style={{ fontSize: 13, color: '#c4cad1' }}>{slotLabel}</span>
+          <LayoutGrid size={16} style={{ color: '#8a8a90' }} />
+          <span style={{ fontSize: 13, color: '#c9c9ce' }}>{slotLabel}</span>
           <div className="flex-1" />
-          <span style={{ fontSize: '13.5px', color: '#aeb5be' }}>{items.length} / {totalSlots}</span>
+          <span className="tabular-nums" style={{ fontSize: '13.5px', color: '#c9c9ce' }}>{items.length} / {totalSlots}</span>
           {onExpand && (
             <button
               onClick={onExpand}
               disabled={expanding}
               title={expandTitle}
-              className="flex items-center justify-center disabled:opacity-50"
-              style={{ width: 22, height: 22, background: 'linear-gradient(180deg, #2f3842, #262e37)', border: '1px solid #46505c', cursor: 'pointer' }}
+              className="flex items-center justify-center rounded-[3px] transition-colors hover:border-[#c9a25f] disabled:opacity-50"
+              style={{ width: 22, height: 22, background: 'linear-gradient(180deg, #2b2b2f, #1c1c1f)', border: `1px solid ${FRAME}`, cursor: 'pointer' }}
             >
-              <Plus size={13} style={{ color: '#cdd3da' }} />
+              <Plus size={13} style={{ color: GOLD_BRIGHT }} />
             </button>
           )}
         </div>
       </div>
 
       {overCapacity && (
-        <div style={{ margin: '0 16px 8px', padding: 10, background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)' }}>
-          <p style={{ color: '#f0a8a8', fontSize: 12 }}>⚠️ Você tem mais itens do que slots. Expanda o inventário.</p>
+        <div className="rounded-[3px]" style={{ margin: '8px 16px', padding: 10, background: 'rgba(120,15,15,0.25)', border: '1px solid rgba(153,27,27,0.7)' }}>
+          <p style={{ color: '#fca5a5', fontSize: 12 }}>⚠️ Você tem mais itens do que slots. Expanda o inventário.</p>
         </div>
       )}
 
       {/* Moedas */}
       {goldText != null && (
-        <div className="flex items-center flex-wrap" style={{ gap: '16px 24px', padding: '11px 18px 13px', borderTop: '1px solid #2a323b', background: 'rgba(0,0,0,0.18)' }}>
+        <div className="flex items-center flex-wrap" style={{ gap: '16px 24px', padding: '11px 18px 13px', borderTop: '1px solid rgba(0,0,0,0.7)', background: '#141416' }}>
           <div className="flex items-center" style={{ gap: 7 }}>
-            <div style={{ width: 16, height: 16, borderRadius: '50%', background: 'radial-gradient(circle at 35% 30%, #f6e08a, #c9962a)', border: '1px solid #8a6418' }} />
-            <span style={{ fontSize: 14, fontWeight: 600, color: '#ece7da' }}>{goldText}</span>
-            <span style={{ fontSize: 11, color: '#7e8893' }}>GOLD</span>
+            <div style={{ width: 16, height: 16, borderRadius: '50%', background: `radial-gradient(circle at 35% 30%, ${GOLD_BRIGHT}, ${GOLD})`, border: `1px solid ${FRAME}` }} />
+            <span className="tabular-nums" style={{ fontSize: 14, fontWeight: 600, color: '#ece7da' }}>{goldText}</span>
+            <span style={{ fontSize: 11, color: '#8a8a90' }}>GOLD</span>
           </div>
         </div>
       )}

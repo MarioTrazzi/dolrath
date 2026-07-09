@@ -33,6 +33,14 @@ import { getSlotTypeFromItemType } from '@/lib/equipmentSlot';
 
 import { Item } from '@/types/item';
 
+// Paleta chumbo + ouro envelhecido — a mesma da EnhancementDialog, para que a
+// ficha inteira leia como um conjunto de janelas do mesmo jogo.
+const GOLD = '#c9a25f';
+const GOLD_BRIGHT = '#e7c682';
+const FRAME = '#8a6d3b';
+const PANEL_BG = 'linear-gradient(180deg, rgba(32,32,36,0.94), rgba(24,24,27,0.96))';
+const TITLEBAR_BG = 'linear-gradient(180deg, #2b2b2f, #1a1a1d)';
+
 interface InventoryItem {
   id: string;
   itemId: string;
@@ -256,6 +264,31 @@ export default function CharacterDetailsPage() {
       }
     } catch (error) {
       console.error('Error refreshing data:', error);
+    }
+  };
+
+  // Botões de teste de XP (removível em produção) — mesma lógica para +100/+1000.
+  const handleAddXp = async (xp: number) => {
+    try {
+      if (!effectiveCharacterId) return;
+      const response = await fetch(`/api/character/${effectiveCharacterId}/add-xp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ xp }),
+      });
+      const raw = await response.text().catch(() => '');
+      const result = raw ? JSON.parse(raw) : null;
+      if (response.ok && result?.success) {
+        toast.success(result.message);
+        const updatedResponse = await fetch(`/api/character/${effectiveCharacterId}`);
+        if (updatedResponse.ok) {
+          setCharacter(await updatedResponse.json());
+        }
+      } else {
+        toast.error(String(result?.error || `Erro ao adicionar XP (HTTP ${response.status})`));
+      }
+    } catch (error) {
+      toast.error(getWalletTxErrorMessage(error, 'Erro ao adicionar XP'));
     }
   };
 
@@ -557,8 +590,8 @@ export default function CharacterDetailsPage() {
 
         <div className="relative z-10 container mx-auto px-2 sm:px-4 py-8">
         <div
-          className="relative overflow-hidden rounded-3xl border-2 p-3 sm:p-8"
-          style={{ borderColor: visual.borderColor, boxShadow: visual.glow }}
+          className="relative overflow-hidden rounded-lg border p-3 sm:p-8"
+          style={{ borderColor: `${visual.borderColor}40`, boxShadow: '0 14px 44px rgba(0,0,0,0.55)', fontFamily: "'Barlow', sans-serif" }}
         >
           {/* Cenário animado da raça/classe como fundo do card (igual ao dashboard) */}
           <div className="absolute inset-0 pointer-events-none">
@@ -566,131 +599,116 @@ export default function CharacterDetailsPage() {
           </div>
           <div className="absolute inset-0 bg-black/55 pointer-events-none" />
           <div className="relative">
-          {/* Character Header */}
-          <div className="flex flex-col md:flex-row items-center gap-8 mb-8">
-            <div
-              className="relative w-32 h-32 rounded-2xl border-4 shadow-lg overflow-hidden"
-              style={{ background: visual.gradient, borderColor: visual.borderColor }}
-            >
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-5xl text-white">
-                  {character.name?.[0]?.toUpperCase() || '?'}
-                </span>
-              </div>
-
-              {(() => {
-                const avatarUrl = resolveImageUrl(character.avatar);
-                if (!avatarUrl) return null;
-
-                return (
-                  // Use a plain <img> to avoid next/image remotePatterns issues.
-                  <img
-                    src={avatarUrl}
-                    alt={`${character.name} avatar`}
-                    className="absolute inset-0 w-full h-full object-cover art-bright"
-                    loading="eager"
-                    decoding="async"
-                    referrerPolicy="no-referrer"
-                    onError={(e) => {
-                      // If the URL is invalid/404, keep the fallback initial visible.
-                      (e.currentTarget as HTMLImageElement).style.display = 'none';
-                    }}
-                  />
-                );
-              })()}
+          {/* Cabeçalho do personagem — janela chumbo no mesmo estilo do aprimoramento */}
+          <div
+            className="relative mb-6 overflow-hidden rounded-[4px] border border-[#46464c] shadow-2xl shadow-black/60"
+            style={{ background: PANEL_BG }}
+          >
+            {/* Barra de título em bisel */}
+            <div className="flex items-center justify-between px-4 py-2.5" style={{ background: TITLEBAR_BG, borderBottom: '1px solid rgba(0,0,0,0.7)' }}>
+              <span className="flex items-center gap-2 text-[15px] font-semibold tracking-wide text-[#dcdce0]">
+                <span style={{ color: GOLD }}>✦</span> Ficha do Personagem
+              </span>
+              <span className="text-[11px] uppercase tracking-[0.14em] text-[#77777d]">
+                Nível {character.level}
+              </span>
             </div>
-            <div className="text-center md:text-left">
-              <h1 className="text-4xl font-black text-white mb-2 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">{character.name}</h1>
-              <div className="flex flex-wrap gap-2 mb-4 justify-center md:justify-start">
-                <span
-                  className="text-base font-bold text-white rounded-full px-4 py-1.5 border"
-                  style={{ background: `${visual.raceVisual.accent}33`, borderColor: `${visual.raceVisual.accent}66` }}
-                >
-                  {visual.raceVisual.emoji} {raceObj?.name}
-                </span>
-                <span
-                  className="text-base font-bold text-white rounded-full px-4 py-1.5 border"
-                  style={{ background: `${visual.classVisual.accent}33`, borderColor: `${visual.classVisual.accent}66` }}
-                >
-                  {visual.classVisual.emoji} {classObj?.name}
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-2 justify-center md:justify-start">
-                <span className="bg-black/40 px-4 py-2 rounded-xl text-white/80 border border-white/10">
-                  Level {character.level}
-                </span>
-                <span className="bg-black/40 px-4 py-2 rounded-xl text-white/80 border border-white/10">
-                  XP: {character.experience}/{character.nextLevelExperience || '?'}
-                </span>
-                {(character.availablePoints ?? 0) > 0 && (
-                  <span
-                    className="px-4 py-2 rounded-xl text-white font-bold border"
-                    style={{ background: `${visual.borderColor}33`, borderColor: `${visual.borderColor}66` }}
-                  >
-                    {character.availablePoints} pontos disponíveis
+
+            <div className="flex flex-col items-center gap-5 p-5 sm:flex-row">
+              {/* Retrato com moldura dourada */}
+              <div
+                className="relative h-28 w-28 shrink-0 overflow-hidden rounded-[3px] border-2"
+                style={{ borderColor: FRAME, background: visual.gradient, boxShadow: '0 0 0 1px rgba(0,0,0,0.6), 0 6px 18px rgba(0,0,0,0.55)' }}
+              >
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-4xl text-white">
+                    {character.name?.[0]?.toUpperCase() || '?'}
                   </span>
-                )}
+                </div>
+
+                {(() => {
+                  const avatarUrl = resolveImageUrl(character.avatar);
+                  if (!avatarUrl) return null;
+
+                  return (
+                    // Use a plain <img> to avoid next/image remotePatterns issues.
+                    <img
+                      src={avatarUrl}
+                      alt={`${character.name} avatar`}
+                      className="absolute inset-0 w-full h-full object-cover art-bright"
+                      loading="eager"
+                      decoding="async"
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        // If the URL is invalid/404, keep the fallback initial visible.
+                        (e.currentTarget as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  );
+                })()}
               </div>
-              
+
+              <div className="min-w-0 flex-1 text-center sm:text-left">
+                <h1 className="text-3xl font-black text-[#ece7da] drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]" style={{ letterSpacing: '0.5px' }}>
+                  {character.name}
+                </h1>
+                <div className="mt-2 flex flex-wrap justify-center gap-2 sm:justify-start">
+                  <span
+                    className="rounded-[3px] border px-3 py-1 text-sm font-semibold text-[#dcdce0]"
+                    style={{ borderColor: `${visual.raceVisual.accent}66`, background: `linear-gradient(180deg, ${visual.raceVisual.accent}2e, ${visual.raceVisual.accent}12)` }}
+                  >
+                    {visual.raceVisual.emoji} {raceObj?.name}
+                  </span>
+                  <span
+                    className="rounded-[3px] border px-3 py-1 text-sm font-semibold text-[#dcdce0]"
+                    style={{ borderColor: `${visual.classVisual.accent}66`, background: `linear-gradient(180deg, ${visual.classVisual.accent}2e, ${visual.classVisual.accent}12)` }}
+                  >
+                    {visual.classVisual.emoji} {classObj?.name}
+                  </span>
+                  {(character.availablePoints ?? 0) > 0 && (
+                    <span
+                      className="rounded-[3px] border px-3 py-1 text-sm font-bold"
+                      style={{ borderColor: FRAME, background: 'linear-gradient(180deg, #3a3325, #241f16)', color: GOLD_BRIGHT }}
+                    >
+                      ✦ {character.availablePoints} pontos disponíveis
+                    </span>
+                  )}
+                </div>
+
+                {/* Barra de experiência */}
+                <div className="mt-3">
+                  <div className="mb-1 flex items-center justify-between text-[11px] uppercase tracking-[0.14em] text-[#77777d]">
+                    <span>Experiência</span>
+                    <span className="normal-case tracking-normal tabular-nums text-[#8a8a90]">
+                      {character.experience} / {character.nextLevelExperience || '?'}
+                    </span>
+                  </div>
+                  <div className="h-[7px] overflow-hidden rounded-[2px] border border-black/70 bg-[#101013]">
+                    <div
+                      className="h-full bg-gradient-to-r from-[#8a6d3b] to-[#e7c682] transition-all"
+                      style={{
+                        width: `${
+                          character.nextLevelExperience
+                            ? Math.min(100, Math.round((character.experience / character.nextLevelExperience) * 100))
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
               {/* Botões de teste XP - removível em produção */}
-              <div className="flex gap-2 mt-4">
+              <div className="flex shrink-0 flex-row gap-2 sm:flex-col">
                 <button
-                  onClick={async () => {
-                    try {
-                      if (!effectiveCharacterId) return;
-                      const response = await fetch(`/api/character/${effectiveCharacterId}/add-xp`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ xp: 100 }),
-                      });
-                      const raw = await response.text().catch(() => '');
-                      const result = raw ? JSON.parse(raw) : null;
-                      if (response.ok && result?.success) {
-                        toast.success(result.message);
-                        // Recarregar dados do personagem
-                        const updatedResponse = await fetch(`/api/character/${effectiveCharacterId}`);
-                        if (updatedResponse.ok) {
-                          const characterData = await updatedResponse.json();
-                          setCharacter(characterData);
-                        }
-                      } else {
-                        toast.error(String(result?.error || `Erro ao adicionar XP (HTTP ${response.status})`));
-                      }
-                    } catch (error) {
-                      toast.error(getWalletTxErrorMessage(error, 'Erro ao adicionar XP'));
-                    }
-                  }}
-                  className="px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
+                  onClick={() => handleAddXp(100)}
+                  className="rounded-[3px] border border-[#46464c] bg-gradient-to-b from-[#2b2b2f] to-[#1c1c1f] px-3 py-1 text-xs font-semibold text-[#c9c9ce] transition-colors hover:border-[#8a6d3b] hover:text-white"
                 >
                   +100 XP (Teste)
                 </button>
                 <button
-                  onClick={async () => {
-                    try {
-                      if (!effectiveCharacterId) return;
-                      const response = await fetch(`/api/character/${effectiveCharacterId}/add-xp`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ xp: 1000 }),
-                      });
-                      const raw = await response.text().catch(() => '');
-                      const result = raw ? JSON.parse(raw) : null;
-                      if (response.ok && result?.success) {
-                        toast.success(result.message);
-                        // Recarregar dados do personagem
-                        const updatedResponse = await fetch(`/api/character/${effectiveCharacterId}`);
-                        if (updatedResponse.ok) {
-                          const characterData = await updatedResponse.json();
-                          setCharacter(characterData);
-                        }
-                      } else {
-                        toast.error(String(result?.error || `Erro ao adicionar XP (HTTP ${response.status})`));
-                      }
-                    } catch (error) {
-                      toast.error(getWalletTxErrorMessage(error, 'Erro ao adicionar XP'));
-                    }
-                  }}
-                  className="px-3 py-1 bg-purple-500 text-white text-xs rounded hover:bg-purple-600"
+                  onClick={() => handleAddXp(1000)}
+                  className="rounded-[3px] border border-[#46464c] bg-gradient-to-b from-[#2b2b2f] to-[#1c1c1f] px-3 py-1 text-xs font-semibold text-[#c9c9ce] transition-colors hover:border-[#8a6d3b] hover:text-white"
                 >
                   +1000 XP (Level Up)
                 </button>
@@ -698,20 +716,30 @@ export default function CharacterDetailsPage() {
             </div>
           </div>
 
-          {/* Action Buttons - estilo masmorras */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mt-10 sm:mt-12">
+          {/* Ações rápidas — botões em bisel, como os da forja */}
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button
               onClick={() => router.push('/combat-lobby')}
-              className="flex-1 sm:flex-none px-6 py-3 rounded-xl font-black text-white shadow-lg transition-transform hover:scale-105 flex items-center justify-center gap-2"
-              style={{ background: 'linear-gradient(90deg, #ef4444cc, #ef444477)', boxShadow: '0 4px 20px rgba(239,68,68,0.35)' }}
+              className="flex-1 sm:flex-none rounded-[3px] border px-8 py-3 text-[15px] font-semibold tracking-wide transition-all hover:brightness-125 flex items-center justify-center gap-2"
+              style={{
+                borderColor: '#8a3b3b',
+                background: 'linear-gradient(180deg, #3a2525, #241616)',
+                color: '#f0a8a8',
+                boxShadow: 'inset 0 1px 0 rgba(240,168,168,0.2), 0 0 14px rgba(201,70,70,0.15)',
+              }}
             >
               <Sword className="w-5 h-5" />
               Entrar em Combate
             </button>
             <button
               onClick={() => router.push('/dungeons')}
-              className="flex-1 sm:flex-none px-6 py-3 rounded-xl font-black text-white shadow-lg transition-transform hover:scale-105 flex items-center justify-center gap-2"
-              style={{ background: 'linear-gradient(90deg, #a855f7cc, #a855f777)', boxShadow: '0 4px 20px rgba(168,85,247,0.35)' }}
+              className="flex-1 sm:flex-none rounded-[3px] border px-8 py-3 text-[15px] font-semibold tracking-wide transition-all hover:brightness-125 flex items-center justify-center gap-2"
+              style={{
+                borderColor: '#5b3b8a',
+                background: 'linear-gradient(180deg, #2e2540, #1c1626)',
+                color: '#c9b3ec',
+                boxShadow: 'inset 0 1px 0 rgba(201,179,236,0.2), 0 0 14px rgba(139,92,246,0.15)',
+              }}
             >
               <Shield className="w-5 h-5" />
               Explorar Dungeon
@@ -770,17 +798,17 @@ export default function CharacterDetailsPage() {
           }
         `}</style>
         <div className="w-full overflow-x-auto pb-2 mt-8">
-        <div className="flex flex-col items-center gap-4 xl:flex-row xl:items-stretch xl:justify-center xl:gap-2 xl:min-w-[1026px] mx-auto" style={{ fontFamily: "'Barlow', sans-serif" }}>
+        <div className="flex flex-col items-center gap-4 xl:flex-row xl:items-stretch xl:justify-center xl:gap-2 xl:min-w-[1026px] mx-auto">
 
           {/* ============ PAINEL EQUIPAMENTO ============ */}
           <div
-            className="relative flex flex-col w-full max-w-[548px] rounded-2xl overflow-hidden border-2 backdrop-blur-md shadow-xl"
-            style={{ background: 'linear-gradient(180deg, rgba(26,32,38,0.78), rgba(20,25,30,0.82))', borderColor: `${visual.borderColor}40` }}
+            className="relative flex flex-col w-full max-w-[548px] rounded-[4px] overflow-hidden border border-[#46464c] shadow-2xl shadow-black/70"
+            style={{ background: PANEL_BG }}
           >
             {/* Retrato flutuante */}
             <div
               className="absolute z-[5] overflow-hidden flex items-center justify-center"
-              style={{ left: -2, top: -2, width: 66, height: 66, border: `2px solid ${visual.borderColor}`, background: '#0e1318', boxShadow: '0 0 0 1px rgba(0,0,0,0.5), 0 6px 14px rgba(0,0,0,0.5)' }}
+              style={{ left: -1, top: -1, width: 66, height: 66, border: `2px solid ${FRAME}`, background: '#141210', boxShadow: '0 0 0 1px rgba(0,0,0,0.5), 0 6px 14px rgba(0,0,0,0.5)' }}
             >
               {(() => {
                 const avatarUrl = resolveImageUrl(character.avatar);
@@ -793,9 +821,9 @@ export default function CharacterDetailsPage() {
             </div>
 
             {/* Barra de título */}
-            <div className="flex items-center gap-2" style={{ height: 38, padding: '0 12px 0 76px', background: 'linear-gradient(180deg, #2b333c, #232a31)', borderBottom: '1px solid #11161a' }}>
-              <Sword size={17} style={{ color: visual.borderColor }} />
-              <span style={{ fontSize: 16, fontWeight: 600, color: '#ece7da', letterSpacing: '0.3px' }}>Equipamento</span>
+            <div className="flex items-center gap-2" style={{ height: 38, padding: '0 12px 0 76px', background: TITLEBAR_BG, borderBottom: '1px solid rgba(0,0,0,0.7)' }}>
+              <Sword size={17} style={{ color: GOLD }} />
+              <span style={{ fontSize: 15, fontWeight: 600, color: '#dcdce0', letterSpacing: '0.4px' }}>Equipamento</span>
               <div className="flex-1" />
               <Link
                 href="/doc#items"
@@ -809,7 +837,7 @@ export default function CharacterDetailsPage() {
 
             {/* Corpo: figura central + anel de slots */}
             <div className="relative flex-1" style={{ padding: '14px 18px 0' }}>
-              <div className="absolute text-center" style={{ top: 8, left: 0, right: 0, fontSize: '12.5px', color: '#9aa3ae', letterSpacing: '1.2px', textTransform: 'uppercase' }}>Aparência</div>
+              <div className="absolute text-center" style={{ top: 8, left: 0, right: 0, fontSize: '11px', color: '#77777d', letterSpacing: '0.14em', textTransform: 'uppercase' }}>Aparência</div>
 
               <div className="equip-figure-wrap">
               <div className="relative equip-figure" style={{ height: 392, width: 512, margin: '4px 0 0' }}>
@@ -849,7 +877,7 @@ export default function CharacterDetailsPage() {
                   )}
                 </div>
 
-                {/* Anel de 12 slots (9 funcionais + 2 brincos e 1 cinto como placeholders) */}
+                {/* Anel de 10 slots funcionais, todos com moldura em ouro envelhecido */}
                 {(() => {
                   // Manopla (arma do Monge) e luva ocupam as mesmas mãos e nunca
                   // acumulam (ver mutex em equip-item/route.ts). Quando uma manopla
@@ -860,54 +888,42 @@ export default function CharacterDetailsPage() {
                     (e) => (e.slot === 'WEAPON' || e.slot === 'SHIELD') && e.item.type === 'GAUNTLET'
                   );
 
-                  const RING: Array<{ key: string; type?: EquipmentSlotType; placeholder?: boolean; emoji?: string; color: string; top: number; left: number }> = [
-                    { key: 'BRINCO_1', placeholder: true, emoji: '💎', color: '#e0b84c', top: 8, left: 150 },
-                    { key: 'HELMET', type: 'HELMET' as EquipmentSlotType, color: '#3f7fd6', top: 8, left: 229 },
-                    { key: 'BRINCO_2', placeholder: true, emoji: '💎', color: '#9b59d0', top: 8, left: 308 },
-                    { key: 'ARMOR', type: 'ARMOR' as EquipmentSlotType, color: '#9b59d0', top: 76, left: 78 },
-                    { key: 'NECKLACE', type: 'NECKLACE' as EquipmentSlotType, color: '#9b59d0', top: 76, left: 380 },
-                    { key: 'WEAPON', type: 'WEAPON' as EquipmentSlotType, color: '#e08a2b', top: 156, left: 44 },
-                    { key: 'SHIELD', type: 'SHIELD' as EquipmentSlotType, color: '#3f7fd6', top: 156, left: 414 },
-                    { key: 'GLOVES', type: 'GLOVES' as EquipmentSlotType, color: '#4fae5a', top: 236, left: 78 },
-                    { key: 'RING_1', type: 'RING_1' as EquipmentSlotType, color: '#e0b84c', top: 236, left: 380 },
-                    { key: 'BOOTS', type: 'BOOTS' as EquipmentSlotType, color: '#4fae5a', top: 304, left: 150 },
-                    { key: 'BELT', type: 'BELT' as EquipmentSlotType, color: '#e08a2b', top: 304, left: 229 },
-                    { key: 'RING_2', type: 'RING_2' as EquipmentSlotType, color: '#3f7fd6', top: 304, left: 308 },
+                  const RING: Array<{ key: string; type: EquipmentSlotType; top: number; left: number }> = [
+                    { key: 'HELMET', type: 'HELMET' as EquipmentSlotType, top: 8, left: 229 },
+                    { key: 'ARMOR', type: 'ARMOR' as EquipmentSlotType, top: 76, left: 78 },
+                    { key: 'NECKLACE', type: 'NECKLACE' as EquipmentSlotType, top: 76, left: 380 },
+                    { key: 'WEAPON', type: 'WEAPON' as EquipmentSlotType, top: 156, left: 44 },
+                    { key: 'SHIELD', type: 'SHIELD' as EquipmentSlotType, top: 156, left: 414 },
+                    { key: 'GLOVES', type: 'GLOVES' as EquipmentSlotType, top: 236, left: 78 },
+                    { key: 'RING_1', type: 'RING_1' as EquipmentSlotType, top: 236, left: 380 },
+                    { key: 'BOOTS', type: 'BOOTS' as EquipmentSlotType, top: 304, left: 150 },
+                    { key: 'BELT', type: 'BELT' as EquipmentSlotType, top: 304, left: 229 },
+                    { key: 'RING_2', type: 'RING_2' as EquipmentSlotType, top: 304, left: 308 },
                   ];
-                  return RING.map((s) => (
-                    <div key={s.key} style={{ position: 'absolute', top: s.top, left: s.left, zIndex: 2 }}>
-                      {s.placeholder ? (
-                        <div
-                          title="Em breve"
-                          className="relative flex items-center justify-center w-[54px] h-[54px] opacity-50"
-                          style={{ border: `2px solid ${s.color}`, background: 'linear-gradient(155deg, #1c232b, #0d1116)', boxShadow: `inset 0 0 13px ${s.color}26` }}
-                        >
-                          <span className="text-xl opacity-60">{s.emoji}</span>
-                        </div>
-                      ) : (() => {
-                        const equipped = character.equipment?.find(e => e.slot === s.type);
-                        // Slot de luva sem luva equipada, mas com manopla nas mãos:
-                        // mostra a manopla de forma opaca para sinalizar que o slot
-                        // está ocupado pela mecânica mão-a-mão.
-                        const showGauntletGhost = s.type === 'GLOVES' && !equipped && gauntletEquipment;
-                        const displayed = showGauntletGhost ? gauntletEquipment : equipped;
-                        return (
-                          <EquipmentSlot
-                            compact
-                            accent={s.color}
-                            type={s.type as EquipmentSlotType}
-                            item={displayed?.item}
-                            enhancementLevel={displayed?.enhancementLevel || 0}
-                            durability={(displayed as any)?.durability}
-                            maxDurability={(displayed as any)?.maxDurability}
-                            ghost={!!showGauntletGhost}
-                            onEquip={handleEquip}
-                            onUnequip={handleUnequip}
-                          />
-                        );
-                      })()}
-                    </div>
-                  ));
+                  return RING.map((s) => {
+                    const equipped = character.equipment?.find(e => e.slot === s.type);
+                    // Slot de luva sem luva equipada, mas com manopla nas mãos:
+                    // mostra a manopla de forma opaca para sinalizar que o slot
+                    // está ocupado pela mecânica mão-a-mão.
+                    const showGauntletGhost = s.type === 'GLOVES' && !equipped && gauntletEquipment;
+                    const displayed = showGauntletGhost ? gauntletEquipment : equipped;
+                    return (
+                      <div key={s.key} style={{ position: 'absolute', top: s.top, left: s.left, zIndex: 2 }}>
+                        <EquipmentSlot
+                          compact
+                          accent={FRAME}
+                          type={s.type}
+                          item={displayed?.item}
+                          enhancementLevel={displayed?.enhancementLevel || 0}
+                          durability={(displayed as any)?.durability}
+                          maxDurability={(displayed as any)?.maxDurability}
+                          ghost={!!showGauntletGhost}
+                          onEquip={handleEquip}
+                          onUnequip={handleUnequip}
+                        />
+                      </div>
+                    );
+                  });
                 })()}
               </div>
               </div>
@@ -936,7 +952,7 @@ export default function CharacterDetailsPage() {
 
             {/* Atributos secundários (FOR/DEF/AGI/INT/CRÍT). A transformação aparece como
                 bônus plano (+N) ao lado do valor, em vez de porcentagem. */}
-            <div className="flex justify-center" style={{ gap: 18, padding: '10px 14px 12px', marginTop: 4 }}>
+            <div className="flex justify-center" style={{ gap: 18, padding: '10px 14px 12px', marginTop: 4, background: '#19191c', borderTop: '1px solid rgba(0,0,0,0.6)' }}>
               {[
                 { icon: <Sword size={18} style={{ color: '#e8d08a' }} />, base: stats.total.str, label: 'FOR', mult: activeFormMods?.strength },
                 { icon: <Shield size={18} style={{ color: '#6aa9d6' }} />, base: stats.total.def, label: 'DEF', mult: activeFormMods?.defense },
@@ -952,7 +968,7 @@ export default function CharacterDetailsPage() {
                   <div key={a.label} className="flex flex-col items-center" style={{ gap: 3 }}>
                     {a.icon}
                     <div className="flex items-baseline" style={{ gap: 4 }}>
-                      <span style={{ fontSize: 14, fontWeight: 700, color: '#d7d2c4' }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: '#dcdce0' }}>
                         {a.isPercent ? `${total.toFixed(1)}%` : Math.round(total)}
                       </span>
                       {delta !== 0 && (
@@ -961,7 +977,7 @@ export default function CharacterDetailsPage() {
                         </span>
                       )}
                     </div>
-                    <span style={{ fontSize: '9.5px', color: '#7e8893', letterSpacing: '0.5px' }}>{a.label}</span>
+                    <span style={{ fontSize: '9.5px', color: '#77777d', letterSpacing: '0.14em' }}>{a.label}</span>
                   </div>
                 );
               })}
@@ -970,7 +986,7 @@ export default function CharacterDetailsPage() {
             {/* Stats principais (AP/DP). O número grande é o total já modificado
                 pela transformação; entre parênteses vem o bônus da transformação
                 e o +N verde é o bônus somado pelos equipamentos. */}
-            <div style={{ padding: '4px 22px 10px', borderTop: '1px solid #2a323b' }}>
+            <div style={{ padding: '4px 22px 10px', borderTop: '1px solid rgba(0,0,0,0.6)' }}>
               {[
                 { icon: <Sword size={18} style={{ color: '#c98a6a' }} />, label: 'Ataque (AD)', base: stats.base.str, equip: stats.equipment.str + (stats.total.bonusDamage || 0), mult: activeFormMods?.attack },
                 { icon: <Zap size={18} style={{ color: '#b06ae0' }} />, label: 'Poder Mágico (AP)', base: stats.base.int, equip: 0, mult: activeFormMods?.attack },
@@ -980,10 +996,11 @@ export default function CharacterDetailsPage() {
                 const transformDelta = transformedBase - row.base;
                 const equip = Math.round(row.equip);
                 return (
-                  <div key={row.label} className="flex items-center justify-between" style={{ padding: '8px 0', borderBottom: i < arr.length - 1 ? '1px solid #20262d' : 'none' }}>
+                  <div key={row.label} className="flex items-center justify-between" style={{ padding: '8px 0', borderBottom: i < arr.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
                     <div className="flex items-center" style={{ gap: 9 }}>
+                      <span style={{ fontSize: 9, color: GOLD }}>✦</span>
                       {row.icon}
-                      <span style={{ fontSize: 14, color: '#c4cad1' }}>{row.label}</span>
+                      <span style={{ fontSize: 14, color: '#c9c9ce' }}>{row.label}</span>
                     </div>
                     <div className="flex items-baseline" style={{ gap: 6 }}>
                       <span style={{ fontSize: 22, fontWeight: 700, color: '#ece7da' }}>{transformedBase}</span>

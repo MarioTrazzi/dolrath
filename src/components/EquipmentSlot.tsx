@@ -130,22 +130,27 @@ export function EquipmentSlot({ type, item, enhancementLevel = 0, durability, ma
 
   // ---------------------- Modo compacto (Black Desert) ----------------------
   if (compact) {
-    const slotAccent = accent || '#d9a441';
+    const slotAccent = accent || '#8a6d3b';
+    // Slot vazio fica apagado (moldura neutra); com item, a moldura dourada
+    // acende — mesmo contraste do seletor de itens da EnhancementDialog.
     const borderColor =
       isOver && canDrop ? '#22c55e'
       : isOver && !canDrop ? '#ef4444'
-      : slotAccent;
+      : item ? slotAccent
+      : '#3c3c41';
 
     return (
       <div
         ref={ref}
         title={ghost ? `${slotLabel} (ocupado pela manopla)` : slotLabel}
-        className="w-[52px] h-[52px] sm:w-[54px] sm:h-[54px] flex items-center justify-center relative transition-all"
+        className="w-[52px] h-[52px] sm:w-[54px] sm:h-[54px] flex items-center justify-center relative rounded-[3px] transition-all"
         style={{
           // Borda o mais fina possível (1px) p/ a arte do item dominar o slot.
           border: `1px solid ${borderColor}`,
-          background: 'linear-gradient(155deg, #1c232b, #0d1116)',
-          boxShadow: `inset 0 0 13px ${slotAccent}${item ? '4d' : '26'}`,
+          background: 'linear-gradient(160deg, #232327, #101013)',
+          boxShadow: item
+            ? `inset 0 0 13px ${slotAccent}4d, 0 0 8px ${slotAccent}33`
+            : 'inset 0 0 10px rgba(0,0,0,0.8)',
         }}
       >
         {item ? (

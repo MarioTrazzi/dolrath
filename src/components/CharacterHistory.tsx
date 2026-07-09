@@ -144,7 +144,7 @@ export default function CharacterHistory({ characterId }: CharacterHistoryProps)
 
   if (loading) {
     return (
-      <div className="glass-card p-6">
+      <div className="rounded-[4px] border border-[#46464c] bg-[#1e1e21]/95 p-6 shadow-2xl shadow-black/60">
         <h3 className="text-xl font-bold text-text-primary mb-4 flex items-center gap-2">
           <Clock className="w-5 h-5" />
           Histórico
@@ -162,7 +162,7 @@ export default function CharacterHistory({ characterId }: CharacterHistoryProps)
 
   if (error) {
     return (
-      <div className="glass-card p-6">
+      <div className="rounded-[4px] border border-[#46464c] bg-[#1e1e21]/95 p-6 shadow-2xl shadow-black/60">
         <h3 className="text-xl font-bold text-text-primary mb-4 flex items-center gap-2">
           <Clock className="w-5 h-5" />
           Histórico
@@ -175,7 +175,7 @@ export default function CharacterHistory({ characterId }: CharacterHistoryProps)
   }
 
   return (
-    <div className="glass-card p-6">
+    <div className="rounded-[4px] border border-[#46464c] bg-[#1e1e21]/95 p-6 shadow-2xl shadow-black/60">
       <h3 className="text-xl font-bold text-text-primary mb-4 flex items-center gap-2">
         <Clock className="w-5 h-5" />
         Histórico

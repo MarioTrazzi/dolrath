@@ -107,7 +107,9 @@ function refAttrs(klass, level) {
   const cb = REF_CLASS_BONUS[klass]
   return { str: out.str + REF_RACE.str + cb.str, agi: out.agi + REF_RACE.agi + cb.agi, int: out.int + REF_RACE.int + cb.int, def: out.def + REF_RACE.def + cb.def }
 }
-const refGearHp = (enh) => Math.floor(REF_SET_HP * (enh <= 0 ? 1 : enh <= 15 ? 1 + enh * 0.08 : 2.5))
+// == curva real do enhancementSystem (+5%/nível; tiers I–V reforçados 2026-07-09)
+const TIER_MULT = { 16: 2.0, 17: 2.2, 18: 2.45, 19: 2.8, 20: 3.3 }
+const refGearHp = (enh) => Math.floor(REF_SET_HP * (enh <= 0 ? 1 : enh <= 15 ? 1 + enh * 0.05 : (TIER_MULT[enh] || 2.8)))
 function anchorAt(level, gearTier, gearHp) {
   let powerSum = 0, hpSum = 0
   for (const k of REF_CLASSES) {

@@ -212,9 +212,9 @@ export const NOMINAL_SLOTS = 9
  */
 export function enhanceTierFactor(enhancementLevel: number): number {
   const lvl = Math.max(0, Math.min(20, Math.floor(enhancementLevel || 0)))
-  const TIER: Record<number, number> = { 16: 1.9, 17: 2.0, 18: 2.1, 19: 2.2, 20: 2.5 }
-  const mult = lvl <= 15 ? 1 + lvl * 0.05 : (TIER[lvl] ?? 2.2)
-  return mult / 2.2 // IV (19) ⇒ 1.0
+  const TIER: Record<number, number> = { 16: 2.0, 17: 2.2, 18: 2.45, 19: 2.8, 20: 3.3 }
+  const mult = lvl <= 15 ? 1 + lvl * 0.05 : (TIER[lvl] ?? 2.8)
+  return mult / 2.8 // IV (19) ⇒ 1.0
 }
 
 export interface EquippedRef {

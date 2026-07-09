@@ -175,15 +175,20 @@ export function getDisplayName(itemName: string, level: number): string {
 //
 // ⚖️ CURVA ACHATADA (2026-06-21): antes a curva explodia (+8%/nv, IV ×4.0). Com
 // stats de lendário já altos (arma str51 → 204 STR numa peça IV), o gear passava
-// a valer ~90% do poder de combate no end-game — desproporcional à base. A curva
-// nova mantém o aprimoramento relevante (IV dobra os stats) sem deixá-lo eclipsar
-// os atributos por nível. Validada em scripts/late-game-gear-sim.js.
+// a valer ~90% do poder de combate no end-game — desproporcional à base.
+// ⚖️ TIERS REFORÇADOS (2026-07-09): a curva achatada deixou os tiers I–V quase
+// sem valor (I→V = 1.9→2.5) e uma COMUM TRI perdia p/ uma INCOMUM +8 — esforço
+// invertido (TRI = correntes de 8–15% com regressão; +8 = uma rolagem de 20%).
+// Regra: mult(TRI) > 1.4 × 1.6 (ratio máx entre raridades adjacentes, U/C) = 2.24
+// ⇒ raridade N em TRI supera raridade N+1 em +8, p/ todo par adjacente, sem que
+// incomum TRI (0.4×2.45=0.98) passe um lendário cru (1.0). Validada em
+// scripts/late-game-gear-sim.js e scripts/gear-ordering-check.js.
 const TIER_MULTIPLIERS: Record<number, number> = {
-  [PRI]: 1.9,
-  [DUO]: 2.0,
-  [TRI]: 2.1,
-  [TET]: 2.2,
-  [PEN]: 2.5,
+  [PRI]: 2.0,
+  [DUO]: 2.2,
+  [TRI]: 2.45,
+  [TET]: 2.8,
+  [PEN]: 3.3,
 };
 
 export function getStatMultiplier(level: number): number {

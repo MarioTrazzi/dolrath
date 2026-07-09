@@ -66,7 +66,9 @@ function buildChar(race, klass, level) {
 
 // Gear do JOGADOR: raridade × aprimoramento → gearTier + HP das peças (== dungeon-sim).
 const SET_HP = [8, 18, 8, 0, 8, 0]
-const ENH_MULT = (enh) => (enh <= 0 ? 1 : enh <= 15 ? 1 + enh * 0.08 : 2.5)
+// == curva real do enhancementSystem (+5%/nível; tiers I–V reforçados 2026-07-09)
+const TIER_MULT = { 16: 2.0, 17: 2.2, 18: 2.45, 19: 2.8, 20: 3.3 }
+const ENH_MULT = (enh) => (enh <= 0 ? 1 : enh <= 15 ? 1 + enh * 0.05 : (TIER_MULT[enh] || 2.8))
 function gearFor(rarity, enh) {
   const pieces = Array.from({ length: CM.NOMINAL_SLOTS }, () => ({ rarity, enhancementLevel: enh }))
   const gearTier = CM.deriveGearTier(pieces)

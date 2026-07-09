@@ -62,9 +62,9 @@ const NOMINAL_SLOTS = 9
 
 function enhanceTierFactor(enhancementLevel) {
   const lvl = Math.max(0, Math.min(20, Math.floor(enhancementLevel || 0)))
-  const TIER = { 16: 1.9, 17: 2.0, 18: 2.1, 19: 2.2, 20: 2.5 }
-  const mult = lvl <= 15 ? 1 + lvl * 0.05 : (TIER[lvl] != null ? TIER[lvl] : 2.2)
-  return mult / 2.2
+  const TIER = { 16: 2.0, 17: 2.2, 18: 2.45, 19: 2.8, 20: 3.3 }
+  const mult = lvl <= 15 ? 1 + lvl * 0.05 : (TIER[lvl] != null ? TIER[lvl] : 2.8)
+  return mult / 2.8
 }
 
 function deriveGearTier(equipped) {

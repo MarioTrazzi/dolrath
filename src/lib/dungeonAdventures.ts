@@ -6,7 +6,7 @@
 // ============================================================
 
 import { getDungeonConsumables, rollEquipmentDrop, type Rarity } from './itemCatalog'
-import { STONE_NAMES } from './enhancementSystem'
+import { STONE_NAMES, getStatMultiplier } from './enhancementSystem'
 import { computeLevers, powerScale, deriveGearTier, type CombatClass } from './combatModel'
 
 export type DungeonId = 'floresta' | 'caverna' | 'pantano' | 'ruinas'
@@ -433,11 +433,14 @@ const dungeonTierRewardMult = (tier: number) => 1 + (clampDungeonTier(tier) - 1)
 // 🎚️ CURVA DE DIFICULDADE (2026-07-06): win-alvo no gear-ALVO cresce em degraus —
 // 1ª masmorra trivial → 4ª bem difícil. Resolvido por classe no dungeon-difficulty-sim
 // (TARGET_WIN por masmorra: floresta ~88% · caverna ~78% · pantano ~63% · ruinas ~52%).
+// Re-sincronizado 2026-07-09 (tiers I–V reforçados + refGearHp corrigido): cada célula
+// foi escalada pelo ratio hpMult_novo/hpMult_antigo resolvido no dungeon-difficulty-sim,
+// preservando a curva de dificuldade original por masmorra.
 const BOSS_HP_MULT: Record<DungeonId, Record<CombatClass, number>> = {
-  floresta: { warrior: 2.36, rogue: 2.24, mage: 2.23, monk: 2.43 }, // ~88% — muito fácil (onboarding)
-  caverna:  { warrior: 2.43, rogue: 2.56, mage: 2.54, monk: 2.54 }, // ~78% — moderada, ainda fácil
-  pantano:  { warrior: 2.92, rogue: 3.13, mage: 2.94, monk: 3.11 }, // ~63% — moderada, um pouco difícil
-  ruinas:   { warrior: 3.34, rogue: 3.61, mage: 3.13, monk: 3.65 }, // ~52% — bem difícil
+  floresta: { warrior: 2.46, rogue: 2.32, mage: 2.27, monk: 2.55 }, // ~88% — muito fácil (onboarding)
+  caverna:  { warrior: 2.50, rogue: 2.61, mage: 2.59, monk: 2.60 }, // ~78% — moderada, ainda fácil
+  pantano:  { warrior: 2.87, rogue: 3.12, mage: 2.99, monk: 3.11 }, // ~63% — moderada, um pouco difícil
+  ruinas:   { warrior: 3.32, rogue: 3.54, mage: 3.34, monk: 3.62 }, // ~52% — bem difícil
 }
 // 🎚️ RAMPA DAS SALAS POR MASMORRA (fase de SALAS do dungeon-difficulty-sim, 2026-07-06).
 // Antes eram escalares únicos (hp 1.4→3.0, minor 0.7/0.78, poder 0.9 do boss) estimados à
@@ -506,7 +509,10 @@ function refAttrs(klass: CombatClass, level: number) {
     int: out.int + REF_RACE.int + cb.int, def: out.def + REF_RACE.def + cb.def,
   }
 }
-const refGearHp = (enh: number) => Math.floor(REF_SET_HP * (enh <= 0 ? 1 : enh <= 15 ? 1 + enh * 0.08 : 2.5))
+// HP sintético do set de referência escala com a MESMA curva do enhancement real
+// (antes era um espelho stale: +8%/nível e flat 2.5 nos tiers I–V; corrigido junto
+// com os tiers reforçados 2026-07-09 — BOSS_HP_MULT foi re-sincronizado na mesma data).
+const refGearHp = (enh: number) => Math.floor(REF_SET_HP * getStatMultiplier(enh))
 const targetGearTierOf = (t: { rarity: string; enh: number }) =>
   deriveGearTier(Array.from({ length: 9 }, () => ({ rarity: t.rarity, enhancementLevel: t.enh })))
 

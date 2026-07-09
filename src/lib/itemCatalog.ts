@@ -64,6 +64,18 @@ export interface CatalogItem {
 }
 
 // === CATÁLOGO DE EQUIPAMENTOS ===
+//
+// ⚖️ BUDGET DE STATS (2026-07-09) — regra p/ armas não terem inversões (ex.: arco
+// pior que adaga no mesmo tier). Custo por ponto: 1 pt = 1 str/agi/int/def/res/con
+// = 2 hp = 2 mp. Budget de ARMA PRINCIPAL:
+//   B(level, rarity) = round(11 × F × (1 + 0.05×(level−1)))
+//   F: COMMON 1.0 · UNCOMMON 1.3 · RARE 1.7 · EPIC 2.2 · LEGENDARY 2.9
+// SECUNDÁRIAS (PARRY_DAGGER/ORB/TALISMAN/escudo-like) = 0.75×B.
+// Invariante anti-regressão: ratio de budget entre tiers adjacentes de loja ≤ ~1.65
+// < TRI/+8 = 2.45/1.4 = 1.75 ⇒ "raridade N em TRI vence N+1 em +8" também na camada
+// de stats (ver enhancementSystem.TIER_MULTIPLIERS e scripts/gear-ordering-check.js).
+// Identidades (mesmo budget, sabor diferente): DAGGER = AGI pura · BOW = AGI −10%
+// + hp · PARRY_DAGGER = AGI + def.
 
 export const ITEM_CATALOG: CatalogItem[] = [
   // ============================================================
@@ -75,7 +87,7 @@ export const ITEM_CATALOG: CatalogItem[] = [
   {
     name: 'Espada de Recruta', description: 'Lâmina de ferro padrão da guarda. Equilíbrio e confiança para quem começa.',
     type: 'SWORD', level: 1, rarity: 'COMMON', goldPrice: 110, source: 'shop', build: 'brute', dungeons: [],
-    stats: { str: 9 },
+    stats: { str: 11 },
   },
   {
     name: 'Adaga Ligeira', description: 'Leve e afiada, premia reflexos rápidos e golpes em sequência.',
@@ -85,39 +97,39 @@ export const ITEM_CATALOG: CatalogItem[] = [
   {
     name: 'Cajado de Aprendiz', description: 'Madeira tratada que conduz as primeiras faíscas arcanas.',
     type: 'STAFF', level: 1, rarity: 'COMMON', goldPrice: 90, source: 'shop', build: 'arcane', dungeons: [],
-    stats: { int: 6, mp: 10 },
+    stats: { int: 8, mp: 6 },
   },
   {
     name: 'Machado do Guarda', description: 'Pesado e estável; troca velocidade por impacto e firmeza.',
     type: 'AXE', level: 2, rarity: 'COMMON', goldPrice: 120, source: 'shop', build: 'guardian', dungeons: [],
-    stats: { str: 7, def: 2, hp: 8 },
+    stats: { str: 8, def: 2, hp: 4 },
   },
 
   // ---------- SUPERIOR (UNCOMMON, nível 5–11) ----------
   {
     name: 'Espada do Veterano', description: 'Aço temperado de quem já viu batalhas. Corte limpo e poderoso.',
     type: 'SWORD', level: 6, rarity: 'UNCOMMON', goldPrice: 420, source: 'shop', build: 'brute', dungeons: [],
-    stats: { str: 16 },
+    stats: { str: 18 },
   },
   {
     name: 'Arco do Batedor', description: 'Arco composto para o combatente ágil que prefere a distância.',
     type: 'BOW', level: 6, rarity: 'UNCOMMON', goldPrice: 410, source: 'shop', build: 'agile', dungeons: [],
-    stats: { agi: 20 },
+    stats: { agi: 16, hp: 4 },
   },
   {
     name: 'Cajado Rúnico', description: 'Runas gravadas amplificam o fluxo de mana do conjurador.',
     type: 'STAFF', level: 7, rarity: 'UNCOMMON', goldPrice: 450, source: 'shop', build: 'arcane', dungeons: [],
-    stats: { int: 13, mp: 18 },
+    stats: { int: 13, mp: 12 },
   },
   {
     name: 'Machado de Guerra', description: 'Cabeça maciça que esmaga defesas. Para quem segura a linha de frente.',
     type: 'AXE', level: 8, rarity: 'UNCOMMON', goldPrice: 480, source: 'shop', build: 'guardian', dungeons: [],
-    stats: { str: 13, def: 3, hp: 16 },
+    stats: { str: 13, def: 3, hp: 6 },
   },
   {
     name: 'Arco Curto', description: 'Arco simples de madeira flexível; o primeiro passo do batedor.',
     type: 'BOW', level: 2, rarity: 'COMMON', goldPrice: 100, source: 'shop', build: 'agile', dungeons: [],
-    stats: { agi: 9 },
+    stats: { agi: 10, hp: 4 },
   },
   {
     name: 'Punhal do Caçador', description: 'Lâmina curva e leve; perfeita para golpes rápidos em sequência.',
@@ -260,12 +272,12 @@ export const ITEM_CATALOG: CatalogItem[] = [
   {
     name: 'Manoplas do Discípulo', description: 'Couro envolto em ferro nos nós dos dedos; o primeiro passo da via marcial.',
     type: 'GAUNTLET', level: 1, rarity: 'COMMON', goldPrice: 100, source: 'shop', build: 'agile', dungeons: [],
-    stats: { agi: 14, def: 1, hp: 4 },
+    stats: { agi: 8, def: 1, hp: 4 },
   },
   {
     name: 'Punhos de Aço', description: 'Cestus reforçado com placas; cada golpe carrega o peso do aço.',
     type: 'GAUNTLET', level: 6, rarity: 'UNCOMMON', goldPrice: 430, source: 'shop', build: 'agile', dungeons: [],
-    stats: { agi: 26, def: 3, hp: 8 },
+    stats: { agi: 13, def: 2, hp: 6 },
   },
   {
     name: 'Orbe de Cristal', description: 'Esfera de quartzo que flutua na mão livre do conjurador, ampliando o foco.',
@@ -275,7 +287,7 @@ export const ITEM_CATALOG: CatalogItem[] = [
   {
     name: 'Orbe Rúnico', description: 'Cristais menores orbitam o núcleo, sussurrando fórmulas arcanas.',
     type: 'ORB', level: 7, rarity: 'UNCOMMON', goldPrice: 450, source: 'shop', build: 'arcane', dungeons: [],
-    stats: { int: 7, mp: 16 },
+    stats: { int: 8, mp: 12 },
   },
 
   // ============================================================
@@ -290,17 +302,17 @@ export const ITEM_CATALOG: CatalogItem[] = [
   {
     name: 'Mão-Esquerda do Duelista', description: 'Guarda em concha que prende a lâmina inimiga; o duelo vira dança.',
     type: 'PARRY_DAGGER', level: 6, rarity: 'UNCOMMON', goldPrice: 410, source: 'shop', build: 'agile', dungeons: [],
-    stats: { agi: 12, def: 3 },
+    stats: { agi: 10, def: 3 },
   },
   {
     name: 'Talismã do Discípulo', description: 'Contas de oração amarradas ao pulso; firmam o espírito interior antes do golpe.',
     type: 'TALISMAN', level: 1, rarity: 'COMMON', goldPrice: 90, source: 'shop', build: 'agile', dungeons: [],
-    stats: { agi: 6, mp: 8 },
+    stats: { agi: 5, mp: 6 },
   },
   {
     name: 'Rosário de Jade', description: 'Esferas de jade polido que canalizam o fôlego e o foco do lutador.',
     type: 'TALISMAN', level: 6, rarity: 'UNCOMMON', goldPrice: 430, source: 'shop', build: 'agile', dungeons: [],
-    stats: { agi: 12, mp: 16 },
+    stats: { agi: 9, mp: 8 },
   },
 
   // ============================================================

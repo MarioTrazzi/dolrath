@@ -43,16 +43,16 @@ const PPL = process.env.PPL !== undefined ? Number(process.env.PPL) : 1 // ponto
 const BASEPTS = Number(process.env.BASEPTS) || 18                       // pontos na criação (prod: 18)
 
 // Multiplicadores de aprimoramento — espelham enhancementSystem.TIER_MULTIPLIERS.
-// Default = PRODUÇÃO. Override via env p/ achatar a curva.
+// Default = PRODUÇÃO (tiers reforçados 2026-07-09). Override via env p/ testar curvas.
 const TIER = {
-  PRI: process.env.PRI !== undefined ? Number(process.env.PRI) : 2.5,
-  DUO: process.env.DUO !== undefined ? Number(process.env.DUO) : 2.9,
-  TRI: process.env.TRI !== undefined ? Number(process.env.TRI) : 3.4,
-  TET: process.env.TET !== undefined ? Number(process.env.TET) : 4.0,
-  PEN: process.env.PEN !== undefined ? Number(process.env.PEN) : 4.8,
+  PRI: process.env.PRI !== undefined ? Number(process.env.PRI) : 2.0,
+  DUO: process.env.DUO !== undefined ? Number(process.env.DUO) : 2.2,
+  TRI: process.env.TRI !== undefined ? Number(process.env.TRI) : 2.45,
+  TET: process.env.TET !== undefined ? Number(process.env.TET) : 2.8,
+  PEN: process.env.PEN !== undefined ? Number(process.env.PEN) : 3.3,
 }
 const ENH_TIER = (process.env.ENH || 'TET').toUpperCase() // qual tier equipar (default IV)
-const ENH_MULT = TIER[ENH_TIER] || 4.0
+const ENH_MULT = TIER[ENH_TIER] || 2.8
 // chaves que escalam com aprimoramento (== enhancementSystem.SCALING_STAT_KEYS)
 const SCALING = new Set(['agi', 'str', 'int', 'res', 'def', 'hp', 'mp'])
 function enh(stats) {

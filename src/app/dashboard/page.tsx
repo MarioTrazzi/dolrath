@@ -2,10 +2,9 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 
-import { useSession, signOut } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
 import { motion } from 'framer-motion';
-import { LogOut, User, Shield, Sword, Heart, Zap, Trash2, Wallet } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
+import { User, Shield, Sword, Trash2, Wallet } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import XPProgressBar from '@/components/XPProgressBar';
@@ -28,6 +27,17 @@ import { getWalletTxErrorMessage } from '@/lib/walletErrors';
 import { getPolygonFeeOverrides } from '@/lib/gasFees';
 // ...existing code...
 // ...existing code...
+
+// Paleta chumbo + ouro envelhecido — a mesma da EnhancementDialog e da ficha do
+// personagem, para todas as janelas do jogo lerem como um só conjunto.
+const GOLD = '#c9a25f';
+const GOLD_BRIGHT = '#e7c682';
+const FRAME = '#8a6d3b';
+const PANEL_BG = 'linear-gradient(180deg, rgba(32,32,36,0.94), rgba(24,24,27,0.96))';
+const TITLEBAR_BG = 'linear-gradient(180deg, #2b2b2f, #1a1a1d)';
+// Botão em bisel neutro (o mesmo dos botões secundários da dialog de aprimoramento)
+const BEVEL_BTN =
+  'rounded-[3px] border border-[#46464c] bg-gradient-to-b from-[#2b2b2f] to-[#1c1c1f] font-semibold text-[#c9c9ce] transition-colors hover:border-[#8a6d3b] hover:text-white';
 
 export default function DashboardPage() {
   const { data: session, status, update } = useSession();
@@ -429,36 +439,43 @@ export default function DashboardPage() {
         <KeepBackdrop />
       </div>
 
-      <main className="relative z-10">
-        {/* Saldo on-chain (DOL) */}
-        <div className="glass-card p-4 mb-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <div>
-              <div className="text-sm text-text-secondary">Carteira vinculada</div>
-              <div className="text-text-primary font-medium">
+      <main className="relative z-10" style={{ fontFamily: "'Barlow', sans-serif" }}>
+        {/* Carteira + saldos on-chain — janela chumbo; layout fixo em 2 colunas
+            (esquerda carteira / direita saldos), sem trocas por breakpoint. */}
+        <div
+          className="mb-4 overflow-hidden rounded-[4px] border border-[#46464c] shadow-2xl shadow-black/60"
+          style={{ background: PANEL_BG }}
+        >
+          <div className="flex items-center gap-2 px-4 py-2.5" style={{ background: TITLEBAR_BG, borderBottom: '1px solid rgba(0,0,0,0.7)' }}>
+            <Wallet size={16} style={{ color: GOLD }} />
+            <span className="text-[15px] font-semibold tracking-wide text-[#dcdce0]">Carteira</span>
+          </div>
+
+          <div className="flex items-start justify-between gap-4 p-4">
+            <div className="min-w-0 flex-1">
+              <div className="text-[11px] uppercase tracking-[0.14em] text-[#77777d]">Carteira vinculada</div>
+              <div className="truncate font-medium tabular-nums text-[#ece7da]">
                 {session?.user?.walletAddress ? session.user.walletAddress : 'Não vinculada'}
               </div>
               {!session?.user?.walletAddress && status === 'authenticated' && (
                 <div className="mt-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
+                  <button
                     onClick={handleLinkWallet}
                     disabled={isLinkingWallet}
-                    className="text-xs inline-flex items-center gap-2"
+                    className={`${BEVEL_BTN} inline-flex items-center gap-2 px-3 py-1.5 text-xs disabled:opacity-50`}
                   >
                     <Wallet className="w-4 h-4" />
                     {isLinkingWallet ? 'Conectando...' : 'Conectar e assinar'}
-                  </Button>
+                  </button>
                   {walletLinkError && (
-                    <div className="mt-2 text-xs text-error">{walletLinkError}</div>
+                    <div className="mt-2 text-xs text-red-400">{walletLinkError}</div>
                   )}
                 </div>
               )}
             </div>
-            <div className="text-right">
-              <div className="text-sm text-text-secondary">Saldo on-chain</div>
-              <div className="text-text-primary font-bold">
+            <div className="shrink-0 text-right">
+              <div className="text-[11px] uppercase tracking-[0.14em] text-[#77777d]">Saldo on-chain</div>
+              <div className="font-bold tabular-nums text-[#ece7da]">
                 {session?.user?.walletAddress ? (
                   dolLoading ? (
                     'Carregando...'
@@ -474,7 +491,7 @@ export default function DashboardPage() {
                 )}
               </div>
               {/* Token GOLD (mintado via claim) lado a lado com o DOL */}
-              <div className="text-amber-300 font-bold">
+              <div className="font-bold tabular-nums" style={{ color: GOLD_BRIGHT }}>
                 {session?.user?.walletAddress ? `${goldOnchain ?? '0'} GOLD` : ''}
               </div>
             </div>
@@ -483,23 +500,26 @@ export default function DashboardPage() {
 
 
         {/* NFTs owned on-chain (shows even if DB characters were deleted) */}
-        <div className="glass-card p-6 mb-8">
-          <div className="flex items-center justify-between gap-4 mb-4">
-            <div>
-              <div className="text-sm text-text-secondary">Suas NFTs</div>
-              <div className="text-text-primary font-bold">Personagens (on-chain)</div>
-            </div>
-            <Button variant="outline" size="sm" onClick={fetchCharacters}>
+        <div
+          className="mb-8 overflow-hidden rounded-[4px] border border-[#46464c] shadow-2xl shadow-black/60"
+          style={{ background: PANEL_BG }}
+        >
+          <div className="flex items-center gap-2 px-4 py-2.5" style={{ background: TITLEBAR_BG, borderBottom: '1px solid rgba(0,0,0,0.7)' }}>
+            <User size={16} style={{ color: GOLD }} />
+            <span className="text-[15px] font-semibold tracking-wide text-[#dcdce0]">Personagens (on-chain)</span>
+            <div className="flex-1" />
+            <button onClick={fetchCharacters} className={`${BEVEL_BTN} px-3 py-1 text-xs`}>
               Atualizar
-            </Button>
+            </button>
           </div>
 
+          <div className="p-4">
           {ownedNftsError ? (
-            <div className="text-xs text-error mb-3">{ownedNftsError}</div>
+            <div className="text-xs text-red-400 mb-3">{ownedNftsError}</div>
           ) : null}
 
           {ownedNfts.length === 0 ? (
-            <div className="text-text-secondary text-sm">Nenhuma NFT encontrada na sua carteira.</div>
+            <div className="text-sm text-[#8a8a90]">Nenhuma NFT encontrada na sua carteira.</div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {ownedNfts.map((it: any) => {
@@ -528,13 +548,14 @@ export default function DashboardPage() {
                 return (
                   <motion.div
                     key={tokenId}
-                    whileHover={{ scale: 1.02 }}
+                    whileHover={{ scale: 1.01 }}
                     whileTap={{ scale: 0.99 }}
                     onClick={() => setSelectedTokenId(tokenId)}
-                    className="relative overflow-hidden rounded-2xl border-2 cursor-pointer transition-all group"
+                    className="relative overflow-hidden rounded-[4px] border cursor-pointer transition-all group"
                     style={{
-                      borderColor: isSelected ? visual.borderColor : `${visual.borderColor}55`,
-                      boxShadow: isSelected ? visual.glow : undefined,
+                      // Seleção em ouro, como o seletor de itens da EnhancementDialog
+                      borderColor: isSelected ? GOLD : '#46464c',
+                      boxShadow: isSelected ? '0 0 12px rgba(201,162,95,0.4)' : undefined,
                     }}
                   >
                     {/* Cenário animado da raça */}
@@ -547,10 +568,10 @@ export default function DashboardPage() {
                       }`}
                     />
 
-                    <div className="relative p-4 flex items-center gap-4">
+                    <div className="relative p-4 flex items-start gap-4">
                       <div
-                        className="w-14 h-14 rounded-xl overflow-hidden border-2 flex-shrink-0 drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]"
-                        style={{ borderColor: `${visual.borderColor}88` }}
+                        className="w-14 h-14 rounded-[3px] overflow-hidden border-2 flex-shrink-0 drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]"
+                        style={{ borderColor: isSelected ? FRAME : '#46464c', background: '#141210' }}
                       >
                         {meta?.image ? (
                           <Image
@@ -578,22 +599,25 @@ export default function DashboardPage() {
                         <div className="flex flex-wrap gap-1.5 mt-1.5">
                           {displayRace && (
                             <span
-                              className="px-2 py-0.5 text-[11px] font-semibold rounded-full text-white border"
-                              style={{ background: `${visual.raceVisual.accent}33`, borderColor: `${visual.raceVisual.accent}66` }}
+                              className="px-2 py-0.5 text-[11px] font-semibold rounded-[3px] text-[#dcdce0] border"
+                              style={{ background: `linear-gradient(180deg, ${visual.raceVisual.accent}2e, ${visual.raceVisual.accent}12)`, borderColor: `${visual.raceVisual.accent}66` }}
                             >
                               {visual.raceVisual.emoji} {displayRace}
                             </span>
                           )}
                           {displayClass && (
                             <span
-                              className="px-2 py-0.5 text-[11px] font-semibold rounded-full text-white border"
-                              style={{ background: `${visual.classVisual.accent}33`, borderColor: `${visual.classVisual.accent}66` }}
+                              className="px-2 py-0.5 text-[11px] font-semibold rounded-[3px] text-[#dcdce0] border"
+                              style={{ background: `linear-gradient(180deg, ${visual.classVisual.accent}2e, ${visual.classVisual.accent}12)`, borderColor: `${visual.classVisual.accent}66` }}
                             >
                               {visual.classVisual.emoji} {displayClass}
                             </span>
                           )}
                           {displayLevel && (
-                            <span className="px-2 py-0.5 text-[11px] font-semibold rounded-full text-white/90 bg-white/10 border border-white/20">
+                            <span
+                              className="px-2 py-0.5 text-[11px] font-bold rounded-[3px] border"
+                              style={{ borderColor: FRAME, background: 'linear-gradient(180deg, #3a3325, #241f16)', color: GOLD_BRIGHT }}
+                            >
                               Lv {displayLevel}
                             </span>
                           )}
@@ -602,7 +626,7 @@ export default function DashboardPage() {
                             const fieldLabel = field ? `${field.emoji} ${field.name}` : '⛏️ Coletando';
                             return (
                               <span
-                                className="px-2 py-0.5 text-[11px] font-semibold rounded-full text-emerald-200 bg-emerald-500/15 border border-emerald-400/40"
+                                className="px-2 py-0.5 text-[11px] font-semibold rounded-[3px] text-emerald-200 bg-emerald-500/15 border border-emerald-400/40"
                                 title={invFull
                                   ? `Inventário cheio — coleta pausada em ${field?.name ?? 'campo'} sem gastar stamina`
                                   : gatherInfo.status === 'exhausted'
@@ -614,22 +638,22 @@ export default function DashboardPage() {
                             );
                           })()}
                           {charRow?.gatherXp > 0 && (
-                            <span className="px-2 py-0.5 text-[11px] font-semibold rounded-full text-lime-200 bg-lime-500/10 border border-lime-400/30">
+                            <span className="px-2 py-0.5 text-[11px] font-semibold rounded-[3px] text-lime-200 bg-lime-500/10 border border-lime-400/30">
                               ⛏️ Nv.{gatherLevel}
                             </span>
                           )}
                           {charRow?.farmXp > 0 && (
-                            <span className="px-2 py-0.5 text-[11px] font-semibold rounded-full text-yellow-200 bg-yellow-500/10 border border-yellow-400/30">
+                            <span className="px-2 py-0.5 text-[11px] font-semibold rounded-[3px] text-yellow-200 bg-yellow-500/10 border border-yellow-400/30">
                               🌾 Nv.{farmLevel}
                             </span>
                           )}
                           {charRow && (
-                            <span className="px-2 py-0.5 text-[11px] font-semibold rounded-full text-sky-200 bg-sky-500/10 border border-sky-400/30">
+                            <span className="px-2 py-0.5 text-[11px] font-semibold rounded-[3px] text-sky-200 bg-sky-500/10 border border-sky-400/30">
                               🎒 Inventário: {Number(charRow?._count?.inventory ?? 0)}/{Number(charRow?.inventorySlots ?? 20)}
                             </span>
                           )}
                           {charRow && (
-                            <span className="px-2 py-0.5 text-[11px] font-semibold rounded-full text-amber-200 bg-amber-500/10 border border-amber-400/30">
+                            <span className="px-2 py-0.5 text-[11px] font-semibold rounded-[3px] text-amber-200 bg-amber-500/10 border border-amber-400/30">
                               💰 Bolso: {Number(charRow?.gold ?? 0).toLocaleString('pt-BR')}g
                             </span>
                           )}
@@ -655,8 +679,13 @@ export default function DashboardPage() {
                             e.stopPropagation();
                             openSheet(characterId, tokenId);
                           }}
-                          className="w-full px-4 py-2 rounded-xl font-black text-xs text-white shadow-lg transition-transform hover:scale-105"
-                          style={{ background: `linear-gradient(90deg, ${visual.raceVisual.accent}cc, ${visual.classVisual.accent}cc)` }}
+                          className="w-full px-4 py-2 rounded-[3px] border text-xs font-semibold tracking-wide transition-all hover:brightness-125"
+                          style={{
+                            borderColor: FRAME,
+                            background: 'linear-gradient(180deg, #3a3325, #241f16)',
+                            color: GOLD_BRIGHT,
+                            boxShadow: 'inset 0 1px 0 rgba(231,198,130,0.25)',
+                          }}
                         >
                           Abrir
                         </button>
@@ -668,7 +697,8 @@ export default function DashboardPage() {
                               // selecionado — a finalização acontece só lá.
                               router.push(`/gathering?focus=${characterId}`);
                             }}
-                            className="px-4 py-2 rounded-xl font-bold text-xs text-emerald-200 border border-emerald-500/40 hover:border-emerald-400 hover:bg-emerald-500/10 transition-colors"
+                            className="px-4 py-2 rounded-[3px] border text-xs font-semibold text-emerald-200 transition-all hover:brightness-125"
+                            style={{ borderColor: '#2f6b3a', background: 'linear-gradient(180deg, #25351f, #161f12)' }}
                           >
                             ⛏️ Encerrar coleta
                           </button>
@@ -678,7 +708,8 @@ export default function DashboardPage() {
                             e.stopPropagation();
                             openDeleteDialog({ tokenId, character: it?.character || null });
                           }}
-                          className="px-4 py-2 rounded-xl font-bold text-xs text-red-300 border border-red-500/40 hover:border-red-500 hover:bg-red-500/10 transition-colors"
+                          className="px-4 py-2 rounded-[3px] border text-xs font-semibold text-red-300 transition-all hover:brightness-125"
+                          style={{ borderColor: '#8a3b3b', background: 'linear-gradient(180deg, #3a2525, #241616)' }}
                         >
                           Excluir
                         </button>
@@ -689,6 +720,7 @@ export default function DashboardPage() {
               })}
             </div>
           )}
+          </div>
         </div>
 
         {detailToShow ? (
@@ -719,30 +751,39 @@ export default function DashboardPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5 }}
-                className="relative overflow-hidden rounded-3xl border-2 mb-12"
-                style={{ borderColor: visual.borderColor, boxShadow: visual.glow }}
+                className="relative overflow-hidden rounded-[4px] border border-[#46464c] shadow-2xl shadow-black/60 mb-12"
+                style={{ background: PANEL_BG }}
               >
-                {/* Cenário animado misturando raça e classe */}
-                <div className="absolute inset-0">
-                  <CreationCardBackdrop theme={visual.backdropTheme} />
-                </div>
-                <div className="absolute inset-0 bg-black/55" />
-
-                <div className="relative p-6 sm:p-8 flex flex-col md:flex-row items-center md:items-start gap-8">
+                {/* Barra de título em bisel */}
+                <div className="relative z-10 flex items-center gap-2 px-4 py-2.5" style={{ background: TITLEBAR_BG, borderBottom: '1px solid rgba(0,0,0,0.7)' }}>
+                  <span style={{ color: GOLD }}>✦</span>
+                  <span className="text-[15px] font-semibold tracking-wide text-[#dcdce0]">Herói Selecionado</span>
+                  <div className="flex-1" />
                   <button
-                    className="absolute top-4 right-4 text-red-400 hover:text-red-300 transition-colors z-10"
+                    className="text-red-400 hover:text-red-300 transition-colors"
                     title="Excluir personagem"
                     onClick={() => openDeleteDialog({ tokenId: String((character as any)?.nftTokenId || ''), character })}
                   >
-                    <Trash2 className="w-6 h-6" />
+                    <Trash2 className="w-5 h-5" />
                   </button>
-                  <div className="flex flex-col md:flex-row w-full gap-8">
+                </div>
+
+                {/* Cenário animado misturando raça e classe (fundo do corpo) */}
+                <div className="relative">
+                  <div className="absolute inset-0">
+                    <CreationCardBackdrop theme={visual.backdropTheme} />
+                  </div>
+                  <div className="absolute inset-0 bg-black/60" />
+
+                {/* Layout fixo: retrato à esquerda, informações à esquerda-alinhadas —
+                    nada re-centraliza entre breakpoints. */}
+                <div className="relative p-4 sm:p-6 flex flex-row items-start gap-4 sm:gap-6">
                     {/* Character Picture */}
-                    <div className="flex-shrink-0 flex justify-center md:justify-start items-center">
+                    <div className="flex-shrink-0">
                       {meta?.image ? (
                         <div
-                          className="w-32 h-32 rounded-2xl overflow-hidden border-4 shadow-lg bg-black/40"
-                          style={{ borderColor: visual.borderColor }}
+                          className="w-24 h-24 sm:w-32 sm:h-32 rounded-[3px] overflow-hidden border-2 shadow-lg bg-black/40"
+                          style={{ borderColor: FRAME, boxShadow: '0 0 0 1px rgba(0,0,0,0.6), 0 6px 18px rgba(0,0,0,0.55)' }}
                         >
                           <Image
                             src={String(meta.image)}
@@ -755,16 +796,16 @@ export default function DashboardPage() {
                         </div>
                       ) : (
                         <div
-                          className="w-32 h-32 rounded-2xl flex items-center justify-center text-5xl text-white border-4 shadow-lg"
-                          style={{ background: visual.gradient, borderColor: visual.borderColor }}
+                          className="w-24 h-24 sm:w-32 sm:h-32 rounded-[3px] flex items-center justify-center text-5xl text-white border-2 shadow-lg"
+                          style={{ background: visual.gradient, borderColor: FRAME }}
                         >
                           {visual.raceVisual.emoji}
                         </div>
                       )}
                     </div>
                     {/* Character Info */}
-                    <div className="flex-1 text-center md:text-left">
-                      <h3 className="text-3xl font-black text-white mb-1 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+                    <div className="flex-1 min-w-0 text-left">
+                      <h3 className="text-2xl sm:text-3xl font-black text-[#ece7da] mb-1 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]" style={{ letterSpacing: '0.5px' }}>
                         {String(getTrait('CharacterName') || character.name)}
                       </h3>
 
@@ -775,39 +816,43 @@ export default function DashboardPage() {
                         <div className="text-white/60 text-sm mb-3">{String(meta.description)}</div>
                       )}
 
-                      <div className="flex flex-wrap gap-2 items-center justify-center md:justify-start mb-3">
+                      <div className="flex flex-wrap gap-2 items-center justify-start mb-3">
                         {raceName && (
                           <span
-                            className="text-sm font-bold text-white rounded-full px-3 py-1 border"
-                            style={{ background: `${visual.raceVisual.accent}33`, borderColor: `${visual.raceVisual.accent}66` }}
+                            className="text-sm font-semibold text-[#dcdce0] rounded-[3px] px-3 py-1 border"
+                            style={{ background: `linear-gradient(180deg, ${visual.raceVisual.accent}2e, ${visual.raceVisual.accent}12)`, borderColor: `${visual.raceVisual.accent}66` }}
                           >
                             {visual.raceVisual.emoji} {raceName}
                           </span>
                         )}
                         {className && (
                           <span
-                            className="text-sm font-bold text-white rounded-full px-3 py-1 border"
-                            style={{ background: `${visual.classVisual.accent}33`, borderColor: `${visual.classVisual.accent}66` }}
+                            className="text-sm font-semibold text-[#dcdce0] rounded-[3px] px-3 py-1 border"
+                            style={{ background: `linear-gradient(180deg, ${visual.classVisual.accent}2e, ${visual.classVisual.accent}12)`, borderColor: `${visual.classVisual.accent}66` }}
                           >
                             {visual.classVisual.emoji} {className}
                           </span>
                         )}
-                        <span className="text-sm font-bold text-white/90 rounded-full px-3 py-1 bg-white/10 border border-white/20">
+                        <span
+                          className="text-sm font-bold rounded-[3px] px-3 py-1 border"
+                          style={{ borderColor: FRAME, background: 'linear-gradient(180deg, #3a3325, #241f16)', color: GOLD_BRIGHT }}
+                        >
                           Lv {String(getTrait('Level') || character.level || 1)}
                         </span>
                       </div>
 
                       {orderedTraits.length > 0 && (
                         <div className="mb-4">
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          {/* Grade fixa de 4 colunas: os atributos não trocam de
+                              posição entre mobile e desktop. */}
+                          <div className="grid grid-cols-4 gap-2">
                             {orderedTraits.map((t) => (
                               <div
                                 key={t.label}
-                                className="bg-black/40 rounded-xl px-3 py-2 border"
-                                style={{ borderColor: `${visual.borderColor}44` }}
+                                className="rounded-[3px] px-2 py-1.5 border border-black/60 bg-[#19191c]"
                               >
-                                <div className="text-xs text-white/60">{t.label}</div>
-                                <div className="text-sm font-semibold text-white truncate">
+                                <div className="text-[10px] uppercase tracking-[0.14em] text-[#77777d]">{t.label}</div>
+                                <div className="text-sm font-semibold tabular-nums text-[#ece7da] truncate">
                                   {String(t.value)}
                                 </div>
                               </div>
@@ -816,13 +861,15 @@ export default function DashboardPage() {
                         </div>
                       )}
 
-                      <div className="flex flex-col sm:flex-row gap-2 mb-4 items-center justify-center md:justify-start">
+                      <div className="flex flex-row flex-wrap gap-2 mb-4 items-center justify-start">
                         <button
                           onClick={() => openSheet(String(character.id))}
-                          className="px-5 py-2.5 rounded-xl font-black text-sm text-white shadow-lg transition-transform hover:scale-105"
+                          className="px-5 py-2.5 rounded-[3px] border text-sm font-semibold tracking-wide transition-all hover:brightness-125"
                           style={{
-                            background: `linear-gradient(90deg, ${visual.raceVisual.accent}cc, ${visual.classVisual.accent}cc)`,
-                            boxShadow: `0 4px 20px ${visual.raceVisual.accentSoft}`,
+                            borderColor: FRAME,
+                            background: 'linear-gradient(180deg, #3a3325, #241f16)',
+                            color: GOLD_BRIGHT,
+                            boxShadow: 'inset 0 1px 0 rgba(231,198,130,0.25), 0 0 14px rgba(201,162,95,0.2)',
                           }}
                         >
                           Ver Ficha Completa
@@ -833,7 +880,7 @@ export default function DashboardPage() {
                             <button
                               key={xp}
                               onClick={() => addXPToCharacter(character.id, xp)}
-                              className="px-3 py-2 rounded-xl font-bold text-xs text-white/90 bg-white/10 border border-white/20 hover:bg-white/20 transition-colors"
+                              className={`${BEVEL_BTN} px-3 py-2 text-xs`}
                             >
                               +{xp} XP
                             </button>
@@ -851,17 +898,17 @@ export default function DashboardPage() {
                       {/* Available Points Alert */}
                       {character.availablePoints && character.availablePoints > 0 && (
                         <div
-                          className="mb-4 p-3 rounded-xl border"
-                          style={{ background: `${visual.borderColor}22`, borderColor: `${visual.borderColor}55` }}
+                          className="mb-4 p-3 rounded-[3px] border"
+                          style={{ borderColor: FRAME, background: 'linear-gradient(180deg, rgba(58,51,37,0.85), rgba(36,31,22,0.85))' }}
                         >
                           <div className="flex items-center justify-between gap-2 flex-wrap">
-                            <span className="text-white font-bold text-sm">
-                              📊 {character.availablePoints} pontos para distribuir
+                            <span className="font-bold text-sm" style={{ color: GOLD_BRIGHT }}>
+                              ✦ {character.availablePoints} pontos para distribuir
                             </span>
                             <button
                               onClick={() => openSheet(String(character.id))}
-                              className="px-4 py-2 rounded-xl font-black text-xs text-white shadow-lg transition-transform hover:scale-105"
-                              style={{ background: `linear-gradient(90deg, ${visual.raceVisual.accent}cc, ${visual.classVisual.accent}cc)` }}
+                              className="px-4 py-2 rounded-[3px] border text-xs font-semibold tracking-wide transition-all hover:brightness-125"
+                              style={{ borderColor: FRAME, background: 'linear-gradient(180deg, #3a3325, #241f16)', color: GOLD_BRIGHT }}
                             >
                               Distribuir Pontos
                             </button>
@@ -869,8 +916,9 @@ export default function DashboardPage() {
                         </div>
                       )}
 
-                      {/* Character Stats */}
-                      <div className="mb-2">
+                      {/* Character Stats — faixa escura para as barras lerem bem
+                          sobre o cenário animado */}
+                      <div className="mb-2 rounded-[3px] border border-black/60 bg-[#19191c]/85 p-3">
                         <CharacterStats character={character} />
                       </div>
                     </div>
@@ -884,96 +932,136 @@ export default function DashboardPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.2 }}
-            className="glass-card p-8 mb-12 text-center"
+            className="rounded-[4px] border border-[#46464c] p-8 mb-12 text-center shadow-2xl shadow-black/60"
+            style={{ background: PANEL_BG }}
           >
-            <h3 className="text-2xl font-bold text-text-primary mb-4">
+            <h3 className="text-2xl font-bold text-[#ece7da] mb-4">
               Nenhum Personagem Encontrado
             </h3>
-            <p className="text-text-secondary mb-6">
+            <p className="text-[#8a8a90] mb-6">
               Parece que você ainda não criou um personagem. Comece sua aventura agora!
             </p>
-            <Link href="/character/create" passHref>
-              <Button size="lg">
-                <User className="w-5 h-5 mr-2" />
-                Criar Novo Personagem
-              </Button>
+            <Link
+              href="/character/create"
+              className="inline-flex items-center gap-2 rounded-[3px] border px-8 py-3 text-[15px] font-semibold tracking-wide transition-all hover:brightness-125"
+              style={{
+                borderColor: FRAME,
+                background: 'linear-gradient(180deg, #3a3325, #241f16)',
+                color: GOLD_BRIGHT,
+                boxShadow: 'inset 0 1px 0 rgba(231,198,130,0.25), 0 0 14px rgba(201,162,95,0.2)',
+              }}
+            >
+              <User className="w-5 h-5" />
+              Criar Novo Personagem
             </Link>
           </motion.div>
         )}
 
         {characterDetails.length > 0 && (
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mt-4">
-            <Link href="/combat-lobby" passHref>
-              <Button size="lg" className="flex-1 sm:flex-none">
-                <Sword className="w-5 h-5 mr-2" />
-                Entrar em Combate
-              </Button>
+          <div className="flex flex-row flex-wrap gap-3 justify-center mt-4">
+            <Link
+              href="/combat-lobby"
+              className="inline-flex items-center justify-center gap-2 rounded-[3px] border px-8 py-3 text-[15px] font-semibold tracking-wide transition-all hover:brightness-125"
+              style={{
+                borderColor: '#8a3b3b',
+                background: 'linear-gradient(180deg, #3a2525, #241616)',
+                color: '#f0a8a8',
+                boxShadow: 'inset 0 1px 0 rgba(240,168,168,0.2), 0 0 14px rgba(201,70,70,0.15)',
+              }}
+            >
+              <Sword className="w-5 h-5" />
+              Entrar em Combate
             </Link>
-            <Link href="/dungeons" passHref>
-              <Button variant="outline" size="lg" className="flex-1 sm:flex-none">
-                <Shield className="w-5 h-5 mr-2" />
-                Explorar Dungeon
-              </Button>
+            <Link
+              href="/dungeons"
+              className="inline-flex items-center justify-center gap-2 rounded-[3px] border px-8 py-3 text-[15px] font-semibold tracking-wide transition-all hover:brightness-125"
+              style={{
+                borderColor: '#5b3b8a',
+                background: 'linear-gradient(180deg, #2e2540, #1c1626)',
+                color: '#c9b3ec',
+                boxShadow: 'inset 0 1px 0 rgba(201,179,236,0.2), 0 0 14px rgba(139,92,246,0.15)',
+              }}
+            >
+              <Shield className="w-5 h-5" />
+              Explorar Dungeon
             </Link>
-            <Link href="/character/create" passHref>
-              <Button size="lg" variant="secondary" className="flex-1 sm:flex-none">
-                <User className="w-5 h-5 mr-2" />
-                Criar Novo Personagem
-              </Button>
+            <Link
+              href="/character/create"
+              className="inline-flex items-center justify-center gap-2 rounded-[3px] border px-8 py-3 text-[15px] font-semibold tracking-wide transition-all hover:brightness-125"
+              style={{
+                borderColor: FRAME,
+                background: 'linear-gradient(180deg, #3a3325, #241f16)',
+                color: GOLD_BRIGHT,
+                boxShadow: 'inset 0 1px 0 rgba(231,198,130,0.25), 0 0 14px rgba(201,162,95,0.2)',
+              }}
+            >
+              <User className="w-5 h-5" />
+              Criar Novo Personagem
             </Link>
           </div>
         )}
 
-        {/* Delete Character Dialog */}
+        {/* Delete Character Dialog — mesma moldura chumbo da EnhancementDialog */}
         {deleteDialog.open && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-            <div className="bg-surface rounded-xl shadow-2xl p-8 w-full max-w-md relative animate-fade-in">
-              <button
-                className="absolute top-3 right-3 text-text-secondary hover:text-text-primary"
-                onClick={closeDeleteDialog}
-                aria-label="Fechar"
-              >
-                ×
-              </button>
-              <h2 className="text-xl font-bold mb-4 text-text-primary">Excluir NFT</h2>
-              <p className="mb-2 text-text-secondary">
-                Isso vai transferir a NFT para uma carteira BURN (você vai assinar a transação e pagar gas).<br />
-                Esta ação não pode ser desfeita.
-              </p>
-
-              {deleteDialog.item?.character?.name ? (
-                <>
-                  <p className="mb-2 text-text-secondary">
-                    Para confirmar, digite o nome do personagem <span className="font-bold text-primary">{deleteDialog.item.character.name}</span> abaixo:
-                  </p>
-                  <input
-                    ref={inputRef}
-                    className="w-full px-3 py-2 border rounded mb-4 text-text-primary bg-background outline-none focus:ring-2 focus:ring-primary"
-                    value={deleteDialog.input}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                      setDeleteDialog((d: any) => ({ ...d, input: e.target.value }))
-                    }
-                    placeholder="Digite o nome do personagem"
-                    autoFocus
-                  />
-                </>
-              ) : (
-                <div className="text-xs text-text-secondary mb-4">
-                  Token ID: {String(deleteDialog.item?.tokenId || '')}
-                </div>
-              )}
-              <div className="flex gap-2 justify-end">
-                <Button variant="outline" onClick={closeDeleteDialog}>Cancelar</Button>
-                <Button
-                  variant="primary"
-                  onClick={handleDeleteCharacter}
-                  disabled={
-                    Boolean(deleteDialog.item?.character?.name) &&
-                    deleteDialog.input !== deleteDialog.item?.character?.name
-                  }
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+            <div className="w-full max-w-md overflow-hidden rounded-[4px] border border-[#46464c] bg-[#1e1e21] shadow-2xl shadow-black/80 animate-fade-in">
+              {/* Barra de título */}
+              <div className="flex items-center justify-between px-4 py-2.5" style={{ background: TITLEBAR_BG, borderBottom: '1px solid rgba(0,0,0,0.7)' }}>
+                <h2 className="flex items-center gap-2 text-[15px] font-semibold tracking-wide text-[#dcdce0]">
+                  <Trash2 className="w-4 h-4 text-red-400" /> Excluir NFT
+                </h2>
+                <button
+                  className="px-2 py-0.5 text-[#8a8a90] transition-colors hover:text-white"
+                  onClick={closeDeleteDialog}
+                  aria-label="Fechar"
                 >
-                  Excluir
-                </Button>
+                  ✕
+                </button>
+              </div>
+
+              <div className="p-5">
+                <p className="mb-2 text-sm text-[#e09a3a]">
+                  Isso vai transferir a NFT para uma carteira BURN (você vai assinar a transação e pagar gas).<br />
+                  Esta ação não pode ser desfeita.
+                </p>
+
+                {deleteDialog.item?.character?.name ? (
+                  <>
+                    <p className="mb-2 text-sm text-[#c9c9ce]">
+                      Para confirmar, digite o nome do personagem <span className="font-bold" style={{ color: GOLD_BRIGHT }}>{deleteDialog.item.character.name}</span> abaixo:
+                    </p>
+                    <input
+                      ref={inputRef}
+                      className="w-full rounded-[3px] border border-[#3c3c41] bg-[#101013] px-3 py-2 mb-4 text-[#ece7da] outline-none transition-colors focus:border-[#8a6d3b]"
+                      value={deleteDialog.input}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                        setDeleteDialog((d: any) => ({ ...d, input: e.target.value }))
+                      }
+                      placeholder="Digite o nome do personagem"
+                      autoFocus
+                    />
+                  </>
+                ) : (
+                  <div className="text-xs text-[#8a8a90] mb-4">
+                    Token ID: {String(deleteDialog.item?.tokenId || '')}
+                  </div>
+                )}
+                <div className="flex gap-2 justify-end">
+                  <button onClick={closeDeleteDialog} className={`${BEVEL_BTN} px-4 py-2 text-sm`}>
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleDeleteCharacter}
+                    disabled={
+                      Boolean(deleteDialog.item?.character?.name) &&
+                      deleteDialog.input !== deleteDialog.item?.character?.name
+                    }
+                    className="rounded-[3px] border px-4 py-2 text-sm font-semibold text-red-300 transition-all hover:brightness-125 disabled:cursor-not-allowed disabled:opacity-40"
+                    style={{ borderColor: '#8a3b3b', background: 'linear-gradient(180deg, #3a2525, #241616)' }}
+                  >
+                    Excluir
+                  </button>
+                </div>
               </div>
             </div>
           </div>

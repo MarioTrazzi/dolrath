@@ -3,8 +3,9 @@ import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { isRunLive } from '@/lib/dungeonRunServer'
 import { regenAndPersist } from '@/lib/staminaServer'
-import { getGatherField, GATHER_TICK_STAMINA } from '@/lib/gathering'
-import { findOpenGatheringSession } from '@/lib/gatheringServer'
+import { getGatherField, FIELD_TOOL, GATHER_TICK_STAMINA, type GatherFieldId } from '@/lib/gathering'
+import { findOpenGatheringSession, getGatherGearBonus } from '@/lib/gatheringServer'
+import { TOOL_CATALOG } from '@/lib/itemCatalog'
 import { freeInventorySlots } from '@/lib/inventoryMutations'
 
 export const dynamic = 'force-dynamic'
@@ -63,6 +64,25 @@ export async function POST(req: Request) {
         },
         { status: 409 }
       )
+    }
+
+    // Campos com requiresTool (Costa/Trilha de Caça) exigem a ferramenta do
+    // campo EQUIPADA e inteira: não se pesca sem Vara nem se caça sem Faca.
+    // Nos campos antigos a ferramenta é só bônus (ninguém trava).
+    if (field.requiresTool) {
+      const gear = await getGatherGearBonus(characterId, field.id as GatherFieldId)
+      if (!gear.tool || gear.tool.broken) {
+        const toolName = TOOL_CATALOG.find((t) => t.type === FIELD_TOOL[field.id])?.name ?? 'a ferramenta do campo'
+        return NextResponse.json(
+          {
+            error: gear.tool?.broken
+              ? `Sua ${toolName} está quebrada. Repare-a com uma cópia craftada na forja.`
+              : `Equipe uma ${toolName} (craftada na Mesa de Forja) para coletar em ${field.name}.`,
+            code: 'TOOL_REQUIRED',
+          },
+          { status: 400 }
+        )
+      }
     }
 
     // Herói em masmorra viva (outra aba) não pode coletar.

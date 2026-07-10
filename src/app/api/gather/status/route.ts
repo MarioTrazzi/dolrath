@@ -85,6 +85,18 @@ export async function GET(req: Request) {
       maxStamina: character.maxStamina,
       secondsToNextTick: synced.secondsToNextTick,
       inventoryFull: synced.inventoryFull,
+      // Ferramenta/traje de coleta equipados p/ este campo (bônus + durabilidade).
+      gear: synced.gear
+        ? {
+            mult: synced.gear.mult,
+            tool: synced.gear.tool
+              ? { name: synced.gear.tool.name, enhancementLevel: synced.gear.tool.enhancementLevel, yieldBonus: synced.gear.tool.yieldBonus, durability: synced.gear.tool.durability, maxDurability: synced.gear.tool.maxDurability, broken: synced.gear.tool.broken }
+              : undefined,
+            garb: synced.gear.garb
+              ? { name: synced.gear.garb.name, enhancementLevel: synced.gear.garb.enhancementLevel, yieldBonus: synced.gear.garb.yieldBonus, durability: synced.gear.garb.durability, maxDurability: synced.gear.garb.maxDurability, broken: synced.gear.garb.broken }
+              : undefined,
+          }
+        : undefined,
       gather: getProfessionLevelInfo(gatherXp?.gatherXp ?? character.gatherXp),
       tickSeconds: GATHER_TICK_SECONDS,
       tickStamina: GATHER_TICK_STAMINA,

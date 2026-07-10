@@ -45,7 +45,9 @@ export type ItemTypeStr =
   | 'LIGHT_BOOTS' | 'MEDIUM_BOOTS' | 'HEAVY_BOOTS'
   | 'RING' | 'NECKLACE' | 'SHIELD'
   | 'GAUNTLET' | 'ORB' | 'BELT'
-  | 'PARRY_DAGGER' | 'TALISMAN';
+  | 'PARRY_DAGGER' | 'TALISMAN'
+  | 'PICKAXE' | 'HERB_SICKLE' | 'LOGGING_AXE' | 'FISHING_ROD' | 'HUNTING_KNIFE'
+  | 'GATHER_GARB';
 
 export interface CatalogItem {
   name: string;
@@ -964,6 +966,32 @@ export const FOOD_CATALOG: ConsumableItem[] = [
     subtype: 'TEMPORARY_BUFF', level: 10, rarity: 'RARE', goldPrice: 320, source: 'cooking',
     stats: { foodBuff: { stat: 'all', value: 1, durationMin: 30 }, effect: 'food', battleUsable: false },
   },
+
+  // ---------- REFEIÇÕES (nv12–15 de Culinária) ----------
+  // Tier alto do "bem alimentado": TODAS dão os 4 atributos, cada uma com
+  // ÊNFASE num deles (+4 no foco / +2 no resto) — o jogador escolhe o prato
+  // pelo que quer buffar. Usam a despensa da pesca (Costa dos Ventos) e da
+  // caça (Trilha de Caça). Shape multi-stat: foodBuff = { stats, durationMin }.
+  {
+    name: 'Festim do Caçador', description: 'Caça assada na brasa com raízes; força de urso por meia hora.',
+    subtype: 'TEMPORARY_BUFF', level: 12, rarity: 'RARE', goldPrice: 380, source: 'cooking',
+    stats: { foodBuff: { stats: { str: 4, agi: 2, int: 2, def: 2 }, durationMin: 30 }, effect: 'food', battleUsable: false },
+  },
+  {
+    name: 'Salteado do Pescador', description: 'Peixe fresco salteado com ervas; o corpo responde antes do pensamento.',
+    subtype: 'TEMPORARY_BUFF', level: 12, rarity: 'RARE', goldPrice: 380, source: 'cooking',
+    stats: { foodBuff: { stats: { str: 2, agi: 4, int: 2, def: 2 }, durationMin: 30 }, effect: 'food', battleUsable: false },
+  },
+  {
+    name: 'Caldeirada Arcana', description: 'Frutos do mar em caldo de Flor de Mana; a mente brilha como maré cheia.',
+    subtype: 'TEMPORARY_BUFF', level: 14, rarity: 'RARE', goldPrice: 420, source: 'cooking',
+    stats: { foodBuff: { stats: { str: 2, agi: 2, int: 4, def: 2 }, durationMin: 30 }, effect: 'food', battleUsable: false },
+  },
+  {
+    name: 'Cozido do Baluarte', description: 'Carne nobre e mariscos em cozido denso; os ossos viram muralha.',
+    subtype: 'TEMPORARY_BUFF', level: 15, rarity: 'RARE', goldPrice: 450, source: 'cooking',
+    stats: { foodBuff: { stats: { str: 2, agi: 2, int: 2, def: 4 }, durationMin: 30 }, effect: 'food', battleUsable: false },
+  },
 ];
 
 // === CATÁLOGO DE INGREDIENTES DE ALQUIMIA ===
@@ -979,8 +1007,9 @@ export interface AlchemyIngredient {
   rarity: Rarity;
   /** Valor de venda ao alquimista (gold). */
   goldValue: number;
-  /** Onde cai: chão de masmorra (comum/incomum), só chefe (raro/épico) ou fazenda (cultivo). */
-  source: 'dungeon' | 'dungeon_boss' | 'farm';
+  /** Onde cai: chão de masmorra (comum/incomum), só chefe (raro/épico), fazenda (cultivo)
+   *  ou coleta (exclusivo dos campos — NÃO entra em pool de masmorra). */
+  source: 'dungeon' | 'dungeon_boss' | 'farm' | 'gathering';
 }
 
 export const INGREDIENT_CATALOG: AlchemyIngredient[] = [
@@ -1009,6 +1038,15 @@ export const INGREDIENT_CATALOG: AlchemyIngredient[] = [
 
   // ---------- CULTIVO (só da fazenda — NÃO cai em masmorra) ----------
   { name: 'Trigo', description: 'Grão dourado de cultivo; vira Ração para os animais e Pão de viagem.', emoji: '🌾', rarity: 'COMMON', goldValue: 5, source: 'farm' },
+
+  // ---------- COLETA (só dos campos de coleta — NÃO caem em masmorra) ----------
+  // Pesca (Costa dos Ventos) e caça (Trilha de Caça): a despensa das REFEIÇÕES
+  // da Culinária (buff em todos os atributos, src/lib/cooking.ts).
+  { name: 'Peixe Prateado', description: 'Peixe fresco de escamas prateadas; a base de todo prato do mar.', emoji: '🐟', rarity: 'COMMON', goldValue: 10, source: 'gathering' },
+  { name: 'Frutos do Mar', description: 'Camarões, mariscos e ostras apanhados na maré baixa.', emoji: '🦐', rarity: 'COMMON', goldValue: 12, source: 'gathering' },
+  { name: 'Pérola Bruta', description: 'Pérola ainda na concha, achado raro de pescador paciente.', emoji: '🦪', rarity: 'RARE', goldValue: 90, source: 'gathering' },
+  { name: 'Carne de Caça', description: 'Carne fresca de caça limpa no campo — sem sacrificar o gado da fazenda.', emoji: '🍖', rarity: 'COMMON', goldValue: 10, source: 'gathering' },
+  { name: 'Carne Nobre', description: 'Corte nobre de uma presa esquiva; recompensa de caçador experiente.', emoji: '🥩', rarity: 'UNCOMMON', goldValue: 30, source: 'gathering' },
 ];
 
 // === CATÁLOGO DE MATERIAIS DE FORJA ===
@@ -1120,6 +1158,83 @@ export const SEED_CATALOG: SeedItem[] = [
   { name: 'Semente de Linho', description: 'Sementes de linho; a colheita vira fibra têxtil para forja e bandagens.', emoji: '🫘', rarity: 'COMMON', goldValue: 5 },
 ];
 
+// === CATÁLOGO DE FERRAMENTAS E TRAJES DE COLETA (lifeskill 🛠️) ===
+// Equipamento de PROFISSÃO: a ferramenta ocupa o slot de ARMA (coletar te deixa
+// "desarmado" — trade-off à la BDO) e o traje ocupa o slot de ARMADURA. São
+// CRAFT-ONLY (Mesa de Forja, src/lib/forge.ts): não caem, não são vendidos.
+// stats.gatherYield = multiplicador de rendimento por tique (0.15 = +15%), que
+// ESCALA com o aprimoramento (+N idêntico a armas — categoria TOOL do
+// enhancementSystem; reparo por CÓPIA craftada, como acessório). O bônus só
+// vale no campo correspondente: ferramenta casa pelo TIPO (FIELD_TOOL em
+// gathering.ts) e traje pelo stats.field. Sem stats de combate → fora do
+// budget B=11×F×G×SLOT (equipar isso numa masmorra é entrar de mãos vazias).
+
+/** Tipos de ferramenta de coleta (ocupam o slot WEAPON). */
+export const GATHER_TOOL_TYPES: ItemTypeStr[] = [
+  'PICKAXE', 'HERB_SICKLE', 'LOGGING_AXE', 'FISHING_ROD', 'HUNTING_KNIFE',
+];
+
+/** Ferramenta OU traje de coleta (nenhum tem stat de combate). */
+export function isGatherGearType(type: string): boolean {
+  return type === 'GATHER_GARB' || (GATHER_TOOL_TYPES as string[]).includes(type);
+}
+
+export const TOOL_CATALOG: CatalogItem[] = [
+  // ---------- FERRAMENTAS (slot WEAPON; campo pelo tipo) ----------
+  {
+    name: 'Picareta do Minerador', description: 'Cabeça de ferro batido para abrir veios; rende mais a cada golpe no Vale dos Minérios.',
+    type: 'PICKAXE', level: 1, rarity: 'COMMON', goldPrice: 120, source: 'craft', dungeons: [],
+    stats: { gatherYield: 0.15 },
+  },
+  {
+    name: 'Foice da Herborista', description: 'Lâmina curva que colhe sem machucar a planta; rende mais nos Campos de Ervas.',
+    type: 'HERB_SICKLE', level: 1, rarity: 'COMMON', goldPrice: 120, source: 'craft', dungeons: [],
+    stats: { gatherYield: 0.15 },
+  },
+  {
+    name: 'Machado do Lenhador', description: 'Machado de corte largo para troncos antigos; rende mais no Bosque Antigo.',
+    type: 'LOGGING_AXE', level: 1, rarity: 'COMMON', goldPrice: 120, source: 'craft', dungeons: [],
+    stats: { gatherYield: 0.15 },
+  },
+  {
+    name: 'Vara de Pesca', description: 'Vara de madeira flexível com linha firme; obrigatória para pescar na Costa dos Ventos.',
+    type: 'FISHING_ROD', level: 1, rarity: 'COMMON', goldPrice: 120, source: 'craft', dungeons: [],
+    stats: { gatherYield: 0.15 },
+  },
+  {
+    name: 'Faca de Caça', description: 'Faca de esfolar afiada e leve; obrigatória para caçar na Trilha de Caça.',
+    type: 'HUNTING_KNIFE', level: 1, rarity: 'COMMON', goldPrice: 120, source: 'craft', dungeons: [],
+    stats: { gatherYield: 0.15 },
+  },
+
+  // ---------- TRAJES (slot ARMOR; campo pelo stats.field) ----------
+  {
+    name: 'Traje do Minerador', description: 'Avental de couro grosso contra lascas de pedra; rende mais no Vale dos Minérios.',
+    type: 'GATHER_GARB', level: 1, rarity: 'COMMON', goldPrice: 140, source: 'craft', dungeons: [],
+    stats: { gatherYield: 0.10, field: 'minerios' },
+  },
+  {
+    name: 'Traje da Herborista', description: 'Vestes leves de bolsos fundos para mudas e ervas; rende mais nos Campos de Ervas.',
+    type: 'GATHER_GARB', level: 1, rarity: 'COMMON', goldPrice: 140, source: 'craft', dungeons: [],
+    stats: { gatherYield: 0.10, field: 'ervas' },
+  },
+  {
+    name: 'Traje do Lenhador', description: 'Camisa de lã grossa e suspensórios reforçados; rende mais no Bosque Antigo.',
+    type: 'GATHER_GARB', level: 1, rarity: 'COMMON', goldPrice: 140, source: 'craft', dungeons: [],
+    stats: { gatherYield: 0.10, field: 'bosque' },
+  },
+  {
+    name: 'Traje do Pescador', description: 'Capa encerada e botas altas contra a maré; rende mais na Costa dos Ventos.',
+    type: 'GATHER_GARB', level: 1, rarity: 'COMMON', goldPrice: 140, source: 'craft', dungeons: [],
+    stats: { gatherYield: 0.10, field: 'costa' },
+  },
+  {
+    name: 'Traje do Caçador', description: 'Couro silencioso em tons de mata; rende mais na Trilha de Caça.',
+    type: 'GATHER_GARB', level: 1, rarity: 'COMMON', goldPrice: 140, source: 'craft', dungeons: [],
+    stats: { gatherYield: 0.10, field: 'caca' },
+  },
+];
+
 // === ÍNDICES E HELPERS ===
 
 /** Slug estável do nome do item (sem acentos/apóstrofos) usado nos assets. */
@@ -1137,7 +1252,9 @@ export function itemImagePath(name: string): string {
   return `/items/${itemImageSlug(name)}.webp`;
 }
 
-const BY_NAME = new Map(ITEM_CATALOG.map((i) => [i.name, i]));
+// Inclui as ferramentas/trajes de coleta (TOOL_CATALOG): eles ficam FORA do
+// ITEM_CATALOG (não entram em loja/drop), mas a forja e o seed resolvem por nome.
+const BY_NAME = new Map([...ITEM_CATALOG, ...TOOL_CATALOG].map((i) => [i.name, i]));
 
 export function getCatalogItemByName(name: string): CatalogItem | undefined {
   return BY_NAME.get(name);
@@ -1377,6 +1494,9 @@ export function canClassEquip(
 ): { ok: boolean; reason?: string } {
   const c = (charClass || '').toLowerCase();
   if (!isClassId(c)) return { ok: true };
+
+  // Ferramentas/trajes de coleta: equipamento de profissão, toda classe usa.
+  if (isGatherGearType(itemType)) return { ok: true };
 
   // Arma: precisa estar na lista de armas da classe
   if (WEAPON_TYPES.includes(itemType)) {

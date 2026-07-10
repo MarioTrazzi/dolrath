@@ -181,6 +181,47 @@ export const FORGE_RECIPES: ForgeRecipe[] = [
   ]),
 
   // ============================================================
+  // FERRAMENTAS E TRAJES DE COLETA (TOOL_CATALOG) — CRAFT-ONLY
+  // ============================================================
+  // Único jeito de obter (não caem nem são vendidos). O reparo também passa por
+  // aqui: craftar OUTRA cópia e usá-la na bancada (+25 durabilidade/cópia) — o
+  // ciclo "falhou o aprimoramento → forja outra pra reparar". Materiais só dos
+  // campos LIVRES (bosque/minérios) + Couro/Fibra: sem ovo-e-galinha com os
+  // campos que exigem a própria ferramenta (costa/caça).
+  // ---------- FERRAMENTAS (slot de arma) ----------
+  gear('tool_picareta_minerador', 'Picareta do Minerador', 'weapon', [
+    { name: 'Ferro Pesado', quantity: 2 }, { name: 'Madeira Flexível', quantity: 1 }, { name: SHARD_W, quantity: 1 },
+  ]),
+  gear('tool_foice_herborista', 'Foice da Herborista', 'weapon', [
+    { name: 'Metal Leve', quantity: 1 }, { name: 'Madeira Flexível', quantity: 2 }, { name: SHARD_W, quantity: 1 },
+  ]),
+  gear('tool_machado_lenhador', 'Machado do Lenhador', 'weapon', [
+    { name: 'Ferro Pesado', quantity: 1 }, { name: 'Madeira Flexível', quantity: 2 }, { name: SHARD_W, quantity: 1 },
+  ]),
+  gear('tool_vara_pesca', 'Vara de Pesca', 'weapon', [
+    { name: 'Madeira Flexível', quantity: 4 }, { name: 'Couro', quantity: 1 }, { name: SHARD_W, quantity: 1 },
+  ]),
+  gear('tool_faca_caca', 'Faca de Caça', 'weapon', [
+    { name: 'Metal Leve', quantity: 2 }, { name: 'Couro', quantity: 1 }, { name: SHARD_W, quantity: 1 },
+  ]),
+  // ---------- TRAJES (slot de armadura) ----------
+  gear('garb_minerador', 'Traje do Minerador', 'armor', [
+    { name: 'Couro', quantity: 3 }, { name: 'Ferro', quantity: 1 }, { name: SHARD_A, quantity: 1 },
+  ]),
+  gear('garb_herborista', 'Traje da Herborista', 'armor', [
+    { name: 'Fibra de Linho', quantity: 3 }, { name: 'Couro', quantity: 1 }, { name: SHARD_A, quantity: 1 },
+  ]),
+  gear('garb_lenhador', 'Traje do Lenhador', 'armor', [
+    { name: 'Couro', quantity: 3 }, { name: 'Madeira Flexível', quantity: 1 }, { name: SHARD_A, quantity: 1 },
+  ]),
+  gear('garb_pescador', 'Traje do Pescador', 'armor', [
+    { name: 'Fibra de Linho', quantity: 2 }, { name: 'Couro', quantity: 2 }, { name: SHARD_A, quantity: 1 },
+  ]),
+  gear('garb_cacador', 'Traje do Caçador', 'armor', [
+    { name: 'Couro', quantity: 4 }, { name: SHARD_A, quantity: 1 },
+  ]),
+
+  // ============================================================
   // REFINO DE PEDRA — 10:1 em cada degrau (estilhaço → pedra → concentrada)
   // ============================================================
   stone('refine_pedra_arma', STONE_NAMES.WEAPON_BASIC, 'UNCOMMON', [

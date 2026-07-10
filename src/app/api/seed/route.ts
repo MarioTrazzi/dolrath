@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { ITEM_CATALOG, itemImagePath } from '@/lib/itemCatalog'
+import { ITEM_CATALOG, TOOL_CATALOG, itemImagePath } from '@/lib/itemCatalog'
 import { ItemType } from '@prisma/client'
 
 // Verificação básica: header X-SEED-SECRET deve corresponder à variável SEED_SECRET
@@ -9,7 +9,9 @@ const SEED_SECRET = process.env.SEED_SECRET || 'dev-secret'
 async function seedItemCatalog() {
   const results = { created: 0, updated: 0, items: [] as string[] }
 
-  for (const item of ITEM_CATALOG) {
+  // Ferramentas/trajes de coleta (TOOL_CATALOG) entram no mesmo loop: são
+  // craft-only (fora de loja/drop), mas o seed garante preço/imagem/stats.
+  for (const item of [...ITEM_CATALOG, ...TOOL_CATALOG]) {
     const stats = {
       ...item.stats,
       rarity: item.rarity,

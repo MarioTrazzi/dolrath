@@ -18,11 +18,11 @@
 // chefe de masmorra. Itens de fazenda (Trigo, Fibra de Linho) NÃO aparecem
 // aqui: a coleta dá as SEMENTES (só nos Campos de Ervas) e a fazenda cultiva.
 
-import { SEED_CATALOG } from './itemCatalog';
+import { SEED_CATALOG, type ItemTypeStr } from './itemCatalog';
 import { gatherSeedChance, gatherYieldPerTick } from './professionSystem';
 import { STONE_NAMES } from './enhancementSystem';
 
-export type GatherFieldId = 'minerios' | 'ervas' | 'bosque';
+export type GatherFieldId = 'minerios' | 'ervas' | 'bosque' | 'costa' | 'caca';
 
 export interface GatherDrop {
   /** Nome de item existente (INGREDIENT_CATALOG / FORGE_MATERIAL_CATALOG). */
@@ -43,6 +43,8 @@ export interface GatherFieldDef {
   drops: GatherDrop[];
   /** Campo que também dropa sementes de cultivo (chance por tique). */
   seedField?: boolean;
+  /** Exige a ferramenta do campo (FIELD_TOOL) equipada para iniciar a coleta. */
+  requiresTool?: boolean;
 }
 
 // Cadência e custos do tique (o servidor é a autoridade; o cliente só exibe).
@@ -106,6 +108,49 @@ export const GATHER_FIELDS: Record<GatherFieldId, GatherFieldDef> = {
       { name: 'Seiva Ancestral', weight: 14, minLevel: 25 },
     ],
   },
+  // Os dois campos abaixo EXIGEM a ferramenta equipada (requiresTool): não se
+  // pesca sem Vara nem se caça sem Faca — ver o gate em /api/gather/start.
+  // Nos campos antigos a ferramenta é só bônus (quem coleta hoje não trava).
+  costa: {
+    id: 'costa',
+    name: 'Costa dos Ventos',
+    emoji: '🎣',
+    tagline: 'Peixe e frutos do mar — a despensa das Refeições.',
+    description:
+      'Falésias varridas pelo vento e poças de maré. Rende peixe fresco e frutos do mar para a cozinha; pescadores pacientes acham pérolas.',
+    requiresTool: true,
+    drops: [
+      { name: 'Peixe Prateado', weight: 34 },
+      { name: 'Frutos do Mar', weight: 26 },
+      { name: 'Água Pura', weight: 20 },
+      { name: 'Pérola Bruta', weight: 6, minLevel: 20 },
+    ],
+  },
+  caca: {
+    id: 'caca',
+    name: 'Trilha de Caça',
+    emoji: '🏹',
+    tagline: 'Carne de caça e couro — sem sacrificar o gado.',
+    description:
+      'Trilhas de presas na orla da mata. Rende carne fresca para a cozinha e couro de caça — a alternativa a abater os animais da fazenda.',
+    requiresTool: true,
+    drops: [
+      { name: 'Carne de Caça', weight: 34 },
+      { name: 'Couro', weight: 30 },
+      { name: 'Carne Nobre', weight: 14, minLevel: 15 },
+      { name: 'Seiva de Ent', weight: 8 },
+    ],
+  },
+};
+
+// Ferramenta de coleta de cada campo (TOOL_CATALOG em itemCatalog.ts): o bônus
+// de gatherYield da ferramenta EQUIPADA (slot WEAPON) só vale no campo dela.
+export const FIELD_TOOL: Record<GatherFieldId, ItemTypeStr> = {
+  minerios: 'PICKAXE',
+  ervas: 'HERB_SICKLE',
+  bosque: 'LOGGING_AXE',
+  costa: 'FISHING_ROD',
+  caca: 'HUNTING_KNIFE',
 };
 
 export function getGatherField(id: string): GatherFieldDef | undefined {
@@ -188,19 +233,22 @@ function pickWeighted<T extends { weight: number }>(pool: T[], rng: () => number
 /**
  * Rende `ticks` tiques de um campo para um nível de Coleta. Determinístico na
  * QUANTIDADE (nível decide, fração vira chance) e ponderado no TIPO de item.
+ * `toolYieldMult` = multiplicador da ferramenta/traje equipados (1 = sem bônus;
+ * 1.25 = +25% de rendimento por tique — gatheringServer resolve o valor).
  */
 export function rollGatherYield(
   fieldId: GatherFieldId,
   gatherLevel: number,
   ticks: number,
   rng: () => number = Math.random,
+  toolYieldMult = 1,
 ): GatherYield {
   const field = GATHER_FIELDS[fieldId];
   const agg = new Map<string, number>();
   if (!field || ticks <= 0) return { drops: [], xp: 0 };
 
   const eligible = field.drops.filter((d) => (d.minLevel ?? 1) <= gatherLevel);
-  const perTick = gatherYieldPerTick(gatherLevel);
+  const perTick = gatherYieldPerTick(gatherLevel) * Math.max(1, toolYieldMult);
   const seedChance = field.seedField ? gatherSeedChance(gatherLevel) : 0;
 
   for (let t = 0; t < ticks; t++) {

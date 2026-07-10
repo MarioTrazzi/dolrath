@@ -29,6 +29,8 @@ export const FIELD_ACCENT: Record<GatherFieldId, string> = {
   minerios: '#94a3b8',
   ervas: '#4ade80',
   bosque: '#a16207',
+  costa: '#38bdf8',
+  caca: '#d4a373',
 }
 
 function dropEmoji(name: string): string {

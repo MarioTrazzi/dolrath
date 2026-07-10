@@ -23,6 +23,7 @@ import { POTION_RECIPES } from '@/lib/alchemy'
 import { FORGE_RECIPES } from '@/lib/forge'
 import { PROCESSING_RECIPES, PROCESSING_GROUP_LABEL } from '@/lib/processing'
 import { COOKING_RECIPES, COOKING_GROUP_LABEL } from '@/lib/cooking'
+import { parseFoodBuffSpec, foodBuffSpecLabel } from '@/lib/foodBuff'
 import { CRAFT_BASE_CHANCE, CRAFT_MIN_LEVEL, CRAFT_XP } from '@/lib/craftingProfession'
 import { DUNGEON_LIST } from '@/lib/dungeonAdventures'
 import { getXPForNextLevel } from '@/lib/experienceSystem'
@@ -1013,9 +1014,9 @@ até +${SAFE_ENHANCE_MAX}: chance = 100% (seguro)`}</Formula>
                 head={['Prato', 'Estação', 'Insumos', 'Efeito ao comer', 'Nível', 'XP', 'Taxa']}
                 rows={COOKING_RECIPES.map((r) => {
                   const food = FOOD_CATALOG.find((f) => f.name === r.outputName)
-                  const fb = (food?.stats as any)?.foodBuff
+                  const fb = parseFoodBuffSpec(food?.stats)
                   const effect = fb
-                    ? `${fb.stat === 'all' ? `+${fb.value} em tudo` : `+${fb.value} ${String(fb.stat).toUpperCase()}`} · ${fb.durationMin} min reais`
+                    ? foodBuffSpecLabel(fb)
                     : `+${Number((food?.stats as any)?.healAmount) || 0} HP fora de combate`
                   return [
                     <span key={r.id} className={`font-semibold ${RARITY[r.rarity].text}`}>🍳 {r.outputName}</span>,

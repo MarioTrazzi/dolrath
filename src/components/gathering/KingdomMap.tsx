@@ -13,6 +13,7 @@ import { X, ArrowRight } from 'lucide-react'
 import { GatherItemThumb } from '@/components/gathering/GatheringPanel'
 import { GATHER_FIELDS, GATHER_TICK_SECONDS, GATHER_TICK_STAMINA, type GatherFieldId, type PendingYield } from '@/lib/gathering'
 import { getProfessionLevelInfo, type ProfessionLevelInfo } from '@/lib/professionSystem'
+import { getDisplayName } from '@/lib/enhancementSystem'
 
 // ============================================================
 // Tipos compartilhados
@@ -36,6 +37,16 @@ export interface OpenSession {
   inventoryFull: boolean
 }
 
+export interface GatherGearPieceInfo {
+  name: string
+  enhancementLevel: number
+  /** Bônus efetivo de rendimento (já com o +N), ex.: 0.18 = +18%. */
+  yieldBonus: number
+  durability: number
+  maxDurability: number
+  broken: boolean
+}
+
 export interface StatusPayload {
   session: {
     id: string
@@ -47,6 +58,8 @@ export interface StatusPayload {
   pending?: PendingYield
   stamina: number
   maxStamina: number
+  /** Ferramenta/traje de coleta equipados p/ o campo da sessão. */
+  gear?: { mult: number; tool?: GatherGearPieceInfo; garb?: GatherGearPieceInfo }
   secondsToNextTick?: number
   inventoryFull?: boolean
   gather: ProfessionLevelInfo
@@ -101,6 +114,22 @@ export const MAP_NODES: MapNode[] = [
     drops: GATHER_FIELDS.bosque.drops,
   },
   {
+    key: 'costa', fieldId: 'costa',
+    name: GATHER_FIELDS.costa.name, emoji: GATHER_FIELDS.costa.emoji,
+    recurso: 'Peixe & Frutos do Mar', tagline: GATHER_FIELDS.costa.tagline,
+    sabor: 'Falésias varridas pelo vento salgado; a maré baixa desenha poças cheias de vida. Exige uma Vara de Pesca equipada.',
+    x: 12, y: 56, acc: '#3a7ea6', accSoft: 'rgba(58,126,166,0.45)', locked: false,
+    drops: GATHER_FIELDS.costa.drops,
+  },
+  {
+    key: 'caca', fieldId: 'caca',
+    name: GATHER_FIELDS.caca.name, emoji: GATHER_FIELDS.caca.emoji,
+    recurso: 'Carne & Couro', tagline: GATHER_FIELDS.caca.tagline,
+    sabor: 'Rastros frescos cruzam a orla da mata — carne e couro sem tocar no gado. Exige uma Faca de Caça equipada.',
+    x: 18, y: 27, acc: '#8f6b4a', accSoft: 'rgba(143,107,74,0.45)', locked: false,
+    drops: GATHER_FIELDS.caca.drops,
+  },
+  {
     key: 'pantano',
     name: 'Pântano das Brumas', emoji: '🌫️',
     recurso: 'Ingredientes raros', tagline: 'Reagentes alquímicos raros — em breve.',
@@ -121,6 +150,7 @@ const ROADS: [string, string][] = [
   ['home', 'ervas'], ['home', 'minerios'],
   ['ervas', 'bosque'], ['minerios', 'pantano'],
   ['bosque', 'ermo'], ['bosque', 'pantano'],
+  ['ervas', 'costa'], ['bosque', 'caca'],
 ]
 const ptFor = (id: string) => (id === 'home' ? HOME : NODE_BY_KEY[id])
 
@@ -450,6 +480,18 @@ function ActiveSessionDetail({ node, status, countdown, busy, onCollect, onStopN
 
       <div className="mb-2.5"><ParchProfessionBar info={status.gather} acc={acc} /></div>
       <div className="text-[10.5px] ink-soft mb-2.5">⚡ {status.stamina}/{status.maxStamina} de stamina · tique de 15 min custa {GATHER_TICK_STAMINA} ⚡</div>
+      {(status.gear?.tool || status.gear?.garb) && (
+        <div className="text-[10.5px] ink-soft mb-2.5 space-y-0.5">
+          {[status.gear.tool, status.gear.garb].filter(Boolean).map((p) => (
+            <div key={p!.name}>
+              🛠️ {getDisplayName(p!.name, p!.enhancementLevel)} ·{' '}
+              {p!.broken
+                ? <span className="font-bold" style={{ color: '#7a2f26' }}>quebrada — sem bônus (repare com uma cópia)</span>
+                : <>+{Math.round(p!.yieldBonus * 100)}% rendimento · durabilidade {p!.durability}/{p!.maxDurability}</>}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="flex gap-2">
         <button onClick={onCollect} disabled={busy || (pending.drops.length === 0 && pending.xp === 0)}

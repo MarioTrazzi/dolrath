@@ -120,7 +120,7 @@ export async function GET(
       })
     }
 
-    const material = getRequiredMaterial(category, targetLevel)
+    const material = getRequiredMaterial(category, targetLevel, inventoryItem.item.type)
     const materialRow = await findMaterialRow(params.characterId, inventoryItem, material)
     const materialCount = await countMaterial(params.characterId, inventoryItem, material)
     const durabilityCost = getDurabilityLossOnFail(targetLevel)
@@ -194,7 +194,7 @@ export async function POST(
       )
     }
 
-    const material = getRequiredMaterial(category, targetLevel)
+    const material = getRequiredMaterial(category, targetLevel, inventoryItem.item.type)
     const materialRow = await findMaterialRow(params.characterId, inventoryItem, material)
     if (!materialRow) {
       const name = material.kind === 'STONE' ? material.name : `uma cópia de ${inventoryItem.item.name}`

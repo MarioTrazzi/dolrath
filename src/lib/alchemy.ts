@@ -181,8 +181,11 @@ export function pickIngredient(
   rarities: Rarity[],
   rng: () => number = Math.random,
 ): AlchemyIngredient | undefined {
-  // Ingredientes de fazenda (Trigo etc.) NÃO caem em masmorra — só cultivo.
-  const pool = rarities.flatMap((r) => getIngredientsByRarity(r)).filter((i) => i.source !== 'farm');
+  // Ingredientes de fazenda (Trigo etc.) e de coleta (peixe/carne) NÃO caem em
+  // masmorra — só cultivo e campos de coleta.
+  const pool = rarities
+    .flatMap((r) => getIngredientsByRarity(r))
+    .filter((i) => i.source !== 'farm' && i.source !== 'gathering');
   if (pool.length === 0) return undefined;
   return pool[Math.floor(rng() * pool.length)];
 }

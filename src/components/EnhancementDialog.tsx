@@ -13,6 +13,7 @@ import {
   applyEnhancementToStats,
   getGearCategory,
   getBaseChance,
+  type GearCategory,
 } from '@/lib/enhancementSystem';
 import { itemStatEntries, formatStatValue } from '@/lib/itemStats';
 import ItemIcon from './ItemIcon';
@@ -30,7 +31,7 @@ export interface EnhanceablePickerItem {
 
 export interface EnhanceInfo {
   maxLevel: boolean;
-  category?: 'WEAPON' | 'ARMOR' | 'ACCESSORY';
+  category?: GearCategory;
   currentLevel: number;
   targetLevel?: number;
   targetLabel?: string;

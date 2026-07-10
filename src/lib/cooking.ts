@@ -79,6 +79,22 @@ export const COOKING_RECIPES: CookingRecipe[] = [
     { name: 'Farinha', quantity: 2 }, { name: 'Cogumelo Lunar', quantity: 1 }, { name: 'Seiva Ancestral', quantity: 1 },
   ], 10, 18, 25),
 
+  // ---------- REFEIÇÕES (nv12–15) — buff em TODOS os atributos, ênfase num deles ----------
+  // A despensa vem dos campos novos de coleta: pesca (Costa dos Ventos) e
+  // caça (Trilha de Caça). Ver o bloco REFEIÇÕES do FOOD_CATALOG.
+  cook('cook_festim_cacador', 'Festim do Caçador', 'RARE', 'oven', [
+    { name: 'Carne de Caça', quantity: 2 }, { name: 'Raiz Vigorosa', quantity: 1 }, { name: 'Farinha', quantity: 1 },
+  ], 12, 20, 30),
+  cook('cook_salteado_pescador', 'Salteado do Pescador', 'RARE', 'pot', [
+    { name: 'Peixe Prateado', quantity: 2 }, { name: 'Erva Medicinal', quantity: 1 }, { name: 'Água Pura', quantity: 1 },
+  ], 12, 20, 30),
+  cook('cook_caldeirada_arcana', 'Caldeirada Arcana', 'RARE', 'pot', [
+    { name: 'Frutos do Mar', quantity: 2 }, { name: 'Flor de Mana', quantity: 1 }, { name: 'Farinha', quantity: 1 },
+  ], 14, 22, 35),
+  cook('cook_cozido_baluarte', 'Cozido do Baluarte', 'RARE', 'pot', [
+    { name: 'Carne Nobre', quantity: 1 }, { name: 'Frutos do Mar', quantity: 1 }, { name: 'Cogumelo Lunar', quantity: 1 }, { name: 'Água Pura', quantity: 1 },
+  ], 15, 24, 40),
+
   // ---------- FRESCOS ----------
   cook('cook_salada_ervas', 'Salada de Ervas', 'COMMON', 'fresh', [
     { name: 'Erva Medicinal', quantity: 1 }, { name: 'Raiz Vigorosa', quantity: 1 },
@@ -125,6 +141,10 @@ export const FOOD_EMOJI: Record<string, string> = {
   'Torta de Cogumelo': '🥧',
   'Ensopado Rústico': '🍲',
   'Banquete do Aventureiro': '🍱',
+  'Festim do Caçador': '🍗',
+  'Salteado do Pescador': '🐟',
+  'Caldeirada Arcana': '🦐',
+  'Cozido do Baluarte': '🍜',
 };
 
 // Insumos-exceção que também não têm emoji no catálogo (consumível migrado).

@@ -21,16 +21,103 @@ import {
   getGatherField,
   mergePendingYield,
   rollGatherYield,
+  FIELD_TOOL,
   GATHER_TICK_SECONDS,
   GATHER_TICK_STAMINA,
   type GatherFieldId,
   type PendingYield,
 } from './gathering'
 import { getProfessionLevel } from './professionSystem'
+import { applyEnhancementToStats } from './enhancementSystem'
 import { addDropToInventoryTx } from './dungeonRunServer'
 import { freeInventorySlots } from './inventoryMutations'
 
 export type { PendingYield }
+
+// ============================================================
+// Ferramenta/traje de coleta equipados (TOOL_CATALOG em itemCatalog.ts)
+// ============================================================
+
+export interface GatherGearPiece {
+  /** Id da linha de CharacterEquipment (para o desgaste por tique). */
+  equipmentId: string
+  name: string
+  enhancementLevel: number
+  /** Bônus efetivo de rendimento (gatherYield JÁ com o +N aplicado). */
+  yieldBonus: number
+  durability: number
+  maxDurability: number
+  /** Quebrada (durabilidade 0): continua equipada mas o bônus não vale. */
+  broken: boolean
+}
+
+export interface GatherGearBonus {
+  /** Multiplicador total de rendimento por tique (1 = sem bônus). */
+  mult: number
+  tool?: GatherGearPiece
+  garb?: GatherGearPiece
+}
+
+/**
+ * Lê a ferramenta (slot WEAPON) e o traje (slot ARMOR) equipados e devolve o
+ * multiplicador de rendimento do CAMPO pedido: a ferramenta casa pelo TIPO
+ * (FIELD_TOOL) e o traje pelo stats.field — equipamento de outro campo (ou de
+ * combate) não dá bônus. O gatherYield escala com o +N (applyEnhancementToStats)
+ * e uma peça quebrada (durabilidade 0) não soma.
+ */
+export async function getGatherGearBonus(
+  characterId: string,
+  fieldId: GatherFieldId,
+): Promise<GatherGearBonus> {
+  const equips = await prisma.characterEquipment.findMany({
+    where: { characterId, slot: { in: ['WEAPON', 'ARMOR'] } },
+    include: { item: { select: { name: true, type: true, stats: true } } },
+  })
+
+  const toolType = FIELD_TOOL[fieldId]
+  const result: GatherGearBonus = { mult: 1 }
+  for (const eq of equips) {
+    const stats = (eq.item.stats ?? {}) as Record<string, any>
+    const isTool = eq.item.type === toolType
+    const isGarb = eq.item.type === 'GATHER_GARB' && stats.field === fieldId
+    if (!isTool && !isGarb) continue
+
+    const enhanced = applyEnhancementToStats(stats, eq.enhancementLevel)
+    const yieldBonus = Number(enhanced.gatherYield) || 0
+    const broken = eq.durability <= 0
+    const piece: GatherGearPiece = {
+      equipmentId: eq.id,
+      name: eq.item.name,
+      enhancementLevel: eq.enhancementLevel,
+      yieldBonus,
+      durability: eq.durability,
+      maxDurability: eq.maxDurability,
+      broken,
+    }
+    if (!broken) result.mult += yieldBonus
+    if (isTool) result.tool = piece
+    else result.garb = piece
+  }
+  return result
+}
+
+/**
+ * Desgaste do cultivo: −1 de durabilidade POR TIQUE computado em cada peça de
+ * coleta do campo (ferramenta e traje), com piso 0 — mesma filosofia do
+ * durability.ts do combate (0 = quebrada, bônus zera, reparo por cópia).
+ * Também reflete o desgaste nas peças do `gear` (o painel mostra pós-tique).
+ */
+function computeGatherWear(gear: GatherGearBonus, ticks: number): { equipmentId: string; durability: number }[] {
+  const pieces = [gear.tool, gear.garb].filter((p): p is GatherGearPiece => !!p)
+  return pieces
+    .filter((p) => p.durability > 0)
+    .map((p) => {
+      const durability = Math.max(0, p.durability - ticks)
+      p.durability = durability
+      p.broken = durability <= 0
+      return { equipmentId: p.equipmentId, durability }
+    })
+}
 
 export interface SyncedGathering {
   session: GatheringSession
@@ -41,6 +128,8 @@ export interface SyncedGathering {
   secondsToNextTick: number
   /** Inventário sem slot livre: coleta pausada (nenhum tique/stamina gasto agora). */
   inventoryFull: boolean
+  /** Ferramenta/traje de coleta equipados p/ o campo (durabilidade pós-tique). */
+  gear?: GatherGearBonus
   /**
    * Preenchido quando esta sincronização FECHOU a sessão sozinha por causa de
    * um "aguardar último ciclo" pendente (stopRequested) — o chamador não deve
@@ -87,8 +176,12 @@ async function finishStopRequested(
   session: GatheringSession,
   pending: PendingYield,
   tick?: { staminaSpent: number; anchor: Date },
+  wear: { equipmentId: string; durability: number }[] = [],
 ): Promise<SyncedGathering> {
   const [depositInfo, character, updatedSession] = await prisma.$transaction(async (tx) => {
+    for (const w of wear) {
+      await tx.characterEquipment.update({ where: { id: w.equipmentId }, data: { durability: w.durability } })
+    }
     const { deposited, skipped } = await depositPendingItems(tx, session.characterId, pending.drops)
     const updatedCharacter = await tx.character.update({
       where: { id: session.characterId },
@@ -143,6 +236,11 @@ export async function syncGatheringSession(
     }
   }
 
+  // Ferramenta/traje do campo: multiplicam o rendimento, desgastam −1/tique e
+  // aparecem no painel mesmo sem tique novo (por isso a leitura fica aqui).
+  const fieldId = session.fieldId as GatherFieldId
+  const gear = await getGatherGearBonus(session.characterId, fieldId)
+
   // 🎒 Bag cheia: mesma mecânica da masmorra (piloto desliga sem consumir).
   // Aqui não há dado a desligar — só PAUSA o relógio: avança a âncora para
   // agora SEM tique nem stamina, então o tempo bloqueado não conta quando o
@@ -159,6 +257,7 @@ export async function syncGatheringSession(
       stamina: character.stamina,
       secondsToNextTick: 0,
       inventoryFull: true,
+      gear,
     }
   }
 
@@ -168,13 +267,14 @@ export async function syncGatheringSession(
     // Sem tique novo; ainda assim marca esgotamento se a stamina não paga o próximo.
     if (tick.exhausted) {
       if (session.stopRequested) {
-        return finishStopRequested(session, readPending(session))
+        const finished = await finishStopRequested(session, readPending(session))
+        return { ...finished, gear }
       }
       const updated = await prisma.gatheringSession.update({
         where: { id: session.id },
         data: { status: 'exhausted' },
       })
-      return { session: updated, pending: readPending(updated), stamina: character.stamina, secondsToNextTick: 0, inventoryFull: false }
+      return { session: updated, pending: readPending(updated), stamina: character.stamina, secondsToNextTick: 0, inventoryFull: false, gear }
     }
     const elapsed = (now.getTime() - session.lastTickAt.getTime()) / 1000
     return {
@@ -183,17 +283,20 @@ export async function syncGatheringSession(
       stamina: character.stamina,
       secondsToNextTick: Math.max(0, Math.ceil(GATHER_TICK_SECONDS - elapsed)),
       inventoryFull: false,
+      gear,
     }
   }
 
   const gatherLevel = getProfessionLevel(character.gatherXp)
-  const yielded = rollGatherYield(session.fieldId as GatherFieldId, gatherLevel, tick.ticks)
+  const yielded = rollGatherYield(fieldId, gatherLevel, tick.ticks, undefined, gear.mult)
   const pending = mergePendingYield(readPending(session), yielded, tick.ticks)
+  const wear = computeGatherWear(gear, tick.ticks)
 
   // "Aguardar último ciclo": este tique que acabou de render É o último —
   // deposita e fecha agora, sem abrir uma nova âncora para o próximo tique.
   if (session.stopRequested) {
-    return finishStopRequested(session, pending, { staminaSpent: tick.staminaSpent, anchor: tick.anchor })
+    const finished = await finishStopRequested(session, pending, { staminaSpent: tick.staminaSpent, anchor: tick.anchor }, wear)
+    return { ...finished, gear }
   }
 
   const [updated] = await prisma.$transaction([
@@ -214,6 +317,9 @@ export async function syncGatheringSession(
         staminaUpdatedAt: tick.anchor,
       },
     }),
+    ...wear.map((w) =>
+      prisma.characterEquipment.update({ where: { id: w.equipmentId }, data: { durability: w.durability } }),
+    ),
   ])
 
   const stamina = character.stamina - tick.staminaSpent
@@ -225,6 +331,7 @@ export async function syncGatheringSession(
       ? 0
       : Math.max(0, Math.ceil(GATHER_TICK_SECONDS - (now.getTime() - tick.anchor.getTime()) / 1000)),
     inventoryFull: false,
+    gear,
   }
 }
 

@@ -23,7 +23,7 @@ export const MAX_ENHANCEMENT_LEVEL = PEN;
 // Até +7 o aprimoramento é garantido (como armas no BDO)
 export const SAFE_ENHANCE_MAX = 7;
 
-export type GearCategory = 'WEAPON' | 'ARMOR' | 'ACCESSORY';
+export type GearCategory = 'WEAPON' | 'ARMOR' | 'ACCESSORY' | 'TOOL';
 
 // ⚠️ Mantenha em sincronia com ItemTypeStr / WEAPON_TYPES de itemCatalog.ts.
 // GAUNTLET = arma do Monge (manoplas); ORB = secundária do Mago (orbe).
@@ -36,11 +36,17 @@ const ARMOR_TYPES = [
 ];
 // BELT (cinto) é tratado como acessório (ver ACCESSORY_TYPES em dungeonAdventures.ts).
 const ACCESSORY_TYPES = ['RING', 'NECKLACE', 'BELT'];
+// Ferramentas/trajes de coleta (TOOL_CATALOG em itemCatalog.ts): mesma escada
+// de chances/failstack das armas (+1..+15, PRI..PEN), NUNCA destrói na falha e
+// o reparo é por CÓPIA craftada (são COMMON → caminho de duplicata nível-0 do
+// repair-item). O stat que escala é gatherYield (SCALING_STAT_KEYS).
+const TOOL_TYPES = ['PICKAXE', 'HERB_SICKLE', 'LOGGING_AXE', 'FISHING_ROD', 'HUNTING_KNIFE', 'GATHER_GARB'];
 
 export function getGearCategory(itemType: string): GearCategory | null {
   if (WEAPON_TYPES.includes(itemType)) return 'WEAPON';
   if (ARMOR_TYPES.includes(itemType)) return 'ARMOR';
   if (ACCESSORY_TYPES.includes(itemType)) return 'ACCESSORY';
+  if (TOOL_TYPES.includes(itemType)) return 'TOOL';
   return null;
 }
 
@@ -202,6 +208,9 @@ const SCALING_STAT_KEYS = [
   'agi', 'str', 'int', 'res', 'def', 'dex', 'con',
   'damage', 'attack', 'defense', 'strength', 'dexterity',
   'constitution', 'intelligence', 'hp', 'mp',
+  // Ferramentas/trajes de coleta: o rendimento por tique escala com o +N
+  // (0.15 base → ~0.26 em +15 → ~0.50 em PEN).
+  'gatherYield',
 ];
 
 export function applyEnhancementToStats(stats: Record<string, any> | null | undefined, level: number): Record<string, any> {
@@ -232,10 +241,12 @@ export type MaterialRequirement =
   | { kind: 'STONE'; name: string }
   | { kind: 'DUPLICATE' };
 
-export function getRequiredMaterial(category: GearCategory, targetLevel: number): MaterialRequirement {
+export function getRequiredMaterial(category: GearCategory, targetLevel: number, itemType?: string): MaterialRequirement {
   if (category === 'ACCESSORY') return { kind: 'DUPLICATE' };
   const concentrated = targetLevel >= PRI;
-  if (category === 'WEAPON') {
+  // Ferramenta de coleta aprimora como ARMA (pedra de arma); o traje
+  // (GATHER_GARB, slot de armadura) usa pedra de armadura.
+  if (category === 'WEAPON' || (category === 'TOOL' && itemType !== 'GATHER_GARB')) {
     return { kind: 'STONE', name: concentrated ? STONE_NAMES.WEAPON_CONCENTRATED : STONE_NAMES.WEAPON_BASIC };
   }
   return { kind: 'STONE', name: concentrated ? STONE_NAMES.ARMOR_CONCENTRATED : STONE_NAMES.ARMOR_BASIC };

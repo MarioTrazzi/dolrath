@@ -14,6 +14,8 @@ export function getSlotTypeFromItemType(itemType: string): EquipmentSlotType {
     case 'LIGHT_ARMOR':
     case 'MEDIUM_ARMOR':
     case 'HEAVY_ARMOR':
+    // Traje de coleta substitui a armadura de corpo (peça única de profissão).
+    case 'GATHER_GARB':
       return 'ARMOR';
     case 'SWORD':
     case 'AXE':
@@ -21,6 +23,12 @@ export function getSlotTypeFromItemType(itemType: string): EquipmentSlotType {
     case 'STAFF':
     case 'BOW':
     case 'GAUNTLET':
+    // Ferramentas de coleta SUBSTITUEM a arma (coletar te deixa "desarmado").
+    case 'PICKAXE':
+    case 'HERB_SICKLE':
+    case 'LOGGING_AXE':
+    case 'FISHING_ROD':
+    case 'HUNTING_KNIFE':
       return 'WEAPON';
     case 'SHIELD':
     case 'ORB':

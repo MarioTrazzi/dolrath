@@ -58,6 +58,10 @@ export const TYPE_STYLE: Record<string, string> = {
   STONE_SHARD: 'A shard of black enhancement stone: a small, sharp broken sliver of polished obsidian-black stone with glowing runic cracks and a tiny etched sigil, faceted and floating — clearly a FRAGMENT/CHIP, not a whole stone. NO vial, NO bottle, NO liquid.',
   // Estilhaço de memória: fragmento de cristal translúcido com uma forma fantasma dentro.
   MEMORY_SHARD: 'A glowing translucent memory fragment: a faceted crystal-glass shard holding a faint ghostly after-image of an ancient weapon and armor swirling inside, pale ethereal blue-white light and drifting motes — a relic of remembered forms. NO vial, NO bottle, NO liquid.',
+  // Insumo PROCESSADO (Bancada de Processamento): produto beneficiado, não o cru.
+  PROCESSED: 'A refined crafting good produced at a processing bench (a cast metal ingot, a polished blade blank, a planed wooden board, tanned finished leather, a woven bolt of linen cloth, a cut and faceted gem, a sack of milled flour, a stoppered clay jar of herbal extract...) neatly presented on the dark backdrop — clearly a PROCESSED/refined material, more finished than raw ore or hide, but NOT a finished weapon, armor or labeled potion.',
+  // Prato de CULINÁRIA: comida rústica de taverna, não poção.
+  FOOD: 'A hearty rustic tavern dish of a fantasy realm (fresh baked bread, a roasted meat platter, a herb salad in a wooden bowl, a savory pie, a steaming stew pot, a lavish feast spread...) served on rustic wood or pewter tableware, appetizing steam and warm light — cooked FOOD, NOT a potion, NO glass vial.',
 };
 
 // Per-rarity treatment — escalates ornamentation and magical aura.

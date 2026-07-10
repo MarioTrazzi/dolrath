@@ -89,6 +89,7 @@
     "eslint-config-next": "14.2.35",
     "ethers": "^6.15.0",
     "hardhat": "^2.28.0",
+    "supabase": "^2.109.1",
     "ts-node": "^10.9.2",
     "uuid": "^9.0.1"
   }

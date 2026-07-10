@@ -39,6 +39,7 @@ import {
 import { applyEnhancementToStats } from '@/lib/enhancementSystem'
 import { isBroken } from '@/lib/durability'
 import { itemImagePath } from '@/lib/itemCatalog'
+import { parseActiveFood, foodBuffAttrBonus, foodBuffLabel, foodBuffRemainingMin } from '@/lib/foodBuff'
 import {
   computeLevers,
   transformLevers,
@@ -92,6 +93,8 @@ export interface DungeonCharacter {
   agi?: number
   int?: number
   def?: number
+  /** 🍳 Buff de comida ativo (Character.activeFood) — validado em lib/foodBuff.ts. */
+  activeFood?: unknown
   equipment: any[]
 }
 
@@ -841,7 +844,9 @@ export default function DungeonRun({ dungeon, character, tier = 1, onExit, onRes
       if (!res.ok) return
       const data = await res.json()
       const list: DungeonConsumable[] = (Array.isArray(data) ? data : [])
-        .filter((row: any) => row?.item?.type === 'CONSUMABLE' && row.quantity > 0)
+        // battleUsable:false = comida da Culinária (Pão cura FORA de combate;
+        // o buff dos pratos entra pelos levers) — fica fora do cinto da run.
+        .filter((row: any) => row?.item?.type === 'CONSUMABLE' && row.quantity > 0 && row?.item?.stats?.battleUsable !== false)
         .map((row: any) => {
           const e = consumableEffect(row.item.stats)
           return {
@@ -871,12 +876,26 @@ export default function DungeonRun({ dungeon, character, tier = 1, onExit, onRes
     [equipList]
   )
   const combatClass = useMemo(() => normalizeCombatClass(character.class) ?? 'warrior', [character.class])
+  // 🍳 Buff de comida (Culinária): bônus PLANO de atributo por tempo REAL, somado
+  // aos pontos distribuídos antes do tilt — avaliado na entrada da run (expiração
+  // lazy: prato vencido é ignorado pelo parseActiveFood).
+  const foodBuff = useMemo(() => parseActiveFood(character.activeFood), [character.activeFood])
+  const foodAttrs = useMemo(() => foodBuffAttrBonus(foodBuff), [foodBuff])
   const baseLevers = useMemo<Levers>(
     () => computeLevers(combatClass, character.level, gearTier, {
-      str: character.str, agi: character.agi, int: character.int, def: character.def,
+      str: (character.str ?? 0) + foodAttrs.str,
+      agi: (character.agi ?? 0) + foodAttrs.agi,
+      int: (character.int ?? 0) + foodAttrs.int,
+      def: (character.def ?? 0) + foodAttrs.def,
     }),
-    [combatClass, character.level, gearTier, character.str, character.agi, character.int, character.def]
+    [combatClass, character.level, gearTier, character.str, character.agi, character.int, character.def, foodAttrs]
   )
+  // Avisa no diário que o herói entrou "bem alimentado" (uma vez, na abertura da run).
+  useEffect(() => {
+    if (!runReady || !foodBuff) return
+    pushLog(`🍽 Bem alimentado: ${foodBuffLabel(foodBuff)} (${foodBuff.name}, ~${foodBuffRemainingMin(foodBuff)} min restantes)`)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runReady])
   // Transformação = buff simétrico por cima dos levers-base (×TRANSFORM_SCALE).
   const playerLevers = useMemo<Levers>(
     () => (transform ? transformLevers(baseLevers) : baseLevers),

@@ -2,6 +2,7 @@ import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { computeStaminaRegen } from '@/lib/staminaSystem'
+import { activateFoodBuff, foodBuffLabel, parseFoodBuffSpec } from '@/lib/foodBuff'
 
 export async function POST(req: Request) {
   const session = await auth()
@@ -94,7 +95,27 @@ export async function POST(req: Request) {
     let updateData: any = {}
     let effectMessage = ''
 
-    switch (itemToUse.item.name.toLowerCase()) {
+    // 🍳 COMIDA da Culinária — braço genérico pelos STATS (antes do switch por
+    // nome, que só conhece as poções antigas).
+    const itemStats = (itemToUse.item.stats ?? {}) as any
+    const foodBuffSpec = parseFoodBuffSpec(itemStats)
+    if (foodBuffSpec) {
+      // Prato de buff: grava o buff ativo por TEMPO REAL (lib/foodBuff.ts).
+      // Um prato por vez — comer outro substitui o anterior.
+      const buff = activateFoodBuff(itemToUse.item.name, foodBuffSpec)
+      updateData.activeFood = buff
+      effectMessage = `Bem alimentado! ${foodBuffLabel(buff)} por ${foodBuffSpec.durationMin} min (${itemToUse.item.name})`
+    } else if (
+      itemStats.effect === 'instant' &&
+      itemStats.battleUsable === false &&
+      Number(itemStats.healAmount) > 0
+    ) {
+      // Prato restaurador fora de combate (ex.: Pão) — cura pelo healAmount do catálogo.
+      const heal = Number(itemStats.healAmount)
+      const newHp = Math.min(character.maxHp, character.hp + heal)
+      updateData.hp = newHp
+      effectMessage = `Vida restaurada! +${newHp - character.hp} HP (${newHp}/${character.maxHp})`
+    } else switch (itemToUse.item.name.toLowerCase()) {
       case 'poção de stamina':
       case 'stamina potion':
         const staminaRestore = 50 // Restaura 50 stamina

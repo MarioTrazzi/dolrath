@@ -18,3 +18,15 @@ export async function getUserAlchemyXp(userId: string): Promise<number> {
   const agg = await prisma.character.aggregate({ where: { userId }, _sum: { alchemyXp: true } });
   return agg._sum.alchemyXp ?? 0;
 }
+
+/** XP de Processamento da CONTA: soma do processXp de todos os personagens do usuário. */
+export async function getUserProcessXp(userId: string): Promise<number> {
+  const agg = await prisma.character.aggregate({ where: { userId }, _sum: { processXp: true } });
+  return agg._sum.processXp ?? 0;
+}
+
+/** XP de Culinária da CONTA: soma do cookXp de todos os personagens do usuário. */
+export async function getUserCookXp(userId: string): Promise<number> {
+  const agg = await prisma.character.aggregate({ where: { userId }, _sum: { cookXp: true } });
+  return agg._sum.cookXp ?? 0;
+}

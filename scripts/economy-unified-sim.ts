@@ -59,6 +59,7 @@ import { farmPlotCount, professionXpForLevel, PROFESSION_MAX_LEVEL } from '@/lib
 import { getEnhanceChance, getFailstackGainOnFail } from '@/lib/enhancementSystem'
 import { POTION_RECIPES } from '@/lib/alchemy'
 import { FORGE_RECIPES } from '@/lib/forge'
+import { PROCESSING_RECIPES } from '@/lib/processing'
 import {
   getCatalogItemByName, getConsumableByName, getIngredientByName,
   getForgeMaterialByName, getSeedByName,
@@ -415,11 +416,11 @@ function farmDay(v: Vault, led: Ledger, c: Char): number {
     gainProfXp('farm', c, WELL.farmXpPerCollect * 2)
     stamina += FARM_ACTION_STAMINA * 2
   }
-  // cercado (nv5+): 1 ciclo/dia se houver Ração (craft real a partir de Trigo via alquimia)
+  // cercado (nv5+): 1 ciclo/dia se houver Ração (craft real a partir de Trigo via PROCESSAMENTO)
   if (c.farmLevel >= 5) {
-    const racao = POTION_RECIPES.find((r) => r.outputName === 'Ração')
-    if (racao && racao.ingredients.every((i) => (v.items.get(i.name) ?? 0) >= i.quantity) && v.gold >= racao.goldCost) {
-      racao.ingredients.forEach((i) => takeItem(v, i.name, i.quantity))
+    const racao = PROCESSING_RECIPES.find((r) => r.outputName === 'Ração')
+    if (racao && racao.inputs.every((i) => (v.items.get(i.name) ?? 0) >= i.quantity) && v.gold >= racao.goldCost) {
+      racao.inputs.forEach((i) => takeItem(v, i.name, i.quantity))
       v.gold -= racao.goldCost; led.potCraftFee += racao.goldCost
       addItem(v, PEN.outputName, PEN.yield)
       led.goldFromFarmSell += sellValueOf(PEN.outputName) * PEN.yield

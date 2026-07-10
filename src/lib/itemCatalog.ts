@@ -23,8 +23,12 @@ export type Rarity = 'COMMON' | 'UNCOMMON' | 'RARE' | 'EPIC' | 'LEGENDARY';
 export type RaceId = 'draconiano' | 'metamorfo' | 'humano' | 'elfo';
 
 // Como o item é obtido. 'farm' = produzido na fazenda (cultivo/poço/cercado);
-// 'craft' = só existe via receita (alquimia/forja) — não cai nem é vendido.
-export type ItemSource = 'shop' | 'dungeon' | 'dungeon_boss' | 'adventure_boss' | 'farm' | 'craft';
+// 'craft' = só existe via receita (alquimia/forja) — não cai nem é vendido;
+// 'processing' = beneficiado na Bancada de Processamento (src/lib/processing.ts);
+// 'cooking' = prato de Culinária (profissão futura — itens já catalogados).
+export type ItemSource =
+  | 'shop' | 'dungeon' | 'dungeon_boss' | 'adventure_boss'
+  | 'farm' | 'craft' | 'processing' | 'cooking';
 
 // Arquétipo de build dos itens de loja (mesma potência, distribuição diferente).
 export type BuildArchetype = 'brute' | 'agile' | 'arcane' | 'guardian';
@@ -871,16 +875,13 @@ export const CONSUMABLE_CATALOG: ConsumableItem[] = [
   },
 
   // ---------- 🌾 CRAFT/FAZENDA — só via receita (não caem nem são vendidos) ----------
+  // Bandagem e Ração são produzidas na Bancada de PROCESSAMENTO (processing.ts):
+  // são beneficiamento (têxtil/moagem), não transmutação — a alquimia é só poções.
   {
     // Contra-item do SANGRAMENTO (Lobo da Floresta), como o Antídoto é do veneno.
     name: 'Bandagem de Linho', description: 'Faixas de linho limpas que estancam sangramentos.',
     subtype: 'ANTIDOTE', level: 2, rarity: 'COMMON', goldPrice: 60, source: 'craft',
     stats: { cure: 'bleed', effect: 'instant', battleUsable: true },
-  },
-  {
-    name: 'Pão', description: 'Pão de trigo da fazenda; restaura 20 HP fora de combate.',
-    subtype: 'HEALTH_POTION', level: 1, rarity: 'COMMON', goldPrice: 40, source: 'craft',
-    stats: { healAmount: 20, effect: 'instant', battleUsable: false },
   },
   {
     // Não é usável pelo personagem: é o insumo do Cercado da fazenda (vira Couro).
@@ -909,6 +910,59 @@ export const CONSUMABLE_CATALOG: ConsumableItem[] = [
     name: 'Lágrima Celeste', description: 'Revive com 100% do HP e concede crítico garantido no próximo golpe.',
     subtype: 'REVIVE_POTION', level: 35, rarity: 'LEGENDARY', goldPrice: 3500, source: 'adventure_boss', adventureBoss: 'Sylariel',
     stats: { reviveHpPercent: 100, effect: 'revive', battleUsable: true, special: 'guaranteedCrit' },
+  },
+];
+
+// === CATÁLOGO DE COMIDAS (Culinária 🍳) ===
+// Pratos da futura profissão de CULINÁRIA. Os ITENS já existem (catalogados
+// aqui, fora da loja e dos pools de drop), mas o craft (receitas, cookXp,
+// CookingDialog, rota cook-food) e o MOTOR de buff por tempo real
+// (foodBuff.durationMin) chegam na sessão da Culinária.
+//
+// Design do buff: comida dá bônus PLANO de atributo (str/int/agi/def) por
+// 15/30 minutos REAIS — mais fraco que poção de combate, porém duradouro
+// (a poção buffa por turnos DENTRO da luta; a comida acompanha o farm).
+// stats.foodBuff = { stat: 'str'|'int'|'agi'|'def'|'all', value, durationMin }.
+//
+// Receitas planejadas (sessão da Culinária — usam os processados de processing.ts):
+//   Pão                      = Farinha ×1 + Água Pura ×1
+//   Assado da Fazenda        = Ração ×1 + Raiz Vigorosa ×1        (STR)
+//   Salada de Ervas          = Erva Medicinal ×1 + Raiz Vigorosa ×1 (AGI)
+//   Torta de Cogumelo        = Farinha ×1 + Cogumelo Lunar ×2     (INT)
+//   Ensopado Rústico         = Farinha ×1 + Cogumelo Lunar ×1 + Água Pura ×1 (DEF)
+//   Banquete do Aventureiro  = Farinha ×2 + Cogumelo Lunar ×1 + Seiva Ancestral ×1 (ALL)
+
+export const FOOD_CATALOG: ConsumableItem[] = [
+  {
+    // Movido da alquimia (era receita do Triângulo): pão é prato, não poção.
+    name: 'Pão', description: 'Pão de trigo da fazenda; restaura 20 HP fora de combate.',
+    subtype: 'HEALTH_POTION', level: 1, rarity: 'COMMON', goldPrice: 40, source: 'cooking',
+    stats: { healAmount: 20, effect: 'instant', battleUsable: false },
+  },
+  {
+    name: 'Assado da Fazenda', description: 'Assado farto da fazenda; fortalece os músculos por meia hora.',
+    subtype: 'TEMPORARY_BUFF', level: 3, rarity: 'COMMON', goldPrice: 90, source: 'cooking',
+    stats: { foodBuff: { stat: 'str', value: 2, durationMin: 30 }, effect: 'food', battleUsable: false },
+  },
+  {
+    name: 'Salada de Ervas', description: 'Folhas frescas e raízes crocantes; deixa o corpo leve e ágil.',
+    subtype: 'TEMPORARY_BUFF', level: 3, rarity: 'COMMON', goldPrice: 70, source: 'cooking',
+    stats: { foodBuff: { stat: 'agi', value: 2, durationMin: 15 }, effect: 'food', battleUsable: false },
+  },
+  {
+    name: 'Torta de Cogumelo', description: 'Torta de Cogumelo Lunar; clareia a mente de quem conjura.',
+    subtype: 'TEMPORARY_BUFF', level: 5, rarity: 'UNCOMMON', goldPrice: 140, source: 'cooking',
+    stats: { foodBuff: { stat: 'int', value: 2, durationMin: 30 }, effect: 'food', battleUsable: false },
+  },
+  {
+    name: 'Ensopado Rústico', description: 'Caldo grosso que aquece os ossos; o corpo aguenta mais pancada.',
+    subtype: 'TEMPORARY_BUFF', level: 5, rarity: 'UNCOMMON', goldPrice: 140, source: 'cooking',
+    stats: { foodBuff: { stat: 'def', value: 2, durationMin: 30 }, effect: 'food', battleUsable: false },
+  },
+  {
+    name: 'Banquete do Aventureiro', description: 'Mesa completa digna de heróis; o grupo inteiro rende mais.',
+    subtype: 'TEMPORARY_BUFF', level: 10, rarity: 'RARE', goldPrice: 320, source: 'cooking',
+    stats: { foodBuff: { stat: 'all', value: 1, durationMin: 30 }, effect: 'food', battleUsable: false },
   },
 ];
 
@@ -1002,6 +1056,49 @@ export const FORGE_MATERIAL_CATALOG: ForgeMaterial[] = [
   { name: 'Fibra de Linho', description: 'Fios de linho fiados na fazenda; a base têxtil das vestes leves e das bandagens.', emoji: '🧵', rarity: 'COMMON', goldValue: 7, source: 'farm' },
 ];
 
+// === CATÁLOGO DE INSUMOS PROCESSADOS (Processamento ⚙️) ===
+// Camada intermediária do ecossistema de craft: matéria-prima CRUA (coleta/
+// fazenda/masmorra) é beneficiada na Bancada de Processamento (src/lib/
+// processing.ts, SEM falha — modelo do refino de pedra) e vira o insumo que
+// as receitas INCOMUNS da forja e as poções da alquimia exigem. Receitas
+// COMUNS continuam usando material cru (loop do novato intacto).
+// No banco viram Item type=CONSUMABLE com stats.kind='processed' (sem
+// migração). Não caem em masmorra, não são vendidos na loja e não entram em
+// pool de drop — só existem via processamento.
+
+export interface ProcessedMaterial {
+  name: string;
+  description: string;
+  emoji: string;
+  rarity: Rarity;
+  /** Valor de venda (gold) ≈ soma dos insumos crus × 1.2 — vender cru rende
+   *  mais que processar-e-vender (a 50%), então processar só vale p/ craftar. */
+  goldValue: number;
+}
+
+export const PROCESSED_CATALOG: ProcessedMaterial[] = [
+  // ---------- FUNDIÇÃO (metais e gemas) ----------
+  { name: 'Barra de Ferro', description: 'Ferro fundido e batido em barra; o esqueleto de todo equipamento incomum.', emoji: '🧱', rarity: 'COMMON', goldValue: 34 },
+  { name: 'Barra de Aço', description: 'Ferro Pesado temperado em aço; lâmina de espadas e machados de verdade.', emoji: '🔩', rarity: 'UNCOMMON', goldValue: 22 },
+  { name: 'Lâmina Polida', description: 'Metal Leve afiado e polido ao fio; o coração de uma adaga de caçador.', emoji: '🗡️', rarity: 'UNCOMMON', goldValue: 22 },
+  { name: 'Cristal Lapidado', description: 'Cristal Bruto lapidado em facetas perfeitas; foco digno de orbes rúnicos.', emoji: '🔷', rarity: 'RARE', goldValue: 67 },
+  { name: 'Joia Lapidada', description: 'Fragmentos de joias fundidos numa gema única; incrusta manoplas de mestre.', emoji: '💎', rarity: 'RARE', goldValue: 115 },
+
+  // ---------- MADEIRA ----------
+  { name: 'Tábua Aparelhada', description: 'Madeira Flexível serrada e aplainada; corpo de arcos de batedor.', emoji: '🪵', rarity: 'COMMON', goldValue: 22 },
+  { name: 'Verniz de Ent', description: 'Seiva de Ent cozida em verniz arcano; sela e desperta cajados rúnicos.', emoji: '🌳', rarity: 'UNCOMMON', goldValue: 58 },
+
+  // ---------- TÊXTIL / CURTUME ----------
+  { name: 'Couro Curtido', description: 'Couro tratado em banho de água pura; base das armaduras incomuns.', emoji: '🟤', rarity: 'COMMON', goldValue: 22 },
+  { name: 'Tecido de Linho', description: 'Fibra de Linho tecida em pano firme; vestes arcanas e bandagens.', emoji: '🧶', rarity: 'COMMON', goldValue: 17 },
+
+  // ---------- MOAGEM / DESTILARIA (insumos de alquimia e culinária) ----------
+  { name: 'Farinha', description: 'Trigo moído fino; a base de todo prato de forno da culinária.', emoji: '🥣', rarity: 'COMMON', goldValue: 12 },
+  { name: 'Extrato Herbal', description: 'Erva Medicinal macerada em água pura; o princípio ativo das poções de vida.', emoji: '🧪', rarity: 'COMMON', goldValue: 26 },
+  { name: 'Essência de Mana', description: 'Flor de Mana destilada; o brilho azul das poções de mana.', emoji: '💙', rarity: 'COMMON', goldValue: 26 },
+  { name: 'Extrato de Raiz', description: 'Raiz Vigorosa prensada em tônico; devolve o fôlego em forma líquida.', emoji: '🫙', rarity: 'COMMON', goldValue: 26 },
+];
+
 // === CATÁLOGO DE SEMENTES (Fazenda) ===
 // Sementes SÓ caem na Coleta (Campos de Ervas — src/lib/gathering.ts) e são
 // plantadas nos canteiros da fazenda (src/lib/farming.ts). No banco viram
@@ -1048,9 +1145,11 @@ export function getCatalogItemByName(name: string): CatalogItem | undefined {
 
 const CONSUMABLE_BY_NAME = new Map(CONSUMABLE_CATALOG.map((c) => [c.name, c]));
 
-/** Consumível do catálogo pelo nome (para recompensas de exploração criarem o item real). */
+/** Consumível do catálogo pelo nome (para recompensas de exploração criarem o item real).
+ *  Cai no FOOD_CATALOG para itens que migraram p/ a Culinária (ex.: Pão) continuarem
+ *  resolvendo — há Items antigos deles no banco. */
 export function getConsumableByName(name: string): ConsumableItem | undefined {
-  return CONSUMABLE_BY_NAME.get(name);
+  return CONSUMABLE_BY_NAME.get(name) ?? FOOD_BY_NAME.get(name);
 }
 
 /** Consumíveis que caem em masmorra (não os de loja). */
@@ -1087,6 +1186,20 @@ const SEED_BY_NAME = new Map(SEED_CATALOG.map((s) => [s.name, s]));
 /** Semente pelo nome (para a coleta/plantio resolverem o item). */
 export function getSeedByName(name: string): SeedItem | undefined {
   return SEED_BY_NAME.get(name);
+}
+
+const PROCESSED_BY_NAME = new Map(PROCESSED_CATALOG.map((p) => [p.name, p]));
+
+/** Insumo processado pelo nome (para o craft/bancada resolverem o item). */
+export function getProcessedByName(name: string): ProcessedMaterial | undefined {
+  return PROCESSED_BY_NAME.get(name);
+}
+
+const FOOD_BY_NAME = new Map(FOOD_CATALOG.map((f) => [f.name, f]));
+
+/** Comida de culinária pelo nome (a bancada de Culinária chega em outra sessão). */
+export function getFoodByName(name: string): ConsumableItem | undefined {
+  return FOOD_BY_NAME.get(name);
 }
 
 // Forma mínima de um Item para classificar craft/transmutação (cliente e servidor).
@@ -1139,6 +1252,23 @@ export function isSeedItem(item: CraftableLike): boolean {
   if (kind === 'seed') return true;
   if (kind && kind !== 'seed') return false;
   return !!item.name && SEED_BY_NAME.has(item.name);
+}
+
+/**
+ * Diz se um Item é um INSUMO PROCESSADO (saída da Bancada de Processamento).
+ * Mesma lógica dos irmãos: `stats.kind === 'processed'` é cache; a verdade é o
+ * PROCESSED_CATALOG. Pedras de aprimoramento (stats.enhancementStone) NÃO
+ * contam — têm fluxo próprio (aprimoramento/refino).
+ */
+export function isProcessedItem(item: CraftableLike): boolean {
+  if (!item) return false;
+  if (item.type && item.type !== 'CONSUMABLE') return false;
+  const stats = item.stats as any;
+  if (stats?.enhancementStone) return false;
+  const kind = stats?.kind;
+  if (kind === 'processed') return true;
+  if (kind && kind !== 'processed') return false;
+  return !!item.name && PROCESSED_BY_NAME.has(item.name);
 }
 
 export function getItemsForDungeon(dungeonId: string): CatalogItem[] {

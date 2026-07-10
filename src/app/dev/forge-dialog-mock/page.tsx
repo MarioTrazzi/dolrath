@@ -10,6 +10,7 @@ import ForgeDialog, {
   type ForgeInventoryItem,
 } from '@/components/crafting/ForgeDialog';
 import { getForgeRecipeById } from '@/lib/forge';
+import { getProcessedByName } from '@/lib/itemCatalog';
 import {
   getCraftChance,
   getCraftXp,
@@ -34,6 +35,16 @@ const START_INV: [string, number][] = [
   ['Estilhaço de Pedra Negra (Arma)', 25],
   ['Estilhaço de Pedra Negra (Armadura)', 25],
   ['Pedra Negra (Arma)', 12],
+  // Processados (Bancada de Processamento) — insumos das receitas INCOMUNS.
+  ['Barra de Ferro', 6],
+  ['Barra de Aço', 4],
+  ['Lâmina Polida', 4],
+  ['Tábua Aparelhada', 4],
+  ['Verniz de Ent', 4],
+  ['Cristal Lapidado', 4],
+  ['Joia Lapidada', 4],
+  ['Couro Curtido', 6],
+  ['Tecido de Linho', 6],
 ];
 
 export default function ForgeDialogMockPage() {
@@ -53,7 +64,11 @@ export default function ForgeDialogMockPage() {
       .map(([name, quantity], i) => ({
         id: `mock-${i}`,
         quantity,
-        item: { name, type: 'CONSUMABLE', stats: { kind: 'material' } },
+        item: {
+          name,
+          type: 'CONSUMABLE',
+          stats: { kind: getProcessedByName(name) ? 'processed' : 'material' },
+        },
       }));
 
   const attemptOverride = async (recipeId: string, quantity: number): Promise<ForgeCraftResult> => {

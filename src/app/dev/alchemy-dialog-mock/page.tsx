@@ -10,6 +10,7 @@ import AlchemyDialog, {
   type AlchemyInventoryItem,
 } from '@/components/crafting/AlchemyDialog';
 import { getRecipeById } from '@/lib/alchemy';
+import { getProcessedByName } from '@/lib/itemCatalog';
 import { getCraftChance, getCraftXp, rollCraftBatch } from '@/lib/craftingProfession';
 import { getProfessionLevelInfo, professionXpForLevel } from '@/lib/professionSystem';
 
@@ -29,8 +30,10 @@ const START_INV: [string, number][] = [
   ['Essência Cristalina', 1],
   ['Sangue de Monstro', 2],
   ['Pena de Fênix', 1],
-  ['Trigo', 6],
-  ['Fibra de Linho', 6],
+  // Extratos processados (destilaria do Processamento) — base das poções.
+  ['Extrato Herbal', 8],
+  ['Essência de Mana', 6],
+  ['Extrato de Raiz', 6],
 ];
 
 export default function AlchemyDialogMockPage() {
@@ -51,7 +54,11 @@ export default function AlchemyDialogMockPage() {
       .map(([name, quantity], i) => ({
         id: `mock-${i}`,
         quantity,
-        item: { name, type: 'CONSUMABLE', stats: { kind: 'ingredient' } },
+        item: {
+          name,
+          type: 'CONSUMABLE',
+          stats: { kind: getProcessedByName(name) ? 'processed' : 'ingredient' },
+        },
       }));
 
   const attemptOverride = async (recipeId: string, quantity: number): Promise<AlchemyCraftResult> => {

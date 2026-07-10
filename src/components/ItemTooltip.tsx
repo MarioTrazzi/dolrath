@@ -8,7 +8,11 @@ import { EquipmentSlotType } from '@prisma/client';
 import { sellUnitPrice as sellPrice } from '@/lib/sellPricing';
 import { getItemVisual, getItemTypeLabel, getItemCategory } from '@/lib/itemVisuals';
 import { resolveImageUrl } from '@/lib/imageUrl';
-import { itemImagePath, isIngredientItem, isMaterialItem, isSeedItem } from '@/lib/itemCatalog';
+import { itemImagePath, isIngredientItem, isMaterialItem, isSeedItem, isProcessedItem } from '@/lib/itemCatalog';
+import { recipesUsingIngredient } from '@/lib/alchemy';
+import { forgeRecipesUsingMaterial } from '@/lib/forge';
+import { processingRecipesUsingInput } from '@/lib/processing';
+import { cookingRecipesUsingInput } from '@/lib/cooking';
 import { applyEnhancementToStats, getLevelLabel } from '@/lib/enhancementSystem';
 import { diffItemStats, formatItemStats, formatStatValue } from '@/lib/itemStats';
 import { whatItemCanProduceSummary } from '@/lib/craftProduces';
@@ -32,9 +36,9 @@ interface ItemTooltipProps {
   /** Abre o diálogo de aprimoramento. Ao vir de uma Pedra Negra, inventoryId vem
    *  vazio e `stoneCategory` indica a categoria de gear que a pedra aprimora. */
   onEnhance?: (inventoryId: string, itemName: string, stoneCategory?: 'WEAPON' | 'ARMOR') => void;
-  /** Abre a dialog de profissão (Forja/Alquimia) com o insumo já posicionado,
-   *  sem sair da página — mesmo padrão do onEnhance. */
-  onOpenCraft?: (craft: 'alchemy' | 'forge', itemName: string) => void;
+  /** Abre a dialog de profissão (Forja/Alquimia/Processamento) com o insumo já
+   *  posicionado, sem sair da página — mesmo padrão do onEnhance. */
+  onOpenCraft?: (craft: 'alchemy' | 'forge' | 'process' | 'cook', itemName: string) => void;
   /** Inventário global: transfere o item para o personagem selecionado.
    *  Recebe a quantidade disponível na pilha (1 = uma unidade; stack > 1 abre
    *  o diálogo de quantidade no chamador). */
@@ -194,8 +198,31 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
   // catálogo por nome quando o registro antigo não tem stats.kind. [[dolrath-alchemy-crafting]]
   const isIngredient = !isEnhancementStone && isIngredientItem(item);
   const isMaterial = !isEnhancementStone && isMaterialItem(item);
+  // Insumo PROCESSADO (saída da Bancada de Processamento) — vai p/ forja/alquimia.
+  const isProcessed = !isEnhancementStone && isProcessedItem(item);
   // Semente de cultivo → "Plantar" leva à fazenda (não é consumível nem insumo de bancada).
   const isSeed = !isEnhancementStone && isSeedItem(item);
+  // Consumidores reais deste insumo — decidem o destino do botão principal e se o
+  // botão "⚙️ Processar" aparece (um material cru pode ter DOIS usos: forjar e processar).
+  const usedInAlchemy = !!item.name && recipesUsingIngredient(item.name).length > 0;
+  const usedInForge = !!item.name && forgeRecipesUsingMaterial(item.name).length > 0;
+  const usedInProcessing = !!item.name && processingRecipesUsingInput(item.name).length > 0;
+  const usedInCooking = !!item.name && cookingRecipesUsingInput(item.name).length > 0;
+  // Destino do botão principal do insumo: a bancada que de fato o consome hoje.
+  // Ex.: Trigo (ingrediente) não entra em poção nenhuma → primário vira Processar;
+  // Farinha (processado) só entra em prato → primário vira Cozinhar.
+  const primaryCraft: 'alchemy' | 'forge' | 'process' | 'cook' | null =
+    isIngredient ? (usedInAlchemy ? 'alchemy' : usedInProcessing ? 'process' : usedInCooking ? 'cook' : 'alchemy')
+    : isMaterial ? (usedInForge ? 'forge' : usedInProcessing ? 'process' : 'forge')
+    : isProcessed ? (usedInAlchemy ? 'alchemy' : usedInForge ? 'forge' : usedInCooking ? 'cook' : null)
+    : null;
+  const isCraftInput = isIngredient || isMaterial || isProcessed;
+  // Segundo botão "⚙️ Processar" quando o insumo TAMBÉM é matéria-prima de
+  // beneficiamento e o primário já aponta para outra bancada.
+  const showProcessButton = !!onOpenCraft && isCraftInput && usedInProcessing && primaryCraft !== 'process';
+  // Segundo botão "🍳 Cozinhar" quando o item também entra em prato e o primário
+  // aponta pra outra bancada — cobre a Ração (consumível comum, insumo do Assado).
+  const showCookButton = !!onOpenCraft && usedInCooking && primaryCraft !== 'cook' && !isEnhancementStone;
   // O que este ingrediente/material ajuda a produzir (receitas do alquimista/ferreiro
   // que o usam como insumo). Vazio para itens que não são insumo de nenhuma receita.
   const producesSummary = whatItemCanProduceSummary(item.name);
@@ -229,8 +256,8 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
   };
 
   // Abre a dialog de profissão com o insumo já posicionado (Alquimia: vértice do
-  // triângulo; Forja: receita que usa o material pré-selecionada).
-  const handleUseInCraft = (craft: 'alchemy' | 'forge') => {
+  // triângulo; Forja/Processamento: receita que usa o insumo pré-selecionada).
+  const handleUseInCraft = (craft: 'alchemy' | 'forge' | 'process' | 'cook') => {
     onOpenCraft?.(craft, item.name);
     setShowTooltip(false);
   };
@@ -241,18 +268,17 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
       handleEnhanceClick();
       return;
     }
-    // Ingrediente → dialog de Alquimia; material → dialog de Forja; semente → fazenda.
+    // Insumo → dialog da bancada que o consome; semente → fazenda. O insumo
+    // vem ANTES do braço de consumível: processados/ingredientes são
+    // CONSUMABLE no banco, mas "consumir" não faz nada com eles.
     if (isSeed) {
       router.push('/farm');
       setShowTooltip(false);
       return;
     }
-    if (isIngredient) {
-      handleUseInCraft('alchemy');
-      return;
-    }
-    if (isMaterial) {
-      handleUseInCraft('forge');
+    if (isCraftInput) {
+      if (primaryCraft) handleUseInCraft(primaryCraft);
+      else setShowTooltip(false); // insumo órfão (nenhuma bancada o consome hoje)
       return;
     }
     // Para itens consumíveis, consumir ao invés de equipar
@@ -432,24 +458,60 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
                 const actionStyle =
                   isEnhancementStone ? buttonStyle('#f59e0b', 'rgba(245,158,11,0.35)')
                   : isSeed ? buttonStyle('#84cc16', 'rgba(132,204,22,0.35)')
-                  : isIngredient ? buttonStyle('#10b981', 'rgba(16,185,129,0.35)')
-                  : isMaterial ? buttonStyle('#f97316', 'rgba(249,115,22,0.35)')
+                  : isCraftInput ? (
+                      primaryCraft === 'alchemy' ? buttonStyle('#10b981', 'rgba(16,185,129,0.35)')
+                      : primaryCraft === 'forge' ? buttonStyle('#f97316', 'rgba(249,115,22,0.35)')
+                      : primaryCraft === 'process' ? buttonStyle('#8b5cf6', 'rgba(139,92,246,0.35)')
+                      : primaryCraft === 'cook' ? buttonStyle('#eab308', 'rgba(234,179,8,0.35)')
+                      : buttonStyle('#6b7280', 'rgba(107,114,128,0.35)')
+                    )
                   : isConsumable ? buttonStyle('#22c55e', 'rgba(34,197,94,0.35)')
                   : isEquipped ? buttonStyle('#ef4444', 'rgba(239,68,68,0.35)')
                   : buttonStyle(visual.accent, visual.accentSoft);
                 const actionLabel =
                   isEnhancementStone ? '⚒️ Aprimorar'
                   : isSeed ? '🌾 Plantar'
-                  : isIngredient ? '⚗️ Alquimia'
-                  : isMaterial ? '⚒️ Forja'
+                  : isCraftInput ? (
+                      primaryCraft === 'alchemy' ? '⚗️ Alquimia'
+                      : primaryCraft === 'forge' ? '⚒️ Forja'
+                      : primaryCraft === 'process' ? '⚙️ Processar'
+                      : primaryCraft === 'cook' ? '🍳 Cozinhar'
+                      : '🧺 Sem uso na bancada'
+                    )
                   : isConsumable ? '🧪 Consumir'
                   : isEquipped ? '⚔️ Desequipar'
                   : '🛡️ Equipar';
                 btns.push(
-                  <button key="action" onClick={handleAction} className={storeButtonClass} style={actionStyle}>
+                  <button
+                    key="action"
+                    onClick={handleAction}
+                    disabled={isCraftInput && !primaryCraft}
+                    className={storeButtonClass}
+                    style={actionStyle}
+                  >
                     {actionLabel}
                   </button>
                 );
+
+                // ⚙️ Segundo uso do insumo cru: beneficiar na Bancada de Processamento
+                // (o primário já aponta p/ forja/alquimia; este abre o processamento).
+                if (showProcessButton) {
+                  btns.push(
+                    <button key="process" onClick={() => handleUseInCraft('process')} className={storeButtonClass} style={buttonStyle('#8b5cf6', 'rgba(139,92,246,0.35)')}>
+                      ⚙️ Processar
+                    </button>
+                  );
+                }
+
+                // 🍳 Segundo uso: o insumo também entra em prato da Culinária
+                // (Água Pura, Erva, Raiz, Cogumelo, Seiva, Ração...).
+                if (showCookButton) {
+                  btns.push(
+                    <button key="cook" onClick={() => handleUseInCraft('cook')} className={storeButtonClass} style={buttonStyle('#eab308', 'rgba(234,179,8,0.35)')}>
+                      🍳 Cozinhar
+                    </button>
+                  );
+                }
 
                 if (canEnhance) {
                   btns.push(

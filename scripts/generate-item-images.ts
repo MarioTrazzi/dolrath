@@ -17,7 +17,7 @@
 import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
 
-import { ITEM_CATALOG, CONSUMABLE_CATALOG, INGREDIENT_CATALOG, FORGE_MATERIAL_CATALOG, itemImageSlug } from '../src/lib/itemCatalog'
+import { ITEM_CATALOG, CONSUMABLE_CATALOG, INGREDIENT_CATALOG, FORGE_MATERIAL_CATALOG, PROCESSED_CATALOG, FOOD_CATALOG, itemImageSlug } from '../src/lib/itemCatalog'
 import { buildItemImagePrompt } from '../src/lib/itemImagePrompt'
 
 // Pseudo-tipo de arte para cada material de forja (só muda o PROMPT; no DB são
@@ -149,6 +149,14 @@ const subjects: Subject[] = [
   // Materiais de forja (couro/ferro/especiais + estilhaços + memória).
   ...FORGE_MATERIAL_CATALOG.map((m) => ({
     name: m.name, description: m.description, type: forgeMaterialArtType(m.name), rarity: m.rarity,
+  })),
+  // Insumos processados (Bancada de Processamento) — beneficiados, não crus.
+  ...PROCESSED_CATALOG.map((p) => ({
+    name: p.name, description: p.description, type: 'PROCESSED', rarity: p.rarity,
+  })),
+  // Pratos de Culinária (itens já catalogados; a bancada chega em outra sessão).
+  ...FOOD_CATALOG.map((f) => ({
+    name: f.name, description: f.description, type: 'FOOD', rarity: f.rarity,
   })),
   // Consumíveis legados que vivem só no seed-battle-consumables.ts (nomes que
   // não estão no CONSUMABLE_CATALOG) — gerados para não deixar refs quebradas.

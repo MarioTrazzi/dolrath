@@ -24,8 +24,10 @@ import {
 import {
   getIngredientByName,
   getForgeMaterialByName,
+  getProcessedByName,
   isIngredientItem,
   isMaterialItem,
+  isProcessedItem,
   type Rarity,
 } from '@/lib/itemCatalog';
 import { recipesUsingIngredient } from '@/lib/alchemy';
@@ -180,14 +182,16 @@ export default function AlchemyDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // Ingredientes do inventário: nome → quantidade total (insumos das duas mesas;
-  // materiais de forja valem quando alguma receita de poção os usa).
+  // Ingredientes do inventário: nome → quantidade total (insumos das bancadas;
+  // materiais de forja e PROCESSADOS — extratos da destilaria — valem quando
+  // alguma receita de poção os usa).
   const ingredientCounts = useMemo(() => {
     const map = new Map<string, number>();
     for (const inv of inventory) {
       const usable =
         isIngredientItem(inv.item) ||
-        (isMaterialItem(inv.item) && recipesUsingIngredient(inv.item.name).length > 0);
+        ((isMaterialItem(inv.item) || isProcessedItem(inv.item)) &&
+          recipesUsingIngredient(inv.item.name).length > 0);
       if (usable) map.set(inv.item.name, (map.get(inv.item.name) ?? 0) + inv.quantity);
     }
     return map;
@@ -202,7 +206,7 @@ export default function AlchemyDialog({
     return Array.from(ingredientCounts.keys())
       .map((name) => ({
         name,
-        info: getIngredientByName(name) ?? getForgeMaterialByName(name),
+        info: getIngredientByName(name) ?? getForgeMaterialByName(name) ?? getProcessedByName(name),
         total: ingredientCounts.get(name) ?? 0,
       }))
       .filter((p) => p.info)
@@ -270,10 +274,14 @@ export default function AlchemyDialog({
     setHover(null);
   };
 
-  // Deep-link: coloca o ingrediente vindo do inventário assim que ele aparecer.
+  // Deep-link: coloca o insumo vindo do inventário assim que ele aparecer
+  // (ingrediente cru OU extrato processado que entra em alguma poção).
   useEffect(() => {
     if (!open || placedFromLinkRef.current || loadingInv || !initialPlaceName) return;
-    if (getIngredientByName(initialPlaceName) && (ingredientCounts.get(initialPlaceName) ?? 0) > 0) {
+    const known =
+      getIngredientByName(initialPlaceName) ||
+      (getProcessedByName(initialPlaceName) && recipesUsingIngredient(initialPlaceName).length > 0);
+    if (known && (ingredientCounts.get(initialPlaceName) ?? 0) > 0) {
       placeIngredient(initialPlaceName);
       placedFromLinkRef.current = true;
     }

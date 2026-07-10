@@ -8,16 +8,19 @@
 //    1 Concentrada. É o caminho determinístico para a Concentrada do late-game.
 //
 // Princípio de raridade (igual à alquimia):
-//  - Armadura: só couro = COMUM; couro + ferro = INCOMUM.
-//  - Arma: material especial do tipo (Ferro Pesado, Seiva de Ent…) = COMUM;
-//    + ferro = INCOMUM. O Estilhaço de Pedra Negra (Arma/Armadura) é o ligante
-//    de toda receita e também o feedstock do refino.
+//  - COMUM usa matéria-prima CRUA (couro, ferro pesado, madeira…) — o novato
+//    chega da coleta/masmorra e já forja.
+//  - INCOMUM exige insumo PROCESSADO (Barra de Aço, Couro Curtido, Tecido de
+//    Linho… — Bancada de Processamento, src/lib/processing.ts): é a demanda
+//    real da profissão de Processamento. O Estilhaço de Pedra Negra
+//    (Arma/Armadura) segue como ligante de toda receita e feedstock do refino.
 //
 // Drop dos materiais: ver dungeonAdventures.ts (chão e luta de masmorra).
 
 import {
   getCatalogItemByName,
   getForgeMaterialByName,
+  getProcessedByName,
   type Rarity,
   type CatalogItem,
 } from './itemCatalog';
@@ -98,35 +101,35 @@ export const FORGE_RECIPES: ForgeRecipe[] = [
   gear('arm_peitoral_ferro', 'Peitoral de Ferro', 'armor', [
     { name: 'Couro', quantity: 2 }, { name: 'Ferro', quantity: 2 }, { name: SHARD_A, quantity: 1 },
   ]),
-  // ---------- INCOMUM (couro + ferro) ----------
+  // ---------- INCOMUM (processados: Couro Curtido + Barra de Ferro) ----------
   gear('arm_coif_malha', 'Coif de Malha', 'armor', [
-    { name: 'Couro', quantity: 2 }, { name: 'Ferro', quantity: 1 }, { name: SHARD_A, quantity: 1 },
+    { name: 'Couro Curtido', quantity: 1 }, { name: 'Barra de Ferro', quantity: 1 }, { name: SHARD_A, quantity: 1 },
   ]),
   gear('arm_elmo_sentinela', 'Elmo do Sentinela', 'armor', [
-    { name: 'Couro', quantity: 1 }, { name: 'Ferro', quantity: 2 }, { name: SHARD_A, quantity: 1 },
+    { name: 'Couro Curtido', quantity: 1 }, { name: 'Barra de Ferro', quantity: 2 }, { name: SHARD_A, quantity: 1 },
   ]),
   gear('arm_luvas_malha', 'Luvas de Malha', 'armor', [
-    { name: 'Couro', quantity: 2 }, { name: 'Ferro', quantity: 1 }, { name: SHARD_A, quantity: 1 },
+    { name: 'Couro Curtido', quantity: 1 }, { name: 'Barra de Ferro', quantity: 1 }, { name: SHARD_A, quantity: 1 },
   ]),
   gear('arm_botas_malha', 'Botas de Malha', 'armor', [
-    { name: 'Couro', quantity: 2 }, { name: 'Ferro', quantity: 1 }, { name: SHARD_A, quantity: 1 },
+    { name: 'Couro Curtido', quantity: 1 }, { name: 'Barra de Ferro', quantity: 1 }, { name: SHARD_A, quantity: 1 },
   ]),
   gear('arm_grevas_aco', 'Grevas de Aço', 'armor', [
-    { name: 'Couro', quantity: 1 }, { name: 'Ferro', quantity: 2 }, { name: SHARD_A, quantity: 1 },
+    { name: 'Couro Curtido', quantity: 1 }, { name: 'Barra de Ferro', quantity: 2 }, { name: SHARD_A, quantity: 1 },
   ]),
   gear('arm_couro_batido', 'Armadura de Couro Batido', 'armor', [
-    { name: 'Couro', quantity: 4 }, { name: 'Ferro', quantity: 2 }, { name: SHARD_A, quantity: 1 },
+    { name: 'Couro Curtido', quantity: 2 }, { name: 'Barra de Ferro', quantity: 1 }, { name: SHARD_A, quantity: 1 },
   ]),
   gear('arm_couraca_aco', 'Couraça de Aço', 'armor', [
-    { name: 'Couro', quantity: 2 }, { name: 'Ferro', quantity: 4 }, { name: SHARD_A, quantity: 1 },
+    { name: 'Couro Curtido', quantity: 1 }, { name: 'Barra de Aço', quantity: 1 }, { name: 'Barra de Ferro', quantity: 1 }, { name: SHARD_A, quantity: 1 },
   ]),
   // ---------- LINHO (fibra da fazenda) — a rota têxtil das vestes arcanas ----------
-  // Mesmo lever de raridade do couro: só linho = comum; linho + ferro = incomum.
+  // Mesmo lever de raridade do couro: fibra crua = comum; Tecido processado = incomum.
   gear('arm_tunica_linho', 'Túnica de Linho Arcano', 'armor', [
     { name: 'Fibra de Linho', quantity: 4 }, { name: SHARD_A, quantity: 1 },
   ]),
   gear('arm_vestes_conjurador', 'Vestes do Conjurador', 'armor', [
-    { name: 'Fibra de Linho', quantity: 4 }, { name: 'Ferro', quantity: 1 }, { name: SHARD_A, quantity: 1 },
+    { name: 'Tecido de Linho', quantity: 2 }, { name: 'Barra de Ferro', quantity: 1 }, { name: SHARD_A, quantity: 1 },
   ]),
 
   // ============================================================
@@ -154,27 +157,27 @@ export const FORGE_RECIPES: ForgeRecipe[] = [
   gear('wpn_manoplas_discipulo', 'Manoplas do Discípulo', 'weapon', [
     { name: 'Fragmentos de Joias', quantity: 2 }, { name: SHARD_W, quantity: 1 },
   ]),
-  // ---------- INCOMUM (+ ferro) ----------
+  // ---------- INCOMUM (processado do tipo + Barra de Ferro) ----------
   gear('wpn_espada_veterano', 'Espada do Veterano', 'weapon', [
-    { name: 'Ferro Pesado', quantity: 3 }, { name: 'Ferro', quantity: 1 }, { name: SHARD_W, quantity: 1 },
+    { name: 'Barra de Aço', quantity: 2 }, { name: 'Barra de Ferro', quantity: 1 }, { name: SHARD_W, quantity: 1 },
   ]),
   gear('wpn_machado_guerra', 'Machado de Guerra', 'weapon', [
-    { name: 'Ferro Pesado', quantity: 3 }, { name: 'Ferro', quantity: 1 }, { name: SHARD_W, quantity: 1 },
+    { name: 'Barra de Aço', quantity: 2 }, { name: 'Barra de Ferro', quantity: 1 }, { name: SHARD_W, quantity: 1 },
   ]),
   gear('wpn_punhal_cacador', 'Punhal do Caçador', 'weapon', [
-    { name: 'Metal Leve', quantity: 3 }, { name: 'Ferro', quantity: 1 }, { name: SHARD_W, quantity: 1 },
+    { name: 'Lâmina Polida', quantity: 2 }, { name: 'Barra de Ferro', quantity: 1 }, { name: SHARD_W, quantity: 1 },
   ]),
   gear('wpn_arco_batedor', 'Arco do Batedor', 'weapon', [
-    { name: 'Madeira Flexível', quantity: 3 }, { name: 'Ferro', quantity: 1 }, { name: SHARD_W, quantity: 1 },
+    { name: 'Tábua Aparelhada', quantity: 2 }, { name: 'Barra de Ferro', quantity: 1 }, { name: SHARD_W, quantity: 1 },
   ]),
   gear('wpn_cajado_runico', 'Cajado Rúnico', 'weapon', [
-    { name: 'Seiva de Ent', quantity: 3 }, { name: 'Ferro', quantity: 1 }, { name: SHARD_W, quantity: 1 },
+    { name: 'Verniz de Ent', quantity: 2 }, { name: 'Barra de Ferro', quantity: 1 }, { name: SHARD_W, quantity: 1 },
   ]),
   gear('wpn_orbe_runico', 'Orbe Rúnico', 'weapon', [
-    { name: 'Cristal Bruto', quantity: 3 }, { name: 'Ferro', quantity: 1 }, { name: SHARD_W, quantity: 1 },
+    { name: 'Cristal Lapidado', quantity: 2 }, { name: 'Barra de Ferro', quantity: 1 }, { name: SHARD_W, quantity: 1 },
   ]),
   gear('wpn_punhos_aco', 'Punhos de Aço', 'weapon', [
-    { name: 'Fragmentos de Joias', quantity: 3 }, { name: 'Ferro', quantity: 1 }, { name: SHARD_W, quantity: 1 },
+    { name: 'Joia Lapidada', quantity: 2 }, { name: 'Barra de Ferro', quantity: 1 }, { name: SHARD_W, quantity: 1 },
   ]),
 
   // ============================================================
@@ -244,7 +247,7 @@ export function getForgeOutputCatalogItem(recipe: ForgeRecipe): CatalogItem | un
   return recipe.kind === 'gear' ? getCatalogItemByName(recipe.outputName) : undefined;
 }
 
-/** Emoji de um material/estilhaço para exibir na mesa (cai pro genérico se desconhecido). */
+/** Emoji de um material/estilhaço/processado para exibir na mesa (cai pro genérico se desconhecido). */
 export function forgeMaterialEmoji(name: string): string {
-  return getForgeMaterialByName(name)?.emoji ?? '⚒️';
+  return getForgeMaterialByName(name)?.emoji ?? getProcessedByName(name)?.emoji ?? '⚒️';
 }

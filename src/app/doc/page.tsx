@@ -18,9 +18,11 @@ import Link from 'next/link'
 import { races as RACES_SRC, pointSystem } from '@/lib/characterCreationData'
 import { CLASSES } from '@/lib/gameData'
 import { TRANSFORMATION_CONFIG } from '@/lib/transformationSystem'
-import { ITEM_CATALOG, CONSUMABLE_CATALOG, INGREDIENT_CATALOG, FORGE_MATERIAL_CATALOG, RARITY_DROP_WEIGHT, getIngredientByName, itemImagePath, type CatalogItem } from '@/lib/itemCatalog'
+import { ITEM_CATALOG, CONSUMABLE_CATALOG, INGREDIENT_CATALOG, FORGE_MATERIAL_CATALOG, PROCESSED_CATALOG, FOOD_CATALOG, RARITY_DROP_WEIGHT, getIngredientByName, getProcessedByName, itemImagePath, type CatalogItem } from '@/lib/itemCatalog'
 import { POTION_RECIPES } from '@/lib/alchemy'
 import { FORGE_RECIPES } from '@/lib/forge'
+import { PROCESSING_RECIPES, PROCESSING_GROUP_LABEL } from '@/lib/processing'
+import { COOKING_RECIPES, COOKING_GROUP_LABEL } from '@/lib/cooking'
 import { CRAFT_BASE_CHANCE, CRAFT_MIN_LEVEL, CRAFT_XP } from '@/lib/craftingProfession'
 import { DUNGEON_LIST } from '@/lib/dungeonAdventures'
 import { getXPForNextLevel } from '@/lib/experienceSystem'
@@ -878,8 +880,8 @@ até +${SAFE_ENHANCE_MAX}: chance = 100% (seguro)`}</Formula>
             </Section>
 
             {/* Crafting */}
-            <Section id="crafting" kicker="Economia" title="Forja & Alquimia">
-              <p>Forja e Alquimia são <strong className="text-white">profissões do jogador</strong> com nível e XP (o NPC ferreiro só vende e repara; a alquimista só vende). O nível é <strong className="text-white">da conta inteira</strong> (como a Fazenda: todo craft de qualquer herói soma). Cada craft rola uma <strong className="text-white">chance de sucesso</strong> pela raridade da receita + seu nível — <strong className="text-orange-300">a falha consome os materiais e a taxa</strong>, mas ainda dá XP reduzido. Receitas de raridade maior <strong className="text-white">destravam por nível</strong>: comum nv1, incomum nv5, rara nv12, épica nv20. Materiais e ingredientes caem em masmorras — <strong className="text-white">exploração e luta</strong>. <Tag tone="ok">fonte: craftingProfession.ts · forge.ts · alchemy.ts</Tag></p>
+            <Section id="crafting" kicker="Economia" title="Processamento, Forja & Alquimia">
+              <p>Forja, Alquimia, <strong className="text-white">Processamento</strong> e <strong className="text-white">Culinária</strong> são <strong className="text-white">profissões do jogador</strong> com nível e XP (o NPC ferreiro só vende e repara; a alquimista só vende). O nível é <strong className="text-white">da conta inteira</strong> (como a Fazenda: todo craft de qualquer herói soma). O pipeline é uma cadeia de produção: <strong className="text-white">matéria-prima crua</strong> (coleta/fazenda/masmorra) → <strong className="text-white">⚙️ Processamento</strong> (beneficia em barras, tecidos, extratos…) → <strong className="text-white">⚒️ Forja / ⚗️ Alquimia / 🍳 Culinária</strong> (peças incomuns, poções e pratos). Na Forja e na Alquimia cada craft rola uma <strong className="text-white">chance de sucesso</strong> pela raridade da receita + seu nível — <strong className="text-orange-300">a falha consome os materiais e a taxa</strong>, mas ainda dá XP reduzido. Receitas de raridade maior <strong className="text-white">destravam por nível</strong>: comum nv1, incomum nv5, rara nv12, épica nv20. <Tag tone="ok">fonte: craftingProfession.ts · processing.ts · forge.ts · alchemy.ts · cooking.ts</Tag></p>
 
               <Table
                 head={['Raridade', 'Destrava', 'Chance base', 'Teto', 'XP (sucesso / falha)']}
@@ -892,10 +894,41 @@ até +${SAFE_ENHANCE_MAX}: chance = 100% (seguro)`}</Formula>
                 ])}
               />
 
-              {/* ⚒️ Forja (fonte: forge.ts) */}
-              <h3 className="pt-2 text-lg font-semibold text-white">⚒️ Forja (Ferreiro)</h3>
+              {/* ⚙️ Processamento (fonte: processing.ts) */}
+              <h3 className="pt-2 text-lg font-semibold text-white">⚙️ Processamento (Bancada de Beneficiamento)</h3>
               <p className="text-sm">
-                Forja peças <Pill rarity="COMMON" /> / <Pill rarity="UNCOMMON" /> a partir de materiais: <strong className="text-white">só couro</strong> = comum, <strong className="text-white">couro + ferro</strong> = incomum, e cada arma usa seu material especial (Ferro Pesado, Seiva de Ent…). O <strong className="text-white">Estilhaço de Pedra Negra</strong> liga toda receita e também refina: <strong className="text-white">10 estilhaços → 1 Pedra Negra</strong> e <strong className="text-white">10 Pedras → 1 Concentrada</strong> — o refino é <strong className="text-white">conversão garantida</strong> (sem chance de falha; Concentrada pede Forja nv10). O <strong className="text-white">Estilhaço de Memória</strong> (só de chefe) repara peças raras, épicas e lendárias (+10 durabilidade cada).
+                Beneficia matéria-prima crua em <strong className="text-white">insumos processados</strong> — é o elo entre a coleta/fazenda e as outras bancadas. Como o refino de pedra, <strong className="text-white">nunca falha</strong> (é conversão, não fabricação): cada receita tem <strong className="text-white">XP fixo</strong>, ratio padrão <strong className="text-white">2 crus → 1 processado</strong> e destrava pelo <strong className="text-white">nível de Processamento</strong> da receita. As receitas <Pill rarity="UNCOMMON" /> da Forja e as poções da Alquimia exigem esses insumos; a <strong className="text-white">Ração</strong> (moagem) e a <strong className="text-white">Bandagem de Linho</strong> (têxtil) também são feitas aqui.
+              </p>
+
+              <h4 className="pt-2 text-sm font-semibold text-textsec uppercase tracking-wide">Insumos processados</h4>
+              <ItemGallery>
+                {[...PROCESSED_CATALOG]
+                  .sort((a, b) => RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity))
+                  .map((p) => (
+                    <ItemArtCard
+                      key={p.name} name={p.name} type="Processado" rarity={p.rarity}
+                      meta="⚙️ Bancada"
+                    />
+                  ))}
+              </ItemGallery>
+
+              <h4 className="pt-2 text-sm font-semibold text-textsec uppercase tracking-wide">Receitas de processamento</h4>
+              <Table
+                head={['Resultado', 'Bancada', 'Insumos', 'Nível', 'XP', 'Taxa']}
+                rows={PROCESSING_RECIPES.map((r) => [
+                  <span key={r.id} className={`font-semibold ${RARITY[r.rarity].text}`}>⚙️ {r.outputName}</span>,
+                  <span key="g" className="text-xs">{PROCESSING_GROUP_LABEL[r.group]}</span>,
+                  <span key="m" className="text-xs">{r.inputs.map((m) => `${m.quantity}× ${m.name}`).join(' · ')}</span>,
+                  <span key="l" className="text-white">nv {r.minLevel}</span>,
+                  <span key="x" className="text-amber-300">+{r.xp}</span>,
+                  <span key="c" className="text-amber-300">{r.goldCost} 🪙</span>,
+                ])}
+              />
+
+              {/* ⚒️ Forja (fonte: forge.ts) */}
+              <h3 className="pt-4 text-lg font-semibold text-white">⚒️ Forja (Ferreiro)</h3>
+              <p className="text-sm">
+                Forja peças <Pill rarity="COMMON" /> / <Pill rarity="UNCOMMON" /> a partir de materiais: receita <strong className="text-white">comum usa matéria-prima crua</strong> (couro, Ferro Pesado, Seiva de Ent…) — o novato chega da coleta e já forja; receita <strong className="text-white">incomum exige o insumo PROCESSADO</strong> (Barra de Aço, Couro Curtido, Tecido de Linho + Barra de Ferro). O <strong className="text-white">Estilhaço de Pedra Negra</strong> liga toda receita e também refina: <strong className="text-white">10 estilhaços → 1 Pedra Negra</strong> e <strong className="text-white">10 Pedras → 1 Concentrada</strong> — o refino é <strong className="text-white">conversão garantida</strong> (sem chance de falha; Concentrada pede Forja nv10). O <strong className="text-white">Estilhaço de Memória</strong> (só de chefe) repara peças raras, épicas e lendárias (+10 durabilidade cada).
               </p>
 
               <h4 className="pt-2 text-sm font-semibold text-textsec uppercase tracking-wide">Materiais de forja</h4>
@@ -926,10 +959,9 @@ até +${SAFE_ENHANCE_MAX}: chance = 100% (seguro)`}</Formula>
               {/* ⚗️ Alquimia & Poções — livro de receitas (fonte: alchemy.ts) */}
               <h3 className="pt-4 text-lg font-semibold text-white">⚗️ Alquimia &amp; Poções</h3>
               <p className="text-sm">
-
-                Poções são destiladas no <strong className="text-white">Triângulo de Transmutação</strong> a partir de <strong className="text-white">ingredientes</strong> obtidos como espólio nas masmorras.
-                Cada tentativa consome os ingredientes da receita + uma <strong className="text-white">taxa em gold</strong> e rola a chance do seu nível de Alquimia.
-                Ingredientes <Pill rarity="COMMON" /> / <Pill rarity="UNCOMMON" /> caem no chão (já na Floresta); <Pill rarity="RARE" /> / <Pill rarity="EPIC" /> só de <strong className="text-white">chefe</strong>.
+                A alquimia é <strong className="text-white">só poções</strong>: elas são transmutadas no <strong className="text-white">Triângulo de Transmutação</strong> a partir de <strong className="text-white">extratos processados</strong> (Extrato Herbal, Essência de Mana, Extrato de Raiz — destilaria do Processamento) + ingredientes de coleta/masmorra.
+                Cada tentativa consome os insumos da receita + uma <strong className="text-white">taxa em gold</strong> e rola a chance do seu nível de Alquimia.
+                Ingredientes <Pill rarity="COMMON" /> / <Pill rarity="UNCOMMON" /> vêm da coleta e do chão de masmorra; <Pill rarity="RARE" /> / <Pill rarity="EPIC" /> só de <strong className="text-white">chefe</strong>. Pão, Ração e Bandagem saíram daqui: Ração/Bandagem são do Processamento e o Pão vai para a <strong className="text-white">Culinária</strong>.
                 <Tag tone="ok"> fonte: alchemy.ts</Tag>
               </p>
 
@@ -954,10 +986,47 @@ até +${SAFE_ENHANCE_MAX}: chance = 100% (seguro)`}</Formula>
                     <span key={r.id} className={`font-semibold ${RARITY[r.rarity].text}`}>🧪 {r.outputName}</span>,
                     <Pill key="r" rarity={r.rarity} />,
                     <span key="i" className="text-xs">
-                      {r.ingredients.map((ing) => `${getIngredientByName(ing.name)?.emoji ?? ''} ${ing.quantity}× ${ing.name}`).join(' · ')}
+                      {r.ingredients.map((ing) => `${(getIngredientByName(ing.name) ?? getProcessedByName(ing.name))?.emoji ?? ''} ${ing.quantity}× ${ing.name}`).join(' · ')}
                     </span>,
                     <span key="c" className="text-amber-300">{r.goldCost} 🪙</span>,
                   ])}
+              />
+
+              {/* 🍳 Culinária (fonte: cooking.ts · foodBuff.ts) */}
+              <h3 className="pt-4 text-lg font-semibold text-white">🍳 Culinária (Cozinha)</h3>
+              <p className="text-sm">
+                A quarta bancada do ecossistema: pratos que dão <strong className="text-white">bônus de atributo por tempo REAL</strong> (STR/AGI/INT/DEF por 15–30 minutos — mais fracos que poção de combate, porém duram o farm inteiro; o <strong className="text-white">Banquete</strong> dá +1 em tudo). Come-se pelo inventário: <strong className="text-white">um prato por vez</strong> (comer outro substitui) e o bônus entra direto nos atributos do combate da masmorra. Como o Processamento, cozinhar <strong className="text-white">nunca falha</strong> — XP fixo por receita, destravada pelo <strong className="text-white">nível de Culinária</strong> da conta. Os pratos usam a <strong className="text-white">Farinha</strong> da moagem, a <strong className="text-white">Ração</strong> e insumos da fazenda/coleta; o <strong className="text-white">Pão</strong> restaura 20 HP fora de combate. <Tag tone="ok">fonte: cooking.ts · foodBuff.ts</Tag>
+              </p>
+              <ItemGallery>
+                {[...FOOD_CATALOG]
+                  .sort((a, b) => RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity))
+                  .map((f) => (
+                    <ItemArtCard
+                      key={f.name} name={f.name} type="Comida" rarity={f.rarity}
+                      meta="🍳 Cozinha"
+                    />
+                  ))}
+              </ItemGallery>
+
+              <h4 className="pt-2 text-sm font-semibold text-textsec uppercase tracking-wide">Receitas de culinária</h4>
+              <Table
+                head={['Prato', 'Estação', 'Insumos', 'Efeito ao comer', 'Nível', 'XP', 'Taxa']}
+                rows={COOKING_RECIPES.map((r) => {
+                  const food = FOOD_CATALOG.find((f) => f.name === r.outputName)
+                  const fb = (food?.stats as any)?.foodBuff
+                  const effect = fb
+                    ? `${fb.stat === 'all' ? `+${fb.value} em tudo` : `+${fb.value} ${String(fb.stat).toUpperCase()}`} · ${fb.durationMin} min reais`
+                    : `+${Number((food?.stats as any)?.healAmount) || 0} HP fora de combate`
+                  return [
+                    <span key={r.id} className={`font-semibold ${RARITY[r.rarity].text}`}>🍳 {r.outputName}</span>,
+                    <span key="g" className="text-xs">{COOKING_GROUP_LABEL[r.group]}</span>,
+                    <span key="m" className="text-xs">{r.inputs.map((m) => `${m.quantity}× ${m.name}`).join(' · ')}</span>,
+                    <span key="e" className="text-xs text-emerald-300">{effect}</span>,
+                    <span key="l" className="text-white">nv {r.minLevel}</span>,
+                    <span key="x" className="text-amber-300">+{r.xp}</span>,
+                    <span key="c" className="text-amber-300">{r.goldCost} 🪙</span>,
+                  ]
+                })}
               />
             </Section>
 

@@ -25,6 +25,7 @@ import {
 import { professionXpForLevel, PROFESSION_MAX_LEVEL } from '@/lib/professionSystem'
 import { POTION_RECIPES } from '@/lib/alchemy'
 import { FORGE_RECIPES } from '@/lib/forge'
+import { PROCESSING_RECIPES } from '@/lib/processing'
 import type { Rarity } from '@/lib/itemCatalog'
 
 const RARITIES: Rarity[] = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC']
@@ -87,6 +88,27 @@ for (const { label, recipes } of [
         `  esperado ${Math.round(rec.gold / cMin)}g (nv${min}) → ${Math.round(rec.gold / cMax)}g (nv50)` +
         `  [${pct(cMin)} → ${pct(cMax)}]`,
     )
+  }
+}
+
+// ---------- 3b. ⚙️ Processamento (sem falha: custo = taxa; curva por XP fixo) ----------
+console.log('\n=== ⚙️ PROCESSAMENTO (sem falha — XP/minLevel/goldCost fixos por receita) ===')
+for (const r of PROCESSING_RECIPES) {
+  const inputs = r.inputs.map((i) => `${i.name} ×${i.quantity}`).join(' + ')
+  console.log(
+    `  ${r.outputName.padEnd(22)} nv${String(r.minLevel).padStart(2)}+  taxa ${String(r.goldCost).padStart(3)}g  +${String(r.xp).padStart(2)}xp  ← ${inputs}`,
+  )
+}
+{
+  // Progressão: quantas operações tier-1 (XP 6) levam a cada marco de desbloqueio.
+  const tier1Xp = Math.min(...PROCESSING_RECIPES.map((r) => r.xp))
+  const unlockMarks = Array.from(new Set(PROCESSING_RECIPES.map((r) => r.minLevel)))
+    .filter((l) => l > 1)
+    .sort((a, b) => a - b)
+  console.log(`  progressão (só receitas de ${tier1Xp} XP):`)
+  for (const mark of unlockMarks) {
+    const ops = Math.ceil(professionXpForLevel(mark) / tier1Xp)
+    console.log(`    nv${String(mark).padStart(2)} → ~${ops} operações (${professionXpForLevel(mark)} XP)`)
   }
 }
 

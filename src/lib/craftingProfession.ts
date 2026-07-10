@@ -17,12 +17,16 @@
 // continua SEM falha (é o caminho determinístico da Concentrada), com XP fixo
 // reduzido e gating leve de nível para não virar farm de XP.
 //
+// PROCESSAMENTO (processing.ts) segue o modelo do refino, mas 100% sem falha:
+// minLevel/xp/goldCost vivem NA RECEITA (ProcessingRecipe), não nas tabelas por
+// raridade daqui — decisão consciente: sem RNG, a tabela de chance não se aplica.
+//
 // Módulo 100% puro (sem prisma) — tunável via scripts/crafting-profession-sim.ts.
 
 import type { Rarity } from './itemCatalog';
 import type { ForgeRecipe } from './forge';
 
-export type CraftKind = 'forge' | 'alchemy';
+export type CraftKind = 'forge' | 'alchemy' | 'process';
 
 // ============================================================
 // Tabelas por raridade

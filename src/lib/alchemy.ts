@@ -1,15 +1,16 @@
 // ⚗️ Sistema de Alquimia — receitas de poção do Dolrath
 //
-// Cada receita combina INGREDIENTES (INGREDIENT_CATALOG) numa POÇÃO já
-// existente em CONSUMABLE_CATALOG. O craft consome os ingredientes do
-// inventário + uma taxa em gold (mão de obra da alquimista) e sempre dá
-// certo (sem RNG). As receitas são a fonte única exibida no /doc e na
-// Bancada de Alquimia.
+// A alquimia é SÓ POÇÕES: cada receita combina ingredientes (INGREDIENT_CATALOG)
+// e EXTRATOS processados (PROCESSED_CATALOG — destilaria de processing.ts) numa
+// poção já existente em CONSUMABLE_CATALOG, consumindo os insumos + taxa em gold.
+// Pão/Ração/Bandagem saíram daqui: são beneficiamento/culinária, não transmutação
+// (Ração/Bandagem = Bancada de Processamento; Pão = Culinária, sessão futura).
 //
-// Princípio de drop dos ingredientes (ver dungeonAdventures.ts):
-//  - Floresta (1ª masmorra) e chão das demais → ingredientes COMUM/INCOMUM
+// Pipeline dos insumos:
+//  - Ervas cruas (coleta/fazenda) → destilaria do Processamento → Extrato/Essência
 //  - Chefes de masmorra → ingredientes RARO/ÉPICO (+ chance da poção pronta)
-// Logo, poções comuns/incomuns dão pra craftar cedo; raras/épicas exigem boss.
+// Logo, toda poção passa pela cadeia coleta → processar → transmutar; as
+// raras/épicas somam o ingrediente exclusivo de boss.
 
 import {
   CONSUMABLE_CATALOG,
@@ -53,33 +54,33 @@ function recipe(
 // TODA receita tem EXATAMENTE 3 elementos (somando as quantidades) — é o que
 // vai nos 3 vértices do Triângulo de Transmutação da Bancada de Alquimia.
 export const POTION_RECIPES: PotionRecipe[] = [
-  // ---------- COMUNS (só ingredientes comuns) ----------
+  // ---------- COMUNS (extrato processado + solvente) ----------
   recipe('vida_pequena', 'Poção de Vida Pequena', 'COMMON', [
-    { name: 'Erva Medicinal', quantity: 2 },
-    { name: 'Água Pura', quantity: 1 },
+    { name: 'Extrato Herbal', quantity: 1 },
+    { name: 'Água Pura', quantity: 2 },
   ]),
   recipe('mana', 'Poção de Mana', 'COMMON', [
-    { name: 'Flor de Mana', quantity: 2 },
-    { name: 'Água Pura', quantity: 1 },
+    { name: 'Essência de Mana', quantity: 1 },
+    { name: 'Água Pura', quantity: 2 },
   ]),
   recipe('stamina', 'Poção de Stamina', 'COMMON', [
-    { name: 'Raiz Vigorosa', quantity: 2 },
-    { name: 'Água Pura', quantity: 1 },
+    { name: 'Extrato de Raiz', quantity: 1 },
+    { name: 'Água Pura', quantity: 2 },
   ]),
   recipe('antidoto', 'Antídoto', 'COMMON', [
-    { name: 'Erva Medicinal', quantity: 1 },
+    { name: 'Extrato Herbal', quantity: 1 },
     { name: 'Glândula de Veneno', quantity: 1 },
     { name: 'Água Pura', quantity: 1 },
   ]),
 
-  // ---------- INCOMUNS (comum + incomum) ----------
+  // ---------- INCOMUNS (extrato + ingrediente incomum) ----------
   recipe('vida', 'Poção de Vida', 'UNCOMMON', [
-    { name: 'Erva Medicinal', quantity: 2 },
+    { name: 'Extrato Herbal', quantity: 2 },
     { name: 'Seiva Ancestral', quantity: 1 },
   ]),
   recipe('elixir_menor', 'Elixir Menor', 'UNCOMMON', [
-    { name: 'Erva Medicinal', quantity: 1 },
-    { name: 'Flor de Mana', quantity: 1 },
+    { name: 'Extrato Herbal', quantity: 1 },
+    { name: 'Essência de Mana', quantity: 1 },
     { name: 'Seiva Ancestral', quantity: 1 },
   ]),
   recipe('forca', 'Poção de Força', 'UNCOMMON', [
@@ -87,40 +88,26 @@ export const POTION_RECIPES: PotionRecipe[] = [
     { name: 'Pó de Osso', quantity: 1 },
   ]),
   recipe('defesa', 'Poção de Defesa', 'UNCOMMON', [
+    { name: 'Extrato de Raiz', quantity: 1 },
     { name: 'Pó de Osso', quantity: 1 },
-    { name: 'Raiz Vigorosa', quantity: 1 },
     { name: 'Água Pura', quantity: 1 },
   ]),
   recipe('agilidade', 'Poção de Agilidade', 'UNCOMMON', [
     { name: 'Cogumelo Lunar', quantity: 1 },
     { name: 'Cristal de Mana', quantity: 1 },
-    { name: 'Flor de Mana', quantity: 1 },
-  ]),
-
-  // ---------- COMUNS DE CULTIVO (insumos da fazenda/coleta) ----------
-  recipe('bandagem', 'Bandagem de Linho', 'COMMON', [
-    { name: 'Fibra de Linho', quantity: 2 },
-    { name: 'Erva Medicinal', quantity: 1 },
-  ]),
-  recipe('pao', 'Pão', 'COMMON', [
-    { name: 'Trigo', quantity: 2 },
-    { name: 'Raiz Vigorosa', quantity: 1 },
-  ]),
-  recipe('racao', 'Ração', 'COMMON', [
-    { name: 'Trigo', quantity: 2 },
-    { name: 'Água Pura', quantity: 1 },
+    { name: 'Essência de Mana', quantity: 1 },
   ]),
 
   // ---------- RARAS (precisam de ingrediente raro — só de chefe) ----------
-  // Exceção deliberada: a Poção de Reviver usa só ingredientes de chão da Floresta,
+  // Exceção deliberada: a Poção de Reviver usa só insumos de chão da Floresta,
   // para o farm automático (auto-revive ao cair) ser sustentável desde o early-game.
   recipe('reviver', 'Poção de Reviver', 'RARE', [
-    { name: 'Erva Medicinal', quantity: 1 },
+    { name: 'Extrato Herbal', quantity: 1 },
     { name: 'Seiva Ancestral', quantity: 1 },
     { name: 'Cogumelo Lunar', quantity: 1 },
   ]),
   recipe('vida_grande', 'Poção de Vida Grande', 'RARE', [
-    { name: 'Erva Medicinal', quantity: 1 },
+    { name: 'Extrato Herbal', quantity: 1 },
     { name: 'Seiva Ancestral', quantity: 1 },
     { name: 'Lótus Negra', quantity: 1 },
   ]),

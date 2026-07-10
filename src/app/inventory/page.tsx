@@ -10,6 +10,8 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import EnhancementDialog from '@/components/EnhancementDialog';
 import ForgeDialog from '@/components/crafting/ForgeDialog';
 import AlchemyDialog from '@/components/crafting/AlchemyDialog';
+import ProcessingDialog from '@/components/crafting/ProcessingDialog';
+import CookingDialog from '@/components/crafting/CookingDialog';
 import VaultBackdrop from '@/components/inventory/VaultBackdrop';
 import InventoryPanel from '@/components/inventory/InventoryPanel';
 import TransferQuantityDialog from '@/components/inventory/TransferQuantityDialog';
@@ -61,9 +63,9 @@ export default function InventoryPage() {
   const [characterInventory, setCharacterInventory] = useState<CharacterInventoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [enhanceTarget, setEnhanceTarget] = useState<{ inventoryId: string; itemName: string; category?: 'WEAPON' | 'ARMOR' } | null>(null);
-  // Dialogs de profissão (Forja/Alquimia) abertas pelo card do insumo — mesmo
-  // padrão do aprimoramento: nada de redirecionar para a loja do NPC.
-  const [craftTarget, setCraftTarget] = useState<{ craft: 'alchemy' | 'forge'; itemName: string } | null>(null);
+  // Dialogs de profissão (Forja/Alquimia/Processamento) abertas pelo card do insumo
+  // — mesmo padrão do aprimoramento: nada de redirecionar para a loja do NPC.
+  const [craftTarget, setCraftTarget] = useState<{ craft: 'alchemy' | 'forge' | 'process' | 'cook'; itemName: string } | null>(null);
   // Diálogo de quantidade ao arrastar uma pilha (>1) entre inventários.
   const [transferTarget, setTransferTarget] = useState<{
     item: Item;
@@ -777,6 +779,28 @@ export default function InventoryPage() {
           characterId={selectedCharacter || undefined}
           characterGold={typeof activeCharacter?.gold === 'number' ? activeCharacter.gold : null}
           initialPlaceName={craftTarget?.craft === 'alchemy' ? craftTarget.itemName : undefined}
+          onChanged={() => {
+            fetchCharacterInventory(selectedCharacter);
+            refreshActiveCharacter();
+          }}
+        />
+        <ProcessingDialog
+          open={craftTarget?.craft === 'process'}
+          onClose={() => setCraftTarget(null)}
+          characterId={selectedCharacter || undefined}
+          characterGold={typeof activeCharacter?.gold === 'number' ? activeCharacter.gold : null}
+          initialInputName={craftTarget?.craft === 'process' ? craftTarget.itemName : undefined}
+          onChanged={() => {
+            fetchCharacterInventory(selectedCharacter);
+            refreshActiveCharacter();
+          }}
+        />
+        <CookingDialog
+          open={craftTarget?.craft === 'cook'}
+          onClose={() => setCraftTarget(null)}
+          characterId={selectedCharacter || undefined}
+          characterGold={typeof activeCharacter?.gold === 'number' ? activeCharacter.gold : null}
+          initialInputName={craftTarget?.craft === 'cook' ? craftTarget.itemName : undefined}
           onChanged={() => {
             fetchCharacterInventory(selectedCharacter);
             refreshActiveCharacter();

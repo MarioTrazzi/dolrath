@@ -26,7 +26,7 @@ interface DraggableItemProps {
   onUnequip?: (itemId: string) => void;
   onConsume?: (itemId: string) => void;
   onEnhance?: (inventoryId: string, itemName: string, stoneCategory?: 'WEAPON' | 'ARMOR') => void;
-  onOpenCraft?: (craft: 'alchemy' | 'forge', itemName: string) => void;
+  onOpenCraft?: (craft: 'alchemy' | 'forge' | 'process' | 'cook', itemName: string) => void;
   onTransfer?: (itemId: string, quantity?: number) => void;
   onSendToGlobal?: (itemId: string, quantity?: number) => void;
   onSell?: (inventoryId: string, quantity?: number) => void;

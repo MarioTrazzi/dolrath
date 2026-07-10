@@ -10,7 +10,7 @@
 // efetivo é SEMPRE o desta função, sobre o goldPrice atual do catálogo.
 
 export const SELL_FRACTION_GEAR = 0.5
-export const SELL_FRACTION_CRAFT_INPUT = 0.5 // ingrediente/material/semente
+export const SELL_FRACTION_CRAFT_INPUT = 0.5 // ingrediente/material/semente/processado
 export const SELL_FRACTION_CONSUMABLE = 0.25 // poções e consumíveis prontos
 
 type SellableItem = {
@@ -23,7 +23,7 @@ type SellableItem = {
 export function sellFractionFor(item: SellableItem): number {
   if (item.type !== 'CONSUMABLE') return SELL_FRACTION_GEAR
   const kind = (item.stats as { kind?: string } | null)?.kind
-  if (kind === 'ingredient' || kind === 'material' || kind === 'seed') {
+  if (kind === 'ingredient' || kind === 'material' || kind === 'seed' || kind === 'processed') {
     return SELL_FRACTION_CRAFT_INPUT
   }
   return SELL_FRACTION_CONSUMABLE

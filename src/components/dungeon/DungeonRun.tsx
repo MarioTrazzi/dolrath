@@ -36,6 +36,12 @@ import {
   resolveSpecialHit,
   type SpecialDef,
 } from '@/lib/transformationSpecials'
+import {
+  getSkillTree,
+  getSkillTreeState,
+  getSkillUnlocks,
+  applyRankPatch,
+} from '@/lib/skillTree'
 import { applyEnhancementToStats } from '@/lib/enhancementSystem'
 import { isBroken } from '@/lib/durability'
 import { itemImagePath } from '@/lib/itemCatalog'
@@ -96,6 +102,10 @@ export interface DungeonCharacter {
   /** 🍳 Buff de comida ativo (Character.activeFood) — validado em lib/foodBuff.ts. */
   activeFood?: unknown
   equipment: any[]
+  /** Forma FIXA travada na criação; null = Metamorfo (multi-forma, escolhe a forma na luta). */
+  unlockedTransformation?: string | null
+  /** 🌳 Árvore de habilidades comprada (lib/skillTree.ts). null = personagem legado (tudo liberado). */
+  skillTree?: unknown
 }
 
 interface DungeonRunProps {
@@ -105,7 +115,7 @@ interface DungeonRunProps {
   tier?: number
   onExit: (updates: { hp: number; mp: number; stamina: number; leveledUp?: boolean }) => void
   /** Re-run: o pai remonta a run do zero (mesma masmorra), preservando o piloto via initialAuto. */
-  onRestart?: (updates: { hp: number; mp: number; stamina: number; leveledUp?: boolean; auto: boolean }) => void
+  onRestart?: (updates: { hp: number; mp: number; stamina: number; level?: number; leveledUp?: boolean; auto: boolean }) => void
   /** Estado inicial do piloto automático (preservado entre re-runs). */
   initialAuto?: boolean
 }
@@ -509,13 +519,31 @@ function defenseVerb(): string {
 }
 
 export default function DungeonRun({ dungeon, character, tier = 1, onExit, onRestart, initialAuto }: DungeonRunProps) {
+  // 🌳 Árvore de habilidades: computado ANTES dos pools de recurso (maxHpPct/maxMpPct
+  // entram no teto inicial). `skillTree` null (legado) libera tudo nos valores BASE
+  // (ver LEGACY_UNLOCKS em lib/skillTree.ts).
+  const skillTreeDef = useMemo(
+    () => getSkillTree(character.class, character.unlockedTransformation),
+    [character.class, character.unlockedTransformation]
+  )
+  const unlocks = useMemo(
+    () => getSkillUnlocks(getSkillTreeState(character.skillTree), skillTreeDef),
+    [character.skillTree, skillTreeDef]
+  )
+  const effMaxMp = Math.round(character.maxMp * (1 + unlocks.passives.maxMpPct))
+
   // ---------- Recursos locais do personagem (durante a run) ----------
   // HP e MP começam cheios: a stamina diária é o que limita as tentativas.
   const [hp, setHp] = useState(() => character.maxHp + equipmentPower(character.equipment).hp)
-  const [mp, setMp] = useState(character.maxMp)
+  const [mp, setMp] = useState(effMaxMp)
   const [stamina, setStamina] = useState(character.stamina)
   const hpRef = useRef(hp)
   hpRef.current = hp
+  // Nível VIVO da run: a prop `character` fica congelada no valor de quando a run
+  // montou — um level up mid-run precisa atualizar este estado (não `character.level`)
+  // para refletir no combate seguinte (levers, card de batalha, escala do monstro).
+  const [charLevel, setCharLevel] = useState(character.level)
+  useEffect(() => { setCharLevel(character.level) }, [character.id, character.level])
 
   // ⚔️ Equipamento VIVO da run: o servidor debita durabilidade a cada abate e
   // devolve `equipmentWear` — aplicamos aqui para que uma peça que QUEBRE no
@@ -668,6 +696,9 @@ export default function DungeonRun({ dungeon, character, tier = 1, onExit, onRes
   const transformedThisFightRef = useRef(false)
   transformedThisFightRef.current = transformedThisFight
   const [showFormPicker, setShowFormPicker] = useState(false)
+  // 🌳 Submenu "⚔️ Ataque": lista Golpe + Ataque de Classe (se desbloqueado) + specials
+  // da forma (filtradas/patchadas pela árvore) — substitui a fileira fixa de botões.
+  const [showAttackMenu, setShowAttackMenu] = useState(false)
   const transformRef = useRef(transform)
   transformRef.current = transform
   const transformCdRef = useRef(transformCd)
@@ -882,13 +913,13 @@ export default function DungeonRun({ dungeon, character, tier = 1, onExit, onRes
   const foodBuff = useMemo(() => parseActiveFood(character.activeFood), [character.activeFood])
   const foodAttrs = useMemo(() => foodBuffAttrBonus(foodBuff), [foodBuff])
   const baseLevers = useMemo<Levers>(
-    () => computeLevers(combatClass, character.level, gearTier, {
+    () => computeLevers(combatClass, charLevel, gearTier, {
       str: (character.str ?? 0) + foodAttrs.str,
       agi: (character.agi ?? 0) + foodAttrs.agi,
       int: (character.int ?? 0) + foodAttrs.int,
       def: (character.def ?? 0) + foodAttrs.def,
     }),
-    [combatClass, character.level, gearTier, character.str, character.agi, character.int, character.def, foodAttrs]
+    [combatClass, charLevel, gearTier, character.str, character.agi, character.int, character.def, foodAttrs]
   )
   // Avisa no diário que o herói entrou "bem alimentado" (uma vez, na abertura da run).
   useEffect(() => {
@@ -903,26 +934,30 @@ export default function DungeonRun({ dungeon, character, tier = 1, onExit, onRes
   )
   // HP da run = pool do jogo (atributos via maxHp + vida das peças). É o recurso que o
   // jogador gerencia entre lutas; a OFENSA/DEFESA do combate vêm dos levers.
-  const effMaxHp = character.maxHp + gear.hp
+  // 🏆 Passiva de Vitalidade/Baluarte (maxHpPct) soma no teto — capstones da árvore.
+  const effMaxHp = Math.round((character.maxHp + gear.hp) * (1 + unlocks.passives.maxHpPct))
   // Peça com HP que quebra mid-run derruba o teto — o HP atual acompanha.
   useEffect(() => { setHp((h) => Math.min(h, effMaxHp)) }, [effMaxHp])
   // Poder efetivo de um ataque = poder do lever × multiplicador do tipo.
   const playerPowerFor = (kind: AttackKind) => playerLevers.power * ATTACKS[kind].powerMult
   // Nome do ATAQUE DE CLASSE (o `weapon`, d8) por classe — Ataque Furtivo/Bola de Fogo/etc.
   const classAtkName = useMemo(() => classAttackName(character.class), [character.class])
+  // Ataque de Classe efetivo (dado/custo já com os ranks II/III comprados).
+  const effWeaponDie = unlocks.classAttackDie
+  const effWeaponMp = unlocks.classAttackMp
 
   // ---------- Lutadores para a arena ----------
   const playerFighter: FighterView = useMemo(() => ({
     id: character.id,
     name: character.name,
-    level: character.level,
+    level: charLevel,
     race: character.race,
     class: character.class,
     avatar: character.avatar,
     hp,
     maxHp: effMaxHp,
     mp,
-    maxMp: character.maxMp,
+    maxMp: effMaxMp,
     stamina,
     maxStamina: character.maxStamina,
     equipmentMap: mapEquipment(equipList),
@@ -945,7 +980,7 @@ export default function DungeonRun({ dungeon, character, tier = 1, onExit, onRes
       dpDelta: 0,
     },
     combatStatLabels: { ad: 'ATK', ap: 'DEF', dp: 'STR' },
-  }), [character, hp, mp, stamina, transform, effMaxHp, playerLevers, baseLevers, equipList])
+  }), [character, charLevel, hp, mp, stamina, transform, effMaxHp, effMaxMp, playerLevers, baseLevers, equipList])
 
   const monsterFighter: FighterView | null = useMemo(() => monster ? {
     id: monster.id,
@@ -1241,7 +1276,8 @@ export default function DungeonRun({ dungeon, character, tier = 1, onExit, onRes
       return
     }
     setMp(prev => Math.max(0, prev - cfg.cost.mp))
-    setTransform({ type, turns: cfg.duration })
+    // 🏆 Coração de Dragão / capstone de assinatura (transformExtraTurns): +1 turno de forma.
+    setTransform({ type, turns: cfg.duration + unlocks.passives.transformExtraTurns })
     setTransformedThisFight(true)
     transformedThisFightRef.current = true
     setShowFormPicker(false)
@@ -1359,8 +1395,13 @@ export default function DungeonRun({ dungeon, character, tier = 1, onExit, onRes
       showBanner('🔒', 'O Especial só pode ser usado transformado!')
       return
     }
-    if (mp < ATTACKS[kind].mp) {
-      showBanner('🔵', `MP insuficiente para ${ATTACKS[kind].label}! (${ATTACKS[kind].mp}🔵)`)
+    if (kind === 'weapon' && !unlocks.classAttack) {
+      showBanner('🔒', 'Aprenda o Ataque de Classe na árvore de habilidades!')
+      return
+    }
+    const atkMp = kind === 'weapon' ? effWeaponMp : ATTACKS[kind].mp
+    if (mp < atkMp) {
+      showBanner('🔵', `MP insuficiente para ${ATTACKS[kind].label}! (${atkMp}🔵)`)
       return
     }
     setPendingAttack(kind)
@@ -1375,7 +1416,7 @@ export default function DungeonRun({ dungeon, character, tier = 1, onExit, onRes
     setHasRolled(true)
     // SÓ O JOGADOR ROLA: o dado visível vira um multiplicador de sorte no dano (sem
     // disputa nenhuma — o monstro esquiva por % pura, nunca rola).
-    const sides = PVE_DIE[pendingAttack]
+    const sides = pendingAttack === 'weapon' ? effWeaponDie : PVE_DIE[pendingAttack]
     const atk = mkResult(sides, 0)
     setPanelResult(atk)
     later(() => resolvePlayerAttack(atk), 1700)
@@ -1390,18 +1431,22 @@ export default function DungeonRun({ dungeon, character, tier = 1, onExit, onRes
     setHasRolled(false)
     const kindUsed = pendingAttack
     setPendingAttack(null)
+    const effMp = kindUsed === 'weapon' ? effWeaponMp : atkDef.mp
+    const effSides = kindUsed === 'weapon' ? effWeaponDie : PVE_DIE[kindUsed]
 
     // Custo de MP do ataque (arma/especial) — sem regen passivo no combate.
-    if (atkDef.mp > 0) setMp(prev => Math.max(0, prev - atkDef.mp))
+    if (effMp > 0) setMp(prev => Math.max(0, prev - effMp))
 
     const mLev = monsterLevers(m)
     // 👁️ Visão Aguçada (ignoreEvadeNext) força o acerto — fura a esquiva do monstro.
     const pfx = combatFxRef.current
-    const outcome = computePlayerOutcome(atk.roll, PVE_DIE[kindUsed], playerPowerFor(kindUsed), mLev, pfx.ignoreEvadeNext)
+    const outcome = computePlayerOutcome(atk.roll, effSides, playerPowerFor(kindUsed), mLev, pfx.ignoreEvadeNext)
     if (pfx.ignoreEvadeNext) setCombatFx(prev => ({ ...prev, ignoreEvadeNext: false }))
 
     // 🐉 Buff de dano causado (Uivo/Foco do Cosmo) — só amplifica se o golpe acertou.
-    const outDmg = outcome.hit ? Math.max(1, Math.round(outcome.damage * pfx.dmgDealtMult)) : 0
+    // 🏆 Capstone de crítico (critBonusMult) amplifica só o golpe crítico.
+    const critMult = outcome.crit ? unlocks.passives.critBonusMult : 1
+    const outDmg = outcome.hit ? Math.max(1, Math.round(outcome.damage * pfx.dmgDealtMult * critMult)) : 0
 
     pushBattleEvent({
       kind: 'resolve',
@@ -1515,13 +1560,24 @@ export default function DungeonRun({ dungeon, character, tier = 1, onExit, onRes
     // dano DIRETO (sem disputa de esquiva, como no PvP) — usa a rolagem já animada.
     const mLev = monsterLevers(m)
     const hit = resolveSpecialHit(def, playerLevers.power, { armor: mLev.armor, K: mLev.K }, { amplify: fx.amplifyNext, outMult: fx.dmgDealtMult, forcedRoll: roll })
+    // 🏆 Capstone de crítico (critBonusMult) amplifica só o golpe crítico.
+    const dmg = hit.crit ? Math.max(1, Math.round(hit.damage * unlocks.passives.critBonusMult)) : hit.damage
     const mfx = (monsterFxRef.current[m.id] ||= { dots: [], immobilizeTurns: 0 })
     if (def.dot) mfx.dots.push({ dmg: Math.max(1, Math.round(m.maxHp * def.dot.frac)), turns: def.dot.turns, label: def.dot.label })
-    if (def.immobilizeRoll && hit.maxRoll >= def.immobilizeRoll) { mfx.immobilizeTurns = 1; pushLog(`🌟 ${m.name} foi IMOBILIZADO! (rolou ${hit.maxRoll})`) }
-    const newHp = Math.max(0, m.hp - hit.damage)
+    if (def.immobilizeRoll && hit.maxRoll >= def.immobilizeRoll) {
+      // 👑 Chefe resiste ao atordoamento — o gate de progressão do boss fica intocado.
+      if (m.isBoss) {
+        pushLog(`👑 ${m.name} RESISTE ao atordoamento! (rolou ${hit.maxRoll})`)
+      } else {
+        mfx.immobilizeTurns = 1
+        pushLog(`🌟 ${m.name} foi IMOBILIZADO! (rolou ${hit.maxRoll})`)
+        later(() => pushBattleEvent({ kind: 'status', actorId: m.id, action: 'stun' }), 1100)
+      }
+    }
+    const newHp = Math.max(0, m.hp - dmg)
     // action = id da habilidade (dragon_breath, super_nova...) → animação própria na arena
-    pushBattleEvent({ kind: 'resolve', attackerId: character.id, defenderId: m.id, action: def.id, defenseAction: 'none', hit: true, damage: hit.damage, isCritical: hit.crit })
-    pushLog(`${def.name} (d${def.die ?? 20}=${roll}): ${hit.damage} de dano${hit.crit ? ' CRÍTICO' : ''} em ${m.name}`)
+    pushBattleEvent({ kind: 'resolve', attackerId: character.id, defenderId: m.id, action: def.id, defenseAction: 'none', hit: true, damage: dmg, isCritical: hit.crit })
+    pushLog(`${def.name} (d${def.die ?? 20}=${roll}): ${dmg} de dano${hit.crit ? ' CRÍTICO' : ''} em ${m.name}`)
     showBanner('💥', def.name)
     later(() => {
       setMonster(prev => (prev && prev.id === m.id ? { ...prev, hp: newHp } : prev))
@@ -1726,7 +1782,8 @@ export default function DungeonRun({ dungeon, character, tier = 1, onExit, onRes
     const mLev = monsterLevers(m)
     // 🌬️ Voo Veloz (Águia): buff de evasão temporário soma na esquiva do jogador.
     const pfxDef = combatFxRef.current
-    const effEvade = Math.min(0.95, playerLevers.evade + (pfxDef.evadeBuffTurns > 0 ? pfxDef.evadeBuff : 0))
+    // 🌬️ Passo Lateral/Reflexos de Batalha (evadeBonus): passiva permanente da árvore.
+    const effEvade = Math.min(0.95, playerLevers.evade + (pfxDef.evadeBuffTurns > 0 ? pfxDef.evadeBuff : 0) + unlocks.passives.evadeBonus)
     const outcome = computeMonsterOutcome(
       sides, monsterPowerFor(m, kind),
       { armor: playerLevers.armor, K: playerLevers.K, evade: effEvade },
@@ -1739,7 +1796,8 @@ export default function DungeonRun({ dungeon, character, tier = 1, onExit, onRes
 
     // 🐉 Escamas (-dano recebido) + Rugido (-dano do inimigo). Contra-ataque ao esquivar.
     const dfx = combatFxRef.current
-    const inDmg = outcome.hit ? Math.max(1, Math.round(outcome.damage * dfx.dmgTakenMult * dfx.enemyDmgMult * procDmgMult)) : 0
+    // 🛡️ Baluarte (selfDmgTakenMult): passiva permanente da árvore, empilha com o buff temporário.
+    const inDmg = outcome.hit ? Math.max(1, Math.round(outcome.damage * dfx.dmgTakenMult * dfx.enemyDmgMult * procDmgMult * unlocks.passives.selfDmgTakenMult)) : 0
 
     pushBattleEvent({
       kind: 'resolve',
@@ -1883,6 +1941,9 @@ export default function DungeonRun({ dungeon, character, tier = 1, onExit, onRes
           // Efeito de level up: HP e MP voltam ao cheio + flash brilhante na tela.
           // (o servidor já restaurou os recursos no banco ao subir de nível.)
           const reachedLevel = data.newLevel ?? null
+          // Atualiza o nível VIVO já (não só no `later`) — o próximo combate desta
+          // run precisa ver o nível novo nos levers/card, mesmo antes do flash.
+          if (reachedLevel != null) setCharLevel(reachedLevel)
           later(() => {
             setHp(effMaxHp)
             setMp(character.maxMp)
@@ -2010,7 +2071,7 @@ export default function DungeonRun({ dungeon, character, tier = 1, onExit, onRes
   const restartRun = async () => {
     if (!onRestart) { exitRun(); return }
     try { await endRunPromiseRef.current } catch { /* segue mesmo assim */ }
-    onRestart({ hp: effMaxHp, mp: character.maxMp, stamina, leveledUp: leveledUpThisRun, auto })
+    onRestart({ hp: effMaxHp, mp: character.maxMp, stamina, level: charLevel, leveledUp: leveledUpThisRun, auto })
   }
 
   // DERROTA: avisa o servidor (encerra a run). XP dos abates já foi creditado por kill.
@@ -2279,7 +2340,7 @@ export default function DungeonRun({ dungeon, character, tier = 1, onExit, onRes
       return fire(() => startCombat(
         serverPackRef.current ??
         serverMonsterRef.current ??
-        scaleMonster(dungeon.boss, dungeon, character.level, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass, tier)
+        scaleMonster(dungeon.boss, dungeon, charLevel, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass, tier)
       ), 1100)
     }
     if (!runReady) return
@@ -2924,7 +2985,7 @@ export default function DungeonRun({ dungeon, character, tier = 1, onExit, onRes
                         <h2 className="text-3xl font-black text-white leading-none">{dungeon.boss.name}</h2>
                         <p className="text-sm text-error/90 font-bold uppercase tracking-wider mt-1 mb-5">{dungeon.boss.title}</p>
                         <button
-                          onClick={() => startCombat(serverPackRef.current ?? serverMonsterRef.current ?? scaleMonster(dungeon.boss, dungeon, character.level, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass, tier))}
+                          onClick={() => startCombat(serverPackRef.current ?? serverMonsterRef.current ?? scaleMonster(dungeon.boss, dungeon, charLevel, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass, tier))}
                           className="w-full py-4 rounded-lg font-black text-white text-lg inline-flex items-center justify-center gap-2 transition-transform active:scale-[0.98] hover:scale-[1.02]"
                           style={{ background: 'linear-gradient(90deg, #e94560, #b91c1c)', boxShadow: '0 0 28px rgba(233,69,96,0.5)' }}
                         >
@@ -3054,7 +3115,7 @@ export default function DungeonRun({ dungeon, character, tier = 1, onExit, onRes
                 <button
                   onClick={
                     atBoss
-                      ? () => startCombat(serverPackRef.current ?? serverMonsterRef.current ?? scaleMonster(dungeon.boss, dungeon, character.level, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass, tier))
+                      ? () => startCombat(serverPackRef.current ?? serverMonsterRef.current ?? scaleMonster(dungeon.boss, dungeon, charLevel, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass, tier))
                       : advance
                   }
                   disabled={exploreRolling || moving || !!eventCard || !!lootCard}
@@ -3197,57 +3258,67 @@ export default function DungeonRun({ dungeon, character, tier = 1, onExit, onRes
                 </div>
               ) : stage === 'playerSelect' ? (
                 <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
-                  {/* Golpe (d6, grátis) + Ataque de Classe (d8, 8 MP). O 'special' é só da IA
-                      dos monstros — quando transformado o jogador usa as HABILIDADES DE FORMA.
-                      Botões de LINHA ÚNICA (sem emoji/subtexto): no celular eles dobravam de
-                      altura e faziam a barra sanfonar a cada turno. */}
-                  {(['basic', 'weapon'] as AttackKind[]).map(kind => {
-                    const atk = ATTACKS[kind]
-                    const locked = mp < atk.mp
-                    const name = kind === 'weapon' ? classAtkName : atk.label
+                  {/* 🌳 Submenu único "⚔️ Ataque": Golpe + Ataque de Classe (se a árvore já
+                      desbloqueou) + specials da forma (filtradas por unlock, com ranks
+                      aplicados). Nível 1 sem nó nenhum comprado = só Golpe aparece. */}
+                  {(() => {
+                    const formSpecials = transform
+                      ? getFormSpecials(transform.type)
+                          .filter(def => {
+                            if (def.id === 'stunning_blow') return unlocks.stunningBlow
+                            if (def.kind === 'util') return unlocks.formBuff
+                            return true // especial assinatura: sempre disponível transformado
+                          })
+                          .map(def => applyRankPatch(def, unlocks, transform.type))
+                      : []
+                    const options: { key: string; label: string; sub: string; locked: boolean; onPick: () => void; tone: 'basic' | 'weapon' | 'ability' }[] = [
+                      {
+                        key: 'basic', label: ATTACKS.basic.label, tone: 'basic', locked: mp < ATTACKS.basic.mp,
+                        sub: `d${PVE_DIE.basic} • grátis`, onPick: () => choosePlayerAttack('basic'),
+                      },
+                      ...(unlocks.classAttack ? [{
+                        key: 'weapon', label: classAtkName, tone: 'weapon' as const, locked: mp < effWeaponMp,
+                        sub: `d${effWeaponDie} • ${effWeaponMp} MP`, onPick: () => choosePlayerAttack('weapon'),
+                      }] : []),
+                      ...formSpecials.map(def => {
+                        const cd = combatFx.cd[def.id] || 0
+                        const mpCost = def.cost.mp || 0
+                        return {
+                          key: def.id, label: def.name, tone: 'ability' as const, locked: cd > 0 || mp < mpCost,
+                          sub: cd > 0 ? `recarga ${cd}` : `${def.kind === 'dmg' ? `d${def.die ?? 20}·` : ''}${mpCost}MP`,
+                          onPick: () => useAbility(def),
+                        }
+                      }),
+                    ]
                     return (
-                      <button
-                        key={kind}
-                        onClick={() => choosePlayerAttack(kind)}
-                        disabled={locked}
-                        title={atk.mp > 0 ? `d${PVE_DIE[kind]} • ${atk.mp} MP${locked ? ' — MP insuficiente' : ''}` : `d${PVE_DIE[kind]} • grátis`}
-                        className={`px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white whitespace-nowrap transition-all shadow-lg ${
-                          locked
-                            ? 'bg-gray-700/60 opacity-50 cursor-not-allowed'
-                            : kind === 'basic' ? 'bg-gradient-to-r from-yellow-600 to-amber-500 hover:scale-105'
-                            : 'bg-gradient-to-r from-red-700 to-red-500 hover:scale-105'
-                        }`}
-                      >
-                        {name}
-                        <span className="ml-1.5 text-[10px] opacity-75 font-semibold">
-                          d{PVE_DIE[kind]}{atk.mp > 0 ? `·${atk.mp}MP` : ''}
-                        </span>
-                      </button>
+                      <div className="relative">
+                        <button
+                          onClick={() => setShowAttackMenu(v => !v)}
+                          className="px-4 sm:px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white whitespace-nowrap transition-all shadow-lg bg-gradient-to-r from-red-700 to-red-500 hover:scale-105"
+                        >
+                          ⚔️ Ataque
+                        </button>
+                        {showAttackMenu && (
+                          <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-50 w-64 bg-black/90 backdrop-blur-md border border-white/15 rounded-xl p-2 shadow-2xl space-y-1">
+                            {options.map(opt => (
+                              <button
+                                key={opt.key}
+                                onClick={() => { setShowAttackMenu(false); opt.onPick() }}
+                                disabled={opt.locked}
+                                title={opt.locked ? 'Indisponível — MP/recarga insuficiente' : undefined}
+                                className={`w-full flex items-center justify-between text-left px-3 py-2 rounded-lg transition-colors ${
+                                  opt.locked ? 'opacity-40 cursor-not-allowed bg-white/5' : 'bg-white/10 hover:bg-white/20'
+                                }`}
+                              >
+                                <span className="font-bold text-white text-xs">{opt.label}</span>
+                                <span className="text-[10px] text-white/60">{opt.sub}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     )
-                  })}
-
-                  {/* 🐉 Habilidades da FORMA (só transformado; dano direto/utilitário, usam o turno) */}
-                  {transform && getFormSpecials(transform.type).map((def: SpecialDef) => {
-                    const cd = combatFx.cd[def.id] || 0
-                    const mpCost = def.cost.mp || 0
-                    const locked = cd > 0 || mp < mpCost
-                    return (
-                      <button
-                        key={def.id}
-                        onClick={() => useAbility(def)}
-                        disabled={locked}
-                        title={def.desc}
-                        className={`px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white whitespace-nowrap transition-all shadow-lg ${
-                          locked ? 'bg-gray-700/60 opacity-50 cursor-not-allowed' : 'bg-gradient-to-r from-fuchsia-700 to-pink-600 hover:scale-105'
-                        }`}
-                      >
-                        {def.name}
-                        <span className="ml-1.5 text-[10px] opacity-75 font-semibold">
-                          {cd > 0 ? `recarga ${cd}` : `${def.kind === 'dmg' ? `d${def.die ?? 20}·` : ''}${mpCost}MP`}
-                        </span>
-                      </button>
-                    )
-                  })}
+                  })()}
 
                   {/* Transformação (apenas raças com formas) — custa só MP */}
                   {transformForms.length > 0 && (

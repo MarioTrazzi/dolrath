@@ -8,8 +8,9 @@ Fonte: `src/lib/combatModel.ts`, `src/lib/transformationSpecials.ts`, doc detalh
 |---|---|---|---|
 | Golpe | d6 | — | ataque básico universal |
 | Ataque de Classe | d8 | stamina | nome único por classe (ex.: Arcana p/ Mago, alimentada por AP=INT) |
-| Especial de Forma | d20 | 12 MP | 1 skill de dano por forma de transformação |
-| Buff de Forma | — | 8 MP | 1 buff por forma; Fúria Selvagem é compartilhada |
+| Especial de Forma | d20 | 12 MP | 1 skill de dano assinatura por forma de transformação |
+| 💫 Golpe Atordoante | d20 | 10 MP | compartilhado pelas 6 formas; CONTROLE puro (mult 0,8, sem pierce), rolagem ≥15 (30%) IMOBILIZA o alvo por 1 turno; recarga 3; é o ÚNICO especial esquivável (esquiva passiva do alvo anula, no PvP); chefe PvE resiste ao stun |
+| Buff de Forma | — | 8 MP | 1 buff por forma; Fúria Selvagem é exclusiva do Lobo |
 | Transformação | — | 1×/luta | multiplicador de stats (piso 1,20), dura o combate +1 turno |
 
 ## Resolução de dano — "dado-como-plus"

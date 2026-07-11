@@ -100,9 +100,17 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
         effect: 'fire_pierce_60'
       },
       {
+        id: 'stunning_blow',
+        name: '💫 Golpe Atordoante',
+        description: 'Golpe leve e esquivável (d20); rolagem ≥15 atordoa o alvo por 1 turno',
+        damage: 'd20',
+        cost: { mp: 10 },
+        effect: 'stun_on_high_roll'
+      },
+      {
         id: 'dragon_scales',
         name: '🛡️ Escama de Dragão',
-        description: 'Reduz o dano recebido em 32% por 3 turnos',
+        description: 'Reduz o dano recebido em 24% por 3 turnos',
         cost: { mp: 8 },
         effect: 'damage_taken_minus_32_for_3_turns'
       }
@@ -143,6 +151,14 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
         damage: 'd20',
         cost: { mp: 12 },
         effect: 'bleeding_dot_3_turns_ignores_defense'
+      },
+      {
+        id: 'stunning_blow',
+        name: '💫 Golpe Atordoante',
+        description: 'Golpe leve e esquivável (d20); rolagem ≥15 atordoa o alvo por 1 turno',
+        damage: 'd20',
+        cost: { mp: 10 },
+        effect: 'stun_on_high_roll'
       },
       {
         id: 'wild_fury',
@@ -189,14 +205,22 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
         effect: 'ignores_all_defense'
       },
       {
-        id: 'wild_fury',
-        name: '😤 Fúria Selvagem',
-        description: '+20% de dano causado por 3 turnos',
+        id: 'stunning_blow',
+        name: '💫 Golpe Atordoante',
+        description: 'Golpe leve e esquivável (d20); rolagem ≥15 atordoa o alvo por 1 turno',
+        damage: 'd20',
+        cost: { mp: 10 },
+        effect: 'stun_on_high_roll'
+      },
+      {
+        id: 'bear_guard',
+        name: '🛡️ Pele de Ferro',
+        description: 'Reduz o dano recebido em 20% por 3 turnos',
         cost: { mp: 8 },
-        effect: 'damage_dealt_plus_20_for_3_turns'
+        effect: 'damage_taken_minus_20_for_3_turns'
       }
     ],
-    
+
     resistances: ['physical_attacks', 'knockback', 'status_effects'],
     vulnerabilities: ['magic_attacks', 'piercing_attacks']
   },
@@ -225,20 +249,28 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
       {
         id: 'ascending_spiral',
         name: '🌀 Espiral Ascendente',
-        description: 'Mergulho em espiral (d20) que fura 30% da armadura',
+        description: 'Mergulho em espiral (d20) que fura 60% da armadura',
         damage: 'd20',
         cost: { mp: 12 },
-        effect: 'pierce_30'
+        effect: 'pierce_60'
       },
       {
-        id: 'wild_fury',
-        name: '😤 Fúria Selvagem',
-        description: '+20% de dano causado por 3 turnos',
+        id: 'stunning_blow',
+        name: '💫 Golpe Atordoante',
+        description: 'Golpe leve e esquivável (d20); rolagem ≥15 atordoa o alvo por 1 turno',
+        damage: 'd20',
+        cost: { mp: 10 },
+        effect: 'stun_on_high_roll'
+      },
+      {
+        id: 'eagle_swift',
+        name: '🌬️ Voo Veloz',
+        description: '+45% de evasão por 3 turnos',
         cost: { mp: 8 },
-        effect: 'damage_dealt_plus_20_for_3_turns'
+        effect: 'evade_plus_45_for_3_turns'
       }
     ],
-    
+
     resistances: ['ground_attacks_while_flying'],
     vulnerabilities: ['area_magic', 'wind_attacks', 'ranged_attacks']
   },
@@ -275,11 +307,19 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
         effect: 'cosmo_strike'
       },
       {
+        id: 'stunning_blow',
+        name: '💫 Golpe Atordoante',
+        description: 'Golpe leve e esquivável (d20); rolagem ≥15 atordoa o alvo por 1 turno',
+        damage: 'd20',
+        cost: { mp: 10 },
+        effect: 'stun_on_high_roll'
+      },
+      {
         id: 'meditation',
         name: '🧘 Meditação',
-        description: 'Cura 20% do HP máximo',
+        description: 'Cura 14% do HP máximo',
         cost: { mp: 8 },
-        effect: 'heal_20_percent_max_hp'
+        effect: 'heal_14_percent_max_hp'
       }
     ],
 
@@ -317,6 +357,14 @@ export const TRANSFORMATION_CONFIG: Record<TransformationType, TransformationCon
         damage: 'd20',
         cost: { mp: 12 },
         effect: 'magic_burst_pierce_50'
+      },
+      {
+        id: 'stunning_blow',
+        name: '💫 Golpe Atordoante',
+        description: 'Golpe leve e esquivável (d20); rolagem ≥15 atordoa o alvo por 1 turno',
+        damage: 'd20',
+        cost: { mp: 10 },
+        effect: 'stun_on_high_roll'
       },
       {
         id: 'hyperfocus',

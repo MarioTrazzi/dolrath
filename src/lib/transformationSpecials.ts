@@ -5,8 +5,9 @@
  * PvP (server/socket-server.js, JS puro) tem uma cópia equivalente em SPECIAL_DEFS —
  * MANTER OS DOIS EM SINCRONIA (mults/pierce/dot/efeitos/custo/cd/die).
  *
- * 🎲 Cada forma tem EXATAMENTE 2 habilidades:
- *   • 1 de DANO (rola o SEU dado — d20, o mais forte — visível na masmorra) — 12 MP;
+ * 🎲 Cada forma tem 3 habilidades:
+ *   • 1 de DANO assinatura (rola o SEU dado — d20, o mais forte — visível na masmorra) — 12 MP;
+ *   • 💫 Golpe Atordoante COMPARTILHADO (dano menor + chance de IMOBILIZAR) — 10 MP;
  *   • 1 de BUFF (aplica direto, SEM rolagem, mas CONSOME o turno) — 8 MP.
  * Dano do especial = DIRETO (sem disputa de esquiva, como no PvP):
  *   dano = poder_transformado × dmgMult × sorte(die) × (1 − DR(armadura×(1−pierce), K))
@@ -54,6 +55,8 @@ export interface SpecialDef {
   hits?: number
   dot?: { frac: number; turns: number; label: string }
   immobilizeRoll?: number
+  /** golpe físico mirado: a esquiva PASSIVA do alvo anula (PvP; monstro PvE não esquiva) */
+  dodgeable?: boolean
   heal?: number
   effect?: SpecialEffect
   cost: { mp?: number; stamina?: number }
@@ -68,29 +71,47 @@ const WILD_FURY: SpecialDef = {
   desc: '+20% de dano causado por 3 turnos',
 }
 
+// 💫 Golpe Atordoante — ataque de CONTROLE PURO compartilhado pelas 6 formas (como a Fúria
+// é o buff compartilhável): dano simbólico (0.8, sem pierce), valor no stun — rolagem ≥15
+// (30%) IMOBILIZA o alvo por 1 turno. É o ÚNICO especial esquivável (dodgeable): golpe
+// físico mirado, a esquiva passiva do alvo anula no PvP. ⚖️ pvp-lever-sim 2026-07-11:
+// com dano de especial (1.45 undodge) virava burst extra e afundava a Águia ~6pts.
+// No PvE monstro não esquiva; CHEFE resiste ao atordoamento (gate de progressão intocado).
+const stunningBlow = (form: TransformationType): SpecialDef => ({
+  id: 'stunning_blow', form, name: '💫 Golpe Atordoante', kind: 'dmg',
+  die: 20, dmgMult: 0.8, immobilizeRoll: 15, dodgeable: true, cost: { mp: 10 }, cd: 3,
+  desc: 'Dano leve; rolagem ≥15 ATORDOA o alvo por 1 turno (chefes resistem) (d20)',
+})
+
 export const TRANSFORMATION_SPECIALS: Record<TransformationType, SpecialDef[]> = {
   dragon: [
     { id: 'dragon_breath', form: 'dragon', name: '🔥 Sopro de Fogo', kind: 'dmg', die: 20, dmgMult: 1.9, pierce: 0.6, cost: { mp: 12 }, cd: 2, desc: 'Dano de fogo que fura 60% da armadura (d20)' },
+    stunningBlow('dragon'),
     { id: 'dragon_scales', form: 'dragon', name: '🛡️ Escama de Dragão', kind: 'util', effect: { selfDmgTaken: { mult: 0.76, turns: 3 } }, cost: { mp: 8 }, cd: 4, desc: '-24% dano recebido por 3 turnos' },
   ],
   wolf: [
     { id: 'bite_bleeding', form: 'wolf', name: '🩸 Mordida Sangrenta', kind: 'dmg', die: 20, dmgMult: 1.6, pierce: 1, dot: { frac: 0.03, turns: 3, label: 'sangramento' }, cost: { mp: 12 }, cd: 2, desc: 'Ignora a armadura + sangramento (3%/turno, 3t) (d20)' },
+    stunningBlow('wolf'),
     WILD_FURY,
   ],
   bear: [
     { id: 'unstoppable_charge', form: 'bear', name: '💥 Investida Imparável', kind: 'dmg', die: 20, dmgMult: 1.72, pierce: 1, cost: { mp: 12 }, cd: 2, desc: 'Ignora TODA a armadura (d20)' },
+    stunningBlow('bear'),
     { id: 'bear_guard', form: 'bear', name: '🛡️ Pele de Ferro', kind: 'util', effect: { selfDmgTaken: { mult: 0.80, turns: 3 } }, cost: { mp: 8 }, cd: 4, desc: '-20% dano recebido por 3 turnos' },
   ],
   eagle: [
     { id: 'ascending_spiral', form: 'eagle', name: '🌀 Espiral Ascendente', kind: 'dmg', die: 20, dmgMult: 2.15, pierce: 0.6, cost: { mp: 12 }, cd: 2, desc: 'Mergulho em espiral (fura 60% da armadura) (d20)' },
+    stunningBlow('eagle'),
     { id: 'eagle_swift', form: 'eagle', name: '🌬️ Voo Veloz', kind: 'util', effect: { selfEvade: { value: 0.45, turns: 3 } }, cost: { mp: 8 }, cd: 4, desc: '+45% de evasão por 3 turnos' },
   ],
   seventh_sense: [
     { id: 'cosmo_burst', form: 'seventh_sense', name: '🌌 Explosão de Cosmo', kind: 'dmg', die: 20, dmgMult: 2.1, cost: { mp: 12 }, cd: 2, desc: 'Explosão de cosmo concentrada (d20)' },
+    stunningBlow('seventh_sense'),
     { id: 'meditation', form: 'seventh_sense', name: '🧘 Meditação', kind: 'util', heal: 0.14, cost: { mp: 8 }, cd: 4, desc: 'Cura 14% do HP máximo' },
   ],
   celestial: [
     { id: 'super_nova', form: 'celestial', name: '💥 Super Nova', kind: 'dmg', die: 20, dmgMult: 2.0, pierce: 0.5, cost: { mp: 12 }, cd: 2, desc: 'Explosão de luz que fura 50% da armadura (d20)' },
+    stunningBlow('celestial'),
     { id: 'hyperfocus', form: 'celestial', name: '✨ Hyperfoco', kind: 'util', effect: { selfDmgDealt: { mult: 1.3, turns: 3 } }, cost: { mp: 8 }, cd: 4, desc: '+30% de dano causado por 3 turnos' },
   ],
 }

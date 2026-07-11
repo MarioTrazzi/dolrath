@@ -59,6 +59,8 @@ interface Player {
   isTransformed?: boolean
   transformationType?: string | null
   unlockedTransformation?: string | null
+  // 🌳 Árvore de habilidades comprada (lib/skillTree.ts). null = personagem legado.
+  skillTree?: unknown
   transformationImage?: string | null
   // Metamorfo: mapa forma->imagem (escolhe a forma em combate).
   transformationImages?: Record<string, string> | null
@@ -123,6 +125,7 @@ const SPECIAL_COST: Record<string, { stamina?: number; mp?: number; cd: number }
   ascending_spiral: { mp: 12, cd: 2 }, eagle_swift: { mp: 8, cd: 4 },
   cosmo_burst: { mp: 12, cd: 2 }, meditation: { mp: 8, cd: 4 },
   super_nova: { mp: 12, cd: 2 }, hyperfocus: { mp: 8, cd: 4 },
+  stunning_blow: { mp: 10, cd: 3 }, // 💫 compartilhado pelas 6 formas
 }
 
 // ⚔️ NOVO KIT: ataques custam MP (Golpe 0 / Ataque de Classe 8) e rolam o SEU dado
@@ -575,6 +578,8 @@ function CombatPageContent() {
               isTransformed: charDetails.isTransformed || false,
               transformationType: charDetails.transformationType || null,
               unlockedTransformation: charDetails.unlockedTransformation || null,
+              // 🌳 Árvore de habilidades (lib/skillTree.ts): null = personagem legado, tudo liberado.
+              skillTree: charDetails.skillTree ?? null,
               transformationImage: charDetails.transformationImage || null,
               transformationImages: charDetails.transformationImages || null,
               isReady: false,

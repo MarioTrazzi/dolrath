@@ -180,10 +180,19 @@ export default function DungeonsPage() {
 
   // 🔁 Re-run: mantém a masmorra ativa e remonta a DungeonRun do zero (nova key),
   // sincronizando os recursos e preservando o estado do piloto automático.
-  const handleRunRestart = (updates: { hp: number; mp: number; stamina: number; leveledUp?: boolean; auto: boolean }) => {
+  const handleRunRestart = (updates: { hp: number; mp: number; stamina: number; level?: number; leveledUp?: boolean; auto: boolean }) => {
     const hero = selectedCharacter
     if (hero) {
-      const updated = { ...hero, hp: updates.hp, mp: updates.mp, stamina: updates.stamina }
+      // O re-run remonta <DungeonRun> do zero com este `character` como prop —
+      // sem propagar o nível aqui, um level up no farm automático "voltaria"
+      // para o nível antigo a cada re-run (mesmo bug do combate, um nível acima).
+      const updated = {
+        ...hero,
+        hp: updates.hp,
+        mp: updates.mp,
+        stamina: updates.stamina,
+        ...(updates.level != null ? { level: updates.level } : {}),
+      }
       setSelectedCharacter(updated)
       setCharacters(prev => prev.map(c => (c.id === updated.id ? updated : c)))
     }

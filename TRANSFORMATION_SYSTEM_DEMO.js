@@ -1,6 +1,11 @@
 /**
  * 🎮 DEMONSTRAÇÃO DO SISTEMA DE TRANSFORMAÇÃO COMPLETO
  * Script que mostra todas as funcionalidades implementadas
+ *
+ * ⚠️ DOCUMENTO HISTÓRICO — os números/kits abaixo são da 1ª versão do sistema.
+ * A fonte ATUAL dos golpes é src/lib/transformationSpecials.ts (kit enxuto: ataque
+ * assinatura d20 12MP + 💫 Golpe Atordoante compartilhado 10MP + buff 8MP por forma),
+ * espelhada em server/socket-server.js (SPECIAL_DEFS) e scripts/pvp-lever-sim.js.
  */
 
 console.log(`
@@ -50,6 +55,12 @@ console.log(`
 ✅ Efeitos visuais e feedback para jogador
 
 ⚔️ 4. HABILIDADES ESPECIAIS IMPLEMENTADAS:
+
+💫 GOLPE ATORDOANTE (TODAS AS FORMAS — kit atual):
+• Ataque de CONTROLE compartilhado pelas 6 formas (d20, 10 MP, recarga 3)
+• Dano simbólico (mult 0.8, sem pierce) — o valor está no atordoamento
+• Rolagem ≥15 (30%): IMOBILIZA o alvo por 1 turno (perde o ataque)
+• Único especial ESQUIVÁVEL (esquiva passiva do alvo anula, no PvP); chefe PvE resiste
 
 🐉 DRAGÃO:
 • Sopro de Fogo: Ignora 50% da defesa, alto dano

@@ -12,6 +12,20 @@ const { spawnTrainingBot, MONSTERS } = require('./training-bot')
 // Ver server/combatModel.js + src/lib/combatModel.ts + docs/combate-ataque-por-arma.md.
 const CM = require('./combatModel')
 
+// 🌳 Árvore de habilidades (espelho de src/lib/skillTree.ts) — gate de Ataque de Classe/
+// Golpe Atordoante/buff de forma + ranks II/III. `player.skillTree` vem direto do payload
+// do cliente (join_room), igual a unlockedTransformation/transformationType.
+const { getSkillUnlocks, applyRankPatch } = require('./skillTree')
+
+// unlocks do jogador nesta luta. Monstro/bot de treino (sem `class`) fica no fallback
+// LEGACY (tudo liberado) — normalizeClass já devolve null pra eles.
+function getUnlocksFor(player) {
+  const cls = normalizeClass(player && player.class)
+  if (!cls) return getSkillUnlocks(null, 'warrior') // legacy (não deveria gatear monstro)
+  const purchased = player.skillTree && Array.isArray(player.skillTree.purchased) ? player.skillTree.purchased : null
+  return getSkillUnlocks(purchased, cls)
+}
+
 // Normaliza o nome da classe (PT da criação) para a chave do PROFILE do modelo.
 // Retorna null para classes desconhecidas (ex.: monstros do treino) → usa fallback por stats.
 function normalizeClass(cls) {
@@ -442,8 +456,14 @@ io.on('connection', (socket) => {
       player.baseLevers = levers // guardado p/ reverter o buff de transformação
       player.combatClass = cls
       player.gearTier = gearTier
-      player.maxHp = Math.round(levers.hp)
+      // 🌳 Vitalidade/Reservas Arcanas (maxHpPct/maxMpPct): passivas permanentes da árvore.
+      const joinUnlocks = getUnlocksFor(player)
+      player.maxHp = Math.round(levers.hp * (1 + joinUnlocks.passives.maxHpPct))
       player.hp = player.maxHp
+      if (joinUnlocks.passives.maxMpPct) {
+        player.maxMp = Math.round((player.maxMp || 0) * (1 + joinUnlocks.passives.maxMpPct))
+        player.mp = player.maxMp
+      }
 
       // Criador retornando (refresh/remontagem): remover a entrada antiga para não ocupar a vaga do oponente
       if (isCreator && room.player1 && room.player1.id !== player.id) {
@@ -732,8 +752,10 @@ io.on('connection', (socket) => {
     // Aplicar transformação
     player.isTransformed = true
     player.transformationType = transformationType
+    // 🏆 Capstone de assinatura (transformExtraTurns): +1 turno de forma.
+    const transformUnlocks = getUnlocksFor(player)
     player.transformationData = {
-      remainingTurns: config.duration,
+      remainingTurns: config.duration + transformUnlocks.passives.transformExtraTurns,
       cooldownTurns: 0,
       originalStats,
       specialAbilities: config.specialAbilities
@@ -802,7 +824,7 @@ io.on('connection', (socket) => {
       playerId,
       transformationType,
       config,
-      remainingTurns: config.duration
+      remainingTurns: player.transformationData.remainingTurns
     })
   })
 
@@ -963,18 +985,28 @@ io.on('connection', (socket) => {
       return
     }
 
+    // 🌳 GATE do Ataque de Classe: só libera com o nó desbloqueado na árvore de habilidades.
+    const unlocksForAttack = getUnlocksFor(currentPlayer)
+    if (attackType === 'weapon' && currentPlayer.combatClass && !unlocksForAttack.classAttack) {
+      socket.emit('error', { message: 'Aprenda o Ataque de Classe na árvore de habilidades!' })
+      return
+    }
+
     // ⚔️ NOVO KIT: ATAQUES custam MP (Golpe 0 / Ataque de Classe 8 / Especial 18); a
     // stamina fica para a DEFESA. Cada ataque rola o SEU dado (Golpe d6 / Classe d8 /
     // Especial d20 — PVE_DIE). Ações não-ataque (item) seguem no custo de stamina + d12.
+    // 🌳 Ranks II/III da árvore sobrescrevem dado/custo do Ataque de Classe.
     if (isAttack) {
       // Só JOGADORES (com combatClass) pagam MP; monstros (sem classe) atacam de graça.
-      const mpCost = currentPlayer.combatClass ? (CM.ATTACKS[attackType]?.mp ?? 0) : 0
+      const mpCost = !currentPlayer.combatClass ? 0
+        : attackType === 'weapon' ? unlocksForAttack.classAttackMp
+        : (CM.ATTACKS[attackType]?.mp ?? 0)
       if ((currentPlayer.mp || 0) < mpCost) {
         socket.emit('error', { message: `MP insuficiente! Precisa de ${mpCost} MP` })
         return
       }
       if (mpCost > 0) currentPlayer.mp = Math.max(0, (currentPlayer.mp || 0) - mpCost)
-      diceType = CM.PVE_DIE[attackType] || CM.DICE_SIDES
+      diceType = attackType === 'weapon' ? unlocksForAttack.classAttackDie : (CM.PVE_DIE[attackType] || CM.DICE_SIDES)
     } else {
       const systemStaminaCost = getStaminaCost('pvp', { playerLevel: currentPlayer.level || 1, actionType: action })
       if (currentPlayer.stamina < systemStaminaCost) {
@@ -1505,16 +1537,20 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
   // Crítico = rolagem máxima do d12 (embutida na banda de sorte). Esquiva (evasão da
   // classe) zera o golpe; bloqueio amplifica a armadura efetiva.
   const attackType = ATTACK_TYPE_MAP[attackAction] || 'weapon'
-  // 🎲 Dado do ataque (Golpe d6 / Ataque de Classe d8 / Especial d20). Sorte, crítico e
-  // faixa de esquiva usam ESSE dado.
-  const sides = CM.PVE_DIE[attackType] || CM.DICE_SIDES
+  // 🌳 Rank II do Ataque de Classe muda o dado (d8→d10) — mesmo gate de processAction.
+  const attackerUnlocks = getUnlocksFor(attacker)
+  // 🎲 Dado do ataque (Golpe d6 / Ataque de Classe d8-d10 / Especial d20). Sorte, crítico
+  // e faixa de esquiva usam ESSE dado.
+  const sides = attackType === 'weapon' ? attackerUnlocks.classAttackDie : (CM.PVE_DIE[attackType] || CM.DICE_SIDES)
   const aLev = attacker.levers || derivePlayerLevers(attacker).levers
   const dLev = defender.levers || derivePlayerLevers(defender).levers
   const attackerPower = aLev.power * (CM.ATTACKS[attackType]?.powerMult ?? 1)
   const defenseModel = DEFENSE_MAP[defenseAction] // 'dodge' | 'block' | undefined
 
   // 🌀 Buff de evasão temporário (especiais: Superioridade Aérea / Uivo / Contra-ataque)
-  const defEvade = Math.min(0.95, (dLev.evade || 0) + (defender.fx?.evadeBuffTurns > 0 ? defender.fx.evadeBuff : 0))
+  // + 🌳 evadeBonus (Passo Lateral/Reflexos de Batalha): passiva permanente da árvore.
+  const defenderUnlocks = getUnlocksFor(defender)
+  const defEvade = Math.min(0.95, (dLev.evade || 0) + (defender.fx?.evadeBuffTurns > 0 ? defender.fx.evadeBuff : 0) + defenderUnlocks.passives.evadeBonus)
   // Esquiva resolvida pela rolagem do defensor (no dado do ataque): sucesso na faixa de evasão.
   let dodgeSucceeded
   if (defenseModel === 'dodge') {
@@ -1532,9 +1568,11 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
   const isCritical = hitResult.crit && !hitResult.dodged
   let finalDamage = hitResult.dodged ? 0 : hitResult.damage
   // 🔥 Camada de status: dano causado (atacante) e dano recebido (defensor)
+  // + 🌳 critBonusMult (capstone de crítico, só no golpe crítico) e selfDmgTakenMult
+  // (capstone de Baluarte, permanente) da árvore de habilidades.
   if (!hitResult.dodged) {
-    const outMult = attacker.fx?.dmgDealtMult ?? 1
-    const inMult = defender.fx?.dmgTakenMult ?? 1
+    const outMult = (attacker.fx?.dmgDealtMult ?? 1) * (isCritical ? attackerUnlocks.passives.critBonusMult : 1)
+    const inMult = (defender.fx?.dmgTakenMult ?? 1) * defenderUnlocks.passives.selfDmgTakenMult
     if (outMult !== 1 || inMult !== 1) finalDamage = Math.max(1, Math.round(finalDamage * outMult * inMult))
   }
   let hit = !hitResult.dodged
@@ -1966,6 +2004,21 @@ const SPECIAL_DEFS = {
   // 🌟 Celestial (elfo)
   super_nova:         { form: 'celestial', name: '💥 Super Nova', kind: 'dmg', die: 20, dmgMult: 2.0, pierce: 0.5, cost: { mp: 12 }, cd: 2 },
   hyperfocus:         { form: 'celestial', name: '✨ Hyperfoco', kind: 'util', cost: { mp: 8 }, cd: 4, apply: (s) => setFxMult(s, 'dmgDealt', 1.3, 3), msg: '+30% de dano causado por 3 turnos' },
+  // 💫 Golpe Atordoante — CONTROLE PURO compartilhado pelas 6 formas: dano simbólico,
+  // rolagem ≥15 (30%) IMOBILIZA 1 turno. dodgeable: único especial que a esquiva
+  // PASSIVA do alvo anula (golpe físico mirado; balance no pvp-lever-sim 2026-07-11).
+  stunning_blow:      { forms: ['dragon', 'wolf', 'bear', 'eagle', 'seventh_sense', 'celestial'], name: '💫 Golpe Atordoante', kind: 'dmg', die: 20, dmgMult: 0.8, immobilizeRoll: 15, dodgeable: true, cost: { mp: 10 }, cd: 3 },
+}
+
+// 🌳 Especial ASSINATURA/BUFF da forma (p/ o gate/rank da árvore) — o de dano que NÃO
+// é o Golpe Atordoante, e o único 'util' daquela forma.
+function formSignatureId(form) {
+  const entry = Object.entries(SPECIAL_DEFS).find(([id, d]) => d.kind === 'dmg' && id !== 'stunning_blow' && d.form === form)
+  return entry ? entry[0] : null
+}
+function formBuffId(form) {
+  const entry = Object.entries(SPECIAL_DEFS).find(([id, d]) => d.kind === 'util' && d.form === form)
+  return entry ? entry[0] : null
 }
 
 // Dano de um especial: DIRETO (sem disputa de esquiva — como o handler legado já fazia).
@@ -1999,11 +2052,24 @@ function specialHitDamage(player, opponent, def) {
 }
 
 function processSpecialAbility(player, opponent, abilityId) {
-  const def = SPECIAL_DEFS[abilityId]
-  if (!def) return { success: false, error: 'Habilidade não reconhecida!' }
+  const baseDef = SPECIAL_DEFS[abilityId]
+  if (!baseDef) return { success: false, error: 'Habilidade não reconhecida!' }
   // Fúria Selvagem é compartilhada (def.forms); as demais validam a forma única (def.form).
-  const formOk = def.forms ? def.forms.includes(player.transformationType) : def.form === player.transformationType
+  const formOk = baseDef.forms ? baseDef.forms.includes(player.transformationType) : baseDef.form === player.transformationType
   if (!formOk) return { success: false, error: 'Habilidade não pertence à sua forma!' }
+
+  // 🌳 Gate da árvore: Golpe Atordoante e buff de forma só liberam com o nó comprado.
+  // O especial ASSINATURA (kind dmg, não-stun) NUNCA é gateado — nível 1 já vem com ele.
+  const unlocks = getUnlocksFor(player)
+  if (abilityId === 'stunning_blow' && !unlocks.stunningBlow) {
+    return { success: false, error: 'Aprenda o Golpe Atordoante na árvore de habilidades!' }
+  }
+  if (baseDef.kind === 'util' && !unlocks.formBuff) {
+    return { success: false, error: 'Aprenda o buff da forma na árvore de habilidades!' }
+  }
+
+  const form = player.transformationType
+  const def = applyRankPatch(baseDef, unlocks, form, 'stunning_blow', formSignatureId(form), formBuffId(form))
 
   const cost = def.cost || {}
   if ((player.stamina || 0) < (cost.stamina || 0)) return { success: false, error: 'Stamina insuficiente!' }
@@ -2021,16 +2087,32 @@ function processSpecialAbility(player, opponent, abilityId) {
       player.hp = Math.min(player.maxHp, (player.hp || 0) + heal)
       return { success: true, damage: 0, message: `${def.name}: ${player.name} recupera ${heal} HP! (${player.hp}/${player.maxHp})` }
     }
-    if (def.apply) def.apply(player, opponent)
-    return { success: true, damage: 0, message: `${def.name}: ${player.name} — ${def.msg}` }
+    // 🌳 Rank II (form_buff): patch de intensidade vem em __buffPatch (id fixo, valor ranked).
+    if (def.__buffPatch) {
+      const { key, value } = def.__buffPatch
+      if (key === 'dmgTaken' || key === 'dmgDealt') setFxMult(player, key, value, 3)
+      else if (key === 'evade') setFxEvade(player, value, 3)
+    } else if (baseDef.apply) baseDef.apply(player, opponent)
+    return { success: true, damage: 0, message: `${def.name}: ${player.name} — ${def.msg || baseDef.msg}` }
   }
 
   // especial de dano
+  // 💫 dodgeable: golpe físico mirado — a esquiva PASSIVA do alvo anula (MP/recarga já gastos)
+  if (def.dodgeable) {
+    const dLev = opponent.levers || derivePlayerLevers(opponent).levers
+    const dFx = getFx(opponent)
+    const evade = Math.min(0.95, (dLev.evade || 0) + (dFx.evadeBuffTurns > 0 ? dFx.evadeBuff : 0))
+    if (Math.random() < evade) {
+      return { success: true, damage: 0, message: `${def.name}: ${opponent.name} ESQUIVA do golpe!` }
+    }
+  }
   if (def.dot) {
     const dmg = Math.max(1, Math.round((opponent.maxHp || 0) * def.dot.frac))
     getFx(opponent).dots.push({ dmg, turns: def.dot.turns, label: def.dot.label })
   }
-  const { damage, crit, maxRoll } = specialHitDamage(player, opponent, def)
+  let { damage, crit, maxRoll } = specialHitDamage(player, opponent, def)
+  // 🏆 Capstone de crítico (critBonusMult) amplifica só o golpe crítico — mesmo hook do PvE.
+  if (crit && unlocks.passives.critBonusMult !== 1) damage = Math.max(1, Math.round(damage * unlocks.passives.critBonusMult))
   opponent.hp = Math.max(0, (opponent.hp || 0) - damage)
   // 🌟 Imobilização = PROC de sorte alta (rolagem ≥ immobilizeRoll), não garantida.
   let immobMsg = ''

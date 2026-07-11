@@ -21,7 +21,7 @@ import { normalizeCombatClass } from '@/lib/combatModel'
 
 export type ImpactKind =
   | 'punch' | 'triple' | 'fireball' | 'stealth' | 'charge'
-  | 'firebreath' | 'bite' | 'spiral' | 'cosmic' | 'nova'
+  | 'firebreath' | 'bite' | 'spiral' | 'cosmic' | 'nova' | 'stunburst'
   | 'claw' | 'clawStrong' | 'generic'
 
 export type AuraKind =
@@ -32,7 +32,7 @@ export type AuraKind =
 export const IMPACT_MS: Record<ImpactKind, number> = {
   punch: 550, triple: 850, fireball: 950, stealth: 750, charge: 850,
   firebreath: 1100, bite: 950, spiral: 950, cosmic: 1400, nova: 950,
-  claw: 650, clawStrong: 850, generic: 450,
+  stunburst: 1100, claw: 650, clawStrong: 850, generic: 450,
 }
 
 export const AURA_MS: Record<AuraKind, number> = {
@@ -48,6 +48,7 @@ const SPECIAL_IMPACT: Record<string, ImpactKind> = {
   ascending_spiral: 'spiral',
   cosmo_burst: 'cosmic',
   super_nova: 'nova',
+  stunning_blow: 'stunburst', // 💫 compartilhado pelas 6 formas
 }
 
 // Habilidades de BUFF das formas → aura no conjurador.
@@ -332,6 +333,19 @@ export function ImpactFX({ kind, side }: { kind: ImpactKind; side: 'left' | 'rig
           <Pop delay={0.15} size="text-5xl">💥</Pop>
           <Particle x={0} y={0} toX={-40} toY={-36} delay={0.25} size="text-lg">✨</Particle>
           <Particle x={0} y={0} toX={42} toY={-30} delay={0.28} size="text-lg">✨</Particle>
+        </Overlay>
+      )
+
+    case 'stunburst': // 💫 Golpe Atordoante: onda de choque dourada + estrelas rodando sobre a cabeça
+      return (
+        <Overlay>
+          <Flash color="rgba(255,245,200,0.9)" duration={0.4} peak={0.85} />
+          <Ring color="rgba(255,210,80,0.95)" duration={0.55} to={2.0} border={6} />
+          <Ring color="rgba(255,255,255,0.85)" delay={0.12} duration={0.55} to={1.5} />
+          <Pop delay={0.08} size="text-5xl">💫</Pop>
+          <Particle x={-30 * from} y={-34} toX={30 * from} toY={-46} delay={0.3} duration={0.65} size="text-xl" spin={260}>💫</Particle>
+          <Particle x={30 * from} y={-42} toX={-28 * from} toY={-30} delay={0.44} duration={0.65} size="text-xl" spin={-240}>💫</Particle>
+          <Particle x={0} y={-24} toX={6 * from} toY={-54} delay={0.52} duration={0.55} size="text-base" spin={180}>✦</Particle>
         </Overlay>
       )
 

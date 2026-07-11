@@ -20,7 +20,6 @@ import ForgeDialog from '@/components/crafting/ForgeDialog';
 import AlchemyDialog from '@/components/crafting/AlchemyDialog';
 import ProcessingDialog from '@/components/crafting/ProcessingDialog';
 import CookingDialog from '@/components/crafting/CookingDialog';
-import AttributeDistributionPanel from '@/components/AttributeDistributionPanel';
 import CharacterHistory from '@/components/CharacterHistory';
 import CreationCardBackdrop from '@/components/character/CreationCardBackdrop';
 import PersonSilhouette from '@/components/character/PersonSilhouette';
@@ -748,43 +747,35 @@ export default function CharacterDetailsPage() {
             </button>
           </div>
 
-        {/* Attribute Distribution Panel */}
+        {/* 🌳 Subiu de nível → só um chamariz pra Árvore de Habilidades. A distribuição
+            de pontos saiu da ficha e agora vive em /character/[id]/skill-tree. */}
         {(character.availablePoints ?? 0) > 0 && (
-          <AttributeDistributionPanel
-            characterId={effectiveCharacterId || ''}
-            availablePoints={character.availablePoints ?? 0}
-            currentAttributes={{
-              str: (character.attributes as any)?.str || (character.baseStats as any)?.str || 0,
-              agi: (character.attributes as any)?.agi || 0,
-              int: (character.attributes as any)?.int || 0,
-              def:
-                (character.attributes as any)?.def ??
-                (character.attributes as any)?.defense ??
-                (character.attributes as any)?.res ??
-                (character.baseStats as any)?.def ??
-                (character.baseStats as any)?.res ??
-                0,
+          <button
+            onClick={() => router.push(`/character/${effectiveCharacterId}/skill-tree`)}
+            className="mt-4 w-full rounded-[4px] border px-6 py-4 text-left transition-all hover:brightness-110"
+            style={{
+              borderColor: FRAME,
+              background: 'linear-gradient(180deg, #3a3325, #241f16)',
+              boxShadow: 'inset 0 1px 0 rgba(231,198,130,0.15), 0 0 18px rgba(201,162,95,0.18)',
             }}
-            currentStats={{
-              hp: character.hp,
-              maxHp: character.maxHp,
-              mp: (character as any).mp || 0,
-              maxMp: (character as any).maxMp || 50,
-              stamina: character.stamina,
-              maxStamina: character.maxStamina,
-              crit: ((character.attributes as any)?.agi || 0) * 0.2,
-              speed: ((character.attributes as any)?.agi || 0) * 0.5,
-            }}
-            onPointsDistributed={async () => {
-              // Recarregar dados do personagem
-              if (!effectiveCharacterId) return;
-              const response = await fetch(`/api/character/${effectiveCharacterId}`);
-              if (response.ok) {
-                const characterData = await response.json();
-                setCharacter(characterData);
-              }
-            }}
-          />
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl" aria-hidden>🌳</span>
+                <div>
+                  <div className="text-[15px] font-bold" style={{ color: GOLD_BRIGHT }}>
+                    Você subiu de nível!
+                  </div>
+                  <div className="text-[13px]" style={{ color: '#d8c8a0' }}>
+                    {character.availablePoints} ponto{character.availablePoints === 1 ? '' : 's'} para distribuir na Árvore de Habilidades
+                  </div>
+                </div>
+              </div>
+              <span className="shrink-0 rounded-[3px] border px-3 py-1.5 text-sm font-bold" style={{ borderColor: GOLD, color: GOLD_BRIGHT, background: 'rgba(0,0,0,0.3)' }}>
+                Distribuir →
+              </span>
+            </div>
+          </button>
         )}
 
         {/* ====== Janelas estilo Black Desert (Equipamento + Inventário) ====== */}

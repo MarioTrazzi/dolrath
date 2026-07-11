@@ -204,6 +204,10 @@ model Character {
   transformationImage    String?
   // Mapa de imagens por forma. Metamorfo: { wolf, bear, eagle }. Demais raças: 1 entrada.
   transformationImages   Json?
+
+  // 🌳 Árvore de habilidades (estilo Child of Light): { version, purchased: string[], respecAt? }
+  // null = personagem LEGADO (tudo liberado no combate até o respec único) — ver lib/skillTree.ts
+  skillTree     Json?           @db.JsonB
   
   equipment     CharacterEquipment[]
   inventory     CharacterInventory[]

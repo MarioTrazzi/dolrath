@@ -59,6 +59,8 @@ const GROUPS: { title: string; items: Trigger[] }[] = [
       T('🌀 Espiral Ascendente', { ...HIT, action: 'ascending_spiral', damage: 45 }),
       T('🌌 Explosão de Cosmo', { ...HIT, action: 'cosmo_burst', damage: 44 }),
       T('💥 Super Nova', { ...HIT, action: 'super_nova', damage: 42 }),
+      T('💫 Golpe Atordoante', { ...HIT, action: 'stunning_blow', damage: 28 }),
+      T('💫 Stun no monstro (proc)', { kind: 'status', actorId: 'foe', action: 'stun' }),
     ],
   },
   {

@@ -152,6 +152,18 @@ export async function recordAttributeDistribution(characterId: string, attribute
   });
 }
 
+// 🌳 Nó da árvore de habilidades comprado. Reusa ATTRIBUTE_DISTRIBUTED de propósito:
+// criar valor novo no enum ActivityType exige migração de enum no Postgres (histórico
+// de migração travada em prod) — o details.action distingue no histórico.
+export async function recordSkillNodePurchase(characterId: string, nodeId: string, nodeName: string, cost: number) {
+  return addHistoryEntry({
+    characterId,
+    activityType: ActivityType.ATTRIBUTE_DISTRIBUTED,
+    description: `Aprendeu "${nodeName}" na árvore de habilidades`,
+    details: { action: 'skill_node', nodeId, cost },
+  });
+}
+
 export async function recordInventoryExpansion(characterId: string, oldSlots: number, newSlots: number, goldCost: number) {
   return addHistoryEntry({
     characterId,

@@ -35,6 +35,11 @@ const SEED = getArg('seed', null)
 const SPECIALS_ON = process.env.SPECIALS === '0' ? false : true
 const WELLS = Boolean(process.env.WELLS)
 const GEAR_TIER = process.env.GEAR !== undefined ? Number(process.env.GEAR) : 0.5 // tier médio dos dois
+// 🌳 Árvore de habilidades completa (nv50, todos os nós comprados) — espelha
+// src/lib/skillTree.ts: Ataque de Classe d10/6MP, Golpe Atordoante rolagem≥14, assinatura
+// rank III, buff rank II, + capstones (crit×1.1, -4% dano recebido, +5% HP, +10% MP, +5%
+// evasão). Simula os 4 caminhos completos igual para os dois lados (fim de jogo simétrico).
+const FULL_TREE = Boolean(getArg('fulltree', process.env.FULLTREE))
 
 // RNG seedável
 let _s = SEED != null ? (Number(SEED) >>> 0) : (Math.random() * 2 ** 32) >>> 0
@@ -61,11 +66,11 @@ const PROFILE = {
 const ATTACKS = { basic: { mult: 0.72, mp: 0, die: 6 }, weapon: { mult: 1.0, mp: 8, die: 8 } }
 const clampGear = (t) => Number.isNaN(t) ? GEAR_FLOOR : Math.max(GEAR_FLOOR, Math.min(1, t))
 const powerScale = (lvl, gear) => WL * (Math.max(0, lvl) / MAXLVL) + WG * clampGear(gear)
-const luckOf = (roll, sides = DICE_SIDES) => { const t = (roll - 1) / (sides - 1); let m = LUCK_LO + (LUCK_HI - LUCK_LO) * t; if (roll >= sides) m *= CRIT_MULT; return m }
+const luckOf = (roll, sides = DICE_SIDES) => { const t = (roll - 1) / (sides - 1); let m = LUCK_LO + (LUCK_HI - LUCK_LO) * t; if (roll >= sides) m *= CRIT_MULT * CRIT_BONUS; return m }
 // 🩹 Especiais CRITAM com bônus REDUZIDO (SPECIAL_CRIT_MULT, ex.: 1.3 vs 1.6 do normal):
 // o jogador ainda vê o crítico ao rolar o máximo do dado, mas o bônus não vira nuke/one-shot.
 const SPECIAL_CRIT_MULT = Number(process.env.SP_CRIT || 1.3)
-const luckSpecial = (roll, sides = DICE_SIDES) => { const m = LUCK_LO + (LUCK_HI - LUCK_LO) * ((roll - 1) / (sides - 1)); return roll >= sides ? m * SPECIAL_CRIT_MULT : m }
+const luckSpecial = (roll, sides = DICE_SIDES) => { const m = LUCK_LO + (LUCK_HI - LUCK_LO) * ((roll - 1) / (sides - 1)); return roll >= sides ? m * SPECIAL_CRIT_MULT * CRIT_BONUS : m }
 const DR = (armor, K) => Math.max(0, armor) / (Math.max(0, armor) + K)
 // 🔧 ATTR TILT — espelha applyAttrTilt do combatModel.ts. TILT=0 desliga (= PvP de
 // HOJE, sem tilt → guerreiro domina). Default ON = a CORREÇÃO (passar attrs como no PvE).
@@ -132,7 +137,8 @@ function attrsOf(cls, form, level) {
 }
 function pools(cls, form, level) {
   const a = attrsOf(cls, form, level)
-  return { maxMp: 60 + a.int * 4 + a.agi, maxStamina: 120 + a.agi * 2 + a.def * 2 }
+  // 🌳 Reservas Arcanas (maxMpPct +10%, capstone da árvore) — só em FULL_TREE.
+  return { maxMp: Math.round((60 + a.int * 4 + a.agi) * MAXMP_BONUS), maxStamina: 120 + a.agi * 2 + a.def * 2 }
 }
 
 // ============================================================
@@ -149,39 +155,97 @@ function pools(cls, form, level) {
 // HP do alvo) + DoT pra repor o output ao longo do tempo. Com o no-crit + o teto
 // SPECIAL_HP_CAP, NENHUM especial tira mais que o teto do HP máx → sem one-shot no
 // mesmo nível. Lutas mais longas; status/DoT/utilidade decidem.
-// 🎲 NOVO KIT (espelha src/lib/transformationSpecials.ts + server): 2 por forma —
-// 1 DANO d20 (12 MP) + 1 BUFF (8 MP). Fúria Selvagem é o buff dos 3 metamorfos.
+// 🎲 NOVO KIT (espelha src/lib/transformationSpecials.ts + server): 3 por forma —
+// 1 DANO assinatura d20 (12 MP) + 💫 Golpe Atordoante COMPARTILHADO (10 MP) + 1 BUFF (8 MP).
 // 😤 Fúria Selvagem agora é EXCLUSIVA do Lobo (Urso/Águia ganharam buffs próprios p/ identidade).
 const WILD_FURY = { id: 'wild_fury', name: '😤 Fúria Selvagem', util: (s) => st(s, 'dmgDealt', 1.2, 3), cost: { mp: 8 }, cd: 4, desc: '+20% dano causado 3t' }
+// 💫 Golpe Atordoante — controle PURO compartilhado: dano simbólico (0.8), valor no stun
+// (rolagem ≥15 = 30% imobiliza 1 turno). dodgeable: ÚNICO especial que respeita a esquiva
+// PASSIVA do alvo (golpe físico mirado). ⚖️ Tunado em 2026-07-11: com dano de especial
+// (1.45 undodge) ele virava um turno EXTRA de burst no buraco de cd do assinatura e
+// afundava a Águia ~6pts (evasão não protege de especial); dodgeable+0.8 devolve as
+// bandas do baseline (formas 47-52, classes 47-53).
+const STUNNING_BLOW = { id: 'stunning_blow', name: '💫 Golpe Atordoante', die: 20, dmgMult: 0.8, immobilizeRoll: 15, dodgeable: true, cost: { mp: 10 }, cd: 3 }
 const SPECIALS = {
   dragon: [
     { id: 'dragon_breath', name: '🔥 Sopro de Fogo', die: 20, dmgMult: 1.9, pierce: 0.6, cost: { mp: 12 }, cd: 2 },
+    STUNNING_BLOW,
     { id: 'dragon_scales', name: '🛡️ Escama de Dragão', util: (s) => st(s, 'dmgTaken', 0.76, 3), cost: { mp: 8 }, cd: 4, desc: '-24% dano recebido 3t' },
   ],
   wolf: [
     { id: 'bite_bleeding', name: '🩸 Mordida Sangrenta', die: 20, dmgMult: 1.6, pierce: 1, dot: (s) => ({ frac: 0.03, turns: 3, label: 'sangramento' }), cost: { mp: 12 }, cd: 2 },
+    STUNNING_BLOW,
     WILD_FURY,
   ],
   bear: [
     { id: 'unstoppable_charge', name: '💥 Investida Imparável', die: 20, dmgMult: 1.72, pierce: 1, cost: { mp: 12 }, cd: 2 },
+    STUNNING_BLOW,
     { id: 'bear_guard', name: '🛡️ Pele de Ferro', util: (s) => st(s, 'dmgTaken', 0.80, 3), cost: { mp: 8 }, cd: 4, desc: '-20% dano recebido 3t' },
   ],
   eagle: [
     { id: 'ascending_spiral', name: '🌀 Espiral Ascendente', die: 20, dmgMult: 2.15, pierce: 0.6, cost: { mp: 12 }, cd: 2 },
+    STUNNING_BLOW,
     { id: 'eagle_swift', name: '🌬️ Voo Veloz', util: (s) => { s.evadeBuff = 0.45; s.evadeBuffTurns = 3 }, cost: { mp: 8 }, cd: 4, desc: '+45% evasão 3t' },
   ],
   seventh_sense: [
     { id: 'cosmo_burst', name: '🌌 Explosão de Cosmo', die: 20, dmgMult: 2.1, cost: { mp: 12 }, cd: 2 },
+    STUNNING_BLOW,
     { id: 'meditation', name: '🧘 Meditação', util: (s) => { s.healPct = 0.14 }, cost: { mp: 8 }, cd: 4, desc: 'cura 14% HP máx' },
   ],
   celestial: [
     { id: 'super_nova', name: '💥 Super Nova', die: 20, dmgMult: 2.0, pierce: 0.5, cost: { mp: 12 }, cd: 2 },
+    STUNNING_BLOW,
     { id: 'hyperfocus', name: '✨ Hyperfoco', util: (s) => st(s, 'dmgDealt', 1.3, 3), cost: { mp: 8 }, cd: 4, desc: '+30% dano causado 3t' },
   ],
 }
 // helper de status temporário (multiplicador): kind 'dmgTaken' | 'dmgDealt'
 function st(c, kind, mult, turns) { c.status = c.status || {}; c.status[kind] = { mult, turns } }
 function formSpecials(form) { return SPECIALS_ON ? (SPECIALS[form] || []) : [] }
+
+// ============================================================
+// 🌳 FULL_TREE: patch in-place dos ranks II/III + capstones (espelha src/lib/skillTree.ts
+// e server/skillTree.js). Aplica IGUAL para os dois lados (fim de jogo simétrico) — o que
+// o sim mede aqui é se as ASSINATURAS/BUFFS por FORMA (que diferem em magnitude) continuam
+// dentro das janelas de balance depois dos ranks.
+// ============================================================
+const SIGNATURE_RANKS = {
+  dragon: { r2: { dmgMult: 2.0 }, r3: { pierce: 0.7 } },
+  wolf: { r2: { dmgMult: 1.7 }, r3: { dmgMult: 1.8 } },
+  bear: { r2: { dmgMult: 1.82 }, r3: { dmgMult: 1.92 } },
+  eagle: { r2: { dmgMult: 2.25 }, r3: { pierce: 0.7 } },
+  seventh_sense: { r2: { dmgMult: 2.2 }, r3: { dmgMult: 2.3 } },
+  celestial: { r2: { dmgMult: 2.1 }, r3: { pierce: 0.6 } },
+}
+if (FULL_TREE) {
+  // Ataque de Classe: rank II (d8→d10) + rank III (8MP→6MP)
+  ATTACKS.weapon.die = 10
+  ATTACKS.weapon.mp = 6
+  // Golpe Atordoante: rank II (rolagem ≥15 → ≥14, 30%→35%)
+  STUNNING_BLOW.immobilizeRoll = 14
+  // Assinatura (rank II+III) + buff (rank II) por forma
+  for (const form in SPECIALS) {
+    const [signature, , buff] = SPECIALS[form]
+    const ranks = SIGNATURE_RANKS[form]
+    if (signature && ranks) Object.assign(signature, ranks.r2, ranks.r3)
+    if (buff) {
+      if (form === 'dragon') buff.util = (s) => st(s, 'dmgTaken', 0.72, 3)
+      else if (form === 'wolf') buff.util = (s) => st(s, 'dmgDealt', 1.25, 3)
+      else if (form === 'bear') buff.util = (s) => st(s, 'dmgTaken', 0.76, 3)
+      else if (form === 'eagle') buff.util = (s) => { s.evadeBuff = 0.5; s.evadeBuffTurns = 3 }
+      else if (form === 'seventh_sense') buff.util = (s) => { s.healPct = 0.17 }
+      else if (form === 'celestial') buff.util = (s) => st(s, 'dmgDealt', 1.35, 3)
+    }
+  }
+  // Capstones: +5% evasão (control) e +5% HP/+10% MP (buff/signature) — via PROFILE (hp/evade
+  // entram em computeLevers/pools ANTES de qualquer fight rodar, então mutar aqui é seguro).
+  for (const cls in PROFILE) { PROFILE[cls].evade = Math.min(0.95, PROFILE[cls].evade + 0.05); PROFILE[cls].hp *= 1.05 }
+}
+// Capstone de crítico (critBonusMult ×1.1) — bônus SÓ no golpe crítico, aplicado na sorte.
+const CRIT_BONUS = FULL_TREE ? 1.1 : 1
+// Capstone de Baluarte (selfDmgTakenMult ×0.96) — permanente, empilha com o buff temporário.
+const CAPSTONE_DMG_TAKEN = FULL_TREE ? 0.96 : 1
+// Capstone de MP (+10% maxMp) — lido por pools().
+const MAXMP_BONUS = FULL_TREE ? 1.10 : 1
 // EV (dano médio estimado) de cada especial de dano, p/ a IA — puro, não rola dado.
 const AVG_LUCK = (() => { let s = 0; for (let r = 1; r <= DICE_SIDES; r++) s += luckOf(r); return s / DICE_SIDES })()
 const AVG_LUCK_NOCRIT = (() => { let s = 0; for (let r = 1; r <= DICE_SIDES; r++) s += luckSpecial(r); return s / DICE_SIDES })()
@@ -203,7 +267,8 @@ function attackDamage(att, def, type, roll, defense, dodgeOK) {
   if (defense === 'dodge' && dodgeOK) return { dmg: 0, dodged: true }
   const effArmor = defense === 'block' ? def.L.armor * BLOCK_ARMOR_MULT : def.L.armor
   let dmg = power * luckOf(roll, sides) * (1 - DR(effArmor, def.L.K))
-  dmg = dmg * (att.status?.dmgDealt?.mult || 1) * (def.status?.dmgTaken?.mult || 1)
+  // 🌳 Baluarte (selfDmgTakenMult, capstone permanente) empilha com o buff temporário.
+  dmg = dmg * (att.status?.dmgDealt?.mult || 1) * (def.status?.dmgTaken?.mult || 1) * CAPSTONE_DMG_TAKEN
   dmg = Math.min(dmg, (def.maxHp || 0) * SPECIAL_HP_CAP) // teto universal (env): default off
   return { dmg: Math.max(1, Math.round(dmg)), dodged: false, crit: roll >= sides }
 }
@@ -219,7 +284,7 @@ function specialDamage(att, def, sp) {
     const power = att.L.power * sp.dmgMult * FM(att.form) * (att.amplifyNext || 1)
     const armor = def.L.armor * (1 - (sp.pierce || 0))
     let dmg = power * luckSpecial(roll, sides) * (1 - DR(armor, def.L.K))
-    dmg = dmg * (att.status?.dmgDealt?.mult || 1) * (def.status?.dmgTaken?.mult || 1)
+    dmg = dmg * (att.status?.dmgDealt?.mult || 1) * (def.status?.dmgTaken?.mult || 1) * CAPSTONE_DMG_TAKEN
     total += Math.max(1, Math.round(dmg))
   }
   att.gcritNext = false; att.amplifyNext = 0
@@ -241,7 +306,16 @@ function specialEV(att, def, sp) {
   const power = att.L.power * sp.dmgMult * FM(att.form)
   const armor = def.L.armor * (1 - (sp.pierce || 0))
   const luck = sp.gcrit ? LUCK_HI : AVG_LUCK_NOCRIT
-  return hits * power * luck * (1 - DR(armor, def.L.K)) * (att.status?.dmgDealt?.mult || 1)
+  let ev = hits * power * luck * (1 - DR(armor, def.L.K)) * (att.status?.dmgDealt?.mult || 1)
+  // 💫 valor do stun p/ a IA: negar 1 turno do alvo ≈ EV do ataque de classe DELE, ×prob do proc
+  if (sp.immobilizeRoll) {
+    const sides = sp.die || DICE_SIDES
+    const probProc = Math.max(0, sides - sp.immobilizeRoll + 1) / sides
+    ev += probProc * normalEV(def, att, 'weapon')
+  }
+  // dodgeable: desconta a chance do alvo esquivar passivamente
+  if (sp.dodgeable) ev *= 1 - Math.min(0.95, def.L.evade + (def.evadeBuffTurns > 0 ? def.evadeBuff : 0))
+  return ev
 }
 
 // EV de um ataque normal contra o defensor (considera evasão média)
@@ -349,6 +423,11 @@ function applyAction(att, def, dec, log, actionCount) {
     if (sp.util) { sp.util(att, def); if (log) log(`  ${sp.name}: ${att.id} — ${sp.desc}`); return actionCount }
     // dano direto
     actionCount++
+    // 💫 especial dodgeable: esquiva PASSIVA do alvo (sem ação de defesa) anula o golpe
+    if (sp.dodgeable) {
+      const evade = Math.min(0.95, def.L.evade + (def.evadeBuffTurns > 0 ? def.evadeBuff : 0))
+      if (rng() < evade) { if (log) log(`  ${sp.name}: ${def.id} ESQUIVA!`); return actionCount }
+    }
     if (sp.dot) { def.dots = def.dots || []; def.dots.push(sp.dot(att)) }
     let { dmg, crit, maxRoll } = specialDamage(att, def, sp)
     // imobilização agora é PROC de sorte alta (rolagem ≥ immobilizeRoll), não garantida

@@ -104,6 +104,7 @@ export async function GET(
     const levelInfo = getLevelInfo(character.experience);
     const characterWithXPInfo = {
       ...characterData,
+      level: levelInfo.level,
       nextLevelExperience: levelInfo.xpForNextLevel,
       currentLevelXP: levelInfo.xpForCurrentLevel,
       xpToNextLevel: levelInfo.xpToNextLevel,

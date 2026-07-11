@@ -28,6 +28,7 @@ export function buildCharacterNftTokenUri(params: {
   raceId: string
   classId: string
   avatarUrl?: string | null
+  transformationImageUrl?: string | null
   stats: { str: number; agi: number; int: number; def: number }
   mintNonce?: string
   level?: number
@@ -37,6 +38,7 @@ export function buildCharacterNftTokenUri(params: {
     raceId: params.raceId,
     classId: params.classId,
     avatarUrl: params.avatarUrl,
+    transformationImageUrl: params.transformationImageUrl,
     stats: params.stats,
     level: params.level,
     mintNonce: params.mintNonce,
@@ -53,6 +55,7 @@ export function buildCharacterNftMetadata(params: {
   raceId: string
   classId: string
   avatarUrl?: string | null
+  transformationImageUrl?: string | null
   stats: { str: number; agi: number; int: number; def: number }
   level?: number
   mintNonce?: string | null
@@ -114,6 +117,7 @@ export function buildCharacterNftMetadata(params: {
 </svg>`
 
   const resolvedAvatar = absolutizeUrl(resolveImageUrl(params.avatarUrl), params.origin)
+  const resolvedTransformation = absolutizeUrl(resolveImageUrl(params.transformationImageUrl), params.origin)
 
   const metadata = {
     name: title,
@@ -132,6 +136,10 @@ export function buildCharacterNftMetadata(params: {
     properties: {
       avatarUrl: params.avatarUrl || null,
       resolvedAvatarUrl: resolvedAvatar,
+      // Imagem da forma de transformação — carregada junto no mint pra não depender
+      // do banco sobreviver pra sempre (ver dolrath-db-access / reset de 2026-07-11).
+      transformationImageUrl: params.transformationImageUrl || null,
+      resolvedTransformationImageUrl: resolvedTransformation,
       stats: params.stats,
       raceId: params.raceId,
       classId: params.classId,

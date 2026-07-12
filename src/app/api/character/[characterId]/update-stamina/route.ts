@@ -1,7 +1,7 @@
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
-import { computeStaminaRegen } from '@/lib/staminaSystem'
+import { regenAndPersist } from '@/lib/staminaServer'
 
 export async function POST(
   req: Request,
@@ -52,9 +52,9 @@ export async function POST(
       )
     }
 
-    // Aplica o regen passivo acumulado antes de cobrar (a stamina viva pode ser
-    // maior que a salva no banco).
-    const { stamina: liveStamina } = computeStaminaRegen(character)
+    // Stamina viva sincronizada antes de cobrar: aplica o regen passivo OU, se
+    // o personagem está coletando, debita os tiques da sessão (sem regen fantasma).
+    const { stamina: liveStamina } = await regenAndPersist(character)
 
     // Verificar se tem stamina suficiente
     console.log(`Checking stamina: ${liveStamina} >= ${staminaCost}?`)

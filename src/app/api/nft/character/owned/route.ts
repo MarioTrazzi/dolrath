@@ -5,13 +5,15 @@ import { Contract, ethers } from 'ethers'
 import { getCharacterNftContractAddress, getCharacterNftProvider } from '@/lib/characterNftOnchain'
 import { DOLRATH_CHARACTERS_ABI } from '@/lib/characterNftSigning'
 import { getLevelInfo } from '@/lib/experienceSystem'
-import { computeStaminaRegen } from '@/lib/staminaSystem'
+import { regenAndPersist } from '@/lib/staminaServer'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 function serializeBigInt(value: unknown): unknown {
   if (typeof value === 'bigint') return value.toString()
+  // Date é `typeof object` com Object.entries === [] — sem o guard viraria `{}`.
+  if (value instanceof Date) return value.toISOString()
   if (Array.isArray(value)) return value.map(serializeBigInt)
   if (value && typeof value === 'object') {
     const out: Record<string, unknown> = {}
@@ -244,6 +246,15 @@ export async function GET() {
     const levelInfo = getLevelInfo(c.experience)
     const baseStats = (c.baseStats as any) || {}
 
+    // Stamina viva SINCRONIZADA (regen passivo persistido; se o herói está
+    // coletando, debita os tiques da sessão em vez de creditar regen fantasma).
+    const live = await regenAndPersist({
+      ...c,
+      // ?? (não ||): stamina 0 é válido; com || o zero caía no máximo e furava o limitador.
+      stamina: c.stamina ?? baseStats.stamina ?? 100,
+      maxStamina: c.maxStamina || baseStats.maxStamina || 100,
+    })
+
     byTokenId.set(tokenId, {
       ...c,
       level: levelInfo.level,
@@ -252,14 +263,9 @@ export async function GET() {
       maxHp: c.maxHp || baseStats.maxHp || 100,
       mp: c.mp || baseStats.mp || 50,
       maxMp: c.maxMp || baseStats.maxMp || 50,
-      // Stamina viva para exibição (regen passivo aplicado sem tocar no banco).
-      stamina: computeStaminaRegen({
-        // ?? (não ||): stamina 0 é válido; com || o zero caía no máximo e furava o limitador.
-        stamina: c.stamina ?? baseStats.stamina ?? 100,
-        maxStamina: c.maxStamina || baseStats.maxStamina || 100,
-        staminaUpdatedAt: c.staminaUpdatedAt,
-      }).stamina,
-      maxStamina: c.maxStamina || baseStats.maxStamina || 100,
+      stamina: live.stamina,
+      maxStamina: live.maxStamina,
+      gathering: live.gathering,
     })
   }
 

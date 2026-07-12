@@ -11,7 +11,7 @@ import {
   STEP_COST,
   type RunPending,
 } from '@/lib/dungeonRunServer'
-import { computeStaminaRegen } from '@/lib/staminaSystem'
+import { regenAndPersist } from '@/lib/staminaServer'
 
 export const dynamic = 'force-dynamic'
 
@@ -65,9 +65,10 @@ export async function POST(req: Request) {
     if (!character) return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
 
     const cost = node.kind === 'main' ? STEP_COST.main : node.kind === 'boss' ? STEP_COST.boss : STEP_COST.minor
-    // Stamina viva (com regen passivo acumulado). Avançar zera o cronômetro de
-    // 15 min: cada nó grava stamina = liveStamina - cost e âncora = agora.
-    const { stamina: liveStamina } = computeStaminaRegen(character)
+    // Stamina viva sincronizada (regen passivo ou tiques de coleta debitados).
+    // Avançar zera o cronômetro de 15 min: cada nó grava stamina = liveStamina
+    // - cost e âncora = agora.
+    const { stamina: liveStamina } = await regenAndPersist(character)
     if (liveStamina < cost) {
       return NextResponse.json(
         { error: 'Stamina insuficiente', current: liveStamina, required: cost },

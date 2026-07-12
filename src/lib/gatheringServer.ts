@@ -178,7 +178,21 @@ async function finishStopRequested(
   tick?: { staminaSpent: number; anchor: Date },
   wear: { equipmentId: string; durability: number }[] = [],
 ): Promise<SyncedGathering> {
-  const [depositInfo, character, updatedSession] = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
+    // CAS: só o PRIMEIRO sync concorrente fecha a sessão (agora que /api/character/me
+    // também sincroniza, dois leitores podem chegar aqui juntos); quem perder a
+    // corrida não deposita nem debita de novo — evita espólio/débito duplicado.
+    const claimed = await tx.gatheringSession.updateMany({
+      where: { id: session.id, status: session.status, stopRequested: true },
+      data: {
+        pendingYield: { drops: [], xp: 0, ticks: 0 } as unknown as Prisma.InputJsonValue,
+        status: 'collected',
+        stopRequested: false,
+        ...(tick ? { lastTickAt: tick.anchor } : {}),
+      },
+    })
+    if (claimed.count === 0) return null
+
     for (const w of wear) {
       await tx.characterEquipment.update({ where: { id: w.equipmentId }, data: { durability: w.durability } })
     }
@@ -191,18 +205,13 @@ async function finishStopRequested(
       },
       select: { stamina: true, gatherXp: true },
     })
-    const updated = await tx.gatheringSession.update({
-      where: { id: session.id },
-      data: {
-        pendingYield: { drops: [], xp: 0, ticks: 0 } as unknown as Prisma.InputJsonValue,
-        status: 'collected',
-        stopRequested: false,
-        ...(tick ? { lastTickAt: tick.anchor } : {}),
-      },
-    })
+    const updated = await tx.gatheringSession.findUniqueOrThrow({ where: { id: session.id } })
     return [{ deposited, skipped, xpGained: pending.xp, gatherXp: updatedCharacter.gatherXp }, updatedCharacter, updated] as const
   })
 
+  if (!result) return freshSnapshot(session.id, session.characterId)
+
+  const [depositInfo, character, updatedSession] = result
   return {
     session: updatedSession,
     pending: readPending(updatedSession),
@@ -210,6 +219,24 @@ async function finishStopRequested(
     secondsToNextTick: 0,
     inventoryFull: false,
     autoStopped: depositInfo,
+  }
+}
+
+/**
+ * Retrato fresco pós-corrida: outro sync concorrente aplicou o tique/fechou a
+ * sessão primeiro — relê banco e devolve sem debitar nem depositar nada.
+ */
+async function freshSnapshot(sessionId: string, characterId: string): Promise<SyncedGathering> {
+  const [freshSession, freshChar] = await Promise.all([
+    prisma.gatheringSession.findUniqueOrThrow({ where: { id: sessionId } }),
+    prisma.character.findUniqueOrThrow({ where: { id: characterId }, select: { stamina: true } }),
+  ])
+  return {
+    session: freshSession,
+    pending: readPending(freshSession),
+    stamina: freshChar.stamina,
+    secondsToNextTick: 0,
+    inventoryFull: false,
   }
 }
 
@@ -299,16 +326,22 @@ export async function syncGatheringSession(
     return { ...finished, gear }
   }
 
-  const [updated] = await prisma.$transaction([
-    prisma.gatheringSession.update({
-      where: { id: session.id },
+  const updated = await prisma.$transaction(async (tx) => {
+    // CAS pela âncora: com /api/character/me também sincronizando, dois leitores
+    // podem computar o MESMO tique em paralelo — e o débito é um decrement
+    // relativo, então a corrida dobraria stamina gasta e rendimento. Só o
+    // primeiro a avançar lastTickAt aplica; o perdedor relê e devolve o fresco.
+    const claimed = await tx.gatheringSession.updateMany({
+      where: { id: session.id, lastTickAt: session.lastTickAt, status: 'active' },
       data: {
         lastTickAt: tick.anchor,
         pendingYield: pending as unknown as Prisma.InputJsonValue,
         ...(tick.exhausted ? { status: 'exhausted' } : {}),
       },
-    }),
-    prisma.character.update({
+    })
+    if (claimed.count === 0) return null
+
+    await tx.character.update({
       where: { id: session.characterId },
       data: {
         stamina: { decrement: tick.staminaSpent },
@@ -316,11 +349,14 @@ export async function syncGatheringSession(
         // passivo volta a contar a partir do fim do trabalho.
         staminaUpdatedAt: tick.anchor,
       },
-    }),
-    ...wear.map((w) =>
-      prisma.characterEquipment.update({ where: { id: w.equipmentId }, data: { durability: w.durability } }),
-    ),
-  ])
+    })
+    for (const w of wear) {
+      await tx.characterEquipment.update({ where: { id: w.equipmentId }, data: { durability: w.durability } })
+    }
+    return tx.gatheringSession.findUniqueOrThrow({ where: { id: session.id } })
+  })
+
+  if (!updated) return { ...(await freshSnapshot(session.id, session.characterId)), gear }
 
   const stamina = character.stamina - tick.staminaSpent
   return {

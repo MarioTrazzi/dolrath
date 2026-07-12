@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 import { addExperienceToCharacter } from '@/lib/characterLevelSystem';
 import { recordXpGained } from '@/lib/characterHistory';
-import { computeStaminaRegen } from '@/lib/staminaSystem';
+import { regenAndPersist } from '@/lib/staminaServer';
 
 interface BattleResult {
   winnerId: string;
@@ -230,11 +230,13 @@ export async function POST(request: NextRequest) {
     // vale 0 gold/xp — segue podendo jogar, mas o faucet fecha.
     const chargeStamina = async (char: typeof winner): Promise<boolean> => {
       if (!char) return false;
-      const { stamina, staminaUpdatedAt } = computeStaminaRegen(char as any);
+      // Stamina viva sincronizada (regen passivo ou tiques de coleta debitados)
+      // antes de cobrar; gastar reancora o cronômetro de regen (âncora = agora).
+      const { stamina } = await regenAndPersist(char as any);
       const ok = stamina >= PVP_STAMINA_COST;
       await prisma.character.update({
         where: { id: char.id },
-        data: { stamina: Math.max(0, stamina - PVP_STAMINA_COST), staminaUpdatedAt },
+        data: { stamina: Math.max(0, stamina - PVP_STAMINA_COST), staminaUpdatedAt: new Date() },
       });
       return ok;
     };

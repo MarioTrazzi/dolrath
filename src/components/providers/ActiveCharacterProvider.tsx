@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react'
 import { useSession } from 'next-auth/react'
 import { computeStaminaRegen, STAMINA_REGEN } from '@/lib/staminaSystem'
+import { computeGatherTicks } from '@/lib/gathering'
 
 // 🦸 Personagem ATIVO global. Antes cada página (inventário/loja/masmorra/combate)
 // buscava a lista e escolhia o "primeiro" como ativo, com seu próprio <select>.
@@ -24,6 +25,8 @@ export interface ActiveCharacter {
   stamina: number
   maxStamina: number
   staminaUpdatedAt?: string
+  /** Sessão de coleta viva (vem de /api/character/me quando o herói está coletando). */
+  gathering?: { fieldId: string; status: string; lastTickAt: string; inventoryFull?: boolean }
   failstacks?: number
   isAlive?: boolean
   // Campos extras vêm livres de /api/character/me; não os tipamos todos.
@@ -118,14 +121,17 @@ export function ActiveCharacterProvider({ children }: { children: ReactNode }) {
     setActiveId(valid ? stored : characters[0].id)
   }, [characters])
 
-  // Reavalia a stamina viva periodicamente. O regen real só muda a cada
-  // tickSeconds (15 min), mas recomputar é idempotente e barato, então
-  // limitamos o refresh a no máx. 60s para o número não ficar visivelmente
-  // defasado quando um tick acontece com a aba aberta. Só liga quando há
-  // alguém abaixo do máximo, evitando re-render à toa com tudo cheio.
+  // Reavalia a stamina viva periodicamente. O tick real só muda a cada
+  // tickSeconds (15 min) — regen (+2) OU coleta (−3) —, mas recomputar é
+  // idempotente e barato, então limitamos o refresh a no máx. 60s para o
+  // número não ficar visivelmente defasado quando um tick acontece com a aba
+  // aberta. Só liga quando há alguém regenerando ou coletando, evitando
+  // re-render à toa com tudo cheio e ninguém trabalhando.
   useEffect(() => {
-    const anyRegenerating = characters.some((c) => c.stamina < c.maxStamina)
-    if (!anyRegenerating) return
+    const anyTicking = characters.some(
+      (c) => c.stamina < c.maxStamina || c.gathering?.status === 'active'
+    )
+    if (!anyTicking) return
     const refreshSeconds = Math.min(STAMINA_REGEN.tickSeconds, 60)
     const id = setInterval(() => setStaminaTick((t) => t + 1), refreshSeconds * 1000)
     return () => clearInterval(id)
@@ -133,10 +139,21 @@ export function ActiveCharacterProvider({ children }: { children: ReactNode }) {
 
   // Stamina viva derivada do snapshot do servidor + hora atual. Recalculada a
   // cada tick (e a cada fetch). O snapshot original em `characters` fica intacto.
+  // Coletando (sessão ativa): o relógio INVERTE — nada de regen; debitamos os
+  // tiques de coleta (−3/15min desde lastTickAt), espelhando o que o servidor
+  // vai persistir no próximo sync. Coleta pausada por inventário cheio congela.
   const liveCharacters = useMemo(
     () =>
-      characters.map((c) =>
-        c.staminaUpdatedAt && c.stamina < c.maxStamina
+      characters.map((c) => {
+        if (c.gathering?.status === 'active') {
+          if (c.gathering.inventoryFull) return c
+          const { staminaSpent } = computeGatherTicks({
+            lastTickAt: new Date(c.gathering.lastTickAt),
+            stamina: c.stamina,
+          })
+          return staminaSpent > 0 ? { ...c, stamina: c.stamina - staminaSpent } : c
+        }
+        return c.staminaUpdatedAt && c.stamina < c.maxStamina
           ? {
               ...c,
               stamina: computeStaminaRegen({
@@ -146,7 +163,7 @@ export function ActiveCharacterProvider({ children }: { children: ReactNode }) {
               }).stamina,
             }
           : c
-      ),
+      }),
     // staminaTick avança no intervalo de 15s e força o recomputo da stamina viva.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [characters, staminaTick]

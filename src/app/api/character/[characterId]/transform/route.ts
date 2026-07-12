@@ -12,7 +12,7 @@ import {
   TRANSFORMATION_CONFIG,
   getRaceTransformations
 } from '@/lib/transformationSystem'
-import { computeStaminaRegen } from '@/lib/staminaSystem'
+import { regenAndPersist } from '@/lib/staminaServer'
 
 export async function POST(
   req: NextRequest,
@@ -47,8 +47,9 @@ export async function POST(
       return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
     }
 
-    // Aplica o regen passivo acumulado antes de checar/cobrar o custo da forma.
-    character.stamina = computeStaminaRegen(character).stamina
+    // Stamina viva sincronizada antes de checar/cobrar o custo da forma (regen
+    // passivo ou, se coletando, débito dos tiques da sessão).
+    character.stamina = (await regenAndPersist(character)).stamina
 
     // Verificar se pode transformar
     const validationResult = canTransform(character, transformationType as TransformationType)

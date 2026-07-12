@@ -2,12 +2,15 @@ import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { getLevelInfo } from '@/lib/experienceSystem'
+import { regenAndPersist } from '@/lib/staminaServer'
 import { Contract } from 'ethers'
 import { getCharacterNftContractAddress, getCharacterNftProvider } from '@/lib/characterNftOnchain'
 import { DOLRATH_CHARACTERS_ABI } from '@/lib/characterNftSigning'
 
 function serializeBigInt(value: unknown): unknown {
   if (typeof value === 'bigint') return value.toString()
+  // Date é `typeof object` com Object.entries === [] — sem o guard viraria `{}`.
+  if (value instanceof Date) return value.toISOString()
   if (Array.isArray(value)) return value.map(serializeBigInt)
   if (value && typeof value === 'object') {
     const out: Record<string, unknown> = {}
@@ -98,8 +101,12 @@ export async function GET(
     }
 
     // Remove sensitive user data before returning
-    const { user, ...characterData } = character
-    
+    const { user, ...rawCharacterData } = character
+
+    // Stamina viva sincronizada (regen passivo persistido ou, se o herói está
+    // coletando, tiques da sessão debitados) + info da coleta p/ a UI da ficha.
+    const characterData = await regenAndPersist(rawCharacterData)
+
     // Calculate XP information for next level
     const levelInfo = getLevelInfo(character.experience);
     const characterWithXPInfo = {

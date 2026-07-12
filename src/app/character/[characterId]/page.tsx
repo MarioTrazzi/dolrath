@@ -697,6 +697,35 @@ export default function CharacterDetailsPage() {
                     />
                   </div>
                 </div>
+
+                {/* Barra de stamina — valor vivo sincronizado pela API (regen ou coleta) */}
+                <div className="mt-2">
+                  <div className="mb-1 flex items-center justify-between text-[11px] uppercase tracking-[0.14em] text-[#77777d]">
+                    <span className="flex items-center gap-1.5">
+                      ⚡ Stamina
+                      {(character as any).gathering?.status === 'active' && (
+                        <span className="rounded-[2px] border border-emerald-400/40 bg-emerald-500/15 px-1.5 normal-case tracking-normal text-emerald-200">
+                          ⛏️ coletando
+                        </span>
+                      )}
+                    </span>
+                    <span className="normal-case tracking-normal tabular-nums text-[#8a8a90]">
+                      {character.stamina ?? 0} / {character.maxStamina ?? 0}
+                    </span>
+                  </div>
+                  <div className="h-[7px] overflow-hidden rounded-[2px] border border-black/70 bg-[#101013]">
+                    <div
+                      className="h-full bg-gradient-to-r from-[#8a6d3b] to-[#fbbf24] transition-all"
+                      style={{
+                        width: `${
+                          character.maxStamina
+                            ? Math.min(100, Math.round(((character.stamina ?? 0) / character.maxStamina) * 100))
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Botões de teste XP - removível em produção */}

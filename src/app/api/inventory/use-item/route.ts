@@ -1,7 +1,7 @@
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
-import { computeStaminaRegen } from '@/lib/staminaSystem'
+import { regenAndPersist } from '@/lib/staminaServer'
 import { activateFoodBuff, foodBuffLabel, parseFoodBuffSpec } from '@/lib/foodBuff'
 
 export async function POST(req: Request) {
@@ -119,8 +119,9 @@ export async function POST(req: Request) {
       case 'poção de stamina':
       case 'stamina potion':
         const staminaRestore = 50 // Restaura 50 stamina
-        // Soma sobre a stamina viva (regen passivo já aplicado) e reancora o regen.
-        const liveStamina = computeStaminaRegen(character).stamina
+        // Soma sobre a stamina viva sincronizada (regen passivo ou, se coletando,
+        // tiques da sessão já debitados) e reancora o regen.
+        const liveStamina = (await regenAndPersist(character)).stamina
         const newStamina = Math.min(character.maxStamina, liveStamina + staminaRestore)
         updateData.stamina = newStamina
         updateData.staminaUpdatedAt = new Date()

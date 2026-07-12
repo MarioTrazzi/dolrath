@@ -71,10 +71,16 @@ export function deterministicMerge({ preprompt, userPrompt, statHints }: MergeIn
 
 const EDIT_SYSTEM =
   'You are a prompt engineer for the dark-fantasy RPG "Dolrath". A player has ' +
-  'an AI-generated character portrait and requested changes to it. Produce ONE ' +
-  'edit instruction in English for an image-editing model (gpt-image-1) that ' +
-  'will receive the current portrait as the reference image.\n\n' +
+  'an AI-generated character portrait and requested changes to it. You receive ' +
+  'the LOCKED style pre-prompt that originally generated this portrait (the ' +
+  'canonical art style + race identity + class identity) and the player\'s ' +
+  'requested changes. REWRITE the original pre-prompt into ONE edit ' +
+  'instruction in English for an image-editing model (gpt-image-1) that will ' +
+  'receive the current portrait as the reference image, weaving the player\'s ' +
+  'changes in naturally.\n\n' +
   'Rules:\n' +
+  '- The locked pre-prompt is authoritative for art style, race identity and ' +
+  'class identity — the rewrite must preserve all of it.\n' +
   '- The edit must KEEP the same character: same face and facial structure, ' +
   'same race features, same class outfit and equipment, same framing, same art ' +
   'style. State this explicitly in the instruction.\n' +
@@ -82,10 +88,11 @@ const EDIT_SYSTEM =
   'concretely. Translate to English if needed.\n' +
   '- If part of the request would change the art style, add text/logos, add ' +
   'more characters, or change race/class identity, silently drop that part.\n' +
-  '- Output a single cohesive English paragraph under 100 words.';
+  '- Output a single cohesive English paragraph under 120 words.';
 
 export async function mergeEditPromptWithClaude(input: {
   modification: string;
+  preprompt?: string | null;
   fallbackPrompt: string;
 }): Promise<{ prompt: string; mergedByClaude: boolean }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -95,6 +102,15 @@ export async function mergeEditPromptWithClaude(input: {
   }
 
   const model = (process.env.ANTHROPIC_MODEL || 'claude-opus-4-8').trim();
+  const preprompt = (input.preprompt || '').trim();
+
+  const userMessage = [
+    preprompt
+      ? `LOCKED STYLE PRE-PROMPT (authoritative — preserve style, race and class):\n${preprompt}`
+      : 'LOCKED STYLE PRE-PROMPT: (unavailable — infer the locked identity from the reference image)',
+    '',
+    `PLAYER REQUESTED CHANGES: ${modification}`,
+  ].join('\n');
 
   try {
     const client = new Anthropic({ apiKey });
@@ -103,9 +119,7 @@ export async function mergeEditPromptWithClaude(input: {
       max_tokens: 1024,
       system: EDIT_SYSTEM,
       output_config: { format: { type: 'json_schema', schema: MERGE_SCHEMA } },
-      messages: [
-        { role: 'user', content: `PLAYER REQUESTED CHANGES: ${modification}` },
-      ],
+      messages: [{ role: 'user', content: userMessage }],
     });
 
     const text = response.content

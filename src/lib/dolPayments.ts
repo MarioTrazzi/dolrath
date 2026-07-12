@@ -19,7 +19,15 @@ export async function verifyDolTransferTx(params: {
   if (!tokenAddress) throw new Error('Missing DOL_TOKEN_ADDRESS')
 
   const provider = getDolProvider()
-  const receipt = await provider.getTransactionReceipt(params.txHash)
+
+  // A transação pode ainda não ter propagado até o RPC do servidor quando o
+  // client envia o hash — em vez de falhar na hora (e obrigar nova tentativa),
+  // aguarda a confirmação por até ~40s antes de desistir.
+  let receipt = await provider.getTransactionReceipt(params.txHash)
+  for (let attempt = 0; !receipt && attempt < 8; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 5000))
+    receipt = await provider.getTransactionReceipt(params.txHash)
+  }
 
   if (!receipt) {
     throw new Error('Transação ainda não encontrada. Aguarde a confirmação e tente novamente.')

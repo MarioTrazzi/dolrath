@@ -21,6 +21,9 @@ export function AppearanceStep() {
   // Ajuste pago da imagem (regeração via edição image-to-image).
   const [adjustPrompt, setAdjustPrompt] = useState('');
   const [isAdjusting, setIsAdjusting] = useState(false);
+  // Pagamento já feito cuja geração falhou: reaproveita o txHash na próxima
+  // tentativa em vez de cobrar de novo (o servidor libera o tx ao falhar).
+  const [pendingTxHash, setPendingTxHash] = useState<string | null>(null);
   // Falha na geração inclusa: libera tentar de novo sem pagar.
   const [genFailed, setGenFailed] = useState(false);
   const regenCostDol = getImageRegenCostDol();
@@ -165,16 +168,26 @@ export function AppearanceStep() {
     }
     setIsAdjusting(true);
     try {
-      const txHash = await payDolToTreasury(regenCostDol);
+      // Se um pagamento anterior não gerou imagem, reaproveita o txHash em vez
+      // de cobrar de novo — o DOL já está na tesouraria.
+      const txHash = pendingTxHash ?? (await payDolToTreasury(regenCostDol));
+      setPendingTxHash(txHash);
 
       const result = await editCharacterImage({
         baseImage: selectedImage,
         modification: adjustPrompt,
         paymentTxHash: txHash,
+        raceId: selectedRace?.id,
+        classId: (selectedClass as any)?.id,
+        raceName: selectedRace?.name,
+        className: (selectedClass as any)?.name,
       });
       if (result.error || !result.image) {
+        // Tx consumida por uma geração que deu certo: não dá para reusar.
+        if ((result.error || '').includes('já foi usada')) setPendingTxHash(null);
         throw new Error(result.error || 'Falha ao regerar imagem');
       }
+      setPendingTxHash(null);
 
       let finalImage = result.image;
       if (finalImage.startsWith('data:image/') && isCloudinaryUploadConfigured()) {

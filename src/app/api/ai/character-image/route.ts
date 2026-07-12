@@ -11,7 +11,7 @@ import { consumeAiGenPayment, releaseAiGenPayment, AiGenPaymentError } from '@/l
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 type Body = {
   // Legacy: a fully-built prompt.
@@ -86,8 +86,25 @@ export async function POST(req: Request) {
       });
       paid = true;
 
-      const fallbackPrompt = buildCharacterEditPrompt(modification);
-      const merged = await mergeEditPromptWithClaude({ modification, fallbackPrompt });
+      // Reformula o prompt ORIGINAL da raça/classe com o pedido do jogador:
+      // Claude recebe o pré-prompt travado + o input e reescreve a instrução
+      // final que vai para a OpenAI (mesmo personagem, só as mudanças pedidas).
+      const editPreprompt =
+        body?.raceId || body?.classId
+          ? buildCombinationPreprompt({
+              raceId: body?.raceId,
+              classId: body?.classId,
+              raceName: body?.raceName,
+              className: body?.className,
+            })
+          : null;
+
+      const fallbackPrompt = buildCharacterEditPrompt(modification, editPreprompt);
+      const merged = await mergeEditPromptWithClaude({
+        modification,
+        preprompt: editPreprompt,
+        fallbackPrompt,
+      });
       const editPrompt = merged.mergedByClaude
         ? `${merged.prompt}\n${DOLRATH_STYLE_BASE}`
         : merged.prompt;

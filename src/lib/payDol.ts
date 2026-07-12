@@ -77,7 +77,15 @@ export async function payDolToTreasury(amountDol: string): Promise<string> {
   const amount = ethers.parseUnits(String(amountDol), decimals);
 
   const tx = await erc20.transfer(treasuryAddress, amount, await getPolygonFeeOverrides(providerAfterSwitch));
-  await tx.wait();
+
+  // O RPC da Amoy às vezes nunca resolve o tx.wait() (a UI ficava presa em
+  // "Confirmando o pagamento…"). Espera com timeout; se estourar, segue com o
+  // hash mesmo assim — o servidor valida a confirmação on-chain por conta própria.
+  try {
+    await providerAfterSwitch.waitForTransaction(tx.hash, 1, 90_000);
+  } catch {
+    // Timeout ou soluço do RPC: o pagamento pode já estar confirmado on-chain.
+  }
 
   return tx.hash;
 }

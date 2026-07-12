@@ -18,6 +18,12 @@ export async function editCharacterImage(options: {
   baseImage: string;
   modification: string;
   paymentTxHash: string;
+  // Raça/classe permitem ao servidor reconstruir o pré-prompt original e
+  // reformulá-lo (via Claude) com o pedido do jogador antes de editar.
+  raceId?: string;
+  classId?: string;
+  raceName?: string;
+  className?: string;
 }): Promise<{ image?: string; finalPrompt?: string; error?: string }> {
   try {
     const res = await fetch('/api/ai/character-image', {
@@ -28,6 +34,10 @@ export async function editCharacterImage(options: {
         baseImage: options.baseImage,
         modification: options.modification,
         paymentTxHash: options.paymentTxHash,
+        raceId: options.raceId,
+        classId: options.classId,
+        raceName: options.raceName,
+        className: options.className,
       }),
     });
     const json = await res.json().catch(() => null);

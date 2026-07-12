@@ -207,15 +207,18 @@ export function buildTransformationPrompt(
 // Builds the edit prompt for a paid re-generation of the BASE portrait: the
 // player's current image is sent to the image edit endpoint and only their
 // requested changes are applied, keeping the same character and locked style.
-export function buildCharacterEditPrompt(modification: string): string {
+// When the race/class pre-prompt is known it is re-asserted so the edit cannot
+// drift away from the locked identity (fallback path when Claude is offline).
+export function buildCharacterEditPrompt(modification: string, preprompt?: string | null): string {
   const changes = String(modification || '').replace(/\s+/g, ' ').trim().slice(0, 400);
+  const identity = String(preprompt || '').trim();
   return [
     'Edit the character portrait in the reference image. Keep the SAME ' +
       'character — same face and facial structure, same race features, same ' +
       'class outfit and equipment, same framing and the same art style. Apply ' +
       'ONLY the following requested changes, weaving them in naturally:',
     changes || 'Subtle refinement pass: improve lighting, detail and overall epic quality.',
-    DOLRATH_STYLE_BASE,
+    identity || DOLRATH_STYLE_BASE,
   ].join('\n');
 }
 

@@ -8,15 +8,23 @@ import { ClassSelectionStep } from './components/ClassSelectionStep';
 import { AppearanceStep } from './components/AppearanceStep';
 import { TransformationStep } from './components/TransformationStep';
 import { NameConfirmStep } from './components/NameConfirmStep';
-import { ArrowLeft, ArrowRight, CheckCircle, Wallet } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { ArrowLeft, ArrowRight, Wallet, Swords, ShieldHalf, Image as ImageIcon, Sparkles, ScrollText } from 'lucide-react';
 import { useSession, signIn } from 'next-auth/react';
 import { ethers } from 'ethers';
 import { getWalletTxErrorMessage } from '@/lib/walletErrors';
 import { getPolygonFeeOverrides } from '@/lib/gasFees';
 import { payDolToTreasury } from '@/lib/payDol';
+import { CreationStepIndicator } from './components/CreationStepIndicator';
 import Link from 'next/link';
 import Image from 'next/image';
+
+const STEP_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  'race-selection': Swords,
+  'class-selection': ShieldHalf,
+  'appearance': ImageIcon,
+  'transformation': Sparkles,
+  'name-confirm': ScrollText,
+};
 
 const POLYGON_AMOY_CHAIN_ID_DEC = BigInt(80002);
 const POLYGON_AMOY_CHAIN_ID_HEX = '0x13882';
@@ -496,42 +504,12 @@ export default function CharacterCreationPage() {
         </motion.h1>
 
         {/* Progress Bar */}
-        <div className="mb-12">
-          <div className="flex justify-between items-center mb-4">
-            {creationSteps.map((step, index) => (
-              <div key={step.id} className="flex flex-col items-center relative">
-                <div
-                  className={cn(
-                    "w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg transition-all duration-300",
-                    index <= currentStep
-                      ? "bg-primary text-white"
-                      : "bg-surface text-text-secondary border border-white/20",
-                    step.isAccessible && "cursor-pointer hover:scale-110"
-                  )}
-                  onClick={() => goToStep(index)}
-                >
-                  {step.isComplete ? <CheckCircle className="w-5 h-5" /> : index + 1}
-                </div>
-                <span
-                  className={cn(
-                    "mt-2 text-sm text-center transition-colors duration-300",
-                    index <= currentStep ? "text-text-primary" : "text-text-secondary"
-                  )}
-                >
-                  {step.title}
-                </span>
-                {index < creationSteps.length - 1 && (
-                  <div
-                    className={cn(
-                      "absolute left-[calc(50%+20px)] top-5 h-1 w-[calc(100%-40px)] -translate-y-1/2 transition-colors duration-300",
-                      index < currentStep ? "bg-primary" : "bg-white/20"
-                    )}
-                  />
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
+        <CreationStepIndicator
+          steps={creationSteps}
+          currentStep={currentStep}
+          onStepClick={goToStep}
+          icons={STEP_ICONS}
+        />
 
         {/* Step Content */}
         <motion.div

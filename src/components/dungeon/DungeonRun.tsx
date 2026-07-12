@@ -118,6 +118,10 @@ interface DungeonRunProps {
   onRestart?: (updates: { hp: number; mp: number; stamina: number; level?: number; leveledUp?: boolean; auto: boolean }) => void
   /** Estado inicial do piloto automático (preservado entre re-runs). */
   initialAuto?: boolean
+  /** Optional custom background image for battles (path relative to /public/) */
+  backgroundImageUrl?: string
+  /** Overlay opacity for custom background image (0-1, default 0.3) */
+  backgroundImageOverlay?: number
 }
 
 type RunPhase = 'explore' | 'combat' | 'summary' | 'defeat'
@@ -518,7 +522,16 @@ function defenseVerb(): string {
   return Math.random() < 0.3 ? 'defendeu' : 'esquivou'
 }
 
-export default function DungeonRun({ dungeon, character, tier = 1, onExit, onRestart, initialAuto }: DungeonRunProps) {
+export default function DungeonRun({ 
+  dungeon, 
+  character, 
+  tier = 1, 
+  onExit, 
+  onRestart, 
+  initialAuto,
+  backgroundImageUrl,
+  backgroundImageOverlay = 0.3,
+}: DungeonRunProps) {
   // 🌳 Árvore de habilidades: computado ANTES dos pools de recurso (maxHpPct/maxMpPct
   // entram no teto inicial). `skillTree` null (legado) libera tudo nos valores BASE
   // (ver LEGACY_UNLOCKS em lib/skillTree.ts).
@@ -3165,7 +3178,11 @@ export default function DungeonRun({ dungeon, character, tier = 1, onExit, onRes
               event={battleEvent}
               diceResults={diceResults}
               dicePanel={dicePanel}
-              backdrop={<DungeonBackdrop theme={dungeon.id} />}
+              backdrop={<DungeonBackdrop 
+                theme={dungeon.id} 
+                imageUrl={backgroundImageUrl}
+                imageOverlayOpacity={backgroundImageOverlay}
+              />}
             />
 
             {/* Roster do pacote (só com >1 inimigo): clique para escolher o alvo no seu

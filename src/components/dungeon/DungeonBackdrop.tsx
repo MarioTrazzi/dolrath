@@ -3,6 +3,7 @@
 import React from 'react'
 import { motion } from 'framer-motion'
 import type { DungeonId } from '@/lib/dungeonAdventures'
+import ImageBackdrop from '@/components/dungeon/ImageBackdrop'
 
 // ============================================================
 // Cenários animados das masmorras (camadas CSS/SVG + partículas)
@@ -15,6 +16,10 @@ interface BackdropProps {
   theme: DungeonId
   /** Versão discreta para usar dentro de cards de seleção */
   subtle?: boolean
+  /** Optional path to a custom background image (relative to /public/) */
+  imageUrl?: string
+  /** Overlay opacity for image backdrops (0-1) */
+  imageOverlayOpacity?: number
 }
 
 function Particle({
@@ -198,7 +203,18 @@ function RuinasBackdrop({ subtle }: { subtle?: boolean }) {
   )
 }
 
-export default function DungeonBackdrop({ theme, subtle }: BackdropProps) {
+export default function DungeonBackdrop({ 
+  theme, 
+  subtle, 
+  imageUrl,
+  imageOverlayOpacity = 0.3,
+}: BackdropProps) {
+  // Use custom image backdrop if provided
+  if (imageUrl) {
+    return <ImageBackdrop src={imageUrl} overlayOpacity={imageOverlayOpacity} subtle={subtle} />
+  }
+
+  // Fall back to themed SVG backdrops
   switch (theme) {
     case 'floresta':
       return <FlorestaBackdrop subtle={subtle} />

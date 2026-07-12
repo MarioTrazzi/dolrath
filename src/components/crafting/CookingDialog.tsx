@@ -1,13 +1,15 @@
 'use client';
 
-// 🍳 Dialog de CULINÁRIA — Cozinha do acampamento no estilo BDO.
+// 🍲 Dialog de CULINÁRIA — o Fogão.
 //
-// Clone estrutural do ProcessingDialog (primitivos de bdoTheme.tsx): o prato
-// fica no losango central e os insumos em molduras num arco abaixo, ligados
-// por linhas-circuito. Mesma regra do processamento: conversão SEM falha
-// (chance 1), XP fixo da receita, gating por minLevel próprio. Diferença de
-// conteúdo: a saída é COMIDA (FOOD_CATALOG) e o card mostra o BUFF por tempo
-// real do prato (lib/foodBuff.ts) — o efeito acontece ao COMER, não ao cozinhar.
+// Casca chumbo+ouro de bdoTheme.tsx + aparelho próprio da profissão
+// (StoveRig de professionFx.tsx): o prato cozinha numa panela de cobre vista
+// de cima, sobre a trempe com anel de chama (gás baixo em idle, fogo alto ao
+// cozinhar); os ingredientes esperam em tigelinhas na tábua de corte e PULAM
+// para a panela, que solta vapor. Regra do processamento: conversão SEM falha
+// (chance 1), XP fixo da receita, gating por minLevel próprio. A saída é
+// COMIDA (FOOD_CATALOG) e o card mostra o BUFF por tempo real do prato
+// (lib/foodBuff.ts) — o efeito acontece ao COMER, não ao cozinhar.
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
@@ -29,7 +31,6 @@ import { ProfessionBar } from '@/components/gathering/GatheringPanel';
 import { CraftItemThumb as ItemThumb } from '@/components/store/CraftItemThumb';
 import {
   BdoDialogShell,
-  DiamondSlot,
   BevelButton,
   RARITY_UI,
   GOLD,
@@ -37,6 +38,7 @@ import {
   CHARGE_MS,
   BORDER_GOLD,
 } from './bdoTheme';
+import { StoveRig, COOK_ACCENT, COOK_ACCENT_BRIGHT } from './professionFx';
 
 export interface CookingInventoryItem {
   id: string;
@@ -75,20 +77,6 @@ interface CookingDialogProps {
   attemptOverride?: (recipeId: string, quantity: number) => Promise<CookingCraftResult>;
   onChanged?: () => void;
 }
-
-// Geometria do circuito (mesma do ProcessingDialog): prato no alto, insumos num arco abaixo.
-const BOX_W = 320;
-const BOX_H = 252;
-const CENTER = { x: 160, y: 86 };
-const CENTER_SLOT = 116;
-const MAT_SIZE = 56;
-const MAT_Y = 208;
-const MAT_XS: Record<number, number[]> = {
-  1: [160],
-  2: [104, 216],
-  3: [64, 160, 256],
-  4: [48, 123, 197, 272],
-};
 
 const GROUP_EMOJI: Record<CookingRecipe['group'], string> = {
   oven: '🔥',
@@ -288,9 +276,6 @@ export default function CookingDialog({
     setBusy(false);
   };
 
-  // Culinária não falha: o veredito, quando existe, é sempre sucesso.
-  const verdict = phase === 'done' && result ? ('success' as const) : null;
-
   const output = recipe ? getCookingOutput(recipe) : null;
   const outputDescription = output?.description ?? null;
   // O que o prato faz ao COMER: buff por tempo real ou restauração fora de combate.
@@ -301,8 +286,6 @@ export default function CookingDialog({
       ? `🍽 Ao comer: restaura ${Number((output.stats as any).healAmount)} HP fora de combate`
       : null;
   const centerUi = recipe ? RARITY_UI[recipe.rarity] : null;
-
-  const matXs = recipe ? (MAT_XS[recipe.inputs.length] ?? MAT_XS[4]) : [];
 
   const groups = useMemo(
     () => cookingRecipesByGroup().filter((g) => g.recipes.length > 0),
@@ -324,7 +307,9 @@ export default function CookingDialog({
         {!recipe ? (
           /* Sem receita: convite ao livro */
           <div className="px-6 py-10 text-center text-sm text-[#b8b8be]">
-            <div className="mb-2 text-3xl">🍳</div>
+            <div className="mb-2 text-3xl" style={{ color: COOK_ACCENT }}>
+              🍲
+            </div>
             Escolha no livro o prato que deseja cozinhar.
             <div className="mt-4">
               <BevelButton onClick={() => setBookOpen(true)}>📖 Livro de Receitas</BevelButton>
@@ -332,72 +317,25 @@ export default function CookingDialog({
           </div>
         ) : (
           <>
-            {/* ✦ Circuito da cozinha: insumos em arco → cometas → prato no losango */}
+            {/* 🍲 O fogão: panela na trempe, chama, vapor e ingredientes pulando */}
             <div className="relative px-5 pb-1 pt-4">
-              <div
-                className="pointer-events-none absolute left-1/2 top-16 h-36 w-36 -translate-x-1/2"
-                style={{ background: 'radial-gradient(circle, rgba(201,162,95,0.14) 0%, transparent 65%)' }}
-              />
-              <div className="relative mx-auto" style={{ width: BOX_W, height: BOX_H }}>
-                <svg
-                  className="pointer-events-none absolute inset-0"
-                  width={BOX_W}
-                  height={BOX_H}
-                  viewBox={`0 0 ${BOX_W} ${BOX_H}`}
-                >
-                  {recipe.inputs.map((m, i) => (
-                    <line
-                      key={m.name}
-                      x1={matXs[i]}
-                      y1={MAT_Y - MAT_SIZE / 2}
-                      x2={CENTER.x}
-                      y2={CENTER.y}
-                      stroke="rgba(201,162,95,0.5)"
-                      strokeWidth={1}
-                    />
-                  ))}
-                </svg>
-
-                {/* Nós em losango no meio das linhas */}
-                {recipe.inputs.map((m, i) => (
-                  <span
-                    key={`node-${m.name}`}
-                    className="absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rotate-45 border bg-[#1e1e21]"
-                    style={{
-                      left: (matXs[i] + CENTER.x) / 2,
-                      top: (MAT_Y - MAT_SIZE / 2 + CENTER.y) / 2,
-                      borderColor: GOLD,
-                    }}
-                  />
-                ))}
-
-                {/* 💫 Cometas dos insumos ao prato */}
-                {phase === 'charging' &&
-                  recipe.inputs.map((m, i) => (
-                    <motion.span
-                      key={`comet-${chargeId}-${m.name}`}
-                      initial={{ left: matXs[i], top: MAT_Y - MAT_SIZE / 2, opacity: 0 }}
-                      animate={{
-                        left: [matXs[i], CENTER.x],
-                        top: [MAT_Y - MAT_SIZE / 2, CENTER.y],
-                        opacity: [0, 1, 0.9],
-                      }}
-                      transition={{
-                        delay: 0.15 + i * 0.15,
-                        duration: (CHARGE_MS - 600) / 1000,
-                        ease: 'easeIn',
-                      }}
-                      className="absolute z-10 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full"
-                      style={{
-                        background: GOLD_BRIGHT,
-                        boxShadow: '0 0 10px 4px rgba(231,198,130,0.85), 0 0 22px 8px rgba(201,162,95,0.35)',
-                      }}
-                    />
-                  ))}
-
-                {/* Sem falha / gating no canto (cozinhar é conversão garantida) */}
-                <div className="absolute left-0 top-1" style={{ width: 92 }}>
-                  {!unlocked ? (
+              <StoveRig
+                phase={phase}
+                chargeId={chargeId}
+                materials={recipe.inputs.map((m) => ({
+                  name: m.name,
+                  emoji: cookingItemEmoji(m.name),
+                  have: have(m.name),
+                  need: m.quantity * craftQty,
+                }))}
+                outputName={recipe.outputName}
+                outputEmoji={cookingItemEmoji(recipe.outputName)}
+                glowColor={centerUi?.glow}
+                plate={
+                  phase === 'done' && result && result.succeeded > 1 ? `×${result.succeeded}` : null
+                }
+                statusNode={
+                  !unlocked ? (
                     <div className="text-center">
                       <div className="text-lg font-black text-red-400">🔒</div>
                       <div className="text-[10px] uppercase tracking-[0.14em] text-red-400">
@@ -406,91 +344,14 @@ export default function CookingDialog({
                     </div>
                   ) : (
                     <div className="text-center">
-                      <span className="text-lg font-bold text-emerald-300">✓</span>
+                      <span className="text-lg font-bold" style={{ color: COOK_ACCENT_BRIGHT }}>
+                        ✓
+                      </span>
                       <div className="text-[10px] uppercase tracking-[0.14em] text-[#77777d]">sem falha</div>
                     </div>
-                  )}
-                </div>
-
-                {/* ◆ O prato sendo cozinhado */}
-                <div
-                  className="absolute"
-                  style={{ left: CENTER.x - CENTER_SLOT / 2, top: CENTER.y - CENTER_SLOT / 2 }}
-                >
-                  <DiamondSlot
-                    size={CENTER_SLOT}
-                    active
-                    verdict={verdict}
-                    verdictKey={chargeId}
-                    glowColor={centerUi?.glow}
-                    title={recipe.outputName}
-                    plate={
-                      phase === 'done' && result && result.succeeded > 1 ? `×${result.succeeded}` : null
-                    }
-                  >
-                    {phase === 'charging' ? (
-                      <span className="animate-ping text-2xl text-white/40">✦</span>
-                    ) : (
-                      <span
-                        className="block h-[64%] w-[64%] overflow-hidden"
-                        style={{
-                          opacity: phase === 'done' ? 1 : 0.5,
-                          filter: phase === 'done' ? undefined : 'grayscale(0.8) brightness(0.8)',
-                          transition: 'filter 1s ease, opacity 1s ease',
-                        }}
-                      >
-                        <ItemThumb
-                          name={recipe.outputName}
-                          emoji={cookingItemEmoji(recipe.outputName)}
-                          className="text-3xl"
-                        />
-                      </span>
-                    )}
-                  </DiamondSlot>
-                </div>
-
-                {/* Molduras de insumo */}
-                {recipe.inputs.map((m, i) => {
-                  const enough = have(m.name) >= m.quantity * craftQty;
-                  return (
-                    <div
-                      key={m.name}
-                      className="absolute flex flex-col items-center gap-1"
-                      style={{ left: matXs[i] - MAT_SIZE / 2, top: MAT_Y - MAT_SIZE / 2, width: MAT_SIZE }}
-                    >
-                      <div
-                        className={`relative rounded-[3px] border p-px shadow-[inset_0_0_10px_rgba(0,0,0,0.8)] ${
-                          enough
-                            ? 'border-[#8a6d3b] bg-gradient-to-b from-[#26262a] to-[#101013]'
-                            : 'border-[#5a2e2e] bg-gradient-to-b from-[#241a1a] to-[#100c0c]'
-                        }`}
-                        style={{ width: MAT_SIZE, height: MAT_SIZE }}
-                      >
-                        <span className={`block h-full w-full overflow-hidden rounded-[2px] ${enough ? '' : 'opacity-40 grayscale'}`}>
-                          <ItemThumb name={m.name} emoji={cookingItemEmoji(m.name)} className="text-xl" />
-                        </span>
-                        <span
-                          className={`absolute -bottom-1.5 -right-1.5 rounded-[2px] border border-black/80 px-1 text-[10px] font-bold ${
-                            enough ? 'bg-[#101012] text-[#e7c682]' : 'bg-[#1c0f0f] text-red-400'
-                          }`}
-                        >
-                          {have(m.name)}/{m.quantity * craftQty}
-                        </span>
-                        {phase === 'charging' && (
-                          <motion.div
-                            animate={{ opacity: [0.15, 0.75, 0.15] }}
-                            transition={{ duration: 0.75, repeat: Infinity }}
-                            className="pointer-events-none absolute -inset-2 z-10"
-                            style={{
-                              background: 'radial-gradient(circle, rgba(231,198,130,0.5) 0%, transparent 70%)',
-                            }}
-                          />
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                  )
+                }
+              />
             </div>
 
             {/* Nome + custo */}
@@ -529,9 +390,9 @@ export default function CookingDialog({
                     <motion.span
                       animate={{ opacity: [0.5, 1, 0.5] }}
                       transition={{ repeat: Infinity, duration: 0.7 }}
-                      style={{ color: GOLD_BRIGHT }}
+                      style={{ color: COOK_ACCENT_BRIGHT }}
                     >
-                      🍳 Cozinhando...
+                      🍲 Cozinhando...
                     </motion.span>
                   )}
                   {phase === 'done' && result && (
@@ -639,7 +500,7 @@ export default function CookingDialog({
             >
               <div className="sticky top-0 z-10 flex items-center justify-between border-b border-black/70 bg-gradient-to-b from-[#2b2b2f] to-[#1a1a1d] px-4 py-2.5">
                 <h3 className="flex items-center gap-2 text-[15px] font-semibold tracking-wide text-[#dcdce0]">
-                  <span style={{ color: GOLD }}>📖</span> Livro de Receitas
+                  <span style={{ color: COOK_ACCENT }}>📖</span> Livro de Receitas
                 </h3>
                 <button
                   onClick={() => setBookOpen(false)}

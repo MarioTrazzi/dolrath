@@ -1,14 +1,13 @@
 'use client';
 
-// ⚒️ Dialog de FORJA — Mesa de Forja no estilo BDO.
+// ⚒️ Dialog de FORJA — a Bigorna.
 //
-// Redesenho da antiga ForgeBench como dialog (primitivos de bdoTheme.tsx, a
-// mesma linguagem da EnhancementDialog): a peça sendo forjada fica num losango
-// central e os materiais em molduras quadradas num arco abaixo, ligados ao
-// centro por linhas-circuito com nós em losango. Ao forjar, os materiais
-// pulsam e cometas de luz sobem ao centro, onde acontece o VEREDITO. A seleção
-// é pelo livro de receitas (o modo "arrastar materiais" da bench foi cortado —
-// o livro + prévia cobre o caso de uso melhor). Refino de pedra não tem falha.
+// Casca chumbo+ouro de bdoTheme.tsx + aparelho próprio da profissão
+// (AnvilRig de professionFx.tsx): a peça assenta numa bigorna, o martelo
+// bate três vezes soltando faíscas, o metal incandesce e o VEREDITO é a
+// têmpera (esfria dourado) ou a rachadura. Materiais ficam enfileirados
+// numa bancada de metal riscado. A seleção é pelo livro de receitas.
+// Refino de pedra não tem falha.
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
@@ -35,7 +34,6 @@ import { ProfessionBar } from '@/components/gathering/GatheringPanel';
 import { CraftItemThumb as ItemThumb } from '@/components/store/CraftItemThumb';
 import {
   BdoDialogShell,
-  DiamondSlot,
   BevelButton,
   RARITY_UI,
   GOLD,
@@ -46,6 +44,7 @@ import {
   chanceColorClass,
   type CraftPhase,
 } from './bdoTheme';
+import { AnvilRig, FORGE_ACCENT, FORGE_ACCENT_BRIGHT } from './professionFx';
 
 export interface ForgeInventoryItem {
   id: string;
@@ -84,21 +83,6 @@ interface ForgeDialogProps {
   attemptOverride?: (recipeId: string, quantity: number) => Promise<ForgeCraftResult>;
   onChanged?: () => void;
 }
-
-// Geometria do circuito dentro da caixa 320×252 (px): peça no alto, materiais
-// num arco abaixo (posições por quantidade de materiais da receita).
-const BOX_W = 320;
-const BOX_H = 252;
-const CENTER = { x: 160, y: 86 };
-const CENTER_SLOT = 116;
-const MAT_SIZE = 56;
-const MAT_Y = 208;
-const MAT_XS: Record<number, number[]> = {
-  1: [160],
-  2: [104, 216],
-  3: [64, 160, 256],
-  4: [48, 123, 197, 272],
-};
 
 const GROUP_LABEL: Record<ForgeRecipe['group'], string> = {
   armor: '🛡️ Armadura',
@@ -322,7 +306,6 @@ export default function ForgeDialog({
   const centerUi = recipe ? RARITY_UI[recipe.rarity] : null;
   const statEntries = catalogItem ? itemStatEntries(catalogItem.stats, catalogItem.type) : [];
 
-  const matXs = recipe ? (MAT_XS[recipe.materials.length] ?? MAT_XS[4]) : [];
   const chancePct = chance != null ? Math.round(chance * 100) : null;
 
   const groups = useMemo(() => forgeRecipesByGroup(), []);
@@ -342,7 +325,9 @@ export default function ForgeDialog({
         {!recipe ? (
           /* Sem receita: convite ao livro */
           <div className="px-6 py-10 text-center text-sm text-[#b8b8be]">
-            <div className="mb-2 text-3xl">⚒</div>
+            <div className="mb-2 text-3xl" style={{ color: FORGE_ACCENT }}>
+              ⚒
+            </div>
             Escolha no livro a peça que deseja forjar.
             <div className="mt-4">
               <BevelButton onClick={() => setBookOpen(true)}>📖 Livro da Forja</BevelButton>
@@ -350,72 +335,26 @@ export default function ForgeDialog({
           </div>
         ) : (
           <>
-            {/* ✦ Circuito da forja: materiais em arco → cometas → peça no losango */}
+            {/* ⚒ A bigorna: marteladas, faíscas e a peça incandescendo */}
             <div className="relative px-5 pb-1 pt-4">
-              <div
-                className="pointer-events-none absolute left-1/2 top-16 h-36 w-36 -translate-x-1/2"
-                style={{ background: 'radial-gradient(circle, rgba(201,162,95,0.14) 0%, transparent 65%)' }}
-              />
-              <div className="relative mx-auto" style={{ width: BOX_W, height: BOX_H }}>
-                <svg
-                  className="pointer-events-none absolute inset-0"
-                  width={BOX_W}
-                  height={BOX_H}
-                  viewBox={`0 0 ${BOX_W} ${BOX_H}`}
-                >
-                  {recipe.materials.map((m, i) => (
-                    <line
-                      key={m.name}
-                      x1={matXs[i]}
-                      y1={MAT_Y - MAT_SIZE / 2}
-                      x2={CENTER.x}
-                      y2={CENTER.y}
-                      stroke="rgba(201,162,95,0.5)"
-                      strokeWidth={1}
-                    />
-                  ))}
-                </svg>
-
-                {/* Nós em losango no meio das linhas */}
-                {recipe.materials.map((m, i) => (
-                  <span
-                    key={`node-${m.name}`}
-                    className="absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rotate-45 border bg-[#1e1e21]"
-                    style={{
-                      left: (matXs[i] + CENTER.x) / 2,
-                      top: (MAT_Y - MAT_SIZE / 2 + CENTER.y) / 2,
-                      borderColor: GOLD,
-                    }}
-                  />
-                ))}
-
-                {/* 💫 Cometas dos materiais à peça */}
-                {phase === 'charging' &&
-                  recipe.materials.map((m, i) => (
-                    <motion.span
-                      key={`comet-${chargeId}-${m.name}`}
-                      initial={{ left: matXs[i], top: MAT_Y - MAT_SIZE / 2, opacity: 0 }}
-                      animate={{
-                        left: [matXs[i], CENTER.x],
-                        top: [MAT_Y - MAT_SIZE / 2, CENTER.y],
-                        opacity: [0, 1, 0.9],
-                      }}
-                      transition={{
-                        delay: 0.15 + i * 0.15,
-                        duration: (CHARGE_MS - 600) / 1000,
-                        ease: 'easeIn',
-                      }}
-                      className="absolute z-10 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full"
-                      style={{
-                        background: GOLD_BRIGHT,
-                        boxShadow: '0 0 10px 4px rgba(231,198,130,0.85), 0 0 22px 8px rgba(201,162,95,0.35)',
-                      }}
-                    />
-                  ))}
-
-                {/* Chance no canto (refino é conversão garantida) */}
-                <div className="absolute left-0 top-1" style={{ width: 92 }}>
-                  {!unlocked ? (
+              <AnvilRig
+                phase={phase}
+                chargeId={chargeId}
+                verdict={verdict}
+                materials={recipe.materials.map((m) => ({
+                  name: m.name,
+                  emoji: forgeMaterialEmoji(m.name),
+                  have: have(m.name),
+                  need: m.quantity * craftQty,
+                }))}
+                outputName={recipe.outputName}
+                outputEmoji="⚒️"
+                glowColor={centerUi?.glow}
+                plate={
+                  phase === 'done' && result && result.succeeded > 1 ? `×${result.succeeded}` : null
+                }
+                statusNode={
+                  !unlocked ? (
                     <div className="text-center">
                       <div className="text-lg font-black text-red-400">🔒</div>
                       <div className="text-[10px] uppercase tracking-[0.14em] text-red-400">
@@ -434,90 +373,9 @@ export default function ForgeDialog({
                       </span>
                       <div className="text-[10px] uppercase tracking-[0.14em] text-[#77777d]">chance</div>
                     </div>
-                  ) : null}
-                </div>
-
-                {/* ◆ A peça sendo forjada — o veredito acontece AQUI */}
-                <div
-                  className="absolute"
-                  style={{ left: CENTER.x - CENTER_SLOT / 2, top: CENTER.y - CENTER_SLOT / 2 }}
-                >
-                  <DiamondSlot
-                    size={CENTER_SLOT}
-                    active
-                    verdict={verdict}
-                    verdictKey={chargeId}
-                    glowColor={centerUi?.glow}
-                    title={recipe.outputName}
-                    plate={
-                      phase === 'done' && result && result.succeeded > 1 ? `×${result.succeeded}` : null
-                    }
-                  >
-                    {phase === 'charging' ? (
-                      <span className="animate-ping text-2xl text-white/40">✦</span>
-                    ) : (
-                      <span
-                        className="block h-[64%] w-[64%] overflow-hidden"
-                        style={{
-                          // Silhueta acinzentada até o martelo cair; acende no veredito.
-                          opacity: phase === 'done' ? 1 : 0.5,
-                          filter:
-                            phase === 'done'
-                              ? verdict === 'fail'
-                                ? 'grayscale(1) brightness(0.5)'
-                                : undefined
-                              : 'grayscale(0.8) brightness(0.8)',
-                          transition: 'filter 1s ease, opacity 1s ease',
-                        }}
-                      >
-                        <ItemThumb name={recipe.outputName} emoji="⚒️" className="text-3xl" />
-                      </span>
-                    )}
-                  </DiamondSlot>
-                </div>
-
-                {/* Molduras de material (quadradas, como o material da referência) */}
-                {recipe.materials.map((m, i) => {
-                  const enough = have(m.name) >= m.quantity * craftQty;
-                  return (
-                    <div
-                      key={m.name}
-                      className="absolute flex flex-col items-center gap-1"
-                      style={{ left: matXs[i] - MAT_SIZE / 2, top: MAT_Y - MAT_SIZE / 2, width: MAT_SIZE }}
-                    >
-                      <div
-                        className={`relative rounded-[3px] border p-px shadow-[inset_0_0_10px_rgba(0,0,0,0.8)] ${
-                          enough
-                            ? 'border-[#8a6d3b] bg-gradient-to-b from-[#26262a] to-[#101013]'
-                            : 'border-[#5a2e2e] bg-gradient-to-b from-[#241a1a] to-[#100c0c]'
-                        }`}
-                        style={{ width: MAT_SIZE, height: MAT_SIZE }}
-                      >
-                        <span className={`block h-full w-full overflow-hidden rounded-[2px] ${enough ? '' : 'opacity-40 grayscale'}`}>
-                          <ItemThumb name={m.name} emoji={forgeMaterialEmoji(m.name)} className="text-xl" />
-                        </span>
-                        <span
-                          className={`absolute -bottom-1.5 -right-1.5 rounded-[2px] border border-black/80 px-1 text-[10px] font-bold ${
-                            enough ? 'bg-[#101012] text-[#e7c682]' : 'bg-[#1c0f0f] text-red-400'
-                          }`}
-                        >
-                          {have(m.name)}/{m.quantity * craftQty}
-                        </span>
-                        {phase === 'charging' && (
-                          <motion.div
-                            animate={{ opacity: [0.15, 0.75, 0.15] }}
-                            transition={{ duration: 0.75, repeat: Infinity }}
-                            className="pointer-events-none absolute -inset-2 z-10"
-                            style={{
-                              background: 'radial-gradient(circle, rgba(231,198,130,0.5) 0%, transparent 70%)',
-                            }}
-                          />
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                  ) : null
+                }
+              />
             </div>
 
             {/* Nome + custo */}
@@ -573,7 +431,7 @@ export default function ForgeDialog({
                     <motion.span
                       animate={{ opacity: [0.5, 1, 0.5] }}
                       transition={{ repeat: Infinity, duration: 0.7 }}
-                      style={{ color: GOLD_BRIGHT }}
+                      style={{ color: FORGE_ACCENT_BRIGHT }}
                     >
                       ⚒ Forjando...
                     </motion.span>
@@ -692,7 +550,7 @@ export default function ForgeDialog({
             >
               <div className="sticky top-0 z-10 flex items-center justify-between border-b border-black/70 bg-gradient-to-b from-[#2b2b2f] to-[#1a1a1d] px-4 py-2.5">
                 <h3 className="flex items-center gap-2 text-[15px] font-semibold tracking-wide text-[#dcdce0]">
-                  <span style={{ color: GOLD }}>📖</span> Livro da Forja
+                  <span style={{ color: FORGE_ACCENT }}>📖</span> Livro da Forja
                 </h3>
                 <button
                   onClick={() => setBookOpen(false)}

@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { isRunLive } from '@/lib/dungeonRunServer'
 import { regenAndPersist } from '@/lib/staminaServer'
 import { getGatherField, FIELD_TOOL, GATHER_TICK_STAMINA, type GatherFieldId } from '@/lib/gathering'
+import { getProfessionLevel } from '@/lib/professionSystem'
 import { findOpenGatheringSession, getGatherGearBonus } from '@/lib/gatheringServer'
 import { TOOL_CATALOG } from '@/lib/itemCatalog'
 import { freeInventorySlots } from '@/lib/inventoryMutations'
@@ -47,6 +48,20 @@ export async function POST(req: Request) {
     if (character.stamina < GATHER_TICK_STAMINA) {
       return NextResponse.json(
         { error: `Stamina insuficiente para coletar (precisa de ${GATHER_TICK_STAMINA}).` },
+        { status: 400 }
+      )
+    }
+
+    // Escada de desbloqueio: o campo exige o nível de Coleta DO HERÓI (gate só
+    // aqui no start — sessão já aberta sincroniza/coleta normalmente).
+    const required = field.minGatherLevel ?? 1
+    if (getProfessionLevel(character.gatherXp) < required) {
+      return NextResponse.json(
+        {
+          error: `${field.name} requer Coleta Nv.${required}. Suba o nível deste herói coletando nos campos já abertos.`,
+          code: 'FIELD_LOCKED',
+          requiredLevel: required,
+        },
         { status: 400 }
       )
     }

@@ -79,11 +79,18 @@ interface MapNode {
   y: number
   acc: string
   accSoft: string
+  /** Trava estática dos nós decorativos ("em breve"); campos jogáveis travam por unlockLevel. */
   locked: boolean
   soon?: boolean
+  /** Nível de Coleta que destrava o campo (GATHER_FIELDS.minGatherLevel; ausente = aberto). */
+  unlockLevel?: number
   drops?: { name: string; minLevel?: number }[]
   seedField?: boolean
 }
+
+/** Campo travado para a CONTA (nenhum herói alcança o nível). */
+const levelLockedFor = (node: MapNode, maxGatherLevel: number) =>
+  (node.unlockLevel ?? 1) > maxGatherLevel
 
 const HOME = { x: 50, y: 90 }
 
@@ -103,6 +110,7 @@ export const MAP_NODES: MapNode[] = [
     recurso: 'Minério & Pedra', tagline: GATHER_FIELDS.minerios.tagline,
     sabor: 'Encostas rachadas expõem veios metálicos que reluzem na penumbra.',
     x: 74, y: 63, acc: '#b5793a', accSoft: 'rgba(181,121,58,0.45)', locked: false,
+    unlockLevel: GATHER_FIELDS.minerios.minGatherLevel,
     drops: GATHER_FIELDS.minerios.drops,
   },
   {
@@ -111,6 +119,7 @@ export const MAP_NODES: MapNode[] = [
     recurso: 'Madeira & Seiva', tagline: GATHER_FIELDS.bosque.tagline,
     sabor: 'Árvores milenares sussurram; a luz mal atravessa a copa cerrada.',
     x: 35, y: 43, acc: '#3f8452', accSoft: 'rgba(63,132,82,0.45)', locked: false,
+    unlockLevel: GATHER_FIELDS.bosque.minGatherLevel,
     drops: GATHER_FIELDS.bosque.drops,
   },
   {
@@ -119,6 +128,7 @@ export const MAP_NODES: MapNode[] = [
     recurso: 'Peixe & Frutos do Mar', tagline: GATHER_FIELDS.costa.tagline,
     sabor: 'Falésias varridas pelo vento salgado; a maré baixa desenha poças cheias de vida. Exige uma Vara de Pesca equipada.',
     x: 12, y: 56, acc: '#3a7ea6', accSoft: 'rgba(58,126,166,0.45)', locked: false,
+    unlockLevel: GATHER_FIELDS.costa.minGatherLevel,
     drops: GATHER_FIELDS.costa.drops,
   },
   {
@@ -127,6 +137,7 @@ export const MAP_NODES: MapNode[] = [
     recurso: 'Carne & Couro', tagline: GATHER_FIELDS.caca.tagline,
     sabor: 'Rastros frescos cruzam a orla da mata — carne e couro sem tocar no gado. Exige uma Faca de Caça equipada.',
     x: 18, y: 27, acc: '#8f6b4a', accSoft: 'rgba(143,107,74,0.45)', locked: false,
+    unlockLevel: GATHER_FIELDS.caca.minGatherLevel,
     drops: GATHER_FIELDS.caca.drops,
   },
   {
@@ -242,10 +253,10 @@ function ProgressRing({ progress, color, size }: { progress: number; color: stri
   )
 }
 
-function RegionNode({ node, sessions, now, onTap }: {
-  node: MapNode; sessions: OpenSession[]; now: number; onTap: (n: MapNode) => void
+function RegionNode({ node, sessions, now, maxGatherLevel, onTap }: {
+  node: MapNode; sessions: OpenSession[]; now: number; maxGatherLevel: number; onTap: (n: MapNode) => void
 }) {
-  const isLocked = node.locked
+  const isLocked = node.locked || levelLockedFor(node, maxGatherLevel)
   const here = sessions.filter((s) => s.fieldId === node.fieldId)
   const first = here[0]
   const anyExhausted = here.some((s) => s.status === 'exhausted')
@@ -308,9 +319,12 @@ function RegionNode({ node, sessions, now, onTap }: {
         </span>
       )}
 
-      <span className="absolute left-1/2 -translate-x-1/2 top-full mt-1 whitespace-nowrap font-map font-bold text-[10.5px] tracking-wide ink"
+      <span className="absolute left-1/2 -translate-x-1/2 top-full mt-1 whitespace-nowrap font-map font-bold text-[10.5px] tracking-wide ink text-center"
         style={{ textShadow: '0 1px 0 rgba(255,247,224,0.6)' }}>
         {node.name}
+        {!node.locked && levelLockedFor(node, maxGatherLevel) && (
+          <span className="block font-combat font-normal text-[9px]" style={{ color: '#7a2f26' }}>Coleta Nv.{node.unlockLevel}</span>
+        )}
       </span>
     </button>
   )
@@ -582,9 +596,13 @@ function RegionActiveBody({
             {freeHeroes.map((h) => {
               const dead = h.isAlive === false
               const noStamina = h.stamina < GATHER_TICK_STAMINA
-              const apto = !dead && !noStamina
+              const lowLevel = gatherLevelOf(h.gatherXp) < (node.unlockLevel ?? 1)
+              const apto = !dead && !noStamina && !lowLevel
               const sel = sendHeroId === h.id
-              const hint = dead ? '💀 morto' : noStamina ? '⚡ sem stamina' : `⛏️ Nv.${gatherLevelOf(h.gatherXp)}`
+              const hint = dead ? '💀 morto'
+                : lowLevel ? `🔒 Coleta Nv.${node.unlockLevel}`
+                : noStamina ? '⚡ sem stamina'
+                : `⛏️ Nv.${gatherLevelOf(h.gatherXp)}`
               return (
                 <button key={h.id} onClick={() => apto && onSelectSend(sel ? null : h.id)} disabled={!apto}
                   className="shrink-0 w-[94px] rounded-xl px-2 py-2.5 text-center transition-all active:scale-95"
@@ -623,6 +641,7 @@ function RegionPanel(props: {
   onCollect: () => void; onStopNow: () => void; onStopAfter: () => void; onCancelStop: () => void
 }) {
   const { node, maxGatherLevel, onClose } = props
+  const levelLocked = node ? !node.locked && levelLockedFor(node, maxGatherLevel) : false
   return (
     <AnimatePresence>
       {node && (
@@ -644,8 +663,8 @@ function RegionPanel(props: {
             <div className="flex items-center gap-3 pr-8 mb-1">
               <span className="grid place-items-center rounded-full shrink-0" style={{
                 width: 52, height: 52, background: 'radial-gradient(circle at 40% 28%, #f3e6c2, #dcc493 82%)',
-                border: `2.5px solid ${node.locked ? 'rgba(74,52,24,0.5)' : node.acc}`,
-                boxShadow: 'inset 0 1px 2px rgba(255,255,255,0.5)', filter: node.locked ? 'grayscale(0.3)' : 'none',
+                border: `2.5px solid ${node.locked || levelLocked ? 'rgba(74,52,24,0.5)' : node.acc}`,
+                boxShadow: 'inset 0 1px 2px rgba(255,255,255,0.5)', filter: node.locked || levelLocked ? 'grayscale(0.3)' : 'none',
               }}>
                 <span className="text-[28px]">{node.emoji}</span>
               </span>
@@ -682,6 +701,18 @@ function RegionPanel(props: {
                 <span className="inline-block mt-2 text-[11px] font-combat px-2.5 py-1 rounded-md"
                   style={{ background: 'rgba(94,64,26,0.12)', border: '1px solid rgba(74,52,24,0.3)', color: '#7a2f26' }}>
                   ⏳ Em breve
+                </span>
+              </div>
+            ) : levelLocked ? (
+              <div className="rounded-xl px-4 py-4 text-center" style={{ background: 'rgba(94,64,26,0.08)', border: '1px dashed rgba(74,52,24,0.45)' }}>
+                <div className="text-2xl mb-1">🔒</div>
+                <div className="font-map font-bold ink text-[14px] mb-1">Desbloqueia com Coleta Nv.{node.unlockLevel}</div>
+                <p className="text-[13px] ink-soft leading-snug">
+                  Nenhum herói seu alcançou esse nível ainda. Cada tique de coleta rende XP de Coleta — continue nos campos já abertos.
+                </p>
+                <span className="inline-block mt-2 text-[11px] font-combat px-2.5 py-1 rounded-md"
+                  style={{ background: 'rgba(94,64,26,0.12)', border: '1px solid rgba(74,52,24,0.3)', color: '#6b4f28' }}>
+                  ⛏️ Melhor herói: Nv.{maxGatherLevel}
                 </span>
               </div>
             ) : (
@@ -802,7 +833,7 @@ export function KingdomMapView(props: KingdomMapViewProps) {
           <Roads activeKeys={activeKeys} />
           <HomeMark />
           {MAP_NODES.map((n) => (
-            <RegionNode key={n.key} node={n} sessions={openSessions} now={now} onTap={(node) => onSelectNode(node.key)} />
+            <RegionNode key={n.key} node={n} sessions={openSessions} now={now} maxGatherLevel={maxGatherLevel} onTap={(node) => onSelectNode(node.key)} />
           ))}
         </div>
 

@@ -45,6 +45,13 @@ export interface GatherFieldDef {
   seedField?: boolean;
   /** Exige a ferramenta do campo (FIELD_TOOL) equipada para iniciar a coleta. */
   requiresTool?: boolean;
+  /**
+   * Nível de Coleta DO HERÓI que destrava o campo (ausente = aberto desde o
+   * início). A escada segue a necessidade do early game: ervas (poções) →
+   * minérios nv3 (estilhaços p/ aprimoramento) → bosque nv5 (ferramentas) →
+   * costa nv7 / caça nv9 (refeições). Cada degrau ≈ 1 noite de coleta.
+   */
+  minGatherLevel?: number;
 }
 
 // Cadência e custos do tique (o servidor é a autoridade; o cliente só exibe).
@@ -62,13 +69,16 @@ export const GATHER_FIELDS: Record<GatherFieldId, GatherFieldDef> = {
     tagline: 'Metais e estilhaços para a forja do ferreiro.',
     description:
       'Encostas ricas em veios de ferro e cristais. É daqui que sai a matéria-prima das armas, armaduras e do refino de pedras.',
+    minGatherLevel: 3,
     drops: [
-      { name: 'Ferro Pesado', weight: 22 },
-      { name: 'Metal Leve', weight: 18 },
-      { name: 'Ferro', weight: 12 },
+      // A necessidade de quem abre a mina (nv3, gear da Floresta em mãos) é
+      // aprimoramento, não craft: estilhaços dominam o pool (~55% no early).
+      { name: 'Ferro Pesado', weight: 14 },
+      { name: 'Metal Leve', weight: 10 },
+      { name: 'Ferro', weight: 10 },
       // P2 pedras (2026-07-05): 30/70 arma/armadura — demanda do set é 1:5
-      { name: 'Estilhaço de Pedra Negra (Arma)', weight: 8 },
-      { name: 'Estilhaço de Pedra Negra (Armadura)', weight: 16 },
+      { name: 'Estilhaço de Pedra Negra (Arma)', weight: 14 },
+      { name: 'Estilhaço de Pedra Negra (Armadura)', weight: 28 },
       { name: 'Cristal Bruto', weight: 14, minLevel: 10 },
       { name: 'Fragmentos de Joias', weight: 10, minLevel: 20 },
       // 💎 Pedra Concentrada: coletor experiente (nv30+) acha raramente — fonte
@@ -86,11 +96,15 @@ export const GATHER_FIELDS: Record<GatherFieldId, GatherFieldDef> = {
       'Campinas férteis onde crescem as ervas das poções. Só aqui se acham sementes de cultivo para a fazenda.',
     seedField: true,
     drops: [
+      // Água Pura pesa mais que as ervas: cada poção consome 3 Águas por
+      // 2 Ervas (2 no craft da poção + 1 na destilaria do extrato).
       { name: 'Erva Medicinal', weight: 22 },
-      { name: 'Água Pura', weight: 22 },
+      { name: 'Água Pura', weight: 30 },
       { name: 'Flor de Mana', weight: 18 },
       { name: 'Raiz Vigorosa', weight: 18 },
-      { name: 'Cogumelo Lunar', weight: 12, minLevel: 10 },
+      // nv6 (era 10): destrava a Poção de Reviver cedo — é o combustível do
+      // auto-revive do farm, desenhada p/ ser sustentável desde o early game.
+      { name: 'Cogumelo Lunar', weight: 12, minLevel: 6 },
       { name: 'Cristal de Mana', weight: 8, minLevel: 20 },
     ],
   },
@@ -101,10 +115,13 @@ export const GATHER_FIELDS: Record<GatherFieldId, GatherFieldDef> = {
     tagline: 'Madeira, couro e seivas para arcos e cajados.',
     description:
       'Mata fechada de árvores ancestrais. Rende madeira flexível, couro de armadilhas e, para coletores experientes, as seivas raras.',
+    minGatherLevel: 5,
     drops: [
       { name: 'Madeira Flexível', weight: 34 },
       { name: 'Couro', weight: 30 },
-      { name: 'Seiva de Ent', weight: 22, minLevel: 15 },
+      // nv8 (era 15): Cajado de Aprendiz (Seiva×2) e Verniz de Ent entram na
+      // janela em que o bosque acabou de abrir, não um gate tardio.
+      { name: 'Seiva de Ent', weight: 22, minLevel: 8 },
       { name: 'Seiva Ancestral', weight: 14, minLevel: 25 },
     ],
   },
@@ -119,6 +136,7 @@ export const GATHER_FIELDS: Record<GatherFieldId, GatherFieldDef> = {
     description:
       'Falésias varridas pelo vento e poças de maré. Rende peixe fresco e frutos do mar para a cozinha; pescadores pacientes acham pérolas.',
     requiresTool: true,
+    minGatherLevel: 7,
     drops: [
       { name: 'Peixe Prateado', weight: 34 },
       { name: 'Frutos do Mar', weight: 26 },
@@ -134,6 +152,7 @@ export const GATHER_FIELDS: Record<GatherFieldId, GatherFieldDef> = {
     description:
       'Trilhas de presas na orla da mata. Rende carne fresca para a cozinha e couro de caça — a alternativa a abater os animais da fazenda.',
     requiresTool: true,
+    minGatherLevel: 9,
     drops: [
       { name: 'Carne de Caça', weight: 34 },
       { name: 'Couro', weight: 30 },

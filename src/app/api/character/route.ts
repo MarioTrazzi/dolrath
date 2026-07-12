@@ -6,7 +6,7 @@ import { RACES, CLASSES, getRaceById, getClassById } from '@/lib/gameData'
 import { verifyDolTransferTx } from '@/lib/dolPayments'
 import { getCharacterNftChainId, getCharacterNftContractAddress } from '@/lib/characterNftOnchain'
 import { verifyCharacterNftMintTx } from '@/lib/characterNftVerify'
-import { pointSystem } from '@/lib/characterCreationData'
+import { rollCreationStatsFromPaymentProof } from '@/lib/characterCreationRoll'
 import { getRaceTransformations } from '@/lib/transformationSystem'
 import { SKILL_TREE_VERSION } from '@/lib/skillTree'
 
@@ -83,7 +83,6 @@ export async function POST(req: Request) {
     name,
     race,
     characterClass: class_,
-    distributedPoints,
     avatar,
     image,
     creationTxHash,
@@ -94,19 +93,6 @@ export async function POST(req: Request) {
     transformationImage,
     transformationImages,
   } = body
-
-  const parsedDistributedPoints = (() => {
-    if (!distributedPoints) return null
-    if (typeof distributedPoints === 'string') {
-      try {
-        const parsed = JSON.parse(distributedPoints)
-        return parsed && typeof parsed === 'object' ? parsed : null
-      } catch {
-        return null
-      }
-    }
-    return typeof distributedPoints === 'object' ? distributedPoints : null
-  })()
 
   const avatarUrl = (typeof avatar === 'string' && avatar.trim())
     ? avatar
@@ -193,33 +179,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid race or class' }, { status: 400 })
     }
 
-    // Validar e extrair os valores dos atributos distribuídos pelo jogador
-    const distributedStr = Number((parsedDistributedPoints as any)?.str ?? 0)
-    const distributedAgi = Number((parsedDistributedPoints as any)?.agi ?? 0)
-    const distributedInt = Number((parsedDistributedPoints as any)?.int ?? 0)
-    const distributedDef = Number((parsedDistributedPoints as any)?.def ?? (parsedDistributedPoints as any)?.res ?? 0)
-
-    // Basic validation (prevents client tampering and keeps balance constraints)
-    const totalDistributed = distributedStr + distributedAgi + distributedInt + distributedDef
-    const maxPerStat = Number(pointSystem?.creation?.maxStatValue ?? 10)
-    const expectedTotal = Number(pointSystem?.creation?.availablePoints ?? 10)
-    const allInts = [distributedStr, distributedAgi, distributedInt, distributedDef].every((v) => Number.isFinite(v) && Number.isInteger(v))
-    const inRange = [distributedStr, distributedAgi, distributedInt, distributedDef].every((v) => v >= 0 && v <= maxPerStat)
-
-    if (!allInts || !inRange || totalDistributed !== expectedTotal) {
-      return NextResponse.json(
-        {
-          error: 'Invalid distributedPoints',
-          details: {
-            expectedTotal,
-            maxPerStat,
-            received: { str: distributedStr, agi: distributedAgi, int: distributedInt, def: distributedDef },
-            totalDistributed,
-          },
-        },
-        { status: 400 }
-      )
-    }
+    // 🎲 Os 18 pontos de criação são rolados pelo servidor (não mais escolhidos
+    // pelo jogador): ponderados pela classe, com aleatoriedade suficiente para
+    // nenhum mint sair idêntico. A seed vem do hash da transação de pagamento
+    // (+ mint, se houver), então o resultado só existe após o pagamento
+    // verificado on-chain — reroll exigiria pagar de novo.
+    const rolled = rollCreationStatsFromPaymentProof({
+      creationTxHash: creationTxHashStr,
+      nftMintTxHash: nftMintTxHashStr,
+      classId: class_,
+    })
+    const distributedStr = rolled.str
+    const distributedAgi = rolled.agi
+    const distributedInt = rolled.int
+    const distributedDef = rolled.def
 
     // 🔥 APLICAR BÔNUS RACIAIS E DE CLASSE
     // Stats base (conversão do sistema antigo para o novo balanceado)
@@ -276,8 +249,8 @@ export async function POST(req: Request) {
       }
     };
 
-    const attributes = parsedDistributedPoints ? {
-      // Stats distribuídos pelo jogador
+    const attributes = {
+      // Stats rolados na criação (substituem a distribuição manual)
       distributedStr, distributedAgi, distributedInt, distributedDef,
       // Stats finais (com bônus)
       str: finalStr, agi: finalAgi, int: finalInt, def: finalDef,
@@ -287,7 +260,7 @@ export async function POST(req: Request) {
       magicResistance: (finalInt * 0.2) + (finalDef * 0.1),   // INT e DEF protegem de magia
       // Transformação disponível
       canTransform: raceData.transformationAvailable
-    } : {};
+    };
 
     // 🐉 Transformação escolhida na criação. Metamorfo (multi-forma) gera TODAS as
     // formas e fica DESTRAVADO (escolhe a forma em combate); demais raças têm 1

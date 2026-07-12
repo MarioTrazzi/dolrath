@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { CharacterClass } from '@/types/game';
 import CreationCardBackdrop from '@/components/character/CreationCardBackdrop';
 import { getCreationVisual } from '@/lib/creationVisuals';
-import { getClassStatBonuses } from '@/lib/characterStats';
+import { getClassStatBonuses, getClassRollProfile } from '@/lib/characterStats';
 
 interface ClassPreviewProps {
   characterClass: CharacterClass | null;
@@ -13,9 +13,16 @@ interface ClassPreviewProps {
 
 const STAT_LABELS = { str: 'Força', agi: 'Agilidade', int: 'Inteligência', def: 'Defesa' } as const;
 
+function rollTier(weight: number): string {
+  if (weight >= 35) return 'Principal';
+  if (weight >= 15) return 'Secundário';
+  return 'Raro';
+}
+
 export function ClassPreview({ characterClass, showStats }: ClassPreviewProps) {
   const visual = characterClass ? getCreationVisual(characterClass.id) : null;
   const classBonuses = characterClass ? getClassStatBonuses(characterClass.id) : null;
+  const rollProfile = characterClass ? getClassRollProfile(characterClass.id) : null;
 
   return (
     <div
@@ -70,13 +77,30 @@ export function ClassPreview({ characterClass, showStats }: ClassPreviewProps) {
               {showStats && classBonuses && (
                 <div className="mt-auto pt-4 border-t border-white/15">
                   <h5 className="text-lg font-bold text-white mb-1 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">Bônus de Atributos:</h5>
-                  <p className="text-xs text-white/50 mb-3">Somados aos bônus raciais e aos pontos distribuídos.</p>
+                  <p className="text-xs text-white/50 mb-3">Somados aos bônus raciais e aos pontos rolados no mint.</p>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                     {(Object.keys(STAT_LABELS) as (keyof typeof STAT_LABELS)[]).map((key) => (
                       <div key={key} className="flex justify-between items-center">
                         <span className="text-white/60">{STAT_LABELS[key]}:</span>
                         <span className="font-bold" style={{ color: classBonuses[key] > 0 ? visual.accent : 'rgba(255,255,255,0.4)' }}>
                           {classBonuses[key] > 0 ? `+${classBonuses[key]}` : '—'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {showStats && rollProfile && (
+                <div className="mt-4 pt-4 border-t border-white/15">
+                  <h5 className="text-lg font-bold text-white mb-1 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">Como os 18 pontos rolam:</h5>
+                  <p className="text-xs text-white/50 mb-3">Sorteados automaticamente no mint — cada personagem sai um pouco diferente.</p>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                    {(Object.keys(STAT_LABELS) as (keyof typeof STAT_LABELS)[]).map((key) => (
+                      <div key={key} className="flex justify-between items-center">
+                        <span className="text-white/60">{STAT_LABELS[key]}:</span>
+                        <span className="font-bold" style={{ color: visual.accent }}>
+                          {rollProfile.mins[key]}+ · {rollTier(rollProfile.weights[key])}
                         </span>
                       </div>
                     ))}

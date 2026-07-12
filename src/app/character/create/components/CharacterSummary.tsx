@@ -1,42 +1,18 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { CharacterRace, BaseStats } from '@/types/character';
+import { Sparkles } from 'lucide-react';
+import { CharacterRace } from '@/types/character';
 import { CharacterClass } from '@/types/game';
-import { computeCreationStats, type StatFour, type DerivedStats } from '@/lib/characterStats';
 
 interface CharacterSummaryProps {
   race: CharacterRace | null;
   characterClass?: CharacterClass | null;
-  distributedPoints: BaseStats;
   characterName: string;
   imageUrl: string | null;
 }
 
-export function CharacterSummary({ race, characterClass, distributedPoints, characterName, imageUrl }: CharacterSummaryProps) {
-  const stats = race
-    ? computeCreationStats(race.id, characterClass?.id, {
-        str: distributedPoints.str,
-        agi: distributedPoints.agi,
-        int: distributedPoints.int,
-        def: (distributedPoints as any).res ?? 0,
-      })
-    : null;
-
-  const primary: { key: keyof StatFour; label: string }[] = [
-    { key: 'str', label: 'Força' },
-    { key: 'agi', label: 'Agilidade' },
-    { key: 'int', label: 'Inteligência' },
-    { key: 'def', label: 'Defesa' },
-  ];
-
-  const derived: { key: keyof DerivedStats; label: string }[] = [
-    { key: 'hp', label: '❤️ HP' },
-    { key: 'mp', label: '🔮 MP' },
-    { key: 'stamina', label: '⚡ Stamina' },
-    { key: 'attack', label: '⚔️ Ataque' },
-  ];
-
+export function CharacterSummary({ race, characterClass, characterName, imageUrl }: CharacterSummaryProps) {
   return (
     <div className="bg-surface/50 backdrop-blur-sm rounded-xl p-6 border border-white/10 h-full flex flex-col items-center text-center">
       <h3 className="text-xl font-bold text-text-primary mb-4">
@@ -44,7 +20,7 @@ export function CharacterSummary({ race, characterClass, distributedPoints, char
       </h3>
 
       <AnimatePresence mode="wait">
-        {race && stats ? (
+        {race ? (
           <motion.div
             key="summary-content"
             initial={{ opacity: 0, y: 20 }}
@@ -71,19 +47,9 @@ export function CharacterSummary({ race, characterClass, distributedPoints, char
               {race.name}{characterClass ? ` · ${characterClass.name}` : ''}
             </p>
 
-            <div className="w-full grid grid-cols-2 gap-x-4 gap-y-2 text-sm mb-4">
-              {primary.map(({ key, label }) => (
-                <div key={key} className="flex justify-between items-center py-1 border-b border-white/5">
-                  <span className="text-text-secondary">{label}:</span>
-                  <span className="font-bold text-text-primary text-base">{stats.final[key]}</span>
-                </div>
-              ))}
-              {derived.map(({ key, label }) => (
-                <div key={key} className="flex justify-between items-center py-1 border-b border-white/5">
-                  <span className="text-text-secondary">{label}:</span>
-                  <span className="font-bold text-text-primary text-base">{stats.derived[key]}</span>
-                </div>
-              ))}
+            <div className="w-full flex items-start gap-2 text-left text-sm text-[#c9a25f] bg-[#3a3325]/30 border border-[#8a6d3b]/40 rounded-lg px-3 py-2 mb-4">
+              <Sparkles className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <span>Os atributos (STR/AGI/INT/DEF) são revelados no momento do mint.</span>
             </div>
 
             <div className="w-full text-left">

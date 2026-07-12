@@ -4,9 +4,11 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Save, RefreshCw } from 'lucide-react';
 import { CharacterSummary } from './CharacterSummary';
+import { StatRevealRadar } from './StatRevealRadar';
 import { createCharacter } from '@/lib/api';
 import { useCharacterCreationStore } from '@/lib/stores/characterCreationStore';
 import { getRaceTransformations } from '@/lib/transformationSystem';
+import { getClassRollProfile } from '@/lib/characterStats';
 import { cn } from '@/lib/utils';
 import { useSession } from 'next-auth/react';
 import { ethers } from 'ethers';
@@ -15,7 +17,7 @@ import { decodeContractCustomErrorMessage, getWalletTxErrorMessage } from '@/lib
 
 export function NameConfirmStep() {
   const { data: session } = useSession();
-  const { selectedRace, selectedClass, distributedPoints, selectedImage, chosenTransformation, transformationImage, transformationImages, characterName, creationPaymentTxHash, setCharacterName, markStepComplete, resetCreation } = useCharacterCreationStore();
+  const { selectedRace, selectedClass, selectedImage, chosenTransformation, transformationImage, transformationImages, characterName, creationPaymentTxHash, setCharacterName, markStepComplete, resetCreation } = useCharacterCreationStore();
   const [isCreating, setIsCreating] = useState(false);
   const [nameError, setNameError] = useState('');
 
@@ -39,6 +41,9 @@ export function NameConfirmStep() {
     mintedAt?: string;
     metadata: any;
   }>(null);
+  // Pontos brutos rolados na criação (antes dos bônus de raça/classe) — usados
+  // só para destacar quando o stat principal da classe saiu "sortudo" no reveal.
+  const [rolledPoints, setRolledPoints] = useState<null | { str: number; agi: number; int: number; def: number }>(null);
 
   const POLYGON_AMOY_CHAIN_ID_DEC = BigInt(80002);
   const POLYGON_AMOY_CHAIN_ID_HEX = '0x13882';
@@ -151,15 +156,6 @@ export function NameConfirmStep() {
         throw new Error('A carteira conectada na MetaMask não é a mesma vinculada à sua conta.');
       }
 
-      // Convert BaseStats to Record<string, number>
-      const statsRecord: Record<string, number> = {
-        str: Number(distributedPoints?.str || 0),
-        agi: Number(distributedPoints?.agi || 0),
-        int: Number(distributedPoints?.int || 0),
-        // Backend expects 'def' (not 'res')
-        def: Number((distributedPoints as any)?.res || 0),
-      };
-
       // 1) Signed mint intent from server
       const mintIntentRes = await fetch('/api/nft/character/mint-intent', {
         method: 'POST',
@@ -168,7 +164,6 @@ export function NameConfirmStep() {
           name: characterName.trim(),
           race: selectedRace.id,
           characterClass: selectedClass.id,
-          distributedPoints: statsRecord,
           avatar: selectedImage,
         }),
       });
@@ -298,7 +293,6 @@ export function NameConfirmStep() {
         name: characterName.trim(),
         race: selectedRace.id,
         characterClass: selectedClass.id,
-        distributedPoints: statsRecord,
         avatar: selectedImage,
         // Metamorfo destravado: null deixa todas as formas disponíveis no combate.
         unlockedTransformation: isMultiForm ? null : chosenTransformation,
@@ -333,6 +327,16 @@ export function NameConfirmStep() {
 
       if (!character?.id) {
         throw new Error('Falha ao criar personagem: resposta inválida do servidor');
+      }
+
+      const rolled = character.attributes;
+      if (rolled && typeof rolled === 'object') {
+        setRolledPoints({
+          str: Number(rolled.distributedStr ?? 0),
+          agi: Number(rolled.distributedAgi ?? 0),
+          int: Number(rolled.distributedInt ?? 0),
+          def: Number(rolled.distributedDef ?? 0),
+        });
       }
 
       // 4) Dialog: load from the NFT tokenURI (not from DB)
@@ -440,7 +444,7 @@ export function NameConfirmStep() {
 
           <button
             onClick={handleCreateCharacter}
-            disabled={isCreating || !!nameError || !characterName || !selectedRace || !distributedPoints || !selectedImage}
+            disabled={isCreating || !!nameError || !characterName || !selectedRace || !selectedClass || !selectedImage}
             className="w-full bg-gradient-to-r from-primary to-primary-dark text-white py-3 rounded-lg font-medium disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {isCreating ? (
@@ -463,7 +467,6 @@ export function NameConfirmStep() {
         <CharacterSummary
           race={selectedRace}
           characterClass={selectedClass}
-          distributedPoints={distributedPoints}
           characterName={characterName}
           imageUrl={selectedImage}
         />
@@ -615,35 +618,75 @@ export function NameConfirmStep() {
                     )}
                   </div>
 
-                  <div className="mt-4">
-                    <div className="text-xs text-text-secondary mb-2">Stats (da NFT)</div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {(() => {
-                        const attributes = Array.isArray(nftData.metadata?.attributes)
-                          ? (nftData.metadata.attributes as any[])
-                          : [];
+                  {(() => {
+                    const attributes = Array.isArray(nftData.metadata?.attributes)
+                      ? (nftData.metadata.attributes as any[])
+                      : [];
 
-                        const order = ['Race', 'Class', 'Level', 'STR', 'AGI', 'INT', 'DEF'];
-                        const byTrait: Record<string, any> = {};
-                        for (const a of attributes) {
-                          const t = String(a?.trait_type || '');
-                          if (order.includes(t)) byTrait[t] = a;
-                        }
+                    const order = ['Race', 'Class', 'Level', 'STR', 'AGI', 'INT', 'DEF'];
+                    const byTrait: Record<string, any> = {};
+                    for (const a of attributes) {
+                      const t = String(a?.trait_type || '');
+                      if (order.includes(t)) byTrait[t] = a;
+                    }
 
-                        return order
-                          .filter((t) => byTrait[t])
-                          .map((t, idx) => {
-                            const a = byTrait[t];
-                            return (
-                              <div key={idx} className="flex items-center justify-between bg-surface/50 border border-white/10 rounded-md px-3 py-2">
-                                <span className="text-text-secondary text-sm">{t}</span>
-                                <span className="text-text-primary font-bold">{String(a.value)}</span>
-                              </div>
-                            );
-                          });
-                      })()}
-                    </div>
-                  </div>
+                    const finalStr = Number(byTrait.STR?.value ?? 0);
+                    const finalAgi = Number(byTrait.AGI?.value ?? 0);
+                    const finalInt = Number(byTrait.INT?.value ?? 0);
+                    const finalDef = Number(byTrait.DEF?.value ?? 0);
+                    const hasFinalStats = ['STR', 'AGI', 'INT', 'DEF'].every((t) => byTrait[t]);
+
+                    // Destaca o stat principal da classe quando o roll saiu no topo da faixa (cap 10).
+                    const rollProfile = selectedClass ? getClassRollProfile(selectedClass.id) : null;
+                    const dominantKey = rollProfile
+                      ? (Object.keys(rollProfile.weights) as (keyof typeof rollProfile.weights)[]).reduce((best, key) =>
+                          rollProfile.weights[key] > rollProfile.weights[best] ? key : best
+                        )
+                      : null;
+                    const dominantValue = dominantKey && rolledPoints ? rolledPoints[dominantKey] : null;
+                    const luckyLabels = { str: 'FORÇA', agi: 'AGILIDADE', int: 'INTELIGÊNCIA', def: 'DEFESA' } as const;
+                    const isLucky = dominantKey && dominantValue !== null && dominantValue >= 9;
+
+                    return (
+                      <>
+                        {hasFinalStats && (
+                          <div className="mt-4 pt-4 border-t border-white/10">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="text-xs text-text-secondary">Atributos revelados</div>
+                              {isLucky && dominantKey && (
+                                <motion.span
+                                  initial={{ opacity: 0, scale: 0.8 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  transition={{ delay: 0.7 }}
+                                  className="text-xs font-semibold text-[#e7c682]"
+                                >
+                                  ✨ {luckyLabels[dominantKey]} EXCEPCIONAL!
+                                </motion.span>
+                              )}
+                            </div>
+                            <StatRevealRadar str={finalStr} agi={finalAgi} int={finalInt} def={finalDef} />
+                          </div>
+                        )}
+
+                        <div className="mt-4">
+                          <div className="text-xs text-text-secondary mb-2">Stats (da NFT)</div>
+                          <div className="grid grid-cols-2 gap-2">
+                            {order
+                              .filter((t) => byTrait[t])
+                              .map((t, idx) => {
+                                const a = byTrait[t];
+                                return (
+                                  <div key={idx} className="flex items-center justify-between bg-surface/50 border border-white/10 rounded-md px-3 py-2">
+                                    <span className="text-text-secondary text-sm">{t}</span>
+                                    <span className="text-text-primary font-bold">{String(a.value)}</span>
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             ) : (

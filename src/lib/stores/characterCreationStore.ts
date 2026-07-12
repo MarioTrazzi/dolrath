@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import { CharacterRace, BaseStats } from '@/types/character';
+import { CharacterRace } from '@/types/character';
 
 const noopStorage = {
   getItem: (_name: string) => null,
@@ -23,7 +23,6 @@ interface CharacterCreationState {
   creationSteps: CreationStep[];
   selectedRace: CharacterRace | null;
   selectedClass: any | null;
-  distributedPoints: BaseStats;
   characterName: string;
   selectedImage: string | null;
   // 🐉 Transformação escolhida na criação
@@ -41,7 +40,6 @@ interface CharacterCreationState {
   goToStep: (stepIndex: number) => void;
   setSelectedRace: (race: CharacterRace) => void;
   setSelectedClass: (characterClass: any) => void;
-  setDistributedPoints: (points: BaseStats) => void;
   setCharacterName: (name: string) => void;
   setSelectedImage: (image: string | null) => void;
   setChosenTransformation: (form: string | null) => void;
@@ -76,14 +74,6 @@ export const useCharacterCreationStore = create<CharacterCreationState>()(
           isAccessible: false,
         },
         {
-          id: 'stats-distribution',
-          title: 'Distribuir Atributos',
-          description: 'Customize seus pontos de atributo',
-          component: () => null, // Placeholder
-          isComplete: false,
-          isAccessible: false,
-        },
-        {
           id: 'appearance',
           title: 'Aparência',
           description: 'Personalize a aparência do seu personagem',
@@ -110,7 +100,6 @@ export const useCharacterCreationStore = create<CharacterCreationState>()(
       ],
       selectedRace: null,
       selectedClass: null,
-      distributedPoints: { str: 0, agi: 0, int: 0, res: 0, hp: 0, mp: 0, crit: 0, speed: 0 },
       characterName: '',
       selectedImage: null,
       chosenTransformation: null,
@@ -160,20 +149,16 @@ export const useCharacterCreationStore = create<CharacterCreationState>()(
             if (step.id === 'class-selection') {
               return { ...step, isComplete: characterClass != null };
             }
-            if (step.id === 'stats-distribution') {
-              return { ...step, isAccessible: characterClass != null, isComplete: false };
+            if (step.id === 'appearance') {
+              return { ...step, isAccessible: characterClass != null };
             }
             return step;
           });
           return {
             selectedClass: characterClass,
-            distributedPoints: { str: 0, agi: 0, int: 0, res: 0, hp: 0, mp: 0, crit: 0, speed: 0 },
             creationSteps: updatedSteps,
           };
         }),
-
-      setDistributedPoints: (points: BaseStats) =>
-        set({ distributedPoints: points }),
 
       setCharacterName: (name: string) => set({ characterName: name }),
 
@@ -261,7 +246,6 @@ export const useCharacterCreationStore = create<CharacterCreationState>()(
           currentStep: 0,
           selectedRace: null,
           selectedClass: null,
-          distributedPoints: { str: 0, agi: 0, int: 0, res: 0, hp: 0, mp: 0, crit: 0, speed: 0 },
           characterName: '',
           selectedImage: null,
           chosenTransformation: null,
@@ -290,7 +274,6 @@ export const useCharacterCreationStore = create<CharacterCreationState>()(
         })),
         selectedRace: state.selectedRace,
         selectedClass: state.selectedClass,
-        distributedPoints: state.distributedPoints,
         characterName: state.characterName,
         selectedImage: state.selectedImage,
         chosenTransformation: state.chosenTransformation,
@@ -330,14 +313,16 @@ export const useCharacterCreationStore = create<CharacterCreationState>()(
           creationSteps: mergedSteps,
         };
       },
-      version: 3,
+      version: 4,
       migrate: (persistedState: any) => {
         // Drop removed fields from older persisted versions.
         if (persistedState && typeof persistedState === 'object') {
           const next = { ...(persistedState as any) }
           delete (next as any).selectedSpecialization
-          // v3 adiciona a etapa de transformação; descarta o passo persistido
-          // para que a nova lista de etapas (com 'transformation') seja usada.
+          // v4 remove a distribuição manual de pontos (agora rolada pelo servidor)
+          // e a etapa 'stats-distribution'; descarta o passo/índice persistidos
+          // para que a nova lista de etapas (5 passos) seja usada.
+          delete (next as any).distributedPoints
           delete (next as any).creationSteps
           delete (next as any).currentStep
           return next

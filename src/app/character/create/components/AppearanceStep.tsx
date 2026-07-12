@@ -10,10 +10,11 @@ import { GenerationProgress } from './GenerationProgress';
 import { useCharacterCreationStore } from '@/lib/stores/characterCreationStore';
 import { cn } from '@/lib/utils';
 import { isCloudinaryUploadConfigured, uploadImageToCloudinary } from '@/lib/cloudinaryUpload';
+import { getRaceStatBonuses, getClassStatBonuses } from '@/lib/characterStats';
 import toast from 'react-hot-toast';
 
 export function AppearanceStep() {
-  const { selectedRace, selectedClass, distributedPoints, selectedImage, setSelectedImage, markStepComplete } = useCharacterCreationStore();
+  const { selectedRace, selectedClass, selectedImage, setSelectedImage, markStepComplete } = useCharacterCreationStore();
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const [customPrompt, setCustomPrompt] = useState('');
@@ -30,11 +31,16 @@ export function AppearanceStep() {
   }, [selectedImage, markStepComplete]);
 
   const statDescriptors = () => {
+    // Os 18 pontos de criação agora são rolados pelo servidor (só após o mint),
+    // então ainda não existem neste passo. Usamos os bônus fixos de raça+classe
+    // (conhecidos aqui) como proxy da "identidade" do personagem para a imagem.
+    const raceBonus = selectedRace ? getRaceStatBonuses(selectedRace.id) : null;
+    const classBonus = selectedClass ? getClassStatBonuses(selectedClass.id) : null;
     const pts = {
-      str: Number((distributedPoints as any)?.str || 0),
-      agi: Number((distributedPoints as any)?.agi || 0),
-      int: Number((distributedPoints as any)?.int || 0),
-      res: Number((distributedPoints as any)?.res || 0),
+      str: (raceBonus?.str || 0) + (classBonus?.str || 0),
+      agi: (raceBonus?.agi || 0) + (classBonus?.agi || 0),
+      int: (raceBonus?.int || 0) + (classBonus?.int || 0),
+      res: (raceBonus?.def || 0) + (classBonus?.def || 0),
     };
 
     const pick = (v: number, low: string, mid: string, high: string) => {

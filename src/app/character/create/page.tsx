@@ -5,7 +5,6 @@ import { motion } from 'framer-motion';
 import { useCharacterCreationStore } from '@/lib/stores/characterCreationStore';
 import { RaceSelectionStep } from './components/RaceSelectionStep';
 import { ClassSelectionStep } from './components/ClassSelectionStep';
-import { StatsDistributionStep } from './components/StatsDistributionStep';
 import { AppearanceStep } from './components/AppearanceStep';
 import { TransformationStep } from './components/TransformationStep';
 import { NameConfirmStep } from './components/NameConfirmStep';
@@ -160,7 +159,6 @@ export default function CharacterCreationPage() {
       creationSteps: state.creationSteps.map(step => {
         if (step.id === 'race-selection') return { ...step, component: RaceSelectionStep };
         if (step.id === 'class-selection') return { ...step, component: ClassSelectionStep };
-        if (step.id === 'stats-distribution') return { ...step, component: StatsDistributionStep };
         if (step.id === 'appearance') return { ...step, component: AppearanceStep };
         if (step.id === 'transformation') return { ...step, component: TransformationStep };
         if (step.id === 'name-confirm') return { ...step, component: NameConfirmStep };

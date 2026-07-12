@@ -66,6 +66,91 @@ export function getClassStatBonuses(classId?: string | null): StatFour {
   return c ? toScaled(c.bonuses as any) : { ...ZERO }
 }
 
+// ============================================================
+// Rolagem automática dos 18 pontos de criação (substitui a distribuição
+// manual). Cada classe tem um perfil: `mins` garante o piso da identidade
+// da classe (soma 12), os 6 pontos restantes são sorteados um a um por peso
+// — assim a rolagem sempre tem a "cara" da classe, mas com aleatoriedade
+// suficiente para nenhum mint sair igual. Pura e determinística: mesma seed
+// => mesmo roll (a seed vem do hash da transação de pagamento/mint, ver
+// characterCreationRoll.ts).
+// ============================================================
+
+export interface ClassRollProfile {
+  mins: StatFour
+  weights: StatFour
+}
+
+export const CLASS_ROLL_PROFILES: Record<string, ClassRollProfile> = {
+  warrior: { mins: { str: 5, agi: 2, int: 1, def: 4 }, weights: { str: 40, agi: 15, int: 5, def: 40 } },
+  rogue: { mins: { str: 2, agi: 5, int: 2, def: 3 }, weights: { str: 15, agi: 45, int: 15, def: 25 } },
+  mage: { mins: { str: 1, agi: 2, int: 6, def: 3 }, weights: { str: 5, agi: 15, int: 50, def: 30 } },
+  monk: { mins: { str: 3, agi: 4, int: 2, def: 4 }, weights: { str: 25, agi: 35, int: 10, def: 30 } },
+}
+
+const DEFAULT_ROLL_PROFILE: ClassRollProfile = {
+  mins: { str: 4, agi: 4, int: 2, def: 2 },
+  weights: { str: 25, agi: 25, int: 25, def: 25 },
+}
+
+const ROLL_STAT_KEYS: (keyof StatFour)[] = ['str', 'agi', 'int', 'def']
+const CREATION_POOL_TOTAL = 18
+const CREATION_STAT_CAP = 10
+
+export function getClassRollProfile(classId?: string | null): ClassRollProfile {
+  return (classId && CLASS_ROLL_PROFILES[classId]) || DEFAULT_ROLL_PROFILE
+}
+
+// PRNG determinístico leve (mulberry32) — não precisa de crypto, então este
+// arquivo continua seguro para import em componentes client.
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0
+  return function () {
+    a |= 0
+    a = (a + 0x6d2b79f5) | 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+/**
+ * Rola os 18 pontos de criação para uma classe a partir de uma seed numérica.
+ * Determinístico: mesma seed + classe => sempre o mesmo resultado.
+ */
+export function rollCreationStats(seed: number, classId?: string | null): StatFour {
+  const profile = getClassRollProfile(classId)
+  const rand = mulberry32(seed)
+
+  const result: StatFour = { ...profile.mins }
+  let remaining = CREATION_POOL_TOTAL - ROLL_STAT_KEYS.reduce((sum, k) => sum + result[k], 0)
+
+  while (remaining > 0) {
+    const eligible = ROLL_STAT_KEYS.filter((k) => result[k] < CREATION_STAT_CAP)
+    if (eligible.length === 0) break
+
+    const totalWeight = eligible.reduce((sum, k) => sum + (profile.weights[k] || 0), 0)
+    let pick: keyof StatFour = eligible[eligible.length - 1]
+    if (totalWeight > 0) {
+      let roll = rand() * totalWeight
+      for (const k of eligible) {
+        roll -= profile.weights[k] || 0
+        if (roll <= 0) {
+          pick = k
+          break
+        }
+      }
+    } else {
+      pick = eligible[Math.floor(rand() * eligible.length)]
+    }
+
+    result[pick] += 1
+    remaining -= 1
+  }
+
+  return result
+}
+
 /**
  * Calcula os atributos finais do personagem na criação, exatamente como o
  * servidor faz ao persistir. `distributed` usa def (não res).

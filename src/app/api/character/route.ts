@@ -8,6 +8,7 @@ import { getCharacterNftChainId, getCharacterNftContractAddress } from '@/lib/ch
 import { verifyCharacterNftMintTx } from '@/lib/characterNftVerify'
 import { pointSystem } from '@/lib/characterCreationData'
 import { getRaceTransformations } from '@/lib/transformationSystem'
+import { SKILL_TREE_VERSION } from '@/lib/skillTree'
 
 function serializeBigIntForJson<T>(value: T): T {
   return JSON.parse(
@@ -343,6 +344,11 @@ export async function POST(req: Request) {
         stamina: baseStamina,
         maxStamina: baseStamina,
         baseStats: baseStats,
+        // 🌳 Já nasce com a Árvore de Habilidades inicializada (vazia). Sem isto o
+        // personagem seria "legado" (skillTree null) e cairia no painel de atributos
+        // antigo em vez da árvore. Os 18 pontos de criação já entraram nos atributos;
+        // os pontos de nível é que se gastam na árvore.
+        skillTree: { version: SKILL_TREE_VERSION, purchased: [] },
         attributes: {
           ...attributes,
           // Adicionar informações de transformação para raças que podem

@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 
 interface ImageBackdropProps {
   /** Path to the background image (relative to /public/) */
@@ -16,6 +16,8 @@ export default function ImageBackdrop({
   overlayOpacity = 0.3, 
   subtle = false 
 }: ImageBackdropProps) {
+  const [isLoaded, setIsLoaded] = useState(false)
+
   return (
     <>
       {/* Background image */}
@@ -25,6 +27,13 @@ export default function ImageBackdrop({
         className="absolute inset-0 w-full h-full object-cover"
         style={{
           filter: subtle ? 'brightness(0.7) blur(2px)' : 'brightness(0.85)',
+          opacity: isLoaded ? 1 : 0,
+          transition: 'opacity 0.3s ease-in',
+        }}
+        onLoad={() => setIsLoaded(true)}
+        onError={(e) => {
+          console.error('[ImageBackdrop] Erro ao carregar imagem:', src, e)
+          setIsLoaded(true) // Fallback: mostra mesmo se houver erro
         }}
       />
 

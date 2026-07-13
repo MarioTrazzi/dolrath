@@ -267,6 +267,8 @@ export default function DungeonsPage() {
         onExit={handleRunExit}
         onRestart={handleRunRestart}
         initialAuto={resumeAuto}
+        backgroundImageUrl={activeDungeon.id === 'floresta' ? '/backgrounds/dark-forest.png' : undefined}
+        backgroundImageOverlay={0.35}
       />
     )
   }

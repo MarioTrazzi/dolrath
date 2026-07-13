@@ -197,6 +197,14 @@ async function goldEmittedToday(tx: Prisma.TransactionClient, userId: string): P
   return (runs._sum.goldEarned ?? 0) + (sales._sum.amount ?? 0)
 }
 
+// Quanto do teto diário AINDA cabe. A rota de combate consulta UMA vez e aloca
+// os créditos do nó (abates + espólio) localmente — antes cada crédito refazia
+// os dois aggregates do dia.
+export async function dailyGoldRemainingTx(tx: Prisma.TransactionClient, userId: string): Promise<number> {
+  const creditedToday = await goldEmittedToday(tx, userId)
+  return Math.max(0, dungeonDailyGoldCap() - creditedToday)
+}
+
 // Credita ouro na CARTEIRA DO PERSONAGEM (Character.gold — "dinheiro na mão"),
 // respeitando o teto diário POR USUÁRIO. Devolve quanto foi realmente creditado
 // (pode ser menos, ou 0 se o teto estourou). O personagem leva o gold pra loja;

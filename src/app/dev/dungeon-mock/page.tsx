@@ -86,26 +86,35 @@ function installFetchStub() {
     }
     if (url.includes('/api/dungeon/run/combat')) {
       const body = init?.body ? JSON.parse(String(init.body)) : {}
-      if (body.outcome === 'kill' || body.outcome === 'win') {
-        const equipmentWear = Object.entries(dur)
+      // Protocolo por NÓ (espelha a rota real): 'clear' credita todos os vivos;
+      // 'retreat'/'lose' credita só os killedIds reportados; desgaste em lote
+      // (arma −2/abate, resto −1) e drops nos MESMOS geradores do servidor.
+      const isClear = body.outcome === 'clear' || body.outcome === 'win'
+      const isRunEnd = body.outcome === 'retreat' || body.outcome === 'lose'
+      if (isClear || isRunEnd) {
+        const kills = isClear
+          ? remaining
+          : Math.min(remaining, Array.isArray(body.killedIds) ? body.killedIds.length : 0)
+        remaining = isClear ? 0 : Math.max(0, remaining - kills)
+        const equipmentWear = kills === 0 ? [] : Object.entries(dur)
           .filter(([, d]) => d.durability > 0)
           .map(([slot, d]) => {
-            d.durability = Math.max(0, d.durability - (slot === 'WEAPON' ? 2 : 1))
+            d.durability = Math.max(0, d.durability - (slot === 'WEAPON' ? 2 : 1) * kills)
             return { slot, name: d.name, durability: d.durability, maxDurability: d.maxDurability, justBroke: d.durability === 0 }
           })
-        remaining = body.outcome === 'win' ? 0 : Math.max(0, remaining - 1)
-        const cleared = remaining === 0
-        // Drop por abate na classe do d20 pré-combate + espólio do nó ao limpar —
-        // os MESMOS geradores do servidor (rollKillLoot/rollNodeLoot).
-        const killDrops = rollKillLoot('minor', false, DUNGEON.difficultyStars, 1, lastRoll, DUNGEON)
-        const nodeLoot = cleared
+        const killDrops = Array.from({ length: kills }).flatMap(() =>
+          rollKillLoot('minor', false, DUNGEON.difficultyStars, 1, lastRoll, DUNGEON))
+        const nodeLoot = isClear
           ? rollNodeLoot(DUNGEON, lastRoll, 'minor', CHAR.level, CHAR.race, CHAR.class, 1)
           : null
         const loot = { gold: nodeLoot?.gold ?? 0, drops: [...killDrops, ...(nodeLoot?.drops ?? [])] }
         return json({
-          granted: { gold: 12 + loot.gold, killGold: 12, lootGold: loot.gold, xp: 20, loot },
-          cleared,
+          granted: { gold: 12 * kills + loot.gold, killGold: 12 * kills, lootGold: loot.gold, xp: 20 * kills, loot },
+          cleared: isClear,
           equipmentWear,
+          finished: isRunEnd,
+          retreated: body.outcome === 'retreat',
+          defeated: body.outcome === 'lose',
         })
       }
       return json({ finished: true })

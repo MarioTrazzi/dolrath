@@ -261,6 +261,9 @@ interface CombatResponse {
   leveledUp?: boolean
   newLevel?: number
   error?: string
+  // status da run no corpo do 409 ("finished" = o clear do boss JÁ aterrissou
+  // num request anterior — retry pós-sucesso conta como vitória, não como falha)
+  status?: string
 }
 
 // Efeito de um consumível a partir dos stats do catálogo: restauração (hp/mp),
@@ -684,9 +687,13 @@ export default function DungeonRun({
   // vitória mostrar o TOTAL do nó (não só o último abate). Reseta a cada startCombat.
   const encounterXpRef = useRef(0)
   const encounterKillGoldRef = useRef(0)
-  // 💀 Drops de abates INTERMEDIÁRIOS do pacote (o servidor credita por kill);
-  // acumulados aqui só para o card de vitória do nó exibi-los junto do espólio.
+  // 💀 Drops exibidos antes do card do nó (hoje o servidor devolve TUDO no clear,
+  // então fica vazio; mantido pro merge do card tolerar fluxos antigos).
   const encounterDropsRef = useRef<LootDrop[]>([])
+  // 🎯 Ids dos monstros abatidos no PACOTE atual (protocolo por nó): abates no
+  // meio do pacote não tocam a rede — quem credita tudo é a chamada única de
+  // desfecho ('clear' no último abate, ou 'retreat'/'lose' com esta lista).
+  const killedIdsRef = useRef<string[]>([])
   // 👑 true enquanto o card de espólio do BOSS está na tela: o dismiss (botão ou
   // auto-pilot) só então dispara finishRun(true) — o jogador vê o brilho do drop
   // raro antes do resumo/re-run automático assumirem a tela.
@@ -1275,6 +1282,7 @@ export default function DungeonRun({
     encounterXpRef.current = 0
     encounterKillGoldRef.current = 0
     encounterDropsRef.current = []
+    killedIdsRef.current = []
     setFocusEnemyId(active.id)
     setIsPack(list.length > 1)
     setEventCard(null)
@@ -1968,18 +1976,43 @@ export default function DungeonRun({
     }
     // Só "encerra" o combate visualmente quando o nó limpa; senão o duelo segue.
     if (willClear) { setCombatEnded(true); setWinnerId(character.id) }
+    killedIdsRef.current.push(m.id)
 
-    // Confirma o abate com o SERVIDOR com pequenas retentativas — crítico no abate
-    // do BOSS: se essa chamada falhar (rede instável) e o cliente seguir como se
-    // tivesse dado certo, a run fica 'active'/pendente no banco e o auto-restart
-    // seguinte trava com "personagem já em uso" (o /start vê o lock antigo vivo).
+    // Abate no MEIO do pacote: ZERO rede — o crédito real vem na chamada única de
+    // desfecho do nó (clear/retreat/lose com killedIds). A UI segue otimista com
+    // os valores que o próprio servidor rolou pro nó (m.goldReward/m.xpReward);
+    // drops por abate agora aparecem juntos no card do clear.
+    if (!willClear) {
+      encounterXpRef.current += m.xpReward
+      encounterKillGoldRef.current += m.goldReward
+      setTotals(prev => ({ ...prev, gold: prev.gold + m.goldReward, xp: prev.xp + m.xpReward, kills: prev.kills + 1 }))
+      pushLog(`🏆 Você derrotou ${m.emoji} ${m.name}! +${m.goldReward} 💰 +${m.xpReward} XP`)
+      const next = weakestOf(remaining)
+      showBanner('🗡️', `${m.name} caiu! Restam ${remaining.length}.`, 1800)
+      if (next) { setMonster(next); monsterRef.current = next }
+      later(() => {
+        setDiceResults({})
+        setPanelResult(null)
+        setHasRolled(false)
+        setPendingAttack(null)
+        startEnemyPhase()
+      }, 1200)
+      return
+    }
+
+    // ÚLTIMO abate: UMA chamada resolve o nó inteiro no servidor (gold+XP de todos
+    // os abates, drops por abate, espólio do nó, desgaste, level-up).
+    // Retentativas — crítico no abate do BOSS: se essa chamada falhar (rede
+    // instável) e o cliente seguir como se tivesse dado certo, a run fica
+    // 'active'/pendente no banco e o auto-restart seguinte trava com "personagem
+    // já em uso" (o /start vê o lock antigo vivo).
     const postKill = async (attempts: number): Promise<{ res: Response; data: CombatResponse } | null> => {
       for (let i = 0; i < attempts; i++) {
         try {
           const res = await fetch('/api/dungeon/run/combat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ runId: runIdRef.current, outcome: 'kill', monsterId: m.id }),
+            body: JSON.stringify({ runId: runIdRef.current, outcome: 'clear', killedIds: killedIdsRef.current }),
           })
           const data: CombatResponse = await res.json().catch(() => ({} as CombatResponse))
           if (res.ok) return { res, data }
@@ -1991,12 +2024,14 @@ export default function DungeonRun({
     }
 
     let grant: CombatGrant | null = null
-    let cleared = willClear // fallback offline (kills do meio do pacote) = inferência local
-    const outcome = await postKill(m.isBoss ? 4 : 1)
+    const outcome = await postKill(m.isBoss ? 4 : 3)
+    // 409 com status 'finished' = um retry chegou DEPOIS do clear ter aterrissado:
+    // o crédito já aconteceu — trata como vitória (sem grant, valores otimistas),
+    // em vez de cair no branch de abandono/aviso.
+    const alreadyLanded = !!outcome && !outcome.res.ok && outcome.res.status === 409 && outcome.data.status === 'finished'
     if (outcome?.res.ok) {
       const data = outcome.data
       grant = data.granted ?? null
-      cleared = !!data.cleared
       // ⚔️ Desgaste debitado pelo servidor neste abate: atualiza o gear vivo da
       // run (peça que quebra para de contribuir já no próximo golpe) e avisa.
       if (data.equipmentWear?.length) {
@@ -2032,7 +2067,7 @@ export default function DungeonRun({
           later(() => setLevelUpFlash(null), 2600)
         }, 1500)
       }
-    } else if (m.isBoss) {
+    } else if (m.isBoss && !alreadyLanded) {
       // O SERVIDOR nunca confirmou o abate do boss: não finge vitória local aqui.
       // Encerra a run explicitamente (libera o lock) para o próximo /start não travar,
       // e avisa o jogador em vez de seguir para o auto-restart sem confirmação.
@@ -2050,37 +2085,17 @@ export default function DungeonRun({
       return
     }
 
-    const killGold = grant?.killGold ?? m.goldReward
-    const xp = grant?.xp ?? m.xpReward
+    // O grant cobre o NÓ INTEIRO; os abates anteriores já entraram otimistas —
+    // aplica só o DELTA do último abate (pode vir menor se o teto diário de gold
+    // clipou; o servidor é a autoridade).
+    const killGold = grant ? grant.killGold - encounterKillGoldRef.current : m.goldReward
+    const xp = grant ? grant.xp - encounterXpRef.current : m.xpReward
     const loot: NodeLoot = grant?.loot ?? { gold: 0, drops: [] }
-    // Acumula o total do ENCONTRO (todos os abates do nó) p/ o card de vitória.
     encounterXpRef.current += xp
     encounterKillGoldRef.current += killGold
 
     setTotals(prev => ({ ...prev, gold: prev.gold + killGold, xp: prev.xp + xp, kills: prev.kills + 1 }))
-    pushLog(`🏆 Você derrotou ${m.emoji} ${m.name}! +${killGold} 💰 +${xp} XP`)
-
-    // Nó AINDA NÃO limpo: o jogador abateu o alvo na vez dele → agora é a vez dos
-    // inimigos restantes (todos atacam). O próximo alvo padrão vira o mais fraco vivo.
-    if (!cleared) {
-      // 💀 Drop por abate: já creditado no servidor — mostra na hora e guarda pro card do nó.
-      if (loot.drops.length > 0) {
-        showLoot(loot, grant?.skippedDrops)
-        const skipped = new Set((grant?.skippedDrops ?? []).map(d => d.name))
-        encounterDropsRef.current.push(...loot.drops.filter(d => !skipped.has(d.name)))
-      }
-      const next = weakestOf(remaining)
-      showBanner('🗡️', `${m.name} caiu! Restam ${remaining.length}.`, 1800)
-      if (next) { setMonster(next); monsterRef.current = next }
-      later(() => {
-        setDiceResults({})
-        setPanelResult(null)
-        setHasRolled(false)
-        setPendingAttack(null)
-        startEnemyPhase()
-      }, 1200)
-      return
-    }
+    pushLog(`🏆 Você derrotou ${m.emoji} ${m.name}! +${Math.max(0, killGold)} 💰 +${Math.max(0, xp)} XP`)
 
     // Nó LIMPO: espólio do nó + avanço (boss → fim da run).
     showLoot(loot, grant?.skippedDrops)
@@ -2143,30 +2158,6 @@ export default function DungeonRun({
     }, 2800)
   }
 
-  // RECUAR: sai do combate em SEGURANÇA mantendo tudo que já ganhou (XP/gold dos
-  // abates já foram creditados por kill). O servidor encerra a run e limpa o pendente.
-  // É a saída do early-game: matou o(s) bicho(s) que dava conta e volta com XP.
-  const handleRetreat = () => {
-    if (combatEnded) return
-    setCombatEnded(true)
-    setAuto(false)
-    if (runIdRef.current) {
-      fetch('/api/dungeon/run/combat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ runId: runIdRef.current, outcome: 'retreat' }),
-      }).catch(() => {})
-    }
-    pushLog('🏃 Você recua em segurança, levando o que conquistou.')
-    showBanner('🏃', 'Recuo seguro — XP e espólio dos abates preservados.', 2600)
-    later(() => {
-      setMonster(null)
-      setPack([])
-      packRef.current = []
-      setPhase('summary')
-    }, 1300)
-  }
-
   // 🔁 Re-run: o pai remonta a run do zero (mesma masmorra/herói), preservando o
   // estado do piloto. Precisa de stamina para ao menos o 1º passo (nó menor).
   // Aguarda o POST que encerra a run atual aterrissar antes de remontar — senão o
@@ -2179,7 +2170,58 @@ export default function DungeonRun({
     onRestart({ hp: effMaxHp, mp: character.maxMp, stamina, level: charLevel, leveledUp: leveledUpThisRun, auto })
   }
 
-  // DERROTA: avisa o servidor (encerra a run). XP dos abates já foi creditado por kill.
+  // Aplica a resposta do DESFECHO da run (retreat/lose): o servidor acabou de
+  // creditar os abates reportados — mostra os drops, corrige gold/XP pro valor
+  // autoritativo (teto diário pode ter clipado) e registra quebra/level-up.
+  const applyEndGrant = (data: CombatResponse) => {
+    const grant = data.granted
+    if (!grant) return
+    const goldDelta = grant.killGold - encounterKillGoldRef.current
+    const xpDelta = grant.xp - encounterXpRef.current
+    encounterKillGoldRef.current = grant.killGold
+    encounterXpRef.current = grant.xp
+    if (goldDelta !== 0 || xpDelta !== 0) {
+      setTotals(prev => ({ ...prev, gold: prev.gold + goldDelta, xp: prev.xp + xpDelta }))
+    }
+    if (grant.loot.drops.length > 0) showLoot(grant.loot, grant.skippedDrops)
+    for (const w of data.equipmentWear ?? []) {
+      if (w.justBroke) pushLog(`💔 ${w.name} QUEBROU! Sem bônus até reparar no ferreiro.`)
+    }
+    if (data.leveledUp) {
+      setLeveledUpThisRun(true)
+      if (data.newLevel != null) setCharLevel(data.newLevel)
+      pushLog('🎉 Você SUBIU DE NÍVEL!')
+    }
+  }
+
+  // RECUAR: sai do combate em SEGURANÇA. Os abates do pacote atual ainda NÃO
+  // foram creditados (protocolo por nó) — vão em `killedIds` pro servidor creditar
+  // ao encerrar. É a saída do early-game: matou o que dava conta e volta com XP.
+  const handleRetreat = () => {
+    if (combatEnded) return
+    setCombatEnded(true)
+    setAuto(false)
+    if (runIdRef.current) {
+      endRunPromiseRef.current = fetch('/api/dungeon/run/combat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ runId: runIdRef.current, outcome: 'retreat', killedIds: killedIdsRef.current }),
+      }).then(async (res) => {
+        if (!res.ok) return
+        applyEndGrant(await res.json().catch(() => ({} as CombatResponse)))
+      }).catch(() => {})
+    }
+    pushLog('🏃 Você recua em segurança, levando o que conquistou.')
+    showBanner('🏃', 'Recuo seguro — XP e espólio dos abates preservados.', 2600)
+    later(() => {
+      setMonster(null)
+      setPack([])
+      packRef.current = []
+      setPhase('summary')
+    }, 1300)
+  }
+
+  // DERROTA: avisa o servidor, que credita os abates reportados e encerra a run.
   // A tela oferece Sair e Re-run; no piloto automático o Re-run é escolhido sozinho
   // (enquanto houver stamina) — sem stamina, volta ao mapa como antes.
   const handleDefeat = () => {
@@ -2188,7 +2230,10 @@ export default function DungeonRun({
       endRunPromiseRef.current = fetch('/api/dungeon/run/combat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ runId: runIdRef.current, outcome: 'lose' }),
+        body: JSON.stringify({ runId: runIdRef.current, outcome: 'lose', killedIds: killedIdsRef.current }),
+      }).then(async (res) => {
+        if (!res.ok) return
+        applyEndGrant(await res.json().catch(() => ({} as CombatResponse)))
       }).catch(() => {})
     }
     if (auto) {
@@ -2196,16 +2241,31 @@ export default function DungeonRun({
     }
   }
 
+  // Encerra a run no servidor ao sair no meio. Saindo DURANTE um combate com
+  // abates ainda não creditados, sai via 'retreat' com os killedIds — o servidor
+  // credita antes de fechar; fora de combate, abandono simples como antes.
+  const closeRunOnServer = () => {
+    if (!runIdRef.current) return
+    const uncredited = phase === 'combat' && !combatEnded && killedIdsRef.current.length > 0
+    endRunPromiseRef.current = (uncredited
+      ? fetch('/api/dungeon/run/combat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ runId: runIdRef.current, outcome: 'retreat', killedIds: killedIdsRef.current }),
+        })
+      : fetch('/api/dungeon/run/abandon', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ runId: runIdRef.current }),
+        })
+    ).catch(() => {})
+  }
+
   const finishRun = async (bossDefeated: boolean) => {
     setPhase('summary')
-    // Sair no meio (sem boss): encerra a sessão no servidor.
-    if (!bossDefeated && runIdRef.current) {
-      fetch('/api/dungeon/run/abandon', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ runId: runIdRef.current }),
-      }).catch(() => {})
-    }
+    // Sair no meio (sem boss): encerra a sessão no servidor (creditando abates
+    // pendentes, se saiu do meio de um combate).
+    if (!bossDefeated) closeRunOnServer()
     if (bossDefeated) {
       pushLog(`👑 ${dungeon.name} conquistada!`)
       // Piloto automático: boss vencido também reinicia a run (farm contínuo até a stamina acabar).
@@ -2227,14 +2287,9 @@ export default function DungeonRun({
   }
 
   const exitRun = () => {
-    // Garante o encerramento da sessão no servidor ao sair.
-    if (runIdRef.current) {
-      fetch('/api/dungeon/run/abandon', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ runId: runIdRef.current }),
-      }).catch(() => {})
-    }
+    // Garante o encerramento da sessão no servidor ao sair (creditando abates
+    // pendentes, se saiu do meio de um combate).
+    closeRunOnServer()
     // HP e MP voltam ao cheio entre runs — só a stamina (orçamento diário) é consumida.
     onExit({ hp: effMaxHp, mp: character.maxMp, stamina, leveledUp: leveledUpThisRun })
   }

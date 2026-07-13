@@ -2,33 +2,37 @@ import { NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
-import { addExperienceToCharacter } from '@/lib/characterLevelSystem'
+import { buildXpUpdate } from '@/lib/characterLevelSystem'
 import {
   getDungeon,
   rollCombatLoot,
   rollKillLoot,
-  applyLootTx,
-  creditGoldTx,
+  addDropToInventoryTx,
+  dailyGoldRemainingTx,
   pendingMonsters,
   type RunPending,
 } from '@/lib/dungeonRunServer'
 import { wearFor } from '@/lib/durability'
-import { firstBossBonusStones, FIRST_BOSS_BONUS, MAX_DUNGEON_TIER, clampDungeonTier } from '@/lib/dungeonAdventures'
+import { firstBossBonusStones, FIRST_BOSS_BONUS, MAX_DUNGEON_TIER, clampDungeonTier, type LootDrop } from '@/lib/dungeonAdventures'
 
 export const dynamic = 'force-dynamic'
 
-// Resolve o combate em PACOTE do nó atual. O encontro tem 1..3 monstros e cada
-// ABATE é creditado por si (gold + XP) — então derrotar pelo menos um já vale XP,
-// mesmo que o jogador recue ou caia depois (sem penalidade, como no design).
+// Resolve o combate em PACOTE do nó atual — em UMA chamada por nó. Abates no
+// meio do pacote NÃO tocam a rede (o cliente mostra os valores otimistas que o
+// próprio servidor rolou pro nó); quem credita tudo é a chamada de desfecho:
+//
+//   • outcome 'clear'            → todos os monstros do nó caíram: credita os abates
+//                       (gold+XP+drops por abate), rola o espólio do nó e avança o
+//                       cursor (boss → fim da run).
+//   • outcome 'retreat' (+ killedIds) → recua: credita os abates REPORTADOS (subset
+//                       dos monstros que o servidor rolou) e encerra a run. Sem
+//                       espólio de nó, cursor não avança.
+//   • outcome 'lose'    (+ killedIds) → derrota: idem retreat, status 'defeated'.
+//   • outcome 'kill'/'win' (legado)   → compat com abas abertas no deploy: 'kill'
+//                       credita 1 abate incremental; 'win' = 'clear'.
 //
 // O cliente reporta a AÇÃO, nunca o valor — o servidor é dono de QUANTO se ganha
-// (teto = os monstros que ele mesmo rolou pro nó):
-//   • outcome 'kill'  (+ monsterId) → credita aquele abate; quando TODOS caem, o nó
-//                       "limpa": rola o espólio, credita e avança o cursor (boss → fim).
-//   • outcome 'retreat'             → recua em segurança: encerra a run, mantém o que
-//                       já foi creditado por abate. Sem espólio do nó, cursor não avança.
-//   • outcome 'lose'                → derrota: encerra a run (abates anteriores já valeram).
-//   • outcome 'win'  (legado)       → trata todos os vivos como abatidos e limpa o nó.
+// (teto = os monstros que ele mesmo rolou pro nó, menos os já creditados).
 export async function POST(req: Request) {
   const session = await auth()
   if (!session?.user?.id) {
@@ -37,10 +41,10 @@ export async function POST(req: Request) {
   const userId = session.user.id
 
   try {
-    const { runId, outcome, monsterId } = await req.json()
-    const VALID = ['kill', 'retreat', 'lose', 'win']
+    const { runId, outcome, monsterId, killedIds } = await req.json()
+    const VALID = ['clear', 'retreat', 'lose', 'kill', 'win']
     if (!runId || !VALID.includes(outcome)) {
-      return NextResponse.json({ error: 'runId e outcome (kill|retreat|lose|win) são obrigatórios' }, { status: 400 })
+      return NextResponse.json({ error: 'runId e outcome (clear|retreat|lose) são obrigatórios' }, { status: 400 })
     }
 
     const run = await prisma.dungeonRun.findFirst({ where: { id: runId, userId } })
@@ -57,55 +61,51 @@ export async function POST(req: Request) {
 
     const pending = run.pending as unknown as RunPending
     const isBoss = pending.kind === 'boss'
-
-    // RECUAR: sai em segurança. Os abates já foram creditados por kill; só fecha a run.
-    if (outcome === 'retreat') {
-      await prisma.dungeonRun.update({
-        where: { id: run.id },
-        data: { status: 'abandoned', pending: Prisma.DbNull },
-      })
-      return NextResponse.json({ finished: true, retreated: true })
-    }
-
-    // DERROTA: encerra a run, limpa o pendente. Sem recompensa do nó.
-    if (outcome === 'lose') {
-      await prisma.dungeonRun.update({
-        where: { id: run.id },
-        data: { status: 'defeated', pending: Prisma.DbNull },
-      })
-      return NextResponse.json({ finished: true, defeated: true })
-    }
-
-    // VITÓRIA/ABATE: o personagem precisa pertencer ao usuário (defesa extra).
-    const character = await prisma.character.findFirst({ where: { id: run.characterId, userId } })
-    if (!character) return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+    const isRunEnd = outcome === 'retreat' || outcome === 'lose'
 
     const monsters = pendingMonsters(pending)
     const killed = new Set(pending.killedIds ?? [])
+    const alive = monsters.filter((m) => !killed.has(m.id))
 
-    // Quais monstros este request abate? 'kill' → o monsterId informado (1); 'win'
-    // (legado) → todos os que ainda estão vivos.
-    let newlyKilled = monsters.filter((m) => !killed.has(m.id))
+    // Quais monstros este request abate?
+    //   clear/win → todos os ainda vivos; retreat/lose → os REPORTADOS (ids
+    //   desconhecidos/repetidos são ignorados); kill (legado) → o monsterId.
+    let newlyKilled = alive
     if (outcome === 'kill') {
-      const target = newlyKilled.find((m) => m.id === monsterId)
+      const target = alive.find((m) => m.id === monsterId)
       if (!target) {
         // Já abatido (reenvio) ou id inválido — idempotente: nada a creditar.
         return NextResponse.json({ error: 'Monstro inválido ou já abatido' }, { status: 409 })
       }
       newlyKilled = [target]
+    } else if (isRunEnd) {
+      const reported = new Set(Array.isArray(killedIds) ? killedIds : [])
+      newlyKilled = alive.filter((m) => reported.has(m.id))
     }
+
+    // RECUAR/DERROTA sem abate novo: só fecha a run (caminho barato).
+    if (isRunEnd && newlyKilled.length === 0) {
+      await prisma.dungeonRun.update({
+        where: { id: run.id },
+        data: { status: outcome === 'retreat' ? 'abandoned' : 'defeated', pending: Prisma.DbNull },
+      })
+      return NextResponse.json({ finished: true, retreated: outcome === 'retreat', defeated: outcome === 'lose' })
+    }
+
+    // O personagem precisa pertencer ao usuário (defesa extra).
+    const character = await prisma.character.findFirst({ where: { id: run.characterId, userId } })
+    if (!character) return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
 
     const killGoldTotal = newlyKilled.reduce((s, m) => s + m.goldReward, 0)
     const xpTotal = newlyKilled.reduce((s, m) => s + m.xpReward, 0)
     for (const m of newlyKilled) killed.add(m.id)
-    const allDead = monsters.every((m) => killed.has(m.id))
+    const allDead = !isRunEnd && monsters.every((m) => killed.has(m.id))
 
     const charForRun = { id: character.id, level: character.level, race: character.race, class: character.class }
-    // 💀 Drop POR ABATE: cada monstro morto rola material na hora (estilhaço; boss =
-    // Pedra Negra garantida) — recuar depois de matar 1 de 3 ainda rende algo.
-    // O d20 pré-combate (pending.lootRoll) define a CLASSE do drop de cada abate —
-    // sorte 20 + recuo depois de 1 abate ainda rendeu drop "classe 20". Boss é
-    // sempre sorte máxima (lootRoll: 20 no resolveBossNode).
+    // 💀 Drop POR ABATE: cada monstro morto rola material (estilhaço; boss = Pedra
+    // Negra garantida). O d20 pré-combate (pending.lootRoll) define a CLASSE do
+    // drop de cada abate — recuar depois de 1 abate num nó de sorte 20 ainda rende
+    // drop "classe 20". Boss é sempre sorte máxima (lootRoll: 20 no resolveBossNode).
     const killDrops = newlyKilled.flatMap((m) =>
       rollKillLoot(pending.kind, !!m.isBoss, dungeon.difficultyStars, run.tier, pending.lootRoll, dungeon)
     )
@@ -119,27 +119,49 @@ export async function POST(req: Request) {
       })
       if (bossesToday < FIRST_BOSS_BONUS.bossesPerDay) killDrops.push(...firstBossBonusStones())
     }
-    // O espólio do NÓ segue saindo só quando o pacote inteiro cai (recompensa por limpar).
+    // O espólio do NÓ só sai quando o pacote inteiro cai (recompensa por limpar).
     const nodeLoot = allDead ? rollCombatLoot(dungeon, charForRun, pending, run.tier) : null
-    const loot = nodeLoot || killDrops.length
-      ? { gold: nodeLoot?.gold ?? 0, drops: [...killDrops, ...(nodeLoot?.drops ?? [])] }
-      : null
+    const allDrops: LootDrop[] = [...killDrops, ...(nodeLoot?.drops ?? [])]
 
-    // ⚔️ Desgaste por uso: cada abate consome durabilidade do gear equipado
-    // (arma desgasta mais; chefe dobra). Servidor é dono do débito — o cliente
-    // só fica sabendo pelo `equipmentWear` da resposta.
+    // ⚔️ Desgaste por uso: os abates do nó consomem durabilidade do gear equipado
+    // (arma desgasta mais; chefe dobra). Linear em nº de abates — o total em lote
+    // é idêntico ao antigo débito por abate.
     const bossKill = newlyKilled.some((m) => !!m.isBoss)
+    const weaponWear = wearFor('WEAPON', newlyKilled.length, bossKill)
+    const gearWear = wearFor('ARMOR', newlyKilled.length, bossKill)
+
+    // XP + level-up calculados sobre o personagem já carregado, aplicados no MESMO
+    // update do gold (antes rodavam fora da transação, em find+update próprios).
+    const xp = buildXpUpdate(character, xpTotal)
 
     const credited = await prisma.$transaction(async (tx) => {
-      const killGold = await creditGoldTx(tx, userId, character.id, killGoldTotal)
-      const lootResult = loot ? await applyLootTx(tx, userId, character.id, loot) : { gold: 0, skippedDrops: [] }
-      const lootGold = lootResult.gold
+      // Teto diário consultado UMA vez; abates têm prioridade sobre o gold do nó.
+      const remaining = await dailyGoldRemainingTx(tx, userId)
+      const killGold = Math.min(Math.max(0, Math.floor(killGoldTotal)), remaining)
+      const lootGold = Math.min(Math.max(0, Math.floor(nodeLoot?.gold ?? 0)), remaining - killGold)
+
+      const skippedDrops: LootDrop[] = []
+      for (const d of allDrops) {
+        const added = await addDropToInventoryTx(tx, character.id, { name: d.name, rarity: d.rarity, enhancement: d.enhancement })
+        if (!added) skippedDrops.push(d)
+      }
+
+      await tx.character.update({
+        where: { id: character.id },
+        data: {
+          ...xp.updateData,
+          ...(killGold + lootGold > 0 ? { gold: { increment: killGold + lootGold } } : {}),
+        },
+      })
+
       await tx.dungeonRun.update({
         where: { id: run.id },
         data: {
           goldEarned: { increment: killGold + lootGold },
           xpEarned: { increment: xpTotal },
-          ...(allDead
+          ...(isRunEnd
+            ? { status: outcome === 'retreat' ? 'abandoned' : 'defeated', pending: Prisma.DbNull }
+            : allDead
             ? { cursor: pending.nodeIdx, pending: Prisma.DbNull, status: isBoss ? 'finished' : 'active' }
             : { pending: { ...pending, killedIds: Array.from(killed) } as unknown as object }),
         },
@@ -160,6 +182,9 @@ export async function POST(req: Request) {
         }
       }
 
+      // Desgaste em LOTE: 2 updateMany por família de slot (decrementa quem sobrevive
+      // ao débito; zera quem quebraria) em vez de um update por peça. O findMany
+      // continua — a resposta precisa de nome/valores pro aviso no cliente.
       const equipped = await tx.characterEquipment.findMany({
         where: { characterId: character.id },
         include: { item: { select: { name: true } } },
@@ -169,10 +194,9 @@ export async function POST(req: Request) {
       }[]
       for (const eq of equipped) {
         if (eq.durability <= 0) continue // já quebrada: não desgasta além de 0
-        const wear = wearFor(eq.slot, newlyKilled.length, bossKill)
+        const wear = eq.slot === 'WEAPON' ? weaponWear : gearWear
         const after = Math.max(0, eq.durability - wear)
         if (after === eq.durability) continue
-        await tx.characterEquipment.update({ where: { id: eq.id }, data: { durability: after } })
         equipmentWear.push({
           slot: eq.slot,
           name: eq.item.name,
@@ -181,12 +205,27 @@ export async function POST(req: Request) {
           justBroke: after === 0,
         })
       }
+      if (equipmentWear.length > 0 && weaponWear > 0) {
+        await tx.characterEquipment.updateMany({
+          where: { characterId: character.id, slot: 'WEAPON', durability: { gt: weaponWear } },
+          data: { durability: { decrement: weaponWear } },
+        })
+        await tx.characterEquipment.updateMany({
+          where: { characterId: character.id, slot: 'WEAPON', durability: { gt: 0, lte: weaponWear } },
+          data: { durability: 0 },
+        })
+        await tx.characterEquipment.updateMany({
+          where: { characterId: character.id, slot: { not: 'WEAPON' }, durability: { gt: gearWear } },
+          data: { durability: { decrement: gearWear } },
+        })
+        await tx.characterEquipment.updateMany({
+          where: { characterId: character.id, slot: { not: 'WEAPON' }, durability: { gt: 0, lte: gearWear } },
+          data: { durability: 0 },
+        })
+      }
 
-      return { killGold, lootGold, skippedDrops: lootResult.skippedDrops, equipmentWear }
+      return { killGold, lootGold, skippedDrops, equipmentWear }
     })
-
-    // XP creditado pelos abates deste request (faz seu próprio update de personagem).
-    const xpResult = await addExperienceToCharacter(character.id, xpTotal)
 
     return NextResponse.json({
       granted: {
@@ -194,16 +233,18 @@ export async function POST(req: Request) {
         killGold: credited.killGold,
         lootGold: credited.lootGold,
         xp: xpTotal,
-        loot: loot ?? { gold: 0, drops: [] },
+        loot: { gold: nodeLoot?.gold ?? 0, drops: allDrops },
         skippedDrops: credited.skippedDrops,
       },
       cleared: allDead,
       equipmentWear: credited.equipmentWear,
       cursor: allDead ? pending.nodeIdx : run.cursor,
-      finished: allDead && isBoss,
+      finished: isRunEnd || (allDead && isBoss),
       bossDefeated: allDead && isBoss,
-      leveledUp: xpResult.leveledUp,
-      newLevel: xpResult.leveledUp ? xpResult.newLevelInfo.level : character.level,
+      retreated: outcome === 'retreat',
+      defeated: outcome === 'lose',
+      leveledUp: xp.leveledUp,
+      newLevel: xp.leveledUp ? xp.newLevelInfo.level : character.level,
     })
   } catch (error) {
     console.error('Error resolving dungeon combat:', error)

@@ -242,6 +242,8 @@ interface CombatGrant {
   xp: number
   loot: NodeLoot
   skippedDrops?: LootDrop[]
+  // d20 do nó (autoritativo do servidor) — dono da classe do loot creditado
+  roll?: number
 }
 interface EquipmentWear {
   slot: string
@@ -896,12 +898,15 @@ export default function DungeonRun({
   // Exibe (sem persistir) o espólio que o SERVIDOR já creditou: ouro + drops.
   // `skippedDrops` são itens que o servidor NÃO conseguiu colocar no inventário
   // (sem slot livre) — não entram nos totais, só avisam o jogador que sumiram.
-  const showLoot = useCallback((loot: NodeLoot, skippedDrops?: LootDrop[]) => {
+  const showLoot = useCallback((loot: NodeLoot, skippedDrops?: LootDrop[], roll?: number) => {
     if (loot.gold > 0) {
       setTotals(prev => ({ ...prev, gold: prev.gold + loot.gold }))
       pushFloat(`+${loot.gold} 💰`, '#f39c12')
     }
     const skippedNames = new Set((skippedDrops ?? []).map(d => d.name))
+    // Todo drop no log carrega o d20 que o gerou — o jogador aprende a "indexar"
+    // qual número rende qual classe de espólio.
+    const dicePrefix = roll != null ? `🎲 ${roll} · ` : ''
     for (const d of loot.drops) {
       const label = d.enhancement ? `${d.name} +${d.enhancement}` : d.name
       if (skippedNames.has(d.name)) {
@@ -909,7 +914,7 @@ export default function DungeonRun({
         continue
       }
       setTotals(prev => ({ ...prev, items: [...prev.items, { name: d.name, emoji: d.emoji, label }] }))
-      pushLog(`${d.emoji} ${label}`)
+      pushLog(`${dicePrefix}${d.emoji} ${label}`)
     }
     if (skippedDrops && skippedDrops.length > 0) {
       // Sem slot livre o farm vira queima de stamina — o piloto desliga sozinho.
@@ -1149,7 +1154,7 @@ export default function DungeonRun({
       }
     }
 
-    showLoot(loot, data.skippedDrops)
+    showLoot(loot, data.skippedDrops, data.roll)
 
     const hasGear = loot.drops.some(d => d.kind === 'item' || d.kind === 'stone')
     const anyDrop = loot.drops.length > 0 || loot.gold > 0
@@ -2098,7 +2103,7 @@ export default function DungeonRun({
     pushLog(`🏆 Você derrotou ${m.emoji} ${m.name}! +${Math.max(0, killGold)} 💰 +${Math.max(0, xp)} XP`)
 
     // Nó LIMPO: espólio do nó + avanço (boss → fim da run).
-    showLoot(loot, grant?.skippedDrops)
+    showLoot(loot, grant?.skippedDrops, grant?.roll ?? lootRollRef.current)
     later(() => {
       setMonster(null)
       setPack([])
@@ -2154,7 +2159,7 @@ export default function DungeonRun({
       // dispara finishRun(true) — garante que o jogador VÊ o brilho do drop raro
       // antes de seguir para o resumo/re-run automático.
       if (m.isBoss) bossVictoryPendingRef.current = true
-      setLootCard({ def, text: def.description, effects, luckRoll: lootRollRef.current })
+      setLootCard({ def, text: def.description, effects, luckRoll: grant?.roll ?? lootRollRef.current })
     }, 2800)
   }
 
@@ -2183,7 +2188,7 @@ export default function DungeonRun({
     if (goldDelta !== 0 || xpDelta !== 0) {
       setTotals(prev => ({ ...prev, gold: prev.gold + goldDelta, xp: prev.xp + xpDelta }))
     }
-    if (grant.loot.drops.length > 0) showLoot(grant.loot, grant.skippedDrops)
+    if (grant.loot.drops.length > 0) showLoot(grant.loot, grant.skippedDrops, grant.roll ?? lootRollRef.current)
     for (const w of data.equipmentWear ?? []) {
       if (w.justBroke) pushLog(`💔 ${w.name} QUEBROU! Sem bônus até reparar no ferreiro.`)
     }

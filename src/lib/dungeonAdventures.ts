@@ -833,8 +833,11 @@ function bossIngredientDrop(rarity: 'rare' | 'epic'): LootDrop | null {
 // goldMult multiplica a fórmula de ouro única (GOLD_BASE/GOLD_VAR abaixo).
 // pMat: chance de 1 material do pool (1.0 = garantido); matUncFrac: fração que
 // vem do pool incomum; matUncommon: material garantido é do pool incomum (17+).
-// Valores calibrados no scripts/dungeon-loot-sim.ts (âncora: paridade de
-// pedras/run com a tabela antiga em tier 1).
+// Valores calibrados no scripts/dungeon-loot-sim.ts. Âncora original: paridade
+// de pedras/run com a tabela antiga em tier 1. Buff 2026-07-13 (pedra escassa
+// fora do boss): pStone começa no 8 e ~+60% nas faixas, killStone no 14+,
+// minor.stone 0.4→0.6 — pedra de CHÃO +40–50%/run (total +13–18%; boss domina),
+// ouro/estilhaço/gear estáveis (sim EV=1).
 // ============================================================
 // Base única de ouro (a faixa antiga low/mid/high virou o goldMult do pacote).
 // 9+14 (média 16) × goldMult médio 1.26 ≈ paridade com a média antiga (sim EV=1).
@@ -865,19 +868,19 @@ const D20_LOOT_PACKS: Record<number, LootPackCfg> = {
   5:  { goldMult: 0.8,  pMat: 1.0, matUncFrac: 0,    pMat2: 0.25, pShard: 0.12, pConsumable: 0,    pGear: 0,    pStone: 0,    killShard: 0.35 },
   6:  { goldMult: 0.9,  pMat: 0.8, matUncFrac: 0,    pShard: 0.15, pConsumable: 0.15, pGear: 0,    pStone: 0,    killShard: 0.40 },
   7:  { goldMult: 1.0,  pMat: 0.8, matUncFrac: 0,    pShard: 0.18, pConsumable: 0.20, pGear: 0.05, pStone: 0,    killShard: 0.40 },
-  8:  { goldMult: 1.0,  pMat: 0.7, matUncFrac: 0.15, pShard: 0.20, pConsumable: 0.25, pGear: 0.08, pStone: 0,    killShard: 0.45 },
-  9:  { goldMult: 1.1,  pMat: 0.7, matUncFrac: 0.20, pShard: 0.22, pConsumable: 0.25, pGear: 0.10, pStone: 0,    killShard: 0.45 },
-  10: { goldMult: 1.2,  pMat: 0.6, matUncFrac: 0.25, pShard: 0.24, pConsumable: 0.30, pGear: 0.12, pStone: 0.03, killShard: 0.50 },
-  11: { goldMult: 1.25, pMat: 0.6, matUncFrac: 0.25, pShard: 0.24, pConsumable: 0.30, pGear: 0.12, pStone: 0.05, killShard: 0.50 },
-  12: { goldMult: 1.3,  pMat: 0.6, matUncFrac: 0.30, pShard: 0.26, pConsumable: 0.30, pGear: 0.15, pStone: 0.06, killShard: 0.55 },
-  13: { goldMult: 1.4,  pMat: 0.6, matUncFrac: 0.30, pShard: 0.26, pConsumable: 0.30, pGear: 0.17, pStone: 0.07, killShard: 0.55 },
-  14: { goldMult: 1.5,  pMat: 0.5, matUncFrac: 0.40, pShard: 0.28, pConsumable: 0.35, pGear: 0.20, pStone: 0.08, killShard: 0.60, killMat: { chance: 0.15, pool: 'common' } },
-  15: { goldMult: 1.6,  pMat: 0.5, matUncFrac: 0.40, pShard: 0.28, pConsumable: 0.35, pGear: 0.22, pStone: 0.10, killShard: 0.60, killMat: { chance: 0.15, pool: 'common' } },
-  16: { goldMult: 1.7,  pMat: 0.5, matUncFrac: 1.0,  pShard: 0.30, pConsumable: 0.40, pGear: 0.24, pStone: 0.12, killShard: 0.65, killMat: { chance: 0.20, pool: 'common' } },
-  17: { goldMult: 1.8,  pMat: 1.0, matUncFrac: 1.0,  matUncommon: true, pShard: 0.32, pConsumable: 0.40, pGear: 0.26, pStone: 0.16, killShard: 0.65, killMat: { chance: 0.20, pool: 'uncommon' } },
-  18: { goldMult: 1.9,  pMat: 1.0, matUncFrac: 1.0,  matUncommon: true, pShard: 0.32, pConsumable: 0.40, pConsumableRare: 0.10, pGear: 0.30, pStone: 0.20, killShard: 0.70, killMat: { chance: 0.20, pool: 'uncommon' } },
-  19: { goldMult: 2.0,  pMat: 1.0, matUncFrac: 1.0,  matUncommon: true, pShard: 0.32, pConsumable: 0.40, pConsumableRare: 0.12, pGear: 0.40, pStone: 0.32, killShard: 0.75, killMat: { chance: 0.25, pool: 'uncommon' }, killStone: 0.04 },
-  20: { goldMult: 2.5,  pMat: 1.0, matUncFrac: 1.0,  matUncommon: true, pShard: 0.35, pConsumable: 0.50, pGear: 0.50, pStone: 1.0,  killShard: 1.0,  killMat: { chance: 0.30, pool: 'uncommon' }, killStone: 0.08 },
+  8:  { goldMult: 1.0,  pMat: 0.7, matUncFrac: 0.15, pShard: 0.20, pConsumable: 0.25, pGear: 0.08, pStone: 0.03, killShard: 0.45 },
+  9:  { goldMult: 1.1,  pMat: 0.7, matUncFrac: 0.20, pShard: 0.22, pConsumable: 0.25, pGear: 0.10, pStone: 0.04, killShard: 0.45 },
+  10: { goldMult: 1.2,  pMat: 0.6, matUncFrac: 0.25, pShard: 0.24, pConsumable: 0.30, pGear: 0.12, pStone: 0.06, killShard: 0.50 },
+  11: { goldMult: 1.25, pMat: 0.6, matUncFrac: 0.25, pShard: 0.24, pConsumable: 0.30, pGear: 0.12, pStone: 0.08, killShard: 0.50 },
+  12: { goldMult: 1.3,  pMat: 0.6, matUncFrac: 0.30, pShard: 0.26, pConsumable: 0.30, pGear: 0.15, pStone: 0.09, killShard: 0.55 },
+  13: { goldMult: 1.4,  pMat: 0.6, matUncFrac: 0.30, pShard: 0.26, pConsumable: 0.30, pGear: 0.17, pStone: 0.11, killShard: 0.55 },
+  14: { goldMult: 1.5,  pMat: 0.5, matUncFrac: 0.40, pShard: 0.28, pConsumable: 0.35, pGear: 0.20, pStone: 0.13, killShard: 0.60, killMat: { chance: 0.15, pool: 'common' }, killStone: 0.02 },
+  15: { goldMult: 1.6,  pMat: 0.5, matUncFrac: 0.40, pShard: 0.28, pConsumable: 0.35, pGear: 0.22, pStone: 0.15, killShard: 0.60, killMat: { chance: 0.15, pool: 'common' }, killStone: 0.02 },
+  16: { goldMult: 1.7,  pMat: 0.5, matUncFrac: 1.0,  pShard: 0.30, pConsumable: 0.40, pGear: 0.24, pStone: 0.18, killShard: 0.65, killMat: { chance: 0.20, pool: 'common' }, killStone: 0.03 },
+  17: { goldMult: 1.8,  pMat: 1.0, matUncFrac: 1.0,  matUncommon: true, pShard: 0.32, pConsumable: 0.40, pGear: 0.26, pStone: 0.24, killShard: 0.65, killMat: { chance: 0.20, pool: 'uncommon' }, killStone: 0.03 },
+  18: { goldMult: 1.9,  pMat: 1.0, matUncFrac: 1.0,  matUncommon: true, pShard: 0.32, pConsumable: 0.40, pConsumableRare: 0.10, pGear: 0.30, pStone: 0.30, killShard: 0.70, killMat: { chance: 0.20, pool: 'uncommon' }, killStone: 0.04 },
+  19: { goldMult: 2.0,  pMat: 1.0, matUncFrac: 1.0,  matUncommon: true, pShard: 0.32, pConsumable: 0.40, pConsumableRare: 0.12, pGear: 0.40, pStone: 0.42, killShard: 0.75, killMat: { chance: 0.25, pool: 'uncommon' }, killStone: 0.06 },
+  20: { goldMult: 2.5,  pMat: 1.0, matUncFrac: 1.0,  matUncommon: true, pShard: 0.35, pConsumable: 0.50, pGear: 0.50, pStone: 1.0,  killShard: 1.0,  killMat: { chance: 0.30, pool: 'uncommon' }, killStone: 0.10 },
 }
 
 const lootPackOf = (roll: number): LootPackCfg =>
@@ -886,7 +889,7 @@ const lootPackOf = (roll: number): LootPackCfg =>
 // Nó menor dropa menos; pedra mais rara nele; sala/boss dão mais ouro. Pedra de
 // aprimoramento vem PRINCIPALMENTE de monstro (boss 2.5× + main sempre-monstro).
 const NODE_LOOT_MULT: Record<LootNodeKind, { all: number; stone: number; gold: number }> = {
-  minor: { all: 0.8, stone: 0.4, gold: 0.8 },
+  minor: { all: 0.8, stone: 0.6, gold: 0.8 },
   main: { all: 1.0, stone: 1.0, gold: 1.3 },
   boss: { all: 1.0, stone: 2.5, gold: 2.0 },
 }
@@ -1103,8 +1106,8 @@ export function rollNodeLoot(
   // pacote — o abate do boss já garante 1–3 (rollKillLoot); sem esta exceção a
   // pedra dobrava no covil e estourava a âncora de paridade do sim (EV=1).
   if (!isBoss) {
-    const pushStone = () => {
-      const weapon = Math.random() < STONE_WEAPON_SHARE
+    const pushStone = (weaponShare: number) => {
+      const weapon = Math.random() < weaponShare
       const stone = dropsConcentrated
         ? (weapon ? STONE_NAMES.WEAPON_CONCENTRATED : STONE_NAMES.ARMOR_CONCENTRATED)
         : (weapon ? STONE_NAMES.WEAPON_BASIC : STONE_NAMES.ARMOR_BASIC)
@@ -1112,9 +1115,9 @@ export function rollNodeLoot(
     }
     if (pack.pStone >= 1) {
       const qty = 1 + Math.floor((dt - 1) / 2)
-      for (let i = 0; i < qty; i++) pushStone()
+      for (let i = 0; i < qty; i++) pushStone(NAT20_STONE_WEAPON_SHARE)
     } else if (Math.random() < tierChance(pack.pStone) * mult.stone) {
-      pushStone()
+      pushStone(STONE_WEAPON_SHARE)
     }
   }
 
@@ -1143,6 +1146,9 @@ const BOSS_KILL_CONCENTRATED = { min: 1, max: 2, minStars: 3 }
 // 50/50 — pedra de arma sobrava ~3× e a de armadura era o gargalo real do +15.
 // 30/70 aproxima a oferta da demanda mantendo folga p/ alts/venda.
 const STONE_WEAPON_SHARE = 0.3
+// 🎲 Crítico (nat 20): a pedra garantida do nó usa 40/60 — o jackpot pende um
+// pouco mais pra arma, direcionando o jogador ao aprimoramento de armas (core).
+const NAT20_STONE_WEAPON_SHARE = 0.4
 
 // 🌅 BÔNUS SOLO (pendência 1 do balance, 2026-07-05): os PRIMEIROS bosses do
 // DIA da CONTA rendem pedras extras. Por que por conta e não por personagem:
@@ -1209,7 +1215,7 @@ export function rollKillLoot(
     const d = materialDrop(dungeon, pack.killMat.pool)
     if (d) drops.push(d)
   }
-  // Pedra por abate: exclusividade da sorte 19–20 (chance baixa — o jackpot é do nó).
+  // Pedra por abate: sorte 14+ (chance baixa e crescente — o jackpot é do nó).
   if (pack.killStone && Math.random() < pack.killStone * kindMult) {
     const weapon = Math.random() < STONE_WEAPON_SHARE
     const concentrated = dt >= CONCENTRATED_MIN_TIER

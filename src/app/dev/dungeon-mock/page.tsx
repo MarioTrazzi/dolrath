@@ -109,7 +109,7 @@ function installFetchStub() {
           : null
         const loot = { gold: nodeLoot?.gold ?? 0, drops: [...killDrops, ...(nodeLoot?.drops ?? [])] }
         return json({
-          granted: { gold: 12 * kills + loot.gold, killGold: 12 * kills, lootGold: loot.gold, xp: 20 * kills, loot },
+          granted: { gold: 12 * kills + loot.gold, killGold: 12 * kills, lootGold: loot.gold, xp: 20 * kills, loot, roll: lastRoll },
           cleared: isClear,
           equipmentWear,
           finished: isRunEnd,

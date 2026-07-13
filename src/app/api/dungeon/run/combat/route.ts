@@ -235,6 +235,8 @@ export async function POST(req: Request) {
         xp: xpTotal,
         loot: { gold: nodeLoot?.gold ?? 0, drops: allDrops },
         skippedDrops: credited.skippedDrops,
+        // d20 do nó (dono da classe do loot) — autoritativo pro badge 🎲 da UI.
+        roll: pending.lootRoll,
       },
       cleared: allDead,
       equipmentWear: credited.equipmentWear,

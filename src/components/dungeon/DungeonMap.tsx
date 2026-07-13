@@ -414,11 +414,22 @@ export function MapAmbient({ backgroundImageUrl }: { backgroundImageUrl?: string
 }
 
 // ============================================================
-// Narração do Mestre — legenda de filme com efeito typewriter
+// Narração do Mestre — dialog com efeito typewriter, aberta sob
+// demanda (junto da rolagem do d20 / avanço na trilha) em vez de
+// ocupar uma faixa fixa permanente sob o mapa.
 // ============================================================
-export function MasterNarration({ text }: { text: string }) {
+export function NarrationDialog({
+  text,
+  open,
+  onClose,
+}: {
+  text: string
+  open: boolean
+  onClose: () => void
+}) {
   const [shown, setShown] = React.useState('')
   React.useEffect(() => {
+    if (!open) return
     setShown('')
     if (!text) return
     let i = 0
@@ -428,25 +439,44 @@ export function MasterNarration({ text }: { text: string }) {
       if (i >= text.length) clearInterval(id)
     }, 24)
     return () => clearInterval(id)
-  }, [text])
+  }, [text, open])
+
   return (
-    <div className="px-4 pb-1 pointer-events-none">
-      <div className="mx-auto max-w-md text-center">
-        <div
-          className="inline-flex items-center gap-1.5 mb-1.5 text-[10px] font-bold uppercase tracking-[0.22em]"
-          style={{ color: 'var(--dgn)' }}
+    <AnimatePresence>
+      {open && text && (
+        <motion.div
+          className="absolute inset-x-0 top-3 z-[45] flex justify-center px-4 pointer-events-none"
+          initial={{ opacity: 0, y: -12 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.3 }}
         >
-          📜 O Mestre narra
-        </div>
-        <p
-          className="text-[15px] sm:text-base leading-snug text-amber-50/90 italic min-h-[2.6em]"
-          style={{ textShadow: '0 2px 12px rgba(0,0,0,0.9)' }}
-        >
-          {shown}
-          <span className="inline-block w-px h-[1em] align-middle ml-0.5 bg-amber-100/70 animate-pulse"></span>
-        </p>
-      </div>
-    </div>
+          <button
+            onClick={onClose}
+            className="pointer-events-auto max-w-md w-full text-left rounded-xl border px-4 py-3 backdrop-blur-xl"
+            style={{
+              background: 'linear-gradient(180deg, rgba(20,18,14,0.92), rgba(12,11,8,0.96))',
+              borderColor: 'var(--dgn-soft)',
+              boxShadow: '0 12px 30px -8px rgba(0,0,0,0.65)',
+            }}
+          >
+            <div
+              className="inline-flex items-center gap-1.5 mb-1 text-[10px] font-bold uppercase tracking-[0.22em]"
+              style={{ color: 'var(--dgn)' }}
+            >
+              📜 O Mestre narra
+            </div>
+            <p
+              className="text-[14px] sm:text-[15px] leading-snug text-amber-50/90 italic"
+              style={{ textShadow: '0 2px 12px rgba(0,0,0,0.9)' }}
+            >
+              {shown}
+              <span className="inline-block w-px h-[1em] align-middle ml-0.5 bg-amber-100/70 animate-pulse"></span>
+            </p>
+          </button>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }
 

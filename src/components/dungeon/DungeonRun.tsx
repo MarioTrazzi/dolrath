@@ -10,7 +10,7 @@ import {
   MapNode,
   PlayerToken,
   MapAmbient,
-  MasterNarration,
+  NarrationDialog,
   DiceOverlay,
   NodeVisualState,
   RevealedNode,
@@ -196,6 +196,11 @@ const TIPS: { icon: string; text: string }[] = [
 ]
 
 const MONSTER_ID = 'dungeon-monster'
+
+// Atraso (ms) antes de animar um efeito de status (veneno/sangramento/atordoamento)
+// que ocorre JUNTO com um golpe. Precisa ser maior que a investida+impacto mais longos
+// (habilidades como Sopro/Cosmo chegam a ~1680ms) pra aura não engolir a animação do golpe.
+const STATUS_FX_DELAY = 1700
 
 interface ResolvedEvent {
   def: DungeonEventDef
@@ -594,6 +599,23 @@ export default function DungeonRun({
   const [tokenIdx, setTokenIdx] = useState(0)
   const [moving, setMoving] = useState(false)
   const [narration, setNarration] = useState(dungeon.enterText)
+  // 📜 O Mestre narra virou dialog sob demanda (não mais uma faixa fixa sob o
+  // mapa): abre nos "beats" da história e junto de cada rolagem do d20, fecha
+  // sozinho depois de dar tempo de ler (typewriter ~24ms/char + folga).
+  const [narrationOpen, setNarrationOpen] = useState(true)
+  const narrationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const showNarration = (text?: string) => {
+    const t = text ?? narration
+    if (text !== undefined) setNarration(text)
+    setNarrationOpen(true)
+    if (narrationTimerRef.current) clearTimeout(narrationTimerRef.current)
+    narrationTimerRef.current = setTimeout(() => setNarrationOpen(false), 1000 + t.length * 26)
+  }
+  useEffect(() => {
+    showNarration()
+    return () => { if (narrationTimerRef.current) clearTimeout(narrationTimerRef.current) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   // Uma dica por run, some sozinha depois de ~30s. Avança em sequência entre runs
   // (índice no localStorage) pra não repetir a mesma toda vez que reentrar na masmorra.
   const [tipIdx] = useState(() => {
@@ -665,6 +687,10 @@ export default function DungeonRun({
   // 💀 Drops de abates INTERMEDIÁRIOS do pacote (o servidor credita por kill);
   // acumulados aqui só para o card de vitória do nó exibi-los junto do espólio.
   const encounterDropsRef = useRef<LootDrop[]>([])
+  // 👑 true enquanto o card de espólio do BOSS está na tela: o dismiss (botão ou
+  // auto-pilot) só então dispara finishRun(true) — o jogador vê o brilho do drop
+  // raro antes do resumo/re-run automático assumirem a tela.
+  const bossVictoryPendingRef = useRef(false)
   // Card em destaque na arena (frente + iluminado): o ALVO do jogador na sua vez,
   // ou o ATACANTE atual na vez dos inimigos.
   const [focusEnemyId, setFocusEnemyId] = useState<string | null>(null)
@@ -1153,6 +1179,9 @@ export default function DungeonRun({
     const dest = tokenIdx + 1
 
     setExploreRolling(true)
+    // 📜 A narração reabre junto com a rolagem — reforça o beat atual da história
+    // a cada passo, mesmo quando o texto não mudou desde o último nó.
+    showNarration()
     let data: StepResponse
     try {
       const res = await fetch('/api/dungeon/run/step', {
@@ -1182,7 +1211,7 @@ export default function DungeonRun({
       serverPackRef.current = data.monsters?.length ? data.monsters : data.monster ? [data.monster] : null
       setMoving(true)
       setTokenIdx(dest)
-      setNarration('A trilha desemboca no covil. O ar treme... algo antigo se ergue.')
+      showNarration('A trilha desemboca no covil. O ar treme... algo antigo se ergue.')
       pushLog(`👑 Você chegou ao covil de ${dungeon.boss.name}...`)
       later(() => setMoving(false), 900)
       later(() => showBanner('👑', `${dungeon.boss.name} desperta!`, 3000), 950)
@@ -1214,9 +1243,9 @@ export default function DungeonRun({
     setExploreResult(null)
     setExploreRolling(false)
     if (nextIsBoss) {
-      setNarration('A trilha termina adiante. Você sente um olhar antigo cravado em você...')
+      showNarration('A trilha termina adiante. Você sente um olhar antigo cravado em você...')
     } else if (!atBoss) {
-      setNarration(TRANSITIONS[tokenIdx % TRANSITIONS.length])
+      showNarration(TRANSITIONS[tokenIdx % TRANSITIONS.length])
     }
   }
 
@@ -1351,7 +1380,12 @@ export default function DungeonRun({
         // Anima o card a cada tique do DoT (veneno/sangramento) — antes o dano
         // acontecia sem nenhum efeito visível. Prioriza o veneno quando os dois
         // estão ativos (só cabe uma aura por vez no slot de battleEvent).
-        pushBattleEvent({ kind: 'status', actorId: character.id, action: pfx.poisoned ? 'poison' : 'bleed' })
+        // Atrasado pro FINAL do turno (STATUS_FX_DELAY): tickPlayerTurn() roda LOGO
+        // depois do pushBattleEvent('resolve') do golpe do jogador — a aura de status
+        // é grande e dura até 1500ms, então precisa esperar o golpe (investida+impacto,
+        // até ~1400ms nas habilidades mais longas) terminar de vez antes de aparecer,
+        // senão ela visualmente engole a animação do golpe (bug reportado 2026-07-13).
+        later(() => pushBattleEvent({ kind: 'status', actorId: character.id, action: pfx.poisoned ? 'poison' : 'bleed' }), STATUS_FX_DELAY)
       }
     }
     // expira buffs/debuffs do jogador e reduz recarga das habilidades
@@ -1365,7 +1399,7 @@ export default function DungeonRun({
       for (const k in n.cd) if (n.cd[k] > 0) n.cd[k]--
       return n
     })
-  }, [showBanner, pushLog, pushFloat, effMaxHp, pushBattleEvent, character.id])
+  }, [showBanner, pushLog, pushFloat, effMaxHp, pushBattleEvent, character.id, later])
 
   // Levers do MONSTRO (classe desconhecida → fallback): poder/armadura dos stats
   // escalados, K pelo nível. Espelha o derive do socket-server e o dungeon-sim.
@@ -1500,7 +1534,8 @@ export default function DungeonRun({
     }, 500)
     tickPlayerTurn()
     if (newHp <= 0) {
-      later(() => onMonsterKilled({ ...m, hp: 0 }), 1600)
+      // Espera o STATUS_FX_DELAY (1700ms) render antes de encerrar o combate.
+      later(() => onMonsterKilled({ ...m, hp: 0 }), 2000)
       return
     }
     // Vez dos inimigos: TODOS os vivos atacam 1x cada.
@@ -1549,7 +1584,8 @@ export default function DungeonRun({
       pushLog(`${def.name}: ${def.desc}`)
       showBanner('✨', def.name)
       tickPlayerTurn()
-      later(() => startEnemyPhase(), 1400)
+      // Espera o STATUS_FX_DELAY (1700ms) render antes de avançar de fase.
+      later(() => startEnemyPhase(), 2000)
       return
     }
 
@@ -1595,7 +1631,7 @@ export default function DungeonRun({
       } else {
         mfx.immobilizeTurns = 1
         pushLog(`🌟 ${m.name} foi IMOBILIZADO! (rolou ${hit.maxRoll})`)
-        later(() => pushBattleEvent({ kind: 'status', actorId: m.id, action: 'stun' }), 1100)
+        later(() => pushBattleEvent({ kind: 'status', actorId: m.id, action: 'stun' }), STATUS_FX_DELAY)
       }
     }
     const newHp = Math.max(0, m.hp - dmg)
@@ -1609,8 +1645,9 @@ export default function DungeonRun({
       packRef.current = packRef.current.map(x => (x.id === m.id ? { ...x, hp: newHp } : x))
     }, 400)
     tickPlayerTurn()
-    if (newHp <= 0) { later(() => onMonsterKilled({ ...m, hp: 0 }), 1500); return }
-    later(() => startEnemyPhase(), 1800)
+    // Fases seguintes esperam o STATUS_FX_DELAY (1700ms) render antes de avançar.
+    if (newHp <= 0) { later(() => onMonsterKilled({ ...m, hp: 0 }), 2000); return }
+    later(() => startEnemyPhase(), 2000)
   }
 
   // ---------- FASE INIMIGA: todos atacam 1x cada, em sequência ----------
@@ -1888,27 +1925,29 @@ export default function DungeonRun({
     }
     // 🐍 Aplica o status do golpe secundário (só se acertou e o jogador segue de pé).
     // O evento 'status' anima o card do jogador (bolhas de veneno/gotas/estrelas) DEPOIS
-    // do impacto do golpe — por isso o atraso (o slot de battleEvent é único).
+    // do impacto do golpe — por isso o atraso de STATUS_FX_DELAY (o slot de battleEvent
+    // é único; sem esperar o golpe terminar de vez, a aura do status o engole).
     if (proc && outcome.hit) {
       if (proc.effect === 'poison' && !dfx.poisoned) {
         setCombatFx(prev => ({ ...prev, poisoned: true, poisonDmg: proc.poisonDmg ?? 4 }))
-        later(() => pushBattleEvent({ kind: 'status', actorId: character.id, action: 'poison' }), 1100)
+        later(() => pushBattleEvent({ kind: 'status', actorId: character.id, action: 'poison' }), STATUS_FX_DELAY)
         pushLog(`☠️ ${proc.name} te envenenou! Perde ${proc.poisonDmg ?? 4} HP por turno até usar um Antídoto.`)
         showBanner('☠️', 'Envenenado!')
       } else if (proc.effect === 'bleed' && !dfx.bleeding) {
         setCombatFx(prev => ({ ...prev, bleeding: true, bleedFrac: proc.bleedFrac ?? 0.04 }))
-        later(() => pushBattleEvent({ kind: 'status', actorId: character.id, action: 'bleed' }), 1100)
+        later(() => pushBattleEvent({ kind: 'status', actorId: character.id, action: 'bleed' }), STATUS_FX_DELAY)
         pushLog(`🩸 ${proc.name} abriu um corte! Você está sangrando até usar uma Bandagem de Linho.`)
       } else if (proc.effect === 'stun') {
         setCombatFx(prev => ({ ...prev, stunTurns: prev.stunTurns + (proc.stunTurns ?? 1) }))
-        later(() => pushBattleEvent({ kind: 'status', actorId: character.id, action: 'stun' }), 1100)
+        later(() => pushBattleEvent({ kind: 'status', actorId: character.id, action: 'stun' }), STATUS_FX_DELAY)
         pushLog(`💫 ${proc.name} te atordoou! Você perde o próximo turno.`)
       } else if (proc.effect === 'damage') {
         pushLog(`💥 ${proc.name}! Um golpe brutal.`)
       }
     }
     // Próximo inimigo da fila ataca; se acabou a fila, volta ao jogador.
-    later(() => nextEnemyAttack(), 1800)
+    // Espera o STATUS_FX_DELAY (1700ms) render antes de passar pro próximo atacante.
+    later(() => nextEnemyAttack(), 2100)
   }
 
   // ---------- Abate de um monstro do pacote ----------
@@ -1930,56 +1969,85 @@ export default function DungeonRun({
     // Só "encerra" o combate visualmente quando o nó limpa; senão o duelo segue.
     if (willClear) { setCombatEnded(true); setWinnerId(character.id) }
 
+    // Confirma o abate com o SERVIDOR com pequenas retentativas — crítico no abate
+    // do BOSS: se essa chamada falhar (rede instável) e o cliente seguir como se
+    // tivesse dado certo, a run fica 'active'/pendente no banco e o auto-restart
+    // seguinte trava com "personagem já em uso" (o /start vê o lock antigo vivo).
+    const postKill = async (attempts: number): Promise<{ res: Response; data: CombatResponse } | null> => {
+      for (let i = 0; i < attempts; i++) {
+        try {
+          const res = await fetch('/api/dungeon/run/combat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ runId: runIdRef.current, outcome: 'kill', monsterId: m.id }),
+          })
+          const data: CombatResponse = await res.json().catch(() => ({} as CombatResponse))
+          if (res.ok) return { res, data }
+          if (res.status === 409) return { res, data } // já resolvido noutro request — não insiste
+        } catch { /* rede instável: tenta de novo */ }
+        if (i < attempts - 1) await new Promise((r) => setTimeout(r, 500))
+      }
+      return null
+    }
+
     let grant: CombatGrant | null = null
-    let cleared = willClear // fallback offline = inferência local; servidor é a verdade
-    try {
-      const res = await fetch('/api/dungeon/run/combat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ runId: runIdRef.current, outcome: 'kill', monsterId: m.id }),
-      })
-      const data: CombatResponse = await res.json()
-      if (res.ok) {
-        grant = data.granted ?? null
-        cleared = !!data.cleared
-        // ⚔️ Desgaste debitado pelo servidor neste abate: atualiza o gear vivo da
-        // run (peça que quebra para de contribuir já no próximo golpe) e avisa.
-        if (data.equipmentWear?.length) {
-          const wearBySlot = new Map(data.equipmentWear.map((w) => [w.slot, w]))
-          setEquipList((prev) => prev.map((eq: any) => {
-            const w = wearBySlot.get(eq.slot)
-            return w ? { ...eq, durability: w.durability, maxDurability: w.maxDurability } : eq
-          }))
-          for (const w of data.equipmentWear) {
-            if (w.justBroke) {
-              pushLog(`💔 ${w.name} QUEBROU! Sem bônus até reparar no ferreiro.`)
-              showBanner('💔', `${w.name} quebrou!`, 2600)
-            } else if (w.durability <= 15 && !wearWarnedRef.current.has(w.slot)) {
-              wearWarnedRef.current.add(w.slot)
-              pushLog(`⚠️ ${w.name} está quase quebrando (${w.durability}/${w.maxDurability}).`)
-            }
+    let cleared = willClear // fallback offline (kills do meio do pacote) = inferência local
+    const outcome = await postKill(m.isBoss ? 4 : 1)
+    if (outcome?.res.ok) {
+      const data = outcome.data
+      grant = data.granted ?? null
+      cleared = !!data.cleared
+      // ⚔️ Desgaste debitado pelo servidor neste abate: atualiza o gear vivo da
+      // run (peça que quebra para de contribuir já no próximo golpe) e avisa.
+      if (data.equipmentWear?.length) {
+        const wearBySlot = new Map(data.equipmentWear.map((w) => [w.slot, w]))
+        setEquipList((prev) => prev.map((eq: any) => {
+          const w = wearBySlot.get(eq.slot)
+          return w ? { ...eq, durability: w.durability, maxDurability: w.maxDurability } : eq
+        }))
+        for (const w of data.equipmentWear) {
+          if (w.justBroke) {
+            pushLog(`💔 ${w.name} QUEBROU! Sem bônus até reparar no ferreiro.`)
+            showBanner('💔', `${w.name} quebrou!`, 2600)
+          } else if (w.durability <= 15 && !wearWarnedRef.current.has(w.slot)) {
+            wearWarnedRef.current.add(w.slot)
+            pushLog(`⚠️ ${w.name} está quase quebrando (${w.durability}/${w.maxDurability}).`)
           }
         }
-        if (data.leveledUp) {
-          setLeveledUpThisRun(true)
-          // Efeito de level up: HP e MP voltam ao cheio + flash brilhante na tela.
-          // (o servidor já restaurou os recursos no banco ao subir de nível.)
-          const reachedLevel = data.newLevel ?? null
-          // Atualiza o nível VIVO já (não só no `later`) — o próximo combate desta
-          // run precisa ver o nível novo nos levers/card, mesmo antes do flash.
-          if (reachedLevel != null) setCharLevel(reachedLevel)
-          later(() => {
-            setHp(effMaxHp)
-            setMp(character.maxMp)
-            setLevelUpFlash(reachedLevel)
-            showBanner('⭐', reachedLevel ? `Nível ${reachedLevel}! HP e MP restaurados` : 'Subiu de nível! HP e MP restaurados', 3200)
-            pushLog('🎉 Você SUBIU DE NÍVEL! HP e MP restaurados por completo.')
-            later(() => setLevelUpFlash(null), 2600)
-          }, 1500)
-        }
       }
-    } catch {
-      /* sem conexão: usa o fallback local (valores do monstro) */
+      if (data.leveledUp) {
+        setLeveledUpThisRun(true)
+        // Efeito de level up: HP e MP voltam ao cheio + flash brilhante na tela.
+        // (o servidor já restaurou os recursos no banco ao subir de nível.)
+        const reachedLevel = data.newLevel ?? null
+        // Atualiza o nível VIVO já (não só no `later`) — o próximo combate desta
+        // run precisa ver o nível novo nos levers/card, mesmo antes do flash.
+        if (reachedLevel != null) setCharLevel(reachedLevel)
+        later(() => {
+          setHp(effMaxHp)
+          setMp(character.maxMp)
+          setLevelUpFlash(reachedLevel)
+          showBanner('⭐', reachedLevel ? `Nível ${reachedLevel}! HP e MP restaurados` : 'Subiu de nível! HP e MP restaurados', 3200)
+          pushLog('🎉 Você SUBIU DE NÍVEL! HP e MP restaurados por completo.')
+          later(() => setLevelUpFlash(null), 2600)
+        }, 1500)
+      }
+    } else if (m.isBoss) {
+      // O SERVIDOR nunca confirmou o abate do boss: não finge vitória local aqui.
+      // Encerra a run explicitamente (libera o lock) para o próximo /start não travar,
+      // e avisa o jogador em vez de seguir para o auto-restart sem confirmação.
+      if (runIdRef.current) {
+        fetch('/api/dungeon/run/abandon', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ runId: runIdRef.current }),
+        }).catch(() => {})
+      }
+      pushLog('⚠️ Sem confirmação do servidor para a vitória contra o chefe.')
+      showBanner('⚠️', 'Falha de conexão ao encerrar a masmorra. Recompensas do boss podem não ter sido creditadas — volte a entrar.', 4200, { sticky: true })
+      setAuto(false)
+      setPhase('summary')
+      return
     }
 
     const killGold = grant?.killGold ?? m.goldReward
@@ -2021,50 +2089,57 @@ export default function DungeonRun({
       setPack([])
       packRef.current = []
       setCombatEnded(false)
-      if (m.isBoss) {
-        finishRun(true)
-      } else {
-        setPhase('explore')
-        setNarration(nextIsBoss
+      // Sempre volta pra fase 'explore' — é ela que hospeda o overlay do lootCard
+      // (inclusive pro boss agora, ver abaixo); dismissLootCard decide o que vem
+      // a seguir (avançar a trilha ou finishRun, se era o boss).
+      setPhase('explore')
+      if (!m.isBoss) {
+        showNarration(nextIsBoss
           ? 'A trilha termina adiante. Você sente um olhar antigo cravado em você...'
           : TRANSITIONS[tokenIdx % TRANSITIONS.length])
-
-        // Card de vitória mostra o TOTAL do nó (soma de todos os abates) + espólio do nó.
-        const nodeXp = encounterXpRef.current
-        const totalGold = encounterKillGoldRef.current + loot.gold
-        const hasGear = loot.drops.some(d => d.kind === 'item' || d.kind === 'stone')
-
-        const effects: EffectChip[] = []
-        if (nodeXp > 0) effects.push({ kind: 'stat', text: `+${nodeXp} ⭐ XP` })
-        if (totalGold > 0) effects.push({ kind: 'stat', text: `+${totalGold} 💰` })
-        // Drops do nó + o que caiu dos abates intermediários do pacote. Pedra de
-        // aprimoramento e RARE+ ganham destaque (moldura dourada) no card.
-        const isHighlight = (d: LootDrop) =>
-          d.kind === 'stone' || ['RARE', 'EPIC', 'LEGENDARY'].includes(String(d.rarity ?? '').toUpperCase())
-        const allDrops = [...encounterDropsRef.current, ...loot.drops]
-        const hasRare = allDrops.some(isHighlight)
-        for (const d of allDrops) effects.push({
-          kind: 'item',
-          name: d.name,
-          emoji: d.emoji,
-          label: d.enhancement ? `${d.name} +${d.enhancement}` : d.name,
-          rarity: d.rarity,
-          highlight: isHighlight(d),
-        })
-        encounterDropsRef.current = []
-
-        const def: DungeonEventDef = {
-          kind: hasGear ? 'item' : 'gold',
-          min: 0,
-          max: 0,
-          icon: hasRare ? '💎' : hasGear ? '🌟' : '🏆',
-          title: hasRare ? 'Espólio Raro!' : 'Espólio da Vitória',
-          description: hasGear
-            ? `${m.emoji} ${m.name} foi derrotado e deixou cair seus pertences.`
-            : `${m.emoji} ${m.name} foi derrotado.`,
-        }
-        setLootCard({ def, text: def.description, effects, luckRoll: lootRollRef.current })
       }
+
+      // Card de vitória mostra o TOTAL do nó (soma de todos os abates) + espólio do nó —
+      // inclui o BOSS: antes o boss pulava direto pro resumo final sem passar por aqui,
+      // então um drop raro nunca ganhava a moldura/brilho de destaque.
+      const nodeXp = encounterXpRef.current
+      const totalGold = encounterKillGoldRef.current + loot.gold
+      const hasGear = loot.drops.some(d => d.kind === 'item' || d.kind === 'stone')
+
+      const effects: EffectChip[] = []
+      if (nodeXp > 0) effects.push({ kind: 'stat', text: `+${nodeXp} ⭐ XP` })
+      if (totalGold > 0) effects.push({ kind: 'stat', text: `+${totalGold} 💰` })
+      // Drops do nó + o que caiu dos abates intermediários do pacote. Pedra de
+      // aprimoramento e RARE+ ganham destaque (moldura dourada + brilho) no card.
+      const isHighlight = (d: LootDrop) =>
+        d.kind === 'stone' || ['RARE', 'EPIC', 'LEGENDARY'].includes(String(d.rarity ?? '').toUpperCase())
+      const allDrops = [...encounterDropsRef.current, ...loot.drops]
+      const hasRare = allDrops.some(isHighlight)
+      for (const d of allDrops) effects.push({
+        kind: 'item',
+        name: d.name,
+        emoji: d.emoji,
+        label: d.enhancement ? `${d.name} +${d.enhancement}` : d.name,
+        rarity: d.rarity,
+        highlight: isHighlight(d),
+      })
+      encounterDropsRef.current = []
+
+      const def: DungeonEventDef = {
+        kind: hasGear ? 'item' : 'gold',
+        min: 0,
+        max: 0,
+        icon: hasRare ? '💎' : m.isBoss ? '👑' : hasGear ? '🌟' : '🏆',
+        title: hasRare ? 'Espólio Raro!' : m.isBoss ? `${dungeon.name} conquistada!` : 'Espólio da Vitória',
+        description: hasGear
+          ? `${m.emoji} ${m.name} foi derrotado e deixou cair seus pertences.`
+          : `${m.emoji} ${m.name} foi derrotado.`,
+      }
+      // Boss: o card some via dismissLootCard (botão ou auto-pilot), que só então
+      // dispara finishRun(true) — garante que o jogador VÊ o brilho do drop raro
+      // antes de seguir para o resumo/re-run automático.
+      if (m.isBoss) bossVictoryPendingRef.current = true
+      setLootCard({ def, text: def.description, effects, luckRoll: lootRollRef.current })
     }, 2800)
   }
 
@@ -2137,6 +2212,17 @@ export default function DungeonRun({
       if (auto) {
         later(() => { if (onRestart && stamina >= MINOR_STEP_COST) restartRun(); else exitRun() }, 3600)
       }
+    }
+  }
+
+  // Fecha o card de espólio (botão "Continuar a jornada" ou auto-pilot). Se era o
+  // espólio do BOSS, só agora dispara finishRun(true) — o jogador chegou a ver o
+  // destaque/brilho do drop raro antes de seguir pro resumo/re-run automático.
+  const dismissLootCard = () => {
+    setLootCard(null)
+    if (bossVictoryPendingRef.current) {
+      bossVictoryPendingRef.current = false
+      finishRun(true)
     }
   }
 
@@ -2351,7 +2437,7 @@ export default function DungeonRun({
 
     // 1) Espólio da vitória aberto → confirmar (fica mais tempo na tela pra dar
     // pra ver o que dropou e, se quiser, desligar o automático a tempo).
-    if (lootCard) return fire(() => setLootCard(null), 3000)
+    if (lootCard) return fire(() => dismissLootCard(), 3000)
     // 2) Card de evento aberto → lutar (monstro) ou seguir (achado).
     if (eventCard) {
       const group = eventCard.monsters ?? (eventCard.monster ? [eventCard.monster] : null)
@@ -2817,6 +2903,9 @@ export default function DungeonRun({
               {/* overlay: dado rolando */}
               <DiceOverlay rolling={exploreRolling} result={exploreResult} />
 
+              {/* dialog: o Mestre narra — abre junto da rolagem / dos beats da história */}
+              <NarrationDialog text={narration} open={narrationOpen} onClose={() => setNarrationOpen(false)} />
+
               {/* overlays: evento / boss / loot */}
               <AnimatePresence>
                 {lootCard && (
@@ -2872,7 +2961,7 @@ export default function DungeonRun({
                       <EffectChipList effects={lootCard.effects} />
 
                       <button
-                        onClick={() => setLootCard(null)}
+                        onClick={dismissLootCard}
                         className="w-full py-3.5 rounded-lg font-bold text-white text-base transition-transform active:scale-[0.98] hover:scale-[1.02]"
                         style={{ background: `linear-gradient(90deg, ${dungeon.accent}, ${dungeon.accent}aa)`, boxShadow: `0 0 22px ${dungeon.accentSoft}` }}
                       >
@@ -3043,6 +3132,116 @@ export default function DungeonRun({
               </AnimatePresence>
                 </div>
               </div>
+
+              {/* ---------- AÇÃO: flutua por cima do mapa (não empurra mais a área
+                  do mapa pra cima) — barra compacta numa linha só. ---------- */}
+              <footer
+                className="absolute inset-x-0 bottom-0 z-[35] px-4 pt-8 pointer-events-none"
+                style={{
+                  paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))',
+                  background: 'linear-gradient(180deg, transparent, rgba(8,8,10,0.55) 45%, rgba(8,8,10,0.82))',
+                }}
+              >
+                <div className="pointer-events-auto">
+                  {/* Dica única no início da run (some sozinha após ~30s). */}
+                  <AnimatePresence>
+                    {tipVisible && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 5, height: 0, marginBottom: 0 }}
+                        animate={{ opacity: 1, y: 0, height: 'auto', marginBottom: 8 }}
+                        exit={{ opacity: 0, y: -5, height: 0, marginBottom: 0 }}
+                        transition={{ duration: 0.35 }}
+                        className="mx-auto max-w-md flex items-center justify-center overflow-hidden"
+                      >
+                        <div className="flex items-center gap-2 rounded-xl border border-amber-300/15 bg-amber-500/5 px-3 py-1.5 text-left">
+                          <span className="shrink-0 text-base leading-none">{TIPS[tipIdx].icon}</span>
+                          <span className="text-[11px] leading-snug text-amber-100/80">
+                            <span className="font-bold text-amber-200/90">Dica: </span>
+                            {TIPS[tipIdx].text}
+                          </span>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* Barra única: sair, piloto automático, poções (manual + auto), seguir */}
+                  <div className="mx-auto max-w-md flex items-center gap-1.5">
+                    <button
+                      onClick={() => setExitConfirm(true)}
+                      disabled={exploreRolling || moving}
+                      title="Sair da masmorra (mantém recompensas)"
+                      className="shrink-0 w-11 h-11 grid place-items-center rounded-xl border border-white/10 bg-black/50 backdrop-blur-xl text-textsec hover:text-white hover:border-white/25 transition-colors active:scale-95 disabled:opacity-40"
+                    >
+                      🚪
+                    </button>
+                    <button
+                      onClick={() => setAuto(a => !a)}
+                      title={auto ? 'Desligar o piloto automático' : 'Jogar a expedição inteira no automático (anda, coleta e luta)'}
+                      className={`shrink-0 w-11 h-11 grid place-items-center rounded-xl border text-lg transition-colors active:scale-95 ${
+                        auto
+                          ? 'bg-blue-600/90 border-blue-300/60 text-white shadow-lg shadow-blue-900/40'
+                          : 'bg-black/50 border-white/10 text-textsec hover:text-white hover:border-white/25'
+                      }`}
+                    >
+                      ⚡
+                    </button>
+                    {auto && (
+                      <button
+                        onClick={() => setAutoConsumables(v => !v)}
+                        title={autoConsumables ? 'O piloto usa poções de HP/MP — clique para desligar' : 'O piloto NÃO usa poções — clique para ligar'}
+                        className={`shrink-0 w-11 h-11 grid place-items-center rounded-xl border transition-colors active:scale-95 relative ${
+                          autoConsumables
+                            ? 'bg-emerald-600/85 border-emerald-300/60 text-white'
+                            : 'bg-black/50 border-white/10 text-white/50 hover:text-white'
+                        }`}
+                      >
+                        💊
+                        <span className={`absolute bottom-1 right-1 w-2 h-2 rounded-full ${autoConsumables ? 'bg-emerald-200' : 'bg-white/25'}`} />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => { loadConsumables(); setShowItems(true) }}
+                      disabled={exploreRolling || moving}
+                      title="Usar consumível (HP/MP)"
+                      className="shrink-0 w-11 h-11 grid place-items-center rounded-xl border border-white/10 bg-black/50 backdrop-blur-xl text-textsec hover:text-white hover:border-white/25 transition-colors active:scale-95 disabled:opacity-40 relative"
+                    >
+                      🧪
+                      {consumables.length > 0 && (
+                        <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-emerald-500 text-[9px] font-black grid place-items-center text-white">
+                          {consumables.reduce((n, c) => n + c.qty, 0)}
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      onClick={
+                        atBoss
+                          ? () => startCombat(serverPackRef.current ?? serverMonsterRef.current ?? scaleMonster(dungeon.boss, dungeon, charLevel, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass, tier))
+                          : advance
+                      }
+                      disabled={exploreRolling || moving || !!eventCard || !!lootCard}
+                      className="flex-1 h-11 rounded-xl font-black text-sm sm:text-base text-white inline-flex items-center justify-center gap-2 transition-all active:scale-[0.98] hover:scale-[1.01] disabled:opacity-50 disabled:cursor-wait disabled:hover:scale-100"
+                      style={{
+                        background: atBoss
+                          ? 'linear-gradient(90deg, #e94560, #b91c1c)'
+                          : nextMainNode
+                            ? 'linear-gradient(90deg, #f39c12, #b45309)'
+                            : `linear-gradient(90deg, ${dungeon.accent}, ${dungeon.accent}aa)`,
+                        boxShadow: atBoss ? '0 0 26px rgba(233,69,96,0.5)' : nextMainNode ? '0 0 26px rgba(243,156,18,0.45)' : `0 0 26px ${dungeon.accentSoft}`,
+                      }}
+                    >
+                      {exploreRolling || moving
+                        ? '...'
+                        : atBoss
+                          ? '⚔️ Enfrentar o Chefe'
+                          : nextIsBoss
+                            ? '👑 Aproximar-se do covil'
+                            : nextMainNode
+                              ? `⚔️ Sala ${trailPoints[tokenIdx + 1]?.tier}`
+                              : '🎲 Seguir a trilha'}
+                    </button>
+                  </div>
+                </div>
+              </footer>
             </main>
 
             {/* ---------- LOG DE FARM: itens coletados na run (persiste por node) ---------- */}
@@ -3077,117 +3276,6 @@ export default function DungeonRun({
                 </div>
               </div>
             )}
-
-            {/* ---------- NARRAÇÃO DO MESTRE ---------- */}
-            <MasterNarration text={narration} />
-
-            {/* ---------- AÇÃO ---------- */}
-            <footer
-              className="flex-shrink-0 px-4 pt-1 pb-4 z-30 relative"
-              style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
-            >
-              {/* Dica única no início da run (some sozinha após ~30s). */}
-              <AnimatePresence>
-                {tipVisible && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 5, height: 0, marginBottom: 0 }}
-                    animate={{ opacity: 1, y: 0, height: 'auto', marginBottom: 8 }}
-                    exit={{ opacity: 0, y: -5, height: 0, marginBottom: 0 }}
-                    transition={{ duration: 0.35 }}
-                    className="mx-auto max-w-md flex items-center justify-center overflow-hidden"
-                  >
-                    <div className="flex items-center gap-2 rounded-xl border border-amber-300/15 bg-amber-500/5 px-3 py-1.5 text-left">
-                      <span className="shrink-0 text-base leading-none">{TIPS[tipIdx].icon}</span>
-                      <span className="text-[11px] leading-snug text-amber-100/80">
-                        <span className="font-bold text-amber-200/90">Dica: </span>
-                        {TIPS[tipIdx].text}
-                      </span>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Piloto automático: toca a run inteira + switch de poções */}
-              <div className="mx-auto max-w-md mb-2 flex items-center gap-2">
-                <button
-                  onClick={() => setAuto(a => !a)}
-                  title={auto ? 'Desligar o piloto automático' : 'Jogar a expedição inteira no automático (anda, coleta e luta)'}
-                  className={`flex-1 h-9 rounded-xl text-xs font-black inline-flex items-center justify-center gap-1.5 border transition-colors ${
-                    auto
-                      ? 'bg-blue-600/90 border-blue-300/60 text-white shadow-lg shadow-blue-900/40'
-                      : 'bg-white/5 border-white/15 text-white/70 hover:text-white hover:border-white/30'
-                  }`}
-                >
-                  {auto ? '⚡ Automático LIGADO' : '⚡ Jogar automático'}
-                </button>
-                {auto && (
-                  <button
-                    onClick={() => setAutoConsumables(v => !v)}
-                    title={autoConsumables ? 'O piloto usa poções de HP/MP — clique para desligar' : 'O piloto NÃO usa poções — clique para ligar'}
-                    className={`shrink-0 h-9 px-3 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 border transition-colors ${
-                      autoConsumables
-                        ? 'bg-emerald-600/85 border-emerald-300/60 text-white'
-                        : 'bg-white/5 border-white/15 text-white/50 hover:text-white'
-                    }`}
-                  >
-                    🧪 Poções
-                    <span className={`inline-flex w-7 h-4 rounded-full items-center px-0.5 transition-colors ${autoConsumables ? 'bg-white/90 justify-end' : 'bg-white/20 justify-start'}`}>
-                      <span className={`w-3 h-3 rounded-full ${autoConsumables ? 'bg-emerald-600' : 'bg-white/70'}`} />
-                    </span>
-                  </button>
-                )}
-              </div>
-              <div className="mx-auto max-w-md flex items-center gap-2.5">
-                <button
-                  onClick={() => setExitConfirm(true)}
-                  disabled={exploreRolling || moving}
-                  title="Sair da masmorra (mantém recompensas)"
-                  className="shrink-0 w-12 h-[52px] grid place-items-center rounded-xl border border-white/10 bg-black/50 backdrop-blur-xl text-textsec hover:text-white hover:border-white/25 transition-colors active:scale-95 disabled:opacity-40"
-                >
-                  🚪
-                </button>
-                <button
-                  onClick={() => { loadConsumables(); setShowItems(true) }}
-                  disabled={exploreRolling || moving}
-                  title="Usar consumível (HP/MP)"
-                  className="shrink-0 w-12 h-[52px] grid place-items-center rounded-xl border border-white/10 bg-black/50 backdrop-blur-xl text-textsec hover:text-white hover:border-white/25 transition-colors active:scale-95 disabled:opacity-40 relative"
-                >
-                  🧪
-                  {consumables.length > 0 && (
-                    <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-emerald-500 text-[9px] font-black grid place-items-center text-white">
-                      {consumables.reduce((n, c) => n + c.qty, 0)}
-                    </span>
-                  )}
-                </button>
-                <button
-                  onClick={
-                    atBoss
-                      ? () => startCombat(serverPackRef.current ?? serverMonsterRef.current ?? scaleMonster(dungeon.boss, dungeon, charLevel, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass, tier))
-                      : advance
-                  }
-                  disabled={exploreRolling || moving || !!eventCard || !!lootCard}
-                  className="flex-1 h-[52px] rounded-xl font-black text-lg text-white inline-flex items-center justify-center gap-2.5 transition-all active:scale-[0.98] hover:scale-[1.01] disabled:opacity-50 disabled:cursor-wait disabled:hover:scale-100"
-                  style={{
-                    background: atBoss
-                      ? 'linear-gradient(90deg, #e94560, #b91c1c)'
-                      : nextMainNode
-                        ? 'linear-gradient(90deg, #f39c12, #b45309)'
-                        : `linear-gradient(90deg, ${dungeon.accent}, ${dungeon.accent}aa)`,
-                    boxShadow: atBoss ? '0 0 26px rgba(233,69,96,0.5)' : nextMainNode ? '0 0 26px rgba(243,156,18,0.45)' : `0 0 26px ${dungeon.accentSoft}`,
-                  }}
-                >
-                  {exploreRolling || moving
-                    ? '...'
-                    : atBoss
-                      ? '⚔️ Enfrentar o Chefe'
-                      : nextIsBoss
-                        ? '👑 Aproximar-se do covil'
-                        : nextMainNode
-                          ? `⚔️ Entrar na sala ${trailPoints[tokenIdx + 1]?.tier}`
-                          : '🎲 Seguir a trilha'}
-                </button>
-              </div>
-            </footer>
           </div>
         )}
 

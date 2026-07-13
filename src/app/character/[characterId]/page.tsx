@@ -47,6 +47,8 @@ interface InventoryItem {
   itemId: string;
   quantity: number;
   enhancementLevel?: number;
+  durability?: number;
+  maxDurability?: number;
   item: Item;
 }
 
@@ -413,18 +415,23 @@ export default function CharacterDetailsPage() {
 
   // 🔥 Vender ao ferreiro (burn): destrói o equipamento por metade do preço; o gold
   // vai pra carteira do personagem (Character.gold). Mesmo endpoint da RepairBench.
-  const handleSell = async (inventoryId: string) => {
+  // quantity vem do ItemTooltip: 1 direto no clique ou a quantidade escolhida no
+  // SellQuantityDialog quando a pilha tem mais de 1 item.
+  const handleSell = async (inventoryId: string, quantity: number = 1) => {
     if (!effectiveCharacterId) return;
     const row = inventory.find((i: any) => i.id === inventoryId);
     const name = row?.item?.name ?? 'item';
-    const price = row?.item ? sellPrice(row.item) : 0; // sellPricing (fonte única)
-    if (!window.confirm(`Vender ${name} ao ferreiro por ${price} gold?\nO item será destruído (não dá pra desfazer).`)) return;
+    // sellPricing (fonte única): peça desgastada vende por menos.
+    const unitPrice = row?.item ? sellPrice(row.item, row.durability, row.maxDurability) : 0;
+    const total = unitPrice * quantity;
+    const label = quantity > 1 ? `${quantity}x ${name}` : name;
+    if (!window.confirm(`Vender ${label} ao ferreiro por ${total} gold?\nO item será destruído (não dá pra desfazer).`)) return;
 
     try {
       const response = await fetch(`/api/character/${effectiveCharacterId}/sell-item`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ inventoryId }),
+        body: JSON.stringify({ inventoryId, quantity }),
       });
       if (response.ok) {
         const data = await response.json();
@@ -437,7 +444,7 @@ export default function CharacterDetailsPage() {
           const inventoryData = await inventoryResponse.json();
           setInventory(Array.isArray(inventoryData) ? inventoryData : (inventoryData.items || []));
         }
-        toast.success(data?.message ?? `💰 Vendido por ${price} gold!`);
+        toast.success(data?.message ?? `💰 Vendido por ${total} gold!`);
       } else {
         const error = await response.json().catch(() => ({}));
         toast.error(`❌ ${error.error || 'Falha ao vender item'}`);
@@ -1053,7 +1060,7 @@ export default function CharacterDetailsPage() {
               onConsume={handleConsume}
               onEnhance={(invId, name, category) => setEnhanceTarget({ inventoryId: invId, itemName: name, category })}
               onOpenCraft={(craft, itemName) => setCraftTarget({ craft, itemName })}
-              onSell={(inventoryId) => handleSell(inventoryId)}
+              onSell={(inventoryId, quantity) => handleSell(inventoryId, quantity)}
               onExpand={handleExpandInventory}
               expanding={expandingSlots}
               expandTitle="Expandir +5 slots (custo: 1000 GOLD)"

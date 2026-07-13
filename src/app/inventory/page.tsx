@@ -236,28 +236,33 @@ export default function InventoryPage() {
 
   // 🔥 Vender ao ferreiro (burn) a partir do INVENTÁRIO DO PERSONAGEM: destrói a
   // peça por metade do preço; o gold vai pra CARTEIRA do personagem (Character.gold).
-  const handleSellFromCharacter = async (inventoryId: string) => {
+  // quantity vem do ItemTooltip: 1 direto no clique (equipamento/pilha única) ou a
+  // quantidade escolhida no SellQuantityDialog quando a pilha tem mais de 1 item.
+  const handleSellFromCharacter = async (inventoryId: string, quantity: number = 1) => {
     if (!selectedCharacter) {
       toast.error('⚠️ Selecione um personagem primeiro', { duration: 3000 });
       return;
     }
     const row = characterInventory.find((i) => i.id === inventoryId);
     const name = row?.item?.name ?? 'item';
-    const price = row?.item ? sellPrice(row.item) : 0; // sellPricing (fonte única)
-    if (!window.confirm(`Vender ${name} ao ferreiro por ${price} gold?\nO item será destruído (não dá pra desfazer).`)) return;
+    // sellPricing (fonte única): peça desgastada vende por menos.
+    const unitPrice = row?.item ? sellPrice(row.item, row.durability, row.maxDurability) : 0;
+    const total = unitPrice * quantity;
+    const label = quantity > 1 ? `${quantity}x ${name}` : name;
+    if (!window.confirm(`Vender ${label} ao ferreiro por ${total} gold?\nO item será destruído (não dá pra desfazer).`)) return;
 
     setLoading(true);
     try {
       const res = await fetch(`/api/character/${selectedCharacter}/sell-item`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ inventoryId }),
+        body: JSON.stringify({ inventoryId, quantity }),
       });
       if (res.ok) {
         const data = await res.json();
         fetchCharacterInventory(selectedCharacter);
         refreshActiveCharacter();
-        toast.success(data?.message ?? `💰 Vendido por ${price} gold!`, { duration: 3000 });
+        toast.success(data?.message ?? `💰 Vendido por ${total} gold!`, { duration: 3000 });
       } else {
         const error = await res.json();
         toast.error(`❌ ${error?.error ?? 'Falha ao vender'}`, { duration: 4000 });
@@ -271,24 +276,26 @@ export default function InventoryPage() {
 
   // 🔥 Vender ao ferreiro (burn) a partir do BAÚ GERAL: destrói a peça por metade do
   // preço; o gold vai pro BANCO da conta (User.goldBalance), exibido no rodapé do baú.
-  const handleSellFromGlobal = async (inventoryId: string) => {
+  const handleSellFromGlobal = async (inventoryId: string, quantity: number = 1) => {
     const row = userInventory.find((i) => i.id === inventoryId);
     const name = row?.item?.name ?? 'item';
-    const price = row?.item ? sellPrice(row.item) : 0; // sellPricing (fonte única)
-    if (!window.confirm(`Vender ${name} ao ferreiro por ${price} gold?\nO gold vai pro banco. O item será destruído (não dá pra desfazer).`)) return;
+    const unitPrice = row?.item ? sellPrice(row.item) : 0; // sellPricing (fonte única)
+    const total = unitPrice * quantity;
+    const label = quantity > 1 ? `${quantity}x ${name}` : name;
+    if (!window.confirm(`Vender ${label} ao ferreiro por ${total} gold?\nO gold vai pro banco. O item será destruído (não dá pra desfazer).`)) return;
 
     setLoading(true);
     try {
       const res = await fetch(`/api/inventory/sell-item`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ inventoryId }),
+        body: JSON.stringify({ inventoryId, quantity }),
       });
       if (res.ok) {
         const data = await res.json();
         fetchUserInventory();
         fetchBankGold();
-        toast.success(data?.message ?? `💰 Vendido por ${price} gold!`, { duration: 3000 });
+        toast.success(data?.message ?? `💰 Vendido por ${total} gold!`, { duration: 3000 });
       } else {
         const error = await res.json();
         toast.error(`❌ ${error?.error ?? 'Falha ao vender'}`, { duration: 4000 });
@@ -679,7 +686,7 @@ export default function InventoryPage() {
             onEnhance={(invId, name, category) => setEnhanceTarget({ inventoryId: invId, itemName: name, category })}
             onOpenCraft={(craft, itemName) => setCraftTarget({ craft, itemName })}
             onSendToGlobal={(itemId, quantity) => handleTransferToGlobal(itemId, quantity)}
-            onSell={(inventoryId) => handleSellFromCharacter(inventoryId)}
+            onSell={(inventoryId, quantity) => handleSellFromCharacter(inventoryId, quantity)}
             onExpand={selectedCharacter ? handleExpandCharacterInventory : undefined}
             expanding={expandingChar}
             expandTitle={`Expandir +${EXPAND_SLOTS} slots (custo: ${EXPAND_COST_GOLD} GOLD)`}
@@ -708,7 +715,7 @@ export default function InventoryPage() {
               }
               handleTransferToCharacter(itemId, 1);
             }}
-            onSell={(inventoryId) => handleSellFromGlobal(inventoryId)}
+            onSell={(inventoryId, quantity) => handleSellFromGlobal(inventoryId, quantity)}
             onExpand={handleExpandGlobalInventory}
             expanding={expandingGlobal}
             expandTitle={`Expandir +${EXPAND_SLOTS} slots (custo: ${EXPAND_COST_GOLD} GOLD)`}

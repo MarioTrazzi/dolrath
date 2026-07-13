@@ -81,6 +81,9 @@ export const GATHER_FIELDS: Record<GatherFieldId, GatherFieldDef> = {
       { name: 'Estilhaço de Pedra Negra (Armadura)', weight: 28 },
       { name: 'Cristal Bruto', weight: 14, minLevel: 10 },
       { name: 'Fragmentos de Joias', weight: 10, minLevel: 20 },
+      // Pó de Joia: reparo de acessório (anel/colar/cinto) no ferreiro — nível
+      // baixo de propósito, já que jóia quebra com o mesmo uso que o resto do gear.
+      { name: 'Pó de Joia', weight: 12, minLevel: 6 },
       // 💎 Pedra Concentrada: coletor experiente (nv30+) acha raramente — fonte
       // alternativa ao boss/tier alto/refino 10:1 pro aprimoramento TRI/TET. 30/70 arma/armadura.
       { name: STONE_NAMES.WEAPON_CONCENTRATED, weight: 2, minLevel: 30 },

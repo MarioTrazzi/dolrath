@@ -19,6 +19,7 @@ import { whatItemCanProduceSummary } from '@/lib/craftProduces';
 import { getSlotTypeFromItemType } from '@/lib/equipmentSlot';
 import ItemCardBackdrop from '@/components/store/ItemCardBackdrop';
 import ItemIcon from '@/components/ItemIcon';
+import SellQuantityDialog from '@/components/inventory/SellQuantityDialog';
 
 interface ItemTooltipProps {
   item: Item;
@@ -66,6 +67,7 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
   const [imgError, setImgError] = useState(false);
   const [coords, setCoords] = useState<{ top: number; left: number; placement: 'top' | 'bottom' }>({ top: 0, left: 0, placement: 'top' });
   const [mounted, setMounted] = useState(false);
+  const [sellDialogOpen, setSellDialogOpen] = useState(false);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<NodeJS.Timeout>();
@@ -175,7 +177,8 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
   const isSellable = getItemCategory(item.type) !== 'consumable';
   // Não vende peça equipada (evita apagar a linha de inventário que o slot referencia).
   const canSell = !!onSell && !!inventoryId && isSellable && !isEquipped;
-  const sellUnitPrice = sellPrice(item); // sellPricing: consumível 25%, resto 50%
+  // Peça desgastada vende por menos (preço escala linear com durabilidade restante).
+  const sellUnitPrice = sellPrice(item, durability, maxDurability);
 
   // Identidade visual idêntica à da loja (cor de destaque, chips, cenário).
   const visual = getItemVisual(item.type);
@@ -242,7 +245,14 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
   };
 
   const handleSellClick = () => {
-    if (onSell && inventoryId) onSell(inventoryId, quantity);
+    if (!onSell || !inventoryId) return;
+    // Pilha > 1: abre o diálogo de quantidade (vender tudo ou uma quantidade
+    // escolhida) em vez de vender o stack inteiro direto no clique.
+    if (quantity > 1) {
+      setSellDialogOpen(true);
+      return;
+    }
+    onSell(inventoryId, 1);
     setShowTooltip(false);
   };
 
@@ -558,6 +568,16 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
           </div>
         </div>,
         document.body
+      )}
+      {canSell && inventoryId && (
+        <SellQuantityDialog
+          open={sellDialogOpen}
+          item={item}
+          maxQuantity={quantity}
+          unitPrice={sellUnitPrice}
+          onConfirm={(qty) => onSell!(inventoryId, qty)}
+          onClose={() => setSellDialogOpen(false)}
+        />
       )}
     </div>
   );

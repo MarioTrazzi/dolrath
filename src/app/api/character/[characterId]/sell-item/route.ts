@@ -50,7 +50,7 @@ export async function POST(
     }
 
     const qty = Math.max(1, Math.min(inventoryItem.quantity, requestedQty || 1))
-    const unitPrice = sellUnitPrice(inventoryItem.item)
+    const unitPrice = sellUnitPrice(inventoryItem.item, inventoryItem.durability, inventoryItem.maxDurability)
     const saleValue = unitPrice * qty
     const displayName = getDisplayName(inventoryItem.item.name, inventoryItem.enhancementLevel)
 

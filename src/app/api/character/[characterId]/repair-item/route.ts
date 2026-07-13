@@ -2,7 +2,13 @@ import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
 import { addHistoryEntry } from '@/lib/characterHistory'
-import { REPAIR_PER_DUPLICATE, getDisplayName } from '@/lib/enhancementSystem'
+import {
+  REPAIR_PER_DUPLICATE,
+  getDisplayName,
+  getGearCategory,
+  ACCESSORY_REPAIR_DUST_NAME,
+  accessoryRepairGoldCost,
+} from '@/lib/enhancementSystem'
 import { getCatalogItemByName } from '@/lib/itemCatalog'
 
 // Reparo de alto nível: peças RARAS/ÉPICAS/LENDÁRIAS quase nunca têm cópias, então
@@ -59,17 +65,31 @@ export async function POST(
       return NextResponse.json({ error: 'O item já está com durabilidade máxima' }, { status: 400 })
     }
 
-    // Raridade decide a fonte de reparo: comum/incomum = cópia nível-0;
-    // rara/épica/lendária = Estilhaço de Memória (cópias são raras demais).
+    // Acessório (anel/colar/cinto) não acumula cópia e estilhaço de chefe é
+    // escasso demais — sempre repara com Pó de Joia (Coleta) + gold, não importa
+    // a raridade. Arma/armadura seguem a regra de sempre: raridade decide a
+    // fonte (cópia nível-0 comum/incomum, Estilhaço de Memória rara+).
+    const category = getGearCategory(inventoryItem.item.type)
+    const isAccessory = category === 'ACCESSORY'
+
     const rarity = String(
       (inventoryItem.item.stats as Record<string, unknown> | null)?.rarity ??
       getCatalogItemByName(inventoryItem.item.name)?.rarity ??
       'COMMON'
     ).toUpperCase()
-    const useMemoryShard = HIGH_RARITIES.has(rarity)
+    const useMemoryShard = !isAccessory && HIGH_RARITIES.has(rarity)
 
-    // Stacks da fonte de reparo (cópias do item OU estilhaços de memória).
-    const sources = useMemoryShard
+    // Stacks da fonte de reparo (Pó de Joia, estilhaço de memória ou cópia).
+    const sources = isAccessory
+      ? (await prisma.characterInventory.findMany({
+          where: {
+            characterId: params.characterId,
+            item: { name: ACCESSORY_REPAIR_DUST_NAME, type: 'CONSUMABLE' },
+            quantity: { gte: 1 },
+          },
+          orderBy: { quantity: 'asc' },
+        })).map((s) => ({ id: s.id, quantity: s.quantity }))
+      : useMemoryShard
       ? (await prisma.characterInventory.findMany({
           where: {
             characterId: params.characterId,
@@ -94,7 +114,9 @@ export async function POST(
     if (totalUnits < 1) {
       return NextResponse.json(
         {
-          error: useMemoryShard
+          error: isAccessory
+            ? `É necessário ${ACCESSORY_REPAIR_DUST_NAME} (Coleta — Vale dos Minérios) para reparar ${inventoryItem.item.name}.`
+            : useMemoryShard
             ? `É necessário um ${MEMORY_SHARD_NAME} (de chefe de masmorra) para reparar ${inventoryItem.item.name}.`
             : `É necessária uma cópia de ${inventoryItem.item.name} para reparar.`,
         },
@@ -107,12 +129,21 @@ export async function POST(
     const unitsNeeded = Math.ceil(missing / REPAIR_PER_DUPLICATE)
     const unitsToUse = mode === 'full' ? Math.min(unitsNeeded, totalUnits) : 1
 
+    // Acessório também cobra gold (fração do preço do item), além do Pó de Joia.
+    const goldCost = isAccessory ? accessoryRepairGoldCost(inventoryItem.item.goldPrice, unitsToUse) : 0
+    if (goldCost > 0 && character.gold < goldCost) {
+      return NextResponse.json(
+        { error: `Gold insuficiente: reparar custa ${goldCost} gold (você tem ${character.gold}).` },
+        { status: 400 }
+      )
+    }
+
     const newDurability = Math.min(
       inventoryItem.maxDurability,
       inventoryItem.durability + unitsToUse * REPAIR_PER_DUPLICATE
     )
     const gained = newDurability - inventoryItem.durability
-    const unitLabel = useMemoryShard ? 'Estilhaço de Memória' : 'cópia'
+    const unitLabel = isAccessory ? ACCESSORY_REPAIR_DUST_NAME : useMemoryShard ? MEMORY_SHARD_NAME : 'cópia'
 
     await prisma.$transaction(async (tx) => {
       // Consome `unitsToUse` unidades percorrendo os stacks disponíveis.
@@ -129,6 +160,12 @@ export async function POST(
           await tx.characterInventory.delete({ where: { id: s.id } })
         }
         remaining -= take
+      }
+      if (goldCost > 0) {
+        await tx.character.update({
+          where: { id: params.characterId },
+          data: { gold: { decrement: goldCost } },
+        })
       }
       if (inventoryId) {
         await tx.characterInventory.update({
@@ -147,7 +184,7 @@ export async function POST(
       await addHistoryEntry({
         characterId: params.characterId,
         activityType: 'ITEM_REPAIRED',
-        description: `🔧 ${getDisplayName(inventoryItem.item.name, inventoryItem.enhancementLevel)} reparado (+${gained} durabilidade, ${unitsToUse} ${unitLabel}${unitsToUse > 1 ? 's' : ''}).`,
+        description: `🔧 ${getDisplayName(inventoryItem.item.name, inventoryItem.enhancementLevel)} reparado (+${gained} durabilidade, ${unitsToUse} ${unitLabel}${unitsToUse > 1 ? 's' : ''}${goldCost > 0 ? ` + ${goldCost} gold` : ''}).`,
         itemId: inventoryItem.itemId,
       })
     } catch (historyError) {
@@ -161,8 +198,9 @@ export async function POST(
       usedMemoryShard: useMemoryShard,
       copiesUsed: unitsToUse,
       copiesRemaining: totalUnits - unitsToUse,
+      goldSpent: goldCost,
       fullyRepaired: newDurability >= inventoryItem.maxDurability,
-      message: `🔧 Item reparado! Durabilidade: ${newDurability}/${inventoryItem.maxDurability} (${unitsToUse} ${unitLabel}${unitsToUse > 1 ? 's' : ''} usada${unitsToUse > 1 ? 's' : ''})`,
+      message: `🔧 Item reparado! Durabilidade: ${newDurability}/${inventoryItem.maxDurability} (${unitsToUse} ${unitLabel}${unitsToUse > 1 ? 's' : ''} usada${unitsToUse > 1 ? 's' : ''}${goldCost > 0 ? ` + ${goldCost} gold` : ''})`,
     })
   } catch (error) {
     console.error('Error repairing item:', error)

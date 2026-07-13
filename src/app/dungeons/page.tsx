@@ -59,6 +59,10 @@ export default function DungeonsPage() {
   // ESCOLHIDO em cada card (default = o maior desbloqueado).
   const [tierProgress, setTierProgress] = useState<Record<string, number>>({})
   const [selectedTier, setSelectedTier] = useState<Record<string, number>>({})
+  // ⛏️ Herói em coleta: checado no CLIQUE do "Entrar" (antes de abrir a run), não
+  // só depois já dentro dela — bloqueia na hora com mensagem clara.
+  const [entering, setEntering] = useState(false)
+  const [gatheringWarning, setGatheringWarning] = useState<string | null>(null)
 
   useEffect(() => {
     if (!session) {
@@ -177,6 +181,32 @@ export default function DungeonsPage() {
     const id = setInterval(check, 20000)
     return () => { cancelled = true; window.removeEventListener('focus', onFocus); clearInterval(id) }
   }, [activeDungeon, recentExit])
+
+  // ⛏️ Valida ANTES de abrir a run: se o herói selecionado está em coleta ATIVA,
+  // bloqueia aqui mesmo (sem sequer criar a run) e mostra mensagem clara. Antes
+  // isso só era detectado depois, já dentro da masmorra (o /start rejeitava).
+  const handleEnterClick = async (dungeon: DungeonDef) => {
+    const hero = selectedCharacter
+    if (!hero || entering) return
+    setGatheringWarning(null)
+    setEntering(true)
+    try {
+      const res = await fetch('/api/gather/active')
+      const data = await res.json().catch(() => null)
+      const sessions: { characterId: string; status: string }[] = data?.sessions ?? []
+      const busy = sessions.some((s) => s.characterId === hero.id && s.status === 'active')
+      if (busy) {
+        setGatheringWarning(`${hero.name} está numa sessão de coleta. Encerre a coleta antes de entrar na masmorra.`)
+        return
+      }
+      setActiveDungeon(dungeon)
+    } catch {
+      // Sem conexão pra checar: deixa passar — o /start ainda barra como defesa em profundidade.
+      setActiveDungeon(dungeon)
+    } finally {
+      setEntering(false)
+    }
+  }
 
   // 🔁 Re-run: mantém a masmorra ativa e remonta a DungeonRun do zero (nova key),
   // sincronizando os recursos e preservando o estado do piloto automático.
@@ -382,6 +412,13 @@ export default function DungeonsPage() {
           </div>
         )}
 
+        {gatheringWarning && (
+          <div className="rounded-[3px] border p-4 mb-6 text-center" style={{ borderColor: 'rgba(224,154,58,0.5)', background: 'rgba(58,45,22,0.5)' }}>
+            <p className="font-bold text-sm" style={{ color: '#e09a3a' }}>⛏️ Herói em coleta</p>
+            <p className="text-xs text-[#8a8a90]">{gatheringWarning}</p>
+          </div>
+        )}
+
         {/* Grid das 4 masmorras */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
           {DUNGEON_LIST.map((dungeon, idx) => (
@@ -488,10 +525,10 @@ export default function DungeonsPage() {
                   {(() => {
                     // Sem gate de nível: toda masmorra é entrável. A dificuldade e o boss
                     // (ancorado no clearLevel) gateiam quem está sub-nivelado.
-                    const enter = canEnter && !heroInUse
+                    const enter = canEnter && !heroInUse && !entering
                     return (
                       <button
-                        onClick={() => enter && setActiveDungeon(dungeon)}
+                        onClick={() => enter && handleEnterClick(dungeon)}
                         disabled={!enter}
                         title={
                           heroInUse ? `${lockedCharacterName ?? 'Outro personagem'} já está em uma masmorra em outra aba ou janela. Só um herói por vez.`
@@ -507,7 +544,7 @@ export default function DungeonsPage() {
                           boxShadow: `inset 0 1px 0 ${dungeon.accent}44, 0 0 14px ${dungeon.accentSoft}`,
                         }}
                       >
-                        {heroInUse ? '🔒 Em outra aba' : '🚪 Entrar'}
+                        {heroInUse ? '🔒 Em outra aba' : entering ? '⏳ Verificando...' : '🚪 Entrar'}
                       </button>
                     )
                   })()}

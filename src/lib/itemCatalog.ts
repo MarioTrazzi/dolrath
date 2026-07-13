@@ -1087,6 +1087,9 @@ export const FORGE_MATERIAL_CATALOG: ForgeMaterial[] = [
   { name: 'Cristal Bruto', description: 'Cristal arcano não lapidado; o núcleo dos orbes conjuradores.', emoji: '🔷', rarity: 'COMMON', goldValue: 28, source: 'dungeon' },
   { name: 'Fragmentos de Joias', description: 'Cacos de gema endurecidos; incrustam as manoplas do monge.', emoji: '💎', rarity: 'COMMON', goldValue: 48, source: 'dungeon' },
 
+  // ---------- REPARO DE ACESSÓRIO (anel/colar/cinto — não usa cópia nem estilhaço) ----------
+  { name: 'Pó de Joia', description: 'Pó fino de gemas trituradas; o ferreiro usa para reparar anéis, colares e cintos (junto com gold).', emoji: '✨', rarity: 'COMMON', goldValue: 40, source: 'dungeon' },
+
   // ---------- REPARO DE ALTO NÍVEL (só de chefe; repara raro/épico/lendário) ----------
   { name: 'Estilhaço de Memória', description: 'Fragmento que guarda a forma original de um equipamento lendário; restaura +10 de durabilidade em peças raras, épicas e lendárias.', emoji: '🧠', rarity: 'RARE', goldValue: 80, source: 'dungeon_boss', memoryShard: true },
 

@@ -4,7 +4,14 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { getItemVisual, getItemTypeLabel, getItemCategory } from '@/lib/itemVisuals';
 import { itemImagePath } from '@/lib/itemCatalog';
-import { getDisplayName, getLevelLabel, REPAIR_PER_DUPLICATE } from '@/lib/enhancementSystem';
+import {
+  getDisplayName,
+  getLevelLabel,
+  REPAIR_PER_DUPLICATE,
+  getGearCategory,
+  ACCESSORY_REPAIR_DUST_NAME,
+  accessoryRepairGoldCost,
+} from '@/lib/enhancementSystem';
 import { sellUnitPrice as sellPrice } from '@/lib/sellPricing';
 import { formatItemStats } from '@/lib/itemStats';
 import { resolveImageUrl } from '@/lib/imageUrl';
@@ -170,12 +177,14 @@ export default function RepairBench({
       .reduce((sum, inv) => sum + inv.quantity, 0);
   }, [inventory, selected]);
 
-  // Raridade decide a fonte de reparo: comum/incomum = cópia nível-0;
-  // rara/épica/lendária = Estilhaço de Memória (só de chefe).
+  // Acessório (anel/colar/cinto) não usa cópia nem estilhaço — repara com Pó de
+  // Joia + gold, sempre, não importa a raridade. Arma/armadura seguem a regra
+  // de sempre: raridade decide a fonte (cópia comum/incomum, estilhaço rara+).
+  const isAccessorySelected = selected ? getGearCategory(selected.item.type) === 'ACCESSORY' : false;
   const itemRarity = selected
     ? String((selected.item.stats as Record<string, unknown> | null)?.rarity ?? '').toUpperCase()
     : '';
-  const usesMemoryShard = ['RARE', 'EPIC', 'LEGENDARY'].includes(itemRarity);
+  const usesMemoryShard = !isAccessorySelected && ['RARE', 'EPIC', 'LEGENDARY'].includes(itemRarity);
 
   const memoryShardsAvailable = useMemo(
     () =>
@@ -185,9 +194,25 @@ export default function RepairBench({
     [inventory]
   );
 
-  // Unidades disponíveis/necessárias para reparar (cópias OU estilhaços de memória).
-  const repairUnitsAvailable = usesMemoryShard ? memoryShardsAvailable : copiesAvailable;
-  const repairMatLabel = usesMemoryShard ? 'Estilhaço de Memória' : 'cópia nível 0';
+  const gemDustAvailable = useMemo(
+    () =>
+      inventory
+        .filter((inv) => !inv.equipped && inv.item.name === ACCESSORY_REPAIR_DUST_NAME)
+        .reduce((sum, inv) => sum + inv.quantity, 0),
+    [inventory]
+  );
+
+  // Unidades disponíveis/necessárias para reparar (Pó de Joia, cópia ou estilhaço).
+  const repairUnitsAvailable = isAccessorySelected
+    ? gemDustAvailable
+    : usesMemoryShard
+    ? memoryShardsAvailable
+    : copiesAvailable;
+  const repairMatLabel = isAccessorySelected
+    ? ACCESSORY_REPAIR_DUST_NAME
+    : usesMemoryShard
+    ? 'Estilhaço de Memória'
+    : 'cópia nível 0';
 
   const missing = selected ? selected.maxDurability - selected.durability : 0;
   const repairUnitsNeeded = Math.ceil(missing / REPAIR_PER_DUPLICATE);
@@ -195,11 +220,20 @@ export default function RepairBench({
     ? Math.round((selected.durability / selected.maxDurability) * 100)
     : 0;
 
+  // Prévia do custo em gold do reparo (só acessório cobra — cópia/estilhaço são de graça).
+  const repairGoldCostSingle = isAccessorySelected && selected ? accessoryRepairGoldCost(selected.item.goldPrice, 1) : 0;
+  const repairGoldCostFull =
+    isAccessorySelected && selected
+      ? accessoryRepairGoldCost(selected.item.goldPrice, Math.min(repairUnitsNeeded, repairUnitsAvailable))
+      : 0;
+
   const handleRepair = async (mode: 'single' | 'full') => {
     if (!selected || !selectedCharacterId) return;
     if (repairUnitsAvailable < 1) {
       toast.error(
-        usesMemoryShard
+        isAccessorySelected
+          ? `Você precisa de ${ACCESSORY_REPAIR_DUST_NAME} (Coleta — Vale dos Minérios) para reparar ${selected.item.name}.`
+          : usesMemoryShard
           ? `Você precisa de um Estilhaço de Memória (de chefe) para reparar ${selected.item.name}.`
           : `Você precisa de uma cópia de ${selected.item.name} para reparar.`
       );
@@ -229,8 +263,9 @@ export default function RepairBench({
     }
   };
 
-  // Venda ao ferreiro por metade do preço (burn off-chain).
-  const sellUnitPrice = selected ? sellPrice(selected.item) : 0; // sellPricing (fonte única)
+  // Venda ao ferreiro por metade do preço (burn off-chain). Peça desgastada
+  // vende por menos — preço escala linear com a durabilidade restante.
+  const sellUnitPrice = selected ? sellPrice(selected.item, selected.durability, selected.maxDurability) : 0;
 
   // Cada peça de equipamento é uma linha (quantity 1). Vender N significa
   // destruir N linhas idênticas do grupo selecionado.
@@ -342,10 +377,10 @@ export default function RepairBench({
 
       <p className="text-sm text-white/60 mb-4">
         Clique num item — inclusive nos <span className="text-sky-300 font-semibold">equipados ⚡</span> —
-        para ver os detalhes, repará-lo (queimando cópias nível 0,{' '}
-        <span className="text-amber-300 font-semibold">+{REPAIR_PER_DUPLICATE}</span> cada) ou vendê-lo
-        ao ferreiro por metade do preço. Equipamento desgasta a cada abate na masmorra; em 0 quebra e
-        não dá bônus até reparar.
+        para ver os detalhes, repará-lo (arma/armadura queima cópias nível 0; acessório consome{' '}
+        {ACCESSORY_REPAIR_DUST_NAME} + gold; <span className="text-amber-300 font-semibold">+{REPAIR_PER_DUPLICATE}</span> por
+        unidade) ou vendê-lo ao ferreiro por metade do preço. Equipamento desgasta a cada abate na
+        masmorra; em 0 quebra e não dá bônus até reparar.
       </p>
 
       {loadingInv && inventory.length === 0 ? (
@@ -597,7 +632,15 @@ export default function RepairBench({
                         }`}
                         style={{ borderColor: repairUnitsAvailable > 0 ? '#f59e0b99' : '#ffffff33' }}
                       >
-                        {usesMemoryShard ? (
+                        {isAccessorySelected ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={itemImagePath(ACCESSORY_REPAIR_DUST_NAME)}
+                            alt={ACCESSORY_REPAIR_DUST_NAME}
+                            className={`w-full h-full object-cover ${repairUnitsAvailable > 0 ? 'art-bright' : 'grayscale'}`}
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : usesMemoryShard ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={itemImagePath('Estilhaço de Memória')}
@@ -626,6 +669,11 @@ export default function RepairBench({
                     </div>
                   </div>
 
+                  {isAccessorySelected && (
+                    <p className="text-[11px] text-amber-200/70 mb-2 text-center">
+                      Acessório — reparado com {ACCESSORY_REPAIR_DUST_NAME} (Coleta) + gold, não com cópias.
+                    </p>
+                  )}
                   {usesMemoryShard && (
                     <p className="text-[11px] text-amber-200/70 mb-2 text-center">
                       Peça {itemRarity === 'RARE' ? 'rara' : itemRarity === 'EPIC' ? 'épica' : 'lendária'} — reparada com Estilhaço de Memória (de chefe), não com cópias.
@@ -639,6 +687,11 @@ export default function RepairBench({
                     <span className={repairUnitsAvailable >= repairUnitsNeeded ? 'text-emerald-300' : 'text-red-300'}>
                       {repairUnitsAvailable}
                     </span>
+                    {isAccessorySelected && (
+                      <>
+                        {' '}(+<span className="text-amber-300">{repairGoldCostFull}</span> gold pra reparar 100%)
+                      </>
+                    )}
                     .
                   </p>
 
@@ -648,14 +701,14 @@ export default function RepairBench({
                       disabled={busy || repairUnitsAvailable < 1}
                       className="flex-1 rounded-[3px] border border-[#8a6d3b] bg-gradient-to-b from-[#3a3325] to-[#241f16] px-4 py-2.5 text-sm font-semibold text-[#e7c682] transition-all hover:brightness-125 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                      🔧 Reparar +{REPAIR_PER_DUPLICATE} (1 {repairMatLabel})
+                      🔧 Reparar +{REPAIR_PER_DUPLICATE} (1 {repairMatLabel}{isAccessorySelected ? ` + ${repairGoldCostSingle}🪙` : ''})
                     </button>
                     <button
                       onClick={() => handleRepair('full')}
                       disabled={busy || repairUnitsAvailable < 1}
                       className="flex-1 rounded-[3px] border border-[#c9a25f] bg-gradient-to-b from-[#4a4030] to-[#2c261a] px-4 py-2.5 text-sm font-semibold tracking-wide text-[#e7c682] shadow-[0_0_14px_rgba(201,162,95,0.3)] transition-all hover:brightness-125 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                      ⚒️ Reparar 100% ({Math.min(repairUnitsNeeded, repairUnitsAvailable)} un.)
+                      ⚒️ Reparar 100% ({Math.min(repairUnitsNeeded, repairUnitsAvailable)} un.{isAccessorySelected ? ` + ${repairGoldCostFull}🪙` : ''})
                     </button>
                   </div>
                 </div>
@@ -666,7 +719,10 @@ export default function RepairBench({
               {!selected.equipped && (
               <div className="flex flex-col gap-2">
                 <span className="text-[11px] text-white/40">
-                  Vender ao ferreiro destrói o item por metade do preço (½ de {selected.item.goldPrice ?? 0} 🪙).
+                  Vender ao ferreiro destrói o item por metade do preço (½ de {selected.item.goldPrice ?? 0} 🪙)
+                  {selected.durability < selected.maxDurability
+                    ? `, reduzido pela durabilidade atual (${durabilityPct}%).`
+                    : '.'}
                 </span>
                 <div className="flex gap-3">
                   <button

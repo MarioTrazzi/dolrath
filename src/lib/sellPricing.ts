@@ -29,7 +29,18 @@ export function sellFractionFor(item: SellableItem): number {
   return SELL_FRACTION_CONSUMABLE
 }
 
-/** Preço unitário de venda (piso 0). */
-export function sellUnitPrice(item: SellableItem): number {
-  return Math.max(0, Math.floor((item.goldPrice ?? 0) * sellFractionFor(item)))
+/**
+ * Preço unitário de venda (piso 0). Equipamento desgastado vende por menos —
+ * o preço escala linearmente com a durabilidade restante (peça na metade da
+ * vida vale metade do preço de venda). `durability`/`maxDurability` só fazem
+ * sentido pra gear; consumível/insumo não têm desgaste e vendem no preço cheio
+ * (chamador simplesmente não passa os dois argumentos).
+ */
+export function sellUnitPrice(item: SellableItem, durability?: number, maxDurability?: number): number {
+  const base = (item.goldPrice ?? 0) * sellFractionFor(item)
+  const durabilityRatio =
+    typeof durability === 'number' && typeof maxDurability === 'number' && maxDurability > 0
+      ? Math.max(0, Math.min(1, durability / maxDurability))
+      : 1
+  return Math.max(0, Math.floor(base * durabilityRatio))
 }

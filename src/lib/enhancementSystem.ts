@@ -257,6 +257,19 @@ export function getRequiredMaterial(category: GearCategory, targetLevel: number,
 // sempre pior do que comprar peça nova (10 cópias pra encher a barra).
 export const REPAIR_PER_DUPLICATE = 25;
 
+// Acessório (anel/colar/cinto) não acumula cópia nem usa Estilhaço de Memória —
+// dropa raro demais pra isso. Repara com Pó de Joia (Coleta, Vale dos Minérios)
+// + gold (fração do goldPrice do item), mesma cadência de 25 de durabilidade
+// por unidade que cópia/estilhaço.
+export const ACCESSORY_REPAIR_DUST_NAME = 'Pó de Joia';
+export const ACCESSORY_REPAIR_GOLD_FRACTION = 0.1;
+export const ACCESSORY_REPAIR_GOLD_MIN = 10;
+
+export function accessoryRepairGoldCost(goldPrice: number | null | undefined, units: number): number {
+  const perUnit = Math.max(ACCESSORY_REPAIR_GOLD_MIN, Math.floor((goldPrice ?? 0) * ACCESSORY_REPAIR_GOLD_FRACTION));
+  return perUnit * units;
+}
+
 // === RESOLUÇÃO DA TENTATIVA ===
 
 export interface EnhanceOutcome {

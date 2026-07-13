@@ -2755,12 +2755,11 @@ export default function DungeonRun({
         {phase === 'explore' && (
           <div className="flex-1 flex flex-col min-h-0">
             {/* ---------- MAPA: trilha de nós ---------- */}
-            <main className="relative flex-1 min-h-0 flex flex-col items-center justify-center px-4">
-              {/* Container limitado ao tamanho mobile */}
-              <div className="relative w-full max-w-md max-h-[90vh] aspect-[9/16] rounded-lg overflow-hidden shadow-2xl">
-                <MapAmbient backgroundImageUrl={dungeon.id === 'floresta' ? '/backgrounds/forest-dark-map.jpg' : undefined} />
+            <main className="relative flex-1 min-h-0">
+              <MapAmbient backgroundImageUrl={dungeon.id === 'floresta' ? '/backgrounds/forest-dark-map.jpg' : undefined} />
 
-                <div className="absolute inset-0 mx-auto max-w-md">
+              <div className="absolute inset-0 mx-auto max-w-md pointer-events-none">
+                <div className="relative h-full pointer-events-auto">
                 <MapTrail points={trailPoints} progress={tokenIdx / LAST} />
                 {trailPoints.map((pt, idx) => (
                   <MapNode
@@ -3011,6 +3010,7 @@ export default function DungeonRun({
                   </motion.div>
                 )}
               </AnimatePresence>
+                </div>
               </div>
             </main>
 
@@ -3052,7 +3052,7 @@ export default function DungeonRun({
 
             {/* ---------- AÇÃO ---------- */}
             <footer
-              className="flex-shrink-0 px-4 pt-1 pb-4 z-20"
+              className="flex-shrink-0 px-4 pt-1 pb-4 z-30 relative"
               style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
             >
               {/* Dica única no início da run (some sozinha após ~30s). */}

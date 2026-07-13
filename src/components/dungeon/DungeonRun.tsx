@@ -2755,10 +2755,12 @@ export default function DungeonRun({
         {phase === 'explore' && (
           <div className="flex-1 flex flex-col min-h-0">
             {/* ---------- MAPA: trilha de nós ---------- */}
-            <main className="relative flex-1 min-h-0">
-              <MapAmbient backgroundImageUrl={dungeon.id === 'floresta' ? '/backgrounds/forest-dark-map.jpg' : undefined} />
+            <main className="relative flex-1 min-h-0 flex flex-col items-center justify-center px-4">
+              {/* Container limitado ao tamanho mobile */}
+              <div className="relative w-full max-w-md max-h-[90vh] aspect-[9/16] rounded-lg overflow-hidden shadow-2xl">
+                <MapAmbient backgroundImageUrl={dungeon.id === 'floresta' ? '/backgrounds/forest-dark-map.jpg' : undefined} />
 
-              <div className="absolute inset-0 mx-auto max-w-md">
+                <div className="absolute inset-0 mx-auto max-w-md">
                 <MapTrail points={trailPoints} progress={tokenIdx / LAST} />
                 {trailPoints.map((pt, idx) => (
                   <MapNode
@@ -3009,6 +3011,7 @@ export default function DungeonRun({
                   </motion.div>
                 )}
               </AnimatePresence>
+              </div>
             </main>
 
             {/* ---------- LOG DE FARM: itens coletados na run (persiste por node) ---------- */}

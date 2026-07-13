@@ -112,6 +112,17 @@ async function main() {
     // Allow forcing locally
     process.env.RUN_PRISMA_MIGRATE_DEPLOY === 'true'
 
+  if (!(process.env.DATABASE_URL || '').trim()) {
+    throw new Error(
+      'DATABASE_URL is required. Set the Supabase transaction pooler URL in the environment.'
+    )
+  }
+  if (!(process.env.DIRECT_URL || '').trim()) {
+    throw new Error(
+      'DIRECT_URL is required (schema prisma/schema.prisma). Set the Supabase session pooler URL (port 5432 on *.pooler.supabase.com), not the db.* host.'
+    )
+  }
+
   await run('npx', ['prisma', 'generate'])
 
   if (shouldRunMigrations) {

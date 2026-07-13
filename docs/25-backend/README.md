@@ -5,8 +5,8 @@
 | Camada | Tecnologia |
 |---|---|
 | Runtime web + API | Next.js 14 (App Router) na **Vercel** (projeto "dolrath"; push no `main` = deploy automático) |
-| Tempo real (PvP) | Socket.IO standalone (`server/socket-server.js`) |
-| Banco | PostgreSQL **Neon** com Prisma (Accelerate na frente); scripts administrativos usam `DATABASE_URL_NEON` |
+| Tempo real (PvP) | Socket.IO standalone (`server/socket-server.js`) no **Render** (`https://dolrath.onrender.com`) |
+| Banco | PostgreSQL **Supabase** (Supavisor): `DATABASE_URL` = transaction pooler, `DIRECT_URL` = session pooler (migrações) |
 | ORM | Prisma 6 (`prisma/schema.prisma`) |
 | Blockchain | ethers v6 + Hardhat (`web3/`) |
 | IA | Anthropic + OpenAI (juiz de combate, geração de imagens gpt-image-1) |
@@ -25,8 +25,8 @@
 
 ## Ambientes
 
-- **Produção:** Vercel + Neon + Polygon; envs no painel da Vercel (segredos de auth/DB não existem no dev local — UI é validada com páginas mock).
-- **Dev local:** `npm run dev` + `npm run socket:dev`; typecheck direcionado aos arquivos tocados (53 erros históricos conhecidos no projeto).
+- **Produção:** Vercel (web) + Render (WebSocket) + Supabase (Postgres) + Polygon. Envs no painel da Vercel — `DATABASE_URL`, `DIRECT_URL` e `NEXT_PUBLIC_SOCKET_URL=https://dolrath.onrender.com` precisam existir em **Production e Preview** (Preview sem as URLs do Supabase quebra o build). Puxe com `npm run env:pull` (requer `VERCEL_TOKEN`).
+- **Dev local:** copie `.env.example` → `.env` (ou `npm run env:pull`) e preencha as duas URLs do pooler; `npm run dev` + `npm run socket:dev`.
 
 ## EM BREVE
 

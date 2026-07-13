@@ -112,6 +112,17 @@ async function main() {
     // Allow forcing locally
     process.env.RUN_PRISMA_MIGRATE_DEPLOY === 'true'
 
+  if (!(process.env.DATABASE_URL || '').trim()) {
+    throw new Error(
+      'DATABASE_URL is required. Set the Supabase transaction pooler URL (*.pooler.supabase.com:6543) in Vercel env for this environment (Production AND Preview).'
+    )
+  }
+  if (!(process.env.DIRECT_URL || '').trim()) {
+    throw new Error(
+      'DIRECT_URL is required (prisma/schema.prisma). Set the Supabase session pooler URL (*.pooler.supabase.com:5432) in Vercel for Production AND Preview — not the db.* host (IPv6-only).'
+    )
+  }
+
   await run('npx', ['prisma', 'generate'])
 
   if (shouldRunMigrations) {

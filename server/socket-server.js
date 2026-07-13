@@ -326,26 +326,36 @@ function revertPlayerTransformation(player) {
   }
 }
 
+function isAllowedCorsOrigin(origin) {
+  if (!origin) return true
+  if (process.env.NODE_ENV !== 'production') {
+    return origin === 'http://localhost:3000' || origin === 'http://127.0.0.1:3000'
+  }
+  try {
+    const { hostname, protocol } = new URL(origin)
+    if (protocol !== 'https:') return false
+    if (hostname === 'dolrath.vercel.app') return true
+    // Preview/deploy URLs: *.vercel.app (literal "https://*.vercel.app" does NOT work in CORS)
+    if (hostname.endsWith('.vercel.app')) return true
+    return false
+  } catch {
+    return false
+  }
+}
+
 const httpServer = createServer()
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.NODE_ENV === 'production' 
-      ? [
-          'https://dolrath.vercel.app',
-          'https://*.vercel.app',
-          'https://dolrath-git-main-mariotrazzi.vercel.app'
-        ]
-      : [
-          'http://localhost:3000', 
-          'http://127.0.0.1:3000'
-        ],
+    origin: (origin, callback) => {
+      callback(null, isAllowedCorsOrigin(origin))
+    },
     methods: ['GET', 'POST'],
     credentials: true
   },
   allowEIO3: true
 })
 
-// Health check endpoint para Railway/Heroku
+// Health check endpoint (Render / local)
 httpServer.on('request', (req, res) => {
   if (req.url === '/health' || req.url === '/') {
     res.writeHead(200, { 'Content-Type': 'application/json' })

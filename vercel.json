@@ -1,8 +1,18 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "env": {
     "NEXT_PUBLIC_SOCKET_URL": "https://dolrath.onrender.com"
   },
   "buildCommand": "npm run build",
+  "ignoreCommand": "[ \"$VERCEL_ENV\" != \"production\" ]",
+  "git": {
+    "deploymentEnabled": {
+      "main": true,
+      "*": false,
+      "cursor/**": false,
+      "claude/**": false
+    }
+  },
   "build": {
     "env": {
       "SKIP_ENV_VALIDATION": "1",

@@ -1,0 +1,21 @@
+---
+description: Ship changes on main → Vercel Production (no preview branches)
+alwaysApply: true
+---
+
+# Deploy: main → Production only
+
+Dolrath uses **wallet (SIWE) login**. Preview URLs break that flow (`NEXTAUTH_URL` + Vercel SSO on `*.vercel.app`), so we do **not** use Preview deploys for testing.
+
+## Required workflow for agents
+
+1. Work on branch **`main`** (or merge into `main` before shipping).
+2. When asked to commit/push/deploy: commit on **`main`** and push to **`origin/main`**.
+3. Do **not** open long-lived `cursor/*` / feature branches just to trigger a Vercel Preview.
+4. Production URL for testing login: **https://dolrath.vercel.app**
+5. Vercel is configured to **build only Production** (`main`). Other branches should not deploy.
+
+## Do not
+
+- Ask the user to "test on the Preview URL" for wallet/auth flows.
+- Create a PR + Preview as the default ship path for this repo.

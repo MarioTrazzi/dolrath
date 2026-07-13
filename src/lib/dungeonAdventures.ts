@@ -735,13 +735,12 @@ export function eventForRoll(dungeon: DungeonDef, roll: number): DungeonEventDef
 }
 
 // ============================================================
-// LOOT POR SORTE — o d20 rolado ao avançar define a QUALIDADE do achado.
-// Cada RESULTADO (1–20) tem seu próprio PACOTE de espólio (D20_LOOT_PACKS):
-//   • 1–5   → material de craft GARANTIDO (early helper: a pior sorte ainda
-//             alimenta alquimia/forja/processamento) + poucas moedas
-//   • 6–16  → escada monotônica: ouro, raridade do material, gear e pedra sobem
-//   • 17–19 → sorte grande: material incomum garantido, pedra até 40%
-//   • 20    → jackpot: PEDRA DE APRIMORAMENTO GARANTIDA + gear 50% + mat incomum
+// LOOT POR SORTE — o d20 rolado ao avançar é um MULTIPLICADOR da chance
+// natural de cada drop: fator = roll/10 (10 = a média; 9 = ×0.9, 8 = ×0.8 …
+// 1 = ×0.1; 15 = ×1.5; 20 = ×2.0). Sem regra especial por faixa — o jogador
+// indexa pelo badge 🎲: número = multiplicador. Única exceção: nat 20 é o
+// CRÍTICO (Pedra Negra garantida 40/60 arma/armadura + estilhaço por abate
+// garantido). Chances naturais em BASE_LOOT (abaixo).
 // O LuckTier (3 faixas) permanece só para decisões de ENCONTRO (chance de
 // monstro em nó menor, fonte revitalizadora) — o espólio usa o roll exato.
 // ============================================================
@@ -825,66 +824,78 @@ function bossIngredientDrop(rarity: 'rare' | 'epic'): LootDrop | null {
 }
 
 // ============================================================
-// 🎲 D20_LOOT_PACKS — um pacote por resultado do d20 (1–20).
+// 🎲 LOOT MULTIPLICATIVO — o d20 modula a chance NATURAL de cada drop.
 //   node: espólio do NÓ (achado de exploração ou limpar o pacote de monstros)
 //   kill: espólio POR ABATE — o d20 rolado ANTES do combate (lootRoll do
-//         RunPending) define a classe do drop de cada monstro morto; recuar
-//         depois de matar 1 de 3 num nó de sorte 20 ainda rendeu drop "classe 20".
-// goldMult multiplica a fórmula de ouro única (GOLD_BASE/GOLD_VAR abaixo).
-// pMat: chance de 1 material do pool (1.0 = garantido); matUncFrac: fração que
-// vem do pool incomum; matUncommon: material garantido é do pool incomum (17+).
-// Valores calibrados no scripts/dungeon-loot-sim.ts. Âncora original: paridade
-// de pedras/run com a tabela antiga em tier 1. Buff 2026-07-13 (pedra escassa
-// fora do boss): pStone começa no 8 e ~+60% nas faixas, killStone no 14+,
-// minor.stone 0.4→0.6 — pedra de CHÃO +40–50%/run (total +13–18%; boss domina),
-// ouro/estilhaço/gear estáveis (sim EV=1).
+//         RunPending) modula o drop de cada monstro morto; recuar depois de
+//         matar 1 de 3 num nó de sorte 20 ainda rende drop dobrado.
+// fator = roll/10 (1 = ×0.1 … 10 = ×1.0 … 20 = ×2.0), teto 0.95 por slot.
+// Nat 20 = CRÍTICO: pedra do nó garantida (split 40/60 arma/armadura) e
+// estilhaço por abate garantido — o resto fica no ×2.0.
+// Chances naturais (BASE_LOOT) calibradas no scripts/dungeon-loot-sim.ts
+// (EV=1): fator médio do d20 = 1.05, então base ≈ EV alvo por nó. Âncora:
+// paridade ±8% em t1 com a tabela dabcc62 (Floresta: ~355 gold, 3.2 pedraB,
+// 6.2 estilh, 8.1 mats, 1.7 gear, 2.7 cons); mats de tier alto caem ~20%
+// (perderam o "garantido" dos rolls baixos — inerente ao modelo). Redesign
+// 2026-07-13 (pedido do Mario): substitui a tabela artesanal D20_LOOT_PACKS
+// de 20 linhas — morrem o material garantido dos rolls 1–5, o incomum
+// garantido do 17+ e os gates de faixa (killStone 14+, poção rara 18–19);
+// tudo agora escala linear e o jogador indexa número → multiplicador.
 // ============================================================
-// Base única de ouro (a faixa antiga low/mid/high virou o goldMult do pacote).
-// 9+14 (média 16) × goldMult médio 1.26 ≈ paridade com a média antiga (sim EV=1).
+// Base única de ouro: 9+14 (média 16) × goldMult do fator.
 const GOLD_BASE = 9
 const GOLD_VAR = 14
+
+// Chances NATURAIS = o que cai com roll 10 (a média do dado).
+const BASE_LOOT = {
+  goldMult: 1.25,        // ouro do nó (roll 20 = ×2.5, teto igual ao antigo)
+  pMat: 0.65,            // material de craft temático da masmorra
+  matUncFrac: 0.30,      // fração do material que vem do pool incomum
+  pShard: 0.21,          // Estilhaço de Pedra Negra (ligante da forja)
+  pConsumable: 0.24,     // consumível comum
+  pConsumableRare: 0.015,// poção rara/épica pronta
+  pGear: 0.15,           // equipamento elegível
+  pStone: 0.10,          // Pedra Negra inteira (nat 20 ignora e GARANTE)
+  killShard: 0.52,       // estilhaço POR ABATE
+  killMatChance: 0.18,   // material temático POR ABATE
+  killMatUncFrac: 0.30,  // fração incomum do killMat
+  killStone: 0.02,       // pedra POR ABATE
+}
 
 interface LootPackCfg {
   goldMult: number
   pMat: number
   matUncFrac: number
-  matUncommon?: boolean
-  pMat2?: number
   pShard: number
   pConsumable: number
-  pConsumableRare?: number
+  pConsumableRare: number
   pGear: number
   pStone: number // 1.0 = pedra garantida (nat 20)
   killShard: number
-  killMat?: { chance: number; pool: 'common' | 'uncommon' }
-  killStone?: number
+  killMat: { chance: number; uncFrac: number }
+  killStone: number
 }
 
-const D20_LOOT_PACKS: Record<number, LootPackCfg> = {
-  1:  { goldMult: 0.4,  pMat: 1.0, matUncFrac: 0,    pShard: 0,    pConsumable: 0,    pGear: 0,    pStone: 0,    killShard: 0.25 },
-  2:  { goldMult: 0.5,  pMat: 1.0, matUncFrac: 0,    pShard: 0,    pConsumable: 0,    pGear: 0,    pStone: 0,    killShard: 0.30 },
-  3:  { goldMult: 0.6,  pMat: 1.0, matUncFrac: 0,    pShard: 0.10, pConsumable: 0,    pGear: 0,    pStone: 0,    killShard: 0.30 },
-  4:  { goldMult: 0.7,  pMat: 1.0, matUncFrac: 0,    pShard: 0,    pConsumable: 0.10, pGear: 0,    pStone: 0,    killShard: 0.35 },
-  5:  { goldMult: 0.8,  pMat: 1.0, matUncFrac: 0,    pMat2: 0.25, pShard: 0.12, pConsumable: 0,    pGear: 0,    pStone: 0,    killShard: 0.35 },
-  6:  { goldMult: 0.9,  pMat: 0.8, matUncFrac: 0,    pShard: 0.15, pConsumable: 0.15, pGear: 0,    pStone: 0,    killShard: 0.40 },
-  7:  { goldMult: 1.0,  pMat: 0.8, matUncFrac: 0,    pShard: 0.18, pConsumable: 0.20, pGear: 0.05, pStone: 0,    killShard: 0.40 },
-  8:  { goldMult: 1.0,  pMat: 0.7, matUncFrac: 0.15, pShard: 0.20, pConsumable: 0.25, pGear: 0.08, pStone: 0.03, killShard: 0.45 },
-  9:  { goldMult: 1.1,  pMat: 0.7, matUncFrac: 0.20, pShard: 0.22, pConsumable: 0.25, pGear: 0.10, pStone: 0.04, killShard: 0.45 },
-  10: { goldMult: 1.2,  pMat: 0.6, matUncFrac: 0.25, pShard: 0.24, pConsumable: 0.30, pGear: 0.12, pStone: 0.06, killShard: 0.50 },
-  11: { goldMult: 1.25, pMat: 0.6, matUncFrac: 0.25, pShard: 0.24, pConsumable: 0.30, pGear: 0.12, pStone: 0.08, killShard: 0.50 },
-  12: { goldMult: 1.3,  pMat: 0.6, matUncFrac: 0.30, pShard: 0.26, pConsumable: 0.30, pGear: 0.15, pStone: 0.09, killShard: 0.55 },
-  13: { goldMult: 1.4,  pMat: 0.6, matUncFrac: 0.30, pShard: 0.26, pConsumable: 0.30, pGear: 0.17, pStone: 0.11, killShard: 0.55 },
-  14: { goldMult: 1.5,  pMat: 0.5, matUncFrac: 0.40, pShard: 0.28, pConsumable: 0.35, pGear: 0.20, pStone: 0.13, killShard: 0.60, killMat: { chance: 0.15, pool: 'common' }, killStone: 0.02 },
-  15: { goldMult: 1.6,  pMat: 0.5, matUncFrac: 0.40, pShard: 0.28, pConsumable: 0.35, pGear: 0.22, pStone: 0.15, killShard: 0.60, killMat: { chance: 0.15, pool: 'common' }, killStone: 0.02 },
-  16: { goldMult: 1.7,  pMat: 0.5, matUncFrac: 1.0,  pShard: 0.30, pConsumable: 0.40, pGear: 0.24, pStone: 0.18, killShard: 0.65, killMat: { chance: 0.20, pool: 'common' }, killStone: 0.03 },
-  17: { goldMult: 1.8,  pMat: 1.0, matUncFrac: 1.0,  matUncommon: true, pShard: 0.32, pConsumable: 0.40, pGear: 0.26, pStone: 0.24, killShard: 0.65, killMat: { chance: 0.20, pool: 'uncommon' }, killStone: 0.03 },
-  18: { goldMult: 1.9,  pMat: 1.0, matUncFrac: 1.0,  matUncommon: true, pShard: 0.32, pConsumable: 0.40, pConsumableRare: 0.10, pGear: 0.30, pStone: 0.30, killShard: 0.70, killMat: { chance: 0.20, pool: 'uncommon' }, killStone: 0.04 },
-  19: { goldMult: 2.0,  pMat: 1.0, matUncFrac: 1.0,  matUncommon: true, pShard: 0.32, pConsumable: 0.40, pConsumableRare: 0.12, pGear: 0.40, pStone: 0.42, killShard: 0.75, killMat: { chance: 0.25, pool: 'uncommon' }, killStone: 0.06 },
-  20: { goldMult: 2.5,  pMat: 1.0, matUncFrac: 1.0,  matUncommon: true, pShard: 0.35, pConsumable: 0.50, pGear: 0.50, pStone: 1.0,  killShard: 1.0,  killMat: { chance: 0.30, pool: 'uncommon' }, killStone: 0.10 },
-}
+const rollFactor = (roll: number) => Math.max(1, Math.min(20, Math.floor(roll) || 1)) / 10
 
-const lootPackOf = (roll: number): LootPackCfg =>
-  D20_LOOT_PACKS[Math.max(1, Math.min(20, Math.floor(roll) || 1))]
+const lootPackOf = (roll: number): LootPackCfg => {
+  const f = rollFactor(roll)
+  const crit = f >= 2 // nat 20
+  const c = (base: number) => Math.min(0.95, base * f)
+  return {
+    goldMult: BASE_LOOT.goldMult * f,
+    pMat: c(BASE_LOOT.pMat),
+    matUncFrac: Math.min(1, BASE_LOOT.matUncFrac * f),
+    pShard: c(BASE_LOOT.pShard),
+    pConsumable: c(BASE_LOOT.pConsumable),
+    pConsumableRare: c(BASE_LOOT.pConsumableRare),
+    pGear: c(BASE_LOOT.pGear),
+    pStone: crit ? 1.0 : c(BASE_LOOT.pStone),
+    killShard: crit ? 1.0 : c(BASE_LOOT.killShard),
+    killMat: { chance: c(BASE_LOOT.killMatChance), uncFrac: Math.min(1, BASE_LOOT.killMatUncFrac * f) },
+    killStone: c(BASE_LOOT.killStone),
+  }
+}
 
 // Nó menor dropa menos; pedra mais rara nele; sala/boss dão mais ouro. Pedra de
 // aprimoramento vem PRINCIPALMENTE de monstro (boss 2.5× + main sempre-monstro).
@@ -965,7 +976,7 @@ export function rollNodeLoot(
   charClass?: string | null,
   dungeonTier: number = 1,
 ): NodeLoot {
-  // roll é o d20 da exploração — cada resultado tem seu pacote (D20_LOOT_PACKS).
+  // roll é o d20 da exploração — fator linear sobre as chances naturais (BASE_LOOT).
   // RARE e EPIC de gear só aparecem em BOSS (DUNGEON_GEAR_RARITY).
   const pack = lootPackOf(roll)
   const mult = NODE_LOOT_MULT[nodeKind]
@@ -985,19 +996,16 @@ export function rollNodeLoot(
     Math.floor((GOLD_BASE + Math.random() * GOLD_VAR) * pack.goldMult * mult.gold * dungeon.difficulty * (1 + level * 0.04) * tierReward)
   )
 
-  // 🌿 Material de craft (ingrediente de alquimia OU material de forja, temático da
-  // masmorra) — o "early helper": rolls 1–5 garantem 1 comum; 17+ garantem 1 incomum.
+  // 🌿 Material de craft (ingrediente de alquimia OU material de forja, temático
+  // da masmorra). Pool incomum e quantidade extra de tier escalam com o roll
+  // (o bônus de qtd fica no 17+, herdeiro do antigo "slot garantido").
   if (Math.random() < pack.pMat * mult.all) {
-    const pool = pack.matUncommon || Math.random() < pack.matUncFrac ? 'uncommon' : 'common'
-    const qty = pack.pMat >= 1 ? 1 + matBonusQty : 1
+    const pool = Math.random() < pack.matUncFrac ? 'uncommon' : 'common'
+    const qty = roll >= 17 ? 1 + matBonusQty : 1
     for (let i = 0; i < qty; i++) {
       const d = materialDrop(dungeon, pool)
       if (d) drops.push(d)
     }
-  }
-  if (pack.pMat2 && Math.random() < pack.pMat2 * mult.all) {
-    const d = materialDrop(dungeon, 'common')
-    if (d) drops.push(d)
   }
   // Ingrediente de CHEFE fora do covil: só tier 4+ e pacotes 19–20.
   if (!isBoss && dt >= HIGH_TIER_BOSS_ING_MIN_TIER && roll >= 19 && Math.random() < HIGH_TIER_BOSS_ING_CHANCE) {
@@ -1025,8 +1033,8 @@ export function rollNodeLoot(
     const c = pickFrom(pool.length ? pool : all)
     if (c) drops.push({ name: c.name, kind: 'consumable', rarity: rarityOf(c), emoji: '🧪' })
   }
-  // poção rara/épica pronta fora do covil: só nos pacotes 18–19 (chance baixa).
-  if (!isBoss && pack.pConsumableRare && Math.random() < pack.pConsumableRare * mult.all) {
+  // poção rara/épica pronta fora do covil: chance natural baixa × fator do roll.
+  if (!isBoss && Math.random() < pack.pConsumableRare * mult.all) {
     const pool = getDungeonConsumables().filter(c => {
       const r = rarityOf(c)
       if (r !== 'RARE' && r !== 'EPIC') return false
@@ -1132,9 +1140,9 @@ export function rollNodeLoot(
 // Constantes calibradas em scripts/farm-progression-sim.js — metas: main full
 // +15 em ~1 semana com 5 chars (~7d), ~1 mês solo ou p/ o esquadrão inteiro.
 // ============================================================
-// O drop por abate segue o PACOTE do d20 pré-combate (D20_LOOT_PACKS.killShard/
-// killMat/killStone); este fator por tipo de nó preserva o "nó menor rende menos"
-// da tabela fixa antiga (minor 0.4 / main 0.6).
+// O drop por abate segue o d20 pré-combate como fator (BASE_LOOT.killShard/
+// killMat/killStone × roll/10); este fator por tipo de nó preserva o "nó menor
+// rende menos" da tabela fixa antiga (minor 0.4 / main 0.6).
 const KILL_KIND_MULT: Record<LootNodeKind, number> = { minor: 0.8, main: 1.0, boss: 1.0 }
 const BOSS_KILL_STONES = { min: 1, max: 3 }
 // ⚖️ Lançamento (P0 TET, 2026-07-05): em masmorra 3★+ (Pântano/Ruínas) o boss
@@ -1210,13 +1218,14 @@ export function rollKillLoot(
       : { name: 'Estilhaço de Pedra Negra (Armadura)', emoji: '🔹' }
     drops.push({ name: shard.name, kind: 'material', rarity: 'COMMON', emoji: shard.emoji })
   }
-  // Material do pool temático por abate (sorte 14+): a luta também alimenta o craft.
-  if (dungeon && pack.killMat && Math.random() < pack.killMat.chance * kindMult) {
-    const d = materialDrop(dungeon, pack.killMat.pool)
+  // Material do pool temático por abate: a luta também alimenta o craft.
+  if (dungeon && Math.random() < pack.killMat.chance * kindMult) {
+    const pool = Math.random() < pack.killMat.uncFrac ? 'uncommon' : 'common'
+    const d = materialDrop(dungeon, pool)
     if (d) drops.push(d)
   }
-  // Pedra por abate: sorte 14+ (chance baixa e crescente — o jackpot é do nó).
-  if (pack.killStone && Math.random() < pack.killStone * kindMult) {
+  // Pedra por abate: chance natural baixa × fator (o jackpot é do nó).
+  if (Math.random() < pack.killStone * kindMult) {
     const weapon = Math.random() < STONE_WEAPON_SHARE
     const concentrated = dt >= CONCENTRATED_MIN_TIER
     const stone = concentrated

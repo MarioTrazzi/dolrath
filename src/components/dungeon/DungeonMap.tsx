@@ -324,9 +324,21 @@ const FIREFLIES = Array.from({ length: 16 }, (_, i) => {
 export function MapAmbient({ backgroundImageUrl }: { backgroundImageUrl?: string } = {}) {
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-      {/* Background image (if provided) */}
+      {/* brilho mágico de cima e roxo de baixo, na cor da masmorra — também serve
+          de fundo nas laterais quando a imagem fica centralizada numa coluna estreita */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(120% 80% at 50% 5%, var(--dgn-soft), transparent 55%), radial-gradient(100% 70% at 50% 100%, rgba(124,58,237,0.16), transparent 60%)',
+        }}
+      ></div>
+
+      {/* Background image (if provided) — mantida na coluna central, no mesmo
+          tamanho/largura do conteúdo (max-w-md), igual ao enquadramento que já
+          funciona no mobile, em vez de esticar/cortar por toda a largura no desktop */}
       {backgroundImageUrl && (
-        <>
+        <div className="absolute inset-0 mx-auto max-w-md">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={backgroundImageUrl}
@@ -343,18 +355,7 @@ export function MapAmbient({ backgroundImageUrl }: { backgroundImageUrl?: string
               background: 'radial-gradient(120% 80% at 50% 5%, rgba(0,0,0,0.2), transparent 55%), radial-gradient(100% 70% at 50% 100%, rgba(0,0,0,0.3), transparent 60%)',
             }}
           />
-        </>
-      )}
-
-      {/* brilho mágico de cima e roxo de baixo, na cor da masmorra (mais sutil se houver imagem) */}
-      {!backgroundImageUrl && (
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              'radial-gradient(120% 80% at 50% 5%, var(--dgn-soft), transparent 55%), radial-gradient(100% 70% at 50% 100%, rgba(124,58,237,0.16), transparent 60%)',
-          }}
-        ></div>
+        </div>
       )}
 
       {/* Glow circles (menos visíveis se houver imagem) */}

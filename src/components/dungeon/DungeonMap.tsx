@@ -321,25 +321,57 @@ const FIREFLIES = Array.from({ length: 16 }, (_, i) => {
   }
 })
 
-export function MapAmbient() {
+export function MapAmbient({ backgroundImageUrl }: { backgroundImageUrl?: string } = {}) {
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-      {/* brilho mágico de cima e roxo de baixo, na cor da masmorra */}
+      {/* Background image (if provided) */}
+      {backgroundImageUrl && (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={backgroundImageUrl}
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover"
+            style={{
+              opacity: 0.95,
+            }}
+          />
+          {/* Dark overlay to preserve readability */}
+          <div
+            className="absolute inset-0"
+            style={{
+              background: 'radial-gradient(120% 80% at 50% 5%, rgba(0,0,0,0.2), transparent 55%), radial-gradient(100% 70% at 50% 100%, rgba(0,0,0,0.3), transparent 60%)',
+            }}
+          />
+        </>
+      )}
+
+      {/* brilho mágico de cima e roxo de baixo, na cor da masmorra (mais sutil se houver imagem) */}
+      {!backgroundImageUrl && (
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              'radial-gradient(120% 80% at 50% 5%, var(--dgn-soft), transparent 55%), radial-gradient(100% 70% at 50% 100%, rgba(124,58,237,0.16), transparent 60%)',
+          }}
+        ></div>
+      )}
+
+      {/* Glow circles (menos visíveis se houver imagem) */}
       <div
-        className="absolute inset-0"
+        className="absolute top-1/4 -left-24 w-80 h-80 rounded-full blur-3xl"
         style={{
-          background:
-            'radial-gradient(120% 80% at 50% 5%, var(--dgn-soft), transparent 55%), radial-gradient(100% 70% at 50% 100%, rgba(124,58,237,0.16), transparent 60%)',
+          background: backgroundImageUrl ? 'rgba(124,58,237,0.08)' : 'rgba(124,58,237,0.18)',
         }}
       ></div>
       <div
-        className="absolute top-1/4 -left-24 w-80 h-80 rounded-full blur-3xl"
-        style={{ background: 'rgba(124,58,237,0.18)' }}
-      ></div>
-      <div
         className="absolute bottom-10 -right-24 w-72 h-72 rounded-full blur-3xl"
-        style={{ background: 'var(--dgn-soft)', opacity: 0.4 }}
+        style={{
+          background: 'var(--dgn-soft)',
+          opacity: backgroundImageUrl ? 0.15 : 0.4,
+        }}
       ></div>
+
       {/* tochas âmbar nos cantos */}
       <div
         className="absolute top-20 left-3 w-16 h-40 rounded-full blur-2xl"
@@ -349,6 +381,7 @@ export function MapAmbient() {
         className="absolute top-32 right-3 w-16 h-40 rounded-full blur-2xl"
         style={{ background: 'rgba(243,156,18,0.16)', animation: 'torch-flicker 4.2s ease-in-out 0.6s infinite' }}
       ></div>
+
       {/* vagalumes */}
       {FIREFLIES.map(f => (
         <span
@@ -369,6 +402,7 @@ export function MapAmbient() {
           }
         ></span>
       ))}
+
       {/* vinheta nos cantos */}
       <div
         className="absolute inset-0"

@@ -1,13 +1,13 @@
 {
   "env": {
-    "NEXT_PUBLIC_SOCKET_URL": "https://terrific-prosperity-production-0402.up.railway.app"
+    "NEXT_PUBLIC_SOCKET_URL": "https://dolrath.onrender.com"
   },
   "buildCommand": "npm run build",
   "build": {
     "env": {
       "SKIP_ENV_VALIDATION": "1",
       "PRISMA_GENERATE_SKIP_AUTOINSTALL": "true",
-      "NEXT_PUBLIC_SOCKET_URL": "https://terrific-prosperity-production-0402.up.railway.app"
+      "NEXT_PUBLIC_SOCKET_URL": "https://dolrath.onrender.com"
     }
   },
   "functions": {

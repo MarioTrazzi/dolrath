@@ -135,9 +135,9 @@ const ATTACK_DIE: Record<string, number> = { light_attack: 6, heavy_attack: 8 }
 
 // Função para criar conexão Socket.IO real
 function createSocketConnection(): Socket {
-  // URL do servidor WebSocket do Railway em produção
-  const socketUrl = process.env.NODE_ENV === 'production' 
-    ? (process.env.NEXT_PUBLIC_SOCKET_URL || 'https://terrific-prosperity-production-0402.up.railway.app')
+  // URL do servidor WebSocket (Render) em produção
+  const socketUrl = process.env.NODE_ENV === 'production'
+    ? (process.env.NEXT_PUBLIC_SOCKET_URL || 'https://dolrath.onrender.com')
     : 'ws://localhost:3001'
     
   console.log('🔗 Conectando ao WebSocket:', socketUrl)

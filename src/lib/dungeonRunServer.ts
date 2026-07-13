@@ -14,6 +14,7 @@ import {
   DUNGEONS,
   scaleMonster,
   scaleMonsterGroup,
+  earlyPoolOf,
   rollNodeLoot,
   rollKillLoot,
   luckTier,
@@ -117,10 +118,18 @@ export function resolveExploreNode(
   const isMain = node.kind === 'main'
   const scaling = { tier: node.tier, isMain, isBoss: false }
 
-  const monsterEncounter = isMain || Math.random() < MINOR_MONSTER_CHANCE_BY_TIER[luckTier(roll)]
+  // 🔰 1º nó menor da run (nodeIdx 1) é TRAVADO: encontro garantido com um pacote
+  // fixo de 3 dos arquétipos mais fracos (earlyPool) — a "luta de calibração" que
+  // assegura XP cedo e elimina o tanque solo na porta pro nível 1. O d20 é rolado
+  // normalmente e segue sendo o lootRoll (qualidade do espólio, não o encontro).
+  const isFirstMinor = nodeIdx === 1 && node.kind === 'minor'
+  const monsterEncounter = isMain || isFirstMinor || Math.random() < MINOR_MONSTER_CHANCE_BY_TIER[luckTier(roll)]
   if (monsterEncounter) {
-    // Sala principal = guardião SOLO; nó menor pode trazer um pacote de 1..3 (mais fracos).
-    const monsters = scaleMonsterGroup(dungeon, character.level, scaling, klass, tier)
+    // Sala principal = guardião SOLO; nó menor pode trazer um pacote de 1..3 (mais
+    // fracos). Nós menores da 1ª sala sorteiam com viés pró-fracos (earlyBias).
+    const monsters = isFirstMinor
+      ? scaleMonsterGroup(dungeon, character.level, scaling, klass, tier, { forcedSize: 3, pool: earlyPoolOf(dungeon) })
+      : scaleMonsterGroup(dungeon, character.level, scaling, klass, tier, { earlyBias: !isMain && node.tier === 1 })
     return { type: 'monster', roll, pending: { nodeIdx, kind: isMain ? 'main' : 'minor', lootRoll: roll, monsters, killedIds: [] } }
   }
 

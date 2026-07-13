@@ -103,7 +103,12 @@ export async function POST(req: Request) {
     const charForRun = { id: character.id, level: character.level, race: character.race, class: character.class }
     // 💀 Drop POR ABATE: cada monstro morto rola material na hora (estilhaço; boss =
     // Pedra Negra garantida) — recuar depois de matar 1 de 3 ainda rende algo.
-    const killDrops = newlyKilled.flatMap((m) => rollKillLoot(pending.kind, !!m.isBoss, dungeon.difficultyStars, run.tier))
+    // O d20 pré-combate (pending.lootRoll) define a CLASSE do drop de cada abate —
+    // sorte 20 + recuo depois de 1 abate ainda rendeu drop "classe 20". Boss é
+    // sempre sorte máxima (lootRoll: 20 no resolveBossNode).
+    const killDrops = newlyKilled.flatMap((m) =>
+      rollKillLoot(pending.kind, !!m.isBoss, dungeon.difficultyStars, run.tier, pending.lootRoll, dungeon)
+    )
     // 🌅 Bônus solo: os primeiros bosses do DIA da CONTA rendem pedras extras
     // (conta runs 'finished' de hoje — a run só finaliza matando o boss).
     if (newlyKilled.some((m) => !!m.isBoss)) {

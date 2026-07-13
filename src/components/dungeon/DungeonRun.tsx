@@ -204,6 +204,8 @@ interface ResolvedEvent {
   monster?: ScaledMonster
   /** Pacote completo do encontro (1..3). monster = o primeiro (avatar do card). */
   monsters?: ScaledMonster[]
+  /** d20 do nó (lootRoll do servidor): badge de sorte no card de vitória. */
+  luckRoll?: number
 }
 
 interface Banner {
@@ -315,7 +317,9 @@ interface RunItem {
 // ou um item — que renderiza o ÍCONE de jogo real (não o emoji-placeholder).
 type EffectChip =
   | { kind: 'stat'; text: string }
-  | { kind: 'item'; name: string; emoji: string; label: string; rarity?: string }
+  // highlight: drop de destaque (pedra de aprimoramento ou raridade RARE+) —
+  // ganha moldura dourada + brilho no card de vitória, independente da raridade.
+  | { kind: 'item'; name: string; emoji: string; label: string; rarity?: string; highlight?: boolean }
 
 // Mesma linguagem visual de raridade usada na landing (DolrathLanding.tsx RARITY_FRAME),
 // replicada aqui para os cards de loot da masmorra não terem que importar a landing inteira.
@@ -374,15 +378,19 @@ function EffectChipList({ effects }: { effects: EffectChip[] }) {
       {items.length > 0 && (
         <div className="grid grid-cols-2 gap-2 mb-2">
           {items.map((fx, i) => {
-            const frame = LOOT_RARITY_RING[fx.rarity ?? 'COMMON'] ?? LOOT_RARITY_RING.COMMON
+            // Drop de destaque (pedra/RARE+) usa a moldura LENDÁRIA (dourada) com
+            // brilho reforçado — o nat 20 precisa ser um momento.
+            const frame = fx.highlight
+              ? LOOT_RARITY_RING.LEGENDARY
+              : LOOT_RARITY_RING[fx.rarity ?? 'COMMON'] ?? LOOT_RARITY_RING.COMMON
             return (
               <motion.div
                 key={i}
                 initial={{ opacity: 0, y: 10, scale: 0.8 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 transition={{ delay: 0.2 + i * 0.12, type: 'spring', stiffness: 300, damping: 18 }}
-                className={`flex items-center gap-2 px-2.5 py-2 rounded-xl border-2 bg-white/5 ${frame.ring}`}
-                style={{ boxShadow: `0 0 14px ${frame.glow}` }}
+                className={`flex items-center gap-2 px-2.5 py-2 rounded-xl border-2 ${fx.highlight ? 'bg-amber-400/10' : 'bg-white/5'} ${frame.ring}`}
+                style={{ boxShadow: fx.highlight ? `0 0 22px ${frame.glow}, 0 0 8px ${frame.glow}` : `0 0 14px ${frame.glow}` }}
               >
                 <span className="w-11 h-11 inline-flex items-center justify-center shrink-0 rounded-lg bg-black/20 text-2xl">
                   <ItemThumb name={fx.name} emoji={fx.emoji} className="text-2xl" />
@@ -1128,10 +1136,13 @@ export default function DungeonRun({
 
     const effects: EffectChip[] = []
     if (loot.gold > 0) effects.push({ kind: 'stat', text: `+${loot.gold} 💰` })
-    for (const d of loot.drops) effects.push({ kind: 'item', name: d.name, emoji: d.emoji, label: d.name, rarity: d.rarity })
+    for (const d of loot.drops) effects.push({
+      kind: 'item', name: d.name, emoji: d.emoji, label: d.name, rarity: d.rarity,
+      highlight: d.kind === 'stone' || ['RARE', 'EPIC', 'LEGENDARY'].includes(String(d.rarity ?? '').toUpperCase()),
+    })
 
     const def: DungeonEventDef = { kind: revealKind, min: 0, max: 0, icon, title, description: text }
-    return { def, text, effects }
+    return { def, text, effects, luckRoll: roll }
   }
 
   // Botão principal: pede o próximo nó ao SERVIDOR (ele cobra stamina, rola o
@@ -2026,13 +2037,19 @@ export default function DungeonRun({
         const effects: EffectChip[] = []
         if (nodeXp > 0) effects.push({ kind: 'stat', text: `+${nodeXp} ⭐ XP` })
         if (totalGold > 0) effects.push({ kind: 'stat', text: `+${totalGold} 💰` })
-        // Drops do nó + o que caiu dos abates intermediários do pacote.
-        for (const d of [...encounterDropsRef.current, ...loot.drops]) effects.push({
+        // Drops do nó + o que caiu dos abates intermediários do pacote. Pedra de
+        // aprimoramento e RARE+ ganham destaque (moldura dourada) no card.
+        const isHighlight = (d: LootDrop) =>
+          d.kind === 'stone' || ['RARE', 'EPIC', 'LEGENDARY'].includes(String(d.rarity ?? '').toUpperCase())
+        const allDrops = [...encounterDropsRef.current, ...loot.drops]
+        const hasRare = allDrops.some(isHighlight)
+        for (const d of allDrops) effects.push({
           kind: 'item',
           name: d.name,
           emoji: d.emoji,
           label: d.enhancement ? `${d.name} +${d.enhancement}` : d.name,
           rarity: d.rarity,
+          highlight: isHighlight(d),
         })
         encounterDropsRef.current = []
 
@@ -2040,13 +2057,13 @@ export default function DungeonRun({
           kind: hasGear ? 'item' : 'gold',
           min: 0,
           max: 0,
-          icon: hasGear ? '🌟' : '🏆',
-          title: 'Espólio da Vitória',
+          icon: hasRare ? '💎' : hasGear ? '🌟' : '🏆',
+          title: hasRare ? 'Espólio Raro!' : 'Espólio da Vitória',
           description: hasGear
             ? `${m.emoji} ${m.name} foi derrotado e deixou cair seus pertences.`
             : `${m.emoji} ${m.name} foi derrotado.`,
         }
-        setLootCard({ def, text: def.description, effects })
+        setLootCard({ def, text: def.description, effects, luckRoll: lootRollRef.current })
       }
     }, 2800)
   }
@@ -2785,7 +2802,6 @@ export default function DungeonRun({
                     </span>
                   ))}
                 </div>
-              </div>
 
               {/* selo de progresso */}
               <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 text-[10px] uppercase tracking-[0.2em] text-textsec/70 font-bold pointer-events-none">
@@ -2836,6 +2852,21 @@ export default function DungeonRun({
                       </motion.div>
 
                       <h3 className="text-2xl font-black mb-1.5" style={{ color: dungeon.accent }}>{lootCard.def.title}</h3>
+                      {/* Badge da sorte do nó: fecha o loop d20 → qualidade do espólio. */}
+                      {lootCard.luckRoll != null && (
+                        <div
+                          className={`inline-flex items-center gap-1.5 px-3 py-1 mb-2 rounded-full border text-xs font-bold font-combat ${
+                            lootCard.luckRoll >= 20
+                              ? 'border-amber-400/70 text-amber-300 bg-amber-400/10'
+                              : lootCard.luckRoll >= 14
+                              ? 'border-emerald-400/60 text-emerald-300 bg-white/5'
+                              : 'border-white/20 text-textsec bg-white/5'
+                          }`}
+                        >
+                          🎲 Sorte {lootCard.luckRoll}
+                          {lootCard.luckRoll >= 20 ? ' — espólio máximo!' : lootCard.luckRoll >= 14 ? ' — boa fortuna' : ''}
+                        </div>
+                      )}
                       {lootCard.text && <p className="text-sm text-textsec leading-snug mb-4">{lootCard.text}</p>}
 
                       <EffectChipList effects={lootCard.effects} />

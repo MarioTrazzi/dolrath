@@ -5,7 +5,7 @@
 // combate no mobile. Mesmo espírito do /dev/battle-fx.
 import { useState, useEffect } from 'react'
 import DungeonRun, { DungeonCharacter } from '@/components/dungeon/DungeonRun'
-import { DUNGEONS, scaleMonster, pickMonster } from '@/lib/dungeonAdventures'
+import { DUNGEONS, scaleMonster, scaleMonsterGroup, pickMonster, earlyPoolOf, rollNodeLoot, rollKillLoot } from '@/lib/dungeonAdventures'
 
 const DUNGEON = DUNGEONS.floresta
 
@@ -48,6 +48,9 @@ const CHAR: DungeonCharacter = {
 function installFetchStub() {
   const real = window.fetch.bind(window)
   let stamina = 156
+  let steps = 0      // nº do nó atual (1º = pacote travado)
+  let lastRoll = 14  // d20 do nó corrente (classe dos drops por abate)
+  let remaining = 0  // monstros vivos do nó (cleared quando zera)
   // Desgaste simulado no "servidor" do stub (arma −2/abate, resto −1) — espelha
   // a rota real /api/dungeon/run/combat.
   const dur: Record<string, { name: string; durability: number; maxDurability: number }> = {
@@ -63,8 +66,22 @@ function installFetchStub() {
     if (url.includes('/api/dungeon/run/heartbeat')) return json({ active: true })
     if (url.includes('/api/dungeon/run/step')) {
       stamina -= 4
-      // Sempre MONSTRO (1 inimigo) — é o layout que queremos ver.
+      steps += 1
+      // 1º nó: espelha a TRAVA do servidor — pacote de 3 do earlyPool com sorte 20
+      // (valida o layout do pacote + drops "classe 20" + pedra destacada no card).
+      if (steps === 1) {
+        const monsters = scaleMonsterGroup(
+          DUNGEON, CHAR.level, { tier: 1, isMain: false, isBoss: false }, 'monk', 1,
+          { forcedSize: 3, pool: earlyPoolOf(DUNGEON) },
+        )
+        lastRoll = 20
+        remaining = monsters.length
+        return json({ type: 'monster', roll: 20, monsters, stamina })
+      }
+      // Demais nós: 1 inimigo, sorte 14 (layout clássico).
       const monster = scaleMonster(pickMonster(DUNGEON), DUNGEON, CHAR.level, { tier: 1, isMain: false })
+      lastRoll = 14
+      remaining = 1
       return json({ type: 'monster', roll: 14, monster, stamina })
     }
     if (url.includes('/api/dungeon/run/combat')) {
@@ -76,9 +93,18 @@ function installFetchStub() {
             d.durability = Math.max(0, d.durability - (slot === 'WEAPON' ? 2 : 1))
             return { slot, name: d.name, durability: d.durability, maxDurability: d.maxDurability, justBroke: d.durability === 0 }
           })
+        remaining = body.outcome === 'win' ? 0 : Math.max(0, remaining - 1)
+        const cleared = remaining === 0
+        // Drop por abate na classe do d20 pré-combate + espólio do nó ao limpar —
+        // os MESMOS geradores do servidor (rollKillLoot/rollNodeLoot).
+        const killDrops = rollKillLoot('minor', false, DUNGEON.difficultyStars, 1, lastRoll, DUNGEON)
+        const nodeLoot = cleared
+          ? rollNodeLoot(DUNGEON, lastRoll, 'minor', CHAR.level, CHAR.race, CHAR.class, 1)
+          : null
+        const loot = { gold: nodeLoot?.gold ?? 0, drops: [...killDrops, ...(nodeLoot?.drops ?? [])] }
         return json({
-          granted: { gold: 12, killGold: 12, lootGold: 0, xp: 20, loot: { gold: 0, drops: [] } },
-          cleared: true,
+          granted: { gold: 12 + loot.gold, killGold: 12, lootGold: loot.gold, xp: 20, loot },
+          cleared,
           equipmentWear,
         })
       }

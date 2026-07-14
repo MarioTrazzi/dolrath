@@ -781,10 +781,30 @@ export default function CharacterDetailsPage() {
               <Shield className="w-5 h-5" />
               Explorar Dungeon
             </button>
+            <button
+              onClick={() => router.push(`/character/${effectiveCharacterId}/skill-tree`)}
+              className="flex-1 sm:flex-none rounded-[3px] border px-8 py-3 text-[15px] font-semibold tracking-wide transition-all hover:brightness-125 flex items-center justify-center gap-2"
+              style={{
+                borderColor: FRAME,
+                background: 'linear-gradient(180deg, #3a3325, #241f16)',
+                color: GOLD_BRIGHT,
+                boxShadow: 'inset 0 1px 0 rgba(231,198,130,0.2), 0 0 14px rgba(201,162,95,0.15)',
+              }}
+            >
+              <Star className="w-5 h-5" />
+              Árvore de Habilidades
+              {(character.availablePoints ?? 0) > 0 && (
+                <span
+                  className="ml-1 rounded-[3px] border px-1.5 py-0.5 text-[11px] font-bold tabular-nums"
+                  style={{ borderColor: GOLD, background: 'rgba(0,0,0,0.35)', color: GOLD_BRIGHT }}
+                >
+                  {character.availablePoints}
+                </span>
+              )}
+            </button>
           </div>
 
-        {/* 🌳 Subiu de nível → só um chamariz pra Árvore de Habilidades. A distribuição
-            de pontos saiu da ficha e agora vive em /character/[id]/skill-tree. */}
+        {/* 🌳 Chamariz de level-up — acesso permanente fica no botão acima. */}
         {(character.availablePoints ?? 0) > 0 && (
           <button
             onClick={() => router.push(`/character/${effectiveCharacterId}/skill-tree`)}

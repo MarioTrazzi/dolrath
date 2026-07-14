@@ -13,13 +13,14 @@
 // receita ÉPICA nunca encosta no teto (~75% no nv50): tensão de late-game,
 // no espírito do softcap/hardcap do enhancementSystem.ts.
 //
-// REFINO de pedra (10:1) é a exceção deliberada: conversão, não fabricação —
-// continua SEM falha (é o caminho determinístico da Concentrada), com XP fixo
-// reduzido e gating leve de nível para não virar farm de XP.
+// REFINO concentrado (10 Pedras → 1 Concentrada) é a exceção deliberada na
+// Forja: conversão, não fabricação — continua SEM falha, com XP fixo e gating
+// de Forja nv10. O refino básico (10 estilhaços → Pedra Negra) mora no
+// PROCESSAMENTO (processing.ts), no mesmo modelo de conversão garantida.
 //
-// PROCESSAMENTO (processing.ts) segue o modelo do refino, mas 100% sem falha:
-// minLevel/xp/goldCost vivem NA RECEITA (ProcessingRecipe), não nas tabelas por
-// raridade daqui — decisão consciente: sem RNG, a tabela de chance não se aplica.
+// PROCESSAMENTO (processing.ts) é 100% sem falha: minLevel/xp/goldCost vivem
+// NA RECEITA (ProcessingRecipe), não nas tabelas por raridade daqui — decisão
+// consciente: sem RNG, a tabela de chance não se aplica.
 //
 // Módulo 100% puro (sem prisma) — tunável via scripts/crafting-profession-sim.ts.
 
@@ -69,14 +70,14 @@ export const CRAFT_CHANCE_CAP = 0.95;
 export const CRAFT_LEVEL_BONUS_PER_LEVEL = 0.01;
 
 // ============================================================
-// Refino de pedra (Forja) — sem falha, XP fixo
+// Refino de pedra — básico no Processamento; concentrado na Forja
 // ============================================================
 
-/** XP do refino básico (10 estilhaços → 1 Pedra Negra). */
+/** XP do refino básico (10 estilhaços → 1 Pedra Negra) — ProcessingRecipe.xp. */
 export const REFINE_XP_BASIC = 8;
-/** XP do refino concentrado (10 Pedras Negras → 1 Concentrada). */
+/** XP do refino concentrado (10 Pedras Negras → 1 Concentrada) — Forja. */
 export const REFINE_XP_CONCENTRATED = 35;
-/** Gating do refino: básico desde o nv1; Concentrada pede Forja nv10. */
+/** Gating: básico (Processamento nv1); Concentrada pede Forja nv10. */
 export const REFINE_MIN_LEVEL = { basic: 1, concentrated: 10 } as const;
 
 /** Receita de refino (kind 'stone') — sem RNG, XP fixo. */

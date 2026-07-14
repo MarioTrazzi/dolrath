@@ -36,7 +36,9 @@ export function whatItemCanProduceSummary(itemName: string): string | null {
   for (const r of forgeRecipesUsingMaterial(itemName)) {
     kinds.add(r.kind === 'stone' ? 'stone' : `gear:${r.group}`);
   }
-  if (processingRecipesUsingInput(itemName).length > 0) kinds.add('processed');
+  for (const r of processingRecipesUsingInput(itemName)) {
+    kinds.add(r.group === 'refine' ? 'stone' : 'processed');
+  }
   if (cookingRecipesUsingInput(itemName).length > 0) kinds.add('food');
 
   const labels = CATEGORY_ORDER.filter(({ match }) =>

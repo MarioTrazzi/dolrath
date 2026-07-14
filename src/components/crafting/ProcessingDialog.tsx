@@ -82,6 +82,7 @@ const GROUP_EMOJI: Record<ProcessingRecipe['group'], string> = {
   textile: '🧵',
   mill: '🌾',
   still: '⚗️',
+  refine: '🪨',
 };
 
 export default function ProcessingDialog({
@@ -277,7 +278,11 @@ export default function ProcessingDialog({
   };
 
   const output = recipe ? getProcessingOutput(recipe) : null;
-  const outputDescription = output?.processed?.description ?? output?.consumable?.description ?? null;
+  const outputDescription =
+    output?.processed?.description ??
+    output?.consumable?.description ??
+    output?.stone?.description ??
+    null;
   const centerUi = recipe ? RARITY_UI[recipe.rarity] : null;
 
   const groups = useMemo(

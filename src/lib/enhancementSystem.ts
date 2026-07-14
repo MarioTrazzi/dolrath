@@ -237,6 +237,53 @@ export const STONE_NAMES = {
   ARMOR_CONCENTRATED: 'Pedra Negra Mágica Concentrada (Armadura)',
 } as const;
 
+/** Metadados para criar a pedra on-demand (forja concentrada / processamento básico). */
+export const STONE_META: Record<
+  string,
+  { code: string; rarity: string; goldPrice: number; sellPrice: number; level: number; description: string; emoji: string }
+> = {
+  [STONE_NAMES.WEAPON_BASIC]: {
+    code: 'WEAPON_BASIC',
+    rarity: 'UNCOMMON',
+    goldPrice: 250,
+    sellPrice: 150,
+    level: 1,
+    description:
+      'Pedra imbuída de energia sombria. Usada para aprimorar armas e escudos de +1 a +15. Obtida em masmorras e pelo processamento de estilhaços.',
+    emoji: '🔸',
+  },
+  [STONE_NAMES.ARMOR_BASIC]: {
+    code: 'ARMOR_BASIC',
+    rarity: 'UNCOMMON',
+    goldPrice: 220,
+    sellPrice: 130,
+    level: 1,
+    description:
+      'Pedra imbuída de energia sombria. Usada para aprimorar armaduras, elmos, luvas e botas de +1 a +15. Obtida em masmorras e pelo processamento de estilhaços.',
+    emoji: '🔹',
+  },
+  [STONE_NAMES.WEAPON_CONCENTRATED]: {
+    code: 'WEAPON_CONCENTRATED',
+    rarity: 'EPIC',
+    goldPrice: 2500,
+    sellPrice: 1500,
+    level: 30,
+    description:
+      'Pedra negra condensada com poder mágico imenso. Necessária para aprimorar armas e escudos aos níveis I a V. Muito rara.',
+    emoji: '💎',
+  },
+  [STONE_NAMES.ARMOR_CONCENTRATED]: {
+    code: 'ARMOR_CONCENTRATED',
+    rarity: 'EPIC',
+    goldPrice: 2200,
+    sellPrice: 1300,
+    level: 30,
+    description:
+      'Pedra negra condensada com poder mágico imenso. Necessária para aprimorar armaduras aos níveis I a V. Muito rara.',
+    emoji: '💎',
+  },
+};
+
 export type MaterialRequirement =
   | { kind: 'STONE'; name: string }
   | { kind: 'DUPLICATE' };

@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { ItemType } from '@prisma/client'
 import { FORGE_RECIPES, getForgeRecipeById, getForgeOutputCatalogItem } from '@/lib/forge'
 import { itemImagePath } from '@/lib/itemCatalog'
-import { STONE_NAMES } from '@/lib/enhancementSystem'
+import { STONE_NAMES, STONE_META } from '@/lib/enhancementSystem'
 import { addHistoryEntry } from '@/lib/characterHistory'
 import { assertInventoryRoom } from '@/lib/inventoryMutations'
 import {
@@ -17,22 +17,15 @@ import {
 import { getUserForgeXp } from '@/lib/craftingServer'
 import { getProfessionLevel, getProfessionLevelInfo } from '@/lib/professionSystem'
 
-// ⚒️ Profissão de FORJA — crafta equipamento OU refina pedra.
+// ⚒️ Profissão de FORJA — crafta equipamento OU refina pedra concentrada.
 // Consome materiais/pedras do inventário + taxa em gold (carteira do personagem)
 // para TODAS as unidades do lote, sucesso ou falha. Gear rola chance de sucesso
 // por unidade (craftingProfession.ts — raridade + nível da CONTA, gating por
-// minLevel); refino continua determinístico (conversão 10:1). Cada craft credita
-// forgeXp no personagem; o NÍVEL é a soma da conta (craftingServer.ts).
-// O servidor decide tudo: nível do aggregate, chance da tabela, RNG aqui dentro.
-
-// Fallback de stats para criar a pedra de saída do refino caso ainda não exista
-// no banco (em produção já está seedada — ver api/seed/route.ts).
-const STONE_META: Record<string, { code: string; rarity: string; goldPrice: number; sellPrice: number; level: number }> = {
-  [STONE_NAMES.WEAPON_BASIC]: { code: 'WEAPON_BASIC', rarity: 'UNCOMMON', goldPrice: 250, sellPrice: 150, level: 1 },
-  [STONE_NAMES.ARMOR_BASIC]: { code: 'ARMOR_BASIC', rarity: 'UNCOMMON', goldPrice: 220, sellPrice: 130, level: 1 },
-  [STONE_NAMES.WEAPON_CONCENTRATED]: { code: 'WEAPON_CONCENTRATED', rarity: 'EPIC', goldPrice: 2500, sellPrice: 1500, level: 30 },
-  [STONE_NAMES.ARMOR_CONCENTRATED]: { code: 'ARMOR_CONCENTRATED', rarity: 'EPIC', goldPrice: 2200, sellPrice: 1300, level: 30 },
-}
+// minLevel); refino concentrado continua determinístico (10 pedras → 1).
+// O refino básico (10 estilhaços → Pedra Negra) está em process-item.
+// Cada craft credita forgeXp no personagem; o NÍVEL é a soma da conta
+// (craftingServer.ts). O servidor decide tudo: nível do aggregate, chance da
+// tabela, RNG aqui dentro.
 
 /** minLevel/chance de uma receita de forja para um dado nível da profissão. */
 function forgeRecipeInfo(recipe: (typeof FORGE_RECIPES)[number], level: number) {
@@ -237,7 +230,7 @@ export async function POST(
             item = await tx.item.create({
               data: {
                 name: recipe.outputName,
-                description: 'Pedra de aprimoramento refinada na forja.',
+                description: meta.description,
                 type: 'CONSUMABLE',
                 image: itemImagePath(recipe.outputName),
                 level: meta.level,

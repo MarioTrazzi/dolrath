@@ -5,14 +5,18 @@
 // INCOMUNS da forja e as poções da alquimia exigem. É a camada intermediária
 // do ecossistema: coleta → processar → forjar/transmutar.
 //
-// Modelo do REFINO de pedra (craftingProfession.ts): conversão, não fabricação
-// — SEM falha (chance 1), XP FIXO por receita e gating por nível de
-// Processamento. Por isso as receitas carregam minLevel/xp/goldCost explícitos
-// (a tabela por raridade do rollCraftBatch não se aplica aqui).
+// Também faz o REFINO BÁSICO de pedra: 10 Estilhaços → 1 Pedra Negra
+// (Arma/Armadura). A Concentrada (10 pedras → 1) continua na Forja.
+//
+// Modelo de conversão (não fabricação): SEM falha (chance 1), XP FIXO por
+// receita e gating por nível de Processamento. Por isso as receitas carregam
+// minLevel/xp/goldCost explícitos (a tabela por raridade do rollCraftBatch
+// não se aplica aqui).
 //
 // Exceções de saída: Ração e Bandagem de Linho saíram da alquimia ("alquimia é
 // só poções") e são produzidas aqui, mas o item de saída delas vive no
 // CONSUMABLE_CATALOG (são consumíveis de verdade, não stats.kind='processed').
+// Pedra Negra sai com stats.enhancementStone (mesmo item do seed/aprimoramento).
 //
 // Módulo 100% puro (sem prisma) — tunável via scripts/crafting-profession-sim.ts.
 
@@ -25,6 +29,8 @@ import {
   type ProcessedMaterial,
   type Rarity,
 } from './itemCatalog';
+import { STONE_META, STONE_NAMES } from './enhancementSystem';
+import { REFINE_XP_BASIC } from './craftingProfession';
 
 export interface ProcessingInputReq {
   name: string;
@@ -33,11 +39,11 @@ export interface ProcessingInputReq {
 
 export interface ProcessingRecipe {
   id: string;
-  /** Nome do item produzido (PROCESSED_CATALOG; Ração/Bandagem → CONSUMABLE_CATALOG). */
+  /** Nome do item produzido (PROCESSED_CATALOG; Ração/Bandagem → CONSUMABLE; estilhaço → Pedra Negra). */
   outputName: string;
   rarity: Rarity;
   /** Categoria de agrupamento na UI da bancada. */
-  group: 'smelt' | 'wood' | 'textile' | 'mill' | 'still';
+  group: 'smelt' | 'wood' | 'textile' | 'mill' | 'still' | 'refine';
   inputs: ProcessingInputReq[];
   /** Nível de Processamento que destrava a receita. */
   minLevel: number;
@@ -119,6 +125,16 @@ export const PROCESSING_RECIPES: ProcessingRecipe[] = [
   proc('proc_extrato_raiz', 'Extrato de Raiz', 'COMMON', 'still', [
     { name: 'Raiz Vigorosa', quantity: 2 }, { name: 'Água Pura', quantity: 1 },
   ], 1, 6, 5),
+
+  // ---------- REFINO DE PEDRA (10 estilhaços → 1 Pedra Negra) ----------
+  // Mesma conversão garantida que o resto da bancada; XP/taxa iguais ao
+  // REFINE_XP_BASIC / taxa antiga. Concentrada (10 pedras → 1) continua na Forja.
+  proc('proc_pedra_arma', STONE_NAMES.WEAPON_BASIC, 'UNCOMMON', 'refine', [
+    { name: 'Estilhaço de Pedra Negra (Arma)', quantity: 10 },
+  ], 1, REFINE_XP_BASIC, 20),
+  proc('proc_pedra_armadura', STONE_NAMES.ARMOR_BASIC, 'UNCOMMON', 'refine', [
+    { name: 'Estilhaço de Pedra Negra (Armadura)', quantity: 10 },
+  ], 1, REFINE_XP_BASIC, 20),
 ];
 
 const RECIPE_BY_ID = new Map(PROCESSING_RECIPES.map((r) => [r.id, r]));
@@ -138,11 +154,19 @@ export const PROCESSING_GROUP_LABEL: Record<ProcessingRecipe['group'], string> =
   textile: 'Têxtil',
   mill: 'Moagem',
   still: 'Destilaria',
+  refine: 'Refino',
 };
 
-const PROCESSING_GROUP_ORDER: ProcessingRecipe['group'][] = ['smelt', 'wood', 'textile', 'mill', 'still'];
+const PROCESSING_GROUP_ORDER: ProcessingRecipe['group'][] = [
+  'smelt',
+  'wood',
+  'textile',
+  'mill',
+  'still',
+  'refine',
+];
 
-/** Receitas agrupadas por bancada (fundição → madeira → têxtil → moagem → destilaria),
+/** Receitas agrupadas por bancada (fundição → … → destilaria → refino),
  *  ordenadas por nível de desbloqueio. */
 export function processingRecipesByGroup(): { group: ProcessingRecipe['group']; recipes: ProcessingRecipe[] }[] {
   return PROCESSING_GROUP_ORDER.map((group) => ({
@@ -151,17 +175,45 @@ export function processingRecipesByGroup(): { group: ProcessingRecipe['group']; 
   }));
 }
 
+export interface ProcessingStoneOutput {
+  name: string;
+  description: string;
+  emoji: string;
+  rarity: Rarity;
+  goldPrice: number;
+  sellPrice: number;
+  level: number;
+  code: string;
+}
+
 export interface ProcessingOutput {
   /** Saída padrão: insumo processado do PROCESSED_CATALOG. */
   processed?: ProcessedMaterial;
   /** Saídas-exceção (Ração/Bandagem): consumível do CONSUMABLE_CATALOG. */
   consumable?: ConsumableItem;
+  /** Refino de pedra: Pedra Negra (Arma/Armadura) a partir de 10 estilhaços. */
+  stone?: ProcessingStoneOutput;
 }
 
-/** Resolve o item de saída de uma receita (processado OU consumível migrado). */
+/** Resolve o item de saída de uma receita (processado, consumível migrado ou pedra). */
 export function getProcessingOutput(recipe: ProcessingRecipe): ProcessingOutput {
   const processed = getProcessedByName(recipe.outputName);
   if (processed) return { processed };
+  const stoneMeta = STONE_META[recipe.outputName];
+  if (stoneMeta) {
+    return {
+      stone: {
+        name: recipe.outputName,
+        description: stoneMeta.description,
+        emoji: stoneMeta.emoji,
+        rarity: stoneMeta.rarity as Rarity,
+        goldPrice: stoneMeta.goldPrice,
+        sellPrice: stoneMeta.sellPrice,
+        level: stoneMeta.level,
+        code: stoneMeta.code,
+      },
+    };
+  }
   const consumable = getConsumableByName(recipe.outputName);
   return { consumable };
 }
@@ -172,12 +224,13 @@ const CONSUMABLE_OUTPUT_EMOJI: Record<string, string> = {
   'Bandagem de Linho': '🩹',
 };
 
-/** Emoji de um insumo/saída da bancada (material cru, ingrediente ou processado). */
+/** Emoji de um insumo/saída da bancada (material cru, ingrediente, processado ou pedra). */
 export function processingItemEmoji(name: string): string {
   return (
     getForgeMaterialByName(name)?.emoji ??
     getIngredientByName(name)?.emoji ??
     getProcessedByName(name)?.emoji ??
+    STONE_META[name]?.emoji ??
     CONSUMABLE_OUTPUT_EMOJI[name] ??
     '⚙️'
   );

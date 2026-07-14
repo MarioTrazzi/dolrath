@@ -14,11 +14,11 @@ import { getUserProcessXp } from '@/lib/craftingServer'
 import { getProfessionLevel, getProfessionLevelInfo } from '@/lib/professionSystem'
 
 // ⚙️ Profissão de PROCESSAMENTO — beneficia matéria-prima crua em insumo
-// processado (Barras/Tecidos/Extratos + Ração/Bandagem). SEM falha: é o modelo
-// do refino de pedra da forja (conversão, não fabricação) — toda unidade passa,
-// XP fixo da receita, gating por minLevel. Consome os insumos + taxa em gold
-// (carteira do personagem) e credita processXp no personagem; o NÍVEL é a soma
-// da conta (craftingServer.ts). O servidor decide tudo (nível do aggregate).
+// processado (Barras/Tecidos/Extratos + Ração/Bandagem) e refina estilhaços
+// em Pedra Negra (10:1). SEM falha: conversão, não fabricação — toda unidade
+// passa, XP fixo da receita, gating por minLevel. Consome os insumos + taxa em
+// gold (carteira do personagem) e credita processXp no personagem; o NÍVEL é a
+// soma da conta (craftingServer.ts). O servidor decide tudo (nível do aggregate).
 
 // GET — nível de Processamento da conta + gating de cada receita (para a UI).
 export async function GET(
@@ -78,9 +78,9 @@ export async function POST(
       return NextResponse.json({ error: 'Receita não encontrada' }, { status: 404 })
     }
 
-    // Valida a saída (processado do catálogo OU consumível migrado — Ração/Bandagem).
+    // Valida a saída (processado, consumível migrado — Ração/Bandagem — ou pedra).
     const output = getProcessingOutput(recipe)
-    if (!output.processed && !output.consumable) {
+    if (!output.processed && !output.consumable && !output.stone) {
       return NextResponse.json({ error: 'Saída da receita não existe no catálogo' }, { status: 500 })
     }
 
@@ -171,43 +171,63 @@ export async function POST(
         data: { gold: { decrement: totalGoldCost }, processXp: { increment: roll.xpGained } },
       })
 
-      // 5. Produz a saída (acha/cria o Item on-demand e EMPILHA — insumo agrupa).
+      // 5. Produz a saída (acha/cria o Item on-demand e EMPILHA — insumo/pedra agrupa).
       let item = await tx.item.findFirst({ where: { name: recipe.outputName } })
       if (!item) {
-        item = output.processed
-          ? await tx.item.create({
-              data: {
-                name: output.processed.name,
-                description: output.processed.description,
-                type: 'CONSUMABLE',
-                image: itemImagePath(output.processed.name),
-                level: 1,
-                goldPrice: output.processed.goldValue,
-                stats: {
-                  kind: 'processed',
-                  rarity: output.processed.rarity,
-                  battleUsable: false,
-                  sellPrice: Math.floor(output.processed.goldValue * 0.5),
-                  source: 'processing',
-                },
+        if (output.processed) {
+          item = await tx.item.create({
+            data: {
+              name: output.processed.name,
+              description: output.processed.description,
+              type: 'CONSUMABLE',
+              image: itemImagePath(output.processed.name),
+              level: 1,
+              goldPrice: output.processed.goldValue,
+              stats: {
+                kind: 'processed',
+                rarity: output.processed.rarity,
+                battleUsable: false,
+                sellPrice: Math.floor(output.processed.goldValue * 0.5),
+                source: 'processing',
               },
-            })
-          : await tx.item.create({
-              data: {
-                name: output.consumable!.name,
-                description: output.consumable!.description,
-                type: 'CONSUMABLE',
-                subtype: output.consumable!.subtype as ConsumableSubtype,
-                image: itemImagePath(output.consumable!.name),
-                level: output.consumable!.level,
-                goldPrice: output.consumable!.goldPrice,
-                stats: {
-                  ...output.consumable!.stats,
-                  rarity: output.consumable!.rarity,
-                  sellPrice: Math.floor(output.consumable!.goldPrice * 0.6),
-                },
+            },
+          })
+        } else if (output.stone) {
+          item = await tx.item.create({
+            data: {
+              name: output.stone.name,
+              description: output.stone.description,
+              type: 'CONSUMABLE',
+              image: itemImagePath(output.stone.name),
+              level: output.stone.level,
+              goldPrice: output.stone.goldPrice,
+              stats: {
+                rarity: output.stone.rarity,
+                enhancementStone: output.stone.code,
+                battleUsable: false,
+                sellPrice: output.stone.sellPrice,
+                source: 'processing',
               },
-            })
+            },
+          })
+        } else {
+          item = await tx.item.create({
+            data: {
+              name: output.consumable!.name,
+              description: output.consumable!.description,
+              type: 'CONSUMABLE',
+              subtype: output.consumable!.subtype as ConsumableSubtype,
+              image: itemImagePath(output.consumable!.name),
+              level: output.consumable!.level,
+              goldPrice: output.consumable!.goldPrice,
+              stats: {
+                ...output.consumable!.stats,
+                rarity: output.consumable!.rarity,
+                sellPrice: Math.floor(output.consumable!.goldPrice * 0.6),
+              },
+            },
+          })
+        }
       }
       const existing = await tx.characterInventory.findFirst({
         where: { characterId: character.id, itemId: item.id, enhancementLevel: 0 },

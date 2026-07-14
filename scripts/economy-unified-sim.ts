@@ -107,8 +107,8 @@ function sellValueOf(name: string): number {
 
 // Receitas reais usadas nas políticas
 const VIDA = POTION_RECIPES.find((r) => r.outputName === 'Poção de Vida')!
-const REFINO_ARMA = FORGE_RECIPES.find((r) => r.outputName === 'Pedra Negra (Arma)')!
-const REFINO_ARMADURA = FORGE_RECIPES.find((r) => r.outputName === 'Pedra Negra (Armadura)')!
+const REFINO_ARMA = PROCESSING_RECIPES.find((r) => r.outputName === 'Pedra Negra (Arma)')!
+const REFINO_ARMADURA = PROCESSING_RECIPES.find((r) => r.outputName === 'Pedra Negra (Armadura)')!
 // custo da cópia p/ reparo: receita comum de forja (fee + valor de mercado dos materiais)
 const COPY_RECIPE = FORGE_RECIPES.find((r) => r.outputName === 'Espada de Recruta')!
 const COPY_COST = COPY_RECIPE.goldCost + COPY_RECIPE.materials.reduce((s, m) => s + goldValueOf(m.name) * m.quantity, 0)

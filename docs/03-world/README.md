@@ -9,7 +9,7 @@ O mundo jogável hoje se divide em **Cidade** (serviços) e **Masmorras** (conte
 | Local | Função | Sistema |
 |---|---|---|
 | Loja | Compra de equipamentos e consumíveis (GOLD) | `src/app/api/store/*`, catálogo em `src/lib/itemCatalog.ts` |
-| Ferreiro | Mesa de Forja: craft, refino de pedras 10:1, reparo raro | `src/lib/forge.ts` |
+| Ferreiro | Mesa de Forja: craft, refino concentrado 10:1, reparo raro | `src/lib/forge.ts` |
 | Alquimista | Craft de poções com ingredientes dropados | `src/lib/alchemy.ts` |
 | Banco | Depósito/saque entre carteira do personagem e conta; ponto de claim on-chain | `src/app/api/bank/*` |
 | Arena | PvP em tempo real via socket | `server/socket-server.js` |

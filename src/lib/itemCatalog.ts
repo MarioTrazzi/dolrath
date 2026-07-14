@@ -1052,10 +1052,12 @@ export const INGREDIENT_CATALOG: AlchemyIngredient[] = [
 // === CATÁLOGO DE MATERIAIS DE FORJA ===
 // Espólios de masmorra usados na Mesa de Forja do ferreiro (src/lib/forge.ts):
 //  - Forjar equipamento comum/incomum (receitas que produzem peças já existentes).
-//  - Refinar pedras de aprimoramento (estilhaço → Pedra Negra → Concentrada, 10:1).
+//  - Refinar pedra concentrada (10 Pedras Negras → 1 Concentrada).
 //  - Reparar equipamento RARO+/ÉPICO/LENDÁRIO (Estilhaço de Memória, só de chefe).
-// No banco viram Item type=CONSUMABLE com stats.kind='material' (sem migração),
-// distinguindo-os de poções/ingredientes. Não são vendidos na loja.
+// Estilhaços também alimentam o refino básico na Bancada de Processamento
+// (10 → 1 Pedra Negra). No banco viram Item type=CONSUMABLE com
+// stats.kind='material' (sem migração), distinguindo-os de poções/ingredientes.
+// Não são vendidos na loja.
 
 export interface ForgeMaterial {
   name: string;
@@ -1076,8 +1078,8 @@ export const FORGE_MATERIAL_CATALOG: ForgeMaterial[] = [
   { name: 'Ferro', description: 'Lingote de ferro forjável; transforma couro comum em proteção incomum.', emoji: '🔩', rarity: 'UNCOMMON', goldValue: 14, source: 'dungeon' },
 
   // ---------- LIGANTES (estilhaços de pedra negra: ligam toda receita + viram pedra) ----------
-  { name: 'Estilhaço de Pedra Negra (Arma)', description: 'Caco de pedra negra de arma; ligante mágico das armas. 10 viram uma Pedra Negra (Arma).', emoji: '🔸', rarity: 'COMMON', goldValue: 8, source: 'dungeon' },
-  { name: 'Estilhaço de Pedra Negra (Armadura)', description: 'Caco de pedra negra de armadura; ligante mágico das armaduras. 10 viram uma Pedra Negra (Armadura).', emoji: '🔹', rarity: 'COMMON', goldValue: 8, source: 'dungeon' },
+  { name: 'Estilhaço de Pedra Negra (Arma)', description: 'Caco de pedra negra de arma; ligante mágico das armas. Processe 10 na bancada para obter 1 Pedra Negra (Arma).', emoji: '🔸', rarity: 'COMMON', goldValue: 8, source: 'dungeon' },
+  { name: 'Estilhaço de Pedra Negra (Armadura)', description: 'Caco de pedra negra de armadura; ligante mágico das armaduras. Processe 10 na bancada para obter 1 Pedra Negra (Armadura).', emoji: '🔹', rarity: 'COMMON', goldValue: 8, source: 'dungeon' },
 
   // ---------- MATERIAIS ESPECIAIS DE ARMA (um por tipo de arma) ----------
   { name: 'Ferro Pesado', description: 'Bloco denso de ferro; base de espadas e machados pesados.', emoji: '🔨', rarity: 'COMMON', goldValue: 9, source: 'dungeon' },

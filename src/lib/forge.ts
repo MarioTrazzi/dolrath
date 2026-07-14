@@ -1,11 +1,12 @@
-// ⚒️ Sistema de Forja — receitas de equipamento e refino de pedra do Dolrath
+// ⚒️ Sistema de Forja — receitas de equipamento e refino concentrado do Dolrath
 //
 // A Mesa de Forja do ferreiro tem duas funções (espelha a Bancada de Alquimia):
 //  - FORJAR EQUIPAMENTO: combina materiais (FORGE_MATERIAL_CATALOG) numa peça
 //    COMUM/INCOMUM já existente no ITEM_CATALOG. Consome materiais + taxa de gold
 //    (mão de obra do ferreiro). Sempre dá certo (sem RNG).
-//  - REFINAR PEDRA: converte 10 estilhaços → 1 Pedra Negra, e 10 Pedras Negras →
-//    1 Concentrada. É o caminho determinístico para a Concentrada do late-game.
+//  - REFINAR CONCENTRADA: converte 10 Pedras Negras → 1 Concentrada (Forja nv10).
+//    O degrau básico (10 estilhaços → 1 Pedra Negra) mora na Bancada de
+//    Processamento (src/lib/processing.ts) — conversão garantida, mesma lógica.
 //
 // Princípio de raridade (igual à alquimia):
 //  - COMUM usa matéria-prima CRUA (couro, ferro pesado, madeira…) — o novato
@@ -13,7 +14,7 @@
 //  - INCOMUM exige insumo PROCESSADO (Barra de Aço, Couro Curtido, Tecido de
 //    Linho… — Bancada de Processamento, src/lib/processing.ts): é a demanda
 //    real da profissão de Processamento. O Estilhaço de Pedra Negra
-//    (Arma/Armadura) segue como ligante de toda receita e feedstock do refino.
+//    (Arma/Armadura) segue como ligante de toda receita de gear.
 //
 // Drop dos materiais: ver dungeonAdventures.ts (chão e luta de masmorra).
 
@@ -24,7 +25,7 @@ import {
   type Rarity,
   type CatalogItem,
 } from './itemCatalog';
-import { STONE_NAMES } from './enhancementSystem';
+import { STONE_META, STONE_NAMES } from './enhancementSystem';
 
 export interface ForgeMaterialReq {
   name: string;
@@ -222,14 +223,9 @@ export const FORGE_RECIPES: ForgeRecipe[] = [
   ]),
 
   // ============================================================
-  // REFINO DE PEDRA — 10:1 em cada degrau (estilhaço → pedra → concentrada)
+  // REFINO CONCENTRADO — 10 Pedras Negras → 1 Concentrada (Forja nv10)
+  // O refino básico (10 estilhaços → Pedra Negra) está em processing.ts.
   // ============================================================
-  stone('refine_pedra_arma', STONE_NAMES.WEAPON_BASIC, 'UNCOMMON', [
-    { name: SHARD_W, quantity: 10 },
-  ], 20),
-  stone('refine_pedra_armadura', STONE_NAMES.ARMOR_BASIC, 'UNCOMMON', [
-    { name: SHARD_A, quantity: 10 },
-  ], 20),
   stone('refine_concentrada_arma', STONE_NAMES.WEAPON_CONCENTRATED, 'EPIC', [
     { name: STONE_NAMES.WEAPON_BASIC, quantity: 10 },
   ], 200),
@@ -270,7 +266,7 @@ export function forgeRecipesUsingMaterial(name: string): ForgeRecipe[] {
 const FORGE_GROUP_ORDER: { group: ForgeRecipe['group']; rarities: Rarity[] }[] = [
   { group: 'armor', rarities: ['COMMON', 'UNCOMMON'] },
   { group: 'weapon', rarities: ['COMMON', 'UNCOMMON'] },
-  { group: 'stone', rarities: ['UNCOMMON', 'EPIC'] },
+  { group: 'stone', rarities: ['EPIC'] },
 ];
 
 /** Receitas agrupadas por função (armadura → arma → refino), ordenadas por raridade. */
@@ -288,7 +284,12 @@ export function getForgeOutputCatalogItem(recipe: ForgeRecipe): CatalogItem | un
   return recipe.kind === 'gear' ? getCatalogItemByName(recipe.outputName) : undefined;
 }
 
-/** Emoji de um material/estilhaço/processado para exibir na mesa (cai pro genérico se desconhecido). */
+/** Emoji de um material/estilhaço/processado/pedra para exibir na mesa. */
 export function forgeMaterialEmoji(name: string): string {
-  return getForgeMaterialByName(name)?.emoji ?? getProcessedByName(name)?.emoji ?? '⚒️';
+  return (
+    getForgeMaterialByName(name)?.emoji ??
+    getProcessedByName(name)?.emoji ??
+    STONE_META[name]?.emoji ??
+    '⚒️'
+  );
 }

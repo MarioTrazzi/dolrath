@@ -196,12 +196,29 @@ function hpBarColor(pct: number): string {
 // Sub-componentes
 // ============================================================
 
-function StatBar({ value, max, gradient, icon }: { value: number; max: number; gradient: string; icon: string }) {
+function StatBar({
+  value,
+  max,
+  gradient,
+  icon,
+  showValue = true,
+  size = 'sm',
+}: {
+  value: number
+  max: number
+  gradient: string
+  icon: string
+  /** Quando false, omite o texto value/max e a barra ocupa o espaço — útil no mobile. */
+  showValue?: boolean
+  /** `lg` = barra mais grossa (HP do monstro sem números). */
+  size?: 'sm' | 'lg'
+}) {
   const pct = Math.max(0, Math.min(100, max > 0 ? (value / max) * 100 : 0))
+  const barH = size === 'lg' ? 'h-3.5 sm:h-4' : 'h-2.5'
   return (
     <div className="flex items-center gap-1 w-full">
-      <span className="text-[10px] w-4 text-center flex-shrink-0">{icon}</span>
-      <div className="flex-1 h-2.5 bg-black/50 rounded-full overflow-hidden border border-white/10">
+      <span className={`${size === 'lg' ? 'text-xs' : 'text-[10px]'} w-4 text-center flex-shrink-0`}>{icon}</span>
+      <div className={`flex-1 ${barH} bg-black/50 rounded-full overflow-hidden border border-white/10`}>
         <motion.div
           className={`h-full rounded-full bg-gradient-to-r ${gradient}`}
           initial={false}
@@ -209,9 +226,11 @@ function StatBar({ value, max, gradient, icon }: { value: number; max: number; g
           transition={{ type: 'spring', stiffness: 120, damping: 20 }}
         />
       </div>
-      <span className="text-[10px] text-white/80 w-14 text-right flex-shrink-0 font-mono">
-        {value}/{max}
-      </span>
+      {showValue && (
+        <span className="text-[10px] text-white/80 w-14 text-right flex-shrink-0 font-mono">
+          {value}/{max}
+        </span>
+      )}
     </div>
   )
 }
@@ -355,6 +374,7 @@ function FighterFigure({
   showHpBar = false,
   hpAbove = false,
   brightenImage = false,
+  hideHpValue = false,
 }: {
   fighter: FighterView
   side: 'left' | 'right'
@@ -382,6 +402,8 @@ function FighterFigure({
   hpAbove?: boolean
   /** Clareia a imagem via CSS (artes de monstro costumam ser escuras) — sem regenerar. */
   brightenImage?: boolean
+  /** Omite o texto HP atual/máx (ex.: 55/55) e engrossa a barra — monstro no mobile. */
+  hideHpValue?: boolean
 }) {
   const hpPct = fighter.maxHp > 0 ? (fighter.hp / fighter.maxHp) * 100 : 0
   const transformEmoji = fighter.isTransformed && fighter.transformationType
@@ -423,7 +445,14 @@ function FighterFigure({
           </div>
           {!hideBars && (
             <div className="space-y-0.5">
-              <StatBar value={fighter.hp} max={fighter.maxHp} gradient={hpBarColor(hpPct)} icon="❤️" />
+              <StatBar
+                value={fighter.hp}
+                max={fighter.maxHp}
+                gradient={hpBarColor(hpPct)}
+                icon="❤️"
+                showValue={!hideHpValue}
+                size={hideHpValue ? 'lg' : 'sm'}
+              />
               <StatBar value={fighter.mp} max={fighter.maxMp} gradient="from-blue-600 to-cyan-400" icon="🔮" />
               <StatBar value={fighter.stamina} max={fighter.maxStamina} gradient="from-yellow-600 to-amber-300" icon="⚡" />
             </div>
@@ -464,10 +493,17 @@ function FighterFigure({
           </AnimatePresence>
         </div>
 
-        {/* Barra de HP ACIMA do card (cascata do pacote) — encostada no topo do card */}
+        {/* Barra de HP ACIMA do card (cascata do pacote) — só a barra, sem números */}
         {showHpBar && hpAbove && (
           <div className="w-full px-0.5 -mb-0.5">
-            <StatBar value={fighter.hp} max={fighter.maxHp} gradient={hpBarColor(hpPct)} icon="❤️" />
+            <StatBar
+              value={fighter.hp}
+              max={fighter.maxHp}
+              gradient={hpBarColor(hpPct)}
+              icon="❤️"
+              showValue={false}
+              size="lg"
+            />
           </div>
         )}
 
@@ -578,10 +614,17 @@ function FighterFigure({
           {fxOverlay}
         </motion.div>
 
-        {/* Barra de HP ABAIXO do card (quando não for a cascata) */}
+        {/* Barra de HP ABAIXO do card (quando não for a cascata) — só a barra, sem números */}
         {showHpBar && !hpAbove && (
           <div className="w-full mt-0.5">
-            <StatBar value={fighter.hp} max={fighter.maxHp} gradient={hpBarColor(hpPct)} icon="❤️" />
+            <StatBar
+              value={fighter.hp}
+              max={fighter.maxHp}
+              gradient={hpBarColor(hpPct)}
+              icon="❤️"
+              showValue={false}
+              size="lg"
+            />
           </div>
         )}
       </div>
@@ -799,6 +842,7 @@ export default function BattleScene({
       showHpBar?: boolean
       hpAbove?: boolean
       brightenImage?: boolean
+      hideHpValue?: boolean
     } = {},
   ) => {
     if (!fighter) {
@@ -842,6 +886,7 @@ export default function BattleScene({
           showHpBar={opts.showHpBar}
           hpAbove={opts.hpAbove}
           brightenImage={opts.brightenImage}
+          hideHpValue={opts.hideHpValue}
         />
 
         {/* Textos flutuantes (dano, cura, esquiva) */}
@@ -1008,7 +1053,7 @@ export default function BattleScene({
         })() : (
           renderFighter(right, 'right', enemyHpOnly
             ? { hideNamePlate: true, nameInCard: true, showHpBar: true, hpAbove: true, brightenImage: brightenEnemyImage }
-            : { hideBars: hideEnemyBars, brightenImage: brightenEnemyImage })
+            : { hideBars: hideEnemyBars, brightenImage: brightenEnemyImage, hideHpValue: true })
         )}
       </div>
     </div>

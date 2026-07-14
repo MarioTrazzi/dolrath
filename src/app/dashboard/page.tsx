@@ -439,7 +439,10 @@ export default function DashboardPage() {
         <KeepBackdrop />
       </div>
 
-      <main className="relative z-10" style={{ fontFamily: "'Barlow', sans-serif" }}>
+      <main
+        className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 pb-12"
+        style={{ fontFamily: "'Barlow', sans-serif" }}
+      >
         {/* Carteira + saldos on-chain — janela chumbo; layout fixo em 2 colunas
             (esquerda carteira / direita saldos), sem trocas por breakpoint. */}
         <div

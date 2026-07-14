@@ -7,6 +7,7 @@ import { motion } from 'framer-motion'
 import DungeonRun, { DungeonCharacter } from '@/components/dungeon/DungeonRun'
 import DungeonBackdrop from '@/components/dungeon/DungeonBackdrop'
 import { DUNGEON_LIST, DungeonDef, monsterImagePath, MAX_DUNGEON_TIER, CONCENTRATED_MIN_TIER } from '@/lib/dungeonAdventures'
+import { DUNGEON_BATTLE_BG } from '@/lib/walkSceneAssets'
 import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider'
 import { GOLD, GOLD_BRIGHT, BORDER_GOLD, PANEL_BG } from '@/components/crafting/bdoTheme'
 
@@ -297,7 +298,7 @@ export default function DungeonsPage() {
         onExit={handleRunExit}
         onRestart={handleRunRestart}
         initialAuto={resumeAuto}
-        backgroundImageUrl={activeDungeon.id === 'floresta' ? '/backgrounds/floresta-battle.webp' : undefined}
+        backgroundImageUrl={DUNGEON_BATTLE_BG[activeDungeon.id]}
         backgroundImageOverlay={0.35}
       />
     )

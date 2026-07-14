@@ -19,7 +19,8 @@ import WalkScene, { type WalkMode, type WalkTrailMark } from '@/components/dunge
 import {
   buildWalkPathPoints,
   walkSceneEnabled,
-  FLORESTA_BATTLE_BG,
+  DUNGEON_BATTLE_BG,
+  DUNGEON_RUN_MAP_BG,
 } from '@/lib/walkSceneAssets'
 import {
   DungeonDef,
@@ -2683,7 +2684,7 @@ export default function DungeonRun({
       <div className="absolute inset-0">
         <DungeonBackdrop
           theme={dungeon.id}
-          imageUrl={phase === 'combat' ? (backgroundImageUrl || (dungeon.id === 'floresta' ? FLORESTA_BATTLE_BG : undefined)) : undefined}
+          imageUrl={phase === 'combat' ? (backgroundImageUrl || DUNGEON_BATTLE_BG[dungeon.id]) : undefined}
           imageOverlayOpacity={backgroundImageOverlay}
         />
       </div>
@@ -3038,7 +3039,7 @@ export default function DungeonRun({
             <main className="relative flex-1 min-h-0">
               {!useWalkScene && (
                 <>
-                  <MapAmbient backgroundImageUrl={dungeon.id === 'floresta' ? '/backgrounds/floresta-walk-map.webp' : undefined} />
+                  <MapAmbient backgroundImageUrl={DUNGEON_RUN_MAP_BG[dungeon.id]} />
                   <div className="absolute inset-0 mx-auto max-w-md pointer-events-none">
                     <div className="relative h-full pointer-events-auto">
                       <MapTrail points={trailPoints} progress={tokenIdx / LAST} />

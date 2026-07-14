@@ -130,6 +130,114 @@ export const FLORESTA_RUN_MAP_PROMPT =
   'STRICTLY FORBIDDEN: characters, monsters, animals, text, letters, labels, numbers, icons, markers, pins, ' +
   'compass rose, legend, border frame, parchment edges, UI, HUD, watermark, logo.'
 
+// ---- Caverna/Pântano/Ruínas: mapa da run + battle BG (biome-swap a partir das artes da Floresta) ----
+//
+// A referência anexada é a ARTE APROVADA da Floresta (run map ou battle):
+// o prompt trava câmera/estilo/composição e troca só o bioma.
+
+/** Âncoras de estilo (artes aprovadas da Floresta). */
+export const RUN_MAP_STYLE_REF = 'public/backgrounds/floresta-run-map.webp'
+export const BATTLE_STYLE_REF = 'public/backgrounds/floresta-battle.webp'
+
+const RUN_MAP_CAMERA_LOCK =
+  'STYLE & CAMERA LOCK — keep EXACTLY the same visual language as the reference image: top-down ' +
+  "bird's-eye classic dark-fantasy RPG dungeon map, painterly finely-textured rendering, a single " +
+  'clearly readable winding route that ENTERS AT THE BOTTOM EDGE and climbs, meandering, to a large ' +
+  'boss lair at the TOP, everything far from the route dissolving into near-black darkness ' +
+  '(fog-of-war feel). ABSOLUTELY NO horizon, NO sky, NO vanishing point, NO eye-level view — the ' +
+  'whole frame is ground plane seen from above.\n'
+
+const RUN_MAP_FORBIDDEN =
+  '\nSTRICTLY FORBIDDEN: characters, monsters, animals, text, letters, labels, numbers, icons, ' +
+  'markers, pins, compass rose, legend, border frame, parchment edges, UI, HUD, watermark, logo.'
+
+const BATTLE_CAMERA_LOCK =
+  'STYLE & CAMERA LOCK — keep EXACTLY the same visual language as the reference image: cinematic ' +
+  'eye-level widescreen dark-fantasy combat backdrop, dramatic framing elements on BOTH side edges, ' +
+  'an EMPTY open ground in the foreground center suitable as a battle arena, volumetric mist, deep ' +
+  'darkness in the far background, painterly finely-textured rendering, high contrast single ' +
+  'dominant light source.\n'
+
+const BATTLE_FORBIDDEN =
+  '\nNo people, no heroes, no monsters, no creatures, no animals, no text, no watermark, no logo, ' +
+  'no UI, no HUD. Widescreen landscape composition, cinematic EMPTY scene.'
+
+export const DUNGEON_RUN_MAP_PROMPTS: Record<string, string> = {
+  caverna:
+    RUN_MAP_CAMERA_LOCK +
+    'BIOME SWAP — replace the forest ENTIRELY with the "Caverna de Cristal": a deep underground ' +
+    'crystal cavern seen from above. Dark slate and indigo stone floor; the route is a carved mine ' +
+    'gallery / stone walkway. Clusters of glowing amethyst-purple and cyan crystals grow along the ' +
+    'route and light it with their own cold radiance (dominant accent: cyan-turquoise) — the crystals ' +
+    'ARE the light source, no moonlight. Along the route, from bottom to top, place FOUR wider cavern ' +
+    'chambers (round encounter arenas bathed in crystal light), and between them small landmarks: a ' +
+    'mirror-black underground pool, a glinting vein of raw gold in the rock, scattered ancient bones ' +
+    'with broken mining picks and an abandoned ore cart, piles of rubble and stalagmites casting ' +
+    'sharp shadows. The route ends at the TOP in a colossal boss chamber: a huge cavern dome ringed ' +
+    'by GIANT cyan crystal shards around a dark hoard of raw gold — the den of the crystal wyrm ' +
+    '(do NOT draw the creature itself).' +
+    RUN_MAP_FORBIDDEN,
+  pantano:
+    RUN_MAP_CAMERA_LOCK +
+    'BIOME SWAP — replace the forest ENTIRELY with the "Pântano Maldito": a cursed mist-veiled swamp ' +
+    'seen from above. Black-green stagnant water with oily sheen, islands of dark mud, reeds and ' +
+    'lily pads; twisted leafless trees draped in hanging moss seen as gnarled crowns from above. The ' +
+    'route is a crooked raised muddy trail patched with rotten wooden boardwalk planks. Drifting ' +
+    'patches of pale mist cross the map; small blue-white will-o\'-wisp lights float NEAR the route, ' +
+    'a few luring AWAY from it into the dark water (lights that lie). Dominant accent: sickly ' +
+    'moss-lime green with cold blue wisp glow. Along the route, from bottom to top, place FOUR ' +
+    'slightly dryer clearings (round encounter arenas), and between them small landmarks: a huge ' +
+    'half-sunken ribcage of some ancient beast, a faint golden glint of sunken treasure under the ' +
+    'water, a broken spear in the mud, fireflies. The route ends at the TOP in the boss lair: a wide ' +
+    'ominous black lagoon ringed by dead trees, its surface disturbed by ripples of something huge ' +
+    'beneath (do NOT draw the creature itself).' +
+    RUN_MAP_FORBIDDEN,
+  ruinas:
+    RUN_MAP_CAMERA_LOCK +
+    'BIOME SWAP — replace the forest ENTIRELY with the "Ruínas Arcanas": the ruins of a dead arcane ' +
+    'empire seen from above. Cracked pale-stone floors and shattered mosaics, broken columns and ' +
+    'collapsed walls casting long moonlit shadows, dust and faint amber haze. The route is a paved ' +
+    'processional way of broken tiles running through the ruins. Dead runes carved along the way ' +
+    'glow violet-purple as if waking (dominant accent: arcane violet), with a few cold candle flames ' +
+    'in crypt niches. Along the route, from bottom to top, place FIVE ruined plazas / roofless halls ' +
+    '(encounter arenas), and between them small landmarks: a shattered triumphal arch, an open crypt ' +
+    'with stone sarcophagi, a rune-covered altar, a toppled colossal statue head, piles of masonry ' +
+    'rubble. The route ends at the TOP in the boss sanctum: a grand roofless throne hall where a ' +
+    'HUGE violet arcane sigil glows on the floor before an empty black throne (do NOT draw the ' +
+    'creature itself).' +
+    RUN_MAP_FORBIDDEN,
+}
+
+export const DUNGEON_BATTLE_PROMPTS: Record<string, string> = {
+  caverna:
+    BATTLE_CAMERA_LOCK +
+    'BIOME SWAP — replace the forest ENTIRELY with the "Caverna de Cristal": an underground crystal ' +
+    'cavern battle arena. Jagged dark rock walls frame both sides; giant glowing amethyst-purple and ' +
+    'cyan crystal formations replace the trees and the moons as the ONLY light sources, casting cold ' +
+    'turquoise light across a smooth cavern floor of dark stone with scattered crystal shards and ' +
+    'faint gold dust. Dripping stalactites overhead, thin mist hugging the ground, deep black tunnel ' +
+    'darkness in the far background.' +
+    BATTLE_FORBIDDEN,
+  pantano:
+    BATTLE_CAMERA_LOCK +
+    'BIOME SWAP — replace the forest ENTIRELY with the "Pântano Maldito": a cursed swamp battle ' +
+    'arena. Twisted leafless trees draped in long hanging moss frame both sides; the arena floor is ' +
+    'firm dark mud and shallow black water with faint reflections. Thick layered fog drifts between ' +
+    'the dead trees; blue-white will-o\'-wisp lights hover in the mist as eerie accents, and a ' +
+    'sickly green-lime glow bleeds through the fog as the dominant light. Reeds, half-sunken roots ' +
+    'and old bones at the edges.' +
+    BATTLE_FORBIDDEN,
+  ruinas:
+    BATTLE_CAMERA_LOCK +
+    'BIOME SWAP — replace the forest ENTIRELY with the "Ruínas Arcanas": a ruined arcane throne hall ' +
+    'battle arena. Broken colossal columns and crumbling rune-carved walls frame both sides; the ' +
+    'arena floor is cracked stone tiles with a faint shattered mosaic. Violet arcane runes glow ' +
+    'along the columns and floor cracks as the dominant light, with one pale moonbeam falling ' +
+    'through the collapsed roof; dust motes and thin haze in the air, endless dark colonnade in the ' +
+    'far background.' +
+    BATTLE_FORBIDDEN,
+}
+
 export const FLORESTA_WALK_MAP_PROMPT =
   'CRITICAL CAMERA LOCK — keep the EXACT same camera as the reference image: ' +
   'high-angle isometric / top-down oblique RPG view (like classic Diablo / World of Anterra exploration), ' +

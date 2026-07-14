@@ -72,6 +72,22 @@ export const WALK_FULL_STRIP: Partial<Record<DungeonId, string>> = {
 /** Battle BG cinematográfico (combate Floresta). */
 export const FLORESTA_BATTLE_BG = '/backgrounds/floresta-battle.webp'
 
+/** Battle BG cinematográfico por masmorra (biome-swap a partir da arte da Floresta). */
+export const DUNGEON_BATTLE_BG: Record<DungeonId, string> = {
+  floresta: '/backgrounds/floresta-battle.webp',
+  caverna: '/backgrounds/caverna-battle.webp',
+  pantano: '/backgrounds/pantano-battle.webp',
+  ruinas: '/backgrounds/ruinas-battle.webp',
+}
+
+/** Mapa da run (top-down, mapa grande de RPG) por masmorra — fundo da fase de exploração. */
+export const DUNGEON_RUN_MAP_BG: Record<DungeonId, string> = {
+  floresta: '/backgrounds/floresta-run-map.webp',
+  caverna: '/backgrounds/caverna-run-map.webp',
+  pantano: '/backgrounds/pantano-run-map.webp',
+  ruinas: '/backgrounds/ruinas-run-map.webp',
+}
+
 /** Fallback se a arte nova ainda não existir. */
 export const FLORESTA_BATTLE_BG_FALLBACK = '/hero-masmorra-floresta.webp'
 export const FLORESTA_WALK_FALLBACK = '/backgrounds/forest-dark-map.jpg'

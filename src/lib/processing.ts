@@ -25,6 +25,7 @@ import {
   getForgeMaterialByName,
   getIngredientByName,
   getProcessedByName,
+  type AlchemyIngredient,
   type ConsumableItem,
   type ProcessedMaterial,
   type Rarity,
@@ -116,6 +117,10 @@ export const PROCESSING_RECIPES: ProcessingRecipe[] = [
   ], 1, 6, 5),
 
   // ---------- DESTILARIA (princípios ativos das poções) ----------
+  // Purificação: Água crua (poço/coleta) → Água Pura (solvente de craft).
+  proc('proc_agua_pura', 'Água Pura', 'COMMON', 'still', [
+    { name: 'Água', quantity: 1 },
+  ], 1, 4, 2),
   proc('proc_extrato_herbal', 'Extrato Herbal', 'COMMON', 'still', [
     { name: 'Erva Medicinal', quantity: 2 }, { name: 'Água Pura', quantity: 1 },
   ], 1, 6, 5),
@@ -193,9 +198,11 @@ export interface ProcessingOutput {
   consumable?: ConsumableItem;
   /** Refino de pedra: Pedra Negra (Arma/Armadura) a partir de 10 estilhaços. */
   stone?: ProcessingStoneOutput;
+  /** Purificação e similares: ingrediente do INGREDIENT_CATALOG (ex.: Água Pura). */
+  ingredient?: AlchemyIngredient;
 }
 
-/** Resolve o item de saída de uma receita (processado, consumível migrado ou pedra). */
+/** Resolve o item de saída de uma receita (processado, consumível, pedra ou ingrediente). */
 export function getProcessingOutput(recipe: ProcessingRecipe): ProcessingOutput {
   const processed = getProcessedByName(recipe.outputName);
   if (processed) return { processed };
@@ -214,6 +221,8 @@ export function getProcessingOutput(recipe: ProcessingRecipe): ProcessingOutput 
       },
     };
   }
+  const ingredient = getIngredientByName(recipe.outputName);
+  if (ingredient) return { ingredient };
   const consumable = getConsumableByName(recipe.outputName);
   return { consumable };
 }

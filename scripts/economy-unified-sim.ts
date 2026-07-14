@@ -54,7 +54,7 @@ import {
   type RunPending, type CharacterForRun,
 } from '@/lib/dungeonRunServer'
 import { rollGatherYield, GATHER_TICK_STAMINA, type GatherFieldId } from '@/lib/gathering'
-import { CROPS, WELL, PEN, FARM_ACTION_STAMINA, cropGrowSeconds, rollCropYield } from '@/lib/farming'
+import { CROPS, WELL, PEN, FARM_ACTION_STAMINA, WELL_COLLECT_STAMINA, cropGrowSeconds, rollCropYield } from '@/lib/farming'
 import { farmPlotCount, professionXpForLevel, PROFESSION_MAX_LEVEL } from '@/lib/professionSystem'
 import { getEnhanceChance, getFailstackGainOnFail } from '@/lib/enhancementSystem'
 import { POTION_RECIPES } from '@/lib/alchemy'
@@ -401,20 +401,30 @@ function farmDay(v: Vault, led: Ledger, c: Char): number {
     for (let k = 0; k < cycles; k++) {
       // replantio dentro do dia consome mais sementes
       if (k > 0 && !takeItem(v, crop.seedName, 1)) break
-      const qty = rollCropYield(crop)
+      const qty = rollCropYield(crop, c.farmLevel)
       addItem(v, crop.outputName, qty)
       led.goldFromFarmSell += sellValueOf(crop.outputName) * qty
       gainProfXp('farm', c, crop.farmXp)
       stamina += FARM_ACTION_STAMINA * 2 // plantar + colher
     }
   }
-  // poço: 2 visitas/dia no teto (12 águas cada)
+  // poço: 1 Água por pull (−1⚡); ~2 visitas/dia no teto (12 águas cada)
   const waters = Math.min(WELL.cap * 2, Math.floor((activeHours * 3600) / WELL.intervalSeconds))
   if (waters > 0) {
     addItem(v, WELL.outputName, waters)
-    led.goldFromFarmSell += sellValueOf(WELL.outputName) * waters
-    gainProfXp('farm', c, WELL.farmXpPerCollect * 2)
-    stamina += FARM_ACTION_STAMINA * 2
+    // Purifica na bancada (1 Água → 1 Água Pura) para o restante do craft
+    const purify = PROCESSING_RECIPES.find((r) => r.id === 'proc_agua_pura')
+    const purifyCost = purify ? purify.goldCost * waters : Infinity
+    if (purify && v.gold >= purifyCost && takeItem(v, WELL.outputName, waters)) {
+      v.gold -= purifyCost
+      led.potCraftFee += purifyCost
+      addItem(v, purify.outputName, waters)
+      led.goldFromFarmSell += sellValueOf(purify.outputName) * waters
+    } else {
+      led.goldFromFarmSell += sellValueOf(WELL.outputName) * waters
+    }
+    gainProfXp('farm', c, WELL.farmXpPerCollect * waters)
+    stamina += WELL_COLLECT_STAMINA * waters
   }
   // cercado (nv5+): 1 ciclo/dia se houver Ração (craft real a partir de Trigo via PROCESSAMENTO)
   if (c.farmLevel >= 5) {

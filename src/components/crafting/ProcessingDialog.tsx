@@ -282,6 +282,7 @@ export default function ProcessingDialog({
     output?.processed?.description ??
     output?.consumable?.description ??
     output?.stone?.description ??
+    output?.ingredient?.description ??
     null;
   const centerUi = recipe ? RARITY_UI[recipe.rarity] : null;
 

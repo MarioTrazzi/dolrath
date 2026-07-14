@@ -5,12 +5,14 @@
 // Fazenda global: plantar é grátis (+XP), colher pega TODOS os prontos (1⚡ cada).
 
 import { useEffect, useState } from 'react'
-import { FarmBoard, type FarmVM, type HarvestResultVM } from '@/components/farm/FarmBoard'
 import {
   CROPS, rollCropYield, farmStoneChance, rollFarmStoneShard, cropPlantXp,
-  FARM_STONE_BONUS_XP, FARM_HARVEST_STAMINA, PEN,
+  FARM_STONE_BONUS_XP, FARM_HARVEST_STAMINA, WELL, WELL_COLLECT_STAMINA,
+  wellShardChance, wellStoneChance, rollWellBlackStone,
+  WELL_SHARD_BONUS_XP, WELL_STONE_BONUS_XP, PEN,
 } from '@/lib/farming'
 import { getProfessionLevelInfo, farmPlotCount } from '@/lib/professionSystem'
+import { FarmBoard, type FarmVM, type HarvestResultVM, type WellCollectResultVM } from '@/components/farm/FarmBoard'
 
 const MOCK_GROW_SECONDS = 10 // todo cultivo/ciclo fica pronto em 10s
 const MOCK_FARM_LEVEL = 7 // cercado aberto (Nv. 5+)
@@ -30,7 +32,10 @@ const initialVm = (): FarmVM => {
     stamina: 88,
     maxStamina: 100,
     actionStamina: 2,
+    wellCollectStamina: WELL_COLLECT_STAMINA,
     stoneChance: farmStoneChance(farm.level),
+    wellShardChance: wellShardChance(farm.level),
+    wellStoneChance: wellStoneChance(farm.level),
   }
 }
 
@@ -148,9 +153,35 @@ export default function FarmMockPage() {
               skippedNoStamina: ready.length - toHarvest.length,
             }
           }}
-          onWellCollect={() => {
-            setVm((prev) => ({ ...prev, stamina: prev.stamina - prev.actionStamina, well: { ...prev.well, pending: 0 } }))
-            push(`💧 Coletou ${vm.well.pending}× Água Pura`)
+          onWellCollect={async (): Promise<WellCollectResultVM> => {
+            if (vm.well.pending <= 0) throw new Error('O poço ainda não acumulou água.')
+            if (vm.stamina < WELL_COLLECT_STAMINA) throw new Error(`Stamina insuficiente (a ação custa ${WELL_COLLECT_STAMINA}).`)
+
+            const bonuses: WellCollectResultVM['bonuses'] = []
+            let xpGained = WELL.farmXpPerCollect
+            if (Math.random() * 100 < wellShardChance(vm.farm.level)) {
+              bonuses.push({ name: rollFarmStoneShard(), kind: 'shard' })
+              xpGained += WELL_SHARD_BONUS_XP
+            }
+            if (Math.random() * 100 < wellStoneChance(vm.farm.level)) {
+              bonuses.push({ name: rollWellBlackStone(), kind: 'stone' })
+              xpGained += WELL_STONE_BONUS_XP
+            }
+
+            setVm((prev) => ({
+              ...prev,
+              stamina: prev.stamina - WELL_COLLECT_STAMINA,
+              well: { ...prev.well, pending: Math.max(0, prev.well.pending - 1) },
+            }))
+            const bonusLabel = bonuses.length > 0 ? ` + ${bonuses.map((b) => b.name).join(', ')}` : ''
+            push(`💧 Coletou 1× ${WELL.outputName}${bonusLabel} (+${xpGained} XP)`)
+            return {
+              outputName: WELL.outputName,
+              qty: 1,
+              bonuses,
+              xpGained,
+              pendingLeft: Math.max(0, vm.well.pending - 1),
+            }
           }}
           onPenFeed={() => {
             setVm((prev) => ({

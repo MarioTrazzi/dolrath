@@ -3,17 +3,17 @@
 // 🌾 FAZENDA — cultivo idle GLOBAL da conta. As sementes vêm da Coleta
 // (Campos de Ervas); aqui elas viram os insumos renováveis das receitas:
 // Fibra de Linho (forja leve/bandagem), Trigo (Ração/Pão), Erva Medicinal
-// (alquimia), Água Pura (poço) e Couro (cercado). Todos os personagens
-// cultivam a MESMA fazenda; quem gerencia é o personagem ATIVO da navbar —
-// plantar é grátis (+XP pra ele), colher custa 1⚡ por canteiro e o XP/itens
-// vão pra ele. Estado 100% derivado no servidor (/api/farm/state) — crescer
-// não exige a página aberta.
+// (alquimia), Água (poço — purifique na bancada) e Couro (cercado). Todos os
+// personagens cultivam a MESMA fazenda; quem gerencia é o personagem ATIVO da
+// navbar — plantar é grátis (+XP pra ele), colher custa 1⚡ por canteiro e o
+// XP/itens vão pra ele. Estado 100% derivado no servidor (/api/farm/state) —
+// crescer não exige a página aberta.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { FarmBoard, type FarmVM, type HarvestResultVM } from '@/components/farm/FarmBoard'
+import { FarmBoard, type FarmVM, type HarvestResultVM, type WellCollectResultVM } from '@/components/farm/FarmBoard'
 import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider'
 
 export default function FarmPage() {
@@ -93,8 +93,6 @@ export default function FarmPage() {
       const data = await res.json().catch(() => null)
       if (!res.ok) {
         setNotice(`❌ ${data?.error ?? 'Erro ao executar a ação'}`)
-      } else if (path === 'well-collect') {
-        setNotice(`💧 Coletou ${data.qty}× ${data.outputName}`)
       } else if (path === 'plant' && data?.xpGained) {
         setNotice(`🫘 Plantado! +${data.xpGained} XP de Fazenda`)
       }
@@ -131,6 +129,40 @@ export default function FarmPage() {
         harvested: data.harvested ?? 0,
         skippedNoStamina: data.skippedNoStamina ?? 0,
         skippedNoSpace: data.skippedNoSpace ?? 0,
+      }
+    } finally {
+      setBusy(false)
+    }
+  }, [activeCharacterId, refresh])
+
+  const wellCollect = useCallback(async (): Promise<WellCollectResultVM> => {
+    if (!activeCharacterId) throw new Error('Escolha um personagem ativo na navbar.')
+    setBusy(true)
+    setNotice(null)
+    try {
+      const res = await fetch('/api/farm/well-collect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ characterId: activeCharacterId }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        const message: string = data?.error ?? 'Erro ao coletar'
+        setNotice(`❌ ${message}`)
+        throw new Error(message)
+      }
+      await refresh(activeCharacterId)
+      const bonuses = Array.isArray(data.bonuses) ? data.bonuses : []
+      const bonusLabel = bonuses.length > 0
+        ? ` + ${bonuses.map((b: { name: string }) => b.name).join(', ')}`
+        : ''
+      setNotice(`💧 Coletou ${data.qty}× ${data.outputName}${bonusLabel}`)
+      return {
+        outputName: data.outputName,
+        qty: data.qty ?? 1,
+        bonuses,
+        xpGained: data.xpGained ?? 0,
+        pendingLeft: data.pendingLeft ?? 0,
       }
     } finally {
       setBusy(false)
@@ -206,7 +238,7 @@ export default function FarmPage() {
             busy={busy}
             onPlant={(slotIndex, cropId) => act('plant', { slotIndex, cropId })}
             onHarvest={harvest}
-            onWellCollect={() => act('well-collect', {})}
+            onWellCollect={wellCollect}
             onPenFeed={() => act('pen-feed', {})}
           />
         )}
@@ -217,7 +249,8 @@ export default function FarmPage() {
 
         <p className="text-center text-white/30 text-[11px] mt-6 max-w-2xl mx-auto">
           🫘 Sem sementes? Elas só caem coletando nos <a href="/gathering" className="underline">Campos de Ervas</a>.
-          🥣 A Ração é craftada na Bancada de Alquimia (2 Trigo + 1 Água Pura).
+          💧 Água do poço/coleta vira Água Pura na Bancada de Processamento (1:1).
+          🥣 A Ração é processada na bancada (2 Trigo + 1 Água Pura).
         </p>
       </div>
     </div>

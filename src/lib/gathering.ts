@@ -99,10 +99,11 @@ export const GATHER_FIELDS: Record<GatherFieldId, GatherFieldDef> = {
       'Campinas férteis onde crescem as ervas das poções. Só aqui se acham sementes de cultivo para a fazenda.',
     seedField: true,
     drops: [
-      // Água Pura pesa mais que as ervas: cada poção consome 3 Águas por
-      // 2 Ervas (2 no craft da poção + 1 na destilaria do extrato).
+      // Água pesa mais que as ervas: cada poção consome 3 Águas Puras por
+      // 2 Ervas (2 no craft da poção + 1 na destilaria do extrato), e a Água
+      // crua ainda precisa ser purificada na bancada (1:1).
       { name: 'Erva Medicinal', weight: 22 },
-      { name: 'Água Pura', weight: 30 },
+      { name: 'Água', weight: 30 },
       { name: 'Flor de Mana', weight: 18 },
       { name: 'Raiz Vigorosa', weight: 18 },
       // nv6 (era 10): destrava a Poção de Reviver cedo — é o combustível do
@@ -143,7 +144,7 @@ export const GATHER_FIELDS: Record<GatherFieldId, GatherFieldDef> = {
     drops: [
       { name: 'Peixe Prateado', weight: 34 },
       { name: 'Frutos do Mar', weight: 26 },
-      { name: 'Água Pura', weight: 20 },
+      { name: 'Água', weight: 20 },
       { name: 'Pérola Bruta', weight: 6, minLevel: 20 },
     ],
   },

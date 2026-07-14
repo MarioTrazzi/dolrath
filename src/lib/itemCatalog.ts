@@ -1014,7 +1014,7 @@ export interface AlchemyIngredient {
 
 export const INGREDIENT_CATALOG: AlchemyIngredient[] = [
   // ---------- COMUM (chão de masmorra, inclusive a Floresta) ----------
-  { name: 'Água Pura', description: 'Água de fonte límpida — solvente base de quase toda poção.', emoji: '💧', rarity: 'COMMON', goldValue: 6, source: 'dungeon' },
+  { name: 'Água Pura', description: 'Água purificada na bancada — solvente base de quase toda poção e destilaria.', emoji: '💧', rarity: 'COMMON', goldValue: 6, source: 'dungeon' },
   { name: 'Erva Medicinal', description: 'Folhas cicatrizantes que fecham feridas e acalmam o corpo.', emoji: '🌿', rarity: 'COMMON', goldValue: 8, source: 'dungeon' },
   { name: 'Flor de Mana', description: 'Pétalas que guardam um resíduo de energia arcana.', emoji: '💠', rarity: 'COMMON', goldValue: 8, source: 'dungeon' },
   { name: 'Raiz Vigorosa', description: 'Raiz fibrosa que devolve fôlego e disposição.', emoji: '🌱', rarity: 'COMMON', goldValue: 8, source: 'dungeon' },
@@ -1037,6 +1037,9 @@ export const INGREDIENT_CATALOG: AlchemyIngredient[] = [
   { name: 'Essência Cristalina', description: 'Essência destilada de núcleos arcanos; cura impossível.', emoji: '✨', rarity: 'EPIC', goldValue: 170, source: 'dungeon_boss' },
 
   // ---------- CULTIVO (só da fazenda — NÃO cai em masmorra) ----------
+  // Água também cai na coleta (ervas/costa); o poço é a fonte idle dedicada.
+  // Purifique na bancada (1:1) para obter Água Pura usada em alquimia/destilaria.
+  { name: 'Água', description: 'Água do poço ou da coleta — precisa ser purificada na bancada antes de virar solvente.', emoji: '💧', rarity: 'COMMON', goldValue: 2, source: 'farm' },
   { name: 'Trigo', description: 'Grão dourado de cultivo; vira Ração para os animais e Pão de viagem.', emoji: '🌾', rarity: 'COMMON', goldValue: 5, source: 'farm' },
 
   // ---------- COLETA (só dos campos de coleta — NÃO caem em masmorra) ----------

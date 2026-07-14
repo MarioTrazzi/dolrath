@@ -78,9 +78,9 @@ export async function POST(
       return NextResponse.json({ error: 'Receita não encontrada' }, { status: 404 })
     }
 
-    // Valida a saída (processado, consumível migrado — Ração/Bandagem — ou pedra).
+    // Valida a saída (processado, consumível, pedra ou ingrediente — Água Pura).
     const output = getProcessingOutput(recipe)
-    if (!output.processed && !output.consumable && !output.stone) {
+    if (!output.processed && !output.consumable && !output.stone && !output.ingredient) {
       return NextResponse.json({ error: 'Saída da receita não existe no catálogo' }, { status: 500 })
     }
 
@@ -206,6 +206,24 @@ export async function POST(
                 enhancementStone: output.stone.code,
                 battleUsable: false,
                 sellPrice: output.stone.sellPrice,
+                source: 'processing',
+              },
+            },
+          })
+        } else if (output.ingredient) {
+          item = await tx.item.create({
+            data: {
+              name: output.ingredient.name,
+              description: output.ingredient.description,
+              type: 'CONSUMABLE',
+              image: itemImagePath(output.ingredient.name),
+              level: 1,
+              goldPrice: output.ingredient.goldValue,
+              stats: {
+                kind: 'ingredient',
+                rarity: output.ingredient.rarity,
+                emoji: output.ingredient.emoji,
+                sellPrice: Math.floor(output.ingredient.goldValue * 0.5),
                 source: 'processing',
               },
             },

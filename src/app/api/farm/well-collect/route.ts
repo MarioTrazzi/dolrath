@@ -2,16 +2,29 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { regenAndPersist } from '@/lib/staminaServer'
-import { spendFarmActionStaminaTx } from '@/lib/farmServer'
-import { wellPending, WELL, WELL_SLOT_INDEX } from '@/lib/farming'
-import { getProfessionLevelInfo } from '@/lib/professionSystem'
+import { spendFarmActionStaminaTx, getUserFarmXp } from '@/lib/farmServer'
+import {
+  wellPending,
+  WELL,
+  WELL_SLOT_INDEX,
+  WELL_COLLECT_STAMINA,
+  wellShardChance,
+  wellStoneChance,
+  rollFarmStoneShard,
+  rollWellBlackStone,
+  WELL_SHARD_BONUS_XP,
+  WELL_STONE_BONUS_XP,
+} from '@/lib/farming'
+import { getProfessionLevel, getProfessionLevelInfo } from '@/lib/professionSystem'
 import { addDropToInventoryTx } from '@/lib/dungeonRunServer'
 
 export const dynamic = 'force-dynamic'
 
-// 💧 Coleta a Água Pura acumulada no poço (goteja 1 a cada 30 min, teto 12).
-// Coletar reancora o relógio do poço em agora — o excedente acima do teto
-// simplesmente não existe (o poço "transborda").
+export type WellBonusLoot = { name: string; kind: 'shard' | 'stone' }
+
+// 💧 Pull do poço: 1 Água por vez (−1⚡). A âncora avança 1 intervalo (não zera
+// o restante acumulado). Chance independente de Estilhaço e Pedra Negra
+// conforme o nível de Fazenda da conta.
 export async function POST(req: Request) {
   const session = await auth()
   if (!session?.user?.id) {
@@ -29,41 +42,82 @@ export async function POST(req: Request) {
     if (!rawCharacter) {
       return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
     }
-    const character = await regenAndPersist(rawCharacter)
+    await regenAndPersist(rawCharacter)
+
+    const farmXp = await getUserFarmXp(userId)
+    const farmLevel = getProfessionLevel(farmXp)
+    const shardChance = wellShardChance(farmLevel)
+    const stoneChance = wellStoneChance(farmLevel)
 
     const result = await prisma.$transaction(async (tx) => {
-      // O poço é da fazenda da CONTA — quem coleta gasta a stamina e leva o XP.
       const well = await tx.farmPlot.findUnique({
         where: { userId_slotIndex: { userId, slotIndex: WELL_SLOT_INDEX } },
       })
       const now = new Date()
       const pending = wellPending(well?.plantedAt ?? null, now)
-      if (!well || pending <= 0) {
+      if (!well || !well.plantedAt || pending <= 0) {
         throw new Error('O poço ainda não acumulou água.')
       }
 
-      const ok = await addDropToInventoryTx(tx, characterId, { name: WELL.outputName, qty: pending })
+      const ok = await addDropToInventoryTx(tx, characterId, { name: WELL.outputName, qty: 1 })
       if (!ok) {
         throw new Error('Inventário cheio — libere um slot e colete de novo.')
       }
 
-      const stamina = await spendFarmActionStaminaTx(tx, characterId)
+      const bonuses: WellBonusLoot[] = []
+      let xpGained = WELL.farmXpPerCollect
+
+      if (Math.random() * 100 < shardChance) {
+        const shardName = rollFarmStoneShard()
+        const shardOk = await addDropToInventoryTx(tx, characterId, { name: shardName, qty: 1 })
+        if (shardOk) {
+          bonuses.push({ name: shardName, kind: 'shard' })
+          xpGained += WELL_SHARD_BONUS_XP
+        }
+      }
+
+      if (Math.random() * 100 < stoneChance) {
+        const stoneName = rollWellBlackStone()
+        const stoneOk = await addDropToInventoryTx(tx, characterId, { name: stoneName, qty: 1 })
+        if (stoneOk) {
+          bonuses.push({ name: stoneName, kind: 'stone' })
+          xpGained += WELL_STONE_BONUS_XP
+        }
+      }
+
+      const stamina = await spendFarmActionStaminaTx(tx, characterId, WELL_COLLECT_STAMINA)
       const updated = await tx.character.update({
         where: { id: characterId },
-        data: { farmXp: { increment: WELL.farmXpPerCollect } },
+        data: { farmXp: { increment: xpGained } },
         select: { farmXp: true },
       })
-      await tx.farmPlot.update({ where: { id: well.id }, data: { plantedAt: now } })
 
-      return { qty: pending, totalFarmXp: updated.farmXp, stamina }
+      // Avança 1 intervalo — preserva o restante acumulado acima de 1.
+      const nextAnchor = new Date(well.plantedAt.getTime() + WELL.intervalSeconds * 1000)
+      await tx.farmPlot.update({ where: { id: well.id }, data: { plantedAt: nextAnchor } })
+
+      const pendingLeft = wellPending(nextAnchor, now)
+
+      return {
+        qty: 1,
+        bonuses,
+        xpGained,
+        pendingLeft,
+        totalFarmXp: updated.farmXp,
+        stamina,
+      }
     })
 
     return NextResponse.json({
       outputName: WELL.outputName,
       qty: result.qty,
-      xpGained: WELL.farmXpPerCollect,
-      farm: getProfessionLevelInfo(result.totalFarmXp),
+      bonuses: result.bonuses,
+      xpGained: result.xpGained,
+      pendingLeft: result.pendingLeft,
+      farm: getProfessionLevelInfo(await getUserFarmXp(userId)),
       stamina: result.stamina,
+      wellShardChance: shardChance,
+      wellStoneChance: stoneChance,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Erro interno do servidor'

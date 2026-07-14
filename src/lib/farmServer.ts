@@ -27,7 +27,10 @@ import {
   penSecondsLeft,
   wellPending,
   farmStoneChance,
+  wellShardChance,
+  wellStoneChance,
   FARM_ACTION_STAMINA,
+  WELL_COLLECT_STAMINA,
 } from './farming'
 import { farmPlotCount, getProfessionLevel, getProfessionLevelInfo, FARM_PEN_MIN_LEVEL } from './professionSystem'
 
@@ -56,8 +59,14 @@ export interface FarmState {
   }
   crops: typeof CROPS
   actionStamina: number
+  /** Stamina por pull do poço. */
+  wellCollectStamina: number
   /** Chance (%) de a colheita de um canteiro render um Estilhaço de Pedra Negra. */
   stoneChance: number
+  /** Chance (%) de um pull do poço render um Estilhaço. */
+  wellShardChance: number
+  /** Chance (%) de um pull do poço render uma Pedra Negra. */
+  wellStoneChance: number
 }
 
 /** XP de Fazenda da CONTA: soma do farmXp de todos os personagens do usuário. */
@@ -120,7 +129,10 @@ export async function getFarmState(userId: string, userFarmXp: number, now: Date
     },
     crops: CROPS,
     actionStamina: FARM_ACTION_STAMINA,
+    wellCollectStamina: WELL_COLLECT_STAMINA,
     stoneChance: farmStoneChance(farmLevel),
+    wellShardChance: wellShardChance(farmLevel),
+    wellStoneChance: wellStoneChance(farmLevel),
   }
 }
 

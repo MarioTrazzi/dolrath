@@ -16,7 +16,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CROPS, cropGrowSeconds, cropYieldRange, FARM_HARVEST_STAMINA, type CropDef } from '@/lib/farming'
+import { CROPS, cropGrowSeconds, cropYieldRange, FARM_HARVEST_STAMINA, WELL, WELL_COLLECT_STAMINA, type CropDef } from '@/lib/farming'
 import { farmPlotUnlockLevel, FARM_TOTAL_PLOTS, type ProfessionLevelInfo } from '@/lib/professionSystem'
 import { GatherItemThumb, ProfessionBar } from '@/components/gathering/GatheringPanel'
 
@@ -46,8 +46,13 @@ export interface FarmVM {
   stamina: number
   maxStamina: number
   actionStamina: number
+  wellCollectStamina: number
   /** Chance (%) de a colheita de um canteiro render um Estilhaço de Pedra Negra. */
   stoneChance: number
+  /** Chance (%) de um pull do poço render um Estilhaço. */
+  wellShardChance: number
+  /** Chance (%) de um pull do poço render uma Pedra Negra. */
+  wellStoneChance: number
   /** Inventário sem slot livre: colheitas vão falhar (mesma mecânica da masmorra/coleta). */
   inventoryFull?: boolean
 }
@@ -62,6 +67,14 @@ export interface HarvestResultVM {
   skippedNoSpace?: number
 }
 
+export interface WellCollectResultVM {
+  outputName: string
+  qty: number
+  bonuses: { name: string; kind: 'shard' | 'stone' }[]
+  xpGained: number
+  pendingLeft: number
+}
+
 const FLAVOR = [
   'Afrouxando a terra ao redor…',
   'Cortando os talos com a foice…',
@@ -72,6 +85,16 @@ const FLAVOR = [
 
 /** Duração da animação de colheita de CADA canteiro (a "working" pausa esse tempo por item). */
 const HARVEST_ITEM_ANIM_MS = 3000
+
+/** Tempo da animação do balde subindo no poço. */
+const WELL_BUCKET_ANIM_MS = 2200
+
+const WELL_FLAVOR = [
+  'Abaixando o balde no poço…',
+  'A corda estica na água escura…',
+  'Puxando o balde cheio…',
+  'A água pinga pelas laterais…',
+]
 
 function cropByOutputName(outputName: string): CropDef | undefined {
   return (Object.values(CROPS) as CropDef[]).find((c) => c.outputName === outputName)
@@ -446,6 +469,227 @@ function HarvestDialog({
 }
 
 // ============================================================
+// Dialog do poço (confirm → balde subindo → loot)
+// ============================================================
+
+function WellBucketRig({ phase }: { phase: 'working' | 'done' }) {
+  return (
+    <div className="relative mx-auto h-36 w-28 mb-3 select-none" aria-hidden>
+      {/* Brocal do poço */}
+      <div className="absolute bottom-2 inset-x-2 h-10 rounded-b-2xl border-2 border-sky-700/60 bg-gradient-to-b from-sky-950 to-black overflow-hidden">
+        <div className="absolute inset-x-3 top-1 h-5 rounded-full bg-sky-900/80 border border-sky-600/30" />
+        {phase === 'done' && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: [0, 0.7, 0] }}
+            transition={{ duration: 0.8 }}
+            className="absolute inset-x-4 top-2 h-3 rounded-full bg-sky-300/40 blur-[2px]"
+          />
+        )}
+      </div>
+      {/* Corda + balde */}
+      <motion.div
+        className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center"
+        initial={{ y: 72 }}
+        animate={{ y: phase === 'working' ? [72, 8] : 8 }}
+        transition={
+          phase === 'working'
+            ? { duration: WELL_BUCKET_ANIM_MS / 1000, ease: [0.22, 1, 0.36, 1] }
+            : { duration: 0.2 }
+        }
+      >
+        <div className="w-0.5 h-14 bg-amber-700/70" />
+        <motion.div
+          animate={phase === 'working' ? { rotate: [-4, 4, -3, 2, 0] } : { rotate: 0 }}
+          transition={{ duration: WELL_BUCKET_ANIM_MS / 1000, ease: 'easeOut' }}
+          className="text-3xl leading-none drop-shadow-md"
+        >
+          🪣
+        </motion.div>
+      </motion.div>
+      {/* Estrutura do poço */}
+      <div className="absolute bottom-10 inset-x-0 flex justify-center gap-10 pointer-events-none">
+        <div className="w-1.5 h-16 rounded-full bg-stone-600/80" />
+        <div className="w-1.5 h-16 rounded-full bg-stone-600/80" />
+      </div>
+      <div className="absolute bottom-[4.75rem] inset-x-4 h-1.5 rounded-full bg-stone-500/70" />
+    </div>
+  )
+}
+
+function WellCollectDialog({
+  pending, stamina, wellShardChancePct, wellStoneChancePct, busy, onCollect, onClose,
+}: {
+  pending: number
+  stamina: number
+  wellShardChancePct: number
+  wellStoneChancePct: number
+  busy?: boolean
+  onCollect: () => Promise<WellCollectResultVM>
+  onClose: () => void
+}) {
+  const [phase, setPhase] = useState<'confirm' | 'working' | 'done' | 'error'>('confirm')
+  const [flavorIdx, setFlavorIdx] = useState(0)
+  const [result, setResult] = useState<WellCollectResultVM | null>(null)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const canPull = pending > 0 && stamina >= WELL_COLLECT_STAMINA
+
+  const start = async () => {
+    setPhase('working')
+    const startedAt = Date.now()
+    try {
+      const res = await onCollect()
+      const elapsed = Date.now() - startedAt
+      const wait = Math.max(0, WELL_BUCKET_ANIM_MS - elapsed)
+      await new Promise((r) => setTimeout(r, wait))
+      setResult(res)
+      setPhase('done')
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Erro ao coletar')
+      setPhase('error')
+    }
+  }
+
+  useEffect(() => {
+    if (phase !== 'working' || result) return
+    const id = setInterval(() => setFlavorIdx((i) => (i + 1) % WELL_FLAVOR.length), 700)
+    return () => clearInterval(id)
+  }, [phase, result])
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 p-0 sm:p-6"
+      onClick={phase !== 'working' ? onClose : undefined}
+    >
+      <motion.div
+        initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 60, opacity: 0 }}
+        transition={{ type: 'spring', damping: 26, stiffness: 300 }}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full sm:max-w-sm bg-zinc-900 border border-white/20 !rounded-b-none sm:!rounded-2xl px-5 pt-5 pb-7 sm:pb-5"
+      >
+        {phase === 'confirm' && (
+          <div className="text-center">
+            <div className="text-4xl mb-2">🪣</div>
+            <h2 className="text-white font-black text-lg mb-1">Puxar água do poço</h2>
+            <p className="text-white/50 text-xs mb-3">
+              {pending} acumulada{pending > 1 ? 's' : ''} · cada pull tira <span className="text-sky-300 font-bold">1× {WELL.outputName}</span>
+              {' '}por <span className="font-bold text-white/80">−{WELL_COLLECT_STAMINA}⚡</span>
+            </p>
+            <div className="rounded-xl border border-fuchsia-400/25 bg-fuchsia-500/10 px-3 py-2 mb-2 text-[11px] text-fuchsia-200/90 text-left">
+              🔸 Chance de Estilhaço: <span className="font-bold">{wellShardChancePct}%</span>
+            </div>
+            <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 mb-4 text-[11px] text-amber-100/90 text-left">
+              💎 Chance de Pedra Negra: <span className="font-bold">{wellStoneChancePct}%</span>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={onClose} className="flex-1 rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 text-white/70 text-sm font-bold py-3 transition-all">
+                Deixar
+              </button>
+              <button
+                onClick={start}
+                disabled={busy || !canPull}
+                className="flex-1 rounded-lg text-white text-sm font-black py-3 transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-sky-600 hover:bg-sky-500"
+              >
+                Puxar · −{WELL_COLLECT_STAMINA}⚡
+              </button>
+            </div>
+            {!canPull && (
+              <div className="text-red-400 text-[11px] mt-2">
+                {pending <= 0 ? 'O poço ainda não acumulou água.' : '⚡ Stamina insuficiente.'}
+              </div>
+            )}
+          </div>
+        )}
+
+        {phase === 'working' && (
+          <div className="text-center py-1">
+            <WellBucketRig phase="working" />
+            <h2 className="text-white font-black text-base mb-1">Subindo o balde…</h2>
+            <AnimatePresence mode="wait">
+              <motion.p key={flavorIdx} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="text-white/45 text-xs mb-3 h-4">
+                {WELL_FLAVOR[flavorIdx]}
+              </motion.p>
+            </AnimatePresence>
+            <div className="h-2 rounded-full bg-black/60 border border-white/10 overflow-hidden mb-2">
+              <motion.div
+                initial={{ width: '0%' }} animate={{ width: '100%' }}
+                transition={{ duration: WELL_BUCKET_ANIM_MS / 1000, ease: 'linear' }}
+                className="h-full rounded-full bg-gradient-to-r from-sky-500 to-cyan-300"
+              />
+            </div>
+            <div className="text-white/30 text-[10px]">não feche — a coleta está em andamento</div>
+          </div>
+        )}
+
+        {phase === 'done' && result && (
+          <div className="text-center">
+            <WellBucketRig phase="done" />
+            <h2 className="text-white font-black text-lg mb-4">Água coletada!</h2>
+            <div className="flex flex-col gap-2 mb-4">
+              <motion.div
+                initial={{ opacity: 0, x: -14 }} animate={{ opacity: 1, x: 0 }}
+                className="flex items-center justify-between rounded-xl border border-sky-400/40 bg-sky-950/40 px-4 py-3"
+              >
+                <span className="text-sm text-sky-100">💧 {result.outputName}</span>
+                <span className="font-bold text-white">×{result.qty}</span>
+              </motion.div>
+              {result.bonuses.map((b, i) => {
+                const isStone = b.kind === 'stone'
+                return (
+                  <motion.div
+                    key={`${b.name}-${i}`}
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: [1, 1.04, 1] }}
+                    transition={{ delay: 0.2 + i * 0.12, duration: 0.9, repeat: isStone ? 2 : 0 }}
+                    className={`relative flex items-center justify-between rounded-xl px-4 py-3 overflow-hidden border ${
+                      isStone
+                        ? 'border-amber-300/80 shadow-[0_0_18px_rgba(251,191,36,0.45)]'
+                        : 'border-fuchsia-400/60'
+                    }`}
+                    style={{
+                      background: isStone
+                        ? 'linear-gradient(120deg, rgba(251,191,36,0.22), rgba(217,70,239,0.16))'
+                        : 'linear-gradient(120deg, rgba(217,70,239,0.18), rgba(139,92,246,0.14))',
+                    }}
+                  >
+                    <span className={`text-sm font-bold ${isStone ? 'text-amber-100' : 'text-fuchsia-200'}`}>
+                      {isStone ? '💎' : '🔸'} {b.name}
+                    </span>
+                    <span className={`font-bold ${isStone ? 'text-amber-50' : 'text-fuchsia-100'}`}>×1</span>
+                    <span className="stone-shine absolute inset-0 pointer-events-none" />
+                  </motion.div>
+                )
+              })}
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }} className="text-[11px] text-white/45">
+                +<span className="text-amber-300 font-bold">{result.xpGained} XP</span> de Fazenda
+                {result.pendingLeft > 0 && (
+                  <> · restam <span className="text-sky-300 font-bold">{result.pendingLeft}</span> no poço</>
+                )}
+              </motion.div>
+            </div>
+            <button onClick={onClose} className="w-full rounded-lg text-white text-sm font-black py-3 transition-all bg-sky-600 hover:bg-sky-500">
+              Guardar no inventário
+            </button>
+          </div>
+        )}
+
+        {phase === 'error' && (
+          <div className="text-center">
+            <div className="text-4xl mb-2">⚠️</div>
+            <h2 className="text-white font-black text-base mb-2">Não deu para coletar</h2>
+            <p className="text-white/60 text-xs mb-4">{errorMsg}</p>
+            <button onClick={onClose} className="w-full rounded-lg text-white text-sm font-black py-3 transition-all bg-white/10 hover:bg-white/20">
+              Fechar
+            </button>
+          </div>
+        )}
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ============================================================
 // Board completo
 // ============================================================
 
@@ -457,18 +701,20 @@ export function FarmBoard({
   onPlant: (slotIndex: number, cropId: string) => void
   /** Sem slotIndex: colhe TODOS os canteiros prontos. Com 101: colhe o cercado. */
   onHarvest: (slotIndex?: number) => Promise<HarvestResultVM>
-  onWellCollect: () => void
+  onWellCollect: () => Promise<WellCollectResultVM>
   onPenFeed: () => void
 }) {
   const cropList = useMemo(() => Object.values(CROPS) as CropDef[], [])
   const [selectedCrop, setSelectedCrop] = useState<string>(cropList[0]?.id ?? 'trigo')
   const [harvestDialogOpen, setHarvestDialogOpen] = useState(false)
+  const [wellDialogOpen, setWellDialogOpen] = useState(false)
   const feedCount = vm.inputCounts[vm.pen.feedName] ?? 0
   const farmLevel = vm.farm.level
 
   const plotBySlot = useMemo(() => new Map(vm.plots.map((p) => [p.slotIndex, p])), [vm.plots])
   const readyPlots = useMemo(() => vm.plots.filter((p) => p.state === 'ready'), [vm.plots])
   const readyCount = readyPlots.length
+  const wellCost = vm.wellCollectStamina ?? WELL_COLLECT_STAMINA
 
   return (
     <div className="space-y-5">
@@ -552,7 +798,7 @@ export function FarmBoard({
               <div className="text-3xl mb-1">💧</div>
               <div className="text-white font-black text-sm">Poço</div>
               <div className="text-white/50 text-[11px]">
-                1 Água Pura a cada {Math.round(vm.well.intervalSeconds / 60)} min (teto {vm.well.cap})
+                1 {WELL.outputName} a cada {Math.round(vm.well.intervalSeconds / 60)} min (teto {vm.well.cap}) · −{wellCost}⚡/pull
               </div>
             </div>
             <div className="text-right">
@@ -560,11 +806,11 @@ export function FarmBoard({
             </div>
           </div>
           <button
-            onClick={onWellCollect}
+            onClick={() => setWellDialogOpen(true)}
             disabled={busy || vm.well.pending <= 0}
             className="mt-3 w-full text-xs font-black text-white bg-sky-600 hover:bg-sky-500 rounded-lg px-3 py-2 disabled:opacity-40 transition-colors"
           >
-            💧 Coletar água
+            🪣 Coletar água
           </button>
         </div>
 
@@ -588,7 +834,7 @@ export function FarmBoard({
             <button
               onClick={onPenFeed}
               disabled={busy || feedCount <= 0}
-              title={feedCount <= 0 ? 'Crafte Ração na Bancada de Alquimia (2 Trigo + 1 Água Pura)' : undefined}
+              title={feedCount <= 0 ? 'Processe Ração na bancada (2 Trigo + 1 Água Pura)' : undefined}
               className="mt-3 w-full text-xs font-black text-white bg-orange-600 hover:bg-orange-500 rounded-lg px-3 py-2 disabled:opacity-40 transition-colors"
             >
               🥣 Alimentar (1 {vm.pen.feedName})
@@ -618,6 +864,20 @@ export function FarmBoard({
             busy={busy}
             onHarvest={() => onHarvest()}
             onClose={() => setHarvestDialogOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {wellDialogOpen && (
+          <WellCollectDialog
+            pending={vm.well.pending}
+            stamina={vm.stamina}
+            wellShardChancePct={vm.wellShardChance}
+            wellStoneChancePct={vm.wellStoneChance}
+            busy={busy}
+            onCollect={onWellCollect}
+            onClose={() => setWellDialogOpen(false)}
           />
         )}
       </AnimatePresence>

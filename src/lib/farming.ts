@@ -7,8 +7,9 @@
 //  - CANTEIROS (kind='crop'): planta semente → cresce em tempo real → colhe.
 //    Nº de canteiros e velocidade crescem com o nível de Fazenda
 //    (professionSystem.farmPlotCount / farmGrowthMult).
-//  - POÇO (kind='well'): sem semente; goteja Água Pura (o solvente de quase
-//    toda poção) até um teto — coletar zera a âncora.
+//  - POÇO (kind='well'): sem semente; goteja Água (cru) até um teto — cada
+//    pull tira 1 unidade, gasta 1⚡ e avança a âncora em 1 intervalo. Água
+//    Pura sai do processamento (1:1). Chance rara de estilhaço/pedra negra.
 //  - CERCADO (kind='pen', nível 5): consome 1 Ração e devolve Couro após um
 //    ciclo. É a fonte renovável de couro (a masmorra/bosque seguem dropando).
 //
@@ -18,6 +19,7 @@
 // canteiro para o personagem que clicou, que também leva o XP da colheita.
 
 import { farmGrowthMult, farmYieldMult } from './professionSystem';
+import { STONE_NAMES } from './enhancementSystem';
 
 export type CropId = 'trigo' | 'erva' | 'linho';
 
@@ -86,12 +88,13 @@ export const WELL_SLOT_INDEX = 100;
 export const PEN_SLOT_INDEX = 101;
 
 export const WELL = {
-  outputName: 'Água Pura',
+  outputName: 'Água',
   emoji: '💧',
-  /** 1 Água Pura a cada 30 min. */
+  /** 1 Água a cada 30 min. */
   intervalSeconds: 30 * 60,
   /** Acúmulo máximo sem coletar (força a visita, não o farm infinito). */
   cap: 12,
+  /** XP de Fazenda por pull (1 unidade). */
   farmXpPerCollect: 2,
 };
 
@@ -105,8 +108,11 @@ export const PEN = {
   farmXp: 12,
 };
 
-/** Stamina cobrada por AÇÃO na fazenda (coletar poço, alimentar/colher cercado). */
+/** Stamina cobrada por AÇÃO na fazenda (alimentar/colher cercado). */
 export const FARM_ACTION_STAMINA = 2;
+
+/** Stamina por pull do poço (1 Água por vez). */
+export const WELL_COLLECT_STAMINA = 1;
 
 /** Stamina por CANTEIRO colhido (a colheita pega todos os prontos de uma vez). */
 export const FARM_HARVEST_STAMINA = 1;
@@ -137,6 +143,36 @@ export const FARM_STONE_SHARDS = [
 export function rollFarmStoneShard(rng: () => number = Math.random): string {
   return FARM_STONE_SHARDS[rng() < 0.5 ? 0 : 1];
 }
+
+/**
+ * Chance (%) de um pull do poço render um Estilhaço de Pedra Negra.
+ * Cresce com o nível de Fazenda; teto 25%.
+ */
+export function wellShardChance(farmLevel: number): number {
+  return Math.min(25, 2 + 1 * (Math.max(1, farmLevel) - 1));
+}
+
+/**
+ * Chance (%) de um pull do poço render uma Pedra Negra básica (jackpot).
+ * Cresce com o nível de Fazenda; teto 3%. Rolls independentes do estilhaço.
+ */
+export function wellStoneChance(farmLevel: number): number {
+  return Math.min(3, 0.2 + 0.1 * (Math.max(1, farmLevel) - 1));
+}
+
+/** Share arma/armadura das pedras inteiras do poço (igual dungeon). */
+const WELL_STONE_WEAPON_SHARE = 0.3;
+
+/** Pedra Negra básica (30% arma / 70% armadura). */
+export function rollWellBlackStone(rng: () => number = Math.random): string {
+  return rng() < WELL_STONE_WEAPON_SHARE ? STONE_NAMES.WEAPON_BASIC : STONE_NAMES.ARMOR_BASIC;
+}
+
+/** XP extra quando o poço rende um estilhaço. */
+export const WELL_SHARD_BONUS_XP = 10;
+
+/** XP extra quando o poço rende uma Pedra Negra. */
+export const WELL_STONE_BONUS_XP = 25;
 
 // ============================================================
 // Estado derivado (funções puras — o servidor decide, o cliente exibe)

@@ -532,16 +532,32 @@ function WellCollectDialog({
   const [flavorIdx, setFlavorIdx] = useState(0)
   const [result, setResult] = useState<WellCollectResultVM | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
-  const canPull = pending > 0 && stamina >= WELL_COLLECT_STAMINA
+  // Contador local: espelha o poço e atualiza a cada pull (props podem atrasar 1 frame).
+  const [localPending, setLocalPending] = useState(pending)
+  const [localStamina, setLocalStamina] = useState(stamina)
+
+  useEffect(() => {
+    if (phase === 'confirm' || phase === 'done') {
+      setLocalPending(pending)
+      setLocalStamina(stamina)
+    }
+  }, [pending, stamina, phase])
+
+  const canPull = localPending > 0 && localStamina >= WELL_COLLECT_STAMINA
 
   const start = async () => {
+    if (localPending <= 0 || localStamina < WELL_COLLECT_STAMINA) return
     setPhase('working')
+    setResult(null)
+    setErrorMsg(null)
     const startedAt = Date.now()
     try {
       const res = await onCollect()
       const elapsed = Date.now() - startedAt
       const wait = Math.max(0, WELL_BUCKET_ANIM_MS - elapsed)
       await new Promise((r) => setTimeout(r, wait))
+      setLocalPending(res.pendingLeft)
+      setLocalStamina((s) => Math.max(0, s - WELL_COLLECT_STAMINA))
       setResult(res)
       setPhase('done')
     } catch (err) {
@@ -551,10 +567,12 @@ function WellCollectDialog({
   }
 
   useEffect(() => {
-    if (phase !== 'working' || result) return
+    if (phase !== 'working') return
     const id = setInterval(() => setFlavorIdx((i) => (i + 1) % WELL_FLAVOR.length), 700)
     return () => clearInterval(id)
-  }, [phase, result])
+  }, [phase])
+
+  const canPullAgain = (result?.pendingLeft ?? localPending) > 0 && localStamina >= WELL_COLLECT_STAMINA
 
   return (
     <motion.div
@@ -573,7 +591,8 @@ function WellCollectDialog({
             <div className="text-4xl mb-2">🪣</div>
             <h2 className="text-white font-black text-lg mb-1">Puxar água do poço</h2>
             <p className="text-white/50 text-xs mb-3">
-              {pending} acumulada{pending > 1 ? 's' : ''} · cada pull tira <span className="text-sky-300 font-bold">1× {WELL.outputName}</span>
+              <span className="text-sky-300 font-bold">{localPending}</span>/{WELL.cap} acumulada{localPending !== 1 ? 's' : ''}
+              {' '}· cada pull tira <span className="text-sky-300 font-bold">1× {WELL.outputName}</span>
               {' '}por <span className="font-bold text-white/80">−{WELL_COLLECT_STAMINA}⚡</span>
             </p>
             <div className="rounded-xl border border-fuchsia-400/25 bg-fuchsia-500/10 px-3 py-2 mb-2 text-[11px] text-fuchsia-200/90 text-left">
@@ -587,7 +606,7 @@ function WellCollectDialog({
                 Deixar
               </button>
               <button
-                onClick={start}
+                onClick={() => void start()}
                 disabled={busy || !canPull}
                 className="flex-1 rounded-lg text-white text-sm font-black py-3 transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-sky-600 hover:bg-sky-500"
               >
@@ -596,7 +615,7 @@ function WellCollectDialog({
             </div>
             {!canPull && (
               <div className="text-red-400 text-[11px] mt-2">
-                {pending <= 0 ? 'O poço ainda não acumulou água.' : '⚡ Stamina insuficiente.'}
+                {localPending <= 0 ? 'O poço ainda não acumulou água.' : '⚡ Stamina insuficiente.'}
               </div>
             )}
           </div>
@@ -604,7 +623,7 @@ function WellCollectDialog({
 
         {phase === 'working' && (
           <div className="text-center py-1">
-            <WellBucketRig phase="working" />
+            <WellBucketRig phase="working" key={`bucket-${localPending}`} />
             <h2 className="text-white font-black text-base mb-1">Subindo o balde…</h2>
             <AnimatePresence mode="wait">
               <motion.p key={flavorIdx} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="text-white/45 text-xs mb-3 h-4">
@@ -613,6 +632,7 @@ function WellCollectDialog({
             </AnimatePresence>
             <div className="h-2 rounded-full bg-black/60 border border-white/10 overflow-hidden mb-2">
               <motion.div
+                key={`bar-${localPending}-${flavorIdx === 0 ? 'a' : 'b'}`}
                 initial={{ width: '0%' }} animate={{ width: '100%' }}
                 transition={{ duration: WELL_BUCKET_ANIM_MS / 1000, ease: 'linear' }}
                 className="h-full rounded-full bg-gradient-to-r from-sky-500 to-cyan-300"
@@ -628,6 +648,7 @@ function WellCollectDialog({
             <h2 className="text-white font-black text-lg mb-4">Água coletada!</h2>
             <div className="flex flex-col gap-2 mb-4">
               <motion.div
+                key={`water-${result.pendingLeft}-${result.xpGained}`}
                 initial={{ opacity: 0, x: -14 }} animate={{ opacity: 1, x: 0 }}
                 className="flex items-center justify-between rounded-xl border border-sky-400/40 bg-sky-950/40 px-4 py-3"
               >
@@ -638,10 +659,10 @@ function WellCollectDialog({
                 const isStone = b.kind === 'stone'
                 return (
                   <motion.div
-                    key={`${b.name}-${i}`}
+                    key={`${b.name}-${i}-${result.pendingLeft}`}
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: [1, 1.04, 1] }}
-                    transition={{ delay: 0.2 + i * 0.12, duration: 0.9, repeat: isStone ? 2 : 0 }}
+                    transition={{ delay: 0.12 + i * 0.1, duration: 0.9, repeat: isStone ? 2 : 0 }}
                     className={`relative flex items-center justify-between rounded-xl px-4 py-3 overflow-hidden border ${
                       isStone
                         ? 'border-amber-300/80 shadow-[0_0_18px_rgba(251,191,36,0.45)]'
@@ -661,16 +682,38 @@ function WellCollectDialog({
                   </motion.div>
                 )
               })}
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }} className="text-[11px] text-white/45">
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-[11px] text-white/45">
                 +<span className="text-amber-300 font-bold">{result.xpGained} XP</span> de Fazenda
-                {result.pendingLeft > 0 && (
-                  <> · restam <span className="text-sky-300 font-bold">{result.pendingLeft}</span> no poço</>
-                )}
+                {' '}· poço <span className="text-sky-300 font-bold">{result.pendingLeft}</span>/{WELL.cap}
               </motion.div>
             </div>
-            <button onClick={onClose} className="w-full rounded-lg text-white text-sm font-black py-3 transition-all bg-sky-600 hover:bg-sky-500">
-              Guardar no inventário
-            </button>
+            <div className="flex gap-2">
+              <button onClick={onClose} className="flex-1 rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 text-white/70 text-sm font-bold py-3 transition-all">
+                Fechar
+              </button>
+              {canPullAgain ? (
+                <button
+                  onClick={() => void start()}
+                  disabled={busy}
+                  className="flex-1 rounded-lg text-white text-sm font-black py-3 transition-all disabled:opacity-40 bg-sky-600 hover:bg-sky-500"
+                >
+                  Puxar mais · −{WELL_COLLECT_STAMINA}⚡
+                </button>
+              ) : (
+                <button
+                  onClick={onClose}
+                  className="flex-1 rounded-lg text-white text-sm font-black py-3 transition-all bg-sky-600 hover:bg-sky-500"
+                >
+                  Guardar
+                </button>
+              )}
+            </div>
+            {!canPullAgain && result.pendingLeft <= 0 && (
+              <div className="text-white/40 text-[11px] mt-2">Poço vazio — volte depois.</div>
+            )}
+            {!canPullAgain && result.pendingLeft > 0 && localStamina < WELL_COLLECT_STAMINA && (
+              <div className="text-red-400 text-[11px] mt-2">⚡ Stamina insuficiente para outro pull.</div>
+            )}
           </div>
         )}
 
@@ -679,9 +722,20 @@ function WellCollectDialog({
             <div className="text-4xl mb-2">⚠️</div>
             <h2 className="text-white font-black text-base mb-2">Não deu para coletar</h2>
             <p className="text-white/60 text-xs mb-4">{errorMsg}</p>
-            <button onClick={onClose} className="w-full rounded-lg text-white text-sm font-black py-3 transition-all bg-white/10 hover:bg-white/20">
-              Fechar
-            </button>
+            <div className="flex gap-2">
+              <button onClick={onClose} className="flex-1 rounded-lg text-white text-sm font-black py-3 transition-all bg-white/10 hover:bg-white/20">
+                Fechar
+              </button>
+              {canPull && (
+                <button
+                  onClick={() => void start()}
+                  disabled={busy}
+                  className="flex-1 rounded-lg text-white text-sm font-black py-3 transition-all disabled:opacity-40 bg-sky-600 hover:bg-sky-500"
+                >
+                  Tentar de novo
+                </button>
+              )}
+            </div>
           </div>
         )}
       </motion.div>

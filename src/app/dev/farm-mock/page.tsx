@@ -168,19 +168,20 @@ export default function FarmMockPage() {
               xpGained += WELL_STONE_BONUS_XP
             }
 
+            const pendingLeft = Math.max(0, vm.well.pending - 1)
             setVm((prev) => ({
               ...prev,
               stamina: prev.stamina - WELL_COLLECT_STAMINA,
-              well: { ...prev.well, pending: Math.max(0, prev.well.pending - 1) },
+              well: { ...prev.well, pending: pendingLeft },
             }))
             const bonusLabel = bonuses.length > 0 ? ` + ${bonuses.map((b) => b.name).join(', ')}` : ''
-            push(`💧 Coletou 1× ${WELL.outputName}${bonusLabel} (+${xpGained} XP)`)
+            push(`💧 Coletou 1× ${WELL.outputName}${bonusLabel} (+${xpGained} XP) · ${pendingLeft}/${WELL.cap}`)
             return {
               outputName: WELL.outputName,
               qty: 1,
               bonuses,
               xpGained,
-              pendingLeft: Math.max(0, vm.well.pending - 1),
+              pendingLeft,
             }
           }}
           onPenFeed={() => {

@@ -15,6 +15,7 @@ import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { FarmBoard, type FarmVM, type HarvestResultVM, type WellCollectResultVM } from '@/components/farm/FarmBoard'
 import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider'
+import { WELL } from '@/lib/farming'
 
 export default function FarmPage() {
   const { data: session } = useSession()
@@ -151,18 +152,30 @@ export default function FarmPage() {
         setNotice(`❌ ${message}`)
         throw new Error(message)
       }
+      // Atualiza o card do poço na hora (12→11→…) sem esperar o poll.
+      const pendingLeft = typeof data.pendingLeft === 'number' ? data.pendingLeft : 0
+      const nextStamina = typeof data.stamina === 'number' ? data.stamina : undefined
+      setVm((prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          well: { ...prev.well, pending: pendingLeft },
+          stamina: nextStamina ?? prev.stamina,
+          farm: data.farm ?? prev.farm,
+        }
+      })
       await refresh(activeCharacterId)
       const bonuses = Array.isArray(data.bonuses) ? data.bonuses : []
       const bonusLabel = bonuses.length > 0
         ? ` + ${bonuses.map((b: { name: string }) => b.name).join(', ')}`
         : ''
-      setNotice(`💧 Coletou ${data.qty}× ${data.outputName}${bonusLabel}`)
+      setNotice(`💧 Coletou ${data.qty}× ${data.outputName}${bonusLabel} · poço ${pendingLeft}/${WELL.cap}`)
       return {
         outputName: data.outputName,
         qty: data.qty ?? 1,
         bonuses,
         xpGained: data.xpGained ?? 0,
-        pendingLeft: data.pendingLeft ?? 0,
+        pendingLeft,
       }
     } finally {
       setBusy(false)

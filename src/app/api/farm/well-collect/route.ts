@@ -92,11 +92,13 @@ export async function POST(req: Request) {
         select: { farmXp: true },
       })
 
-      // Avança 1 intervalo — preserva o restante acumulado acima de 1.
-      const nextAnchor = new Date(well.plantedAt.getTime() + WELL.intervalSeconds * 1000)
+      // Reancora para pending-1 a partir de `now`. Avançar só +1 intervalo
+      // falha quando o poço já transbordou (elapsed >> cap×interval): o floor
+      // continuaria em 12. Snap em now − (pending−1)×interval garante −1 no contador.
+      const nextAnchor = new Date(now.getTime() - (pending - 1) * WELL.intervalSeconds * 1000)
       await tx.farmPlot.update({ where: { id: well.id }, data: { plantedAt: nextAnchor } })
 
-      const pendingLeft = wellPending(nextAnchor, now)
+      const pendingLeft = Math.max(0, pending - 1)
 
       return {
         qty: 1,

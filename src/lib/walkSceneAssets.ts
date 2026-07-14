@@ -64,10 +64,17 @@ export const WALK_SEGMENTS: Record<DungeonId, WalkSegmentDef[]> = {
   ],
 }
 
-/** Strip único conhecido (Fase A / fallback sem segmentos). */
+/** Strip único conhecido (Fase A / treadmill). */
 export const WALK_FULL_STRIP: Partial<Record<DungeonId, string>> = {
-  floresta: '/backgrounds/forest-dark-map.jpg',
+  floresta: '/backgrounds/floresta-walk-map.webp',
 }
+
+/** Battle BG cinematográfico (combate Floresta). */
+export const FLORESTA_BATTLE_BG = '/backgrounds/floresta-battle.webp'
+
+/** Fallback se a arte nova ainda não existir. */
+export const FLORESTA_BATTLE_BG_FALLBACK = '/hero-masmorra-floresta.webp'
+export const FLORESTA_WALK_FALLBACK = '/backgrounds/forest-dark-map.jpg'
 
 /** Sprite genérico de caminhada (NFT continua no retrato/combate). */
 export const WALK_HERO_SPRITE = '/hero-masmorra-floresta.webp'
@@ -122,7 +129,7 @@ export function segmentCountForTrail(nodeCount: number): number {
 
 /**
  * Remapeia a trilha zigzag do SVG para um caminho vertical (sempre pra cima),
- * com leve serpenteio em X — adequado à câmera da WalkScene.
+ * com serpenteio em X — usado pelo fallback SVG; treadmill não desenha a trilha.
  */
 export function buildWalkPathPoints(rooms: number, minorNodes: number): MapPoint[] {
   const seq: { kind: NodeKind; tier: number }[] = [{ kind: 'start', tier: 0 }]
@@ -135,12 +142,10 @@ export function buildWalkPathPoints(rooms: number, minorNodes: number): MapPoint
   const last = seq.length - 1
   return seq.map((n, i) => {
     const t = last > 0 ? i / last : 0
-    // y em % do mundo: 92 (entrada embaixo) → 8 (boss no topo)
     const y = 92 - t * 84
     let x = 50
     if (i > 0 && i < last) {
-      // serpenteio suave (±10%) sem ir pras laterais extremas do zigzag antigo
-      x = 50 + (i % 2 === 1 ? -10 : 10) * (0.55 + 0.45 * Math.sin(i * 1.7))
+      x = 50 + (i % 2 === 1 ? -14 : 14) * (0.55 + 0.45 * Math.sin(i * 1.7))
     }
     return { x, y, kind: n.kind, tier: n.tier }
   })

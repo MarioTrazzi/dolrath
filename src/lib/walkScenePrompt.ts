@@ -81,3 +81,23 @@ export const WALK_SEGMENT_ART: Record<string, Record<string, string>> = {
       'A broken ancient gate frame at mid-segment; the path still enters bottom center and exits top center.',
   },
 }
+
+// ---- Floresta Sombria: battle BG + walk strip (edit from landing celestial art) ----
+
+export const FLORESTA_SCENE_REF = 'public/hero-masmorra-floresta-celestial.webp'
+
+export const FLORESTA_BATTLE_PROMPT =
+  'EDIT the provided Dolrath Floresta Sombria cinematic image. Keep the EXACT same dark fantasy forest environment, ' +
+  'color grade, twin moons / moonlight, twisted ancient trees, volumetric mist, mossy ground and dramatic lighting. ' +
+  'REMOVE all characters, heroes, elves, bosses, creatures, auras and UI entirely — leave an empty atmospheric ' +
+  'clearing / battle arena in the forest suitable as a full-bleed RPG combat background. No people, no monsters, ' +
+  'no text, no watermark, no logo, no HUD. Widescreen landscape composition, cinematic empty scene.'
+
+export const FLORESTA_WALK_MAP_PROMPT =
+  'EDIT the provided Dolrath Floresta Sombria image into a TALL VERTICAL exploration map strip for a top-down / ' +
+  'slightly isometric RPG walk scene. Keep the same dark forest world, moons, mist, twisted trees, moss and color ' +
+  'palette. Transform the framing into a continuous vertical path: a narrow dirt trail enters at the BOTTOM center ' +
+  'and exits at the TOP center in the SAME horizontal position so the image can scroll as a treadmill. Dense forest ' +
+  'on both sides. REMOVE all characters, heroes, bosses, creatures and UI. No text, no watermark, no logo. Portrait ' +
+  'vertical composition, seamless-feel path for scrolling exploration.'
+

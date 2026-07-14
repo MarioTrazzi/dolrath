@@ -15,10 +15,11 @@ import {
   NodeVisualState,
   RevealedNode,
 } from '@/components/dungeon/DungeonMap'
-import WalkScene from '@/components/dungeon/WalkScene'
+import WalkScene, { type WalkMode, type WalkTrailMark } from '@/components/dungeon/WalkScene'
 import {
   buildWalkPathPoints,
   walkSceneEnabled,
+  FLORESTA_BATTLE_BG,
 } from '@/lib/walkSceneAssets'
 import {
   DungeonDef,
@@ -613,7 +614,11 @@ export default function DungeonRun({
   const LAST = trailPoints.length - 1
   const [tokenIdx, setTokenIdx] = useState(0)
   const [moving, setMoving] = useState(false)
-  const [walkSeed, setWalkSeed] = useState(() => `${dungeon.id}-${Date.now()}`)
+  /** Treadmill: idle → scroll (mundo rola) → approach (ícone vai no ?) → resolve. */
+  const [walkMode, setWalkMode] = useState<WalkMode>('idle')
+  const [walkTrailMarks, setWalkTrailMarks] = useState<WalkTrailMark[]>([])
+  const walkBusy = walkMode === 'scroll' || walkMode === 'approach' || moving
+  const walkStepLockRef = useRef(false)
   const [narration, setNarration] = useState(dungeon.enterText)
   // 📜 O Mestre narra virou dialog sob demanda (não mais uma faixa fixa sob o
   // mapa): abre nos "beats" da história e junto de cada rolagem do d20, fecha
@@ -857,7 +862,6 @@ export default function DungeonRun({
           return
         }
         runIdRef.current = data.runId
-        if (data.runId) setWalkSeed(String(data.runId))
         if (typeof data.stamina === 'number') setStamina(data.stamina)
         setRunReady(true)
         // Inventário já cheio ao entrar: avisa que os drops não vão ser coletados.
@@ -1195,16 +1199,99 @@ export default function DungeonRun({
     return { def, text, effects, luckRoll: roll }
   }
 
-  // Botão principal: pede o próximo nó ao SERVIDOR (ele cobra stamina, rola o
-  // d20 e decide monstro/achado/boss), depois anima o resultado recebido.
+  // Botão principal: treadmill (scroll → approach → /step) ou path clássico.
+  const finishWalkStep = useCallback(async (dest: number) => {
+    if (walkStepLockRef.current) return
+    walkStepLockRef.current = true
+    if (!runIdRef.current) {
+      setWalkMode('idle')
+      setMoving(false)
+      walkStepLockRef.current = false
+      return
+    }
+    setExploreRolling(true)
+    let data: StepResponse
+    try {
+      const res = await fetch('/api/dungeon/run/step', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ runId: runIdRef.current }),
+      })
+      data = await res.json()
+      if (!res.ok) {
+        setExploreRolling(false)
+        setWalkMode('idle')
+        setMoving(false)
+        walkStepLockRef.current = false
+        if (res.status === 400) showBanner('😮‍💨', `${data?.error || 'Stamina insuficiente'} — ela volta +2 a cada 15 min ocioso`)
+        else showBanner('⚠️', data?.error || 'Falha ao avançar')
+        return
+      }
+    } catch {
+      setExploreRolling(false)
+      setWalkMode('idle')
+      setMoving(false)
+      walkStepLockRef.current = false
+      showBanner('⚠️', 'Sem conexão com o servidor')
+      return
+    }
+
+    if (typeof data.stamina === 'number') setStamina(data.stamina)
+    setTokenIdx(dest)
+    setWalkMode('idle')
+    setMoving(false)
+    walkStepLockRef.current = false
+
+    if (data.type === 'boss') {
+      setExploreRolling(false)
+      if (data.monster) serverMonsterRef.current = data.monster
+      serverPackRef.current = data.monsters?.length ? data.monsters : data.monster ? [data.monster] : null
+      showNarration('A trilha desemboca no covil. O ar treme... algo antigo se ergue.')
+      pushLog(`👑 Você chegou ao covil de ${dungeon.boss.name}...`)
+      later(() => showBanner('👑', `${dungeon.boss.name} desperta!`, 3000), 200)
+      return
+    }
+
+    setExploreResult(null)
+    const result: DiceResult = { sides: 20, roll: data.roll ?? 12, modifier: 0, total: data.roll ?? 12 }
+    setExploreResult(result)
+    later(() => {
+      setExploreRolling(false)
+      setExploreResult(null)
+      const resolved = applyServerEvent(data, dest)
+      const emoji = resolved.def.icon || (resolved.monster ? '⚔️' : '❔')
+      setWalkTrailMarks(prev => {
+        const aged = prev.map(m => ({ ...m, age: m.age + 1 })).filter(m => m.age < 5)
+        return [{ id: dest, age: 0, emoji: typeof emoji === 'string' ? emoji : '❔' }, ...aged]
+      })
+      later(() => setEventCard(resolved), 80)
+    }, 320)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dungeon.boss.name])
+
+  const handleWalkApproachComplete = useCallback(() => {
+    if (walkMode !== 'approach') return
+    const dest = tokenIdx + 1
+    finishWalkStep(dest)
+  }, [walkMode, tokenIdx, finishWalkStep])
+
   const advance = async () => {
-    if (phase !== 'explore' || exploreRolling || moving || eventCard || lootCard || atBoss) return
+    if (phase !== 'explore' || exploreRolling || walkBusy || eventCard || lootCard || atBoss) return
     if (!runReady || !runIdRef.current) return
     const dest = tokenIdx + 1
 
+    // --- Treadmill: mundo rola → ? → approach → /step ---
+    if (useWalkScene) {
+      setMoving(true)
+      setWalkMode('scroll')
+      showNarration()
+      later(() => {
+        setWalkMode('approach')
+      }, 1500)
+      return
+    }
+
     setExploreRolling(true)
-    // 📜 A narração reabre junto com a rolagem — reforça o beat atual da história
-    // a cada passo, mesmo quando o texto não mudou desde o último nó.
     showNarration()
     let data: StepResponse
     try {
@@ -1228,7 +1315,6 @@ export default function DungeonRun({
 
     if (typeof data.stamina === 'number') setStamina(data.stamina)
 
-    // Covil do boss: o monstro do boss veio do servidor (sem rolagem de d20).
     if (data.type === 'boss') {
       setExploreRolling(false)
       if (data.monster) serverMonsterRef.current = data.monster
@@ -1242,11 +1328,6 @@ export default function DungeonRun({
       return
     }
 
-    // Nó de evento: o dado já está girando desde o clique (cobrindo a espera da
-    // rede) — assim que a resposta chega, mostra o resultado NA HORA, sem atraso
-    // artificial. O piso de giro (minSpinMs no AnimatedDie) garante uma rolagem
-    // mínima visível mesmo se a rede for instantânea. Os 375ms abaixo são só pra
-    // dar tempo de LER o número antes de seguir pro próximo nó.
     setExploreResult(null)
     const result: DiceResult = { sides: 20, roll: data.roll ?? 12, modifier: 0, total: data.roll ?? 12 }
     setExploreResult(result)
@@ -1306,6 +1387,7 @@ export default function DungeonRun({
     setExploreResult(null)
     setExploreRolling(false)
     setMoving(false)
+    setWalkMode('idle')
     setCombatEnded(false)
     setWinnerId(null)
     setDiceResults({})
@@ -2483,7 +2565,7 @@ export default function DungeonRun({
   // Para com segurança quando falta stamina (evita laço de avanços negados).
   useEffect(() => {
     if (!auto || phase !== 'explore' || exitConfirm) return
-    if (moving || exploreRolling) return
+    if (moving || exploreRolling || walkBusy) return
     let cancelled = false
     const fire = (fn: () => void, ms: number) => {
       const t = setTimeout(() => { if (!cancelled) fn() }, ms)
@@ -2545,7 +2627,7 @@ export default function DungeonRun({
     }
     return fire(advance, 800)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auto, autoConsumables, exitConfirm, phase, moving, exploreRolling, lootCard, eventCard, atBoss, tokenIdx, runReady, stamina, hp, mp, consumables])
+  }, [auto, autoConsumables, exitConfirm, phase, moving, walkBusy, exploreRolling, lootCard, eventCard, atBoss, tokenIdx, runReady, stamina, hp, mp, consumables])
 
   // ============================================================
   // RENDER
@@ -2596,12 +2678,12 @@ export default function DungeonRun({
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden overscroll-none touch-pan-y bg-black">
-      {/* Cenário temático — full-screen. Com WalkScene o mapa é a própria cena;
-          em combate clássico (sem walk) usa a imagem da masmorra. */}
+      {/* Cenário temático — full-screen. Em combate Floresta: battle BG cinematográfico.
+          Na exploração com WalkScene o mapa é a própria cena. */}
       <div className="absolute inset-0">
         <DungeonBackdrop
           theme={dungeon.id}
-          imageUrl={!useWalkScene && phase === 'combat' ? backgroundImageUrl : undefined}
+          imageUrl={phase === 'combat' ? (backgroundImageUrl || (dungeon.id === 'floresta' ? FLORESTA_BATTLE_BG : undefined)) : undefined}
           imageOverlayOpacity={backgroundImageOverlay}
         />
       </div>
@@ -2738,20 +2820,17 @@ export default function DungeonRun({
         {/* Área de conteúdo abaixo do header (e barras mobile): WalkScene + fases */}
         <div className="relative flex-1 min-h-0 flex flex-col">
         {/* ============================================================ */}
-        {/* WALK SCENE (Anterra) — permanece montada em explore + combate */}
+        {/* WALK SCENE (Anterra treadmill) — só na exploração; combate usa battle BG */}
         {/* ============================================================ */}
-        {useWalkScene && (phase === 'explore' || phase === 'combat') && (
-          <div className="absolute inset-0 z-0 pointer-events-none" aria-hidden={phase === 'combat'}>
+        {useWalkScene && phase === 'explore' && (
+          <div className="absolute inset-0 z-0 pointer-events-none">
             <WalkScene
               dungeonId={dungeon.id}
               accent={dungeon.accent}
-              points={trailPoints}
-              tokenIdx={tokenIdx}
-              moving={moving}
-              combatMode={phase === 'combat'}
-              nodeState={nodeState}
-              revealed={nodeEvents}
-              seed={walkSeed}
+              mode={walkMode}
+              trailMarks={walkTrailMarks}
+              nextIsBoss={nextIsBoss}
+              onApproachComplete={handleWalkApproachComplete}
             />
           </div>
         )}
@@ -2959,7 +3038,7 @@ export default function DungeonRun({
             <main className="relative flex-1 min-h-0">
               {!useWalkScene && (
                 <>
-                  <MapAmbient backgroundImageUrl={dungeon.id === 'floresta' ? '/backgrounds/forest-dark-map.jpg' : undefined} />
+                  <MapAmbient backgroundImageUrl={dungeon.id === 'floresta' ? '/backgrounds/floresta-walk-map.webp' : undefined} />
                   <div className="absolute inset-0 mx-auto max-w-md pointer-events-none">
                     <div className="relative h-full pointer-events-auto">
                       <MapTrail points={trailPoints} progress={tokenIdx / LAST} />
@@ -3273,7 +3352,7 @@ export default function DungeonRun({
                   <div className="mx-auto max-w-md flex items-center gap-1.5">
                     <button
                       onClick={() => setExitConfirm(true)}
-                      disabled={exploreRolling || moving}
+                      disabled={exploreRolling || walkBusy}
                       title="Sair da masmorra (mantém recompensas)"
                       className="shrink-0 w-11 h-11 grid place-items-center rounded-xl border border-white/10 bg-black/50 backdrop-blur-xl text-textsec hover:text-white hover:border-white/25 transition-colors active:scale-95 disabled:opacity-40"
                     >
@@ -3306,7 +3385,7 @@ export default function DungeonRun({
                     )}
                     <button
                       onClick={() => { loadConsumables(); setShowItems(true) }}
-                      disabled={exploreRolling || moving}
+                      disabled={exploreRolling || walkBusy}
                       title="Usar consumível (HP/MP)"
                       className="shrink-0 w-11 h-11 grid place-items-center rounded-xl border border-white/10 bg-black/50 backdrop-blur-xl text-textsec hover:text-white hover:border-white/25 transition-colors active:scale-95 disabled:opacity-40 relative"
                     >
@@ -3323,7 +3402,7 @@ export default function DungeonRun({
                           ? () => startCombat(serverPackRef.current ?? serverMonsterRef.current ?? scaleMonster(dungeon.boss, dungeon, charLevel, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass, tier))
                           : advance
                       }
-                      disabled={exploreRolling || moving || !!eventCard || !!lootCard}
+                      disabled={exploreRolling || walkBusy || !!eventCard || !!lootCard}
                       className="flex-1 h-11 rounded-xl font-black text-sm sm:text-base text-white inline-flex items-center justify-center gap-2 transition-all active:scale-[0.98] hover:scale-[1.01] disabled:opacity-50 disabled:cursor-wait disabled:hover:scale-100"
                       style={{
                         background: atBoss
@@ -3334,8 +3413,12 @@ export default function DungeonRun({
                         boxShadow: atBoss ? '0 0 26px rgba(233,69,96,0.5)' : nextMainNode ? '0 0 26px rgba(243,156,18,0.45)' : `0 0 26px ${dungeon.accentSoft}`,
                       }}
                     >
-                      {exploreRolling || moving
-                        ? '...'
+                      {exploreRolling || walkBusy
+                        ? walkMode === 'scroll'
+                          ? '🌲 Vasculhando...'
+                          : walkMode === 'approach'
+                            ? '👀 Aproximando...'
+                            : '...'
                         : atBoss
                           ? '⚔️ Enfrentar o Chefe'
                           : nextIsBoss
@@ -3388,7 +3471,7 @@ export default function DungeonRun({
         {/* FASE: COMBATE — com WalkScene fica overlay in-loco no mapa */}
         {/* ============================================================ */}
         {phase === 'combat' && monster && (
-          <div className={`flex-1 flex flex-col min-h-0 relative z-10 ${useWalkScene ? 'bg-black/25' : ''}`}>
+          <div className="flex-1 flex flex-col min-h-0 relative z-10">
             <BattleScene
               className="flex-1 min-h-[280px]"
               left={playerFighter}

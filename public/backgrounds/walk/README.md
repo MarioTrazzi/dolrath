@@ -2,21 +2,23 @@
 
 Vertical path segments for the dungeon walk scene. Each image must have the
 walkable path entering at the **bottom center** and exiting at the **top center**
-so they can be stacked.
+so they can be stacked / scrolled.
 
-## Generate
+## Floresta Sombria (canonical)
+
+Generated from landing celestial art (`hero-masmorra-floresta-celestial.webp`):
 
 ```bash
-npx tsx scripts/generate-walk-segments.ts --dungeon floresta
-npx tsx scripts/generate-walk-segments.ts --dry-run
+npx tsx scripts/generate-floresta-scene-art.ts
 ```
 
-Output: `public/backgrounds/walk/<dungeonId>/<kind>.webp`
+- `public/backgrounds/floresta-battle.webp` — combat backdrop
+- `public/backgrounds/floresta-walk-map.webp` — treadmill walk strip
 
-Until assets exist, `WalkScene` uses:
+## Other dungeons (segments)
 
-- **Floresta:** `/backgrounds/forest-dark-map.jpg` as a single strip
-- **Others:** procedural canvas segments (seeded per run)
+```bash
+npx tsx scripts/generate-walk-segments.ts --dungeon caverna
+```
 
-When at least one segment image loads for a dungeon, the scene switches to
-seed-picked stitched segments.
+Until assets exist, `WalkScene` uses procedural canvas segments (seeded per run).

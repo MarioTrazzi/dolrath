@@ -100,6 +100,7 @@ export default function SkillTreeMockPage() {
           purchased={purchased}
           availablePoints={points}
           onSpend={spend}
+          classId={classId}
         />
       </div>
     </div>

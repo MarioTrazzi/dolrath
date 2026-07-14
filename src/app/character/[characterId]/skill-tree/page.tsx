@@ -154,6 +154,7 @@ export default function SkillTreePage() {
             availablePoints={availablePoints}
             busy={spending}
             onSpend={handleSpendSkillPoint}
+            classId={classObj?.id ?? String(character.class)}
           />
         ) : availablePoints > 0 ? (
           // Legado: painel de atributos antigo até o respec único converter pra árvore.

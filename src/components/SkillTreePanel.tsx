@@ -5,12 +5,8 @@
  * PURO (zero fetch; padrão KingdomMap): o container passa tree/purchased/pontos e recebe
  * onSpend(nodeId). Testável sem DB em /dev/skill-tree-mock.
  *
- * Visual (inspirado em Child of Light + janelas chumbo+ouro da ficha): um medalhão de
- * classe no CENTRO de onde partem 4 BRAÇOS EM ESPIRAL — um por caminho (cor de acento
- * própria). Cada especial (golpe/aprimoramento/passiva) ocupa uma MOLDURA EM LOSANGO
- * ornamentada (o mesmo relicário do diálogo de Aprimoramento); os nós de atributo são os
- * SLOTS-GEMA menores (a caixa do material da forja). Painel de detalhe estilo CoL ao lado,
- * com estrelas de rank, descrição e o botão Aprender.
+ * Layout por classe (ver skillTreeLayouts): mago=espiral, guerreiro=swastika,
+ * ladino=seta, monge=anel. Medalhão central + 4 braços com acento próprio.
  *
  * Estados do nó: aprendido (ouro vivo + brilho) · disponível (borda ouro, anel pulsando
  * se dá pra pagar) · bloqueado (chumbo apagado).
@@ -21,6 +17,15 @@ import {
   type SkillPathInfo,
   canPurchase,
 } from '@/lib/skillTree';
+import {
+  VB,
+  CENTER,
+  HUB_R,
+  getLayoutForClass,
+  placeSkillTree,
+  outwardLabelPos,
+  type SkillTreeLayoutKind,
+} from '@/lib/skillTreeLayouts';
 
 const GOLD = '#c9a25f';
 const GOLD_BRIGHT = '#e7c682';
@@ -29,17 +34,6 @@ const GUNMETAL = '#46464c';
 const PANEL_BG = 'linear-gradient(180deg, rgba(32,32,36,0.94), rgba(24,24,27,0.96))';
 const TITLEBAR_BG = 'linear-gradient(180deg, #2b2b2f, #1a1a1d)';
 
-// Geometria do astrolábio (unidades lógicas do viewBox; o canvas escala por container query).
-const VB = 700;
-const CENTER = VB / 2;
-const HUB_R = 52;
-// Espiral parametrizada por COMPRIMENTO DE ARCO: cada nó fica a ~ARC unidades do
-// anterior (espaçamento constante, sem sobreposição), enquanto o raio cresce DR por
-// tier. Os 11 nós de um braço enrolam ~180° — visual de nautilo/Child of Light.
-const R0 = 100; // raio do tier 1 (folga contra o medalhão central)
-const DR = 16; // crescimento radial por tier
-const ARC = 50; // distância (lógica) entre nós consecutivos
-
 export interface SkillTreePanelProps {
   tree: SkillNode[];
   paths: SkillPathInfo[];
@@ -47,15 +41,8 @@ export interface SkillTreePanelProps {
   availablePoints: number;
   onSpend: (nodeId: string) => void;
   busy?: boolean;
-}
-
-interface Placed {
-  node: SkillNode;
-  accent: string;
-  x: number;
-  y: number;
-  isSpecial: boolean;
-  isCapstone: boolean;
+  /** Classe do personagem — escolhe a geometria (espiral / swastika / seta / anel). */
+  classId?: string;
 }
 
 /** Quantas estrelas o nó "vale" (rank do especial). Atributos não têm. */
@@ -74,33 +61,15 @@ const KIND_LABEL: Record<SkillNode['kind'], string> = {
   passive: 'Passiva',
 };
 
-export default function SkillTreePanel({ tree, paths, purchased, availablePoints, onSpend, busy }: SkillTreePanelProps) {
+export default function SkillTreePanel({ tree, paths, purchased, availablePoints, onSpend, busy, classId }: SkillTreePanelProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const owned = useMemo(() => new Set(purchased), [purchased]);
+  const layout = useMemo<SkillTreeLayoutKind>(() => getLayoutForClass(classId), [classId]);
 
-  // Distribui os 4 caminhos em braços espirais a partir do centro.
-  const placedByPath = useMemo(() => {
-    return paths.map((path, armIndex) => {
-      const nodes = tree.filter(n => n.path === path.id).sort((a, b) => a.tier - b.tier);
-      let rad = R0;
-      let ang = ((armIndex * 90 - 90) * Math.PI) / 180; // braço 0 começa apontando pra cima
-      const placed: Placed[] = nodes.map((node, i) => {
-        if (i > 0) {
-          ang += ARC / rad; // passo angular p/ manter ~ARC de arco tangencial
-          rad += DR;
-        }
-        return {
-          node,
-          accent: path.accent,
-          x: CENTER + rad * Math.cos(ang),
-          y: CENTER + rad * Math.sin(ang),
-          isSpecial: node.kind !== 'stat',
-          isCapstone: node.cost > 1,
-        };
-      });
-      return { path, placed };
-    });
-  }, [tree, paths]);
+  const placedByPath = useMemo(
+    () => placeSkillTree({ tree, paths, classId, layout }),
+    [tree, paths, classId, layout],
+  );
 
   const allPlaced = useMemo(() => placedByPath.flatMap(p => p.placed), [placedByPath]);
 
@@ -110,6 +79,7 @@ export default function SkillTreePanel({ tree, paths, purchased, availablePoints
   const selectedPlaced = selected ? allPlaced.find(p => p.node.id === selected.id) || null : null;
 
   const pct = (v: number) => `${(v / VB) * 100}%`;
+  const showRings = layout === 'spiral' || layout === 'ring';
 
   return (
     <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${FRAME}`, background: PANEL_BG }}>
@@ -130,7 +100,7 @@ export default function SkillTreePanel({ tree, paths, purchased, availablePoints
       </div>
 
       <div className="flex flex-col lg:flex-row">
-        {/* ✦ ASTROLÁBIO — canvas quadrado com os 4 braços espirais */}
+        {/* ✦ ASTROLÁBIO — canvas quadrado com geometria por classe */}
         <div className="flex-1 min-w-0 p-3 sm:p-4">
           <div
             className="relative mx-auto w-full aspect-square select-none"
@@ -141,17 +111,29 @@ export default function SkillTreePanel({ tree, paths, purchased, availablePoints
                 'radial-gradient(circle at 50% 50%, rgba(201,162,95,0.10) 0%, rgba(201,162,95,0.03) 34%, transparent 62%)',
             }}
           >
-            {/* Camada de conectores + anéis (escala com o viewBox) */}
+            {/* Camada de conectores + guias de fundo */}
             <svg viewBox={`0 0 ${VB} ${VB}`} className="absolute inset-0 h-full w-full" aria-hidden>
-              {/* anéis de tier, muito sutis */}
-              {[0.28, 0.52, 0.76, 0.98].map((f, i) => (
-                <circle key={i} cx={CENTER} cy={CENTER} r={HUB_R + (VB / 2 - HUB_R) * f}
-                  fill="none" stroke="rgba(201,162,95,0.06)" strokeWidth={1} />
-              ))}
+              {showRings &&
+                [0.28, 0.52, 0.76, 0.98].map((f, i) => (
+                  <circle key={i} cx={CENTER} cy={CENTER} r={HUB_R + (VB / 2 - HUB_R) * f}
+                    fill="none" stroke="rgba(201,162,95,0.06)" strokeWidth={1} />
+                ))}
+              {layout === 'swastika' && (
+                <>
+                  <line x1={CENTER} y1={80} x2={CENTER} y2={VB - 80} stroke="rgba(201,162,95,0.05)" strokeWidth={1} />
+                  <line x1={80} y1={CENTER} x2={VB - 80} y2={CENTER} stroke="rgba(201,162,95,0.05)" strokeWidth={1} />
+                </>
+              )}
+              {layout === 'arrow' && (
+                <>
+                  <line x1={CENTER} y1={CENTER} x2={CENTER} y2={70} stroke="rgba(201,162,95,0.06)" strokeWidth={1} />
+                  <line x1={CENTER} y1={CENTER} x2={120} y2={120} stroke="rgba(201,162,95,0.05)" strokeWidth={1} />
+                  <line x1={CENTER} y1={CENTER} x2={VB - 120} y2={120} stroke="rgba(201,162,95,0.05)" strokeWidth={1} />
+                </>
+              )}
 
               {placedByPath.map(({ path, placed }) => {
                 const segs: React.ReactNode[] = [];
-                // espículo do hub até o tier 1
                 if (placed[0]) {
                   const p0 = placed[0];
                   const lit = owned.has(p0.node.id);
@@ -204,16 +186,17 @@ export default function SkillTreePanel({ tree, paths, purchased, availablePoints
               </div>
             </div>
 
-            {/* Rótulos de caminho, junto à ponta externa de cada braço */}
+            {/* Rótulos de caminho — offset radial para fora do último nó */}
             {placedByPath.map(({ path, placed }) => {
               const tip = placed[placed.length - 1];
               if (!tip) return null;
+              const label = outwardLabelPos(tip);
               return (
                 <div
                   key={`lbl-${path.id}`}
                   className="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap font-bold"
                   style={{
-                    left: pct(tip.x), top: pct(tip.y - 40),
+                    left: pct(label.x), top: pct(label.y),
                     fontSize: '2.7cqw', color: path.accent,
                     textShadow: '0 1px 3px rgba(0,0,0,0.9)',
                   }}
@@ -231,7 +214,7 @@ export default function SkillTreePanel({ tree, paths, purchased, availablePoints
               const affordable = available && availablePoints >= node.cost;
               const isSelected = selectedId === node.id;
 
-              const size = isCapstone ? 10 : isSpecial ? 8 : 6; // cqw (espaçados ~ARC)
+              const size = isCapstone ? 10 : isSpecial ? 8 : 6;
               const borderCol = isSelected ? GOLD_BRIGHT : isOwned ? GOLD_BRIGHT : available ? GOLD : GUNMETAL;
               const glow = isSelected
                 ? `0 0 16px ${GOLD}`
@@ -253,7 +236,6 @@ export default function SkillTreePanel({ tree, paths, purchased, availablePoints
                   className="absolute -translate-x-1/2 -translate-y-1/2 transition-transform hover:z-20 hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e7c682]"
                   style={{ left: pct(x), top: pct(y), width: `${size}cqw`, height: `${size}cqw`, zIndex: isSelected ? 20 : 10, opacity }}
                 >
-                  {/* anel pulsando quando dá pra aprender agora */}
                   {affordable && !isSelected && (
                     <span
                       className="pointer-events-none absolute inset-0 animate-ping rounded-full motion-reduce:animate-none"
@@ -262,13 +244,11 @@ export default function SkillTreePanel({ tree, paths, purchased, availablePoints
                   )}
 
                   {isSpecial ? (
-                    // ◆ MOLDURA EM LOSANGO (relicário do diálogo de Aprimoramento)
                     <span className="absolute inset-0">
                       <span
                         className="absolute inset-[12%] rotate-45"
                         style={{ borderRadius: '10%', border: `2px solid ${borderCol}`, background: fill, boxShadow: glow }}
                       />
-                      {/* cravos nos 4 vértices */}
                       {['left-1/2 top-0 -translate-x-1/2 -translate-y-1/2',
                         'left-1/2 bottom-0 -translate-x-1/2 translate-y-1/2',
                         'top-1/2 left-0 -translate-y-1/2 -translate-x-1/2',
@@ -276,11 +256,9 @@ export default function SkillTreePanel({ tree, paths, purchased, availablePoints
                         <span key={p} className={`absolute ${p} rotate-45`}
                           style={{ width: '16%', height: '16%', background: '#17140f', border: `1px solid ${isOwned ? GOLD : FRAME}` }} />
                       ))}
-                      {/* ícone (em pé, por cima do losango) */}
                       <span className="absolute inset-0 grid place-items-center" style={{ fontSize: isCapstone ? '4.4cqw' : '3.6cqw' }} aria-hidden>
                         {node.icon}
                       </span>
-                      {/* selo de rank / capstone */}
                       {node.effect.rank && (
                         <span className="absolute -right-1 -top-1 rounded-[3px] px-1 font-black"
                           style={{ fontSize: '2.4cqw', background: '#141210', border: `1px solid ${GOLD}`, color: GOLD_BRIGHT }}>
@@ -295,7 +273,6 @@ export default function SkillTreePanel({ tree, paths, purchased, availablePoints
                       )}
                     </span>
                   ) : (
-                    // ▢ SLOT-GEMA (caixa do material da forja) para os atributos
                     <span
                       className="absolute inset-0 grid place-items-center"
                       style={{
@@ -319,7 +296,6 @@ export default function SkillTreePanel({ tree, paths, purchased, availablePoints
           style={{ borderColor: FRAME, background: 'rgba(0,0,0,0.22)' }}>
           {selected ? (
             <div className="lg:sticky lg:top-4">
-              {/* estrelas de rank */}
               {starCount(selected) > 0 && (
                 <div className="mb-1.5 text-sm tracking-widest" style={{ color: GOLD }}>
                   {'★'.repeat(starCount(selected))}

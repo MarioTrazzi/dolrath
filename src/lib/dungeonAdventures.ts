@@ -833,10 +833,13 @@ function bossIngredientDrop(rarity: 'rare' | 'epic'): LootDrop | null {
 // Nat 20 = CRÍTICO: pedra do nó garantida (split 40/60 arma/armadura) e
 // estilhaço por abate garantido — o resto fica no ×2.0.
 // Chances naturais (BASE_LOOT) calibradas no scripts/dungeon-loot-sim.ts
-// (EV=1): fator médio do d20 = 1.05, então base ≈ EV alvo por nó. Âncora:
-// paridade ±8% em t1 com a tabela dabcc62 (Floresta: ~355 gold, 3.2 pedraB,
-// 6.2 estilh, 8.1 mats, 1.7 gear, 2.7 cons); mats de tier alto caem ~20%
-// (perderam o "garantido" dos rolls baixos — inerente ao modelo). Redesign
+// (EV=1): fator médio do d20 = 1.05, então base ≈ EV alvo por nó. Âncora
+// (meta Mario 2026-07-13): sessão de stamina cheia ≈ 3 runs de Floresta
+// (STEP_COST 54/run, barra ~160-190) deve render 3-4 pedras de CHÃO (sem o
+// boss, que garante 1-3 e vira excedente) + ~10 estilhaços de CADA tipo
+// (refino 10:1 → +2 pedras). Em EV/run Floresta t1: pedraB total ~4.2
+// (chão ~1.35), estilh ~7.2 (50/50); ouro/mats/gear/cons preservados da
+// âncora anterior (~355 gold, 8.1 mats, 1.7 gear, 2.7 cons). Redesign
 // 2026-07-13 (pedido do Mario): substitui a tabela artesanal D20_LOOT_PACKS
 // de 20 linhas — morrem o material garantido dos rolls 1–5, o incomum
 // garantido do 17+ e os gates de faixa (killStone 14+, poção rara 18–19);
@@ -851,15 +854,15 @@ const BASE_LOOT = {
   goldMult: 1.25,        // ouro do nó (roll 20 = ×2.5, teto igual ao antigo)
   pMat: 0.65,            // material de craft temático da masmorra
   matUncFrac: 0.30,      // fração do material que vem do pool incomum
-  pShard: 0.21,          // Estilhaço de Pedra Negra (ligante da forja)
+  pShard: 0.25,          // Estilhaço de Pedra Negra (ligante da forja)
   pConsumable: 0.24,     // consumível comum
   pConsumableRare: 0.015,// poção rara/épica pronta
   pGear: 0.15,           // equipamento elegível
-  pStone: 0.10,          // Pedra Negra inteira (nat 20 ignora e GARANTE)
-  killShard: 0.52,       // estilhaço POR ABATE
+  pStone: 0.14,          // Pedra Negra inteira (nat 20 ignora e GARANTE)
+  killShard: 0.62,       // estilhaço POR ABATE
   killMatChance: 0.18,   // material temático POR ABATE
   killMatUncFrac: 0.30,  // fração incomum do killMat
-  killStone: 0.02,       // pedra POR ABATE
+  killStone: 0.03,       // pedra POR ABATE
 }
 
 interface LootPackCfg {
@@ -1017,7 +1020,7 @@ export function rollNodeLoot(
   // (10 viram 1 Pedra Negra). É o material de craft "corrente" — deve ser bem
   // frequente. Roll dedicado (não some no sorteio uniforme dos outros materiais).
   if (Math.random() < pack.pShard * mult.all) {
-    const shard = Math.random() < STONE_WEAPON_SHARE
+    const shard = Math.random() < SHARD_WEAPON_SHARE
       ? { name: 'Estilhaço de Pedra Negra (Arma)', emoji: '🔸' }
       : { name: 'Estilhaço de Pedra Negra (Armadura)', emoji: '🔹' }
     drops.push({ name: shard.name, kind: 'material', rarity: 'COMMON', emoji: shard.emoji })
@@ -1157,6 +1160,9 @@ const STONE_WEAPON_SHARE = 0.3
 // 🎲 Crítico (nat 20): a pedra garantida do nó usa 40/60 — o jackpot pende um
 // pouco mais pra arma, direcionando o jogador ao aprimoramento de armas (core).
 const NAT20_STONE_WEAPON_SHARE = 0.4
+// ESTILHAÇO é 50/50: a meta do refino é simétrica (10 de cada → 1 pedra de
+// cada); só a pedra inteira segue a demanda do set (30/70).
+const SHARD_WEAPON_SHARE = 0.5
 
 // 🌅 BÔNUS SOLO (pendência 1 do balance, 2026-07-05): os PRIMEIROS bosses do
 // DIA da CONTA rendem pedras extras. Por que por conta e não por personagem:
@@ -1213,7 +1219,7 @@ export function rollKillLoot(
   const pack = lootPackOf(lootRoll)
   const kindMult = KILL_KIND_MULT[nodeKind]
   if (Math.random() < pack.killShard * kindMult) {
-    const shard = Math.random() < STONE_WEAPON_SHARE
+    const shard = Math.random() < SHARD_WEAPON_SHARE
       ? { name: 'Estilhaço de Pedra Negra (Arma)', emoji: '🔸' }
       : { name: 'Estilhaço de Pedra Negra (Armadura)', emoji: '🔹' }
     drops.push({ name: shard.name, kind: 'material', rarity: 'COMMON', emoji: shard.emoji })

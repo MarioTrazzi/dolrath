@@ -4,7 +4,7 @@
     "NEXT_PUBLIC_SOCKET_URL": "https://dolrath.onrender.com"
   },
   "buildCommand": "npm run build",
-  "ignoreCommand": "[ \"$VERCEL_ENV\" != \"production\" ]",
+  "ignoreCommand": "if [ \"$VERCEL_GIT_COMMIT_REF\" = \"main\" ]; then exit 1; else exit 0; fi",
   "git": {
     "deploymentEnabled": {
       "main": true,

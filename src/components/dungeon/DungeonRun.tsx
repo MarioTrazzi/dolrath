@@ -15,6 +15,11 @@ import {
   NodeVisualState,
   RevealedNode,
 } from '@/components/dungeon/DungeonMap'
+import WalkScene from '@/components/dungeon/WalkScene'
+import {
+  buildWalkPathPoints,
+  walkSceneEnabled,
+} from '@/lib/walkSceneAssets'
 import {
   DungeonDef,
   DungeonEventDef,
@@ -191,7 +196,7 @@ const TIPS: { icon: string; text: string }[] = [
   { icon: '🧪', text: 'Não esqueça de passar na Alquimista e levar algumas poções para a aventura.' },
   { icon: '⚒️', text: 'Compre suas armaduras no Ferreiro e aprimore-as para buscar recompensas maiores nos bosses das masmorras.' },
   { icon: '⚡', text: 'A stamina se restaura sozinha: +2 a cada 15 min, após 15 min sem gastar.' },
-  { icon: '🤖', text: 'No automático, o piloto anda na trilha, coleta o espólio e luta os turnos por você.' },
+  { icon: '🤖', text: 'Farm visual: ligue o Auto e deixe a aba aberta — o herói anda, coleta e luta sozinho.' },
   { icon: '✨', text: 'Salas principais (⚔️) têm monstro garantido e o melhor espólio — os bosses guardam os itens raros.' },
 ]
 
@@ -596,13 +601,19 @@ export default function DungeonRun({
 
   // ---------- Mapa de exploração (trilha de nós) ----------
   // entrada → (nós menores + sala principal) × salas → covil do boss.
+  // WalkScene (Anterra): path vertical; fallback SVG: zigzag clássico.
+  const useWalkScene = walkSceneEnabled(dungeon.id)
   const trailPoints = useMemo(
-    () => buildTrailPoints(dungeon.rooms, dungeon.minorNodes),
-    [dungeon.rooms, dungeon.minorNodes]
+    () =>
+      useWalkScene
+        ? buildWalkPathPoints(dungeon.rooms, dungeon.minorNodes)
+        : buildTrailPoints(dungeon.rooms, dungeon.minorNodes),
+    [dungeon.rooms, dungeon.minorNodes, useWalkScene]
   )
   const LAST = trailPoints.length - 1
   const [tokenIdx, setTokenIdx] = useState(0)
   const [moving, setMoving] = useState(false)
+  const [walkSeed, setWalkSeed] = useState(() => `${dungeon.id}-${Date.now()}`)
   const [narration, setNarration] = useState(dungeon.enterText)
   // 📜 O Mestre narra virou dialog sob demanda (não mais uma faixa fixa sob o
   // mapa): abre nos "beats" da história e junto de cada rolagem do d20, fecha
@@ -846,6 +857,7 @@ export default function DungeonRun({
           return
         }
         runIdRef.current = data.runId
+        if (data.runId) setWalkSeed(String(data.runId))
         if (typeof data.stamina === 'number') setStamina(data.stamina)
         setRunReady(true)
         // Inventário já cheio ao entrar: avisa que os drops não vão ser coletados.
@@ -2584,12 +2596,12 @@ export default function DungeonRun({
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden overscroll-none touch-pan-y bg-black">
-      {/* Cenário temático — full-screen. Em combate usa a imagem da masmorra
-          (quando houver) para cobrir a tela toda; na trilha fica o SVG/tema. */}
+      {/* Cenário temático — full-screen. Com WalkScene o mapa é a própria cena;
+          em combate clássico (sem walk) usa a imagem da masmorra. */}
       <div className="absolute inset-0">
         <DungeonBackdrop
           theme={dungeon.id}
-          imageUrl={phase === 'combat' ? backgroundImageUrl : undefined}
+          imageUrl={!useWalkScene && phase === 'combat' ? backgroundImageUrl : undefined}
           imageOverlayOpacity={backgroundImageOverlay}
         />
       </div>
@@ -2656,7 +2668,7 @@ export default function DungeonRun({
         transition={{ duration: 0.5 }}
       >
         {/* ---------- Header ---------- */}
-        <div className="flex-shrink-0 flex items-center justify-between px-3 sm:px-5 py-2.5 bg-black/50 backdrop-blur-sm border-b border-white/10">
+        <div className="relative z-20 flex-shrink-0 flex items-center justify-between px-3 sm:px-5 py-2.5 bg-black/50 backdrop-blur-sm border-b border-white/10">
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-xl sm:text-2xl">{dungeon.emoji}</span>
             <div className="min-w-0">
@@ -2716,10 +2728,31 @@ export default function DungeonRun({
 
         {/* Barras de recurso no mobile — só na trilha; em combate a arena mostra o HP. */}
         {phase !== 'combat' && (
-          <div className="sm:hidden flex-shrink-0 flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 px-3 py-1.5 bg-black/40 border-b border-white/10">
+          <div className="sm:hidden flex-shrink-0 flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 px-3 py-1.5 bg-black/40 border-b border-white/10 relative z-20">
             <ResourceBar icon="❤️" value={hp} max={character.maxHp} gradient="from-red-600 to-rose-400" />
             <ResourceBar icon="🔮" value={mp} max={character.maxMp} gradient="from-blue-600 to-cyan-400" />
             <ResourceBar icon="⚡" value={stamina} max={character.maxStamina} gradient="from-yellow-600 to-amber-300" />
+          </div>
+        )}
+
+        {/* Área de conteúdo abaixo do header (e barras mobile): WalkScene + fases */}
+        <div className="relative flex-1 min-h-0 flex flex-col">
+        {/* ============================================================ */}
+        {/* WALK SCENE (Anterra) — permanece montada em explore + combate */}
+        {/* ============================================================ */}
+        {useWalkScene && (phase === 'explore' || phase === 'combat') && (
+          <div className="absolute inset-0 z-0 pointer-events-none" aria-hidden={phase === 'combat'}>
+            <WalkScene
+              dungeonId={dungeon.id}
+              accent={dungeon.accent}
+              points={trailPoints}
+              tokenIdx={tokenIdx}
+              moving={moving}
+              combatMode={phase === 'combat'}
+              nodeState={nodeState}
+              revealed={nodeEvents}
+              seed={walkSeed}
+            />
           </div>
         )}
 
@@ -2921,26 +2954,33 @@ export default function DungeonRun({
         {/* FASE: EXPLORAÇÃO */}
         {/* ============================================================ */}
         {phase === 'explore' && (
-          <div className="flex-1 flex flex-col min-h-0">
-            {/* ---------- MAPA: trilha de nós ---------- */}
+          <div className="flex-1 flex flex-col min-h-0 relative z-10">
+            {/* ---------- MAPA: WalkScene (fundo) ou trilha SVG clássica ---------- */}
             <main className="relative flex-1 min-h-0">
-              <MapAmbient backgroundImageUrl={dungeon.id === 'floresta' ? '/backgrounds/forest-dark-map.jpg' : undefined} />
+              {!useWalkScene && (
+                <>
+                  <MapAmbient backgroundImageUrl={dungeon.id === 'floresta' ? '/backgrounds/forest-dark-map.jpg' : undefined} />
+                  <div className="absolute inset-0 mx-auto max-w-md pointer-events-none">
+                    <div className="relative h-full pointer-events-auto">
+                      <MapTrail points={trailPoints} progress={tokenIdx / LAST} />
+                      {trailPoints.map((pt, idx) => (
+                        <MapNode
+                          key={idx}
+                          pt={pt}
+                          state={nodeState(idx)}
+                          revealed={nodeEvents[idx]}
+                          accent={dungeon.accent}
+                          bossName={dungeon.boss.name}
+                        />
+                      ))}
+                      <PlayerToken point={trailPoints[tokenIdx]} moving={moving} avatar={character.avatar} />
+                    </div>
+                  </div>
+                </>
+              )}
 
               <div className="absolute inset-0 mx-auto max-w-md pointer-events-none">
                 <div className="relative h-full pointer-events-auto">
-                <MapTrail points={trailPoints} progress={tokenIdx / LAST} />
-                {trailPoints.map((pt, idx) => (
-                  <MapNode
-                    key={idx}
-                    pt={pt}
-                    state={nodeState(idx)}
-                    revealed={nodeEvents[idx]}
-                    accent={dungeon.accent}
-                    bossName={dungeon.boss.name}
-                  />
-                ))}
-                <PlayerToken point={trailPoints[tokenIdx]} moving={moving} avatar={character.avatar} />
-
                 {/* números flutuantes (ganhos/perdas) */}
                 <div className="absolute left-1/2 top-3 -translate-x-1/2 flex flex-col items-center gap-1 pointer-events-none z-20">
                   {floats.map(f => (
@@ -3241,7 +3281,7 @@ export default function DungeonRun({
                     </button>
                     <button
                       onClick={() => setAuto(a => !a)}
-                      title={auto ? 'Desligar o piloto automático' : 'Jogar a expedição inteira no automático (anda, coleta e luta)'}
+                      title={auto ? 'Desligar o piloto automático' : 'Farm visual: deixa a aba aberta — anda, coleta e luta sozinho'}
                       className={`shrink-0 w-11 h-11 grid place-items-center rounded-xl border text-lg transition-colors active:scale-95 ${
                         auto
                           ? 'bg-blue-600/90 border-blue-300/60 text-white shadow-lg shadow-blue-900/40'
@@ -3345,10 +3385,10 @@ export default function DungeonRun({
         )}
 
         {/* ============================================================ */}
-        {/* FASE: COMBATE */}
+        {/* FASE: COMBATE — com WalkScene fica overlay in-loco no mapa */}
         {/* ============================================================ */}
         {phase === 'combat' && monster && (
-          <div className="flex-1 flex flex-col min-h-0">
+          <div className={`flex-1 flex flex-col min-h-0 relative z-10 ${useWalkScene ? 'bg-black/25' : ''}`}>
             <BattleScene
               className="flex-1 min-h-[280px]"
               left={playerFighter}
@@ -3439,7 +3479,7 @@ export default function DungeonRun({
                     )}
                     <button
                       onClick={() => setAuto(a => !a)}
-                      title={auto ? 'Desligar o piloto automático' : 'Ligar o piloto automático (joga os turnos por você)'}
+                      title={auto ? 'Desligar o piloto automático' : 'Ligar farm visual (aba aberta — joga os turnos por você)'}
                       className={`px-3 py-1.5 rounded-full text-[10px] font-black border transition-colors ${
                         auto
                           ? 'bg-blue-600/90 border-blue-300/60 text-white shadow-lg shadow-blue-900/50'
@@ -3694,7 +3734,7 @@ export default function DungeonRun({
 
               {auto && canRerun && (
                 <div className="text-emerald-300/90 text-[11px] font-bold mb-3 animate-pulse">
-                  🤖 Piloto automático: refazendo a run…
+                  🤖 Farm visual: refazendo a run (mantenha a aba aberta)…
                 </div>
               )}
               <div className="flex flex-col sm:flex-row gap-2 justify-center">
@@ -3738,7 +3778,7 @@ export default function DungeonRun({
               </div>
               {auto && canRerun && (
                 <div className="text-emerald-300/90 text-[11px] font-bold mb-3 animate-pulse">
-                  🤖 Piloto automático: refazendo a run…
+                  🤖 Farm visual: refazendo a run (mantenha a aba aberta)…
                 </div>
               )}
               <div className="flex flex-col sm:flex-row gap-2 justify-center">
@@ -3760,6 +3800,7 @@ export default function DungeonRun({
             </motion.div>
           </div>
         )}
+        </div>
       </motion.div>
     </div>
   )

@@ -66,7 +66,10 @@ export const WALK_SEGMENTS: Record<DungeonId, WalkSegmentDef[]> = {
 
 /** Strip único conhecido (Fase A / treadmill). */
 export const WALK_FULL_STRIP: Partial<Record<DungeonId, string>> = {
-  floresta: '/backgrounds/floresta-walk-map.webp',
+  floresta: '/backgrounds/floresta-run-map.webp',
+  caverna: '/backgrounds/caverna-run-map.webp',
+  pantano: '/backgrounds/pantano-run-map.webp',
+  ruinas: '/backgrounds/ruinas-run-map.webp',
 }
 
 /** Battle BG cinematográfico (combate Floresta). */

@@ -7,6 +7,11 @@ const { getStaminaCost, checkStaminaLevel, calculateStaminaRegeneration } = requ
 // 🐉 Modo treino - bot monstro que joga pelas regras do PvP
 const { spawnTrainingBot, MONSTERS } = require('./training-bot')
 
+// 🤖 Bots de PvP (lançamento): filler (entra na sala do jogador após alguns
+// segundos) + seeding (salas com bot aguardando no lobby). Tudo atrás da flag
+// PVP_BOTS_ENABLED — desligada, nada aqui muda de comportamento.
+const PvpBot = require('./pvp-bot')
+
 // ⚔️ MODELO DE COMBATE ENXUTO (fonte da verdade): poder × sorte × (1−DR), mitigação
 // proporcional, levers por classe (poder/armadura/hp/evasão) escalados por nível+gear.
 // Ver server/combatModel.js + src/lib/combatModel.ts + docs/combate-ataque-por-arma.md.
@@ -62,7 +67,11 @@ function derivePlayerLevers(player) {
   const equipped = Array.isArray(player.equipment)
     ? player.equipment.map((e) => ({ rarity: e?.item?.rarity ?? e?.rarity, enhancementLevel: e?.enhancementLevel }))
     : []
-  const gearTier = CM.deriveGearTier(equipped)
+  // 🤖 Bots de PvP não têm peças reais: o tier vem do override (igualado ao do
+  // oponente humano). Guardado pelo prefixo bot_ — ids bot_ não recebem recompensa.
+  const gearTier = PvpBot.isBotId(player.id) && Number.isFinite(Number(player.gearTierOverride))
+    ? CM.clampGearTier(Number(player.gearTierOverride))
+    : CM.deriveGearTier(equipped)
 
   if (cls) {
     const levers = applyPvpClassAdj(CM.computeLevers(cls, level, gearTier), cls)
@@ -79,6 +88,39 @@ function derivePlayerLevers(player) {
     cls: null,
     gearTier,
   }
+}
+
+// 🤖 Reescala o bot semeado para o oponente humano que acabou de entrar: mesmo
+// nível/gear, classe garantidamente diferente, recursos espelhados. Roda síncrono
+// no join_room (antes do room_updated), então o card/iniciativa já saem certos.
+function rescaleBotToOpponent(room, bot, human) {
+  bot.level = Math.max(1, Number(human.level) || 1)
+  bot.gearTierOverride = human.gearTier
+  const humanCls = normalizeClass(human.class)
+  if (humanCls && normalizeClass(bot.class) === humanCls) {
+    const newCls = PvpBot.pickBotClass(humanCls)
+    bot.class = newCls
+    bot.skillTree = { purchased: [PvpBot.classAttackNodeId(newCls)] }
+  }
+  // Recomputar levers/unlocks — espelha o bloco de join do FIGHTER.
+  const { levers, cls, gearTier } = derivePlayerLevers(bot)
+  bot.levers = levers
+  bot.baseLevers = levers
+  bot.combatClass = cls
+  bot.gearTier = gearTier
+  const unlocks = getUnlocksFor(bot)
+  bot.maxHp = Math.round(levers.hp * (1 + unlocks.passives.maxHpPct))
+  bot.hp = bot.maxHp
+  bot.maxMp = Math.max(1, Number(human.maxMp) || bot.maxMp || 100)
+  bot.mp = bot.maxMp
+  bot.maxStamina = Math.max(1, Number(human.maxStamina) || bot.maxStamina || 100)
+  bot.stamina = bot.maxStamina
+  // Sincronizar a cópia em participants.fighters (spread feito no join do bot).
+  const idx = room.participants.fighters.findIndex((f) => f.id === bot.id)
+  if (idx !== -1) {
+    room.participants.fighters[idx] = { ...room.participants.fighters[idx], ...bot }
+  }
+  console.log(`🤖 Bot ${bot.name} reescalado p/ ${human.name}: lvl ${bot.level}, gearTier ${gearTier.toFixed(2)}, classe ${bot.class}`)
 }
 
 // Mapeia os nomes de ação do cliente/bot (legado) para os tipos de ataque do modelo.
@@ -479,6 +521,16 @@ io.on('connection', (socket) => {
         }
       } else if (!room.player2 && room.participants.fighters.length <= 2) {
         room.player2 = player
+        // 🤖 Sala completa: o filler agendado (se houver) não é mais necessário.
+        PvpBot.cancelFillBot(roomId)
+        // Bot semeado aguardando + humano entrou → igualar nível/gear, classe ≠.
+        if (PvpBot.isBotId(room.player1?.id) && !PvpBot.isBotId(player.id)) {
+          rescaleBotToOpponent(room, room.player1, player)
+        }
+        // Catálogo do lobby: fechar a vaga (polling de 5s para de oferecer a sala).
+        if (PvpBot.isBotId(room.player1?.id) || PvpBot.isBotId(player.id)) {
+          PvpBot.catalogPatch(roomId, { playerCount: 2 })
+        }
         room.combatLog.push({
           type: 'system',
           message: `${player.name} entrou como lutador!`,
@@ -528,6 +580,24 @@ io.on('connection', (socket) => {
       }, 1000)
     }
 
+    // 🤖 FILLER: jogador humano criou sala PvP e está sozinho → agendar um bot
+    // para entrar se ninguém aparecer em PVP_BOT_FILL_DELAY_MS. Cancelado quando
+    // um 2º lutador entra, a sala fecha ou é deletada. Nunca em treino.
+    if (PvpBot.PVP_BOTS_ENABLED && !training && !room.isTraining && role === RoomRole.FIGHTER &&
+        isCreator && !PvpBot.isBotId(player.id) && room.participants.fighters.length === 1) {
+      PvpBot.scheduleFillBot(roomId, () => {
+        const r = rooms.get(roomId)
+        // Re-validar: a sala ainda espera um oponente humano?
+        if (!r || r.isTraining || r.phase !== CombatPhase.WAITING_PLAYERS) return
+        if (r.participants.fighters.length !== 1) return
+        const human = r.player1
+        if (!human || PvpBot.isBotId(human.id)) return
+        // Persona já casada com o humano: mesmo nível/gear (computados no join
+        // dele), classe diferente, recursos espelhados.
+        PvpBot.spawnPvpBot({ roomId, port: PORT, persona: PvpBot.buildPersonaFor(human) })
+      })
+    }
+
     io.to(roomId).emit('room_updated', room)
     io.to(roomId).emit('player_joined', { player: participantData, role })
   })
@@ -569,6 +639,10 @@ io.on('connection', (socket) => {
         timestamp: new Date()
       })
       room.isActive = true
+      // 🤖 Luta com bot começou → refletir no catálogo do lobby
+      if (PvpBot.isBotId(room.player1?.id) || PvpBot.isBotId(room.player2?.id)) {
+        PvpBot.catalogPatch(roomId, { status: 'in_progress' })
+      }
     }
 
     io.to(roomId).emit('room_updated', room)
@@ -1260,6 +1334,12 @@ io.on('connection', (socket) => {
     const room = rooms.get(roomId)
     if (!room || room.creator !== playerId) return
 
+    // 🤖 Sala morrendo: cancelar filler pendente e fechar a entrada no catálogo
+    PvpBot.cancelFillBot(roomId)
+    if (room.participants.fighters.some(f => PvpBot.isBotId(f.id))) {
+      PvpBot.catalogPatch(roomId, { status: 'finished' })
+    }
+
     // 💚 REGENERAÇÃO AUTOMÁTICA - Restaurar recursos antes de fechar sala
     if (room.player1) {
       regeneratePlayerResources(room.player1, 'Room closed')
@@ -1362,9 +1442,17 @@ io.on('connection', (socket) => {
           
           if (playerFound && totalParticipants === 0) {
             console.log(`🏁 Sala ${roomId} ficou vazia - finalizando...`)
-            
+
             // Remover sala da memória
             rooms.delete(roomId)
+
+            // 🤖 Sala morreu: cancelar filler pendente e fechar a entrada no
+            // catálogo. O bot é sempre o último a sair (shutdown quando fica só),
+            // então playerId cobre o caso; fantasmas restantes caem no ghost-cleanup.
+            PvpBot.cancelFillBot(roomId)
+            if (PvpBot.isBotId(playerId)) {
+              PvpBot.catalogPatch(roomId, { status: 'finished' })
+            }
             
             // Notificar todos os sockets restantes (caso ainda existam)
             io.to(roomId).emit('room_closed', { 
@@ -1962,6 +2050,9 @@ httpServer.listen(PORT, () => {
   console.log(`🚀 Servidor WebSocket rodando na porta ${PORT}`)
   console.log(`🌍 Ambiente: ${process.env.NODE_ENV || 'development'}`)
   console.log(`💡 Health check: http://localhost:${PORT}/health`)
+
+  // 🤖 Seeding de salas com bot no lobby (no-op com PVP_BOTS_ENABLED desligado)
+  PvpBot.startSeeding({ port: PORT, getRooms: () => rooms })
 })
 
 module.exports = { io }

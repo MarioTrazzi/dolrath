@@ -169,6 +169,121 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing battle result data' }, { status: 400 });
     }
 
+    // 🤖 LUTA CONTRA BOT DE PVP (ids `bot_`, efêmeros, sem linha no DB): só o
+    // personagem HUMANO existe/recebe. O bot conta como oponente do MESMO nível
+    // do humano (nada do body entra na conta), e o humano pode estar em qualquer
+    // lado (vitória OU derrota). Fluxo humano×humano segue intocado abaixo.
+    const winnerIsBot = String(battleResult.winnerId).startsWith('bot_');
+    const loserIsBot = String(battleResult.loserId).startsWith('bot_');
+    if (winnerIsBot && loserIsBot) {
+      return NextResponse.json({ error: 'Invalid battle participants' }, { status: 400 });
+    }
+    if (winnerIsBot || loserIsBot) {
+      const humanId = winnerIsBot ? battleResult.loserId : battleResult.winnerId;
+      const humanWon = !winnerIsBot;
+
+      const human = await prisma.character.findUnique({ where: { id: humanId } });
+      if (!human) {
+        return NextResponse.json({ error: 'Characters not found' }, { status: 404 });
+      }
+      if (human.userId !== userId) {
+        return NextResponse.json({ error: 'Unauthorized for these characters' }, { status: 403 });
+      }
+
+      // 🔁 DEDUP ancorado no humano: o rastro "vs Bot" desta própria rota dentro
+      // da janela vira no-op (também dedupa duas lutas vs bot em <120s — aceitável
+      // e anti-farm, já que o claim vem do cliente).
+      const historyLabel = humanWon ? 'PvP Victory vs Bot' : 'PvP Defeat vs Bot';
+      const dedupWindow = new Date(Date.now() - 120_000);
+      const alreadyCredited = await prisma.characterHistory.findFirst({
+        where: {
+          characterId: human.id,
+          description: { startsWith: historyLabel },
+          createdAt: { gte: dedupWindow },
+        },
+        select: { id: true },
+      });
+      if (alreadyCredited) {
+        return NextResponse.json({
+          success: true,
+          deduped: true,
+          winner: { id: battleResult.winnerId, xpGained: 0, goldGained: 0, leveledUp: false, newLevel: humanWon ? human.level : 1 },
+          loser: { id: battleResult.loserId, xpGained: 0, goldGained: 0, leveledUp: false, newLevel: humanWon ? 1 : human.level },
+        });
+      }
+
+      // 🔒 1ª vitória do dia no SERVIDOR (prefixo "PvP Victory" casa com "vs Bot")
+      const botStartOfDay = new Date();
+      botStartOfDay.setUTCHours(0, 0, 0, 0);
+      const botWinsToday = await prisma.characterHistory.count({
+        where: {
+          characterId: human.id,
+          createdAt: { gte: botStartOfDay },
+          description: { startsWith: 'PvP Victory' },
+        },
+      });
+
+      // ⚡ Stamina persistente só do humano (mesma regra do PvP normal): exausto
+      // (< 20) ⇒ luta vale 0 gold/xp.
+      const { stamina } = await regenAndPersist(human as any);
+      const hasStamina = stamina >= PVP_STAMINA_COST;
+      await prisma.character.update({
+        where: { id: human.id },
+        data: { stamina: Math.max(0, stamina - PVP_STAMINA_COST), staminaUpdatedAt: new Date() },
+      });
+
+      // Oponente = MESMO nível do humano (sem bônus/penalidade de diferença)
+      const rewards = hasStamina
+        ? calculateBattleRewards(human.level, humanWon, human.level, humanWon ? {
+            isFlawless: battleResult.isFlawlessVictory,
+            killTransformed: battleResult.loserTransformed,
+            isFirstWin: botWinsToday === 0,
+          } : {})
+        : { xp: 0, gold: 0 };
+
+      const [xpResult] = await Promise.all([
+        addExperienceToCharacter(human.id, rewards.xp),
+        rewards.gold > 0
+          ? prisma.character.update({
+              where: { id: human.id },
+              data: { gold: { increment: rewards.gold } }
+            })
+          : Promise.resolve()
+      ]);
+
+      try {
+        await recordXpGained(
+          human.id,
+          rewards.xp,
+          historyLabel,
+          xpResult.leveledUp ? human.level : undefined,
+          xpResult.leveledUp ? xpResult.newLevelInfo.level : undefined
+        );
+      } catch (historyError) {
+        console.error('Error recording bot battle history:', historyError);
+      }
+
+      const humanSide = {
+        id: human.id,
+        xpGained: rewards.xp,
+        goldGained: rewards.gold,
+        leveledUp: xpResult.leveledUp,
+        newLevel: xpResult.leveledUp ? xpResult.newLevelInfo.level : human.level
+      };
+      const botSide = {
+        id: winnerIsBot ? battleResult.winnerId : battleResult.loserId,
+        xpGained: 0,
+        goldGained: 0,
+        leveledUp: false,
+        newLevel: human.level
+      };
+      return NextResponse.json({
+        success: true,
+        winner: humanWon ? humanSide : botSide,
+        loser: humanWon ? botSide : humanSide
+      });
+    }
+
     // Buscar personagens
     const [winner, loser] = await Promise.all([
       prisma.character.findUnique({ where: { id: battleResult.winnerId } }),

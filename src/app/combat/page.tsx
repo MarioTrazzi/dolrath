@@ -212,8 +212,11 @@ function CombatPageContent() {
   const [isTransforming, setIsTransforming] = useState(false)
   // 🐉 Transformação é 1× POR LUTA: trava após o primeiro uso na partida atual.
   const [usedTransformThisMatch, setUsedTransformThisMatch] = useState(false)
+  // 🤖 Claim de recompensa vs bot: dispara 1× por partida (guarda contra
+  // double-fire de StrictMode/re-render).
+  const botRewardsClaimed = useRef(false)
   // Nova sala/partida → libera o uso único de novo.
-  useEffect(() => { setUsedTransformThisMatch(false) }, [roomId])
+  useEffect(() => { setUsedTransformThisMatch(false); botRewardsClaimed.current = false }, [roomId])
 
   // 🎬 Estados da cena de batalha visual (estilo Adventure Quest)
   const [battleEvent, setBattleEvent] = useState<BattleEvent | null>(null)
@@ -472,6 +475,14 @@ function CombatPageContent() {
         router.push('/combat-lobby')
       })
 
+      // Sala cheia/role indisponível: sem este listener o jogador ficava pendurado
+      // na tela de "aguardando" (mais frequente agora que bots ocupam vagas).
+      socket.on('join_room_error', (data: { error?: string }) => {
+        console.log('🚫 Entrada na sala recusada:', data?.error)
+        alert(data?.error || 'Não foi possível entrar na sala.')
+        router.push('/combat-lobby')
+      })
+
       socket.on('dice_rolled', (data: {playerId: string, sides: number, result: any}) => {
         console.log('🎲 Dado rolado:', data)
         // Mostrar o resultado do dado na cena de batalha
@@ -678,6 +689,7 @@ function CombatPageContent() {
       socket.off('disconnect')
       socket.off('room_updated')
       socket.off('room_closed')
+      socket.off('join_room_error')
       socket.off('dice_rolled')
       socket.off('action_selected')
       socket.off('damage_dealt')
@@ -686,6 +698,36 @@ function CombatPageContent() {
       socket.disconnect()
     }
   }, [socket, roomId, isRoomCreator, characterId])
+
+  // 🤖 RECOMPENSA VS BOT: bots são efêmeros (sem sessão/DB), então o servidor de
+  // socket não consegue creditar (fetch sem cookie → 401). O cliente HUMANO
+  // autenticado reivindica ao fim da luta; a rota valida dono/stamina/nível no
+  // servidor (bot conta como oponente do mesmo nível) e dedupa por histórico.
+  // Fluxo humano×humano não passa por aqui (opponent não é bot_).
+  useEffect(() => {
+    if (combatRoom?.phase !== CombatPhase.COMBAT_END || !combatRoom?.winner) return
+    if (!currentPlayer || !opponent?.id?.startsWith('bot_')) return
+    if (!characterId || currentPlayer.id !== characterId) return
+    if (botRewardsClaimed.current) return
+    botRewardsClaimed.current = true
+
+    const iWon = combatRoom.winner === currentPlayer.id
+    fetch('/api/battle/rewards', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        winnerId: iWon ? currentPlayer.id : opponent.id,
+        loserId: iWon ? opponent.id : currentPlayer.id,
+        // Níveis por compat de payload — o servidor usa os níveis do banco
+        winnerLevel: (iWon ? currentPlayer.level : opponent.level) || 1,
+        loserLevel: (iWon ? opponent.level : currentPlayer.level) || 1,
+        battleType: 'pvp'
+      })
+    })
+      .then(res => res.json())
+      .then(data => console.log('🏆 Recompensa vs bot processada:', data))
+      .catch(err => console.error('❌ Erro ao reivindicar recompensa vs bot:', err))
+  }, [combatRoom?.phase, combatRoom?.winner, currentPlayer?.id, opponent?.id, characterId])
 
   // 🔥 FORÇA re-render quando currentPlayer ou opponent mudam
   useEffect(() => {

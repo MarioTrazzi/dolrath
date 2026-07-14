@@ -86,6 +86,9 @@ export const WALK_SEGMENT_ART: Record<string, Record<string, string>> = {
 
 export const FLORESTA_SCENE_REF = 'public/hero-masmorra-floresta-celestial.webp'
 
+/** Referência de CÂMERA / luz / fog-of-war (World of Anterra style) para o walk map. */
+export const FLORESTA_WALK_CAMERA_REF = 'public/backgrounds/anterra-camera-ref.png'
+
 export const FLORESTA_BATTLE_PROMPT =
   'EDIT the provided Dolrath Floresta Sombria cinematic image. Keep the EXACT same dark fantasy forest environment, ' +
   'color grade, twin moons / moonlight, twisted ancient trees, volumetric mist, mossy ground and dramatic lighting. ' +
@@ -93,11 +96,54 @@ export const FLORESTA_BATTLE_PROMPT =
   'clearing / battle arena in the forest suitable as a full-bleed RPG combat background. No people, no monsters, ' +
   'no text, no watermark, no logo, no HUD. Widescreen landscape composition, cinematic empty scene.'
 
+/**
+ * Walk map: a imagem de entrada DEVE ser a ref Anterra (câmera).
+ * O prompt trava perspectiva + halo; remove personagem; alonga em strip vertical Dolrath.
+ */
+// ---- Floresta Sombria: MAPA DA RUN (top-down, mapa grande de RPG) ----
+
+/** Referência de FLORESTA (mood/paleta/folhagem) escolhida pelo Mario — câmera errada, corrigida via prompt. */
+export const FLORESTA_RUN_MAP_REF = 'public/backgrounds/floresta-run-ref.png'
+
+export const FLORESTA_RUN_MAP_PROMPT =
+  'CRITICAL CAMERA OVERRIDE — the reference image shows the RIGHT forest from the WRONG angle. ' +
+  'Repaint this EXACT forest as seen STRAIGHT FROM ABOVE: a classic top-down dark-fantasy RPG dungeon map, ' +
+  "bird's-eye view looking down at the forest canopy and floor. ABSOLUTELY NO horizon, NO sky, NO vanishing " +
+  'point, NO eye-level tree trunks receding into the distance — if any part of the image reads as "standing ' +
+  'on the path looking forward", it is WRONG. Tree canopies must be seen as round/irregular tops from above, ' +
+  'the trail must be a flat ribbon drawn on the ground plane, like a hand-painted world map in Diablo or ' +
+  'a tabletop RPG campaign map.\n' +
+  'KEEP FROM THE REFERENCE (identity lock): the exact same haunted ancient forest — deep green-teal palette, ' +
+  'cold moonlight, dense mossy gnarled trees, olive-gold moss and undergrowth catching the light, oppressive ' +
+  'darkness at the edges, subtle mist. Same painterly, finely textured dark-fantasy rendering.\n' +
+  'MAP CONTENT — the full run of the "Floresta Sombria" dungeon on one tall map: a single winding dirt trail ' +
+  'enters at the BOTTOM EDGE of the map and climbs, meandering left and right, to the TOP where it ends in a ' +
+  'large sinister boss grove dominated by one COLOSSAL corrupted ancient tree with a faint eerie green glow ' +
+  '(the lair of the Anciã da Mata). Along the trail, from bottom to top, place THREE distinct moonlit ' +
+  'clearings (small round encounter arenas where moonbeams break through the canopy), and between them small ' +
+  'landmarks: a shallow brook crossing the trail with stepping stones, clusters of mossy boulders, patches of ' +
+  'mushrooms and tiny yellow wildflowers, and one small glowing elven spring pool with silvery-blue water. ' +
+  'Everything far from the trail dissolves into near-black forest darkness, so the lit trail and clearings ' +
+  'read clearly as the playable route (fog-of-war feeling).\n' +
+  'STYLE: rich painted texture, high detail, moody and legible; the trail must be clearly readable from ' +
+  'bottom to top at a glance.\n' +
+  'STRICTLY FORBIDDEN: characters, monsters, animals, text, letters, labels, numbers, icons, markers, pins, ' +
+  'compass rose, legend, border frame, parchment edges, UI, HUD, watermark, logo.'
+
 export const FLORESTA_WALK_MAP_PROMPT =
-  'EDIT the provided Dolrath Floresta Sombria image into a TALL VERTICAL exploration map strip for a top-down / ' +
-  'slightly isometric RPG walk scene. Keep the same dark forest world, moons, mist, twisted trees, moss and color ' +
-  'palette. Transform the framing into a continuous vertical path: a narrow dirt trail enters at the BOTTOM center ' +
-  'and exits at the TOP center in the SAME horizontal position so the image can scroll as a treadmill. Dense forest ' +
-  'on both sides. REMOVE all characters, heroes, bosses, creatures and UI. No text, no watermark, no logo. Portrait ' +
-  'vertical composition, seamless-feel path for scrolling exploration.'
+  'CRITICAL CAMERA LOCK — keep the EXACT same camera as the reference image: ' +
+  'high-angle isometric / top-down oblique RPG view (like classic Diablo / World of Anterra exploration), ' +
+  'looking down at the forest floor from above at a fixed oblique angle. NOT eye-level, NOT side-view, ' +
+  'NOT cinematic landscape portrait of trees — it must read as a PLAYABLE MAP from above.\n' +
+  'LIGHTING LOCK — keep the circular spotlight / lantern halo on the ground with hard fog-of-war: ' +
+  'bright readable grass and path in the center circle, everything outside fades to near-black darkness. ' +
+  'Light rain streaks catching in the light. High contrast.\n' +
+  'EDIT goals: (1) REMOVE the rider, horse, and any characters completely — empty path only. ' +
+  '(2) Extend into a TALL VERTICAL map strip (portrait): a continuous dirt/grass trail that enters at the ' +
+  'BOTTOM CENTER and exits at the TOP CENTER in the SAME X position so it can scroll as a treadmill. ' +
+  '(3) Keep dense dark forest (pines, bushes, yellow wildflowers, mossy ground, reddish soil patches) ' +
+  'on both sides of the path, same mood as the reference. Optional faint twin moons in the dark sky ' +
+  'above the canopy for Dolrath Floresta Sombria identity — but do NOT change the camera to look up at moons.\n' +
+  'No UI, no text, no watermark, no logo, no HUD, no characters, no animals. ' +
+  'Output must look like an empty exploration tilemap corridor seen from above, not a key-art poster.'
 

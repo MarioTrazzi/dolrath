@@ -1,12 +1,12 @@
-// Gera battle BG + walk map da Floresta Sombria a partir da arte celestial da landing
-// (gpt-image-1 /images/edits + input_fidelity).
+// Gera battle BG + walk map da Floresta Sombria.
+//
+// - battle: edita a partir do celestial da landing (identidade Dolrath)
+// - walk: edita a partir da ref Anterra (câmera iso + halo) — NÃO usar celestial aqui
 //
 // Uso:
-//   npx tsx scripts/generate-floresta-scene-art.ts
-//   npx tsx scripts/generate-floresta-scene-art.ts --only battle
-//   npx tsx scripts/generate-floresta-scene-art.ts --only walk
+//   npx tsx scripts/generate-floresta-scene-art.ts --only walk --force
+//   npx tsx scripts/generate-floresta-scene-art.ts --only battle --force
 //   npx tsx scripts/generate-floresta-scene-art.ts --dry-run
-//   npx tsx scripts/generate-floresta-scene-art.ts --force
 //
 // Saída:
 //   public/backgrounds/floresta-battle.webp
@@ -17,6 +17,7 @@ import { join } from 'path'
 
 import {
   FLORESTA_SCENE_REF,
+  FLORESTA_WALK_CAMERA_REF,
   FLORESTA_BATTLE_PROMPT,
   FLORESTA_WALK_MAP_PROMPT,
 } from '../src/lib/walkScenePrompt'
@@ -56,6 +57,8 @@ type Job = {
   outFile: string
   size: string
   prompt: string
+  ref: string
+  mime: string
 }
 
 const JOBS: Job[] = [
@@ -64,17 +67,25 @@ const JOBS: Job[] = [
     outFile: join('public', 'backgrounds', 'floresta-battle.webp'),
     size: (process.env.OPENAI_FLORESTA_BATTLE_SIZE || '1536x1024').trim(),
     prompt: FLORESTA_BATTLE_PROMPT,
+    ref: FLORESTA_SCENE_REF,
+    mime: 'image/webp',
   },
   {
     id: 'walk',
     outFile: join('public', 'backgrounds', 'floresta-walk-map.webp'),
     size: (process.env.OPENAI_FLORESTA_WALK_SIZE || '1024x1536').trim(),
     prompt: FLORESTA_WALK_MAP_PROMPT,
+    // Câmera Anterra: iso + spotlight — base visual do walk
+    ref: FLORESTA_WALK_CAMERA_REF,
+    mime: 'image/png',
   },
 ]
 
-async function editOne(refPath: string, prompt: string, size: string): Promise<Buffer> {
+async function editOne(refPath: string, mime: string, prompt: string, size: string): Promise<Buffer> {
   const buf = readFileSync(refPath)
+  const filename = refPath.endsWith('.png') || refPath.endsWith('.jpg') || refPath.endsWith('.jpeg')
+    ? 'ref.png'
+    : 'ref.webp'
   let lastErr: unknown
   for (let attempt = 1; attempt <= 4; attempt++) {
     try {
@@ -84,7 +95,7 @@ async function editOne(refPath: string, prompt: string, size: string): Promise<B
       form.append('size', size)
       form.append('quality', 'high')
       form.append('input_fidelity', 'high')
-      form.append('image', new Blob([buf], { type: 'image/webp' }), 'ref.webp')
+      form.append('image', new Blob([buf], { type: mime }), filename)
 
       const res = await fetch('https://api.openai.com/v1/images/edits', {
         method: 'POST',
@@ -108,33 +119,37 @@ async function editOne(refPath: string, prompt: string, size: string): Promise<B
 }
 
 async function main() {
-  if (!existsSync(FLORESTA_SCENE_REF)) {
-    throw new Error(`Referência ausente: ${FLORESTA_SCENE_REF}`)
-  }
   if (!DRY && !OPENAI_API_KEY) {
     throw new Error('OPENAI_API_KEY ausente no ambiente (.env).')
   }
 
-  console.log(`🌲 Floresta scene art (edit from celestial)`)
-  console.log(`   ref=${FLORESTA_SCENE_REF} model=${MODEL} dry=${DRY}\n`)
+  console.log(`🌲 Floresta scene art`)
+  console.log(`   model=${MODEL} dry=${DRY}`)
+  console.log(`   walk camera ref=${FLORESTA_WALK_CAMERA_REF}`)
+  console.log(`   battle ref=${FLORESTA_SCENE_REF}\n`)
 
   for (const job of JOBS) {
     if (ONLY && ONLY !== job.id) continue
+    if (!existsSync(job.ref)) {
+      throw new Error(`Referência ausente para ${job.id}: ${job.ref}`)
+    }
     if (!FORCE && existsSync(job.outFile)) {
       console.log(`✓ já existe ${job.outFile}`)
       continue
     }
-    console.log(`→ ${job.id} (${job.size}) → ${job.outFile}`)
+    console.log(`→ ${job.id} (${job.size})`)
+    console.log(`   ref: ${job.ref}`)
+    console.log(`   out: ${job.outFile}`)
     if (DRY) {
-      console.log(job.prompt.slice(0, 220) + '…\n')
+      console.log(job.prompt.slice(0, 280) + '…\n')
       continue
     }
-    const img = await editOne(FLORESTA_SCENE_REF, job.prompt, job.size)
+    const img = await editOne(job.ref, job.mime, job.prompt, job.size)
     writeFileSync(job.outFile, img)
-    console.log(`   salvou ${job.outFile} (${img.length} bytes)`)
+    console.log(`   salvou ${job.outFile} (${img.length} bytes)\n`)
     await sleep(1500)
   }
-  console.log('\nDone.')
+  console.log('Done.')
 }
 
 main().catch((e) => {

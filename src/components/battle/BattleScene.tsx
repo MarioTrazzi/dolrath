@@ -122,8 +122,9 @@ interface BattleSceneProps {
   diceResults?: Record<string, DiceResult | undefined>
   dicePanel?: DicePanelInfo | null
   className?: string
-  /** Cenário customizado (ex.: fundo temático de masmorra). Substitui o céu noturno padrão. */
-  backdrop?: React.ReactNode
+  /** Cenário customizado (ex.: fundo temático de masmorra). Substitui o céu noturno
+   *  padrão. Passe `null` para não pintar fundo (herda o backdrop full-screen do pai). */
+  backdrop?: React.ReactNode | null
   /** PACOTE de inimigos no lado direito (ex.: masmorra com 2-3 monstros). Quando
    *  presente, renderiza todos lado a lado (cada um anima sozinho) em vez do `right`
    *  único. O ATIVO deve ter o mesmo id que `right` (recebe dados/eventos de combate). */
@@ -210,11 +211,10 @@ function StatBar({
   icon: string
   /** Quando false, omite o texto value/max e a barra ocupa o espaço — útil no mobile. */
   showValue?: boolean
-  /** `lg` = barra mais grossa (HP do monstro sem números). */
   size?: 'sm' | 'lg'
 }) {
   const pct = Math.max(0, Math.min(100, max > 0 ? (value / max) * 100 : 0))
-  const barH = size === 'lg' ? 'h-3.5 sm:h-4' : 'h-2.5'
+  const barH = size === 'lg' ? 'h-3' : 'h-2.5'
   return (
     <div className="flex items-center gap-1 w-full">
       <span className={`${size === 'lg' ? 'text-xs' : 'text-[10px]'} w-4 text-center flex-shrink-0`}>{icon}</span>
@@ -451,7 +451,6 @@ function FighterFigure({
                 gradient={hpBarColor(hpPct)}
                 icon="❤️"
                 showValue={!hideHpValue}
-                size={hideHpValue ? 'lg' : 'sm'}
               />
               <StatBar value={fighter.mp} max={fighter.maxMp} gradient="from-blue-600 to-cyan-400" icon="🔮" />
               <StatBar value={fighter.stamina} max={fighter.maxStamina} gradient="from-yellow-600 to-amber-300" icon="⚡" />
@@ -502,7 +501,6 @@ function FighterFigure({
               gradient={hpBarColor(hpPct)}
               icon="❤️"
               showValue={false}
-              size="lg"
             />
           </div>
         )}
@@ -623,7 +621,6 @@ function FighterFigure({
               gradient={hpBarColor(hpPct)}
               icon="❤️"
               showValue={false}
-              size="lg"
             />
           </div>
         )}
@@ -913,8 +910,9 @@ export default function BattleScene({
 
   return (
     <div className={`relative overflow-hidden ${className}`}>
-      {/* Cenário de fundo (customizável via backdrop) */}
-      {backdrop ?? (
+      {/* Cenário de fundo (customizável via backdrop). `null` = transparente
+          (herda o fundo full-screen do container pai, ex.: DungeonRun). */}
+      {backdrop !== undefined ? backdrop : (
         <>
           <div className="absolute inset-0 bg-gradient-to-b from-indigo-950 via-purple-950/80 to-slate-900" />
           <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-emerald-950/90 to-transparent" />

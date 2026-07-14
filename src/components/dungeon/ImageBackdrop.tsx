@@ -47,29 +47,26 @@ export default function ImageBackdrop({
 
   return (
     <>
-      {/* Fundo de reserva nas laterais, quando a imagem fica centralizada numa
-          coluna mais estreita em telas largas (evita esticar a arte no desktop) */}
+      {/* Fallback enquanto a imagem carrega */}
       <div className="absolute inset-0 bg-gradient-to-b from-emerald-950 via-green-950 to-stone-950" />
 
-      {/* Background image — mantida na coluna central, no mesmo enquadramento
-          que já funciona no mobile, em vez de esticar por toda a largura */}
-      <div className="absolute inset-0 mx-auto max-w-2xl">
-        <img
-          src={src}
-          alt="Battle backdrop"
-          className="absolute inset-0 w-full h-full object-cover"
-          style={{
-            filter: subtle ? 'brightness(0.7) blur(2px)' : 'brightness(0.85)',
-            opacity: isLoaded ? 1 : 0,
-            transition: 'opacity 0.3s ease-in',
-          }}
-          onLoad={() => setIsLoaded(true)}
-          onError={(e) => {
-            console.error('[ImageBackdrop] Erro ao carregar imagem:', src, e)
-            setIsLoaded(true)
-          }}
-        />
-      </div>
+      {/* Background — cobre o cenário inteiro (object-cover corta as bordas se
+          a proporção da arte diferir da viewport) */}
+      <img
+        src={src}
+        alt="Battle backdrop"
+        className="absolute inset-0 w-full h-full object-cover"
+        style={{
+          filter: subtle ? 'brightness(0.7) blur(2px)' : 'brightness(0.85)',
+          opacity: isLoaded ? 1 : 0,
+          transition: 'opacity 0.3s ease-in',
+        }}
+        onLoad={() => setIsLoaded(true)}
+        onError={(e) => {
+          console.error('[ImageBackdrop] Erro ao carregar imagem:', src, e)
+          setIsLoaded(true)
+        }}
+      />
 
       {/* Dark overlay for better text/UI readability */}
       <div

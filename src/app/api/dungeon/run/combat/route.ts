@@ -121,7 +121,13 @@ export async function POST(req: Request) {
     }
     // O espólio do NÓ só sai quando o pacote inteiro cai (recompensa por limpar).
     const nodeLoot = allDead ? rollCombatLoot(dungeon, charForRun, pending, run.tier) : null
-    const allDrops: LootDrop[] = [...killDrops, ...(nodeLoot?.drops ?? [])]
+    // Pedras PRIMEIRO: no nat 20 a pedra é o jackpot — se o inventário estiver
+    // quase cheio, materiais/estilhaços não podem "roubar" o último slot e
+    // descartar a pedra (skippedDrops). Gear em seguida; o resto depois.
+    const allDrops: LootDrop[] = [...killDrops, ...(nodeLoot?.drops ?? [])].sort((a, b) => {
+      const rank = (d: LootDrop) => (d.kind === 'stone' ? 0 : d.kind === 'item' ? 1 : 2)
+      return rank(a) - rank(b)
+    })
 
     // ⚔️ Desgaste por uso: os abates do nó consomem durabilidade do gear equipado
     // (arma desgasta mais; chefe dobra). Linear em nº de abates — o total em lote

@@ -2584,9 +2584,14 @@ export default function DungeonRun({
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden overscroll-none touch-pan-y bg-black">
-      {/* Cenário temático */}
+      {/* Cenário temático — full-screen. Em combate usa a imagem da masmorra
+          (quando houver) para cobrir a tela toda; na trilha fica o SVG/tema. */}
       <div className="absolute inset-0">
-        <DungeonBackdrop theme={dungeon.id} />
+        <DungeonBackdrop
+          theme={dungeon.id}
+          imageUrl={phase === 'combat' ? backgroundImageUrl : undefined}
+          imageOverlayOpacity={backgroundImageOverlay}
+        />
       </div>
 
       {/* ✨ Flash de SUBIU DE NÍVEL — explosão dourada sobre toda a tela */}
@@ -3360,11 +3365,7 @@ export default function DungeonRun({
               event={battleEvent}
               diceResults={diceResults}
               dicePanel={dicePanel}
-              backdrop={<DungeonBackdrop 
-                theme={dungeon.id} 
-                imageUrl={backgroundImageUrl}
-                imageOverlayOpacity={backgroundImageOverlay}
-              />}
+              backdrop={null}
             />
 
             {/* Roster do pacote (só com >1 inimigo): clique para escolher o alvo no seu

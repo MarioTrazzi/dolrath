@@ -30,6 +30,7 @@ import { normalizeCombatClass, type CombatClass } from './combatModel'
 import { SELL_FRACTION_GEAR, SELL_FRACTION_CRAFT_INPUT, SELL_FRACTION_CONSUMABLE } from './sellPricing'
 import { getCatalogItemByName, getConsumableByName, getIngredientByName, getForgeMaterialByName, getSeedByName, itemImagePath } from './itemCatalog'
 import { freeInventorySlots } from './inventoryMutations'
+import { STONE_META } from './enhancementSystem'
 
 // Custo de stamina por TIPO de nó (espelha DungeonRun.tsx: MINOR/MAIN/BOSS_STEP_COST).
 export const STEP_COST = { minor: 4, main: 8, boss: 6 } as const
@@ -160,7 +161,8 @@ export function resolveBossNode(
 
 // Espólio pós-combate (mesma regra do cliente: boss = sorte máxima e mais drops).
 export function rollCombatLoot(dungeon: DungeonDef, character: CharacterForRun, pending: RunPending, tier: number = 1): NodeLoot {
-  const roll = pending.kind === 'boss' ? 20 : pending.lootRoll
+  const raw = pending.kind === 'boss' ? 20 : pending.lootRoll
+  const roll = Math.max(1, Math.min(20, Math.floor(Number(raw)) || 10))
   return rollNodeLoot(dungeon, roll, pending.kind, character.level, character.race, character.class, tier)
 }
 
@@ -274,6 +276,32 @@ export async function addDropToInventoryTx(
   const itemName = drop.name
   const qty = Math.max(1, Math.floor(Number(drop.qty) || 1))
   let existingItem = await tx.item.findFirst({ where: { name: itemName } })
+
+  // Cura pedras criadas pelo fallback genérico (sem stats.enhancementStone) —
+  // senão caem no inventário mas não funcionam no aprimoramento.
+  if (existingItem && existingItem.type === 'CONSUMABLE' && STONE_META[itemName]) {
+    const stats = (existingItem.stats as Record<string, any> | null) ?? {}
+    const meta = STONE_META[itemName]
+    if (!stats.enhancementStone) {
+      existingItem = await tx.item.update({
+        where: { id: existingItem.id },
+        data: {
+          description: meta.description,
+          level: meta.level,
+          goldPrice: meta.goldPrice,
+          image: existingItem.image || itemImagePath(itemName),
+          stats: {
+            ...stats,
+            rarity: meta.rarity,
+            enhancementStone: meta.code,
+            battleUsable: false,
+            sellPrice: meta.sellPrice,
+            emoji: meta.emoji,
+          },
+        },
+      })
+    }
+  }
 
   // Cura registros legados: ingredientes/materiais criados antes do sistema de craft
   // (ou reaproveitados por nome) podem não ter `image`/`stats.kind`. Como o Item é
@@ -395,6 +423,26 @@ export async function addDropToInventoryTx(
           },
         },
       })
+    } else if (STONE_META[itemName]) {
+      // Pedra de aprimoramento on-demand (seed pode não ter rodado ainda).
+      const meta = STONE_META[itemName]
+      existingItem = await tx.item.create({
+        data: {
+          name: itemName,
+          description: meta.description,
+          type: 'CONSUMABLE',
+          image: itemImagePath(itemName),
+          level: meta.level,
+          goldPrice: meta.goldPrice,
+          stats: {
+            rarity: meta.rarity,
+            enhancementStone: meta.code,
+            battleUsable: false,
+            sellPrice: meta.sellPrice,
+            emoji: meta.emoji,
+          },
+        },
+      })
     } else {
       const rarity = drop.rarity || 'COMMON'
       existingItem = await tx.item.create({
@@ -448,7 +496,12 @@ export async function applyLootTx(
   // Ouro vai pra carteira do personagem (com teto diário); drops (itens) sempre entram.
   const credited = await creditCappedGoldTx(tx, userId, characterId, loot.gold)
   const skippedDrops: LootDrop[] = []
-  for (const d of loot.drops) {
+  // Pedras (e gear) antes de mats/estilhaços — inventário cheio não come o jackpot.
+  const ordered = [...loot.drops].sort((a, b) => {
+    const rank = (d: LootDrop) => (d.kind === 'stone' ? 0 : d.kind === 'item' ? 1 : 2)
+    return rank(a) - rank(b)
+  })
+  for (const d of ordered) {
     const added = await addDropToInventoryTx(tx, characterId, { name: d.name, rarity: d.rarity, enhancement: d.enhancement })
     if (!added) skippedDrops.push(d)
   }

@@ -739,7 +739,7 @@ export function eventForRoll(dungeon: DungeonDef, roll: number): DungeonEventDef
 // natural de cada drop: fator = roll/10 (10 = a média; 9 = ×0.9, 8 = ×0.8 …
 // 1 = ×0.1; 15 = ×1.5; 20 = ×2.0). Sem regra especial por faixa — o jogador
 // indexa pelo badge 🎲: número = multiplicador. Única exceção: nat 20 é o
-// CRÍTICO (Pedra Negra garantida 40/60 arma/armadura + estilhaço por abate
+// CRÍTICO (Pedra Negra garantida 30/70 arma/armadura + estilhaço por abate
 // garantido). Chances naturais em BASE_LOOT (abaixo).
 // O LuckTier (3 faixas) permanece só para decisões de ENCONTRO (chance de
 // monstro em nó menor, fonte revitalizadora) — o espólio usa o roll exato.
@@ -830,7 +830,7 @@ function bossIngredientDrop(rarity: 'rare' | 'epic'): LootDrop | null {
 //         RunPending) modula o drop de cada monstro morto; recuar depois de
 //         matar 1 de 3 num nó de sorte 20 ainda rende drop dobrado.
 // fator = roll/10 (1 = ×0.1 … 10 = ×1.0 … 20 = ×2.0), teto 0.95 por slot.
-// Nat 20 = CRÍTICO: pedra do nó garantida (split 40/60 arma/armadura) e
+// Nat 20 = CRÍTICO: pedra do nó SEMPRE (100% — split 30/70 arma/armadura) e
 // estilhaço por abate garantido — o resto fica no ×2.0.
 // Chances naturais (BASE_LOOT) calibradas no scripts/dungeon-loot-sim.ts
 // (EV=1): fator médio do d20 = 1.05, então base ≈ EV alvo por nó. Âncora
@@ -1111,24 +1111,26 @@ export function rollNodeLoot(
 
   // pedra de aprimoramento. BÁSICA por padrão; a CONCENTRADA só cai em TIER alto
   // (≥ CONCENTRATED_MIN_TIER). Fora isso, a concentrada vem do BOSS, do refino 10:1
-  // na forja e da Coleta. No nat 20 a pedra é GARANTIDA — e aí o tier age em
-  // QUANTIDADE (1 + 1 a cada 2 tiers, espelha a fórmula do boss); nos demais
-  // pacotes a chance sobe com o tier (tierChance). O NÓ do boss NÃO rola pedra de
-  // pacote — o abate do boss já garante 1–3 (rollKillLoot); sem esta exceção a
-  // pedra dobrava no covil e estourava a âncora de paridade do sim (EV=1).
+  // na forja e da Coleta. Nat 20 = CRÍTICO: SEMPRE 1+ pedra inteira (nunca falha
+  // o sorteio 30/70 — esse split só escolhe arma vs armadura). Nos demais rolls a
+  // chance sobe com o tier (tierChance). O NÓ do boss NÃO rola pedra de pacote —
+  // o abate do boss já garante 1–3 (rollKillLoot); sem esta exceção a pedra
+  // dobrava no covil e estourava a âncora de paridade do sim (EV=1).
   if (!isBoss) {
-    const pushStone = (weaponShare: number) => {
-      const weapon = Math.random() < weaponShare
+    const pushStone = () => {
+      // 30% arma / 70% armadura — SEMPRE uma das duas (nunca "nada").
+      const weapon = Math.random() < STONE_WEAPON_SHARE
       const stone = dropsConcentrated
         ? (weapon ? STONE_NAMES.WEAPON_CONCENTRATED : STONE_NAMES.ARMOR_CONCENTRATED)
         : (weapon ? STONE_NAMES.WEAPON_BASIC : STONE_NAMES.ARMOR_BASIC)
       drops.push({ name: stone, kind: 'stone', rarity: dropsConcentrated ? 'RARE' : 'COMMON', emoji: '⚒️' })
     }
-    if (pack.pStone >= 1) {
+    // Crit explícito no d20 (não depender só de pack.pStone === 1 por float/legado).
+    if (roll >= 20) {
       const qty = 1 + Math.floor((dt - 1) / 2)
-      for (let i = 0; i < qty; i++) pushStone(NAT20_STONE_WEAPON_SHARE)
+      for (let i = 0; i < qty; i++) pushStone()
     } else if (Math.random() < tierChance(pack.pStone) * mult.stone) {
-      pushStone(STONE_WEAPON_SHARE)
+      pushStone()
     }
   }
 
@@ -1156,10 +1158,9 @@ const BOSS_KILL_CONCENTRATED = { min: 1, max: 2, minStars: 3 }
 // ⚖️ P2 pedras (2026-07-05): o set aprimora 1 arma : 5 armaduras, mas o drop era
 // 50/50 — pedra de arma sobrava ~3× e a de armadura era o gargalo real do +15.
 // 30/70 aproxima a oferta da demanda mantendo folga p/ alts/venda.
+// Pedra inteira (chão, crítico nat 20, boss, kill): 30% arma / 70% armadura —
+// sempre uma das duas; a % NÃO é chance de dropar vs não dropar.
 const STONE_WEAPON_SHARE = 0.3
-// 🎲 Crítico (nat 20): a pedra garantida do nó usa 40/60 — o jackpot pende um
-// pouco mais pra arma, direcionando o jogador ao aprimoramento de armas (core).
-const NAT20_STONE_WEAPON_SHARE = 0.4
 // ESTILHAÇO é 50/50: a meta do refino é simétrica (10 de cada → 1 pedra de
 // cada); só a pedra inteira segue a demanda do set (30/70).
 const SHARD_WEAPON_SHARE = 0.5

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@/app/api/auth/[...nextauth]/route'
+import { requireApiActor } from '@/lib/botFleetAuth'
 import { prisma } from '@/lib/prisma'
 import { isRunLive } from '@/lib/dungeonRunServer'
 import { regenAndPersist } from '@/lib/staminaServer'
@@ -17,11 +17,9 @@ export const dynamic = 'force-dynamic'
 // (é o objetivo: os reservas trabalham enquanto o principal batalha) — mas o
 // mesmo herói não pode coletar e estar em masmorra ao mesmo tempo.
 export async function POST(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-  const userId = session.user.id
+  const resolved = await requireApiActor(req)
+  if ('error' in resolved) return resolved.error
+  const userId = resolved.actor.userId
 
   try {
     const { characterId, fieldId } = await req.json()

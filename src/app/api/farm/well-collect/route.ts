@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@/app/api/auth/[...nextauth]/route'
+import { requireApiActor } from '@/lib/botFleetAuth'
 import { prisma } from '@/lib/prisma'
 import { regenAndPersist } from '@/lib/staminaServer'
 import { spendFarmActionStaminaTx, getUserFarmXp } from '@/lib/farmServer'
@@ -26,11 +26,9 @@ export type WellBonusLoot = { name: string; kind: 'shard' | 'stone' }
 // o restante acumulado). Chance independente de Estilhaço e Pedra Negra
 // conforme o nível de Fazenda da conta.
 export async function POST(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-  const userId = session.user.id
+  const resolved = await requireApiActor(req)
+  if ('error' in resolved) return resolved.error
+  const userId = resolved.actor.userId
 
   try {
     const { characterId } = await req.json()

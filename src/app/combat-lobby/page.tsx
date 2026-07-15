@@ -1,12 +1,19 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Users, Sword, Plus, RefreshCw, Crown, Clock, X, Shield } from 'lucide-react'
+import { io, Socket } from 'socket.io-client'
+import { Users, Sword, Plus, RefreshCw, Crown, Clock, X, Shield, Search } from 'lucide-react'
 import ArenaBackdrop from '@/components/combat/ArenaBackdrop'
 import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider'
 import { GOLD, GOLD_BRIGHT, PANEL_BG, TITLEBAR_BG, BEVEL_BTN_CLASS, BEVEL_COLOR_BTN_CLASS, BEVEL_VARIANTS } from '@/components/crafting/bdoTheme'
 import { TRAINING_OPPONENTS } from '@/lib/trainingOpponents'
+
+function lobbySocketUrl() {
+  return process.env.NODE_ENV === 'production'
+    ? (process.env.NEXT_PUBLIC_SOCKET_URL || 'https://dolrath.onrender.com')
+    : 'ws://localhost:3001'
+}
 
 interface CombatRoom {
   id: string
@@ -76,6 +83,12 @@ export default function CombatLobbyPage() {
   const [isCreatingRoom, setIsCreatingRoom] = useState(false)
   const [newRoomName, setNewRoomName] = useState('')
   const [isPrivateRoom, setIsPrivateRoom] = useState(false)
+  const [roomPassword, setRoomPassword] = useState('')
+  const [joinRoomId, setJoinRoomId] = useState('')
+  const [joinPassword, setJoinPassword] = useState('')
+  const [isSearching, setIsSearching] = useState(false)
+  const [searchStatus, setSearchStatus] = useState('')
+  const queueSocketRef = useRef<Socket | null>(null)
   const [selectedRole, setSelectedRole] = useState<RoomRole>(RoomRole.FIGHTER)
   const [showRoleSelector, setShowRoleSelector] = useState<string | null>(null)
   const [showTrainingPicker, setShowTrainingPicker] = useState(false)
@@ -243,6 +256,10 @@ export default function CombatLobbyPage() {
 
   const createRoom = async () => {
     if (!newRoomName.trim() || !selectedCharacter) return
+    if (isPrivateRoom && roomPassword.trim().length < 4) {
+      alert('Sala com senha precisa de pelo menos 4 caracteres.')
+      return
+    }
 
     setIsCreatingRoom(true)
     try {
@@ -254,6 +271,7 @@ export default function CombatLobbyPage() {
         body: JSON.stringify({
           name: newRoomName.trim(),
           isPrivate: isPrivateRoom,
+          password: isPrivateRoom ? roomPassword.trim() : undefined,
           createdBy: selectedCharacter.id,
           createdByName: selectedCharacter.name
         })
@@ -261,22 +279,30 @@ export default function CombatLobbyPage() {
 
       if (response.ok) {
         const newRoom = await response.json()
-        router.push(`/combat?room=${newRoom.id}&creator=true&character=${selectedCharacter.id}`)
+        if (newRoom.password) {
+          sessionStorage.setItem(`room_pw_${newRoom.id}`, newRoom.password)
+        }
+        const pwQ = newRoom.password ? `&password=${encodeURIComponent(newRoom.password)}` : ''
+        router.push(`/combat?room=${newRoom.id}&creator=true&character=${selectedCharacter.id}${pwQ}`)
       } else {
-        // Simular criação de sala para demonstração
         const roomId = 'room_' + Math.random().toString(36).substr(2, 9)
-        // Redirecionar para a página de combate com o ID da sala e personagem
-        router.push(`/combat?room=${roomId}&creator=true&character=${selectedCharacter.id}`)
+        if (isPrivateRoom && roomPassword.trim()) {
+          sessionStorage.setItem(`room_pw_${roomId}`, roomPassword.trim())
+        }
+        const pwQ = isPrivateRoom && roomPassword.trim()
+          ? `&password=${encodeURIComponent(roomPassword.trim())}`
+          : ''
+        router.push(`/combat?room=${roomId}&creator=true&character=${selectedCharacter.id}${pwQ}`)
       }
     } catch (error) {
       console.error('Erro ao criar sala:', error)
-      // Fallback - simular criação bem-sucedida
       const roomId = 'room_' + Math.random().toString(36).substr(2, 9)
       router.push(`/combat?room=${roomId}&creator=true&character=${selectedCharacter.id}`)
     } finally {
       setIsCreatingRoom(false)
       setNewRoomName('')
       setIsPrivateRoom(false)
+      setRoomPassword('')
     }
   }
 
@@ -284,6 +310,79 @@ export default function CombatLobbyPage() {
     if (!selectedCharacter) return
     router.push(`/combat?room=${roomId}&character=${selectedCharacter.id}&role=${role}`)
   }
+
+  const joinRoomById = () => {
+    if (!selectedCharacter || !joinRoomId.trim()) return
+    const id = joinRoomId.trim()
+    if (joinPassword.trim()) {
+      sessionStorage.setItem(`room_pw_${id}`, joinPassword.trim())
+    }
+    const pwQ = joinPassword.trim() ? `&password=${encodeURIComponent(joinPassword.trim())}` : ''
+    router.push(`/combat?room=${id}&character=${selectedCharacter.id}&role=fighter${pwQ}`)
+  }
+
+  const stopSearchOpponent = () => {
+    const sock = queueSocketRef.current
+    if (sock && selectedCharacter) {
+      sock.emit('queue_leave', { characterId: selectedCharacter.id })
+      sock.disconnect()
+    }
+    queueSocketRef.current = null
+    setIsSearching(false)
+    setSearchStatus('')
+  }
+
+  const startSearchOpponent = () => {
+    if (!selectedCharacter?.isAlive) return
+    stopSearchOpponent()
+    setIsSearching(true)
+    setSearchStatus(`Procurando lutador nível ~${selectedCharacter.level}…`)
+
+    const sock = io(lobbySocketUrl(), {
+      transports: ['websocket', 'polling'],
+      forceNew: true,
+    })
+    queueSocketRef.current = sock
+
+    sock.on('connect', () => {
+      sock.emit('queue_join', {
+        characterId: selectedCharacter.id,
+        userId: (selectedCharacter as any).userId || null,
+        level: selectedCharacter.level,
+        name: selectedCharacter.name,
+        isBot: false,
+      })
+    })
+
+    sock.on('queue_status', (data: { status: string; error?: string }) => {
+      if (data.status === 'searching') {
+        setSearchStatus(`Procurando lutador nível ~${selectedCharacter.level}…`)
+      } else if (data.status === 'cancelled') {
+        setIsSearching(false)
+        setSearchStatus(data.error || '')
+      }
+    })
+
+    sock.on('match_found', (data: { roomId: string }) => {
+      setIsSearching(false)
+      setSearchStatus('Oponente encontrado!')
+      sock.disconnect()
+      queueSocketRef.current = null
+      router.push(`/combat?room=${data.roomId}&character=${selectedCharacter.id}&role=fighter`)
+    })
+
+    sock.on('disconnect', () => {
+      if (queueSocketRef.current === sock) {
+        setIsSearching(false)
+      }
+    })
+  }
+
+  useEffect(() => {
+    return () => {
+      queueSocketRef.current?.disconnect()
+    }
+  }, [])
 
   const startTraining = (monsterKey: string) => {
     if (!selectedCharacter) return
@@ -469,14 +568,49 @@ export default function CombatLobbyPage() {
             </div>
           )}
 
+          {/* Buscar oponente (matchmaking) */}
+          <div className="border-b border-black/60 bg-[#19191c] p-6">
+            <h2 className="text-lg font-semibold text-[#dcdce0] mb-3 flex items-center tracking-wide">
+              <Search className="mr-2" size={20} style={{ color: GOLD }} />
+              Buscar Oponente
+            </h2>
+            <p className="text-sm text-[#8a8a90] mb-4">
+              Encontra alguém do mesmo nível (fila aleatória). Salas com amigos ficam em Criar Sala / Entrar com ID.
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              {!isSearching ? (
+                <button
+                  onClick={startSearchOpponent}
+                  disabled={!selectedCharacter?.isAlive}
+                  className={`${BEVEL_COLOR_BTN_CLASS} px-6 py-2 flex items-center disabled:opacity-40`}
+                  style={BEVEL_VARIANTS.gold}
+                >
+                  <Search className="mr-2" size={18} />
+                  Buscar Oponente
+                </button>
+              ) : (
+                <button
+                  onClick={stopSearchOpponent}
+                  className={`${BEVEL_BTN_CLASS} px-6 py-2 flex items-center`}
+                >
+                  <X className="mr-2" size={18} />
+                  Cancelar busca
+                </button>
+              )}
+              {searchStatus && (
+                <span className="text-sm text-[#c9c9ce]">{searchStatus}</span>
+              )}
+            </div>
+          </div>
+
           {/* Create Room Section */}
           <div className="border-b border-black/60 bg-[#19191c] p-6">
             <h2 className="text-lg font-semibold text-[#dcdce0] mb-4 flex items-center tracking-wide">
               <Plus className="mr-2" size={20} style={{ color: GOLD }} />
               Criar Nova Sala
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-              <div className="md:col-span-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+              <div className="lg:col-span-2">
                 <label className="block text-[11px] uppercase tracking-[0.14em] text-[#77777d] mb-2">
                   Nome da Sala
                 </label>
@@ -489,17 +623,27 @@ export default function CombatLobbyPage() {
                   maxLength={50}
                 />
               </div>
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="privateRoom"
-                  checked={isPrivateRoom}
-                  onChange={(e) => setIsPrivateRoom(e.target.checked)}
-                  className="mr-2 accent-[#c9a25f]"
-                />
-                <label htmlFor="privateRoom" className="text-sm text-[#c9c9ce]">
-                  Sala Privada
+              <div className="flex flex-col gap-2">
+                <label className="flex items-center text-sm text-[#c9c9ce]">
+                  <input
+                    type="checkbox"
+                    id="privateRoom"
+                    checked={isPrivateRoom}
+                    onChange={(e) => setIsPrivateRoom(e.target.checked)}
+                    className="mr-2 accent-[#c9a25f]"
+                  />
+                  Com senha (amigos)
                 </label>
+                {isPrivateRoom && (
+                  <input
+                    type="text"
+                    value={roomPassword}
+                    onChange={(e) => setRoomPassword(e.target.value)}
+                    placeholder="Senha (min. 4)"
+                    className="w-full rounded-[3px] border border-[#3c3c41] bg-[#101013] px-3 py-2 text-[#ece7da] outline-none focus:border-[#8a6d3b]"
+                    maxLength={32}
+                  />
+                )}
               </div>
               <button
                 onClick={createRoom}
@@ -516,6 +660,36 @@ export default function CombatLobbyPage() {
                     Criar Sala
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+
+          {/* Entrar com ID + senha */}
+          <div className="border-b border-black/60 bg-[#151518] p-6">
+            <h2 className="text-base font-semibold text-[#dcdce0] mb-3 tracking-wide">
+              Entrar com ID da sala
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+              <input
+                type="text"
+                value={joinRoomId}
+                onChange={(e) => setJoinRoomId(e.target.value)}
+                placeholder="ID da sala (ex: room_abc123)"
+                className="w-full rounded-[3px] border border-[#3c3c41] bg-[#101013] px-4 py-2 text-[#ece7da] outline-none focus:border-[#8a6d3b]"
+              />
+              <input
+                type="text"
+                value={joinPassword}
+                onChange={(e) => setJoinPassword(e.target.value)}
+                placeholder="Senha (se houver)"
+                className="w-full rounded-[3px] border border-[#3c3c41] bg-[#101013] px-4 py-2 text-[#ece7da] outline-none focus:border-[#8a6d3b]"
+              />
+              <button
+                onClick={joinRoomById}
+                disabled={!joinRoomId.trim() || !selectedCharacter?.isAlive}
+                className={`${BEVEL_BTN_CLASS} px-4 py-2 disabled:opacity-40`}
+              >
+                Entrar
               </button>
             </div>
           </div>

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@/app/api/auth/[...nextauth]/route'
+import { requireApiActor } from '@/lib/botFleetAuth'
 import { prisma } from '@/lib/prisma'
 import { collectGatheringSession, findOpenGatheringSession, syncGatheringSession } from '@/lib/gatheringServer'
 import { getProfessionLevelInfo } from '@/lib/professionSystem'
@@ -12,11 +12,9 @@ export const dynamic = 'force-dynamic'
 // consumível empilha, então cada item ocupa no máx. 1 slot) e credita gatherXp.
 // O que não coube permanece pendente — nada é descartado aqui.
 export async function POST(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-  const userId = session.user.id
+  const resolved = await requireApiActor(req)
+  if ('error' in resolved) return resolved.error
+  const userId = resolved.actor.userId
 
   try {
     const { characterId } = await req.json()

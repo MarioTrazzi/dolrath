@@ -111,6 +111,8 @@ model User {
   walletLinkedAt DateTime?
   walletLinkNonce String?
   walletLinkNonceExpiresAt DateTime?
+  // Conta da frota headless (seed bot-fleet) — fora de ranking/claim público.
+  isBot         Boolean   @default(false)
   goldBalance   Int       @default(1000)
   // Slots do Baú Geral da conta (UserInventory). Começa em 50, expansível como o do personagem.
   globalInventorySlots Int  @default(50)

@@ -42,6 +42,10 @@ cookies.txt
 test-*.ts
 test-*.js
 
+# Bot fleet local runtime
+scripts/bot-fleet-registry.json
+scripts/bot-fleet-events.jsonl
+
 # Vercel
 .vercel
 

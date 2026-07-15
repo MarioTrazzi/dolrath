@@ -274,25 +274,31 @@ export async function POST(request: NextRequest) {
       console.error('PvP history write failed:', histErr)
     }
 
-    // Ranking — best-effort. Antes um `updateRanking` do CORPO podia desligar isto;
-    // quem decide é o socket, que só chama esta rota fora do treino (`room.isTraining`).
+    // Ranking — best-effort. Bots (User.isBot) não entram no leaderboard / season DOL.
     let ranking: { winnerPoints?: number; loserPoints?: number } = {}
     {
       try {
-        const season = await ensureActivePvpSeason()
-        ranking = await applyPvpMatchRating({
-          seasonId: season.id,
-          winnerId: battleResult.winnerId,
-          loserId: battleResult.loserId,
-          winPoints: PVP_RANK_WIN_POINTS,
-          lossPoints: PVP_RANK_LOSS_POINTS,
-          winnerStaminaSpent: winnerCharged,
-          loserStaminaSpent: loserCharged,
-          winnerGold,
-          loserGold,
-          winnerXp,
-          loserXp,
-        })
+        const [winnerUser, loserUser] = await Promise.all([
+          prisma.user.findUnique({ where: { id: winner.userId }, select: { isBot: true } }),
+          prisma.user.findUnique({ where: { id: loser.userId }, select: { isBot: true } }),
+        ])
+        const skipRanking = !!(winnerUser?.isBot || loserUser?.isBot)
+        if (!skipRanking) {
+          const season = await ensureActivePvpSeason()
+          ranking = await applyPvpMatchRating({
+            seasonId: season.id,
+            winnerId: battleResult.winnerId,
+            loserId: battleResult.loserId,
+            winPoints: PVP_RANK_WIN_POINTS,
+            lossPoints: PVP_RANK_LOSS_POINTS,
+            winnerStaminaSpent: winnerCharged,
+            loserStaminaSpent: loserCharged,
+            winnerGold,
+            loserGold,
+            winnerXp,
+            loserXp,
+          })
+        }
       } catch (rankErr) {
         console.error('PvP ranking update failed:', rankErr)
       }

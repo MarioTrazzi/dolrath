@@ -1,4 +1,4 @@
-import { auth } from '@/app/api/auth/[...nextauth]/route'
+import { requireApiActor } from '@/lib/botFleetAuth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 
@@ -9,12 +9,10 @@ export async function POST(
   req: Request,
   context: { params: { characterId: string } }
 ) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
   const { characterId } = context.params
+  const resolved = await requireApiActor(req, characterId)
+  if ('error' in resolved) return resolved.error
+  const userId = resolved.actor.userId
 
   try {
     const { itemId } = await req.json()
@@ -24,7 +22,7 @@ export async function POST(
 
     // Garante que o personagem pertence ao usuário.
     const character = await prisma.character.findFirst({
-      where: { id: characterId, userId: session.user.id },
+      where: { id: characterId, userId },
       select: { id: true },
     })
     if (!character) {

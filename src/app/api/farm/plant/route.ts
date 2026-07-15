@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@/app/api/auth/[...nextauth]/route'
+import { requireApiActor } from '@/lib/botFleetAuth'
 import { prisma } from '@/lib/prisma'
 import { getUserFarmXp } from '@/lib/farmServer'
 import { getCropById, cropPlantXp } from '@/lib/farming'
@@ -12,11 +12,9 @@ export const dynamic = 'force-dynamic'
 // semente do inventário do personagem ativo e credita um XP pequeno a ele —
 // plantar NÃO custa stamina (o custo mora na colheita: 1⚡ por canteiro).
 export async function POST(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-  const userId = session.user.id
+  const resolved = await requireApiActor(req)
+  if ('error' in resolved) return resolved.error
+  const userId = resolved.actor.userId
 
   try {
     const { characterId, slotIndex, cropId } = await req.json()

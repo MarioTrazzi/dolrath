@@ -1,4 +1,5 @@
 import { auth } from '@/app/api/auth/[...nextauth]/route'
+import { requireApiActor } from '@/lib/botFleetAuth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { getLevelInfo } from '@/lib/experienceSystem'
@@ -28,11 +29,10 @@ export async function GET(
   req: Request,
   { params }: { params: { characterId: string } }
 ) {
-  const session = await auth()
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const resolved = await requireApiActor(req, params.characterId)
+  if ('error' in resolved) return resolved.error
+  const userId = resolved.actor.userId
+  const session = resolved.actor.isBot ? null : await auth()
 
   const characterIdOrTokenId = params.characterId
 
@@ -57,7 +57,7 @@ export async function GET(
         const tokenId = BigInt(characterIdOrTokenId)
 
         // Security: ensure the session wallet owns this token on-chain.
-        const walletAddress = String((session.user as any)?.walletAddress || '').trim()
+        const walletAddress = String((session?.user as any)?.walletAddress || '').trim()
         if (!walletAddress) {
           return null
         }
@@ -79,7 +79,7 @@ export async function GET(
 
         return prisma.character.findFirst({
           where: {
-            userId: session.user.id,
+            userId,
             nftTokenId: tokenId,
           },
           include,
@@ -96,7 +96,7 @@ export async function GET(
       return NextResponse.json({ error: 'Character not found' }, { status: 404 })
     }
 
-    if (character.userId !== session.user.id) {
+    if (character.userId !== userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -133,11 +133,9 @@ export async function PUT(
   req: Request,
   { params }: { params: { characterId: string } }
 ) {
-  const session = await auth()
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const resolved = await requireApiActor(req, params.characterId)
+  if ('error' in resolved) return resolved.error
+  const userId = resolved.actor.userId
 
   const characterId = params.characterId
 
@@ -154,7 +152,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Character not found' }, { status: 404 })
     }
 
-    if (character.userId !== session.user.id) {
+    if (character.userId !== userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -192,11 +190,9 @@ export async function DELETE(
   req: Request,
   { params }: { params: { characterId: string } }
 ) {
-  const session = await auth()
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const resolved = await requireApiActor(req, params.characterId)
+  if ('error' in resolved) return resolved.error
+  const userId = resolved.actor.userId
 
   const characterId = params.characterId
 
@@ -211,7 +207,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Character not found' }, { status: 404 })
     }
 
-    if (character.userId !== session.user.id) {
+    if (character.userId !== userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@/app/api/auth/[...nextauth]/route'
+import { requireApiActor } from '@/lib/botFleetAuth'
 import { prisma } from '@/lib/prisma'
 import { regenAndPersist } from '@/lib/staminaServer'
 import { getFarmState, getUserFarmXp } from '@/lib/farmServer'
@@ -13,11 +13,9 @@ export const dynamic = 'force-dynamic'
 // Tudo computado lazy dos timestamps — esta rota não muda nada além de criar
 // o poço na primeira visita e aplicar o regen passivo de stamina.
 export async function GET(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-  const userId = session.user.id
+  const resolved = await requireApiActor(req)
+  if ('error' in resolved) return resolved.error
+  const userId = resolved.actor.userId
 
   try {
     const { searchParams } = new URL(req.url)

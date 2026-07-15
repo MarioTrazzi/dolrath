@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@/app/api/auth/[...nextauth]/route'
+import { requireApiActor } from '@/lib/botFleetAuth'
 import { prisma } from '@/lib/prisma'
 import { collectGatheringSession, findOpenGatheringSession, syncGatheringSession } from '@/lib/gatheringServer'
 import { getProfessionLevelInfo } from '@/lib/professionSystem'
@@ -16,11 +16,9 @@ export const dynamic = 'force-dynamic'
 //   ciclo vindo (sessão 'exhausted'), não há o que esperar: encerra na hora.
 // - 'cancel': desiste do encerramento agendado, a coleta segue normal.
 export async function POST(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-  const userId = session.user.id
+  const resolved = await requireApiActor(req)
+  if ('error' in resolved) return resolved.error
+  const userId = resolved.actor.userId
 
   try {
     const { characterId, mode } = await req.json()

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@/app/api/auth/[...nextauth]/route'
+import { requireApiActor } from '@/lib/botFleetAuth'
 import { prisma } from '@/lib/prisma'
 import { findOpenGatheringSession, syncGatheringSession } from '@/lib/gatheringServer'
 import { getProfessionLevelInfo } from '@/lib/professionSystem'
@@ -12,11 +12,9 @@ export const dynamic = 'force-dynamic'
 // rendimento em pendingYield) e devolve o retrato atual. Idempotente — chamar
 // duas vezes seguidas não rende nada a mais.
 export async function GET(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-  const userId = session.user.id
+  const resolved = await requireApiActor(req)
+  if ('error' in resolved) return resolved.error
+  const userId = resolved.actor.userId
 
   try {
     const { searchParams } = new URL(req.url)

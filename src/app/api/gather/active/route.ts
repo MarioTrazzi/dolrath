@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@/app/api/auth/[...nextauth]/route'
+import { requireApiActor } from '@/lib/botFleetAuth'
 import { prisma } from '@/lib/prisma'
 import { freeInventorySlots } from '@/lib/inventoryMutations'
 
@@ -10,15 +10,14 @@ export const dynamic = 'force-dynamic'
 // marcarem quem está trabalhando com uma chamada só. `inventoryFull` é um
 // retrato rápido (sem sincronizar a sessão) para o card mostrar o alerta 🎒
 // sem precisar abrir a página de coleta.
-export async function GET() {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+export async function GET(req: Request) {
+  const resolved = await requireApiActor(req)
+  if ('error' in resolved) return resolved.error
+  const userId = resolved.actor.userId
 
   try {
     const sessions = await prisma.gatheringSession.findMany({
-      where: { userId: session.user.id, status: { in: ['active', 'exhausted'] } },
+      where: { userId, status: { in: ['active', 'exhausted'] } },
       select: { characterId: true, fieldId: true, status: true, startedAt: true },
     })
     const withInventory = await Promise.all(

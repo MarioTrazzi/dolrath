@@ -1,4 +1,4 @@
-import { auth } from '@/app/api/auth/[...nextauth]/route'
+import { requireApiActor } from '@/lib/botFleetAuth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { PotionType, PREDEFINED_POTIONS } from '@/types/item'
@@ -7,11 +7,9 @@ export async function POST(
   req: Request,
   { params }: { params: { characterId: string } }
 ) {
-  const session = await auth()
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const resolved = await requireApiActor(req, params.characterId)
+  if ('error' in resolved) return resolved.error
+  const userId = resolved.actor.userId
 
   const characterId = params.characterId
 
@@ -19,7 +17,7 @@ export async function POST(
     const body = await req.json()
     const { potionId } = body
 
-    console.log('🧪 Revive attempt:', { characterId, potionId, userId: session.user.id })
+    console.log('🧪 Revive attempt:', { characterId, potionId, userId })
 
     // Verificar se é uma poção de reviver válida
     const revivalPotion = PREDEFINED_POTIONS.REVIVAL_POTION
@@ -45,7 +43,7 @@ export async function POST(
       return NextResponse.json({ error: 'Character not found' }, { status: 404 })
     }
 
-    if (character.userId !== session.user.id) {
+    if (character.userId !== userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 

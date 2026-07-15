@@ -64,6 +64,10 @@ export async function POST() {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
+    if ((user as { isBot?: boolean }).isBot) {
+      return NextResponse.json({ error: 'Bot accounts cannot claim GOLD' }, { status: 403 })
+    }
+
     // If there is an expired pending claim, unlock it.
     const goldClaimPendingAmount = Number((user as any).goldClaimPendingAmount ?? 0)
     const goldClaimPendingNonce = (user as any).goldClaimPendingNonce as number | null | undefined

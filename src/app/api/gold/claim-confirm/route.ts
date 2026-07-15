@@ -56,6 +56,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
+    if ((user as { isBot?: boolean }).isBot) {
+      return NextResponse.json({ error: 'Bot accounts cannot claim GOLD' }, { status: 403 })
+    }
+
     const pendingAmount = Number((user as any).goldClaimPendingAmount ?? 0)
     const pendingNonceRaw = (user as any).goldClaimPendingNonce as number | null | undefined
     const pendingDeadlineRaw = (user as any).goldClaimPendingDeadline as Date | null | undefined

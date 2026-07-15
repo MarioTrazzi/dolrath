@@ -1,4 +1,4 @@
-import { auth } from '@/app/api/auth/[...nextauth]/route'
+import { requireApiActor } from '@/lib/botFleetAuth'
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
 import { ConsumableSubtype } from '@prisma/client'
@@ -19,23 +19,22 @@ import { getProfessionLevel, getProfessionLevelInfo } from '@/lib/professionSyst
 
 // GET — nível de Alquimia da conta + chance/gating de cada receita (para a UI).
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { characterId: string } }
 ) {
   try {
-    const session = await auth()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const resolved = await requireApiActor(request, params.characterId)
+    if ('error' in resolved) return resolved.error
+    const userId = resolved.actor.userId
     const character = await prisma.character.findFirst({
-      where: { id: params.characterId, userId: session.user.id },
+      where: { id: params.characterId, userId },
       select: { id: true },
     })
     if (!character) {
       return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
     }
 
-    const xp = await getUserAlchemyXp(session.user.id)
+    const xp = await getUserAlchemyXp(userId)
     const levelInfo = getProfessionLevelInfo(xp)
     const recipes = POTION_RECIPES.map((r) => {
       const minLevel = getCraftMinLevel(r.rarity)
@@ -58,11 +57,9 @@ export async function POST(
   { params }: { params: { characterId: string } }
 ) {
   try {
-    const session = await auth()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-    const userId = session.user.id
+    const resolved = await requireApiActor(request, params.characterId)
+    if ('error' in resolved) return resolved.error
+    const userId = resolved.actor.userId
 
     const body = await request.json()
     const recipeId: string | undefined = body?.recipeId

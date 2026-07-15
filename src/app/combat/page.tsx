@@ -225,6 +225,12 @@ function CombatPageContent() {
   const isTraining = searchParams?.get('training') === 'true' // 🐉 Modo treino vs monstro
   const trainingMonster = searchParams?.get('monster') || DEFAULT_TRAINING_OPPONENT_KEY
   const trainingDef = isTraining ? getTrainingOpponent(trainingMonster) : null
+  const roomPasswordFromQuery = searchParams?.get('password') || ''
+  const roomPassword =
+    roomPasswordFromQuery ||
+    (typeof window !== 'undefined'
+      ? sessionStorage.getItem(`room_pw_${roomId}`) || ''
+      : '')
 
   const [socket] = useState(() => createSocketConnection())
   const [combatRoom, setCombatRoom] = useState<CombatRoom | null>(null)
@@ -714,9 +720,26 @@ function CombatPageContent() {
         isCreator: isRoomCreator,
         role: userRole,
         training: isTraining,
-        monster: trainingMonster
+        monster: trainingMonster,
+        password: roomPassword || null,
       })
     }
+
+    const onJoinError = (err: { error?: string; code?: string }) => {
+      if (err?.code === 'BAD_PASSWORD') {
+        const entered = typeof window !== 'undefined'
+          ? window.prompt('Esta sala exige senha. Digite a senha:') || ''
+          : ''
+        if (entered && characterId) {
+          sessionStorage.setItem(`room_pw_${roomId}`, entered)
+          window.location.href = `/combat?room=${roomId}&character=${characterId}&role=${userRole}&password=${encodeURIComponent(entered)}`
+          return
+        }
+        alert(err.error || 'Senha incorreta')
+        router.push('/combat-lobby')
+      }
+    }
+    socket.on('join_room_error', onJoinError)
 
     initializeCombat()
 
@@ -731,9 +754,10 @@ function CombatPageContent() {
       socket.off('damage_dealt')
       socket.off('action_resolved')
       socket.off('consumable_used')
+      socket.off('join_room_error', onJoinError)
       socket.disconnect()
     }
-  }, [socket, roomId, isRoomCreator, characterId])
+  }, [socket, roomId, isRoomCreator, characterId, roomPassword, userRole, isTraining, trainingMonster, router])
 
   // 🔥 FORÇA re-render quando currentPlayer ou opponent mudam
   useEffect(() => {

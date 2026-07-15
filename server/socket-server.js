@@ -404,14 +404,91 @@ const ROLE_LIMITS = {
   [RoomRole.MODERATOR]: 2
 }
 
+// 🔎 Matchmaking — fila "Buscar oponente" (humano + bots da frota)
+const matchQueue = new Map() // characterId -> { socketId, userId, characterId, level, name, joinedAt, band }
+
+function queueBandForWaitMs(waitMs) {
+  if (waitMs >= 30000) return 2
+  if (waitMs >= 15000) return 1
+  return 0
+}
+
+function tryMatchmake() {
+  const entries = [...matchQueue.values()]
+  for (let i = 0; i < entries.length; i++) {
+    const a = entries[i]
+    if (!matchQueue.has(a.characterId)) continue
+    const waitA = Date.now() - a.joinedAt
+    const bandA = queueBandForWaitMs(waitA)
+    for (let j = i + 1; j < entries.length; j++) {
+      const b = entries[j]
+      if (!matchQueue.has(b.characterId)) continue
+      if (a.userId && b.userId && a.userId === b.userId) continue
+      const waitB = Date.now() - b.joinedAt
+      const band = Math.max(bandA, queueBandForWaitMs(waitB))
+      if (Math.abs((a.level || 1) - (b.level || 1)) > band) continue
+
+      matchQueue.delete(a.characterId)
+      matchQueue.delete(b.characterId)
+      const roomId = 'mm_' + Math.random().toString(36).slice(2, 11)
+      const payloadA = {
+        roomId,
+        opponentPreview: { id: b.characterId, name: b.name, level: b.level },
+      }
+      const payloadB = {
+        roomId,
+        opponentPreview: { id: a.characterId, name: a.name, level: a.level },
+      }
+      const sockA = io.sockets.sockets.get(a.socketId)
+      const sockB = io.sockets.sockets.get(b.socketId)
+      if (sockA) {
+        sockA.emit('match_found', payloadA)
+        sockA.emit('queue_status', { status: 'matched', ...payloadA })
+      }
+      if (sockB) {
+        sockB.emit('match_found', payloadB)
+        sockB.emit('queue_status', { status: 'matched', ...payloadB })
+      }
+      console.log(`🔎 Match: ${a.name} vs ${b.name} → ${roomId}`)
+      return
+    }
+  }
+}
+
+setInterval(tryMatchmake, 2000)
+
 io.on('connection', (socket) => {
   console.log('Cliente conectado:', socket.id)
 
-  socket.on('join_room', ({ roomId, player, isCreator, role = RoomRole.FIGHTER, training = false, monster = 'goblin' }) => {
+  socket.on('queue_join', ({ characterId, userId, level, name, isBot }) => {
+    if (!characterId) {
+      socket.emit('queue_status', { status: 'cancelled', error: 'characterId obrigatório' })
+      return
+    }
+    matchQueue.set(characterId, {
+      socketId: socket.id,
+      characterId,
+      userId: userId || null,
+      level: Math.max(1, Number(level) || 1),
+      name: name || 'Lutador',
+      isBot: !!isBot,
+      joinedAt: Date.now(),
+    })
+    socket.emit('queue_status', { status: 'searching', level: Math.max(1, Number(level) || 1) })
+    tryMatchmake()
+  })
+
+  socket.on('queue_leave', ({ characterId }) => {
+    if (characterId && matchQueue.has(characterId)) {
+      matchQueue.delete(characterId)
+      socket.emit('queue_status', { status: 'cancelled' })
+    }
+  })
+
+  socket.on('join_room', ({ roomId, player, isCreator, role = RoomRole.FIGHTER, training = false, monster = 'goblin', password = null }) => {
     console.log(`Jogador ${player.name} entrando na sala ${roomId} como ${role}${training ? ` (treino vs ${monster})` : ''}`)
     
     playerSockets.set(player.id, socket.id)
-    socket.join(roomId)
     
     let room = rooms.get(roomId)
     if (!room) {
@@ -432,10 +509,37 @@ io.on('connection', (socket) => {
         combatLog: [],
         isActive: false,
         pendingAction: null,
-        reactionPhase: false
+        reactionPhase: false,
+        password: null,
+        isMatchmade: String(roomId).startsWith('mm_'),
+      }
+      // Criador define senha da sala na criação
+      if (password && String(password).trim()) {
+        room.password = String(password).trim().slice(0, 32)
       }
       rooms.set(roomId, room)
+    } else {
+      // Criador pode atrasar o bind da senha se o socket room nasceu sem ela
+      if (isCreator && password && String(password).trim() && !room.password) {
+        room.password = String(password).trim().slice(0, 32)
+      }
+      if (room.password) {
+        // Sala com senha: espectador livre; lutador precisa da senha (exceto reconexão)
+        const existingFighter = room.participants.fighters.find(f => f.id === player.id)
+        if (!existingFighter && role === RoomRole.FIGHTER) {
+          if (String(password || '') !== room.password) {
+            socket.emit('join_room_error', {
+              error: 'Senha incorreta ou necessária para entrar nesta sala',
+              code: 'BAD_PASSWORD',
+              availableRoles: getAvailableRoles(room),
+            })
+            return
+          }
+        }
+      }
     }
+
+    socket.join(roomId)
 
     // Reconexão: se o jogador já está na sala como lutador, apenas atualizar o socket
     // (evita duplicar o mesmo jogador como player2 após refresh da página)
@@ -1270,6 +1374,11 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log('Cliente desconectado:', socket.id)
+
+    // Limpar fila de matchmaking
+    for (const [cid, entry] of matchQueue.entries()) {
+      if (entry.socketId === socket.id) matchQueue.delete(cid)
+    }
     
     // 💚 REGENERAÇÃO AUTOMÁTICA - Se jogador sair de combate
     playerSockets.forEach((socketId, playerId) => {

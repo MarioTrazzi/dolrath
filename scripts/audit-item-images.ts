@@ -6,7 +6,7 @@ import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
 import {
   ITEM_CATALOG, CONSUMABLE_CATALOG, INGREDIENT_CATALOG, FORGE_MATERIAL_CATALOG,
-  PROCESSED_CATALOG, FOOD_CATALOG,
+  PROCESSED_CATALOG, FOOD_CATALOG, SEED_CATALOG, TOOL_CATALOG,
   itemImageSlug,
 } from '../src/lib/itemCatalog'
 
@@ -30,6 +30,8 @@ const groups: Row[] = [
   ...FORGE_MATERIAL_CATALOG.map((m) => ({ name: m.name, group: 'MATERIAL (forja)' })),
   ...PROCESSED_CATALOG.map((p) => ({ name: p.name, group: 'PROCESSADO (bancada)' })),
   ...FOOD_CATALOG.map((f) => ({ name: f.name, group: 'COMIDA (culinária)' })),
+  ...SEED_CATALOG.map((s) => ({ name: s.name, group: 'SEMENTE (fazenda)' })),
+  ...TOOL_CATALOG.map((t) => ({ name: t.name, group: 'FERRAMENTA/TRAJE (coleta)' })),
 ]
 
 const has = (name: string) => existsSync(join('public', 'items', `${itemImageSlug(name)}.webp`))

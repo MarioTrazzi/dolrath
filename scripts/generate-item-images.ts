@@ -17,7 +17,7 @@
 import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
 
-import { ITEM_CATALOG, CONSUMABLE_CATALOG, INGREDIENT_CATALOG, FORGE_MATERIAL_CATALOG, PROCESSED_CATALOG, FOOD_CATALOG, itemImageSlug } from '../src/lib/itemCatalog'
+import { ITEM_CATALOG, CONSUMABLE_CATALOG, INGREDIENT_CATALOG, FORGE_MATERIAL_CATALOG, PROCESSED_CATALOG, FOOD_CATALOG, SEED_CATALOG, TOOL_CATALOG, itemImageSlug } from '../src/lib/itemCatalog'
 import { buildItemImagePrompt } from '../src/lib/itemImagePrompt'
 
 // Pseudo-tipo de arte para cada material de forja (só muda o PROMPT; no DB são
@@ -157,6 +157,15 @@ const subjects: Subject[] = [
   // Pratos de Culinária (itens já catalogados; a bancada chega em outra sessão).
   ...FOOD_CATALOG.map((f) => ({
     name: f.name, description: f.description, type: 'FOOD', rarity: f.rarity,
+  })),
+  // Sementes da Fazenda (SeedItem não tem `type` — a arte é sempre SEED).
+  ...SEED_CATALOG.map((s) => ({
+    name: s.name, description: s.description, type: 'SEED', rarity: s.rarity,
+  })),
+  // Ferramentas e trajes de coleta (lifeskill): o próprio type do catálogo já
+  // resolve a arte (PICKAXE, HERB_SICKLE, ..., GATHER_GARB).
+  ...TOOL_CATALOG.map((t) => ({
+    name: t.name, description: t.description, type: t.type, rarity: t.rarity,
   })),
   // Consumíveis legados que vivem só no seed-battle-consumables.ts (nomes que
   // não estão no CONSUMABLE_CATALOG) — gerados para não deixar refs quebradas.

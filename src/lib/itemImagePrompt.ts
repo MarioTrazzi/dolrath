@@ -62,6 +62,16 @@ export const TYPE_STYLE: Record<string, string> = {
   PROCESSED: 'A refined crafting good produced at a processing bench (a cast metal ingot, a polished blade blank, a planed wooden board, tanned finished leather, a woven bolt of linen cloth, a cut and faceted gem, a sack of milled flour, a stoppered clay jar of herbal extract...) neatly presented on the dark backdrop — clearly a PROCESSED/refined material, more finished than raw ore or hide, but NOT a finished weapon, armor or labeled potion.',
   // Prato de CULINÁRIA: comida rústica de taverna, não poção.
   FOOD: 'A hearty rustic tavern dish of a fantasy realm (fresh baked bread, a roasted meat platter, a herb salad in a wooden bowl, a savory pie, a steaming stew pot, a lavish feast spread...) served on rustic wood or pewter tableware, appetizing steam and warm light — cooked FOOD, NOT a potion, NO glass vial.',
+  // Semente de FAZENDA: insumo de plantio, nem planta crescida nem colheita.
+  SEED: 'Farm seed stock: a small burlap seed pouch spilling a loose handful of seeds, grains or seedling cuttings onto the dark backdrop, with one sprouting shoot to hint at what it grows into — raw PLANTING stock, NOT a grown plant, NOT a harvested crop, NO vial.',
+  // === FERRAMENTAS DE COLETA (slot de arma; utensílio de trabalho, não arma de guerra) ===
+  PICKAXE: "A miner's pickaxe: a forged iron head with one pointed pick end and one flat chisel end on a sturdy wooden haft, chipped and dusted with rock powder — a mining WORK TOOL, not a battle weapon.",
+  HERB_SICKLE: "A herbalist's sickle: a small curved harvesting blade with a worn wooden handle, a few cut herb sprigs and leaves clinging to the edge — a gentle gathering TOOL, not a battle weapon.",
+  LOGGING_AXE: "A lumberjack's felling axe: a broad wedge-shaped steel head on a long wooden haft, sap-stained with wood chips around it — a woodcutting WORK TOOL, not a battle axe.",
+  FISHING_ROD: 'A fishing rod: a slender flexible wooden rod with a taut line, a simple reel and a hook or lure dangling, wrapped grip — an angling TOOL, never a weapon.',
+  HUNTING_KNIFE: "A hunter's skinning knife: a short broad curved-belly blade with a bone or antler handle and a leather sheath beside it — a field-dressing WORK TOOL, not a combat dagger.",
+  // Traje de coleta: roupa de trabalho de profissão, sem nada de armadura de combate.
+  GATHER_GARB: "A gatherer's profession work outfit displayed on an invisible stand: practical laborer's clothing with the pouches, aprons, straps and weatherproofing of its trade — humble WORK CLOTHES, NOT combat armor, no plate, no pauldrons, no weapons.",
 };
 
 // Per-rarity treatment — escalates ornamentation and magical aura.

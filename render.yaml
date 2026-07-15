@@ -10,3 +10,10 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: APP_URL
+        value: https://dolrath.vercel.app
+      - key: PVP_SEASON_POT_DOL
+        value: "1000"
+      # Mesmo valor do Vercel BATTLE_REWARDS_SECRET — definir no dashboard (sync: false)
+      - key: BATTLE_REWARDS_SECRET
+        sync: false

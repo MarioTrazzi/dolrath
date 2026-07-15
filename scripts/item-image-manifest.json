@@ -490,5 +490,193 @@
   },
   "Mandala do Cosmo": {
     "file": "/items/mandala-do-cosmo.webp"
+  },
+  "Bandagem de Linho": {
+    "file": "/items/bandagem-de-linho.webp",
+    "publicId": "dolrath/characters/avatar/bandagem-de-linho"
+  },
+  "Ração": {
+    "file": "/items/racao.webp",
+    "publicId": "dolrath/characters/avatar/racao"
+  },
+  "Água": {
+    "file": "/items/agua.webp",
+    "publicId": "dolrath/characters/avatar/agua"
+  },
+  "Trigo": {
+    "file": "/items/trigo.webp",
+    "publicId": "dolrath/characters/avatar/trigo"
+  },
+  "Peixe Prateado": {
+    "file": "/items/peixe-prateado.webp",
+    "publicId": "dolrath/characters/avatar/peixe-prateado"
+  },
+  "Frutos do Mar": {
+    "file": "/items/frutos-do-mar.webp",
+    "publicId": "dolrath/characters/avatar/frutos-do-mar"
+  },
+  "Pérola Bruta": {
+    "file": "/items/perola-bruta.webp",
+    "publicId": "dolrath/characters/avatar/perola-bruta"
+  },
+  "Carne de Caça": {
+    "file": "/items/carne-de-caca.webp",
+    "publicId": "dolrath/characters/avatar/carne-de-caca"
+  },
+  "Carne Nobre": {
+    "file": "/items/carne-nobre.webp",
+    "publicId": "dolrath/characters/avatar/carne-nobre"
+  },
+  "Pó de Joia": {
+    "file": "/items/po-de-joia.webp",
+    "publicId": "dolrath/characters/avatar/po-de-joia"
+  },
+  "Fibra de Linho": {
+    "file": "/items/fibra-de-linho.webp",
+    "publicId": "dolrath/characters/avatar/fibra-de-linho"
+  },
+  "Barra de Ferro": {
+    "file": "/items/barra-de-ferro.webp",
+    "publicId": "dolrath/characters/avatar/barra-de-ferro"
+  },
+  "Barra de Aço": {
+    "file": "/items/barra-de-aco.webp",
+    "publicId": "dolrath/characters/avatar/barra-de-aco"
+  },
+  "Lâmina Polida": {
+    "file": "/items/lamina-polida.webp",
+    "publicId": "dolrath/characters/avatar/lamina-polida"
+  },
+  "Cristal Lapidado": {
+    "file": "/items/cristal-lapidado.webp",
+    "publicId": "dolrath/characters/avatar/cristal-lapidado"
+  },
+  "Joia Lapidada": {
+    "file": "/items/joia-lapidada.webp",
+    "publicId": "dolrath/characters/avatar/joia-lapidada"
+  },
+  "Tábua Aparelhada": {
+    "file": "/items/tabua-aparelhada.webp",
+    "publicId": "dolrath/characters/avatar/tabua-aparelhada"
+  },
+  "Verniz de Ent": {
+    "file": "/items/verniz-de-ent.webp",
+    "publicId": "dolrath/characters/avatar/verniz-de-ent"
+  },
+  "Couro Curtido": {
+    "file": "/items/couro-curtido.webp",
+    "publicId": "dolrath/characters/avatar/couro-curtido"
+  },
+  "Tecido de Linho": {
+    "file": "/items/tecido-de-linho.webp",
+    "publicId": "dolrath/characters/avatar/tecido-de-linho"
+  },
+  "Farinha": {
+    "file": "/items/farinha.webp",
+    "publicId": "dolrath/characters/avatar/farinha"
+  },
+  "Extrato Herbal": {
+    "file": "/items/extrato-herbal.webp",
+    "publicId": "dolrath/characters/avatar/extrato-herbal"
+  },
+  "Essência de Mana": {
+    "file": "/items/essencia-de-mana.webp",
+    "publicId": "dolrath/characters/avatar/essencia-de-mana"
+  },
+  "Extrato de Raiz": {
+    "file": "/items/extrato-de-raiz.webp",
+    "publicId": "dolrath/characters/avatar/extrato-de-raiz"
+  },
+  "Pão": {
+    "file": "/items/pao.webp",
+    "publicId": "dolrath/characters/avatar/pao"
+  },
+  "Assado da Fazenda": {
+    "file": "/items/assado-da-fazenda.webp",
+    "publicId": "dolrath/characters/avatar/assado-da-fazenda"
+  },
+  "Salada de Ervas": {
+    "file": "/items/salada-de-ervas.webp",
+    "publicId": "dolrath/characters/avatar/salada-de-ervas"
+  },
+  "Torta de Cogumelo": {
+    "file": "/items/torta-de-cogumelo.webp",
+    "publicId": "dolrath/characters/avatar/torta-de-cogumelo"
+  },
+  "Ensopado Rústico": {
+    "file": "/items/ensopado-rustico.webp",
+    "publicId": "dolrath/characters/avatar/ensopado-rustico"
+  },
+  "Banquete do Aventureiro": {
+    "file": "/items/banquete-do-aventureiro.webp",
+    "publicId": "dolrath/characters/avatar/banquete-do-aventureiro"
+  },
+  "Festim do Caçador": {
+    "file": "/items/festim-do-cacador.webp",
+    "publicId": "dolrath/characters/avatar/festim-do-cacador"
+  },
+  "Salteado do Pescador": {
+    "file": "/items/salteado-do-pescador.webp",
+    "publicId": "dolrath/characters/avatar/salteado-do-pescador"
+  },
+  "Caldeirada Arcana": {
+    "file": "/items/caldeirada-arcana.webp",
+    "publicId": "dolrath/characters/avatar/caldeirada-arcana"
+  },
+  "Cozido do Baluarte": {
+    "file": "/items/cozido-do-baluarte.webp",
+    "publicId": "dolrath/characters/avatar/cozido-do-baluarte"
+  },
+  "Semente de Trigo": {
+    "file": "/items/semente-de-trigo.webp",
+    "publicId": "dolrath/characters/avatar/semente-de-trigo"
+  },
+  "Semente de Erva Medicinal": {
+    "file": "/items/semente-de-erva-medicinal.webp",
+    "publicId": "dolrath/characters/avatar/semente-de-erva-medicinal"
+  },
+  "Semente de Linho": {
+    "file": "/items/semente-de-linho.webp",
+    "publicId": "dolrath/characters/avatar/semente-de-linho"
+  },
+  "Picareta do Minerador": {
+    "file": "/items/picareta-do-minerador.webp",
+    "publicId": "dolrath/characters/avatar/picareta-do-minerador"
+  },
+  "Foice da Herborista": {
+    "file": "/items/foice-da-herborista.webp",
+    "publicId": "dolrath/characters/avatar/foice-da-herborista"
+  },
+  "Machado do Lenhador": {
+    "file": "/items/machado-do-lenhador.webp",
+    "publicId": "dolrath/characters/avatar/machado-do-lenhador"
+  },
+  "Vara de Pesca": {
+    "file": "/items/vara-de-pesca.webp",
+    "publicId": "dolrath/characters/avatar/vara-de-pesca"
+  },
+  "Faca de Caça": {
+    "file": "/items/faca-de-caca.webp",
+    "publicId": "dolrath/characters/avatar/faca-de-caca"
+  },
+  "Traje do Minerador": {
+    "file": "/items/traje-do-minerador.webp",
+    "publicId": "dolrath/characters/avatar/traje-do-minerador"
+  },
+  "Traje da Herborista": {
+    "file": "/items/traje-da-herborista.webp",
+    "publicId": "dolrath/characters/avatar/traje-da-herborista"
+  },
+  "Traje do Lenhador": {
+    "file": "/items/traje-do-lenhador.webp",
+    "publicId": "dolrath/characters/avatar/traje-do-lenhador"
+  },
+  "Traje do Pescador": {
+    "file": "/items/traje-do-pescador.webp",
+    "publicId": "dolrath/characters/avatar/traje-do-pescador"
+  },
+  "Traje do Caçador": {
+    "file": "/items/traje-do-cacador.webp",
+    "publicId": "dolrath/characters/avatar/traje-do-cacador"
   }
 }

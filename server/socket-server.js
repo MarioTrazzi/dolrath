@@ -5,7 +5,7 @@ const { Server } = require('socket.io')
 const { getStaminaCost, checkStaminaLevel, calculateStaminaRegeneration } = require('./staminaSystem')
 
 // 🐉 Modo treino - bot monstro que joga pelas regras do PvP
-const { spawnTrainingBot, MONSTERS } = require('./training-bot')
+const { spawnTrainingBot, MONSTERS, DEFAULT_TRAINING_OPPONENT_KEY } = require('./training-bot')
 
 // ⚔️ MODELO DE COMBATE ENXUTO (fonte da verdade): poder × sorte × (1−DR), mitigação
 // proporcional, levers por classe (poder/armadura/hp/evasão) escalados por nível+gear.
@@ -468,13 +468,18 @@ io.on('connection', (socket) => {
       // de classe/nível/equipamento. HP passa a vir dos levers (PROFILE.hp × escala), não
       // mais dos atributos. O cliente já envia class/level/equipment no payload.
       const { levers, cls, gearTier } = derivePlayerLevers(player)
-      player.levers = levers
-      player.baseLevers = levers // guardado p/ reverter o buff de transformação
+      // Treino: Gárgula / Leviatã aplicam leverMult após o peer de gear
+      const trainMult = Number(player.trainingLeverMult) || 1
+      const finalLevers = trainMult !== 1
+        ? { ...levers, power: levers.power * trainMult, armor: levers.armor * trainMult, hp: levers.hp * trainMult }
+        : levers
+      player.levers = finalLevers
+      player.baseLevers = finalLevers // guardado p/ reverter o buff de transformação
       player.combatClass = cls
       player.gearTier = gearTier
       // 🌳 Vitalidade/Reservas Arcanas (maxHpPct/maxMpPct): passivas permanentes da árvore.
       const joinUnlocks = getUnlocksFor(player)
-      player.maxHp = Math.round(levers.hp * (1 + joinUnlocks.passives.maxHpPct))
+      player.maxHp = Math.round(finalLevers.hp * (1 + joinUnlocks.passives.maxHpPct))
       player.hp = player.maxHp
       player.fightStaminaSpent = 0
       player.initialHp = player.maxHp
@@ -528,11 +533,11 @@ io.on('connection', (socket) => {
     if (training && isCreator && role === RoomRole.FIGHTER && !room.botSpawned) {
       room.isTraining = true
       room.botSpawned = true
-      const monsterKey = MONSTERS[monster] ? monster : 'goblin'
+      const monsterKey = MONSTERS[monster] ? monster : DEFAULT_TRAINING_OPPONENT_KEY
 
       room.combatLog.push({
         type: 'system',
-        message: `🏟️ Modo Treino! Um ${MONSTERS[monsterKey].name} se aproxima... (sem recompensas PvP)`,
+        message: `🏟️ Treino · ${MONSTERS[monsterKey].name} (peer ${MONSTERS[monsterKey].gearLabel}${MONSTERS[monsterKey].unbeatable ? ' · imbatível' : ''}) — sem recompensas PvP`,
         timestamp: new Date()
       })
 

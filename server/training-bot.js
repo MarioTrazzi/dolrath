@@ -1,132 +1,31 @@
-// 🐉 MODO TREINO - Bot monstro que joga pelas mesmas regras do PvP
-// O bot conecta como um cliente Socket.IO real no próprio servidor,
-// então todo o fluxo de combate (ready, iniciativa, ações, defesa, dados)
-// passa pelos mesmos handlers do PvP — zero duplicação de regras.
+// 🐉 MODO TREINO — bot monstro como peer PvP (mesmo nível, força via gear DUO→PEN).
+// Conecta como cliente Socket.IO real; fluxo = mesmos handlers do PvP.
 
 const { io } = require('socket.io-client')
+const {
+  getTrainingOpponent,
+  syntheticPeerEquipment,
+  syntheticPeerAttrs,
+  TRAINING_OPPONENTS_BY_KEY,
+  DEFAULT_TRAINING_OPPONENT_KEY,
+} = require('./trainingOpponents')
 
-// ============================================================
-// Catálogo de monstros (stats escalam com o nível do jogador)
-// ============================================================
-
-const MONSTERS = {
-  goblin: {
-    name: 'Goblin Salteador',
-    race: 'Goblin',
-    class: 'Salteador',
-    emoji: '🧌',
-    difficulty: 'Fácil',
-    scale: (L) => ({
-      hp: 60 + 18 * L,
-      mp: 30,
-      stamina: 60,
-      str: 4 + Math.floor(1.5 * L),
-      agi: 6 + 2 * L,
-      int: 1,
-      def: 2 + L,
-      res: 1 + Math.floor(0.5 * L),
-    }),
-    behavior: {
-      attackWeights: { light_attack: 4, heavy_attack: 1, special_attack: 0 },
-      dodgeChance: 0.7,
-    },
-  },
-  wolf: {
-    name: 'Lobo das Sombras',
-    race: 'Fera',
-    class: 'Lobo',
-    emoji: '🐺',
-    difficulty: 'Médio',
-    scale: (L) => ({
-      hp: 80 + 22 * L,
-      mp: 30,
-      stamina: 80,
-      str: 6 + 2 * L,
-      agi: 8 + Math.floor(2.5 * L),
-      int: 2,
-      def: 3 + Math.floor(1.2 * L),
-      res: 2 + Math.floor(0.8 * L),
-    }),
-    behavior: {
-      attackWeights: { light_attack: 3, heavy_attack: 2, special_attack: 0 },
-      dodgeChance: 0.85,
-    },
-  },
-  orc: {
-    name: 'Orc Berserker',
-    race: 'Orc',
-    class: 'Berserker',
-    emoji: '👹',
-    difficulty: 'Médio',
-    scale: (L) => ({
-      hp: 110 + 26 * L,
-      mp: 30,
-      stamina: 90,
-      str: 9 + Math.floor(2.5 * L),
-      agi: 3 + L,
-      int: 1,
-      def: 5 + Math.floor(1.5 * L),
-      res: 3 + L,
-    }),
-    behavior: {
-      attackWeights: { light_attack: 1, heavy_attack: 4, special_attack: 0 },
-      dodgeChance: 0.3,
-    },
-  },
-  golem: {
-    name: 'Golem de Pedra',
-    race: 'Constructo',
-    class: 'Golem',
-    emoji: '🗿',
-    difficulty: 'Difícil',
-    scale: (L) => ({
-      hp: 150 + 30 * L,
-      mp: 30,
-      stamina: 100,
-      str: 8 + 2 * L,
-      agi: 1 + Math.floor(0.5 * L),
-      int: 2,
-      def: 9 + Math.floor(2.5 * L),
-      res: 6 + 2 * L,
-    }),
-    behavior: {
-      attackWeights: { light_attack: 1, heavy_attack: 3, special_attack: 0 },
-      dodgeChance: 0.05,
-    },
-  },
-  dragon: {
-    name: 'Dragão Ancião',
-    race: 'Dragão',
-    class: 'Ancião',
-    emoji: '🐉',
-    difficulty: 'Chefe',
-    scale: (L) => ({
-      hp: 180 + 35 * L,
-      mp: 100 + 10 * L,
-      stamina: 120,
-      str: 10 + 3 * L,
-      agi: 6 + Math.floor(1.5 * L),
-      int: 8 + Math.floor(2.5 * L),
-      def: 7 + 2 * L,
-      res: 6 + Math.floor(1.5 * L),
-    }),
-    behavior: {
-      attackWeights: { light_attack: 1, heavy_attack: 2, special_attack: 2 },
-      dodgeChance: 0.5,
-    },
-  },
-}
+// Compat: socket-server ainda importa MONSTERS[key]
+const MONSTERS = TRAINING_OPPONENTS_BY_KEY
 
 const DICE_BY_ACTION = {
   light_attack: 6,
-  heavy_attack: 10,
-  special_attack: 20,
+  heavy_attack: 8,
 }
 
 const STAMINA_BY_ACTION = {
   light_attack: 1,
   heavy_attack: 2,
-  special_attack: 4,
+}
+
+const MP_BY_ACTION = {
+  light_attack: 0,
+  heavy_attack: 8,
 }
 
 function randomDelay(min, max) {
@@ -144,50 +43,61 @@ function pickWeighted(weights) {
   return entries[0]?.[0] || 'light_attack'
 }
 
+/**
+ * Peer PvP sintético: nível do humano + 9 slots no gear-alvo.
+ * Levers vêm de derivePlayerLevers no join (classe + gear + attrs).
+ */
 function buildMonsterPlayer(monsterKey, playerLevel) {
-  const template = MONSTERS[monsterKey] || MONSTERS.goblin
+  const def = getTrainingOpponent(monsterKey)
   const level = Math.max(1, Number(playerLevel) || 1)
-  const s = template.scale(level)
+  const attrs = syntheticPeerAttrs(level)
+  const equipment = syntheticPeerEquipment(def.rarity, def.enhancementLevel)
+
+  // MP/stamina de sessão generosos o bastante para uma luta (faucet de treino)
+  const maxMp = 60 + level * 4 + attrs.int
+  const maxStamina = 120 + attrs.agi * 2 + attrs.def * 2
 
   return {
-    id: `monster_${monsterKey}_${Date.now()}`,
-    name: template.name,
+    id: `monster_${def.key}_${Date.now()}`,
+    name: def.name,
     level,
-    race: template.race,
-    class: template.class,
-    hp: s.hp,
-    maxHp: s.hp,
-    mp: s.mp,
-    maxMp: s.mp,
-    stamina: s.stamina,
-    maxStamina: s.stamina,
-    attack: s.str,
-    defense: s.def,
-    strength: s.str,
-    agility: s.agi,
-    intelligence: s.int,
-    resistance: s.res,
+    race: def.race,
+    class: def.classNamePt,
+    hp: 100, // sobrescrito pelos levers no join
+    maxHp: 100,
+    mp: maxMp,
+    maxMp,
+    stamina: maxStamina,
+    maxStamina,
+    attack: attrs.str,
+    defense: attrs.def,
+    strength: attrs.str,
+    agility: attrs.agi,
+    intelligence: attrs.int,
+    resistance: Math.floor(attrs.def * 0.8),
     critical: 1.0,
     speed: 2.5,
-    experience: 0, // perde empates de iniciativa para o jogador
-    equipment: {},
-    avatar: null,
-    avatarEmoji: template.emoji,
+    experience: 0,
+    attributes: attrs,
+    baseStats: attrs,
+    equipment,
+    avatar: def.image,
+    avatarEmoji: def.emoji,
     equipmentMap: {},
+    trainingLeverMult: def.leverMult || 1,
+    trainingGearLabel: def.gearLabel,
+    trainingUnbeatable: !!def.unbeatable,
+    skillTree: null, // legado → Ataque de Classe liberado
     isReady: false,
     isConnected: true,
     isAlive: true,
   }
 }
 
-// ============================================================
-// Bot: conecta na própria porta e joga a sala de treino
-// ============================================================
-
 function spawnTrainingBot({ roomId, port, playerLevel, monsterKey }) {
-  const template = MONSTERS[monsterKey] || MONSTERS.goblin
-  const monster = buildMonsterPlayer(monsterKey, playerLevel)
-  const behavior = template.behavior
+  const def = getTrainingOpponent(monsterKey)
+  const monster = buildMonsterPlayer(def.key, playerLevel)
+  const behavior = { attackWeights: { ...def.attackWeights } }
 
   const socket = io(`http://localhost:${port}`, {
     transports: ['websocket'],
@@ -198,7 +108,6 @@ function spawnTrainingBot({ roomId, port, playerLevel, monsterKey }) {
 
   let isReady = false
   let rolledInitiative = false
-  let rolledDice = false
   let lastPhase = null
   let finished = false
 
@@ -220,11 +129,10 @@ function spawnTrainingBot({ roomId, port, playerLevel, monsterKey }) {
     socket.disconnect()
   }
 
-  // Trava de segurança: bot nunca vive mais que 30 minutos
   after(30 * 60 * 1000, () => shutdown('tempo máximo de treino'))
 
   socket.on('connect', () => {
-    log('entrando na arena de treino')
+    log(`entrando (peer ${def.gearLabel}${def.unbeatable ? ' · imbatível' : ''})`)
     socket.emit('join_room', { roomId, player: monster, isCreator: false, role: 'fighter' })
   })
 
@@ -245,7 +153,6 @@ function spawnTrainingBot({ roomId, port, playerLevel, monsterKey }) {
     const fighters = room.participants?.fighters || []
     const me = room.player1?.id === monster.id ? room.player1 : room.player2?.id === monster.id ? room.player2 : null
 
-    // Se o bot virou o único lutador (jogador saiu), encerrar para a sala ser limpa
     if (fighters.length === 1 && fighters[0]?.id === monster.id) {
       return shutdown('jogador saiu da sala')
     }
@@ -276,57 +183,38 @@ function spawnTrainingBot({ roomId, port, playerLevel, monsterKey }) {
       }
 
       case 'player_turn': {
-        rolledDice = false
         if (room.currentTurn === monster.id && phaseChanged) {
-          after(randomDelay(2000, 3500), () => {
-            // Escolher ataque respeitando MP/stamina disponíveis
+          after(randomDelay(1800, 3200), () => {
             const weights = { ...behavior.attackWeights }
-            if (me.mp < 15) weights.special_attack = 0
-            if (me.stamina < STAMINA_BY_ACTION.special_attack) weights.special_attack = 0
-            if (me.stamina < STAMINA_BY_ACTION.heavy_attack) weights.heavy_attack = 0
+            if ((me.mp || 0) < MP_BY_ACTION.heavy_attack) weights.heavy_attack = 0
+            if ((me.stamina || 0) < STAMINA_BY_ACTION.heavy_attack) weights.heavy_attack = 0
 
-            const action = me.stamina < 1 ? 'light_attack' : pickWeighted(weights)
-            const mpCost = action === 'special_attack' ? 15 : 0
+            const action = (me.stamina || 0) < 1
+              ? 'light_attack'
+              : pickWeighted(weights)
+            const staminaCost = STAMINA_BY_ACTION[action] || 1
+            const mpCost = MP_BY_ACTION[action] || 0
 
-            log(`atacando: ${action}`)
+            log(`atacando: ${action} (−${staminaCost} STA${mpCost ? ` · −${mpCost} MP` : ''})`)
             socket.emit('player_action', {
               playerId: monster.id,
               roomId,
               action,
               diceType: DICE_BY_ACTION[action],
               mpCost,
-              staminaCost: STAMINA_BY_ACTION[action],
+              staminaCost,
             })
           })
         }
         break
       }
 
-      case 'opponent_reaction': {
-        // Defesa passiva — servidor resolve sem reação do bot
+      case 'dice_roll':
         break
-      }
-
-      case 'dice_roll': {
-        if (room.pendingAction && !rolledDice) {
-          rolledDice = true
-          after(randomDelay(1800, 3200), () => {
-            log(`rolando d${room.pendingAction.diceType}`)
-            socket.emit('roll_dice', {
-              playerId: monster.id,
-              roomId,
-              sides: room.pendingAction.diceType,
-              action: room.pendingAction.action,
-            })
-          })
-        }
-        break
-      }
 
       case 'combat_end': {
         const won = room.winner === monster.id
         log(won ? 'venceu o treino!' : 'foi derrotado no treino!')
-        // Dar tempo do jogador ver o resultado antes do bot sair
         after(15000, () => shutdown('combate encerrado'))
         break
       }
@@ -336,4 +224,9 @@ function spawnTrainingBot({ roomId, port, playerLevel, monsterKey }) {
   return { monsterId: monster.id, shutdown }
 }
 
-module.exports = { spawnTrainingBot, MONSTERS }
+module.exports = {
+  spawnTrainingBot,
+  MONSTERS,
+  getTrainingOpponent,
+  DEFAULT_TRAINING_OPPONENT_KEY,
+}

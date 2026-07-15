@@ -147,8 +147,8 @@ export function segmentCountForTrail(nodeCount: number): number {
 }
 
 /**
- * Remapeia a trilha zigzag do SVG para um caminho vertical (sempre pra cima),
- * com serpenteio em X — usado pelo fallback SVG; treadmill não desenha a trilha.
+ * Trilha no mapa único (pan, sem tiling): começa bem embaixo, zigzag largo
+ * nas laterais, boss no topo ao centro. Coordenadas em % do mapa (x/y 0–100).
  */
 export function buildWalkPathPoints(rooms: number, minorNodes: number): MapPoint[] {
   const seq: { kind: NodeKind; tier: number }[] = [{ kind: 'start', tier: 0 }]
@@ -161,10 +161,16 @@ export function buildWalkPathPoints(rooms: number, minorNodes: number): MapPoint
   const last = seq.length - 1
   return seq.map((n, i) => {
     const t = last > 0 ? i / last : 0
-    const y = 92 - t * 84
+    // Base ~94% → topo ~8% (boss)
+    const y = 94 - t * 86
     let x = 50
-    if (i > 0 && i < last) {
-      x = 50 + (i % 2 === 1 ? -14 : 14) * (0.55 + 0.45 * Math.sin(i * 1.7))
+    if (i === 0 || i === last) {
+      x = 50
+    } else {
+      // Laterais amplas (~22% / 78%) com leve variação pra não parecer grade
+      const side = i % 2 === 1 ? -1 : 1
+      const amp = 28 * (0.85 + 0.15 * Math.sin(i * 1.3))
+      x = 50 + side * amp
     }
     return { x, y, kind: n.kind, tier: n.tier }
   })

@@ -603,7 +603,7 @@ export default function DungeonRun({
 
   // ---------- Mapa de exploração (trilha de nós) ----------
   // entrada → (nós menores + sala principal) × salas → covil do boss.
-  // WalkScene (Anterra): path vertical; fallback SVG: zigzag clássico.
+  // WalkScene: pan sobre mapa único; fallback SVG: zigzag clássico.
   const useWalkScene = walkSceneEnabled(dungeon.id)
   const trailPoints = useMemo(
     () =>
@@ -2856,6 +2856,8 @@ export default function DungeonRun({
               dungeonId={dungeon.id}
               accent={dungeon.accent}
               mode={walkMode}
+              nodeIndex={tokenIdx}
+              pathPoints={trailPoints}
               avatar={character.avatar}
               trailMarks={walkTrailMarks}
               nextIsBoss={nextIsBoss}

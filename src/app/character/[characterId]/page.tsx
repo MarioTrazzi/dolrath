@@ -693,7 +693,7 @@ export default function CharacterDetailsPage() {
                   </div>
                   <div className="h-[7px] overflow-hidden rounded-[2px] border border-black/70 bg-[#101013]">
                     <div
-                      className="h-full bg-gradient-to-r from-[#8a6d3b] to-[#e7c682] transition-all"
+                      className="h-full bg-gradient-to-r from-[#9b1c1c] via-[#c45c1a] to-[#e7c682] transition-all"
                       style={{
                         width: `${
                           character.nextLevelExperience

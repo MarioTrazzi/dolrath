@@ -1,6 +1,7 @@
 /**
  * Espelho CJS de src/lib/trainingOpponents.ts — manter sincronizado.
- * Usado pelo socket / training-bot (Node puro).
+ * Usado pelo socket / training-bot (Node puro). A documentação do modelo (por que o peer
+ * espelha o jogador e como o difficultyMult é calibrado) está no arquivo TS.
  */
 
 const TRAINING_OPPONENTS = [
@@ -9,15 +10,14 @@ const TRAINING_OPPONENTS = [
     name: 'Lobo Faminto',
     dungeonLabel: 'Floresta Sombria',
     difficultyLabel: 'Fácil',
-    gearLabel: 'DUO',
     image: '/monsters/lobo-faminto.webp',
     emoji: '🐺',
     combatClass: 'rogue',
     classNamePt: 'Ladino',
     race: 'Fera',
-    rarity: 'RARE',
-    enhancementLevel: 17,
-    description: 'Peer com gear DUO — ótimo para aquecer.',
+    difficultyMult: 0.8,
+    winRateLabel: '~70%',
+    description: 'Espelho seu a 80% — rápido e esquivo. Ótimo para aquecer.',
     attackWeights: { light_attack: 4, heavy_attack: 2 },
   },
   {
@@ -25,15 +25,14 @@ const TRAINING_OPPONENTS = [
     name: 'Golem de Pedra',
     dungeonLabel: 'Caverna de Cristal',
     difficultyLabel: 'Médio',
-    gearLabel: 'TRI',
     image: '/monsters/golem-de-pedra.webp',
     emoji: '🗿',
     combatClass: 'warrior',
     classNamePt: 'Guerreiro',
     race: 'Constructo',
-    rarity: 'EPIC',
-    enhancementLevel: 18,
-    description: 'Peer com gear TRI — nível típico da arena.',
+    difficultyMult: 0.9,
+    winRateLabel: '~50%',
+    description: 'Espelho seu a 90% — couraçado. Luta parelha de verdade.',
     attackWeights: { light_attack: 2, heavy_attack: 4 },
   },
   {
@@ -41,15 +40,14 @@ const TRAINING_OPPONENTS = [
     name: 'Crocodilo Ancião',
     dungeonLabel: 'Pântano Maldito',
     difficultyLabel: 'Difícil',
-    gearLabel: 'IV',
     image: '/monsters/crocodilo-anciao.webp',
     emoji: '🐊',
     combatClass: 'monk',
     classNamePt: 'Monge',
     race: 'Réptil',
-    rarity: 'LEGENDARY',
-    enhancementLevel: 19,
-    description: 'Peer com gear IV (TET) — pressão séria.',
+    difficultyMult: 1.08,
+    winRateLabel: '~30%',
+    description: 'Espelho seu reforçado — pressão séria, exige o kit todo.',
     attackWeights: { light_attack: 2, heavy_attack: 3 },
   },
   {
@@ -57,16 +55,14 @@ const TRAINING_OPPONENTS = [
     name: 'Gárgula de Obsidiana',
     dungeonLabel: 'Ruínas Arcanas',
     difficultyLabel: 'Muito difícil',
-    gearLabel: 'IV+',
     image: '/monsters/gargula-de-obsidiana.webp',
     emoji: '🦅',
     combatClass: 'mage',
     classNamePt: 'Mago',
     race: 'Constructo',
-    rarity: 'LEGENDARY',
-    enhancementLevel: 19,
-    leverMult: 1.1,
-    description: 'Peer IV reforçado — quase no teto atual.',
+    difficultyMult: 1.31,
+    winRateLabel: '~15%',
+    description: 'Espelho seu bem acima — só cai com sorte e uso perfeito.',
     attackWeights: { light_attack: 1, heavy_attack: 4 },
   },
   {
@@ -74,17 +70,15 @@ const TRAINING_OPPONENTS = [
     name: 'Leviatã do Abismo',
     dungeonLabel: 'Abismo (em breve)',
     difficultyLabel: 'Imbatível',
-    gearLabel: 'PEN',
     image: '/monsters/leviatan-do-abismo.webp',
     emoji: '🦑',
     combatClass: 'warrior',
     classNamePt: 'Guerreiro',
     race: 'Leviatã',
-    rarity: 'LEGENDARY',
-    enhancementLevel: 20,
-    leverMult: 1.35,
+    difficultyMult: 1.64,
+    winRateLabel: '~1%',
     unbeatable: true,
-    description: 'Easter egg — peer PEN. Praticamente imbatível · sem recompensa.',
+    description: 'Easter egg — praticamente imbatível. Sem recompensa.',
     attackWeights: { light_attack: 1, heavy_attack: 5 },
   },
 ]
@@ -97,17 +91,9 @@ function getTrainingOpponent(key) {
   return TRAINING_OPPONENTS_BY_KEY[DEFAULT_TRAINING_OPPONENT_KEY]
 }
 
-function syntheticPeerEquipment(rarity, enhancementLevel) {
-  return Array.from({ length: 9 }, (_, i) => ({
-    id: `synth_${i}`,
-    rarity,
-    enhancementLevel,
-    item: { rarity, enhancementLevel },
-  }))
-}
-
-function syntheticPeerAttrs(level) {
-  const base = 8 + Math.floor(Math.max(1, level) * 0.7)
+/** Fallback defensivo: só vale se o payload do jogador não trouxer atributos. */
+function fallbackPeerAttrs(level) {
+  const base = 8 + Math.floor(Math.max(1, level) * 0.2)
   return { str: base, agi: base, int: base, def: base }
 }
 
@@ -116,6 +102,5 @@ module.exports = {
   TRAINING_OPPONENTS_BY_KEY,
   DEFAULT_TRAINING_OPPONENT_KEY,
   getTrainingOpponent,
-  syntheticPeerEquipment,
-  syntheticPeerAttrs,
+  fallbackPeerAttrs,
 }

@@ -719,8 +719,9 @@ export default function CombatLobbyPage() {
               </button>
             </div>
             <p className="text-sm text-[#8a8a90] mb-4">
-              Treino na mesma arena PvP. O adversário entra no <span className="text-[#c9b896]">seu nível</span> —
-              a dificuldade é o gear do peer (DUO → PEN). Sem recompensas.
+              Treino na mesma arena PvP. O adversário é um <span className="text-[#c9b896]">espelho seu</span> —
+              mesmo nível, mesmos atributos, mesmo equipamento. A dificuldade é o quanto ele te supera,
+              então o desafio vale o mesmo em qualquer ponto da progressão. Sem recompensas.
             </p>
 
             {showTrainingPicker && (
@@ -760,6 +761,11 @@ export default function CombatLobbyPage() {
                         {m.difficultyLabel}
                       </div>
                       <div className="font-bold text-[#ece7da] text-sm leading-tight drop-shadow">{m.name}</div>
+                      {/* O rótulo vira promessa verificável: o mult e a chance saem do
+                          training-peer-sim, medidos com o motor de combate real. */}
+                      <div className="mt-1 text-[9px] text-[#a8a29a] tabular-nums">
+                        {Math.round(m.difficultyMult * 100)}% do seu poder · vitória {m.winRateLabel}
+                      </div>
                     </div>
                   </button>
                 ))}

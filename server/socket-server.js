@@ -65,13 +65,16 @@ function readAttrs(player) {
   }
 }
 
-function derivePlayerLevers(player) {
+// `gearTierOverride` existe só para o TREINO: o peer espelha o gearTier REAL do humano
+// em vez de derivar de um equipamento sintético (ver trainingOpponents). O caller é quem
+// gateia por room.isTraining — nunca aceite este valor do payload em sala ranqueada.
+function derivePlayerLevers(player, gearTierOverride) {
   const cls = normalizeClass(player.class)
   const level = Math.max(1, Number(player.level) || 1)
   const equipped = Array.isArray(player.equipment)
     ? player.equipment.map((e) => ({ rarity: e?.item?.rarity ?? e?.rarity, enhancementLevel: e?.enhancementLevel }))
     : []
-  const gearTier = CM.deriveGearTier(equipped)
+  const gearTier = gearTierOverride != null ? gearTierOverride : CM.deriveGearTier(equipped)
   const attrs = readAttrs(player)
 
   if (cls) {
@@ -467,17 +470,21 @@ io.on('connection', (socket) => {
       // ⚔️ MODELO ENXUTO: computar os levers de combate (poder/armadura/hp/evasão) a partir
       // de classe/nível/equipamento. HP passa a vir dos levers (PROFILE.hp × escala), não
       // mais dos atributos. O cliente já envia class/level/equipment no payload.
-      const { levers, cls, gearTier } = derivePlayerLevers(player)
-      // Treino: Gárgula / Leviatã aplicam leverMult após o peer de gear.
-      // 🔒 SÓ em sala de treino: `trainingLeverMult` vem do PAYLOAD DO CLIENTE, e sem
-      // este gate um cliente modificado mandava `trainingLeverMult: 5` numa sala
-      // ranqueada e ficava 5× mais forte (power/armor/hp) — direto em ouro e em pontos
-      // de ranking, que pagam DOL no top 10. Na sala de treino não há recompensa, então
-      // forjá-lo lá não compra nada. O bot entra DEPOIS de `room.isTraining = true`.
-      const trainMult = room.isTraining ? (Number(player.trainingLeverMult) || 1) : 1
-      const finalLevers = trainMult !== 1
-        ? { ...levers, power: levers.power * trainMult, armor: levers.armor * trainMult, hp: levers.hp * trainMult }
-        : levers
+      // 🏟️ TREINO: o peer ESPELHA o poder do humano — mesmo gearTier (aqui) e mesmos
+      // atributos (o bot copia no payload) — e a dificuldade é o `difficultyMult`.
+      // 🔒 Os dois campos vêm do PAYLOAD DO CLIENTE e só valem com room.isTraining, onde
+      // não há recompensa a capturar. Sem este gate, um cliente modificado mandava
+      // `trainingLeverMult: 5` numa sala ranqueada e ficava 5× mais forte (confirmado em
+      // QA: pow 716 vs 143) — direto em ouro e em pontos que pagam DOL no top 10.
+      const training = room.isTraining === true
+      const mirrorTier = training && player.trainingTargetGearTier != null
+        ? Math.max(0, Math.min(1, Number(player.trainingTargetGearTier) || 0))
+        : undefined
+      const { levers, cls, gearTier } = derivePlayerLevers(player, mirrorTier)
+      const trainMult = training ? (Number(player.trainingLeverMult) || 1) : 1
+      // Escala SIMÉTRICA (power/armor/hp/K juntos), igual à transformação: é o que faz o
+      // multiplicador significar a mesma dificuldade em qualquer ponto da progressão.
+      const finalLevers = trainMult !== 1 ? CM.transformLevers(levers, trainMult) : levers
       player.levers = finalLevers
       player.baseLevers = finalLevers // guardado p/ reverter o buff de transformação
       player.combatClass = cls
@@ -540,17 +547,21 @@ io.on('connection', (socket) => {
       room.botSpawned = true
       const monsterKey = MONSTERS[monster] ? monster : DEFAULT_TRAINING_OPPONENT_KEY
 
+      const def = MONSTERS[monsterKey]
       room.combatLog.push({
         type: 'system',
-        message: `🏟️ Treino · ${MONSTERS[monsterKey].name} (peer ${MONSTERS[monsterKey].gearLabel}${MONSTERS[monsterKey].unbeatable ? ' · imbatível' : ''}) — sem recompensas PvP`,
+        message: `🏟️ Treino · ${def.name} — espelho seu a ${Math.round(def.difficultyMult * 100)}% (vitória ${def.winRateLabel})${def.unbeatable ? ' · imbatível' : ''} — sem recompensas PvP`,
         timestamp: new Date()
       })
 
+      // O peer espelha o poder do humano: o join ACIMA já derivou gearTier/levers dele.
       setTimeout(() => {
         spawnTrainingBot({
           roomId,
           port: PORT,
           playerLevel: player.level || 1,
+          playerGearTier: player.gearTier,
+          playerAttrs: readAttrs(player),
           monsterKey
         })
       }, 1000)

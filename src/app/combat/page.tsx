@@ -1218,7 +1218,7 @@ function CombatPageContent() {
           <div className="flex items-center">
             <h2 className="text-sm sm:text-lg font-bold">
               {isTraining && trainingDef
-                ? `🏟️ Treino · ${trainingDef.name} (peer ${trainingDef.gearLabel}${trainingDef.unbeatable ? ' · imbatível' : ''})`
+                ? `🏟️ Treino · ${trainingDef.name} (${Math.round(trainingDef.difficultyMult * 100)}% do seu poder${trainingDef.unbeatable ? ' · imbatível' : ''})`
                 : `⚔️ Combate PvP - Sala ${roomId}`}
               {isSpectator && <span className="ml-2 text-xs bg-blue-500/30 px-2 py-1 rounded-full">👁️ Espectador</span>}
               {isModerator && <span className="ml-2 text-xs bg-purple-500/30 px-2 py-1 rounded-full">🛡️ Moderador</span>}

@@ -1,12 +1,12 @@
-// 🐉 MODO TREINO — bot monstro como peer PvP (mesmo nível, força via gear DUO→PEN).
+// 🏟️ MODO TREINO — bot monstro como ESPELHO do jogador (mesmo nível, mesmos atributos,
+// mesmo gearTier), com a dificuldade vindo do `difficultyMult` da def.
 // Conecta como cliente Socket.IO real; fluxo = mesmos handlers do PvP.
 
 const { io } = require('socket.io-client')
 const CM = require('./combatModel')
 const {
   getTrainingOpponent,
-  syntheticPeerEquipment,
-  syntheticPeerAttrs,
+  fallbackPeerAttrs,
   TRAINING_OPPONENTS_BY_KEY,
   DEFAULT_TRAINING_OPPONENT_KEY,
 } = require('./trainingOpponents')
@@ -38,14 +38,21 @@ function pickWeighted(weights) {
 }
 
 /**
- * Peer PvP sintético: nível do humano + 9 slots no gear-alvo.
- * Levers vêm de derivePlayerLevers no join (classe + gear + attrs).
+ * Peer ESPELHO: nível, atributos e gearTier do humano; a força vem do difficultyMult.
+ *
+ * Antes o peer era sintético (9 slots num gear FIXO DUO→PEN + attrs 8+nível×0.7), e por
+ * isso um nv4 sem gear pegava um "Lobo · Fácil" com 3.3× a sua escala — morria em um
+ * golpe. Agora quem define o patamar é o próprio jogador, e o rótulo de dificuldade só
+ * diz o quanto o peer te supera.
+ *
+ * O servidor recomputa os levers no join (derivePlayerLevers + trainingTargetGearTier +
+ * trainingLeverMult, tudo gateado por room.isTraining) — este payload é só a entrada.
  */
-function buildMonsterPlayer(monsterKey, playerLevel) {
+function buildMonsterPlayer(monsterKey, playerLevel, playerGearTier, playerAttrs) {
   const def = getTrainingOpponent(monsterKey)
   const level = Math.max(1, Number(playerLevel) || 1)
-  const attrs = syntheticPeerAttrs(level)
-  const equipment = syntheticPeerEquipment(def.rarity, def.enhancementLevel)
+  const attrs = playerAttrs && typeof playerAttrs === 'object' ? { ...playerAttrs } : fallbackPeerAttrs(level)
+  const gearTier = Number.isFinite(Number(playerGearTier)) ? Number(playerGearTier) : 0
 
   // MP/stamina de sessão generosos o bastante para uma luta (faucet de treino)
   const maxMp = 60 + level * 4 + attrs.int
@@ -72,14 +79,15 @@ function buildMonsterPlayer(monsterKey, playerLevel) {
     critical: 1.0,
     speed: 2.5,
     experience: 0,
-    attributes: attrs,
+    attributes: attrs,   // espelho dos atributos do humano
     baseStats: attrs,
-    equipment,
+    equipment: [],       // sem gear próprio: o gearTier vem espelhado abaixo
     avatar: def.image,
     avatarEmoji: def.emoji,
     equipmentMap: {},
-    trainingLeverMult: def.leverMult || 1,
-    trainingGearLabel: def.gearLabel,
+    // Lidos pelo servidor SÓ em sala de treino (room.isTraining) — ver o join.
+    trainingTargetGearTier: gearTier,
+    trainingLeverMult: def.difficultyMult || 1,
     trainingUnbeatable: !!def.unbeatable,
     skillTree: null, // legado → Ataque de Classe liberado
     isReady: false,
@@ -88,9 +96,9 @@ function buildMonsterPlayer(monsterKey, playerLevel) {
   }
 }
 
-function spawnTrainingBot({ roomId, port, playerLevel, monsterKey }) {
+function spawnTrainingBot({ roomId, port, playerLevel, playerGearTier, playerAttrs, monsterKey }) {
   const def = getTrainingOpponent(monsterKey)
-  const monster = buildMonsterPlayer(def.key, playerLevel)
+  const monster = buildMonsterPlayer(def.key, playerLevel, playerGearTier, playerAttrs)
   const behavior = { attackWeights: { ...def.attackWeights } }
 
   const socket = io(`http://localhost:${port}`, {
@@ -126,7 +134,7 @@ function spawnTrainingBot({ roomId, port, playerLevel, monsterKey }) {
   after(30 * 60 * 1000, () => shutdown('tempo máximo de treino'))
 
   socket.on('connect', () => {
-    log(`entrando (peer ${def.gearLabel}${def.unbeatable ? ' · imbatível' : ''})`)
+    log(`entrando (espelho a ${Math.round(def.difficultyMult * 100)}%${def.unbeatable ? ' · imbatível' : ''})`)
     socket.emit('join_room', { roomId, player: monster, isCreator: false, role: 'fighter' })
   })
 

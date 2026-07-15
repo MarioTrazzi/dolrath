@@ -431,9 +431,13 @@ export default function DungeonsPage() {
               whileHover={{ scale: 1.01 }}
               className="relative overflow-hidden rounded-[4px] border border-[#46464c] shadow-2xl shadow-black/60 group transition-colors hover:border-[#8a6d3b]"
             >
-              {/* Cenário em miniatura */}
+              {/* Cenário em miniatura — mesma arte de batalha + luzinhas */}
               <div className="absolute inset-0">
-                <DungeonBackdrop theme={dungeon.id} />
+                <DungeonBackdrop
+                  theme={dungeon.id}
+                  imageUrl={DUNGEON_BATTLE_BG[dungeon.id]}
+                  imageOverlayOpacity={0.25}
+                />
               </div>
               <div className="absolute inset-0 bg-black/30 group-hover:bg-black/15 transition-colors" />
 

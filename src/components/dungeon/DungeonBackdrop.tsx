@@ -211,7 +211,14 @@ export default function DungeonBackdrop({
 }: BackdropProps) {
   // Use custom image backdrop if provided
   if (imageUrl) {
-    return <ImageBackdrop src={imageUrl} overlayOpacity={imageOverlayOpacity} subtle={subtle} />
+    return (
+      <ImageBackdrop
+        src={imageUrl}
+        overlayOpacity={imageOverlayOpacity}
+        subtle={subtle}
+        theme={theme}
+      />
+    )
   }
 
   // Fall back to themed SVG backdrops

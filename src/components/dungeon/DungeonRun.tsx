@@ -1562,6 +1562,11 @@ export default function DungeonRun({
       return
     }
     if (kind === 'weapon' && !unlocks.classAttack) {
+      // No automático: nunca trava o turno — cai pro Golpe grátis.
+      if (auto) {
+        choosePlayerAttack('basic')
+        return
+      }
       showBanner('🔒', 'Aprenda o Ataque de Classe na árvore de habilidades!')
       return
     }
@@ -1678,6 +1683,14 @@ export default function DungeonRun({
   const useAbility = (def: SpecialDef) => {
     const m = monsterRef.current
     if (!m || stage !== 'playerSelect' || !transformRef.current) return
+    if (def.id === 'stunning_blow' && !unlocks.stunningBlow) {
+      showBanner('🔒', 'Aprenda o Golpe Atordoante na árvore de habilidades!')
+      return
+    }
+    if (def.kind === 'util' && !unlocks.formBuff) {
+      showBanner('🔒', 'Aprenda o buff da forma na árvore de habilidades!')
+      return
+    }
     const fx = combatFxRef.current
     if ((fx.cd[def.id] || 0) > 0) { showBanner('⏳', `${def.name} em recarga (${fx.cd[def.id]})`); return }
     const mpCost = def.cost.mp || 0
@@ -2464,14 +2477,28 @@ export default function DungeonRun({
   // decidir se vale gastar MP — o dano real ainda sai do luck multiplicativo (resolveHit).
   const estDamage = (kind: AttackKind) => playerPowerFor(kind) * LUCK_LO
 
-  // Melhor golpe PAGÁVEL agora, mas SEM desperdiçar MP num monstro quase morto:
-  // se o Golpe (grátis) já deve derrubá-lo, golpeia; senão usa o Ataque de Classe (8 MP).
+  // Melhor golpe DISPONÍVEL e pagável agora, sem desperdiçar MP num monstro quase morto:
+  // Golpe (grátis) se já deve derrubar; senão Ataque de Classe só se a árvore desbloqueou.
   const autoPickAttack = (): AttackKind => {
     const foeHp = monsterRef.current?.hp ?? Infinity
     if (foeHp <= estDamage('basic')) return 'basic'
-    if (mp >= ATTACKS.weapon.mp) return 'weapon'
+    if (unlocks.classAttack && mp >= effWeaponMp) return 'weapon'
     return 'basic'
   }
+
+  // Dano de referência do piloto: o melhor ataque básico/classe realmente liberado.
+  const autoRefDamage = () =>
+    estDamage(unlocks.classAttack ? 'weapon' : 'basic')
+
+  // Specials da forma filtradas como no menu manual (só o que a árvore já treinou).
+  const autoFormSpecials = (form: TransformationType): SpecialDef[] =>
+    getFormSpecials(form)
+      .filter(def => {
+        if (def.id === 'stunning_blow') return unlocks.stunningBlow
+        if (def.kind === 'util') return unlocks.formBuff
+        return true // assinatura: sempre disponível transformado
+      })
+      .map(def => applyRankPatch(def, unlocks, form))
 
   // Poção mais "justa" pro déficit: a MAIOR que restaura sem desperdiçar; se todas
   // passam do buraco, a menor disponível. Só restauradores puros (nada de buff/revive).
@@ -2497,6 +2524,7 @@ export default function DungeonRun({
 
     if (stage === 'playerSelect') return fire(() => {
       const alive = packRef.current.filter(m => m.hp > 0)
+      const refDmg = autoRefDamage()
       // Consumíveis automáticos (se o switch estiver ligado):
       if (autoConsumables) {
         // 1) Cura de emergência: HP baixo + poção de vida no inventário.
@@ -2504,8 +2532,8 @@ export default function DungeonRun({
           const potion = pickPotion('hp', effMaxHp - hpRef.current)
           if (potion) { useConsumable(potion); return }
         }
-        // 2) Repõe MP quando nem o golpe da arma cabe — habilita ataques mais fortes.
-        if (mp < ATTACKS.weapon.mp && mp < character.maxMp) {
+        // 2) Repõe MP só quando o Ataque de Classe está liberado e ainda não cabe no MP atual.
+        if (unlocks.classAttack && mp < effWeaponMp && mp < character.maxMp) {
           const mPotion = pickPotion('mp', character.maxMp - mp)
           if (mPotion) { useConsumable(mPotion); return }
         }
@@ -2514,19 +2542,19 @@ export default function DungeonRun({
       // 3) Transforma (1× por luta) — mas só se o PACOTE ainda tem luta pela frente (não
       // desperdiça a transformação num resto de encontro que cai em 1-2 golpes baratos).
       const packHp = alive.reduce((sum, m) => sum + m.hp, 0)
-      if (!transform && !transformedThisFightRef.current && transformForms.length > 0 && packHp > estDamage('weapon') * 2) {
+      if (!transform && !transformedThisFightRef.current && transformForms.length > 0 && packHp > refDmg * 2) {
         const cfg = TRANSFORMATION_CONFIG[transformForms[0]]
         if (cfg && mp >= cfg.cost.mp) { activateTransform(transformForms[0]); return }
       }
       // 4) Transformado: usa a HABILIDADE DE DANO da forma (d20) se pagável e fora da
-      // recarga — mas NUNCA em quem já cai com um Ataque de Classe: o especial vai no
+      // recarga — mas NUNCA em quem já cai com o melhor golpe liberado: o especial vai no
       // inimigo mais FORTE que ainda aguenta; o quase-morto é finalizado com golpe barato.
       if (transform) {
-        const specials = getFormSpecials(transform.type)
+        const specials = autoFormSpecials(transform.type)
         const dmgAbility = specials.find(d => d.kind === 'dmg')
         const dmgCd = dmgAbility ? (combatFxRef.current.cd[dmgAbility.id] || 0) : 0
         if (dmgAbility && dmgCd === 0 && mp >= (dmgAbility.cost.mp || 0)) {
-          const worthy = alive.filter(m => m.hp > estDamage('weapon'))
+          const worthy = alive.filter(m => m.hp > refDmg)
           if (worthy.length > 0) {
             const strongest = worthy.reduce((best, m) => (m.hp > best.hp ? m : best))
             if (strongest.id !== monsterRef.current?.id) setActiveTarget(strongest.id)
@@ -2534,10 +2562,9 @@ export default function DungeonRun({
             return
           }
           // Nenhum alvo "merece" o especial — guarda o MP e cai pros golpes baratos.
-        } else if (dmgAbility && packHp > estDamage('weapon') * 2) {
+        } else if (dmgAbility && packHp > refDmg * 2) {
           // 4b) Dano em recarga numa luta ainda longa: aproveita o turno com o UTILITÁRIO
-          // da forma (buff/cura, 8 MP) — sem re-aplicar por cima de um buff ativo e sem
-          // comprometer o MP do próximo especial de dano.
+          // da forma (buff/cura) — só se a árvore já liberou (autoFormSpecials filtra).
           const fx = combatFxRef.current
           const util = specials.find(d => d.kind === 'util')
           const utilCd = util ? (fx.cd[util.id] || 0) : 0
@@ -2550,7 +2577,7 @@ export default function DungeonRun({
         }
       }
       // 5) Golpes baratos: foca o inimigo MAIS FRACO vivo do pacote (atualiza o ref de
-      // forma síncrona) e ataca com o melhor golpe pagável sem desperdiçar MP.
+      // forma síncrona) e ataca com o melhor golpe liberado/pagável sem desperdiçar MP.
       const weak = weakestOf(packRef.current)
       if (weak && weak.id !== monsterRef.current?.id) setActiveTarget(weak.id)
       choosePlayerAttack(autoPickAttack())

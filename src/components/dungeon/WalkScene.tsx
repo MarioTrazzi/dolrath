@@ -90,20 +90,9 @@ function lerp(a: number, b: number, t: number) {
   return a + (b - a) * t
 }
 
-function easeOutCubic(t: number) {
-  return 1 - Math.pow(1 - t, 3)
-}
-
-/** Vasculhar: começa devagar, avança pouco — sensação de procurar. */
-function easeSearch(t: number) {
-  return 1 - Math.pow(1 - clamp(t, 0, 1), 1.65)
-}
-
-/** Dois “passos” de vasculhar no mesmo feeling do primeiro. */
-function easeSearchTwoBeats(t: number) {
+function easeInOutCubic(t: number) {
   const u = clamp(t, 0, 1)
-  if (u < 0.5) return 0.5 * easeSearch(u * 2)
-  return 0.5 + 0.5 * easeSearch((u - 0.5) * 2)
+  return u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2
 }
 
 function paintFallbackMap(
@@ -166,6 +155,9 @@ export default function WalkScene({
   const mapImgRef = useRef<HTMLImageElement | null>(null)
   const animRef = useRef(0)
   const segmentTRef = useRef(0)
+  /** Progresso exibido (suavizado) — evita spikes de velocidade. */
+  const displaySegRef = useRef(0)
+  const weaveRef = useRef({ x: 0, y: 0 })
   const camRef = useRef({ x: 0, y: 0 })
   const camReadyRef = useRef(false)
   const bobRef = useRef(0)
@@ -191,14 +183,18 @@ export default function WalkScene({
     if (mode === 'scroll') {
       approachDoneRef.current = false
       segmentTRef.current = 0
+      displaySegRef.current = 0
+      weaveRef.current = { x: 0, y: 0 }
     } else if (mode === 'approach') {
       approachDoneRef.current = false
-      // Continua de onde o scroll parou (não zera)
-      if (segmentTRef.current < SCROLL_FRACTION) {
+      // Continua de onde o scroll chegou (sem snap se já estiver lá)
+      if (segmentTRef.current < SCROLL_FRACTION - 0.02) {
         segmentTRef.current = SCROLL_FRACTION
       }
     } else if (mode === 'idle') {
       segmentTRef.current = 0
+      displaySegRef.current = 0
+      weaveRef.current = { x: 0, y: 0 }
       approachDoneRef.current = false
     }
   }, [mode])
@@ -277,7 +273,7 @@ export default function WalkScene({
       const pts = pathRef.current
       const lastIdx = Math.max(0, pts.length - 1)
 
-      // --- segmento: vasculhar lento → avistar ? → approach rápido ---
+      // --- alvo linear (velocidade estável); display segue com damping ---
       if (m === 'scroll') {
         segmentTRef.current = Math.min(
           SCROLL_FRACTION,
@@ -296,34 +292,44 @@ export default function WalkScene({
       }
 
       const rawSeg = m === 'idle' ? 0 : clamp(segmentTRef.current, 0, 1)
-      // Dois vasculhares (easeSearchTwoBeats) → estilingada curta (easeOut).
-      let segT: number
+      // Target de progresso: linear no vasculhar; easeInOut suave na estilingada
+      // (sem easeOut no início — evitava spike de velocidade ao avistar).
+      let targetSeg: number
       if (m === 'idle') {
-        segT = 0
+        targetSeg = 0
       } else if (rawSeg <= SCROLL_FRACTION) {
-        const u = SCROLL_FRACTION > 0 ? rawSeg / SCROLL_FRACTION : 0
-        segT = easeSearchTwoBeats(u) * SCROLL_FRACTION
+        targetSeg = rawSeg
       } else {
         const u = (rawSeg - SCROLL_FRACTION) / (1 - SCROLL_FRACTION)
-        segT = SCROLL_FRACTION + easeOutCubic(u) * (1 - SCROLL_FRACTION)
+        targetSeg = SCROLL_FRACTION + easeInOutCubic(u) * (1 - SCROLL_FRACTION)
       }
+
+      // Damping do progresso exibido (corta micro-spikes)
+      const segSmooth = 1 - Math.exp(-10 * dt)
+      displaySegRef.current = lerp(displaySegRef.current, targetSeg, segSmooth)
+      const segT = m === 'idle' ? 0 : displaySegRef.current
 
       const from = pointAt(idx)
       const to = pointAt(Math.min(idx + 1, lastIdx))
       let heroPctX = lerp(from.x, to.x, segT)
       let heroPctY = lerp(from.y, to.y, segT)
 
-      // Vasculhar: serpenteio em dois tempos; some ao avistar / no approach
-      if (m === 'scroll') {
-        const searchU = SCROLL_FRACTION > 0 ? rawSeg / SCROLL_FRACTION : 1
-        // Mantém weave nos dois beats; só amortece perto do spot
-        const weaveFade = searchU < SPOT_RATIO ? 1 : 1 - (searchU - SPOT_RATIO) / (1 - SPOT_RATIO)
-        const weaveAmp = Math.max(0, weaveFade) * 4.2
-        // Fase do 2º beat: direção de serpenteio um pouco diferente
-        const beat2 = searchU >= 0.5 ? 1 : 0
-        heroPctX += Math.sin(bobRef.current * (2.2 + beat2 * 0.5)) * weaveAmp
-        heroPctY += Math.sin(bobRef.current * 1.6) * 0.55 * weaveFade
+      // Vasculhar: dois arcos laterais contínuos (seno), sem troca brusca de fase
+      const searchU = m === 'scroll' && SCROLL_FRACTION > 0
+        ? clamp(rawSeg / SCROLL_FRACTION, 0, 1)
+        : m === 'approach' ? 1 : 0
+      const envelope = m === 'scroll' ? Math.sin(searchU * Math.PI) : 0
+      const targetWeaveX =
+        Math.sin(searchU * Math.PI * 2) * envelope * 2.8 +
+        Math.sin(bobRef.current * 2.05) * envelope * 1.1
+      const targetWeaveY = Math.sin(bobRef.current * 1.55) * envelope * 0.45
+      const weaveSmooth = 1 - Math.exp(-8 * dt)
+      weaveRef.current = {
+        x: lerp(weaveRef.current.x, targetWeaveX, weaveSmooth),
+        y: lerp(weaveRef.current.y, targetWeaveY, weaveSmooth),
       }
+      heroPctX += weaveRef.current.x
+      heroPctY += weaveRef.current.y
 
       // Progresso global (inclui segmento em andamento) para bias da câmera
       const baseProg = lastIdx > 0 ? idx / lastIdx : 0
@@ -354,8 +360,8 @@ export default function WalkScene({
         camRef.current = clampedTarget
         camReadyRef.current = true
       } else {
-        // follow suave; no fim “estica” um pouco mais rápido
-        const follow = progress > 0.85 ? 8 : 5
+        // Follow constante e suave (sem salto de taxa no fim)
+        const follow = m === 'approach' ? 6 : 4.5
         const k = 1 - Math.exp(-follow * dt)
         camRef.current = {
           x: lerp(camRef.current.x, clampedTarget.x, k),
@@ -415,14 +421,11 @@ export default function WalkScene({
       ctx.fillRect(heroScreenX - lightR, heroScreenY - lightR, lightR * 2, lightR * 2)
 
       // "?" só depois de avistar (fim do vasculhar / approach)
-      const searchU = m === 'scroll' && SCROLL_FRACTION > 0
-        ? rawSeg / SCROLL_FRACTION
-        : m === 'approach' || m === 'idle' ? 1 : 0
       const spotted = m === 'approach' || (m === 'scroll' && searchU >= SPOT_RATIO)
       const spotFade = m === 'approach'
         ? 1
         : m === 'scroll' && spotted
-          ? clamp((searchU - SPOT_RATIO) / (1 - SPOT_RATIO), 0, 1)
+          ? clamp((searchU - SPOT_RATIO) / Math.max(0.01, 1 - SPOT_RATIO), 0, 1)
           : 0
       if (spotted && spotFade > 0.05 && idx < lastIdx) {
         const next = pointAt(idx + 1)

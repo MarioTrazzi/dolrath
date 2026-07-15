@@ -2856,6 +2856,7 @@ export default function DungeonRun({
               dungeonId={dungeon.id}
               accent={dungeon.accent}
               mode={walkMode}
+              avatar={character.avatar}
               trailMarks={walkTrailMarks}
               nextIsBoss={nextIsBoss}
               onApproachComplete={handleWalkApproachComplete}

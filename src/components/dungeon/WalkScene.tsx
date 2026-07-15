@@ -23,12 +23,32 @@ export interface WalkSceneProps {
   dungeonId: DungeonId
   accent: string
   mode: WalkMode
+  /** Retrato do personagem (NFT) no card da trilha. */
+  avatar?: string | null
   /** Marks revelados atrás do herói (rastro). */
   trailMarks?: WalkTrailMark[]
   /** Próximo evento é boss? (ainda mostra ? até o card). */
   nextIsBoss?: boolean
   onApproachComplete?: () => void
   className?: string
+}
+
+function roundRectPath(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+) {
+  const rr = Math.min(r, w * 0.5, h * 0.5)
+  ctx.beginPath()
+  ctx.moveTo(x + rr, y)
+  ctx.arcTo(x + w, y, x + w, y + h, rr)
+  ctx.arcTo(x + w, y + h, x, y + h, rr)
+  ctx.arcTo(x, y + h, x, y, rr)
+  ctx.arcTo(x, y, x + w, y, rr)
+  ctx.closePath()
 }
 
 function loadImage(src: string): Promise<HTMLImageElement | null> {
@@ -88,6 +108,7 @@ export default function WalkScene({
   dungeonId,
   accent,
   mode,
+  avatar = null,
   trailMarks = [],
   nextIsBoss = false,
   onApproachComplete,
@@ -131,7 +152,8 @@ export default function WalkScene({
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      const hero = await loadImage(WALK_HERO_SPRITE)
+      const heroSrc = avatar || WALK_HERO_SPRITE
+      const hero = await loadImage(heroSrc)
       if (!cancelled) heroImgRef.current = hero
       const stripUrl = WALK_FULL_STRIP[dungeonId]
       if (stripUrl) {
@@ -145,7 +167,7 @@ export default function WalkScene({
     return () => {
       cancelled = true
     }
-  }, [dungeonId])
+  }, [dungeonId, avatar])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -183,11 +205,10 @@ export default function WalkScene({
       const m = modeRef.current
 
       // --- treadmill scroll ---
-      const scrollSpeed = h * 0.22 // px/s
+      // Mundo desce na tela (= andar pra frente na trilha). Offset↑ → tile em Y+.
+      const scrollSpeed = h * 0.2 // px/s
       if (m === 'scroll') {
         worldOffsetRef.current += scrollSpeed * dt
-        // after ~1.5s of scroll, signal transition to approach via parent
-        // Parent owns mode; we just animate. Parent switches to approach on timer.
       }
 
       // --- approach 0→1 ---
@@ -206,7 +227,7 @@ export default function WalkScene({
         ? Math.max(h * 1.35, (w * strip.naturalHeight) / strip.naturalWidth)
         : h * 1.6
 
-      // draw looping strip (two tiles) — world scrolls UP (offset increases → draw lower)
+      // Loop vertical: offset positivo empurra o tile pra baixo (frente = cima do mapa).
       const off = worldOffsetRef.current % tileH
       const drawTile = (sy: number) => {
         if (strip) {
@@ -217,51 +238,50 @@ export default function WalkScene({
           paintFallbackStrip(ctx, sy, w, tileH, dungeonId)
         }
       }
-      // tiles covering viewport
-      drawTile(-off)
-      drawTile(-off + tileH)
-      drawTile(-off - tileH)
+      drawTile(off)
+      drawTile(off - tileH)
+      drawTile(off + tileH)
 
-      // Hero screen-fixed position (center-bottom of light)
+      // Herói fixo um pouco abaixo do centro — card menor deixa ver mais mapa.
       const heroBaseX = w * 0.5
-      const heroBaseY = h * 0.62
+      const heroBaseY = h * 0.58
 
-      // Event marker appears ahead (above hero) during approach / end of scroll
-      const markerX = w * 0.5 + Math.sin(worldOffsetRef.current * 0.01) * (w * 0.06)
-      const markerY = h * 0.28
+      // Marcador à frente (acima); serpenteio leve na trilha.
+      const markerX = w * 0.5 + Math.sin(worldOffsetRef.current * 0.008) * (w * 0.045)
+      const markerY = h * 0.26
       const showMarker = m === 'approach' || m === 'scroll'
       const approachT = easeOutCubic(approachTRef.current)
 
-      // Hero moves toward marker during approach
+      // No approach o card sobe até o "?" (avançando na trilha).
       const heroX = m === 'approach' ? heroBaseX + (markerX - heroBaseX) * approachT : heroBaseX
-      const heroY = m === 'approach' ? heroBaseY + (markerY - heroBaseY) * approachT : heroBaseY
+      const heroY = m === 'approach' ? heroBaseY + (markerY - heroBaseY) * approachT * 0.72 : heroBaseY
 
-      // Trail marks behind (below hero)
+      // Trail marks atrás (abaixo do herói)
       for (const mark of marksRef.current) {
-        const my = heroBaseY + 40 + mark.age * 55
+        const my = heroBaseY + 36 + mark.age * 48
         if (my > h + 20) continue
-        const mx = heroBaseX + Math.sin(mark.id * 1.7) * 18
+        const mx = heroBaseX + Math.sin(mark.id * 1.7) * 16
         ctx.globalAlpha = Math.max(0.25, 0.7 - mark.age * 0.15)
-        ctx.font = '16px serif'
+        ctx.font = '15px serif'
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
         ctx.fillText(mark.emoji, mx, my)
         ctx.globalAlpha = 1
       }
 
-      // Halo (larger visibility)
-      const lightR = Math.min(w, h) * 0.48
-      const fog = ctx.createRadialGradient(heroX, heroY, lightR * 0.12, heroX, heroY, lightR)
+      // Halo — um pouco mais aberto pra revelar o mapa
+      const lightR = Math.min(w, h) * 0.52
+      const fog = ctx.createRadialGradient(heroX, heroY, lightR * 0.14, heroX, heroY, lightR)
       fog.addColorStop(0, 'rgba(0,0,0,0)')
-      fog.addColorStop(0.4, 'rgba(0,0,0,0.18)')
-      fog.addColorStop(0.75, 'rgba(0,0,0,0.72)')
-      fog.addColorStop(1, 'rgba(0,0,0,0.88)')
+      fog.addColorStop(0.42, 'rgba(0,0,0,0.14)')
+      fog.addColorStop(0.78, 'rgba(0,0,0,0.68)')
+      fog.addColorStop(1, 'rgba(0,0,0,0.86)')
       ctx.fillStyle = fog
       ctx.fillRect(0, 0, w, h)
 
-      const warm = ctx.createRadialGradient(heroX, heroY, 0, heroX, heroY, lightR * 0.85)
-      warm.addColorStop(0, 'rgba(255,220,140,0.18)')
-      warm.addColorStop(0.5, 'rgba(255,200,100,0.06)')
+      const warm = ctx.createRadialGradient(heroX, heroY, 0, heroX, heroY, lightR * 0.8)
+      warm.addColorStop(0, 'rgba(255,220,140,0.16)')
+      warm.addColorStop(0.5, 'rgba(255,200,100,0.05)')
       warm.addColorStop(1, 'transparent')
       ctx.fillStyle = warm
       ctx.fillRect(heroX - lightR, heroY - lightR, lightR * 2, lightR * 2)
@@ -269,7 +289,7 @@ export default function WalkScene({
       // "?" marker
       if (showMarker) {
         const pulse = 0.85 + Math.sin(bobRef.current * 4) * 0.15
-        const mr = 14 * pulse
+        const mr = 13 * pulse
         ctx.beginPath()
         ctx.arc(markerX, markerY, mr, 0, Math.PI * 2)
         ctx.fillStyle = 'rgba(15,15,30,0.9)'
@@ -277,40 +297,52 @@ export default function WalkScene({
         ctx.strokeStyle = nextBossRef.current ? '#f39c12' : accentRef.current
         ctx.lineWidth = 2.5
         ctx.stroke()
-        ctx.font = 'bold 16px sans-serif'
+        ctx.font = 'bold 15px sans-serif'
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
         ctx.fillStyle = nextBossRef.current ? '#f39c12' : accentRef.current
-        ctx.fillText(nextBossRef.current ? '?' : '?', markerX, markerY + 1)
+        ctx.fillText('?', markerX, markerY + 1)
       }
 
-      // Hero sprite (sneak bob)
+      // Card retangular do personagem (retrato 3:4, menor)
       const sneak = m === 'scroll' || m === 'approach'
-      const bob = sneak ? Math.sin(bobRef.current * 7) * 2.2 : Math.sin(bobRef.current * 2) * 1.2
+      const bob = sneak ? Math.sin(bobRef.current * 7) * 1.8 : Math.sin(bobRef.current * 2) * 1.0
       const hero = heroImgRef.current
-      const hs = Math.min(48, w * 0.12)
+      const cardW = Math.min(34, w * 0.085)
+      const cardH = cardW * 1.28
+      const cardX = heroX - cardW / 2
+      const cardY = heroY + bob - cardH * 0.55
+      const radius = Math.max(4, cardW * 0.12)
+
       if (hero) {
         ctx.save()
-        ctx.beginPath()
-        ctx.arc(heroX, heroY + bob - 2, hs * 0.46, 0, Math.PI * 2)
-        ctx.closePath()
+        roundRectPath(ctx, cardX, cardY, cardW, cardH, radius)
         ctx.clip()
-        ctx.drawImage(hero, heroX - hs / 2, heroY + bob - hs * 0.62, hs, hs)
+        // cover crop (object-fit: cover)
+        const iw = hero.naturalWidth || hero.width
+        const ih = hero.naturalHeight || hero.height
+        const scale = Math.max(cardW / iw, cardH / ih)
+        const dw = iw * scale
+        const dh = ih * scale
+        ctx.drawImage(hero, cardX + (cardW - dw) / 2, cardY + (cardH - dh) / 2, dw, dh)
         ctx.restore()
+
+        roundRectPath(ctx, cardX, cardY, cardW, cardH, radius)
         ctx.strokeStyle = accentRef.current
         ctx.lineWidth = 2
-        ctx.beginPath()
-        ctx.arc(heroX, heroY + bob - 2, hs * 0.46, 0, Math.PI * 2)
         ctx.stroke()
+        // sombra leve sob o card
+        ctx.fillStyle = 'rgba(0,0,0,0.35)'
+        ctx.beginPath()
+        ctx.ellipse(heroX, cardY + cardH + 3, cardW * 0.38, 3.5, 0, 0, Math.PI * 2)
+        ctx.fill()
       } else {
         ctx.fillStyle = '#2a1a12'
-        ctx.beginPath()
-        ctx.ellipse(heroX, heroY + bob + 6, 9, 12, 0, 0, Math.PI * 2)
+        roundRectPath(ctx, cardX, cardY, cardW, cardH, radius)
         ctx.fill()
-        ctx.fillStyle = '#1a120c'
-        ctx.beginPath()
-        ctx.arc(heroX, heroY + bob - 6, 8, 0, Math.PI * 2)
-        ctx.fill()
+        ctx.strokeStyle = accentRef.current
+        ctx.lineWidth = 2
+        ctx.stroke()
       }
 
       // light rain

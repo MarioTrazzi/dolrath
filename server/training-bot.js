@@ -2,6 +2,7 @@
 // Conecta como cliente Socket.IO real; fluxo = mesmos handlers do PvP.
 
 const { io } = require('socket.io-client')
+const CM = require('./combatModel')
 const {
   getTrainingOpponent,
   syntheticPeerEquipment,
@@ -13,20 +14,13 @@ const {
 // Compat: socket-server ainda importa MONSTERS[key]
 const MONSTERS = TRAINING_OPPONENTS_BY_KEY
 
-const DICE_BY_ACTION = {
-  light_attack: 6,
-  heavy_attack: 8,
-}
-
-const STAMINA_BY_ACTION = {
-  light_attack: 1,
-  heavy_attack: 2,
-}
-
-const MP_BY_ACTION = {
-  light_attack: 0,
-  heavy_attack: 8,
-}
+// Custos/dados vêm do combatModel — o bot luta com o MESMO kit do jogador. Antes eram
+// três tabelas copiadas aqui (d6/d8, 1/2 STA, 0/8 MP); batiam por sorte, e qualquer
+// tuning do kit deixaria o treino mentindo sobre o combate real.
+const ACTION_TO_TYPE = { light_attack: 'basic', heavy_attack: 'weapon' }
+const dieFor = (action) => CM.PVE_DIE[ACTION_TO_TYPE[action]] || CM.DICE_SIDES
+const staminaFor = (action) => CM.ATTACKS[ACTION_TO_TYPE[action]]?.stamina ?? 1
+const mpFor = (action) => CM.ATTACKS[ACTION_TO_TYPE[action]]?.mp ?? 0
 
 function randomDelay(min, max) {
   return min + Math.floor(Math.random() * (max - min))
@@ -186,24 +180,17 @@ function spawnTrainingBot({ roomId, port, playerLevel, monsterKey }) {
         if (room.currentTurn === monster.id && phaseChanged) {
           after(randomDelay(1800, 3200), () => {
             const weights = { ...behavior.attackWeights }
-            if ((me.mp || 0) < MP_BY_ACTION.heavy_attack) weights.heavy_attack = 0
-            if ((me.stamina || 0) < STAMINA_BY_ACTION.heavy_attack) weights.heavy_attack = 0
+            if ((me.mp || 0) < mpFor('heavy_attack')) weights.heavy_attack = 0
+            if ((me.stamina || 0) < staminaFor('heavy_attack')) weights.heavy_attack = 0
 
-            const action = (me.stamina || 0) < 1
+            const action = (me.stamina || 0) < staminaFor('light_attack')
               ? 'light_attack'
               : pickWeighted(weights)
-            const staminaCost = STAMINA_BY_ACTION[action] || 1
-            const mpCost = MP_BY_ACTION[action] || 0
 
-            log(`atacando: ${action} (−${staminaCost} STA${mpCost ? ` · −${mpCost} MP` : ''})`)
-            socket.emit('player_action', {
-              playerId: monster.id,
-              roomId,
-              action,
-              diceType: DICE_BY_ACTION[action],
-              mpCost,
-              staminaCost,
-            })
+            log(`atacando: ${action} (−${staminaFor(action)} STA${mpFor(action) ? ` · −${mpFor(action)} MP` : ''})`)
+            // O servidor recalcula custo e dado a partir do combatModel e IGNORA o que
+            // vem aqui (é a autoridade); mandamos só a ação.
+            socket.emit('player_action', { playerId: monster.id, roomId, action })
           })
         }
         break

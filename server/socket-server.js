@@ -468,8 +468,13 @@ io.on('connection', (socket) => {
       // de classe/nível/equipamento. HP passa a vir dos levers (PROFILE.hp × escala), não
       // mais dos atributos. O cliente já envia class/level/equipment no payload.
       const { levers, cls, gearTier } = derivePlayerLevers(player)
-      // Treino: Gárgula / Leviatã aplicam leverMult após o peer de gear
-      const trainMult = Number(player.trainingLeverMult) || 1
+      // Treino: Gárgula / Leviatã aplicam leverMult após o peer de gear.
+      // 🔒 SÓ em sala de treino: `trainingLeverMult` vem do PAYLOAD DO CLIENTE, e sem
+      // este gate um cliente modificado mandava `trainingLeverMult: 5` numa sala
+      // ranqueada e ficava 5× mais forte (power/armor/hp) — direto em ouro e em pontos
+      // de ranking, que pagam DOL no top 10. Na sala de treino não há recompensa, então
+      // forjá-lo lá não compra nada. O bot entra DEPOIS de `room.isTraining = true`.
+      const trainMult = room.isTraining ? (Number(player.trainingLeverMult) || 1) : 1
       const finalLevers = trainMult !== 1
         ? { ...levers, power: levers.power * trainMult, armor: levers.armor * trainMult, hp: levers.hp * trainMult }
         : levers

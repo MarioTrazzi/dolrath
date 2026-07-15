@@ -43,14 +43,16 @@ export interface WalkSceneProps {
 }
 
 const MAP_ZOOM = 1.2
-/** Vasculhar lento até avistar o "?". Sync com timer do DungeonRun. */
-const SCROLL_DUR = 2.6
-/** Avanço decisivo até o nó depois de avistar. */
-const APPROACH_DUR = 0.85
-/** Pouco do caminho no vasculhar — o resto é o rush até o "?". */
-const SCROLL_FRACTION = 0.36
-/** Dentro do scroll: a partir daqui o "?" aparece (avistou). */
-const SPOT_RATIO = 0.58
+/** Dois vasculhares no ritmo do primeiro (~2.6s cada). Sync com DungeonRun. */
+const SCROLL_DUR = 5.2
+/** Estilingada curta depois de avistar o "?". */
+const APPROACH_DUR = 0.7
+/** Quase todo o caminho no vasculhar; a estilingada só fecha. */
+const SCROLL_FRACTION = 0.76
+/** Avista o "?" no fim do 2º vasculhar. */
+const SPOT_RATIO = 0.82
+/** Raio do halo (menor = menos mapa visível, menos sensação de loop). */
+const VISION_RADIUS = 0.34
 
 function roundRectPath(
   ctx: CanvasRenderingContext2D,
@@ -94,8 +96,14 @@ function easeOutCubic(t: number) {
 
 /** Vasculhar: começa devagar, avança pouco — sensação de procurar. */
 function easeSearch(t: number) {
-  // ease-out suave: muito tempo no começo andando pouco
   return 1 - Math.pow(1 - clamp(t, 0, 1), 1.65)
+}
+
+/** Dois “passos” de vasculhar no mesmo feeling do primeiro. */
+function easeSearchTwoBeats(t: number) {
+  const u = clamp(t, 0, 1)
+  if (u < 0.5) return 0.5 * easeSearch(u * 2)
+  return 0.5 + 0.5 * easeSearch((u - 0.5) * 2)
 }
 
 function paintFallbackMap(
@@ -288,13 +296,13 @@ export default function WalkScene({
       }
 
       const rawSeg = m === 'idle' ? 0 : clamp(segmentTRef.current, 0, 1)
-      // Scroll: ease de busca (lento). Approach: easeOut rápido até o nó.
+      // Dois vasculhares (easeSearchTwoBeats) → estilingada curta (easeOut).
       let segT: number
       if (m === 'idle') {
         segT = 0
       } else if (rawSeg <= SCROLL_FRACTION) {
         const u = SCROLL_FRACTION > 0 ? rawSeg / SCROLL_FRACTION : 0
-        segT = easeSearch(u) * SCROLL_FRACTION
+        segT = easeSearchTwoBeats(u) * SCROLL_FRACTION
       } else {
         const u = (rawSeg - SCROLL_FRACTION) / (1 - SCROLL_FRACTION)
         segT = SCROLL_FRACTION + easeOutCubic(u) * (1 - SCROLL_FRACTION)
@@ -305,12 +313,16 @@ export default function WalkScene({
       let heroPctX = lerp(from.x, to.x, segT)
       let heroPctY = lerp(from.y, to.y, segT)
 
-      // Vasculhar: serpenteio lateral que some ao avistar / no approach
+      // Vasculhar: serpenteio em dois tempos; some ao avistar / no approach
       if (m === 'scroll') {
         const searchU = SCROLL_FRACTION > 0 ? rawSeg / SCROLL_FRACTION : 1
-        const weaveAmp = (1 - searchU) * 5.5 // % do mapa
-        heroPctX += Math.sin(bobRef.current * 2.4) * weaveAmp
-        heroPctY += Math.sin(bobRef.current * 1.7) * 0.6 * (1 - searchU)
+        // Mantém weave nos dois beats; só amortece perto do spot
+        const weaveFade = searchU < SPOT_RATIO ? 1 : 1 - (searchU - SPOT_RATIO) / (1 - SPOT_RATIO)
+        const weaveAmp = Math.max(0, weaveFade) * 4.2
+        // Fase do 2º beat: direção de serpenteio um pouco diferente
+        const beat2 = searchU >= 0.5 ? 1 : 0
+        heroPctX += Math.sin(bobRef.current * (2.2 + beat2 * 0.5)) * weaveAmp
+        heroPctY += Math.sin(bobRef.current * 1.6) * 0.55 * weaveFade
       }
 
       // Progresso global (inclui segmento em andamento) para bias da câmera
@@ -385,19 +397,19 @@ export default function WalkScene({
         ctx.globalAlpha = 1
       }
 
-      // Halo em volta do herói
-      const lightR = Math.min(w, h) * 0.52
-      const fog = ctx.createRadialGradient(heroScreenX, heroScreenY, lightR * 0.14, heroScreenX, heroScreenY, lightR)
+      // Halo menor — menos mapa à vista, menos sensação de loop
+      const lightR = Math.min(w, h) * VISION_RADIUS
+      const fog = ctx.createRadialGradient(heroScreenX, heroScreenY, lightR * 0.1, heroScreenX, heroScreenY, lightR)
       fog.addColorStop(0, 'rgba(0,0,0,0)')
-      fog.addColorStop(0.42, 'rgba(0,0,0,0.14)')
-      fog.addColorStop(0.78, 'rgba(0,0,0,0.68)')
-      fog.addColorStop(1, 'rgba(0,0,0,0.86)')
+      fog.addColorStop(0.35, 'rgba(0,0,0,0.22)')
+      fog.addColorStop(0.68, 'rgba(0,0,0,0.78)')
+      fog.addColorStop(1, 'rgba(0,0,0,0.94)')
       ctx.fillStyle = fog
       ctx.fillRect(0, 0, w, h)
 
-      const warm = ctx.createRadialGradient(heroScreenX, heroScreenY, 0, heroScreenX, heroScreenY, lightR * 0.8)
-      warm.addColorStop(0, 'rgba(255,220,140,0.16)')
-      warm.addColorStop(0.5, 'rgba(255,200,100,0.05)')
+      const warm = ctx.createRadialGradient(heroScreenX, heroScreenY, 0, heroScreenX, heroScreenY, lightR * 0.75)
+      warm.addColorStop(0, 'rgba(255,220,140,0.14)')
+      warm.addColorStop(0.55, 'rgba(255,200,100,0.04)')
       warm.addColorStop(1, 'transparent')
       ctx.fillStyle = warm
       ctx.fillRect(heroScreenX - lightR, heroScreenY - lightR, lightR * 2, lightR * 2)

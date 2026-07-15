@@ -1288,7 +1288,7 @@ export default function DungeonRun({
       showNarration()
       later(() => {
         setWalkMode('approach')
-      }, 2600)
+      }, 5200)
       return
     }
 

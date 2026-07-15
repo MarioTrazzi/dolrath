@@ -99,6 +99,7 @@ export function Navbar() {
     { label: 'Coleta', href: '/gathering' },
     { label: 'Fazenda', href: '/farm' },
     { label: 'Combate', href: '/combat-lobby' },
+    { label: 'Ranking', href: '/ranking' },
     { label: 'Inventário', href: '/inventory' },
     { label: 'Mercado', href: '/marketplace' },
     { label: 'Ferreiro', href: '/blacksmith' },

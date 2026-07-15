@@ -43,6 +43,9 @@ interface Player {
   speed: number
   stamina: number
   maxStamina: number
+  /** Pontos distribuídos (STR/AGI/INT/DEF) — tilt de combate no socket */
+  attributes?: { str?: number; agi?: number; int?: number; def?: number } | null
+  baseStats?: Record<string, unknown> | null
   equipment: {
     weapon?: Equipment
     armor?: Equipment
@@ -102,7 +105,6 @@ enum CombatPhase {
   WAITING_PLAYERS = 'waiting_players',
   INITIATIVE_ROLL = 'initiative_roll',
   PLAYER_TURN = 'player_turn',
-  OPPONENT_REACTION = 'opponent_reaction',
   DICE_ROLL = 'dice_roll',
   COMBAT_END = 'combat_end'
 }
@@ -119,18 +121,18 @@ enum ActionType {
 // 🐉 Custos e cooldown dos especiais de transformação — DEVE espelhar SPECIAL_DEFS
 // em server/socket-server.js (o servidor é a autoridade; isto é só p/ a UI gatear/exibir).
 const SPECIAL_COST: Record<string, { stamina?: number; mp?: number; cd: number }> = {
-  dragon_breath: { mp: 12, cd: 2 }, dragon_scales: { mp: 8, cd: 4 },
-  bite_bleeding: { mp: 12, cd: 2 }, wild_fury: { mp: 8, cd: 4 },
-  unstoppable_charge: { mp: 12, cd: 2 }, bear_guard: { mp: 8, cd: 4 },
-  ascending_spiral: { mp: 12, cd: 2 }, eagle_swift: { mp: 8, cd: 4 },
-  cosmo_burst: { mp: 12, cd: 2 }, meditation: { mp: 8, cd: 4 },
-  super_nova: { mp: 12, cd: 2 }, hyperfocus: { mp: 8, cd: 4 },
-  stunning_blow: { mp: 10, cd: 3 }, // 💫 compartilhado pelas 6 formas
+  dragon_breath: { mp: 12, stamina: 2, cd: 2 }, dragon_scales: { mp: 8, stamina: 1, cd: 4 },
+  bite_bleeding: { mp: 12, stamina: 2, cd: 2 }, wild_fury: { mp: 8, stamina: 1, cd: 4 },
+  unstoppable_charge: { mp: 12, stamina: 2, cd: 2 }, bear_guard: { mp: 8, stamina: 1, cd: 4 },
+  ascending_spiral: { mp: 12, stamina: 2, cd: 2 }, eagle_swift: { mp: 8, stamina: 1, cd: 4 },
+  cosmo_burst: { mp: 12, stamina: 2, cd: 2 }, meditation: { mp: 8, stamina: 1, cd: 4 },
+  super_nova: { mp: 12, stamina: 2, cd: 2 }, hyperfocus: { mp: 8, stamina: 1, cd: 4 },
+  stunning_blow: { mp: 10, stamina: 2, cd: 3 },
 }
 
-// ⚔️ NOVO KIT: ataques custam MP (Golpe 0 / Ataque de Classe 8) e rolam o SEU dado
-// (Golpe d6 / Classe d8). Espelha CM.ATTACKS.mp e CM.PVE_DIE no servidor.
+// ⚔️ KIT: Golpe 0MP/1STA d6 · Classe 8MP/2STA d8 — defesa passiva (sem reação)
 const ATTACK_MP: Record<string, number> = { light_attack: 0, heavy_attack: 8 }
+const ATTACK_STA: Record<string, number> = { light_attack: 1, heavy_attack: 2 }
 const ATTACK_DIE: Record<string, number> = { light_attack: 6, heavy_attack: 8 }
 
 // Função para criar conexão Socket.IO real
@@ -544,6 +546,27 @@ function CombatPageContent() {
         }
       })
 
+      socket.on('battle_rewards', (data: {
+        winner: { id: string; xpGained: number; goldGained: number; staminaCharged?: number; rankPoints?: number }
+        loser: { id: string; xpGained: number; goldGained: number; staminaCharged?: number; rankPoints?: number }
+      }) => {
+        const side = data.winner?.id === characterId ? data.winner : data.loser?.id === characterId ? data.loser : null
+        if (!side) return
+        const bits = [
+          side.xpGained ? `+${side.xpGained} XP` : null,
+          side.goldGained ? `+${side.goldGained} gold` : null,
+          side.staminaCharged ? `−${side.staminaCharged} STA` : null,
+          side.rankPoints != null ? `${side.rankPoints} pts ranking` : null,
+        ].filter(Boolean)
+        if (bits.length) {
+          socket.emit('chat_message', {
+            playerId: characterId,
+            roomId,
+            message: `🎁 Recompensa: ${bits.join(' · ')}`,
+          })
+        }
+      })
+
       // Se temos characterId, carregar dados do personagem específico
       if (characterId) {
         try {
@@ -562,6 +585,13 @@ function CombatPageContent() {
               maxMp: charDetails.baseStats?.maxMp || 50,
               stamina: charDetails.stamina || 100,
               maxStamina: charDetails.maxStamina || 100,
+              attributes: charDetails.attributes || {
+                str: charDetails.baseStats?.str || 10,
+                agi: charDetails.baseStats?.agi || 10,
+                int: charDetails.baseStats?.int || 10,
+                def: charDetails.baseStats?.def || 10,
+              },
+              baseStats: charDetails.baseStats || null,
               attack: charDetails.baseStats?.str || 10,
               defense: charDetails.baseStats?.def || 10,
               strength: charDetails.baseStats?.str || 10,
@@ -806,11 +836,18 @@ function CombatPageContent() {
       return
     }
 
-    // ⚔️ NOVO KIT: ATAQUES custam MP (Golpe 0 / Ataque de Classe 8) e rolam o SEU dado
-    // (Golpe d6 / Classe d8). Demais ações (esquiva/defesa/item) custam STAMINA + d12.
+    // ⚔️ ATAQUES: MP + STAMINA. Servidor auto-rola o dado (~400ms). Defesa passiva.
     const isAttack = action in ATTACK_MP || action === ActionType.SPECIAL_ATTACK
     if (isAttack) {
       const mpCost = ATTACK_MP[action] ?? 0
+      const staminaCost = ATTACK_STA[action] ?? 1
+      if (currentPlayer.stamina < staminaCost) {
+        socket.emit('chat_message', {
+          playerId: currentPlayer.id, roomId,
+          message: `❌ Stamina insuficiente! (${staminaCost} STA necessária)`
+        })
+        return
+      }
       if (currentPlayer.mp < mpCost) {
         socket.emit('chat_message', {
           playerId: currentPlayer.id, roomId,
@@ -818,10 +855,14 @@ function CombatPageContent() {
         })
         return
       }
-      if (mpCost > 0) setCurrentPlayer(prev => prev ? { ...prev, mp: Math.max(0, prev.mp - mpCost) } : null)
+      setCurrentPlayer(prev => prev ? {
+        ...prev,
+        mp: Math.max(0, prev.mp - mpCost),
+        stamina: Math.max(0, prev.stamina - staminaCost),
+      } : null)
       socket.emit('player_action', {
         playerId: currentPlayer.id, roomId, action,
-        diceType: ATTACK_DIE[action] ?? 12, mpCost, staminaCost: 0
+        diceType: ATTACK_DIE[action] ?? 12, mpCost, staminaCost
       })
       return
     }
@@ -1449,24 +1490,24 @@ function CombatPageContent() {
                   {/* 👊 Golpe (d6, grátis) — o ataque básico de todos */}
                   <button
                     onClick={() => handlePlayerAction(ActionType.LIGHT_ATTACK)}
-                    disabled={!currentPlayer}
-                    className={`w-full ${!currentPlayer
+                    disabled={!currentPlayer || currentPlayer.stamina < ATTACK_STA.light_attack}
+                    className={`w-full ${!currentPlayer || currentPlayer.stamina < ATTACK_STA.light_attack
                       ? 'bg-gray-600 opacity-50 cursor-not-allowed'
                       : 'bg-gradient-to-r from-warning to-yellow-500 hover:from-yellow-500 hover:to-warning'
                     } text-white py-3 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                   >
-                    Golpe <span className="text-[10px] opacity-75">d6</span>
+                    Golpe <span className="text-[10px] opacity-75">d6·1⚡</span>
                   </button>
-                  {/* ⚔️ Ataque de Classe (d8, 8 MP) — nome por classe */}
+                  {/* ⚔️ Ataque de Classe (d8, 8 MP / 2 STA) */}
                   <button
                     onClick={() => handlePlayerAction(ActionType.HEAVY_ATTACK)}
-                    disabled={!currentPlayer || currentPlayer.mp < ATTACK_MP.heavy_attack}
-                    className={`w-full ${!currentPlayer || currentPlayer.mp < ATTACK_MP.heavy_attack
+                    disabled={!currentPlayer || currentPlayer.mp < ATTACK_MP.heavy_attack || currentPlayer.stamina < ATTACK_STA.heavy_attack}
+                    className={`w-full ${!currentPlayer || currentPlayer.mp < ATTACK_MP.heavy_attack || currentPlayer.stamina < ATTACK_STA.heavy_attack
                       ? 'bg-gray-600 opacity-50 cursor-not-allowed'
                       : 'bg-gradient-to-r from-error to-red-600 hover:from-red-600 hover:to-error'
                     } text-white py-3 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
                   >
-                    {classAttackName(currentPlayer?.class)} <span className="text-[10px] opacity-75">d8·{ATTACK_MP.heavy_attack}MP{currentPlayer && currentPlayer.mp < ATTACK_MP.heavy_attack ? ' — sem MP' : ''}</span>
+                    {classAttackName(currentPlayer?.class)} <span className="text-[10px] opacity-75">d8·{ATTACK_MP.heavy_attack}MP·2⚡</span>
                   </button>
 
                   {/* 🐉 Habilidades especiais da FORMA (só transformado; consomem o turno, sem dado) */}
@@ -1576,35 +1617,9 @@ function CombatPageContent() {
                     </button>
                   )}
                 </div>
-              ) : combatRoom?.phase === CombatPhase.OPPONENT_REACTION && !isMyTurn ? (
-                <div className="space-y-2">
-                  <div className="text-center text-warning font-bold text-sm mb-3">
-                    🛡️ Escolha sua defesa:
-                  </div>
-                  <button
-                    onClick={() => handleDefenseChoice('dodge')}
-                    disabled={!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.DODGE]}
-                    className={`w-full ${!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.DODGE]
-                      ? 'bg-gray-600 opacity-50 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-blue-600 hover:to-cyan-600'
-                    } text-white py-3 sm:py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
-                  >
-                    Esquivar <span className="text-[10px] opacity-75">evasão{currentPlayerDisplay?.levers ? ` ${Math.round((currentPlayerDisplay.levers.evade || 0) * 100)}%` : ''} · {STAMINA_COSTS[ActionType.DODGE]}⚡</span>
-                  </button>
-                  <button
-                    onClick={() => handleDefenseChoice('defend')}
-                    disabled={!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.DEFEND]}
-                    className={`w-full ${!currentPlayer || currentPlayer.stamina < STAMINA_COSTS[ActionType.DEFEND]
-                      ? 'bg-gray-600 opacity-50 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-emerald-600 to-green-600 hover:from-green-600 hover:to-emerald-600'
-                    } text-white py-3 sm:py-2 px-4 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
-                  >
-                    Bloquear <span className="text-[10px] opacity-75">armadura reforçada · {STAMINA_COSTS[ActionType.DEFEND]}⚡</span>
-                  </button>
-                </div>
               ) : (
                 <div className="text-center text-text-secondary font-bold text-xs flex-1 flex items-center justify-center">
-                  {combatRoom?.phase === CombatPhase.OPPONENT_REACTION ? '⚔️ Oponente escolhendo defesa...' : 
+                  {combatRoom?.phase === CombatPhase.DICE_ROLL ? '🎲 Resolvendo golpe…' :
                    !isMyTurn ? '⏳ Turno do oponente...' : '⚔️ Executando ação...'}
                 </div>
               )}

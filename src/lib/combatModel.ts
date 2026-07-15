@@ -49,6 +49,8 @@ export interface Levers {
   armor: number
   hp: number
   evade: number
+  /** chance passiva de bloquear (0..1) — escala com DEF; amplifica armadura no golpe */
+  block: number
   /** constante de mitigação já escalada por S (DR = armor/(armor+K)) */
   K: number
   /** o multiplicador de poder S = wL·(nível/50) + wG·tier_gear */
@@ -264,6 +266,8 @@ export const ATTR_TILT = {
   hp: 1.3,        // por ponto de DEF (sobrevivência)
   evade: 0.0020,  // por ponto de AGI (chance de esquiva)
   evadeCap: 0.6,  // teto absoluto de evasão já com o tilt
+  block: 0.0025,  // por ponto de DEF (chance passiva de bloquear)
+  blockCap: 0.45, // teto de bloqueio passivo
 }
 
 // Peso do atributo no PODER, por classe (identidade). Cada classe rende cheio (1.0)
@@ -297,6 +301,7 @@ export function applyAttrTilt(levers: Levers, attrs?: Partial<AttrPoints> | null
     armor: levers.armor + def * t.armor,
     hp: levers.hp + def * t.hp,
     evade: Math.min(t.evadeCap, levers.evade + agi * t.evade),
+    block: Math.min(t.blockCap, (levers.block || 0) + def * t.block),
   }
 }
 
@@ -312,6 +317,7 @@ export function computeLevers(cls: CombatClass, level: number, gearTier: number,
     armor: p.armor * S,
     hp: p.hp * S,
     evade: p.evade, // % é invariante de escala
+    block: 0,       // bloqueio vem só do tilt de DEF
     K: K50 * S,
     scale: S,
   }
@@ -328,6 +334,7 @@ export function transformLevers(levers: Levers, scale: number = TRANSFORM_SCALE)
     armor: levers.armor * scale,
     hp: levers.hp * scale,
     evade: levers.evade, // % é invariante de escala
+    block: levers.block ?? 0,
     K: levers.K * scale,
     scale: levers.scale * scale,
   }
@@ -340,6 +347,7 @@ export function revertTransformLevers(levers: Levers, scale: number = TRANSFORM_
     armor: levers.armor / scale,
     hp: levers.hp / scale,
     evade: levers.evade,
+    block: levers.block ?? 0,
     K: levers.K / scale,
     scale: levers.scale / scale,
   }
@@ -378,44 +386,71 @@ export interface HitResult {
 }
 
 export interface ResolveOpts {
-  /** reação do defensor */
-  defense?: 'none' | 'dodge' | 'block'
+  /**
+   * Modo de defesa:
+   * - `passive` / `none` / omitido → esquiva% depois bloqueio% (PvP fluido + PvE padrão)
+   * - `dodge` → só tenta esquiva (legado / monstro com evade forçado)
+   * - `block` → força bloqueio (legado)
+   */
+  defense?: 'none' | 'passive' | 'dodge' | 'block'
   /** rng injetável (para sim/testes) */
   rng?: () => number
   /** rolagem forçada (pula o dado) */
   forcedRoll?: number
   /** sucesso de esquiva já decidido externamente (pula o sorteio) */
   dodgeSucceeded?: boolean
+  /** força falha de esquiva (ex.: Visão Aguçada) */
+  ignoreEvade?: boolean
   /** lados do dado do ataque (PvP: Golpe d6 / Ataque de Classe d8 / Especial d20). Default d12. */
   sides?: number
 }
 
 /**
- * Resolve UM golpe: atacante (power) vs defensor (armor, K, evade).
+ * Resolve UM golpe: atacante (power) vs defensor (armor, K, evade, block).
  * - dano = power × sorte × (1 − DR);  bloqueio amplifica a armadura (DR maior).
  * - esquiva: chance = evade do defensor → zera o golpe.
+ * - bloqueio passivo: chance = block do defensor (DEF) → armadura × BLOCK_ARMOR_MULT.
  */
 export function resolveHit(
   attacker: { power: number },
-  defender: { armor: number; K: number; evade: number },
+  defender: { armor: number; K: number; evade: number; block?: number },
   opts: ResolveOpts = {},
 ): HitResult {
   const rng = opts.rng ?? Math.random
   const sides = opts.sides ?? DICE_SIDES
   const roll = opts.forcedRoll ?? rollDie(rng, sides)
   const crit = roll >= sides
+  const mode = opts.defense ?? 'passive'
 
-  // Esquiva: zera o golpe.
-  if (opts.defense === 'dodge') {
-    const dodged = opts.dodgeSucceeded ?? rng() < defender.evade
+  // Legado: reação explícita "só esquiva"
+  if (mode === 'dodge') {
+    const dodged = opts.ignoreEvade ? false : (opts.dodgeSucceeded ?? rng() < defender.evade)
     if (dodged) return { damage: 0, roll, crit, dodged: true, blocked: false }
+    const raw = attacker.power * luckOf(roll, sides)
+    const damage = Math.max(1, Math.round(raw * (1 - damageReduction(defender.armor, defender.K))))
+    return { damage, roll, crit, dodged: false, blocked: false }
   }
 
-  const block = opts.defense === 'block'
-  const effArmor = block ? defender.armor * BLOCK_ARMOR_MULT : defender.armor
+  // Legado: reação explícita "só bloqueio"
+  if (mode === 'block') {
+    const effArmor = defender.armor * BLOCK_ARMOR_MULT
+    const raw = attacker.power * luckOf(roll, sides)
+    const damage = Math.max(1, Math.round(raw * (1 - damageReduction(effArmor, defender.K))))
+    return { damage, roll, crit, dodged: false, blocked: true }
+  }
+
+  // Passivo (padrão PvP/PvE): esquiva → bloqueio → hit
+  const dodged = opts.ignoreEvade
+    ? false
+    : (opts.dodgeSucceeded ?? rng() < (defender.evade || 0))
+  if (dodged) return { damage: 0, roll, crit, dodged: true, blocked: false }
+
+  const blockChance = Math.max(0, defender.block ?? 0)
+  const blocked = blockChance > 0 && rng() < blockChance
+  const effArmor = blocked ? defender.armor * BLOCK_ARMOR_MULT : defender.armor
   const raw = attacker.power * luckOf(roll, sides)
   const damage = Math.max(1, Math.round(raw * (1 - damageReduction(effArmor, defender.K))))
-  return { damage, roll, crit, dodged: false, blocked: block }
+  return { damage, roll, crit, dodged: false, blocked }
 }
 
 // ============================================================
@@ -446,7 +481,7 @@ export interface MonsterHitOpts {
   power: number
   /** dado de DEFESA do jogador (PVE_DIE[kind] do golpe recebido) */
   sides: number
-  defender: { armor: number; K: number; evade: number }
+  defender: { armor: number; K: number; evade: number; block?: number }
   rng?: () => number
   /** rolagem de defesa forçada (testes/sim) */
   forcedDefRoll?: number
@@ -455,6 +490,8 @@ export interface MonsterHitResult {
   damage: number
   /** esquiva total: número máximo do dado (garantido) OU sucesso na %-de-evasão */
   avoided: boolean
+  /** bloqueio passivo (DEF) — armadura amplificada */
+  blocked: boolean
   /** o monstro nunca crita (não rola dado) — mantido só pra compatibilidade de shape */
   crit: false
   /** rolagem de DEFESA do jogador (o monstro não rola) */
@@ -465,16 +502,19 @@ export interface MonsterHitResult {
 
 /** Resolve UM golpe do MONSTRO no jogador: monstro não rola (dano vem dos stats, com
  *  variação pequena sem dado); o jogador defende — número máximo = esquiva total
- *  garantida, senão %-de-evasão pura. */
+ *  garantida, senão %-de-evasão; depois bloqueio passivo por DEF. */
 export function resolveMonsterHit(opts: MonsterHitOpts): MonsterHitResult {
   const rng = opts.rng ?? Math.random
   const sides = opts.sides || DICE_SIDES
   const defRoll = opts.forcedDefRoll ?? rollDie(rng, sides)
   const natMax = defRoll >= sides
   const avoided = natMax || rng() < (opts.defender.evade || 0)
-  if (avoided) return { damage: 0, avoided: true, crit: false, defRoll, natMax }
+  if (avoided) return { damage: 0, avoided: true, blocked: false, crit: false, defRoll, natMax }
+  const blockChance = Math.max(0, opts.defender.block ?? 0)
+  const blocked = blockChance > 0 && rng() < blockChance
   const variance = 1 + (rng() * 2 - 1) * MONSTER_DMG_VARIANCE
   const raw = opts.power * variance
-  const damage = Math.max(1, Math.round(raw * (1 - damageReduction(opts.defender.armor, opts.defender.K))))
-  return { damage, avoided: false, crit: false, defRoll, natMax }
+  const effArmor = blocked ? opts.defender.armor * BLOCK_ARMOR_MULT : opts.defender.armor
+  const damage = Math.max(1, Math.round(raw * (1 - damageReduction(effArmor, opts.defender.K))))
+  return { damage, avoided: false, blocked, crit: false, defRoll, natMax }
 }

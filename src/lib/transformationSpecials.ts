@@ -14,8 +14,8 @@
  * Crítico do especial = rolar o máximo do dado → bônus REDUZIDO (SPECIAL_CRIT_MULT 1.3
  * vs 1.6 do normal): o jogador vê o crítico, mas não vira nuke/one-shot no mesmo nível.
  *
- * ⚔️ Todos os custos são em MP (a stamina é o orçamento DIÁRIO de runs, não se gasta no
- * combate PvE), e o cooldown é o gate secundário.
+ * ⚔️ Custos: MP + STAMINA no PvP (stamina = orçamento diário compartilhado com a masmorra).
+ * No PvE a stamina dos golpes NÃO é debitada (só passos do trail); o cooldown é o gate secundário.
  */
 import type { TransformationType } from './transformationSystem'
 import { DICE_SIDES, LUCK_LO, LUCK_HI, damageReduction, type Levers } from './combatModel'
@@ -67,7 +67,7 @@ export interface SpecialDef {
 // 😤 Fúria Selvagem — buff OFENSIVO do LOBO (Urso e Águia ganharam buffs próprios p/ identidade).
 const WILD_FURY: SpecialDef = {
   id: 'wild_fury', form: 'wolf', name: '😤 Fúria Selvagem', kind: 'util',
-  effect: { selfDmgDealt: { mult: 1.2, turns: 3 } }, cost: { mp: 8 }, cd: 4,
+  effect: { selfDmgDealt: { mult: 1.2, turns: 3 } }, cost: { mp: 8, stamina: 1 }, cd: 4,
   desc: '+20% de dano causado por 3 turnos',
 }
 
@@ -79,40 +79,40 @@ const WILD_FURY: SpecialDef = {
 // No PvE monstro não esquiva; CHEFE resiste ao atordoamento (gate de progressão intocado).
 const stunningBlow = (form: TransformationType): SpecialDef => ({
   id: 'stunning_blow', form, name: '💫 Golpe Atordoante', kind: 'dmg',
-  die: 20, dmgMult: 0.8, immobilizeRoll: 15, dodgeable: true, cost: { mp: 10 }, cd: 3,
+  die: 20, dmgMult: 0.8, immobilizeRoll: 15, dodgeable: true, cost: { mp: 10, stamina: 2 }, cd: 3,
   desc: 'Dano leve; rolagem ≥15 ATORDOA o alvo por 1 turno (chefes resistem) (d20)',
 })
 
 export const TRANSFORMATION_SPECIALS: Record<TransformationType, SpecialDef[]> = {
   dragon: [
-    { id: 'dragon_breath', form: 'dragon', name: '🔥 Sopro de Fogo', kind: 'dmg', die: 20, dmgMult: 1.9, pierce: 0.6, cost: { mp: 12 }, cd: 2, desc: 'Dano de fogo que fura 60% da armadura (d20)' },
+    { id: 'dragon_breath', form: 'dragon', name: '🔥 Sopro de Fogo', kind: 'dmg', die: 20, dmgMult: 1.9, pierce: 0.6, cost: { mp: 12, stamina: 2 }, cd: 2, desc: 'Dano de fogo que fura 60% da armadura (d20)' },
     stunningBlow('dragon'),
-    { id: 'dragon_scales', form: 'dragon', name: '🛡️ Escama de Dragão', kind: 'util', effect: { selfDmgTaken: { mult: 0.76, turns: 3 } }, cost: { mp: 8 }, cd: 4, desc: '-24% dano recebido por 3 turnos' },
+    { id: 'dragon_scales', form: 'dragon', name: '🛡️ Escama de Dragão', kind: 'util', effect: { selfDmgTaken: { mult: 0.76, turns: 3 } }, cost: { mp: 8, stamina: 1 }, cd: 4, desc: '-24% dano recebido por 3 turnos' },
   ],
   wolf: [
-    { id: 'bite_bleeding', form: 'wolf', name: '🩸 Mordida Sangrenta', kind: 'dmg', die: 20, dmgMult: 1.6, pierce: 1, dot: { frac: 0.03, turns: 3, label: 'sangramento' }, cost: { mp: 12 }, cd: 2, desc: 'Ignora a armadura + sangramento (3%/turno, 3t) (d20)' },
+    { id: 'bite_bleeding', form: 'wolf', name: '🩸 Mordida Sangrenta', kind: 'dmg', die: 20, dmgMult: 1.6, pierce: 1, dot: { frac: 0.03, turns: 3, label: 'sangramento' }, cost: { mp: 12, stamina: 2 }, cd: 2, desc: 'Ignora a armadura + sangramento (3%/turno, 3t) (d20)' },
     stunningBlow('wolf'),
     WILD_FURY,
   ],
   bear: [
-    { id: 'unstoppable_charge', form: 'bear', name: '💥 Investida Imparável', kind: 'dmg', die: 20, dmgMult: 1.72, pierce: 1, cost: { mp: 12 }, cd: 2, desc: 'Ignora TODA a armadura (d20)' },
+    { id: 'unstoppable_charge', form: 'bear', name: '💥 Investida Imparável', kind: 'dmg', die: 20, dmgMult: 1.72, pierce: 1, cost: { mp: 12, stamina: 2 }, cd: 2, desc: 'Ignora TODA a armadura (d20)' },
     stunningBlow('bear'),
-    { id: 'bear_guard', form: 'bear', name: '🛡️ Pele de Ferro', kind: 'util', effect: { selfDmgTaken: { mult: 0.80, turns: 3 } }, cost: { mp: 8 }, cd: 4, desc: '-20% dano recebido por 3 turnos' },
+    { id: 'bear_guard', form: 'bear', name: '🛡️ Pele de Ferro', kind: 'util', effect: { selfDmgTaken: { mult: 0.80, turns: 3 } }, cost: { mp: 8, stamina: 1 }, cd: 4, desc: '-20% dano recebido por 3 turnos' },
   ],
   eagle: [
-    { id: 'ascending_spiral', form: 'eagle', name: '🌀 Espiral Ascendente', kind: 'dmg', die: 20, dmgMult: 2.15, pierce: 0.6, cost: { mp: 12 }, cd: 2, desc: 'Mergulho em espiral (fura 60% da armadura) (d20)' },
+    { id: 'ascending_spiral', form: 'eagle', name: '🌀 Espiral Ascendente', kind: 'dmg', die: 20, dmgMult: 2.15, pierce: 0.6, cost: { mp: 12, stamina: 2 }, cd: 2, desc: 'Mergulho em espiral (fura 60% da armadura) (d20)' },
     stunningBlow('eagle'),
-    { id: 'eagle_swift', form: 'eagle', name: '🌬️ Voo Veloz', kind: 'util', effect: { selfEvade: { value: 0.45, turns: 3 } }, cost: { mp: 8 }, cd: 4, desc: '+45% de evasão por 3 turnos' },
+    { id: 'eagle_swift', form: 'eagle', name: '🌬️ Voo Veloz', kind: 'util', effect: { selfEvade: { value: 0.45, turns: 3 } }, cost: { mp: 8, stamina: 1 }, cd: 4, desc: '+45% de evasão por 3 turnos' },
   ],
   seventh_sense: [
-    { id: 'cosmo_burst', form: 'seventh_sense', name: '🌌 Explosão de Cosmo', kind: 'dmg', die: 20, dmgMult: 2.1, cost: { mp: 12 }, cd: 2, desc: 'Explosão de cosmo concentrada (d20)' },
+    { id: 'cosmo_burst', form: 'seventh_sense', name: '🌌 Explosão de Cosmo', kind: 'dmg', die: 20, dmgMult: 2.1, cost: { mp: 12, stamina: 2 }, cd: 2, desc: 'Explosão de cosmo concentrada (d20)' },
     stunningBlow('seventh_sense'),
-    { id: 'meditation', form: 'seventh_sense', name: '🧘 Meditação', kind: 'util', heal: 0.14, cost: { mp: 8 }, cd: 4, desc: 'Cura 14% do HP máximo' },
+    { id: 'meditation', form: 'seventh_sense', name: '🧘 Meditação', kind: 'util', heal: 0.14, cost: { mp: 8, stamina: 1 }, cd: 4, desc: 'Cura 14% do HP máximo' },
   ],
   celestial: [
-    { id: 'super_nova', form: 'celestial', name: '💥 Super Nova', kind: 'dmg', die: 20, dmgMult: 2.0, pierce: 0.5, cost: { mp: 12 }, cd: 2, desc: 'Explosão de luz que fura 50% da armadura (d20)' },
+    { id: 'super_nova', form: 'celestial', name: '💥 Super Nova', kind: 'dmg', die: 20, dmgMult: 2.0, pierce: 0.5, cost: { mp: 12, stamina: 2 }, cd: 2, desc: 'Explosão de luz que fura 50% da armadura (d20)' },
     stunningBlow('celestial'),
-    { id: 'hyperfocus', form: 'celestial', name: '✨ Hyperfoco', kind: 'util', effect: { selfDmgDealt: { mult: 1.3, turns: 3 } }, cost: { mp: 8 }, cd: 4, desc: '+30% de dano causado por 3 turnos' },
+    { id: 'hyperfocus', form: 'celestial', name: '✨ Hyperfoco', kind: 'util', effect: { selfDmgDealt: { mult: 1.3, turns: 3 } }, cost: { mp: 8, stamina: 1 }, cd: 4, desc: '+30% de dano causado por 3 turnos' },
   ],
 }
 

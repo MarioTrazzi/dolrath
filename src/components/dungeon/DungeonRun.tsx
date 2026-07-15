@@ -529,21 +529,20 @@ function computePlayerOutcome(
 // Monstro ataca o jogador: ele NÃO rola — dano sai dos stats dele, com uma variação
 // pequena sem dado (combatModel.resolveMonsterHit). O JOGADOR, defendendo, ainda "rola"
 // (oculto/calculado): número máximo do dado dele = esquiva total GARANTIDA, senão
-// esquiva por % pura — sem disputa de margem nenhuma.
+// esquiva por %; depois bloqueio passivo por DEF.
 function computeMonsterOutcome(
   sides: number,
   power: number,
-  player: { armor: number; K: number; evade: number },
+  player: { armor: number; K: number; evade: number; block?: number },
   forcedDefRoll?: number,
-): Outcome {
+): Outcome & { blocked?: boolean } {
   const r = resolveMonsterHit({ power, sides, defender: player, forcedDefRoll })
-  return { hit: !r.avoided, damage: r.damage, crit: false, sides, atkRoll: 0, defRoll: r.defRoll }
+  return { hit: !r.avoided, damage: r.damage, crit: false, sides, atkRoll: 0, defRoll: r.defRoll, blocked: r.blocked }
 }
 
-// A "defesa" (bloqueio) virou só LORE: mecanicamente todo mundo ESQUIVA (sem bloqueio nem
-// stamina). O log às vezes narra a reação como "defesa", às vezes como "esquiva", só pra dar
-// sabor — a matemática é sempre a da esquiva.
-function defenseVerb(): string {
+// Lore do log: esquiva ou "defesa" (bloqueio passivo também narra como defesa).
+function defenseVerb(blocked?: boolean): string {
+  if (blocked) return 'bloqueou'
   return Math.random() < 0.3 ? 'defendeu' : 'esquivou'
 }
 
@@ -1513,7 +1512,7 @@ export default function DungeonRun({
   // escalados, K pelo nível. Espelha o derive do socket-server e o dungeon-sim.
   const monsterLevers = (m: ScaledMonster): Levers => {
     const S = m.level / MAX_LEVEL_REF + 0.5 // K pela escala do NÍVEL (= sim/socket)
-    return { power: m.attack, armor: m.defense, hp: m.maxHp, evade: m.evade, K: K50 * S, scale: m.scale ?? S }
+    return { power: m.attack, armor: m.defense, hp: m.maxHp, evade: m.evade, block: 0, K: K50 * S, scale: m.scale ?? S }
   }
   // Poder efetivo do golpe do monstro = poder do lever × multiplicador do tipo.
   const monsterPowerFor = (m: ScaledMonster, kind: AttackKind) => monsterLevers(m).power * ATTACKS[kind].powerMult
@@ -1968,7 +1967,7 @@ export default function DungeonRun({
     const effEvade = Math.min(0.95, playerLevers.evade + (pfxDef.evadeBuffTurns > 0 ? pfxDef.evadeBuff : 0) + unlocks.passives.evadeBonus)
     const outcome = computeMonsterOutcome(
       sides, monsterPowerFor(m, kind),
-      { armor: playerLevers.armor, K: playerLevers.K, evade: effEvade },
+      { armor: playerLevers.armor, K: playerLevers.K, evade: effEvade, block: playerLevers.block ?? 0 },
       def.roll,
     )
     // 🐍 Golpe secundário telegrafado (ver monsterTelegraph): só se aplica se o golpe acertou.
@@ -1999,6 +1998,8 @@ export default function DungeonRun({
       pushLog(outcome.defRoll >= outcome.sides
         ? `✨ ESQUIVA TOTAL! Você evitou o golpe de ${m.name} (rolagem máxima)`
         : `💨 Você ${defenseVerb()} o golpe de ${m.name}! (0 de dano)`)
+    } else if (outcome.blocked) {
+      pushLog(`🛡️ Você bloqueou o golpe de ${m.name}! Sofreu ${inDmg} (armadura reforçada)`)
     } else {
       pushLog(`🩸 ${m.name} causou ${inDmg} de dano em você`)
     }

@@ -215,6 +215,7 @@ model Character {
   dungeonRuns   DungeonRun[]
   dungeonProgress DungeonProgress[]
   gatheringSessions GatheringSession[]
+  pvpRatings        PvpRating[]
 
   // On-chain payment for creation (testnet: fixed DOL fee; mainnet: will be oracle-priced)
   creationTxHash String?         @unique
@@ -498,4 +499,81 @@ model GoldSale {
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
+}
+
+// ============================================================
+// PvP Ranking (Fases 2–3)
+// ============================================================
+
+model PvpSeason {
+  id        String   @id @default(cuid())
+  name      String
+  startsAt  DateTime
+  endsAt    DateTime
+  potDol    Float    @default(1000)
+  status    String   @default("active") // active | ended | paid
+  paidAt    DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ratings PvpRating[]
+  matches PvpMatch[]
+  payouts PvpSeasonPayout[]
+
+  @@index([status, endsAt])
+}
+
+model PvpRating {
+  id          String    @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  seasonId    String
+  season      PvpSeason @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  points      Int       @default(0)
+  wins        Int       @default(0)
+  losses      Int       @default(0)
+  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime  @default(now())
+
+  @@unique([characterId, seasonId])
+  @@index([seasonId, points])
+}
+
+model PvpMatch {
+  id                  String    @id @default(cuid())
+  seasonId            String
+  season              PvpSeason @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  winnerId            String
+  loserId             String
+  winnerStaminaSpent  Int       @default(0)
+  loserStaminaSpent   Int       @default(0)
+  winnerGold          Int       @default(0)
+  loserGold           Int       @default(0)
+  winnerXp            Int       @default(0)
+  loserXp             Int       @default(0)
+  winnerPoints        Int       @default(0)
+  loserPoints         Int       @default(0)
+  createdAt           DateTime  @default(now())
+
+  @@index([seasonId, createdAt])
+  @@index([winnerId])
+  @@index([loserId])
+}
+
+model PvpSeasonPayout {
+  id          String    @id @default(cuid())
+  seasonId    String
+  season      PvpSeason @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  characterId String
+  rank        Int
+  points      Int
+  dolAmount   Float
+  walletAddress String?
+  status      String    @default("pending") // pending | paid | skipped
+  txHash      String?
+  createdAt   DateTime  @default(now())
+  paidAt      DateTime?
+
+  @@unique([seasonId, characterId])
+  @@index([seasonId, rank])
 }

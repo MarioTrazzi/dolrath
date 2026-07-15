@@ -132,7 +132,7 @@ function gearFor(rarity: string, enh: number) {
 type AttackKind = 'basic' | 'weapon' | 'special'
 function monsterLevers(m: ScaledMonster): Levers {
   const S = m.level / MAX_LEVEL_REF + 0.5
-  return { power: m.attack, armor: m.defense, hp: m.maxHp, evade: m.evade, K: K50 * S, scale: m.scale ?? S }
+  return { power: m.attack, armor: m.defense, hp: m.maxHp, evade: m.evade, block: 0, K: K50 * S, scale: m.scale ?? S }
 }
 // Jogador ataca: ELE rola (luck multiplicativo); o monstro esquiva por % pura (nunca rola).
 function playerStrike(power: number, sides: number, defender: { armor: number; K: number; evade: number }): number {

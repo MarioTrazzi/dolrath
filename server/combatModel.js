@@ -84,7 +84,7 @@ function powerScale(level, gearTier) {
 
 // === TILT DE ATRIBUTOS (criação + nível) → ajuste simétrico nos levers ===
 // Espelho de src/lib/combatModel.ts. STR/INT→poder; DEF→armadura+HP; AGI→evasão.
-const ATTR_TILT = { power: 0.55, powerAgi: 0.30, armor: 0.5, hp: 1.3, evade: 0.0020, evadeCap: 0.6 }
+const ATTR_TILT = { power: 0.55, powerAgi: 0.30, armor: 0.5, hp: 1.3, evade: 0.0020, evadeCap: 0.6, block: 0.0025, blockCap: 0.45 }
 // Peso do atributo no PODER, por classe (identidade): cada classe rende cheio (1.0)
 // no seu atributo-chave e menos no "errado". Guerreiro=força, Mago=mente (o off-stat
 // rende 0.8); Monge híbrido equilibrado (1.0/1.0); Ladino não vive de força nem mente
@@ -111,13 +111,14 @@ function applyAttrTilt(levers, attrs, cls) {
     armor: levers.armor + def * t.armor,
     hp: levers.hp + def * t.hp,
     evade: Math.min(t.evadeCap, levers.evade + agi * t.evade),
+    block: Math.min(t.blockCap, (levers.block || 0) + def * t.block),
   }
 }
 
 function computeLevers(cls, level, gearTier, attrs) {
   const p = PROFILE[cls] || PROFILE.warrior
   const S = powerScale(level, gearTier)
-  const base = { power: p.power * S, armor: p.armor * S, hp: p.hp * S, evade: p.evade, K: K50 * S, scale: S }
+  const base = { power: p.power * S, armor: p.armor * S, hp: p.hp * S, evade: p.evade, block: 0, K: K50 * S, scale: S }
   return applyAttrTilt(base, attrs, cls)
 }
 
@@ -141,6 +142,7 @@ function transformLevers(levers, scale) {
     armor: levers.armor * f,
     hp: levers.hp * f,
     evade: levers.evade, // % é invariante de escala
+    block: levers.block || 0,
     K: levers.K * f,
     scale: levers.scale * f,
   }
@@ -153,6 +155,7 @@ function revertTransformLevers(levers, scale) {
     armor: levers.armor / f,
     hp: levers.hp / f,
     evade: levers.evade,
+    block: levers.block || 0,
     K: levers.K / f,
     scale: levers.scale / f,
   }
@@ -177,21 +180,41 @@ function damageReduction(armor, K) {
 
 // `opts.sides` = lados do dado do ATAQUE (PvP: Golpe d6 / Ataque de Classe d8 / Especial d20).
 // Sorte e crítico (rolagem máxima) usam esse dado; default d12 preserva o comportamento antigo.
+// Defesa passiva (padrão): esquiva% → bloqueio% (DEF) → hit. Modos dodge/block legados mantidos.
 function resolveHit(attacker, defender, opts) {
   opts = opts || {}
   const rng = opts.rng || Math.random
   const sides = opts.sides || DICE_SIDES
   const roll = opts.forcedRoll != null ? opts.forcedRoll : rollDie(rng, sides)
   const crit = roll >= sides
-  if (opts.defense === 'dodge') {
-    const dodged = opts.dodgeSucceeded != null ? opts.dodgeSucceeded : rng() < defender.evade
+  const mode = opts.defense || 'passive'
+
+  if (mode === 'dodge') {
+    const dodged = opts.ignoreEvade ? false : (opts.dodgeSucceeded != null ? opts.dodgeSucceeded : rng() < defender.evade)
     if (dodged) return { damage: 0, roll, crit, dodged: true, blocked: false }
+    const raw = attacker.power * luckOf(roll, sides)
+    const damage = Math.max(1, Math.round(raw * (1 - damageReduction(defender.armor, defender.K))))
+    return { damage, roll, crit, dodged: false, blocked: false }
   }
-  const block = opts.defense === 'block'
-  const effArmor = block ? defender.armor * BLOCK_ARMOR_MULT : defender.armor
+
+  if (mode === 'block') {
+    const effArmor = defender.armor * BLOCK_ARMOR_MULT
+    const raw = attacker.power * luckOf(roll, sides)
+    const damage = Math.max(1, Math.round(raw * (1 - damageReduction(effArmor, defender.K))))
+    return { damage, roll, crit, dodged: false, blocked: true }
+  }
+
+  const dodged = opts.ignoreEvade
+    ? false
+    : (opts.dodgeSucceeded != null ? opts.dodgeSucceeded : rng() < (defender.evade || 0))
+  if (dodged) return { damage: 0, roll, crit, dodged: true, blocked: false }
+
+  const blockChance = Math.max(0, defender.block || 0)
+  const blocked = blockChance > 0 && rng() < blockChance
+  const effArmor = blocked ? defender.armor * BLOCK_ARMOR_MULT : defender.armor
   const raw = attacker.power * luckOf(roll, sides)
   const damage = Math.max(1, Math.round(raw * (1 - damageReduction(effArmor, defender.K))))
-  return { damage, roll, crit, dodged: false, blocked: block }
+  return { damage, roll, crit, dodged: false, blocked }
 }
 
 // ============================================================
@@ -214,11 +237,14 @@ function resolveMonsterHit(opts) {
   const natMax = defRoll >= sides
   const def = opts.defender || {}
   const avoided = natMax || rng() < (def.evade || 0)
-  if (avoided) return { damage: 0, avoided: true, crit: false, defRoll, natMax }
+  if (avoided) return { damage: 0, avoided: true, blocked: false, crit: false, defRoll, natMax }
+  const blockChance = Math.max(0, def.block || 0)
+  const blocked = blockChance > 0 && rng() < blockChance
   const variance = 1 + (rng() * 2 - 1) * MONSTER_DMG_VARIANCE
   const raw = opts.power * variance
-  const damage = Math.max(1, Math.round(raw * (1 - damageReduction(def.armor || 0, def.K))))
-  return { damage, avoided: false, crit: false, defRoll, natMax }
+  const effArmor = blocked ? (def.armor || 0) * BLOCK_ARMOR_MULT : (def.armor || 0)
+  const damage = Math.max(1, Math.round(raw * (1 - damageReduction(effArmor, def.K))))
+  return { damage, avoided: false, blocked, crit: false, defRoll, natMax }
 }
 
 module.exports = {

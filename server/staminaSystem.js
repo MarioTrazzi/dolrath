@@ -9,11 +9,14 @@
 const STAMINA_COSTS = {
   // ⚔️ Combates PvP - custos baixos para permitir 10 lutas diárias
   pvp: {
-    light_attack: 1,   // Ataque leve
-    heavy_attack: 2,   // Ataque pesado
-    special_attack: 4, // Ataque especial
-    dodge: 1,          // Esquivar
-    defend: 3,         // Defender (mais caro para incentivar ação)
+    light_attack: 1,   // Golpe
+    heavy_attack: 2,   // Ataque de Classe
+    special_attack: 2, // Especial de forma (dano)
+    basic: 1,
+    weapon: 2,
+    special: 2,
+    dodge: 0,          // Defesa passiva — sem custo de reação
+    defend: 0,
     use_item: 0,       // Usar item
     basic: 15,         // Custo base para entrada em combate (1 luta = ~15 stamina total)
     ranked: 25,        // Lutas ranqueadas
@@ -102,7 +105,10 @@ function getStaminaCost(activity, options = {}) {
       const actionCosts = {
         'light_attack': 1,
         'heavy_attack': 2,
-        'special_attack': 4,
+        'special_attack': 2,
+        'basic': 1,
+        'weapon': 2,
+        'special': 2,
         'dodge': 1,
         'defend': 3,
         'use_item': 0

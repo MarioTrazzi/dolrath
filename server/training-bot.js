@@ -303,18 +303,7 @@ function spawnTrainingBot({ roomId, port, playerLevel, monsterKey }) {
       }
 
       case 'opponent_reaction': {
-        if (room.currentTurn !== monster.id && phaseChanged) {
-          after(randomDelay(1500, 2800), () => {
-            const wantsDodge = Math.random() < behavior.dodgeChance
-            // Esquiva custa 1, defesa custa 3 — cair para a opção possível
-            let reaction = wantsDodge ? 'dodge' : 'defend'
-            if (reaction === 'defend' && me.stamina < 3) reaction = 'dodge'
-            const staminaCost = reaction === 'dodge' ? 1 : 3
-
-            log(`defendendo: ${reaction}`)
-            socket.emit('opponent_reaction', { playerId: monster.id, roomId, reaction, staminaCost })
-          })
-        }
+        // Defesa passiva — servidor resolve sem reação do bot
         break
       }
 

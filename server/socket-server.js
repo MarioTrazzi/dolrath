@@ -40,13 +40,11 @@ function normalizeClass(cls) {
 // Deriva os levers de combate do jogador a partir de classe/nível/equipamento.
 // Classe de jogador → PROFILE do modelo escalado por S; classe desconhecida (monstro)
 // → fallback que mapeia os stats fornecidos para levers (preserva a dificuldade do treino).
-// 🎯 AJUSTE DE CLASSE SÓ-PvP (validado em scripts/pvp-lever-sim.js). O PROFILE puro
-// (sem applyAttrTilt, que o PvP não usa) deixa o Guerreiro dominar (~74% no sim;
-// armor 160 + hp 438). Este ajuste é aplicado APENAS aqui (PvP) — o PvE/dungeon chama
-// CM.computeLevers direto e fica intocado. Resultado no sim: classes 47-54%.
+// 🎯 AJUSTE DE CLASSE SÓ-PvP (validado em scripts/pvp-lever-sim.js). Com attrs
+// (AGI/DEF) o tilt já equilibra um pouco; este ajuste fino mantém classes ~47-54%.
 const PVP_CLASS_ADJ = {
   warrior: { power: 1.00, armor: 0.90, hp: 0.96 },
-  rogue:   { power: 1.10, armor: 1.00, hp: 1.18 }, // glass cannon: +HP p/ sobreviver (era o piso ~44%)
+  rogue:   { power: 1.10, armor: 1.00, hp: 1.18 },
   mage:    { power: 0.86, armor: 1.00, hp: 1.00 },
   monk:    { power: 1.04, armor: 1.00, hp: 1.08 },
 }
@@ -56,6 +54,17 @@ function applyPvpClassAdj(levers, cls) {
   return { ...levers, power: levers.power * a.power, armor: levers.armor * a.armor, hp: levers.hp * a.hp }
 }
 
+function readAttrs(player) {
+  const raw = player?.attributes || player?.baseStats || null
+  if (!raw || typeof raw !== 'object') return null
+  return {
+    str: Number(raw.str) || 0,
+    agi: Number(raw.agi) || 0,
+    int: Number(raw.int) || 0,
+    def: Number(raw.def) || 0,
+  }
+}
+
 function derivePlayerLevers(player) {
   const cls = normalizeClass(player.class)
   const level = Math.max(1, Number(player.level) || 1)
@@ -63,9 +72,10 @@ function derivePlayerLevers(player) {
     ? player.equipment.map((e) => ({ rarity: e?.item?.rarity ?? e?.rarity, enhancementLevel: e?.enhancementLevel }))
     : []
   const gearTier = CM.deriveGearTier(equipped)
+  const attrs = readAttrs(player)
 
   if (cls) {
-    const levers = applyPvpClassAdj(CM.computeLevers(cls, level, gearTier), cls)
+    const levers = applyPvpClassAdj(CM.computeLevers(cls, level, gearTier, attrs), cls)
     return { levers, cls, gearTier }
   }
 
@@ -75,7 +85,7 @@ function derivePlayerLevers(player) {
   const armor = Math.max(0, Number(player.defense) || 0)
   const hp = Math.max(1, Number(player.maxHp) || Number(player.hp) || 100)
   return {
-    levers: { power, armor, hp, evade: 0.08, K: CM.K50 * S, scale: S },
+    levers: { power, armor, hp, evade: 0.08, block: 0, K: CM.K50 * S, scale: S },
     cls: null,
     gearTier,
   }
@@ -87,9 +97,16 @@ const ATTACK_TYPE_MAP = {
   heavy_attack: 'weapon', weapon: 'weapon',
   special_attack: 'special', special: 'special',
 }
-// Mapeia a reação do defensor para a defesa do modelo (defesa antiga → bloqueio).
-const DEFENSE_MAP = { dodge: 'dodge', defend: 'block', block: 'block' }
 const ATTACK_ACTIONS = ['light_attack', 'heavy_attack', 'special_attack', 'basic', 'weapon', 'special']
+
+function attackStaminaCost(attackType) {
+  return CM.ATTACKS[attackType]?.stamina ?? 1
+}
+
+function trackFightStamina(player, amount) {
+  if (!player || !(amount > 0)) return
+  player.fightStaminaSpent = (player.fightStaminaSpent || 0) + amount
+}
 
 // Configuração de porta - Railway usa PORT, Heroku também
 const PORT = process.env.PORT || 3001
@@ -366,7 +383,6 @@ const CombatPhase = {
   WAITING_PLAYERS: 'waiting_players',
   INITIATIVE_ROLL: 'initiative_roll',
   PLAYER_TURN: 'player_turn',
-  OPPONENT_REACTION: 'opponent_reaction',
   DICE_ROLL: 'dice_roll',
   COMBAT_END: 'combat_end'
 }
@@ -460,6 +476,8 @@ io.on('connection', (socket) => {
       const joinUnlocks = getUnlocksFor(player)
       player.maxHp = Math.round(levers.hp * (1 + joinUnlocks.passives.maxHpPct))
       player.hp = player.maxHp
+      player.fightStaminaSpent = 0
+      player.initialHp = player.maxHp
       if (joinUnlocks.passives.maxMpPct) {
         player.maxMp = Math.round((player.maxMp || 0) * (1 + joinUnlocks.passives.maxMpPct))
         player.mp = player.maxMp
@@ -992,83 +1010,97 @@ io.on('connection', (socket) => {
       return
     }
 
-    // ⚔️ NOVO KIT: ATAQUES custam MP (Golpe 0 / Ataque de Classe 8 / Especial 18); a
-    // stamina fica para a DEFESA. Cada ataque rola o SEU dado (Golpe d6 / Classe d8 /
-    // Especial d20 — PVE_DIE). Ações não-ataque (item) seguem no custo de stamina + d12.
+    // ⚔️ KIT FLUIDO: ataques custam MP + STAMINA (Golpe 0MP/1STA, Classe 8MP/2STA).
+    // Sem fase de reação — defesa é passiva (AGI=esquiva, DEF=bloqueio).
     // 🌳 Ranks II/III da árvore sobrescrevem dado/custo do Ataque de Classe.
     if (isAttack) {
-      // Só JOGADORES (com combatClass) pagam MP; monstros (sem classe) atacam de graça.
+      const stamCost = !currentPlayer.combatClass ? 0 : attackStaminaCost(attackType)
       const mpCost = !currentPlayer.combatClass ? 0
         : attackType === 'weapon' ? unlocksForAttack.classAttackMp
         : (CM.ATTACKS[attackType]?.mp ?? 0)
+      if ((currentPlayer.stamina || 0) < stamCost) {
+        socket.emit('error', { message: `Stamina insuficiente! Precisa de ${stamCost} Stamina` })
+        return
+      }
       if ((currentPlayer.mp || 0) < mpCost) {
         socket.emit('error', { message: `MP insuficiente! Precisa de ${mpCost} MP` })
         return
       }
+      if (stamCost > 0) {
+        currentPlayer.stamina = Math.max(0, (currentPlayer.stamina || 0) - stamCost)
+        trackFightStamina(currentPlayer, stamCost)
+      }
       if (mpCost > 0) currentPlayer.mp = Math.max(0, (currentPlayer.mp || 0) - mpCost)
       diceType = attackType === 'weapon' ? unlocksForAttack.classAttackDie : (CM.PVE_DIE[attackType] || CM.DICE_SIDES)
-    } else {
-      const systemStaminaCost = getStaminaCost('pvp', { playerLevel: currentPlayer.level || 1, actionType: action })
-      if (currentPlayer.stamina < systemStaminaCost) {
-        socket.emit('error', { message: `Stamina insuficiente! Precisa de ${systemStaminaCost} Stamina` })
-        return
-      }
-      currentPlayer.stamina = Math.max(0, currentPlayer.stamina - systemStaminaCost)
-      diceType = CM.DICE_SIDES
-    }
 
-    // 🔥 ATUALIZAÇÃO IMEDIATA para mostrar consumo de recursos
-    io.to(roomId).emit('room_updated', room)
-
-    // Se é um ataque, ir para OPPONENT_REACTION (não DICE_ROLL)
-    if (isAttack) {
-      // 😮‍💨 DEFENSOR EXAUSTO: sem stamina nem para esquivar (custo 1) —
-      // pula a reação e vai direto para a rolagem do atacante (evita soft-lock)
-      if ((opponent?.stamina || 0) < 1) {
-        room.pendingAction = {
-          action,
-          diceType,
-          playerId,
-          type: 'attack',
-          attackRoll: undefined,
-          defenseAction: 'exhausted',
-          defenseRoll: 0
-        }
-        room.phase = CombatPhase.DICE_ROLL
-        room.combatLog.push({
-          type: 'action',
-          player: currentPlayer.name,
-          message: `🎯 ${actionNames[action]} selecionado! 😮‍💨 ${opponent.name} está exausto e não pode reagir — role o d${diceType}!`,
-          timestamp: new Date()
-        })
-      } else {
-        room.pendingAction = {
-          action,
-          diceType,
-          playerId,
-          type: 'attack',
-          attackRoll: undefined,  // Limpar rolls anteriores
-          defenseRoll: undefined  // Limpar rolls anteriores
-        }
-        room.phase = CombatPhase.OPPONENT_REACTION // MUDANÇA AQUI!
-        room.combatLog.push({
-          type: 'action',
-          player: currentPlayer.name,
-          message: `🎯 ${actionNames[action]} selecionado! ${opponent.name}, escolha sua defesa.`,
-          timestamp: new Date()
-        })
+      room.pendingAction = {
+        action,
+        diceType,
+        playerId,
+        type: 'attack',
+        defenseAction: 'passive',
+        attackRoll: undefined,
+        defenseRoll: 0,
+        resolving: false,
       }
-    } else {
-      // Outras ações (items, etc) processam normalmente
-      room.pendingAction = { action, diceType, playerId, type: 'other' }
       room.phase = CombatPhase.DICE_ROLL
       room.combatLog.push({
         type: 'action',
         player: currentPlayer.name,
-        message: `🎯 ${actionNames[action]} selecionado! Role o d${diceType}`,
+        message: `🎯 ${actionNames[action]}! (−${stamCost} STA${mpCost ? ` · −${mpCost} MP` : ''}) — rolando d${diceType}…`,
         timestamp: new Date()
       })
+      io.to(roomId).emit('room_updated', room)
+      socket.emit('action_selected', { action, diceType })
+
+      // Auto-roll servidor (~400ms, igual DungeonRun) — sem clique no dado
+      const pending = room.pendingAction
+      setTimeout(() => {
+        if (room.pendingAction !== pending || pending.resolving) return
+        pending.resolving = true
+        const roll = Math.floor(Math.random() * diceType) + 1
+        pending.attackRoll = roll
+        const attacker = room.player1?.id === playerId ? room.player1 : room.player2
+        room.combatLog.push({
+          type: 'action',
+          player: attacker?.name,
+          message: `🎲 ${attacker?.name}: Rolou d${diceType} = ${roll}`,
+          timestamp: new Date()
+        })
+        io.to(roomId).emit('dice_rolled', {
+          playerId,
+          sides: diceType,
+          result: { roll, modifier: 0, total: roll }
+        })
+        io.to(roomId).emit('room_updated', room)
+        setTimeout(() => {
+          if (room.pendingAction !== pending) return
+          processCompleteAction(room, pending.action, pending.attackRoll, 'passive', 0, roomId)
+        }, 900)
+      }, 400)
+      return
     }
+
+    // Outras ações (items, etc)
+    const systemStaminaCost = getStaminaCost('pvp', { playerLevel: currentPlayer.level || 1, actionType: action })
+    if (currentPlayer.stamina < systemStaminaCost) {
+      socket.emit('error', { message: `Stamina insuficiente! Precisa de ${systemStaminaCost} Stamina` })
+      return
+    }
+    currentPlayer.stamina = Math.max(0, currentPlayer.stamina - systemStaminaCost)
+    if (systemStaminaCost > 0) trackFightStamina(currentPlayer, systemStaminaCost)
+    diceType = CM.DICE_SIDES
+
+    io.to(roomId).emit('room_updated', room)
+
+    room.pendingAction = { action, diceType, playerId, type: 'other' }
+    room.phase = CombatPhase.DICE_ROLL
+    room.combatLog.push({
+      type: 'action',
+      player: currentPlayer.name,
+      message: `🎯 ${actionNames[action]} selecionado! Role o d${diceType}`,
+      timestamp: new Date()
+    })
     
     io.to(roomId).emit('room_updated', room)
     socket.emit('action_selected', { action, diceType })
@@ -1078,17 +1110,10 @@ io.on('connection', (socket) => {
     const room = rooms.get(roomId)
     if (!room) return
 
-    // Defensor exausto não participa do conteste (apenas o atacante rola)
-    if (room.pendingAction?.type === 'attack' &&
-        room.pendingAction.defenseAction === 'exhausted' &&
-        playerId !== room.pendingAction.playerId) {
-      return
-    }
+    // Ataques: o servidor auto-rola após player_action — ignore rolls manuais do cliente/bot
+    if (room.pendingAction?.type === 'attack') return
 
     const player = room.player1?.id === playerId ? room.player1 : room.player2
-    // ⚔️ NOVO KIT: o dado é o do ATAQUE pendente (Golpe d6 / Ataque de Classe d8 /
-    // Especial d20); atacante e defensor rolam o MESMO dado. A esquiva é resolvida pela
-    // evasão da classe (na faixa desse dado) em processCompleteAction.
     const diceSides = room.pendingAction?.diceType || CM.DICE_SIDES
     const roll = Math.floor(Math.random() * diceSides) + 1
     const total = roll
@@ -1106,47 +1131,10 @@ io.on('connection', (socket) => {
       result: { roll, modifier: 0, total }
     })
 
-    // Para ataques na fase DICE_ROLL, salvar os rolls de ambos
-    if (room.pendingAction?.type === 'attack' && room.phase === CombatPhase.DICE_ROLL) {
-      if (playerId === room.pendingAction.playerId) {
-        // É o atacante rolando
-        room.pendingAction.attackRoll = total
-        room.combatLog.push({
-          type: 'system',
-          message: `⏳ Aguardando ${room.currentTurn === room.player1?.id ? room.player2?.name : room.player1?.name} rolar o dado...`,
-          timestamp: new Date()
-        })
-        // Atualizar sala imediatamente para mostrar quem já rolou
-        io.to(roomId).emit('room_updated', room)
-      } else {
-        // É o defensor rolando
-        room.pendingAction.defenseRoll = total
-      }
-      
-      // Só processar quando AMBOS tiverem rolado (uma única vez: `resolving` evita
-      // agendar duas resoluções se um roll_dice duplicado chegar por race de rede)
-      if (room.pendingAction.attackRoll !== undefined && room.pendingAction.defenseRoll !== undefined && !room.pendingAction.resolving) {
-        room.pendingAction.resolving = true
-        const pending = room.pendingAction
-        room.combatLog.push({
-          type: 'system',
-          message: `⚔️ Ambos rolaram! Calculando resultado...`,
-          timestamp: new Date()
-        })
-        // Atualizar sala antes de processar
-        io.to(roomId).emit('room_updated', room)
-        setTimeout(() => {
-          // Se a pendingAction já foi substituída/limpa, não há o que resolver.
-          if (room.pendingAction !== pending) return
-          processCompleteAction(room, pending.action, pending.attackRoll, pending.defenseAction, pending.defenseRoll, roomId)
-        }, 1000)
-      }
-    } else {
-      // Ações não-ataque processam diretamente
-      setTimeout(() => {
-        processActionResult(room, action, roll, roomId)
-      }, 1000)
-    }
+    // Ações não-ataque processam diretamente
+    setTimeout(() => {
+      processActionResult(room, action, roll, roomId)
+    }, 1000)
   })
 
   // 🧪 Usar consumível da hotbar: aplica efeito, registra no log e consome o turno (regra atual)
@@ -1219,39 +1207,9 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('room_updated', room)
   })
 
-  // Novo evento para reação do oponente
-  socket.on('opponent_reaction', ({ playerId, roomId, reaction, staminaCost }) => {
-    const room = rooms.get(roomId)
-    if (!room || !room.pendingAction || room.phase !== CombatPhase.OPPONENT_REACTION) return
+  // Reação manual removida — defesa é passiva (AGI/DEF). Handler mantido como no-op.
+  socket.on('opponent_reaction', () => {})
 
-    const opponent = room.currentTurn === room.player1?.id ? room.player2 : room.player1
-    if (opponent.id !== playerId) return
-
-    // Aplicar custo de stamina para defesa
-    if (staminaCost > 0) {
-      opponent.stamina = Math.max(0, opponent.stamina - staminaCost)
-      // 🔥 ATUALIZAÇÃO IMEDIATA para mostrar consumo de stamina
-      io.to(roomId).emit('room_updated', room)
-    }
-
-    // Salvar a reação escolhida e ir para DICE_ROLL onde ambos rolam
-    room.pendingAction.defenseAction = reaction
-    room.phase = CombatPhase.DICE_ROLL
-    
-    const reactionNames = {
-      'dodge': 'Esquiva',
-      'defend': 'Defesa'
-    }
-    
-    room.combatLog.push({
-      type: 'action',
-      player: opponent.name,
-      message: `🛡️ ${opponent.name} escolheu: ${reactionNames[reaction]}! Ambos rolem d${room.pendingAction.diceType}`,
-      timestamp: new Date()
-    })
-
-    io.to(roomId).emit('room_updated', room)
-  })
 
   // Evento roll_defense removido - agora ambos usam roll_dice
 
@@ -1533,43 +1491,28 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
 
   if (!attacker || !defender) return
 
-  // ⚔️ MODELO ENXUTO: dano = poder × sorte(d12) × (1 − DR), DR = armadura/(armadura+K).
-  // Crítico = rolagem máxima do d12 (embutida na banda de sorte). Esquiva (evasão da
-  // classe) zera o golpe; bloqueio amplifica a armadura efetiva.
+  // ⚔️ MODELO ENXUTO + defesa PASSIVA: esquiva (AGI) → bloqueio (DEF) → hit.
   const attackType = ATTACK_TYPE_MAP[attackAction] || 'weapon'
-  // 🌳 Rank II do Ataque de Classe muda o dado (d8→d10) — mesmo gate de processAction.
   const attackerUnlocks = getUnlocksFor(attacker)
-  // 🎲 Dado do ataque (Golpe d6 / Ataque de Classe d8-d10 / Especial d20). Sorte, crítico
-  // e faixa de esquiva usam ESSE dado.
   const sides = attackType === 'weapon' ? attackerUnlocks.classAttackDie : (CM.PVE_DIE[attackType] || CM.DICE_SIDES)
   const aLev = attacker.levers || derivePlayerLevers(attacker).levers
   const dLev = defender.levers || derivePlayerLevers(defender).levers
   const attackerPower = aLev.power * (CM.ATTACKS[attackType]?.powerMult ?? 1)
-  const defenseModel = DEFENSE_MAP[defenseAction] // 'dodge' | 'block' | undefined
 
-  // 🌀 Buff de evasão temporário (especiais: Superioridade Aérea / Uivo / Contra-ataque)
-  // + 🌳 evadeBonus (Passo Lateral/Reflexos de Batalha): passiva permanente da árvore.
   const defenderUnlocks = getUnlocksFor(defender)
   const defEvade = Math.min(0.95, (dLev.evade || 0) + (defender.fx?.evadeBuffTurns > 0 ? defender.fx.evadeBuff : 0) + defenderUnlocks.passives.evadeBonus)
-  // Esquiva resolvida pela rolagem do defensor (no dado do ataque): sucesso na faixa de evasão.
-  let dodgeSucceeded
-  if (defenseModel === 'dodge') {
-    const evadeBand = Math.round(defEvade * sides)
-    dodgeSucceeded = defenseRoll <= evadeBand
-  }
-  // 👁️ Visão Aguçada: o próximo ataque do atacante ignora a esquiva.
-  if (attacker.fx?.ignoreEvadeNext) { dodgeSucceeded = false; attacker.fx.ignoreEvadeNext = false }
+  const defBlock = dLev.block || 0
+
+  const ignoreEvade = !!attacker.fx?.ignoreEvadeNext
+  if (attacker.fx?.ignoreEvadeNext) attacker.fx.ignoreEvadeNext = false
 
   const hitResult = CM.resolveHit(
     { power: attackerPower },
-    { armor: dLev.armor, K: dLev.K, evade: defEvade },
-    { defense: defenseModel || 'none', forcedRoll: attackRoll, dodgeSucceeded, sides }
+    { armor: dLev.armor, K: dLev.K, evade: defEvade, block: defBlock },
+    { defense: 'passive', forcedRoll: attackRoll, ignoreEvade, sides }
   )
   const isCritical = hitResult.crit && !hitResult.dodged
   let finalDamage = hitResult.dodged ? 0 : hitResult.damage
-  // 🔥 Camada de status: dano causado (atacante) e dano recebido (defensor)
-  // + 🌳 critBonusMult (capstone de crítico, só no golpe crítico) e selfDmgTakenMult
-  // (capstone de Baluarte, permanente) da árvore de habilidades.
   if (!hitResult.dodged) {
     const outMult = (attacker.fx?.dmgDealtMult ?? 1) * (isCritical ? attackerUnlocks.passives.critBonusMult : 1)
     const inMult = (defender.fx?.dmgTakenMult ?? 1) * defenderUnlocks.passives.selfDmgTakenMult
@@ -1580,7 +1523,7 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
   // ↩️ Contra-ataque Precognitivo: ao esquivar, devolve metade do dano que sofreria.
   if (hitResult.dodged && defender.fx?.counterNext) {
     defender.fx.counterNext = false
-    const reflected = Math.max(1, Math.round((hitResult.damage || finalDamage) * 0.5))
+    const reflected = Math.max(1, Math.round((hitResult.damage || finalDamage || attackerPower) * 0.5))
     attacker.hp = Math.max(0, (attacker.hp || 0) - reflected)
     room.combatLog.push({ type: 'damage', message: `↩️ ${defender.name} contra-ataca e devolve ${reflected} a ${attacker.name}! (${attacker.hp}/${attacker.maxHp})`, timestamp: new Date() })
     io.to(roomId).emit('damage_dealt', { playerId: attacker.id, damage: reflected, newHp: attacker.hp })
@@ -1589,19 +1532,13 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
   if (hitResult.dodged) {
     room.combatLog.push({
       type: 'result',
-      message: `🌪️ ${defender.name} esquivou! (rolou ${defenseRoll}, evasão ${Math.round((dLev.evade || 0) * 100)}%)`,
+      message: `🌪️ ${defender.name} esquivou! (evasão ${Math.round(defEvade * 100)}%)`,
       timestamp: new Date()
     })
   } else if (hitResult.blocked) {
     room.combatLog.push({
       type: 'result',
-      message: `🛡️ ${defender.name} bloqueou! ${attacker.name} acerta por ${finalDamage} (armadura reforçada).`,
-      timestamp: new Date()
-    })
-  } else if (defenseAction === 'exhausted') {
-    room.combatLog.push({
-      type: 'result',
-      message: `😮‍💨 ${defender.name} está exausto e não consegue reagir! ${attacker.name} acerta por ${finalDamage} dano!`,
+      message: `🛡️ ${defender.name} bloqueou! ${attacker.name} acerta por ${finalDamage} (armadura reforçada · bloqueio ${Math.round(defBlock * 100)}%).`,
       timestamp: new Date()
     })
   } else {
@@ -1633,7 +1570,6 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
 
   // 🎯 APLICAR DANO E LOGS DETALHADOS
   if (hit && finalDamage > 0) {
-    // Log de crítico se aplicável (rolagem máxima do d12)
     if (isCritical) {
       room.combatLog.push({
         type: 'result',
@@ -1642,7 +1578,6 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
       })
     }
 
-    // Log do tipo de ataque (d6 Golpe / d8 Ataque de Classe por classe / d20 Especial)
     const atkLabel = attackType === 'weapon'
       ? CM.classAttackName(attacker.combatClass)
       : (CM.ATTACKS[attackType]?.label || 'Ataque')
@@ -1660,7 +1595,6 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
       timestamp: new Date()
     })
 
-    // Notificar dano via socket
     io.to(roomId).emit('damage_dealt', {
       playerId: defender.id,
       damage: finalDamage,
@@ -1668,15 +1602,16 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
     })
   }
 
-  // 🎬 Evento estruturado para as animações da arena no cliente
   io.to(roomId).emit('action_resolved', {
     attackerId: attacker.id,
     defenderId: defender.id,
     action: attackAction,
-    defenseAction,
+    defenseAction: hitResult.dodged ? 'dodge' : hitResult.blocked ? 'defend' : 'none',
     hit,
     damage: finalDamage,
-    isCritical: isCritical && hit && finalDamage > 0
+    isCritical: isCritical && hit && finalDamage > 0,
+    dodged: hitResult.dodged,
+    blocked: hitResult.blocked,
   })
 
   // Verificar se o combate acabou
@@ -1691,7 +1626,6 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
       timestamp: new Date()
     })
     
-    // 🏆 PROCESSAR RECOMPENSAS PVP (modo treino não dá recompensas)
     if (room.isTraining) {
       room.combatLog.push({
         type: 'system',
@@ -1702,21 +1636,15 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
       processBattleRewards(room, attacker, defender, roomId)
     }
     
-    // 💚 REGENERAÇÃO AUTOMÁTICA AO FINAL DO COMBATE
     regeneratePlayerResources(room.player1, 'Combat Victory/Defeat')
     regeneratePlayerResources(room.player2, 'Combat Victory/Defeat')
   } else {
-    // Continuar combate - trocar turno
     room.currentTurn = room.currentTurn === room.player1?.id ? room.player2?.id : room.player1?.id
     room.phase = CombatPhase.PLAYER_TURN
 
-    // 🔄 PROCESSAR TRANSFORMAÇÕES
     processTransformationTurns(room)
-
-    // ⚡ REGEN DE STAMINA: +2 no início do turno (evita exaustão permanente)
     regenTurnStamina(room)
 
-    // 🔥 Status do próximo jogador (DoT/expiração/cooldown). Pode encerrar por DoT.
     const deadByDot = processStatusStartOfTurn(room, roomId)
     if (!deadByDot) {
       room.combatLog.push({
@@ -1727,7 +1655,6 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
     }
   }
 
-  // Limpar ação pendente
   room.pendingAction = null
   io.to(roomId).emit('room_updated', room)
 }
@@ -1773,15 +1700,13 @@ function processActionResult(room, action, playerRoll, roomId) {
   io.to(roomId).emit('room_updated', room)
 }
 
-// 🏆 SISTEMA DE RECOMPENSAS PVP
+// 🏆 SISTEMA DE RECOMPENSAS PVP — stamina gasta na luta → gold/XP (paridade masmorra)
 async function processBattleRewards(room, winner, loser, roomId) {
   try {
-    // Detectar condições especiais da batalha
     const isFlawlessVictory = winner.initialHp && winner.hp === winner.initialHp
-    const winnerTransformed = winner.transformationType && winner.transformationType !== 'none'
-    const loserTransformed = loser.transformationType && loser.transformationType !== 'none'
-    
-    // Preparar dados da batalha
+    const winnerTransformed = !!(winner.isTransformed || (winner.transformationType && winner.transformationType !== 'none'))
+    const loserTransformed = !!(loser.isTransformed || (loser.transformationType && loser.transformationType !== 'none'))
+
     const battleResult = {
       winnerId: winner.id,
       loserId: loser.id,
@@ -1791,168 +1716,89 @@ async function processBattleRewards(room, winner, loser, roomId) {
       isFlawlessVictory,
       winnerTransformed,
       loserTransformed,
-      winStreak: winner.winStreak || 1, // TODO: Implementar tracking de win streak
-      isFirstWinOfDay: false // TODO: Implementar tracking de primeira vitória do dia
+      winnerStaminaSpent: winner.fightStaminaSpent || 0,
+      loserStaminaSpent: loser.fightStaminaSpent || 0,
+      updateRanking: true,
     }
-    
-    // 💾 SALVAR RECOMPENSAS NO BANCO DE DADOS VIA API
+
+    const appUrl = (process.env.APP_URL || process.env.NEXTAUTH_URL || 'https://dolrath.vercel.app').replace(/\/$/, '')
+    const secret = process.env.BATTLE_REWARDS_SECRET || ''
+
     let rewardData
     try {
-      const apiResponse = await fetch('http://localhost:3000/api/battle/rewards', {
+      const apiResponse = await fetch(`${appUrl}/api/battle/rewards`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(secret ? { 'x-battle-secret': secret } : {}),
         },
         body: JSON.stringify(battleResult)
       })
-      
+
       if (apiResponse.ok) {
         rewardData = await apiResponse.json()
-        console.log('✅ Recompensas salvas no banco de dados:', rewardData)
+        console.log('✅ Recompensas PvP creditadas:', rewardData)
       } else {
-        console.error('❌ Erro na API de recompensas:', apiResponse.status)
-        // Fallback para cálculo local se API falhar
+        const errText = await apiResponse.text().catch(() => '')
+        console.error('❌ Erro na API de recompensas:', apiResponse.status, errText)
         rewardData = calculateBattleRewardsLocal(battleResult)
       }
     } catch (apiError) {
       console.error('❌ Erro ao chamar API de recompensas:', apiError)
-      // Fallback para cálculo local se API falhar
       rewardData = calculateBattleRewardsLocal(battleResult)
     }
-    
-    // Adicionar recompensas aos logs de combate
+
     room.combatLog.push({
       type: 'rewards',
-      message: `💰 ${winner.name} ganhou ${rewardData.winner.xpGained} XP e ${rewardData.winner.goldGained} gold!`,
+      message: `💰 ${winner.name} ganhou ${rewardData.winner.xpGained} XP e ${rewardData.winner.goldGained} gold (−${battleResult.winnerStaminaSpent} STA)!`,
       timestamp: new Date()
     })
-    
+
     room.combatLog.push({
-      type: 'rewards', 
-      message: `💝 ${loser.name} ganhou ${rewardData.loser.xpGained} XP e ${rewardData.loser.goldGained} gold por participar!`,
+      type: 'rewards',
+      message: `💝 ${loser.name} ganhou ${rewardData.loser.xpGained} XP e ${rewardData.loser.goldGained} gold (−${battleResult.loserStaminaSpent} STA)!`,
       timestamp: new Date()
     })
-    
-    // Notificar clientes sobre as recompensas
+
     io.to(roomId).emit('battle_rewards', {
       winner: rewardData.winner,
       loser: rewardData.loser,
       battleDetails: {
         isFlawless: isFlawlessVictory,
         transformationKill: loserTransformed,
-        underdogVictory: battleResult.winnerLevel < battleResult.loserLevel - 2
+        winnerStaminaSpent: battleResult.winnerStaminaSpent,
+        loserStaminaSpent: battleResult.loserStaminaSpent,
       }
     })
-    
+
     console.log(`🏆 Recompensas de batalha processadas: ${winner.name} vs ${loser.name}`)
-    
   } catch (error) {
     console.error('Erro ao processar recompensas da batalha:', error)
   }
 }
 
-// Função local para cálculo de recompensas (replica a API)
+// Fallback local (UI only — sem DB) se a API falhar
 function calculateBattleRewardsLocal(battleResult) {
-  const PVP_REWARDS_CONFIG = {
-    victory: { xpBase: 50, goldBase: 15 },
-    defeat: { xpBase: 25, goldBase: 8 },
-    levelScaling: { xpMultiplier: 1.1, goldMultiplier: 1.08, maxScaling: 5.0 },
-    specialBonuses: {
-      perfectVictory: { xpBonus: 1.3, goldBonus: 1.5 },
-      transformationKill: { xpBonus: 1.2, goldBonus: 1.2 },
-      firstWinOfDay: { xpBonus: 2.0, goldBonus: 1.5 }
-    },
-    levelDifferenceBalancing: {
-      perLevelDifference: 0.15,
-      underdog_bonus: 1.5,
-      bully_penalty: 0.7
-    }
-  }
-  
-  function calculateRewards(playerLevel, isVictory, opponentLevel, specialBonuses = {}) {
-    const config = PVP_REWARDS_CONFIG
-    const baseRewards = isVictory ? config.victory : config.defeat
-    
-    // XP e Gold base
-    let xp = baseRewards.xpBase
-    let gold = baseRewards.goldBase
-    
-    // Scaling por nível
-    const levelMult = Math.min(
-      Math.pow(config.levelScaling.xpMultiplier, playerLevel - 1),
-      config.levelScaling.maxScaling
-    )
-    
-    xp = Math.floor(xp * levelMult)
-    gold = Math.floor(gold * levelMult * config.levelScaling.goldMultiplier)
-    
-    // Bônus/Penalidade por diferença de nível
-    if (isVictory) {
-      const levelDiff = opponentLevel - playerLevel
-      const diffMultiplier = 1 + (levelDiff * config.levelDifferenceBalancing.perLevelDifference)
-      
-      xp = Math.floor(xp * diffMultiplier)
-      gold = Math.floor(gold * diffMultiplier)
-      
-      // Bônus especiais por diferença extrema
-      if (levelDiff >= 5) {
-        xp = Math.floor(xp * config.levelDifferenceBalancing.underdog_bonus)
-        gold = Math.floor(gold * config.levelDifferenceBalancing.underdog_bonus)
-      } else if (levelDiff <= -5) {
-        xp = Math.floor(xp * config.levelDifferenceBalancing.bully_penalty)
-        gold = Math.floor(gold * config.levelDifferenceBalancing.bully_penalty)
-      }
-    }
-
-    // Aplicar bônus especiais
-    if (specialBonuses.isFlawless && isVictory) {
-      xp = Math.floor(xp * config.specialBonuses.perfectVictory.xpBonus)
-      gold = Math.floor(gold * config.specialBonuses.perfectVictory.goldBonus)
-    }
-
-    if (specialBonuses.killTransformed && isVictory) {
-      xp = Math.floor(xp * config.specialBonuses.transformationKill.xpBonus)
-      gold = Math.floor(gold * config.specialBonuses.transformationKill.goldBonus)
-    }
-
-    if (specialBonuses.isFirstWin && isVictory) {
-      xp = Math.floor(xp * config.specialBonuses.firstWinOfDay.xpBonus)
-      gold = Math.floor(gold * config.specialBonuses.firstWinOfDay.goldBonus)
-    }
-
-    return { xpGained: Math.max(5, xp), goldGained: Math.max(1, gold) }
-  }
-  
-  // Calcular recompensas do vencedor
-  const winnerRewards = calculateRewards(
-    battleResult.winnerLevel,
-    true,
-    battleResult.loserLevel,
-    {
-      isFlawless: battleResult.isFlawlessVictory,
-      killTransformed: battleResult.loserTransformed,
-      isFirstWin: battleResult.isFirstWinOfDay
-    }
-  )
-
-  // Calcular recompensas do perdedor
-  const loserRewards = calculateRewards(
-    battleResult.loserLevel,
-    false,
-    battleResult.winnerLevel
-  )
-
+  const pool = (battleResult.winnerStaminaSpent || 0) + (battleResult.loserStaminaSpent || 0)
+  const GOLD_PER = 6.6
+  const XP_PER = 8
+  const winGold = Math.round(pool * GOLD_PER * 0.7)
+  const winXp = Math.round(pool * XP_PER * 0.7)
+  const lossGold = Math.round(pool * GOLD_PER * 0.3)
+  const lossXp = Math.round(pool * XP_PER * 0.3)
   return {
     winner: {
       id: battleResult.winnerId,
-      ...winnerRewards,
-      leveledUp: false, // TODO: Calcular se subiu de nível
+      xpGained: battleResult.winnerStaminaSpent > 0 ? winXp : 0,
+      goldGained: battleResult.winnerStaminaSpent > 0 ? winGold : 0,
+      leveledUp: false,
       newLevel: battleResult.winnerLevel
     },
     loser: {
       id: battleResult.loserId,
-      ...loserRewards,
-      leveledUp: false, // TODO: Calcular se subiu de nível  
+      xpGained: battleResult.loserStaminaSpent > 0 ? lossXp : 0,
+      goldGained: battleResult.loserStaminaSpent > 0 ? lossGold : 0,
+      leveledUp: false,
       newLevel: battleResult.loserLevel
     }
   }
@@ -1986,28 +1832,28 @@ function setFxMult(p, kind, mult, turns) {
 function setFxEvade(p, value, turns) { const fx = getFx(p); fx.evadeBuff = value; fx.evadeBuffTurns = turns }
 const SPECIAL_DEFS = {
   // 🐉 Dragão
-  dragon_breath:      { form: 'dragon', name: '🔥 Sopro de Fogo', kind: 'dmg', die: 20, dmgMult: 1.9, pierce: 0.6, cost: { mp: 12 }, cd: 2 },
-  dragon_scales:      { form: 'dragon', name: '🛡️ Escama de Dragão', kind: 'util', cost: { mp: 8 }, cd: 4, apply: (s) => setFxMult(s, 'dmgTaken', 0.76, 3), msg: '-24% dano recebido por 3 turnos' },
+  dragon_breath:      { form: 'dragon', name: '🔥 Sopro de Fogo', kind: 'dmg', die: 20, dmgMult: 1.9, pierce: 0.6, cost: { mp: 12, stamina: 2 }, cd: 2 },
+  dragon_scales:      { form: 'dragon', name: '🛡️ Escama de Dragão', kind: 'util', cost: { mp: 8, stamina: 1 }, cd: 4, apply: (s) => setFxMult(s, 'dmgTaken', 0.76, 3), msg: '-24% dano recebido por 3 turnos' },
   // 🐺 Lobo
-  bite_bleeding:      { form: 'wolf', name: '🩸 Mordida Sangrenta', kind: 'dmg', die: 20, dmgMult: 1.6, pierce: 1, dot: { frac: 0.03, turns: 3, label: 'sangramento' }, cost: { mp: 12 }, cd: 2 },
+  bite_bleeding:      { form: 'wolf', name: '🩸 Mordida Sangrenta', kind: 'dmg', die: 20, dmgMult: 1.6, pierce: 1, dot: { frac: 0.03, turns: 3, label: 'sangramento' }, cost: { mp: 12, stamina: 2 }, cd: 2 },
   // 😤 Fúria Selvagem — buff OFENSIVO do Lobo (Urso/Águia têm buffs próprios)
-  wild_fury:          { form: 'wolf', name: '😤 Fúria Selvagem', kind: 'util', cost: { mp: 8 }, cd: 4, apply: (s) => setFxMult(s, 'dmgDealt', 1.2, 3), msg: '+20% de dano causado por 3 turnos' },
+  wild_fury:          { form: 'wolf', name: '😤 Fúria Selvagem', kind: 'util', cost: { mp: 8, stamina: 1 }, cd: 4, apply: (s) => setFxMult(s, 'dmgDealt', 1.2, 3), msg: '+20% de dano causado por 3 turnos' },
   // 🐻 Urso
-  unstoppable_charge: { form: 'bear', name: '💥 Investida Imparável', kind: 'dmg', die: 20, dmgMult: 1.72, pierce: 1, cost: { mp: 12 }, cd: 2 },
-  bear_guard:         { form: 'bear', name: '🛡️ Pele de Ferro', kind: 'util', cost: { mp: 8 }, cd: 4, apply: (s) => setFxMult(s, 'dmgTaken', 0.80, 3), msg: '-20% dano recebido por 3 turnos' },
+  unstoppable_charge: { form: 'bear', name: '💥 Investida Imparável', kind: 'dmg', die: 20, dmgMult: 1.72, pierce: 1, cost: { mp: 12, stamina: 2 }, cd: 2 },
+  bear_guard:         { form: 'bear', name: '🛡️ Pele de Ferro', kind: 'util', cost: { mp: 8, stamina: 1 }, cd: 4, apply: (s) => setFxMult(s, 'dmgTaken', 0.80, 3), msg: '-20% dano recebido por 3 turnos' },
   // 🦅 Águia
-  ascending_spiral:   { form: 'eagle', name: '🌀 Espiral Ascendente', kind: 'dmg', die: 20, dmgMult: 2.15, pierce: 0.6, cost: { mp: 12 }, cd: 2 },
-  eagle_swift:        { form: 'eagle', name: '🌬️ Voo Veloz', kind: 'util', cost: { mp: 8 }, cd: 4, apply: (s) => setFxEvade(s, 0.45, 3), msg: '+45% de evasão por 3 turnos' },
+  ascending_spiral:   { form: 'eagle', name: '🌀 Espiral Ascendente', kind: 'dmg', die: 20, dmgMult: 2.15, pierce: 0.6, cost: { mp: 12, stamina: 2 }, cd: 2 },
+  eagle_swift:        { form: 'eagle', name: '🌬️ Voo Veloz', kind: 'util', cost: { mp: 8, stamina: 1 }, cd: 4, apply: (s) => setFxEvade(s, 0.45, 3), msg: '+45% de evasão por 3 turnos' },
   // ✨ 7º Sentido (humano)
-  cosmo_burst:        { form: 'seventh_sense', name: '🌌 Explosão de Cosmo', kind: 'dmg', die: 20, dmgMult: 2.1, cost: { mp: 12 }, cd: 2 },
-  meditation:         { form: 'seventh_sense', name: '🧘 Meditação', kind: 'util', heal: 0.14, cost: { mp: 8 }, cd: 4, msg: 'cura 14% do HP máximo' },
+  cosmo_burst:        { form: 'seventh_sense', name: '🌌 Explosão de Cosmo', kind: 'dmg', die: 20, dmgMult: 2.1, cost: { mp: 12, stamina: 2 }, cd: 2 },
+  meditation:         { form: 'seventh_sense', name: '🧘 Meditação', kind: 'util', heal: 0.14, cost: { mp: 8, stamina: 1 }, cd: 4, msg: 'cura 14% do HP máximo' },
   // 🌟 Celestial (elfo)
-  super_nova:         { form: 'celestial', name: '💥 Super Nova', kind: 'dmg', die: 20, dmgMult: 2.0, pierce: 0.5, cost: { mp: 12 }, cd: 2 },
-  hyperfocus:         { form: 'celestial', name: '✨ Hyperfoco', kind: 'util', cost: { mp: 8 }, cd: 4, apply: (s) => setFxMult(s, 'dmgDealt', 1.3, 3), msg: '+30% de dano causado por 3 turnos' },
+  super_nova:         { form: 'celestial', name: '💥 Super Nova', kind: 'dmg', die: 20, dmgMult: 2.0, pierce: 0.5, cost: { mp: 12, stamina: 2 }, cd: 2 },
+  hyperfocus:         { form: 'celestial', name: '✨ Hyperfoco', kind: 'util', cost: { mp: 8, stamina: 1 }, cd: 4, apply: (s) => setFxMult(s, 'dmgDealt', 1.3, 3), msg: '+30% de dano causado por 3 turnos' },
   // 💫 Golpe Atordoante — CONTROLE PURO compartilhado pelas 6 formas: dano simbólico,
   // rolagem ≥15 (30%) IMOBILIZA 1 turno. dodgeable: único especial que a esquiva
   // PASSIVA do alvo anula (golpe físico mirado; balance no pvp-lever-sim 2026-07-11).
-  stunning_blow:      { forms: ['dragon', 'wolf', 'bear', 'eagle', 'seventh_sense', 'celestial'], name: '💫 Golpe Atordoante', kind: 'dmg', die: 20, dmgMult: 0.8, immobilizeRoll: 15, dodgeable: true, cost: { mp: 10 }, cd: 3 },
+  stunning_blow:      { forms: ['dragon', 'wolf', 'bear', 'eagle', 'seventh_sense', 'celestial'], name: '💫 Golpe Atordoante', kind: 'dmg', die: 20, dmgMult: 0.8, immobilizeRoll: 15, dodgeable: true, cost: { mp: 10, stamina: 2 }, cd: 3 },
 }
 
 // 🌳 Especial ASSINATURA/BUFF da forma (p/ o gate/rank da árvore) — o de dano que NÃO
@@ -2077,7 +1923,9 @@ function processSpecialAbility(player, opponent, abilityId) {
   const fx = getFx(player)
   if ((fx.abilityCd[abilityId] || 0) > 0) return { success: false, error: `Em recarga: ${fx.abilityCd[abilityId]} turno(s)` }
 
-  player.stamina = Math.max(0, (player.stamina || 0) - (cost.stamina || 0))
+  const spentSta = cost.stamina || 0
+  player.stamina = Math.max(0, (player.stamina || 0) - spentSta)
+  if (spentSta > 0) trackFightStamina(player, spentSta)
   player.mp = Math.max(0, (player.mp || 0) - (cost.mp || 0))
   fx.abilityCd[abilityId] = def.cd || 0
 

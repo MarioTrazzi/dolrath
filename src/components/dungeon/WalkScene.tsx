@@ -90,9 +90,17 @@ function lerp(a: number, b: number, t: number) {
   return a + (b - a) * t
 }
 
-function easeInOutCubic(t: number) {
-  const u = clamp(t, 0, 1)
-  return u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2
+/** Catmull-Rom 1D — curva contínua entre nós (sem canto seco). */
+function catmullRom(p0: number, p1: number, p2: number, p3: number, t: number) {
+  const t2 = t * t
+  const t3 = t2 * t
+  return (
+    0.5 *
+    (2 * p1 +
+      (-p0 + p2) * t +
+      (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
+      (-p0 + 3 * p1 - 3 * p2 + p3) * t3)
+  )
 }
 
 function paintFallbackMap(
@@ -155,11 +163,10 @@ export default function WalkScene({
   const mapImgRef = useRef<HTMLImageElement | null>(null)
   const animRef = useRef(0)
   const segmentTRef = useRef(0)
-  /** Progresso exibido (suavizado) — evita spikes de velocidade. */
-  const displaySegRef = useRef(0)
   const weaveRef = useRef({ x: 0, y: 0 })
   const camRef = useRef({ x: 0, y: 0 })
   const camReadyRef = useRef(false)
+  const mapSizeRef = useRef({ viewW: 0, viewH: 0, mapW: 0, mapH: 0 })
   const bobRef = useRef(0)
   const modeRef = useRef(mode)
   const approachDoneRef = useRef(false)
@@ -178,23 +185,16 @@ export default function WalkScene({
   nodeIndexRef.current = nodeIndex
   pathRef.current = pathPoints
 
-  // Reset segment quando o modo muda
+  // Reset só o progresso ao mudar de modo — weave/câmera continuam (sem teleport)
   useEffect(() => {
     if (mode === 'scroll') {
       approachDoneRef.current = false
       segmentTRef.current = 0
-      displaySegRef.current = 0
-      weaveRef.current = { x: 0, y: 0 }
     } else if (mode === 'approach') {
       approachDoneRef.current = false
-      // Continua de onde o scroll chegou (sem snap se já estiver lá)
-      if (segmentTRef.current < SCROLL_FRACTION - 0.02) {
-        segmentTRef.current = SCROLL_FRACTION
-      }
+      // Sem snap: segue do ponto atual até 1
     } else if (mode === 'idle') {
       segmentTRef.current = 0
-      displaySegRef.current = 0
-      weaveRef.current = { x: 0, y: 0 }
       approachDoneRef.current = false
     }
   }, [mode])
@@ -237,7 +237,19 @@ export default function WalkScene({
       canvas.style.width = `${w}px`
       canvas.style.height = `${h}px`
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-      camReadyRef.current = false
+
+      // Só recalcula o mapa se a viewport mudou de verdade (evita micro-teleports)
+      const prev = mapSizeRef.current
+      if (Math.abs(prev.viewW - w) > 1 || Math.abs(prev.viewH - h) > 1 || prev.mapW === 0) {
+        const mapImg = mapImgRef.current
+        const aspect = mapImg
+          ? mapImg.naturalHeight / mapImg.naturalWidth
+          : 1536 / 1024
+        const mapW = Math.max(w * MAP_ZOOM, (h * 1.55) / aspect)
+        const mapH = mapW * aspect
+        mapSizeRef.current = { viewW: w, viewH: h, mapW, mapH }
+        camReadyRef.current = false
+      }
     }
     resize()
     const ro = new ResizeObserver(resize)
@@ -248,6 +260,17 @@ export default function WalkScene({
       if (!pts.length) return { x: 50, y: 94 }
       const i = clamp(idx, 0, pts.length - 1)
       return pts[i]
+    }
+
+    const pathPos = (idx: number, t: number) => {
+      const p0 = pointAt(idx - 1)
+      const p1 = pointAt(idx)
+      const p2 = pointAt(idx + 1)
+      const p3 = pointAt(idx + 2)
+      return {
+        x: catmullRom(p0.x, p1.x, p2.x, p3.x, t),
+        y: catmullRom(p0.y, p1.y, p2.y, p3.y, t),
+      }
     }
 
     const worldFromPct = (px: number, py: number, mapW: number, mapH: number) => ({
@@ -268,62 +291,67 @@ export default function WalkScene({
         return
       }
 
+      // Atualiza escala quando a arte do mapa termina de carregar (uma vez)
+      const mapImgLoaded = mapImgRef.current
+      if (mapImgLoaded && mapImgLoaded.naturalWidth > 0) {
+        const aspect = mapImgLoaded.naturalHeight / mapImgLoaded.naturalWidth
+        const wantW = Math.max(w * MAP_ZOOM, (h * 1.55) / aspect)
+        const old = mapSizeRef.current
+        if (old.mapW > 0 && Math.abs(wantW - old.mapW) > 2 && Math.abs(old.viewW - w) <= 1) {
+          const mapW = wantW
+          const mapH = mapW * aspect
+          const sx = mapW / old.mapW
+          const sy = mapH / old.mapH
+          camRef.current = { x: camRef.current.x * sx, y: camRef.current.y * sy }
+          mapSizeRef.current = { viewW: w, viewH: h, mapW, mapH }
+        } else if (old.mapW === 0) {
+          mapSizeRef.current = {
+            viewW: w,
+            viewH: h,
+            mapW: wantW,
+            mapH: wantW * aspect,
+          }
+          camReadyRef.current = false
+        }
+      }
+
       const m = modeRef.current
       const idx = nodeIndexRef.current
-      const pts = pathRef.current
-      const lastIdx = Math.max(0, pts.length - 1)
+      const lastIdx = Math.max(0, pathRef.current.length - 1)
 
-      // --- alvo linear (velocidade estável); display segue com damping ---
+      // Progresso contínuo e linear (sem ease que gera puxão)
       if (m === 'scroll') {
         segmentTRef.current = Math.min(
           SCROLL_FRACTION,
           segmentTRef.current + (SCROLL_FRACTION / SCROLL_DUR) * dt,
         )
       } else if (m === 'approach') {
-        const approachRange = 1 - SCROLL_FRACTION
-        segmentTRef.current = Math.min(
-          1,
-          segmentTRef.current + (approachRange / APPROACH_DUR) * dt,
-        )
+        const speed = (1 - SCROLL_FRACTION) / APPROACH_DUR
+        segmentTRef.current = Math.min(1, segmentTRef.current + speed * dt)
         if (segmentTRef.current >= 1 && !approachDoneRef.current) {
           approachDoneRef.current = true
+          segmentTRef.current = 1
           onCompleteRef.current?.()
         }
       }
 
-      const rawSeg = m === 'idle' ? 0 : clamp(segmentTRef.current, 0, 1)
-      // Target de progresso: linear no vasculhar; easeInOut suave na estilingada
-      // (sem easeOut no início — evitava spike de velocidade ao avistar).
-      let targetSeg: number
-      if (m === 'idle') {
-        targetSeg = 0
-      } else if (rawSeg <= SCROLL_FRACTION) {
-        targetSeg = rawSeg
-      } else {
-        const u = (rawSeg - SCROLL_FRACTION) / (1 - SCROLL_FRACTION)
-        targetSeg = SCROLL_FRACTION + easeInOutCubic(u) * (1 - SCROLL_FRACTION)
-      }
+      const segT = m === 'idle' ? 0 : clamp(segmentTRef.current, 0, 1)
 
-      // Damping do progresso exibido (corta micro-spikes)
-      const segSmooth = 1 - Math.exp(-10 * dt)
-      displaySegRef.current = lerp(displaySegRef.current, targetSeg, segSmooth)
-      const segT = m === 'idle' ? 0 : displaySegRef.current
+      // Posição na curva entre nó atual e próximo
+      const along = pathPos(idx, segT)
+      let heroPctX = along.x
+      let heroPctY = along.y
 
-      const from = pointAt(idx)
-      const to = pointAt(Math.min(idx + 1, lastIdx))
-      let heroPctX = lerp(from.x, to.x, segT)
-      let heroPctY = lerp(from.y, to.y, segT)
-
-      // Vasculhar: dois arcos laterais contínuos (seno), sem troca brusca de fase
+      // Vasculhar: arcos laterais suaves; amortece a zero no approach/idle (sem corte)
       const searchU = m === 'scroll' && SCROLL_FRACTION > 0
-        ? clamp(rawSeg / SCROLL_FRACTION, 0, 1)
-        : m === 'approach' ? 1 : 0
+        ? clamp(segT / SCROLL_FRACTION, 0, 1)
+        : 0
       const envelope = m === 'scroll' ? Math.sin(searchU * Math.PI) : 0
       const targetWeaveX =
-        Math.sin(searchU * Math.PI * 2) * envelope * 2.8 +
-        Math.sin(bobRef.current * 2.05) * envelope * 1.1
-      const targetWeaveY = Math.sin(bobRef.current * 1.55) * envelope * 0.45
-      const weaveSmooth = 1 - Math.exp(-8 * dt)
+        Math.sin(searchU * Math.PI * 2) * envelope * 2.2 +
+        Math.sin(bobRef.current * 2.05) * envelope * 0.9
+      const targetWeaveY = Math.sin(bobRef.current * 1.55) * envelope * 0.35
+      const weaveSmooth = 1 - Math.exp(-7 * dt)
       weaveRef.current = {
         x: lerp(weaveRef.current.x, targetWeaveX, weaveSmooth),
         y: lerp(weaveRef.current.y, targetWeaveY, weaveSmooth),
@@ -331,20 +359,17 @@ export default function WalkScene({
       heroPctX += weaveRef.current.x
       heroPctY += weaveRef.current.y
 
-      // Progresso global (inclui segmento em andamento) para bias da câmera
       const baseProg = lastIdx > 0 ? idx / lastIdx : 0
       const stepProg = lastIdx > 0 ? 1 / lastIdx : 0
       const progress = clamp(baseProg + segT * stepProg, 0, 1)
 
-      // --- mapa único (sem tile) ---
-      // Garante altura extra pra pan base→topo (em telas altas o zoom lateral não bastava).
-      const mapImg = mapImgRef.current
-      const aspect = mapImg
-        ? mapImg.naturalHeight / mapImg.naturalWidth
-        : 1536 / 1024
-      const mapW = Math.max(w * MAP_ZOOM, (h * 1.55) / aspect)
-      const mapH = mapW * aspect
+      const { mapW, mapH } = mapSizeRef.current
+      if (mapW < 1 || mapH < 1) {
+        animRef.current = requestAnimationFrame(drawFrame)
+        return
+      }
 
+      const mapImg = mapImgRef.current
       const heroWorld = worldFromPct(heroPctX, heroPctY, mapW, mapH)
       const biasY = screenBiasY(progress, h)
       const targetCamX = heroWorld.x - w * 0.5
@@ -360,8 +385,8 @@ export default function WalkScene({
         camRef.current = clampedTarget
         camReadyRef.current = true
       } else {
-        // Follow constante e suave (sem salto de taxa no fim)
-        const follow = m === 'approach' ? 6 : 4.5
+        // Câmera bem colada no card — segue em vez de “teleportar” ao corrigir atraso
+        const follow = 14
         const k = 1 - Math.exp(-follow * dt)
         camRef.current = {
           x: lerp(camRef.current.x, clampedTarget.x, k),
@@ -375,7 +400,6 @@ export default function WalkScene({
 
       ctx.clearRect(0, 0, w, h)
 
-      // Desenha o mapa uma vez, deslocado pela câmera
       ctx.save()
       ctx.translate(-cam.x, -cam.y)
       if (mapImg) {
@@ -387,7 +411,6 @@ export default function WalkScene({
       }
       ctx.restore()
 
-      // Trail marks nos nós visitados (espaço do mapa → tela)
       for (const mark of marksRef.current) {
         const markIdx = clamp(mark.id, 0, lastIdx)
         const mp = pointAt(markIdx)
@@ -403,7 +426,6 @@ export default function WalkScene({
         ctx.globalAlpha = 1
       }
 
-      // Halo menor — menos mapa à vista, menos sensação de loop
       const lightR = Math.min(w, h) * VISION_RADIUS
       const fog = ctx.createRadialGradient(heroScreenX, heroScreenY, lightR * 0.1, heroScreenX, heroScreenY, lightR)
       fog.addColorStop(0, 'rgba(0,0,0,0)')
@@ -420,7 +442,6 @@ export default function WalkScene({
       ctx.fillStyle = warm
       ctx.fillRect(heroScreenX - lightR, heroScreenY - lightR, lightR * 2, lightR * 2)
 
-      // "?" só depois de avistar (fim do vasculhar / approach)
       const spotted = m === 'approach' || (m === 'scroll' && searchU >= SPOT_RATIO)
       const spotFade = m === 'approach'
         ? 1

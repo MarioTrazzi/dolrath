@@ -9,6 +9,7 @@ import {
   rollKillLoot,
   addDropToInventoryTx,
   dailyGoldRemainingTx,
+  applyGearWearTx,
   pendingMonsters,
   type RunPending,
 } from '@/lib/dungeonRunServer'
@@ -212,22 +213,7 @@ export async function POST(req: Request) {
         })
       }
       if (equipmentWear.length > 0 && weaponWear > 0) {
-        await tx.characterEquipment.updateMany({
-          where: { characterId: character.id, slot: 'WEAPON', durability: { gt: weaponWear } },
-          data: { durability: { decrement: weaponWear } },
-        })
-        await tx.characterEquipment.updateMany({
-          where: { characterId: character.id, slot: 'WEAPON', durability: { gt: 0, lte: weaponWear } },
-          data: { durability: 0 },
-        })
-        await tx.characterEquipment.updateMany({
-          where: { characterId: character.id, slot: { not: 'WEAPON' }, durability: { gt: gearWear } },
-          data: { durability: { decrement: gearWear } },
-        })
-        await tx.characterEquipment.updateMany({
-          where: { characterId: character.id, slot: { not: 'WEAPON' }, durability: { gt: 0, lte: gearWear } },
-          data: { durability: 0 },
-        })
+        await applyGearWearTx(tx, character.id, weaponWear, gearWear)
       }
 
       return { killGold, lootGold, skippedDrops, equipmentWear }

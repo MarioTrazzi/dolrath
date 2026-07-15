@@ -136,6 +136,30 @@ const ATTACK_MP: Record<string, number> = { light_attack: 0, heavy_attack: 8 }
 const ATTACK_STA: Record<string, number> = { light_attack: 1, heavy_attack: 2 }
 const ATTACK_DIE: Record<string, number> = { light_attack: 6, heavy_attack: 8 }
 
+// 🏆 Resultado da aposta, vindo de /api/battle/rewards via socket. A arena paga OURO e
+// XP — nunca item (os jogadores apostam e o governo paga); quem quer espólio vai à
+// masmorra. `equipmentWear` existe porque a luta gasta o equipamento, igual ao abate.
+interface BattleRewardSide {
+  id: string
+  xpGained: number
+  goldGained: number
+  leveledUp?: boolean
+  newLevel?: number
+  staminaCharged?: number
+  rankPoints?: number
+  equipmentWear?: { slot: string; name: string; durability: number; maxDurability: number; justBroke: boolean }[]
+  /** A rota não respondeu: não há o que mostrar, e mentir número seria pior. */
+  failed?: boolean
+  /** Luta que não gera faucet (mesma conta / curta demais). */
+  skipped?: 'same_user' | 'below_min_stamina' | null
+}
+interface BattleRewardsPayload {
+  winner?: BattleRewardSide
+  loser?: BattleRewardSide
+  failed?: boolean
+  skipped?: 'same_user' | 'below_min_stamina' | null
+}
+
 // Função para criar conexão Socket.IO real
 function createSocketConnection(): Socket {
   // URL do servidor WebSocket (Render) em produção
@@ -241,6 +265,9 @@ function CombatPageContent() {
   }
 
   const combatLogRef = useRef<HTMLDivElement>(null)
+  // 🏆 Resumo da aposta: o que ESTE jogador levou da luta (antes isto virava uma
+  // mensagem de chat que o próprio jogador mandava pra si mesmo).
+  const [battleReward, setBattleReward] = useState<BattleRewardSide | null>(null)
   // 📱 Mobile: o chat/log sai do rodapé (onde disputava espaço com as ações) e vira
   // um bottom-sheet aberto pelo botão 💬; o badge conta mensagens de chat não lidas.
   const [chatOpen, setChatOpen] = useState(false)
@@ -364,6 +391,10 @@ function CombatPageContent() {
         console.log('📊 Fase atual:', room.phase)
         console.log('🎯 Pending Action:', room.pendingAction)
         setCombatRoom(room)
+        // A luta recomeçou: limpa a bolsa da luta ANTERIOR. Sem isto o card de
+        // recompensa da luta passada aparece no fim da próxima (e continua lá se a
+        // rota falhar) — mostrando ouro que este jogador não ganhou agora.
+        if (room.isActive) setBattleReward(null)
 
         // 🔥 CORREÇÃO CRÍTICA: Sincronizar dados da sala SEM sobrescrever mudanças locais imediatas
         if (currentPlayer && room.player1?.id === currentPlayer.id && room.player1) {
@@ -548,25 +579,10 @@ function CombatPageContent() {
         }
       })
 
-      socket.on('battle_rewards', (data: {
-        winner: { id: string; xpGained: number; goldGained: number; staminaCharged?: number; rankPoints?: number }
-        loser: { id: string; xpGained: number; goldGained: number; staminaCharged?: number; rankPoints?: number }
-      }) => {
+      socket.on('battle_rewards', (data: BattleRewardsPayload) => {
         const side = data.winner?.id === characterId ? data.winner : data.loser?.id === characterId ? data.loser : null
         if (!side) return
-        const bits = [
-          side.xpGained ? `+${side.xpGained} XP` : null,
-          side.goldGained ? `+${side.goldGained} gold` : null,
-          side.staminaCharged ? `−${side.staminaCharged} STA` : null,
-          side.rankPoints != null ? `${side.rankPoints} pts ranking` : null,
-        ].filter(Boolean)
-        if (bits.length) {
-          socket.emit('chat_message', {
-            playerId: characterId,
-            roomId,
-            message: `🎁 Recompensa: ${bits.join(' · ')}`,
-          })
-        }
+        setBattleReward({ ...side, failed: !!data.failed, skipped: data.skipped ?? null })
       })
 
       // Se temos characterId, carregar dados do personagem específico
@@ -1478,10 +1494,45 @@ function CombatPageContent() {
                   )}
                 </div>
               ) : combatRoom?.phase === CombatPhase.COMBAT_END ? (
-                <div className="text-center space-y-4">
+                <div className="text-center space-y-3">
                   <div className={`text-xl sm:text-2xl font-bold ${isWinner ? 'text-success' : 'text-error'}`}>
                     {isWinner ? '🏆 VITÓRIA!' : '💀 DERROTA!'}
                   </div>
+
+                  {/* 💰 O acerto da aposta: ouro + XP, sem espólio (a arena não dropa item) */}
+                  {battleReward && (
+                    battleReward.failed ? (
+                      <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-warning">
+                        ⚠️ As recompensas não puderam ser creditadas. Nada foi perdido — tente a próxima luta.
+                      </div>
+                    ) : battleReward.skipped ? (
+                      <div className="rounded-lg border border-white/15 bg-black/30 p-3 text-xs text-text-secondary">
+                        {battleReward.skipped === 'same_user'
+                          ? '🤝 Luta entre personagens da mesma conta — vale como treino, sem recompensa.'
+                          : '⚡ Luta curta demais para valer recompensa.'}
+                      </div>
+                    ) : (
+                      <div className="rounded-lg border border-amber-500/30 bg-amber-900/15 p-3 space-y-2">
+                        <div className="text-[10px] font-bold text-amber-300">💰 A BOLSA DA ARENA</div>
+                        <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-xs font-bold">
+                          {battleReward.xpGained > 0 && <span className="text-sky-300">+{battleReward.xpGained} XP</span>}
+                          {battleReward.goldGained > 0 && <span className="text-amber-300">+{battleReward.goldGained} 💰</span>}
+                          {!!battleReward.staminaCharged && <span className="text-emerald-300">−{battleReward.staminaCharged} ⚡</span>}
+                          {battleReward.rankPoints != null && <span className="text-fuchsia-300">{battleReward.rankPoints} pts</span>}
+                        </div>
+                        {battleReward.leveledUp && (
+                          <div className="text-xs font-bold text-success">🎉 Subiu para o nível {battleReward.newLevel}!</div>
+                        )}
+                        {/* 🔧 A luta gasta o equipamento (igual ao abate na masmorra) */}
+                        {!!battleReward.equipmentWear?.some((w) => w.justBroke) && (
+                          <div className="text-[11px] text-error font-bold">
+                            💥 Quebrou: {battleReward.equipmentWear.filter((w) => w.justBroke).map((w) => w.name).join(', ')} — repare no ferreiro!
+                          </div>
+                        )}
+                      </div>
+                    )
+                  )}
+
                   <button
                     onClick={() => router.push('/combat-lobby')}
                     className="bg-primary hover:bg-primary-dark text-white px-6 py-2 rounded-lg w-full transition-colors"

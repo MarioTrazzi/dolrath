@@ -629,7 +629,10 @@ export function scaleMonster(
     // AP um pouco acima do ataque físico para o especial ser ameaçador.
     magicPower: hasSpecial ? Math.floor(attack * 1.2) : 0,
     hasSpecial,
-    goldReward: Math.floor((s.isBoss ? 150 + Math.random() * 150 : s.isMain ? 25 + Math.random() * 25 : 6 + Math.random() * 10) * rewardScale * tierFactor * tierReward),
+    // ⚖️ 2026-07-15 — ouro de abate cortado à METADE (era boss 150+150, main 25+25,
+    // menor 6+10): ver a nota em GOLD_BASE. O xpReward NÃO foi tocado — a masmorra
+    // continua ensinando no mesmo ritmo; o que migrou p/ a arena foi só o ouro.
+    goldReward: Math.floor((s.isBoss ? 75 + Math.random() * 75 : s.isMain ? 12.5 + Math.random() * 12.5 : 3 + Math.random() * 5) * rewardScale * tierFactor * tierReward),
     xpReward: Math.floor((s.isBoss ? 150 + Math.random() * 100 : s.isMain ? 35 + Math.random() * 25 : 12 + Math.random() * 12) * rewardScale * tierFactor * tierReward),
     isBoss: !!s.isBoss,
     scale: S,
@@ -845,9 +848,14 @@ function bossIngredientDrop(rarity: 'rare' | 'epic'): LootDrop | null {
 // garantido do 17+ e os gates de faixa (killStone 14+, poção rara 18–19);
 // tudo agora escala linear e o jogador indexa número → multiplicador.
 // ============================================================
-// Base única de ouro: 9+14 (média 16) × goldMult do fator.
-const GOLD_BASE = 9
-const GOLD_VAR = 14
+// Base única de ouro: 4.5+7 (média 8) × goldMult do fator.
+// ⚖️ 2026-07-15 — ESPECIALIZAÇÃO DE MOEDA (arena=ouro, masmorra=itens): o ouro da
+// masmorra foi cortado à METADE (era 9+14, média 16) e a fatia migrou p/ a arena
+// (PVP_GOLD_PER_STA em src/lib/pvpRewards.ts). A masmorra segue pagando em ITENS —
+// pedra/estilhaço/material/gear ficaram INTOCADOS, então a timeline do +15 não muda.
+// Calibrado no economy-unified-sim: VALOR TOTAL/dia plano em PVP_STA_SHARE 0/0.5/1.
+const GOLD_BASE = 4.5
+const GOLD_VAR = 7
 
 // Chances NATURAIS = o que cai com roll 10 (a média do dado).
 const BASE_LOOT = {

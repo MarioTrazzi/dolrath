@@ -21,7 +21,8 @@
 //   • defeatChance: mesma curva do farm-progression-sim (boss ~75% no alvo)
 //   • POTS_RUN poções de vida por run (craft-first, senão loja)
 //   • desgaste: arma −2/abate (boss 2×), 5 peças −1; reparo = cópia/25 pts
-//   • PvP: PVP_WINS/dia por conta (recompensa da battle/rewards, sem stamina)
+//   • PvP: PVP_STA_SHARE do orçamento vai p/ a arena (o RESTO vai p/ a masmorra) —
+//     as duas atividades disputam a MESMA stamina; recompensa = calculatePvpStaminaRewards
 //
 // Uso:
 //   npm run sim:economy            (ou o comando ts-node abaixo)
@@ -66,6 +67,8 @@ import {
 } from '@/lib/itemCatalog'
 import { getXPForNextLevel } from '@/lib/experienceSystem'
 import { SELL_FRACTION_CRAFT_INPUT, SELL_FRACTION_CONSUMABLE } from '@/lib/sellPricing'
+import { calculatePvpStaminaRewards, PVP_MIN_ENTRY_STAMINA } from '@/lib/pvpRewards'
+import { PVP_FIGHT_WEAR_KILLS, WEAR_WEAPON_PER_KILL, WEAR_GEAR_PER_KILL } from '@/lib/durability'
 
 // ---------------- Parâmetros ----------------
 const DAYS = Number(process.env.DAYS ?? 30)
@@ -75,7 +78,18 @@ const DUNGEON_ID = String(process.env.DUNGEON ?? 'floresta')
 const UTIL = Number(process.env.UTIL ?? 0.75)           // fração do dia jogada (farm sim: 0.75)
 const DAILY_GOLD_CAP = Number(process.env.CAP ?? 20000) // dungeonDailyGoldCap default
 const POTS_RUN = Number(process.env.POTS_RUN ?? 4)      // poções de vida consumidas por run
-const PVP_WINS = Number(process.env.PVP_WINS ?? 2)      // vitórias PvP/dia por conta
+// ⚔️ Arena: fração do orçamento diário de stamina que vai p/ PvP (0 = só masmorra,
+// 1 = só arena, 0.5 = o "jogador equilibrado"). O resto sobra p/ a masmorra — é a
+// MESMA stamina disputada, que é o ponto do design (arena=ouro, masmorra=itens).
+const PVP_STA_SHARE = Number(process.env.PVP_STA_SHARE ?? 0.5)
+const PVP_STA_FIGHT = Number(process.env.PVP_STA_FIGHT ?? 20) // stamina gasta por luta (golpes: ~12 ações × ~1.7⚡)
+const PVP_WINRATE = Number(process.env.PVP_WINRATE ?? 0.5)    // matchmaking justo: 50%
+const PVP_FLAWLESS = Number(process.env.PVP_FLAWLESS ?? 0.15) // % das vitórias sem tomar dano
+// 🔧 Desgaste na arena, em "abates-equivalentes" por luta (durability.ts, aplicado em
+// battle/rewards). Sem ele a arena é a única atividade SEM custo operacional e domina:
+// o sim mostrava +15 em 15d p/ quem só luta vs 18d p/ quem só masmorra. PVP_WEAR=0
+// mede o contrafactual (como era antes de 2026-07-15).
+const PVP_WEAR_KILLS = Number(process.env.PVP_WEAR ?? PVP_FIGHT_WEAR_KILLS)
 const REVIVE = Number(process.env.REVIVE ?? 0.7)        // % das quedas cobertas (segue a run)
 const EXPANSIONS = Number(process.env.EXPANSIONS ?? 2)  // expansões de inventário/char (1000g cada, amortizado)
 const CSV = process.env.CSV === '1'
@@ -134,23 +148,35 @@ interface Ledger {
   dgGold: number; dgKillGold: number; pvpGold: number; sellGold: number
   // sinks
   potCraftFee: number; potBuy: number; refineFee: number; repair: number; expansion: number
+  marketBuy: number; stonesBought: number // 🏪 ouro → pedra no marketplace P2P
   // contadores
   runs: number; kills: number; bossKills: number
-  staminaDungeon: number; staminaGather: number; staminaFarm: number
+  staminaDungeon: number; staminaGather: number; staminaFarm: number; staminaPvp: number
   goldFromDungeonActivity: number // p/ gold-por-stamina
   goldFromGatherSell: number; goldFromFarmSell: number
-  xpDungeon: number
+  xpDungeon: number; xpPvp: number; fights: number
+  stonesGained: number; shardsGained: number // ⚖️ o que a masmorra entrega ALÉM do ouro
   capHitDays: number
   sellByKind: Map<string, number>
 }
 const newLedger = (): Ledger => ({
   dgGold: 0, dgKillGold: 0, pvpGold: 0, sellGold: 0,
   potCraftFee: 0, potBuy: 0, refineFee: 0, repair: 0, expansion: 0,
+  marketBuy: 0, stonesBought: 0,
   runs: 0, kills: 0, bossKills: 0,
-  staminaDungeon: 0, staminaGather: 0, staminaFarm: 0,
+  staminaDungeon: 0, staminaGather: 0, staminaFarm: 0, staminaPvp: 0,
   goldFromDungeonActivity: 0, goldFromGatherSell: 0, goldFromFarmSell: 0,
-  xpDungeon: 0, capHitDays: 0, sellByKind: new Map(),
+  xpDungeon: 0, xpPvp: 0, fights: 0, stonesGained: 0, shardsGained: 0,
+  capHitDays: 0, sellByKind: new Map(),
 })
+
+// ⚖️ Valor de mercado da pedra (STONE_META): loja 250/220, venda 150/130 — o preço P2P
+// fica no meio. É a régua p/ comparar "itens da masmorra" com "ouro da arena".
+const STONE_MARKET_GOLD = Number(process.env.STONE_GOLD ?? 200)
+// 🏪 Marketplace P2P ligado? (MARKET=1). É a hipótese central do design: quem faz arena
+// compra pedra com ouro de quem masmorra. Default 0 = mede o pior caso (sem liquidez).
+const MARKET = process.env.MARKET === '1'
+const MARKET_GOLD_RESERVE = Number(process.env.MARKET_RESERVE ?? 1500) // caixa p/ poções/reparo
 
 const addItem = (v: Vault, name: string, qty = 1) => v.items.set(name, (v.items.get(name) ?? 0) + qty)
 const takeItem = (v: Vault, name: string, qty: number): boolean => {
@@ -186,7 +212,9 @@ function absorbDrops(v: Vault, led: Ledger, drops: LootDrop[], c: Char | null, c
   for (const d of drops) {
     if (d.kind === 'stone') {
       if (d.name.includes('(Arma)')) v.stonesW++; else v.stonesA++
+      led.stonesGained++
     } else if (d.name.startsWith('Estilhaço de Pedra Negra')) {
+      led.shardsGained++
       if (d.name.includes('(Arma)')) v.shardsW++; else v.shardsA++
     } else if (d.kind === 'item') {
       // gear cai JÁ aprimorado (floresta +4..+7, rollDropEnhancement): se supera a
@@ -343,6 +371,26 @@ function enhance(v: Vault, c: Char) {
   }
 }
 
+// 🏪 MARKETPLACE (MARKET=1): o jogador da arena converte OURO em PEDRA comprando de
+// quem masmorra. É a peça que fecha o design da especialização — sem uma ponta
+// vendendo pedra, quem escolhe a arena nunca fecha o +15 por mais ouro que junte.
+// Liquidez infinita = cenário OTIMISTA (mostra o teto, não a realidade do day-1).
+function buyStonesFromMarket(v: Vault, led: Ledger, chars: Char[]) {
+  if (!MARKET) return
+  const needsW = chars.some((c) => c.pieces[0] < 15)
+  const needsA = chars.some((c) => c.pieces.slice(1).some((p) => p < 15))
+  let guard = 0
+  while (v.gold >= STONE_MARKET_GOLD + MARKET_GOLD_RESERVE && guard++ < 500) {
+    // 1 arma : 5 armaduras — a proporção real do set (mesma lógica do STONE_WEAPON_SHARE)
+    const buyW = needsW && (!needsA || guard % 6 === 0)
+    if (!buyW && !needsA) break
+    if (buyW) v.stonesW++; else v.stonesA++
+    v.gold -= STONE_MARKET_GOLD
+    led.marketBuy += STONE_MARKET_GOLD
+    led.stonesBought++
+  }
+}
+
 function sellSurplus(v: Vault, led: Ledger, potIngredientBuffer: number, capLeft: { v: number }) {
   // ⚠️ Map.forEach (não for..of): target es5 sem downlevelIteration NÃO itera Map em for..of.
   v.items.forEach((qty, name) => {
@@ -441,16 +489,55 @@ function farmDay(v: Vault, led: Ledger, c: Char): number {
   return stamina
 }
 
-// ---------------- PvP (battle/rewards/route.ts — duplicado consciente: é rota) ----------------
-// P1 (2026-07-05): goldBase 40, mult de nível cap 5.0, e cada luta custa 20 de
-// stamina persistente do personagem (recompensa 0 se exausto).
-const PVP_STAMINA_COST = 20
-function pvpGoldForWin(level: number, firstOfDay: boolean): number {
-  let gold = 40
-  const levelMult = Math.min(Math.pow(1.1, level - 1), 5)
-  gold = Math.floor(gold * levelMult * 1.08)
-  if (firstOfDay) gold = Math.floor(gold * 1.5)
-  return Math.max(1, gold)
+// ---------------- ⚔️ ARENA (PvP) ----------------
+// Modelo REAL: calculatePvpStaminaRewards (src/lib/pvpRewards.ts) — pool = a stamina
+// que os DOIS gastaram, split 70/30 win/loss. Zero constante duplicada aqui.
+//
+// 🎲 Design (2026-07-15): a arena paga OURO + XP e NADA MAIS — os jogadores apostam e
+// o governo paga; dropar item numa arena não faz sentido. A masmorra é quem paga em
+// ITENS. As duas disputam a MESMA stamina, então o equilíbrio é ouro/stamina.
+//
+// O oponente é espelho (mesmo nível, mesma stamina por luta): matchmaking justo, sem
+// underdog/bully. Cada luta gasta PVP_STA_FIGHT do MEU orçamento; o pool inclui a
+// stamina do oponente, e é por isso que com 50% de winrate cada lado recebe de volta
+// exatamente o que gastou (0.5×0.7 + 0.5×0.3 = 0.5 do pool = a própria stamina).
+function pvpDay(
+  v: Vault, led: Ledger, c: Char, budget: number,
+  capLeft: { v: number }, winsToday: { n: number },
+): number {
+  // Luta abaixo do piso não gera faucet nenhum (a rota devolve `below_min_stamina`),
+  // então nem simula.
+  if (PVP_STA_FIGHT < PVP_MIN_ENTRY_STAMINA) return 0
+  let spent = 0
+  while (budget - spent >= PVP_STA_FIGHT) {
+    const mySta = PVP_STA_FIGHT
+    const oppSta = PVP_STA_FIGHT
+    const iWon = Math.random() < PVP_WINRATE
+    const firstWin = iWon && winsToday.n === 0
+    const calc = calculatePvpStaminaRewards({
+      winnerStaminaSpent: iWon ? mySta : oppSta,
+      loserStaminaSpent: iWon ? oppSta : mySta,
+      isFlawless: iWon && Math.random() < PVP_FLAWLESS,
+      isFirstWinOfDay: firstWin,
+      winnerLevel: c.level,
+      loserLevel: c.level, // espelho: sem underdog/bully
+    })
+    const mine = iWon ? calc.winner : calc.loser
+    if (iWon) winsToday.n++
+
+    // teto diário compartilhado com a masmorra (a rota real clampa igual)
+    const give = Math.max(0, Math.min(mine.gold, capLeft.v))
+    capLeft.v -= give
+    v.gold += give
+    led.pvpGold += give
+    gainXp(c, mine.xp); led.xpPvp += mine.xp
+    // 🔧 desgaste da luta (wearForPvpFight: arma −2/abate-equiv, cada uma das 5 peças −1)
+    c.wearWeapon += WEAR_WEAPON_PER_KILL * PVP_WEAR_KILLS
+    c.wearArmor += WEAR_GEAR_PER_KILL * PVP_WEAR_KILLS * 5
+    led.fights++
+    spent += mySta
+  }
+  return spent
 }
 
 // ---------------- Loop principal ----------------
@@ -496,6 +583,13 @@ function simulateAccount(nChars: number): TrialResult {
         led.staminaGather += s
         return
       }
+      // ⚔️ ARENA primeiro: consome PVP_STA_SHARE do orçamento; a masmorra fica com o resto.
+      // É a escolha do jogador (arena=ouro, masmorra=itens) disputando a MESMA stamina.
+      if (PVP_STA_SHARE > 0) {
+        const winsToday = { n: 0 }
+        const s = pvpDay(v, led, c, Math.floor(budget * PVP_STA_SHARE), capLeft, winsToday)
+        budget -= s; led.staminaPvp += s
+      }
       // masmorra: runs até o orçamento acabar
       while (budget >= 30) { // custo mínimo de uma run parcial útil
         craftOrBuyPotions(v, led, POTS_RUN)
@@ -509,18 +603,8 @@ function simulateAccount(nChars: number): TrialResult {
       payRepairs(v, led, c)
     })
 
-    // PvP: sem stamina persistente (auditoria 2026-07-05) — só o gate de partidas/dia
-    const pvpLevel = Math.max(...chars.map((c) => c.level))
-    for (let w = 0; w < PVP_WINS; w++) {
-      const g = pvpGoldForWin(pvpLevel, w === 0)
-      v.gold += g; led.pvpGold += g
-      led.staminaDungeon += 0 // stamina do PvP sai do budget do main (linha abaixo)
-    }
-    // custo de stamina do PvP: reduz o budget efetivo do dia seguinte do main —
-    // aproximação: contabiliza como stamina gasta fora das atividades medidas.
-
-
     refineAll(v, led)
+    buyStonesFromMarket(v, led, chars) // 🏪 ouro da arena → pedra (fecha a especialização)
     // pedras no MAIN primeiro (maior nível), depois os alts — política do farm rotativo
     ;[...chars].sort((a, b) => b.level - a.level).forEach((c) => enhance(v, c))
     sellSurplus(v, led, 12, capLeft)
@@ -548,13 +632,14 @@ const per = (n: number, d: number) => (d > 0 ? ((100 * n) / d).toFixed(0) + '%' 
 
 console.log('💰 DOLRATH — SIMULADOR ECONÔMICO UNIFICADO (geradores reais do jogo)')
 console.log(`   masmorra ${dungeon.id} · ${DAYS} dias · ${TRIALS} trials · seed ${SEED} · budget ${DAY_BUDGET} stamina/char/dia`)
-console.log(`   políticas: venda 25% consumível / 50% resto (P0, dentro do cap) · poções/run ${POTS_RUN} (craft-first) · PvP ${PVP_WINS} win/dia · cap diário ${fmt(DAILY_GOLD_CAP)}`)
+console.log(`   políticas: venda 25% consumível / 50% resto (P0, dentro do cap) · poções/run ${POTS_RUN} (craft-first) · cap diário ${fmt(DAILY_GOLD_CAP)}`)
+console.log(`   ⚔️ arena: ${(PVP_STA_SHARE * 100).toFixed(0)}% da stamina · ${PVP_STA_FIGHT}⚡/luta · winrate ${(PVP_WINRATE * 100).toFixed(0)}% (arena=ouro+xp, masmorra=itens)`)
 console.log('')
 
 const csvRows: string[] = ['chars,faucet_total_dia,dungeon_chao,dungeon_abate,venda,pvp,sink_total_dia,pocoes,refino,reparo,expansao,net_dia,gpstam_dungeon,gpstam_coleta,gpstam_fazenda,dias_main_full,dias_all_full']
 
 for (const n of CHAR_COUNTS) {
-  const acc = { faucet: 0, dgChao: 0, dgKill: 0, sell: 0, pvp: 0, sink: 0, pots: 0, refine: 0, repair: 0, exp: 0, gsDg: 0, gsGa: 0, gsFa: 0, mainFull: [] as number[], allFull: [] as number[], lvl: 0, capDays: 0, kills: 0, runs: 0 }
+  const acc = { faucet: 0, dgChao: 0, dgKill: 0, sell: 0, pvp: 0, sink: 0, pots: 0, refine: 0, repair: 0, exp: 0, gsDg: 0, gsGa: 0, gsFa: 0, gsPvp: 0, vsDg: 0, stonesDay: 0, xsDg: 0, xsPvp: 0, market: 0, stonesBought: 0, mainFull: [] as number[], allFull: [] as number[], lvl: 0, capDays: 0, kills: 0, runs: 0, fights: 0 }
   const sellKinds = new Map<string, number>()
 
   for (let t = 0; t < TRIALS; t++) {
@@ -563,16 +648,29 @@ for (const n of CHAR_COUNTS) {
     const L = r.led
     const chao = L.dgGold - L.dgKillGold
     const faucet = L.dgGold + L.sellGold + L.pvpGold
-    const sink = L.potCraftFee + L.potBuy + L.refineFee + L.repair + L.expansion
+    // 🏪 marketBuy NÃO é sink de economia (o ouro vai p/ outro jogador, não some) —
+    // mas é gasto do bolso deste jogador, então entra no net dele.
+    const sink = L.potCraftFee + L.potBuy + L.refineFee + L.repair + L.expansion + L.marketBuy
     acc.faucet += faucet / DAYS
     acc.dgChao += chao / DAYS; acc.dgKill += L.dgKillGold / DAYS
     acc.sell += L.sellGold / DAYS; acc.pvp += L.pvpGold / DAYS
     acc.sink += sink / DAYS
     acc.pots += (L.potCraftFee + L.potBuy) / DAYS; acc.refine += L.refineFee / DAYS
+    acc.market += L.marketBuy / DAYS; acc.stonesBought += L.stonesBought / DAYS
     acc.repair += L.repair / DAYS; acc.exp += L.expansion / DAYS
     acc.gsDg += L.staminaDungeon > 0 ? L.goldFromDungeonActivity / L.staminaDungeon : 0
     acc.gsGa += L.staminaGather > 0 ? L.goldFromGatherSell / L.staminaGather : 0
     acc.gsFa += L.staminaFarm > 0 ? L.goldFromFarmSell / L.staminaFarm : 0
+    acc.gsPvp += L.staminaPvp > 0 ? L.pvpGold / L.staminaPvp : 0
+    acc.fights += L.fights
+    // ⚖️ VALOR/stamina da masmorra = ouro + as pedras que ela retém (a preço P2P).
+    // É esta régua — não o ouro sozinho — que a arena precisa igualar, já que ela
+    // não entrega item nenhum.
+    const stoneEq = L.stonesGained + L.shardsGained / 10
+    acc.stonesDay += stoneEq / DAYS
+    acc.xsDg += L.staminaDungeon > 0 ? L.xpDungeon / L.staminaDungeon : 0
+    acc.xsPvp += L.staminaPvp > 0 ? L.xpPvp / L.staminaPvp : 0
+    acc.vsDg += L.staminaDungeon > 0 ? (L.goldFromDungeonActivity + stoneEq * STONE_MARKET_GOLD) / L.staminaDungeon : 0
     if (r.daysToMainFull) acc.mainFull.push(r.daysToMainFull)
     if (r.daysToAllFull) acc.allFull.push(r.daysToAllFull)
     acc.lvl += r.finalLevelMain
@@ -591,10 +689,21 @@ for (const n of CHAR_COUNTS) {
   console.log(`   FAUCET ${fmt(faucet)}/dia   →  chão ${fmt(acc.dgChao / T)} (${per(acc.dgChao / T, faucet)}) · abate ${fmt(acc.dgKill / T)} (${per(acc.dgKill / T, faucet)}) · venda ${fmt(acc.sell / T)} (${per(acc.sell / T, faucet)}) · pvp ${fmt(acc.pvp / T)} (${per(acc.pvp / T, faucet)})`)
   const kindsStr = Array.from(sellKinds.entries()).map(([k, gv]) => `${k} ${fmt(gv)}`).join(' · ')
   console.log(`     venda por tipo: ${kindsStr || '—'}`)
-  console.log(`   SINK   ${fmt(sink)}/dia   →  poções ${fmt(acc.pots / T)} · refino ${fmt(acc.refine / T)} · reparo ${fmt(acc.repair / T)} · expansão ${fmt(acc.exp / T)}`)
+  console.log(`   SINK   ${fmt(sink)}/dia   →  poções ${fmt(acc.pots / T)} · refino ${fmt(acc.refine / T)} · reparo ${fmt(acc.repair / T)} · expansão ${fmt(acc.exp / T)}${MARKET ? ` · 🏪 pedra ${fmt(acc.market / T)} (${(acc.stonesBought / T).toFixed(1)}/dia)` : ''}`)
   console.log(`   NET    ${net >= 0 ? '+' : ''}${fmt(net)}/dia   (sobra p/ claim on-chain)`)
-  console.log(`   ⚖️ gold/stamina: dungeon ${(acc.gsDg / T).toFixed(1)} · coleta ${(acc.gsGa / T).toFixed(1)} · fazenda ${(acc.gsFa / T).toFixed(1)}`)
-  console.log(`   📈 runs/dia ${(acc.runs / T / DAYS).toFixed(1)} · abates/dia ${(acc.kills / T / DAYS).toFixed(0)} · nível main d${DAYS}: ${(acc.lvl / T).toFixed(0)} · cap 20k batido em ${(acc.capDays / T).toFixed(1)} dia(s)`)
+  // ⚖️ A RÉGUA DO DESIGN (2026-07-15): arena=ouro, masmorra=itens. O jogador escolhe a
+  // COMPOSIÇÃO, não o valor — então este número tem que ficar ~plano em PVP_STA_SHARE
+  // 0 / 0.5 / 1. Se cair conforme a arena cresce, fazer PvP é punição.
+  // pedra COMPRADA entra no valor: o net já pagou por ela (marketBuy está no sink),
+  // então somá-la de volta mantém a régua comparável entre MARKET=0 e MARKET=1.
+  const stonesDay = acc.stonesDay / T + acc.stonesBought / T
+  const totalValue = net + stonesDay * STONE_MARKET_GOLD
+  console.log(`   💎 VALOR TOTAL ${fmt(totalValue)}/dia  =  net ${fmt(net)} + ${stonesDay.toFixed(1)} pedras × ${STONE_MARKET_GOLD}g   ← tem que ficar PLANO em PVP_STA_SHARE 0/0.5/1`)
+  console.log(`   ⚖️ gold/stamina: dungeon ${(acc.gsDg / T).toFixed(1)} · ARENA ${(acc.gsPvp / T).toFixed(1)} · coleta ${(acc.gsGa / T).toFixed(1)} · fazenda ${(acc.gsFa / T).toFixed(1)}`)
+  console.log(`   🎯 VALOR/stamina (ouro + pedras a ${STONE_MARKET_GOLD}g): dungeon ${(acc.vsDg / T).toFixed(1)} vs ARENA ${(acc.gsPvp / T).toFixed(1)}  ← a régua da escolha`)
+  console.log(`      pedras-equiv/dia ${(acc.stonesDay / T).toFixed(1)} (só da masmorra)`)
+  console.log(`   📈 runs/dia ${(acc.runs / T / DAYS).toFixed(1)} · lutas/dia ${(acc.fights / T / DAYS).toFixed(1)} · abates/dia ${(acc.kills / T / DAYS).toFixed(0)} · nível main d${DAYS}: ${(acc.lvl / T).toFixed(0)} · cap 20k batido em ${(acc.capDays / T).toFixed(1)} dia(s)`)
+  console.log(`   📚 xp/stamina: dungeon ${(acc.xsDg / T).toFixed(1)} · ARENA ${(acc.xsPvp / T).toFixed(1)}   (nível também não pode punir quem escolhe a arena)`)
   console.log(`   🎯 set +15: main ${mf ? mf + 'd' : `>${DAYS}d`} (${acc.mainFull.length}/${T} trials) · todos ${af ? af + 'd' : `>${DAYS}d`} (${acc.allFull.length}/${T})`)
   console.log('')
 

@@ -187,16 +187,34 @@ function startOfUtcDay(): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
 }
 
-// Emissão de gold do DIA (UTC) por usuário = masmorra + VENDAS ao ferreiro.
+// Emissão de gold do DIA (UTC) por usuário = masmorra + VENDAS ao ferreiro + ARENA.
 // ⚖️ Balance de lançamento (P0): a venda passava por fora do cap e era ~40% do
 // faucet da conta — agora as duas fontes dividem o MESMO teto diário.
+// ⚖️ 2026-07-15: a ARENA entrou no teto. Antes o ouro de PvP consumia o teto do PvP
+// (battle/rewards tinha a própria cópia desta soma) mas NÃO o da masmorra — dava p/
+// estourar 20k lutando e MAIS 20k masmorrando. Com a arena virando a fonte principal
+// de ouro (PVP_GOLD_PER_STA 31), essa assimetria deixou de ser detalhe.
+export async function pvpGoldEmittedTodayTx(tx: Prisma.TransactionClient, userId: string): Promise<number> {
+  const agg = await tx.characterHistory.aggregate({
+    _sum: { goldAmount: true },
+    where: {
+      createdAt: { gte: startOfUtcDay() },
+      goldAmount: { gt: 0 },
+      description: { startsWith: 'PvP' },
+      character: { userId },
+    },
+  })
+  return agg._sum.goldAmount ?? 0
+}
+
 async function goldEmittedToday(tx: Prisma.TransactionClient, userId: string): Promise<number> {
   const gte = startOfUtcDay()
-  const [runs, sales] = await Promise.all([
+  const [runs, sales, pvp] = await Promise.all([
     tx.dungeonRun.aggregate({ _sum: { goldEarned: true }, where: { userId, createdAt: { gte } } }),
     tx.goldSale.aggregate({ _sum: { amount: true }, where: { userId, createdAt: { gte } } }),
+    pvpGoldEmittedTodayTx(tx, userId),
   ])
-  return (runs._sum.goldEarned ?? 0) + (sales._sum.amount ?? 0)
+  return (runs._sum.goldEarned ?? 0) + (sales._sum.amount ?? 0) + pvp
 }
 
 // Quanto do teto diário AINDA cabe. A rota de combate consulta UMA vez e aloca
@@ -516,6 +534,38 @@ export async function creditGoldTx(
   gold: number,
 ): Promise<number> {
   return creditCappedGoldTx(tx, userId, characterId, gold)
+}
+
+// ⚔️ Aplica desgaste ao gear equipado, com clamp em 0 (peça QUEBRADA — segue equipada,
+// mas sem somar bônus até o reparo). Dois updateMany por grupo porque `decrement` não
+// tem piso: o 1º baixa quem aguenta o débito, o 2º zera quem não aguenta.
+// Compartilhado pela masmorra (dungeon/run/combat) e pela arena (battle/rewards).
+export async function applyGearWearTx(
+  tx: Prisma.TransactionClient,
+  characterId: string,
+  weaponWear: number,
+  gearWear: number,
+): Promise<void> {
+  if (weaponWear > 0) {
+    await tx.characterEquipment.updateMany({
+      where: { characterId, slot: 'WEAPON', durability: { gt: weaponWear } },
+      data: { durability: { decrement: weaponWear } },
+    })
+    await tx.characterEquipment.updateMany({
+      where: { characterId, slot: 'WEAPON', durability: { gt: 0, lte: weaponWear } },
+      data: { durability: 0 },
+    })
+  }
+  if (gearWear > 0) {
+    await tx.characterEquipment.updateMany({
+      where: { characterId, slot: { not: 'WEAPON' }, durability: { gt: gearWear } },
+      data: { durability: { decrement: gearWear } },
+    })
+    await tx.characterEquipment.updateMany({
+      where: { characterId, slot: { not: 'WEAPON' }, durability: { gt: 0, lte: gearWear } },
+      data: { durability: 0 },
+    })
+  }
 }
 
 // Serializa o monstro para o cliente animar (mesma forma do ScaledMonster).

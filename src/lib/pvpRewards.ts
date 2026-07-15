@@ -1,20 +1,35 @@
 /**
- * Recompensas PvP proporcionais à stamina gasta — paridade com EV da masmorra.
+ * ⚔️ Recompensas da ARENA, proporcionais à stamina gasta.
  *
- * Âncora Floresta t1: ~54 STA / run → ~355 gold + ~XP médio.
- * GOLD_PER_STA ≈ 355/54 ≈ 6.6; XP_PER_STA ≈ 8 (ordem de grandeza similar).
+ * 🎲 DESIGN (2026-07-15) — ESPECIALIZAÇÃO DE MOEDA, não paridade de espólio:
+ *   • ARENA    = ouro + XP, e NADA MAIS. Lore: os jogadores apostam e o governo paga;
+ *                dropar item numa arena não faz sentido.
+ *   • MASMORRA = itens (pedra/estilhaço/material/gear) + ouro REDUZIDO à metade.
+ * As duas disputam o MESMO orçamento diário de stamina, então o jogador escolhe a
+ * COMPOSIÇÃO (ouro líquido ou itens), nunca o valor — o VALOR/dia é o mesmo nas duas.
+ * Quem só faz arena progride comprando pedra no marketplace de quem só masmorra.
+ *
+ * ⚠️ A âncora antiga (6.6 = 355 gold ÷ 54 STA da run de Floresta) estava ERRADA: os
+ * 355 eram só o ouro de CHÃO e esqueciam o ouro de ABATE (o boss sozinho dava 150-300).
+ * Resultado: a arena pagava ~1/3 do ouro/stamina da masmorra E não dava item — não
+ * havia razão para lutar (o economy-unified-sim media 7.3 vs 22.2 gold/STA).
+ *
+ * Calibração atual (economy-unified-sim, PVP_STA_SHARE 0/0.5/1): a masmorra entrega
+ * ~41.8 de VALOR/stamina (22.2 ouro + 19.6 em pedras a 200g). Cortado o ouro dela à
+ * metade, a arena precisa pagar ~24/STA em ouro puro p/ o VALOR TOTAL/dia ficar plano.
+ * ⚠️ Mexeu aqui ou no ouro da masmorra? Rode `npm run sim:economy` nos três perfis.
  *
  * Share: vencedor leva a maior fatia do que AMBOS gastaram; perdedor recebe consolação.
- * Sem drops de item — só gold/XP.
  */
 
+/** Stamina mínima gasta p/ a luta valer recompensa (mata o farm de luta de 1 turno). */
 export const PVP_MIN_ENTRY_STAMINA = 5
 
-/** Gold médio por ponto de stamina (âncora Floresta). */
-export const PVP_GOLD_PER_STA = 6.6
+/** Gold médio por ponto de stamina (ver a calibração no cabeçalho). */
+export const PVP_GOLD_PER_STA = 31
 
-/** XP médio por ponto de stamina. */
-export const PVP_XP_PER_STA = 8
+/** XP médio por ponto de stamina — casa com os 11.8/STA que a masmorra paga (sim). */
+export const PVP_XP_PER_STA = 11
 
 /** Fatia do pool total da luta que vai ao vencedor (resto ao perdedor). */
 export const PVP_WIN_SHARE = 0.70

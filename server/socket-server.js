@@ -1712,18 +1712,16 @@ async function processBattleRewards(room, winner, loser, roomId) {
     const winnerTransformed = !!(winner.isTransformed || (winner.transformationType && winner.transformationType !== 'none'))
     const loserTransformed = !!(loser.isTransformed || (loser.transformationType && loser.transformationType !== 'none'))
 
+    // Nível NÃO vai no corpo: a rota lê do banco (o payload do cliente não é autoridade).
+    // updateRanking também saiu — o gate do treino é `room.isTraining`, checado no caller.
     const battleResult = {
       winnerId: winner.id,
       loserId: loser.id,
-      winnerLevel: winner.level || 1,
-      loserLevel: loser.level || 1,
-      battleType: 'pvp',
       isFlawlessVictory,
       winnerTransformed,
       loserTransformed,
       winnerStaminaSpent: winner.fightStaminaSpent || 0,
       loserStaminaSpent: loser.fightStaminaSpent || 0,
-      updateRanking: true,
     }
 
     const appUrl = (process.env.APP_URL || process.env.NEXTAUTH_URL || 'https://dolrath.vercel.app').replace(/\/$/, '')
@@ -1753,19 +1751,33 @@ async function processBattleRewards(room, winner, loser, roomId) {
       rewardData = calculateBattleRewardsLocal(battleResult)
     }
 
-    room.combatLog.push({
-      type: 'rewards',
-      message: `💰 ${winner.name} ganhou ${rewardData.winner.xpGained} XP e ${rewardData.winner.goldGained} gold (−${battleResult.winnerStaminaSpent} STA)!`,
-      timestamp: new Date()
-    })
-
-    room.combatLog.push({
-      type: 'rewards',
-      message: `💝 ${loser.name} ganhou ${rewardData.loser.xpGained} XP e ${rewardData.loser.goldGained} gold (−${battleResult.loserStaminaSpent} STA)!`,
-      timestamp: new Date()
-    })
+    if (rewardData.failed) {
+      room.combatLog.push({
+        type: 'system',
+        message: '⚠️ As recompensas não puderam ser creditadas — nada foi perdido, tente a próxima luta.',
+        timestamp: new Date()
+      })
+    } else if (rewardData.skipped) {
+      const why = rewardData.skipped === 'same_user'
+        ? '🤝 Luta entre personagens da mesma conta: sem recompensa (vale como treino).'
+        : '⚡ Luta curta demais: sem recompensa.'
+      room.combatLog.push({ type: 'system', message: why, timestamp: new Date() })
+    } else {
+      room.combatLog.push({
+        type: 'rewards',
+        message: `💰 ${winner.name} ganhou ${rewardData.winner.xpGained} XP e ${rewardData.winner.goldGained} gold (−${battleResult.winnerStaminaSpent} STA)!`,
+        timestamp: new Date()
+      })
+      room.combatLog.push({
+        type: 'rewards',
+        message: `💝 ${loser.name} ganhou ${rewardData.loser.xpGained} XP e ${rewardData.loser.goldGained} gold (−${battleResult.loserStaminaSpent} STA)!`,
+        timestamp: new Date()
+      })
+    }
 
     io.to(roomId).emit('battle_rewards', {
+      failed: !!rewardData.failed,
+      skipped: rewardData.skipped || null,
       winner: rewardData.winner,
       loser: rewardData.loser,
       battleDetails: {
@@ -1782,30 +1794,16 @@ async function processBattleRewards(room, winner, loser, roomId) {
   }
 }
 
-// Fallback local (UI only — sem DB) se a API falhar
+// A rota não respondeu: NÃO invente recompensa. O fallback antigo recalculava gold/XP
+// aqui (com 6.6/8 hard-coded, que a calibração de 2026-07-15 deixou pra trás) e mandava
+// os números pra UI — mas nada disso tinha ido ao banco. O jogador via ouro que não
+// existia. Zero + `failed` é a verdade; a UI avisa em vez de mentir.
 function calculateBattleRewardsLocal(battleResult) {
-  const pool = (battleResult.winnerStaminaSpent || 0) + (battleResult.loserStaminaSpent || 0)
-  const GOLD_PER = 6.6
-  const XP_PER = 8
-  const winGold = Math.round(pool * GOLD_PER * 0.7)
-  const winXp = Math.round(pool * XP_PER * 0.7)
-  const lossGold = Math.round(pool * GOLD_PER * 0.3)
-  const lossXp = Math.round(pool * XP_PER * 0.3)
+  const empty = (id) => ({ id, xpGained: 0, goldGained: 0, leveledUp: false, equipmentWear: [] })
   return {
-    winner: {
-      id: battleResult.winnerId,
-      xpGained: battleResult.winnerStaminaSpent > 0 ? winXp : 0,
-      goldGained: battleResult.winnerStaminaSpent > 0 ? winGold : 0,
-      leveledUp: false,
-      newLevel: battleResult.winnerLevel
-    },
-    loser: {
-      id: battleResult.loserId,
-      xpGained: battleResult.loserStaminaSpent > 0 ? lossXp : 0,
-      goldGained: battleResult.loserStaminaSpent > 0 ? lossGold : 0,
-      leveledUp: false,
-      newLevel: battleResult.loserLevel
-    }
+    failed: true,
+    winner: empty(battleResult.winnerId),
+    loser: empty(battleResult.loserId),
   }
 }
 

@@ -724,55 +724,43 @@ export default function CombatLobbyPage() {
             </p>
 
             {showTrainingPicker && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                 {TRAINING_OPPONENTS.map((m) => (
                   <button
                     key={m.key}
                     onClick={() => startTraining(m.key)}
-                    className={`rounded-[3px] border p-3 text-center transition-all group relative overflow-hidden ${
+                    className={`relative aspect-[3/4] rounded-[3px] border overflow-hidden group transition-all ${
                       m.unbeatable
                         ? 'border-fuchsia-700/60 hover:border-fuchsia-500'
                         : 'border-[#3c3c41] hover:border-[#8a6d3b]'
                     }`}
-                    style={{ background: 'linear-gradient(160deg, #232327, #101013)' }}
                   >
-                    <div className="relative mx-auto mb-2 h-16 w-16 overflow-hidden rounded-full ring-1 ring-white/15 bg-black/40">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={m.image}
-                        alt={m.name}
-                        className="h-full w-full object-cover group-hover:scale-105 transition-transform"
-                        onError={(e) => {
-                          const el = e.currentTarget
-                          el.style.display = 'none'
-                          const sib = el.nextElementSibling as HTMLElement | null
-                          if (sib) sib.style.display = 'flex'
-                        }}
-                      />
-                      <span className="hidden absolute inset-0 items-center justify-center text-3xl">{m.emoji}</span>
-                    </div>
-                    <div className="font-bold text-[#ece7da] text-sm mb-0.5">{m.name}</div>
-                    <div className="text-[10px] uppercase tracking-wider text-[#8a8a90] mb-1.5">{m.dungeonLabel}</div>
-                    <div className="flex items-center justify-center gap-1.5 mb-2 flex-wrap">
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                        m.difficultyLabel === 'Fácil' ? 'bg-green-900/50 text-green-300'
-                        : m.difficultyLabel === 'Médio' ? 'bg-yellow-900/50 text-yellow-300'
-                        : m.difficultyLabel === 'Difícil' ? 'bg-orange-900/50 text-orange-300'
-                        : m.difficultyLabel === 'Muito difícil' ? 'bg-red-900/50 text-red-300'
-                        : 'bg-fuchsia-900/50 text-fuchsia-200'
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={m.image}
+                      alt={m.name}
+                      className="absolute inset-0 h-full w-full object-cover object-top transition-transform duration-300 group-hover:scale-105"
+                      onError={(e) => {
+                        const el = e.currentTarget
+                        el.style.display = 'none'
+                        const sib = el.nextElementSibling as HTMLElement | null
+                        if (sib) sib.style.display = 'flex'
+                      }}
+                    />
+                    <span className="hidden absolute inset-0 items-center justify-center bg-[#151518] text-5xl">{m.emoji}</span>
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-transparent" />
+                    <div className="absolute inset-x-0 bottom-0 p-2.5 text-center">
+                      <div className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${
+                        m.difficultyLabel === 'Fácil' ? 'text-green-300'
+                        : m.difficultyLabel === 'Médio' ? 'text-yellow-300'
+                        : m.difficultyLabel === 'Difícil' ? 'text-orange-300'
+                        : m.difficultyLabel === 'Muito difícil' ? 'text-red-300'
+                        : 'text-fuchsia-200'
                       }`}>
                         {m.difficultyLabel}
-                      </span>
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-200">
-                        peer {m.gearLabel}
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-[#8a8a90] leading-tight">{m.description}</div>
-                    {m.unbeatable && (
-                      <div className="mt-2 text-[10px] font-semibold text-fuchsia-300/90">
-                        Easter egg · masmorra futura
                       </div>
-                    )}
+                      <div className="font-bold text-[#ece7da] text-sm leading-tight drop-shadow">{m.name}</div>
+                    </div>
                   </button>
                 ))}
               </div>

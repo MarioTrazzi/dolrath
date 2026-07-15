@@ -615,7 +615,7 @@ export default function DungeonRun({
   const LAST = trailPoints.length - 1
   const [tokenIdx, setTokenIdx] = useState(0)
   const [moving, setMoving] = useState(false)
-  /** Treadmill: idle → scroll (mundo rola) → approach (ícone vai no ?) → resolve. */
+  /** Walk: idle → scroll (vasculhar) → approach (avistou ?) → resolve. */
   const [walkMode, setWalkMode] = useState<WalkMode>('idle')
   const [walkTrailMarks, setWalkTrailMarks] = useState<WalkTrailMark[]>([])
   const walkBusy = walkMode === 'scroll' || walkMode === 'approach' || moving
@@ -1281,14 +1281,14 @@ export default function DungeonRun({
     if (!runReady || !runIdRef.current) return
     const dest = tokenIdx + 1
 
-    // --- Treadmill: mundo rola → ? → approach → /step ---
+    // --- Walk: vasculhar lento → avistar ? → approach → /step ---
     if (useWalkScene) {
       setMoving(true)
       setWalkMode('scroll')
       showNarration()
       later(() => {
         setWalkMode('approach')
-      }, 1500)
+      }, 2600)
       return
     }
 

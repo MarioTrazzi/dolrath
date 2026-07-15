@@ -43,12 +43,14 @@ export interface WalkSceneProps {
 }
 
 const MAP_ZOOM = 1.2
-/** Duração do scroll (deve bater com o timer do DungeonRun ~1500ms). */
-const SCROLL_DUR = 1.5
-/** Duração do approach até o nó. */
-const APPROACH_DUR = 0.75
-/** Fração do segmento coberta no scroll (resto no approach). */
-const SCROLL_FRACTION = 0.62
+/** Vasculhar lento até avistar o "?". Sync com timer do DungeonRun. */
+const SCROLL_DUR = 2.6
+/** Avanço decisivo até o nó depois de avistar. */
+const APPROACH_DUR = 0.85
+/** Pouco do caminho no vasculhar — o resto é o rush até o "?". */
+const SCROLL_FRACTION = 0.36
+/** Dentro do scroll: a partir daqui o "?" aparece (avistou). */
+const SPOT_RATIO = 0.58
 
 function roundRectPath(
   ctx: CanvasRenderingContext2D,
@@ -86,8 +88,14 @@ function lerp(a: number, b: number, t: number) {
   return a + (b - a) * t
 }
 
-function easeInOutCubic(t: number) {
-  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
+function easeOutCubic(t: number) {
+  return 1 - Math.pow(1 - t, 3)
+}
+
+/** Vasculhar: começa devagar, avança pouco — sensação de procurar. */
+function easeSearch(t: number) {
+  // ease-out suave: muito tempo no começo andando pouco
+  return 1 - Math.pow(1 - clamp(t, 0, 1), 1.65)
 }
 
 function paintFallbackMap(
@@ -261,7 +269,7 @@ export default function WalkScene({
       const pts = pathRef.current
       const lastIdx = Math.max(0, pts.length - 1)
 
-      // --- segmento 0→1 durante scroll/approach ---
+      // --- segmento: vasculhar lento → avistar ? → approach rápido ---
       if (m === 'scroll') {
         segmentTRef.current = Math.min(
           SCROLL_FRACTION,
@@ -279,11 +287,31 @@ export default function WalkScene({
         }
       }
 
-      const segT = m === 'idle' ? 0 : easeInOutCubic(clamp(segmentTRef.current, 0, 1))
+      const rawSeg = m === 'idle' ? 0 : clamp(segmentTRef.current, 0, 1)
+      // Scroll: ease de busca (lento). Approach: easeOut rápido até o nó.
+      let segT: number
+      if (m === 'idle') {
+        segT = 0
+      } else if (rawSeg <= SCROLL_FRACTION) {
+        const u = SCROLL_FRACTION > 0 ? rawSeg / SCROLL_FRACTION : 0
+        segT = easeSearch(u) * SCROLL_FRACTION
+      } else {
+        const u = (rawSeg - SCROLL_FRACTION) / (1 - SCROLL_FRACTION)
+        segT = SCROLL_FRACTION + easeOutCubic(u) * (1 - SCROLL_FRACTION)
+      }
+
       const from = pointAt(idx)
       const to = pointAt(Math.min(idx + 1, lastIdx))
-      const heroPctX = lerp(from.x, to.x, segT)
-      const heroPctY = lerp(from.y, to.y, segT)
+      let heroPctX = lerp(from.x, to.x, segT)
+      let heroPctY = lerp(from.y, to.y, segT)
+
+      // Vasculhar: serpenteio lateral que some ao avistar / no approach
+      if (m === 'scroll') {
+        const searchU = SCROLL_FRACTION > 0 ? rawSeg / SCROLL_FRACTION : 1
+        const weaveAmp = (1 - searchU) * 5.5 // % do mapa
+        heroPctX += Math.sin(bobRef.current * 2.4) * weaveAmp
+        heroPctY += Math.sin(bobRef.current * 1.7) * 0.6 * (1 - searchU)
+      }
 
       // Progresso global (inclui segmento em andamento) para bias da câmera
       const baseProg = lastIdx > 0 ? idx / lastIdx : 0
@@ -374,15 +402,24 @@ export default function WalkScene({
       ctx.fillStyle = warm
       ctx.fillRect(heroScreenX - lightR, heroScreenY - lightR, lightR * 2, lightR * 2)
 
-      // "?" no próximo nó (à frente na trilha)
-      const showMarker = m === 'approach' || m === 'scroll'
-      if (showMarker && idx < lastIdx) {
+      // "?" só depois de avistar (fim do vasculhar / approach)
+      const searchU = m === 'scroll' && SCROLL_FRACTION > 0
+        ? rawSeg / SCROLL_FRACTION
+        : m === 'approach' || m === 'idle' ? 1 : 0
+      const spotted = m === 'approach' || (m === 'scroll' && searchU >= SPOT_RATIO)
+      const spotFade = m === 'approach'
+        ? 1
+        : m === 'scroll' && spotted
+          ? clamp((searchU - SPOT_RATIO) / (1 - SPOT_RATIO), 0, 1)
+          : 0
+      if (spotted && spotFade > 0.05 && idx < lastIdx) {
         const next = pointAt(idx + 1)
         const nw = worldFromPct(next.x, next.y, mapW, mapH)
         const mx = nw.x - cam.x
         const my = nw.y - cam.y
         const pulse = 0.85 + Math.sin(bobRef.current * 4) * 0.15
         const mr = 13 * pulse
+        ctx.globalAlpha = spotFade
         ctx.beginPath()
         ctx.arc(mx, my, mr, 0, Math.PI * 2)
         ctx.fillStyle = 'rgba(15,15,30,0.9)'
@@ -395,11 +432,17 @@ export default function WalkScene({
         ctx.textBaseline = 'middle'
         ctx.fillStyle = nextBossRef.current ? '#f39c12' : accentRef.current
         ctx.fillText('?', mx, my + 1)
+        ctx.globalAlpha = 1
       }
 
       // Card retangular do personagem
       const sneak = m === 'scroll' || m === 'approach'
-      const bob = sneak ? Math.sin(bobRef.current * 7) * 1.8 : Math.sin(bobRef.current * 2) * 1.0
+      // Vasculhar: bob mais alto/lento; approach: bob rápido de avanço
+      const bob = m === 'scroll'
+        ? Math.sin(bobRef.current * 5.2) * 2.4
+        : sneak
+          ? Math.sin(bobRef.current * 8) * 2.0
+          : Math.sin(bobRef.current * 2) * 1.0
       const hero = heroImgRef.current
       const cardW = Math.min(34, w * 0.085)
       const cardH = cardW * 1.28

@@ -2,9 +2,9 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 
-import { useSession } from 'next-auth/react';
+import { useSession, signOut } from 'next-auth/react';
 import { motion } from 'framer-motion';
-import { User, Shield, Sword, Trash2, Wallet } from 'lucide-react';
+import { User, Shield, Sword, Trash2, Wallet, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import XPProgressBar from '@/components/XPProgressBar';
@@ -457,8 +457,21 @@ export default function DashboardPage() {
           <div className="flex items-start justify-between gap-4 p-4">
             <div className="min-w-0 flex-1">
               <div className="text-[11px] uppercase tracking-[0.14em] text-[#77777d]">Carteira vinculada</div>
-              <div className="truncate font-medium tabular-nums text-[#ece7da]">
-                {session?.user?.walletAddress ? session.user.walletAddress : 'Não vinculada'}
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="truncate font-medium tabular-nums text-[#ece7da]">
+                  {session?.user?.walletAddress ? session.user.walletAddress : 'Não vinculada'}
+                </div>
+                {status === 'authenticated' && (
+                  <button
+                    type="button"
+                    onClick={() => signOut({ callbackUrl: '/' })}
+                    className={`${BEVEL_BTN} shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs hover:border-red-700/60 hover:text-red-300`}
+                    title="Sair da conta"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    Sair
+                  </button>
+                )}
               </div>
               {!session?.user?.walletAddress && status === 'authenticated' && (
                 <div className="mt-2">

@@ -1,12 +1,12 @@
 'use client'
 
-import { useSession, signOut } from 'next-auth/react'
+import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Coins, Wallet, ChevronDown } from 'lucide-react'
+import { Wallet, ChevronDown } from 'lucide-react'
 import { ethers } from 'ethers'
 import toast from 'react-hot-toast'
 import { getWalletTxErrorMessage } from '@/lib/walletErrors'
@@ -28,10 +28,6 @@ export function Navbar() {
   const activeAvatarUrl = resolveImageUrl(activeCharacter?.avatar ?? null)
 
   const walletAddress = session?.user?.walletAddress
-
-  const handleSignOut = async () => {
-    await signOut({ callbackUrl: '/' })
-  }
 
   // Rotas públicas: acessíveis sem login (ex.: documentação)
   const PUBLIC_ROUTES = ['/doc']
@@ -171,15 +167,14 @@ export function Navbar() {
           <div className="hidden lg:flex items-center gap-2">
             {session ? (
               <>
-                {/* GOLD do inventário do herói ativo — clique abre a Wallet (DOL/GOLD em carteira + claim) */}
+                {/* Gold do herói ativo — compacto (ex.: 500g); clique abre a Wallet */}
                 <Link
                   href="/wallet"
-                  className="flex items-center gap-1.5 px-3 py-2 bg-white/5 rounded-lg border border-yellow-500/30 hover:border-primary transition-all"
+                  className="px-2.5 py-2 bg-white/5 rounded-lg border border-yellow-500/30 hover:border-primary transition-all"
                   title="Abrir Wallet (saldo on-chain e claim)"
                 >
-                  <Coins className="w-4 h-4 text-yellow-500" />
-                  <span className="text-yellow-400 font-semibold font-combat text-sm">
-                    {inventoryGold !== null ? `${inventoryGold.toLocaleString('pt-BR')} GOLD` : '— GOLD'}
+                  <span className="text-yellow-400 font-semibold font-combat text-sm tabular-nums whitespace-nowrap">
+                    {inventoryGold !== null ? `${inventoryGold.toLocaleString('pt-BR')}g` : '—g'}
                   </span>
                 </Link>
 
@@ -199,12 +194,6 @@ export function Navbar() {
                 >
                   Dashboard
                 </Link>
-                <button
-                  onClick={handleSignOut}
-                  className="bg-surface/60 backdrop-blur-xl border border-white/10 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:border-error/60 hover:text-error active:scale-[0.98] transition-all"
-                >
-                  Sair
-                </button>
               </>
             ) : (
               <Link
@@ -258,12 +247,9 @@ export function Navbar() {
                     onClick={() => setIsMenuOpen(false)}
                     className="flex items-center justify-between gap-3 px-3 py-2 bg-white/5 rounded-lg border border-yellow-500/30 hover:border-primary transition-all"
                   >
-                    <div className="flex items-center gap-2">
-                      <Coins className="w-4 h-4 text-yellow-500" />
-                      <span className="text-yellow-400 font-semibold font-combat text-sm">
-                        {inventoryGold !== null ? `${inventoryGold.toLocaleString('pt-BR')} GOLD` : '— GOLD'}
-                      </span>
-                    </div>
+                    <span className="text-yellow-400 font-semibold font-combat text-sm tabular-nums">
+                      {inventoryGold !== null ? `${inventoryGold.toLocaleString('pt-BR')}g` : '—g'}
+                    </span>
                     <span className="text-textsec text-xs">Wallet →</span>
                   </Link>
 
@@ -288,12 +274,6 @@ export function Navbar() {
                   >
                     Dashboard
                   </Link>
-                  <button
-                    onClick={handleSignOut}
-                    className="w-full bg-surface/60 border border-white/10 text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:border-error/60 hover:text-error active:scale-[0.98] transition-all"
-                  >
-                    Sair
-                  </button>
                 </div>
               ) : (
                 <Link

@@ -17,8 +17,8 @@ import {
   AlertTriangle, Zap, Gem, RefreshCw, Palette, Crown, Skull,
   Lock, Hammer, Flame, Scale,
 } from 'lucide-react'
-import { ShowcaseDie, AnimatedDie } from '@/components/battle/AnimatedDice'
-import { Button, Card, GlassCard, Badge, StatBar, SectionHeading, Reveal, ArenaSky } from './ui'
+import { ShowcaseDie } from '@/components/battle/AnimatedDice'
+import { Button, Card, GlassCard, Badge, StatBar, SectionHeading, DiceChip, Reveal, ArenaSky, D20 } from './ui'
 import { itemImagePath } from '@/lib/itemCatalog'
 import { DUNGEON_RUNS, type DungeonRunId, type RunNode, type RunDrop } from './dungeonRuns'
 import { DUNGEON_BATTLE_BG, DUNGEON_RUN_MAP_BG } from '@/lib/walkSceneAssets'
@@ -145,35 +145,23 @@ function Navbar({ primaryHref }: { primaryHref: string }) {
 // Hero
 // ============================================================
 
-// Ciclo do fundo do hero: a cena normal "desperta" para a forma Celestial
-// (elfo irradiando aura dourada + Anciã da Mata com aura verde) por alguns
-// segundos, com relâmpagos, e depois volta ao normal — em loop.
+// Ciclo do fundo do hero: cross-fade suave entre a cena normal e a Celestial.
+// Sem estroboscópio/relâmpagos em cascata — esses flashes competiam com o dado
+// 3D e travavam o paint (duas webps full-bleed + mix-blend + RAF).
 function useHeroAwaken(enabled: boolean) {
   const [awaken, setAwaken] = useState(false)
-  const [strobe, setStrobe] = useState(false) // saída em estroboscópio (transição rápida)
-  const [bolt, setBolt] = useState(0) // muda a cada relâmpago p/ re-disparar a animação
   useEffect(() => {
     if (!enabled) return
     let alive = true
     const timers: ReturnType<typeof setTimeout>[] = []
     const at = (delay: number, fn: () => void) => timers.push(setTimeout(() => alive && fn(), delay))
-    const flash = (delay: number) => at(delay, () => setBolt((b) => b + 1))
     const loop = () => {
       if (!alive) return
-      // entrada: salva de relâmpagos -> forma celestial (cross-fade suave)
-      setStrobe(false)
-      flash(0); flash(140); flash(320)
-      at(220, () => setAwaken(true))
-      // saída: o SEGUNDO relâmpago encerra a transformação em estroboscópio.
-      // pisca p/ a forma normal, brilha de volta na celestial e fixa no normal.
-      at(4500, () => setStrobe(true))
-      flash(4520); at(4540, () => setAwaken(false)) // 1º flash: pisca p/ a forma anterior
-      at(4680, () => setAwaken(true))               // brilha de volta na celestial
-      flash(4880); at(4900, () => setAwaken(false)) // 2º flash: brilha e fixa no normal
-      at(5120, () => setStrobe(false))
+      setAwaken(true)
+      at(4800, () => setAwaken(false))
     }
-    const id = setInterval(loop, 9000)
-    const kickoff = setTimeout(loop, 2600)
+    const id = setInterval(loop, 11000)
+    const kickoff = setTimeout(loop, 2800)
     return () => {
       alive = false
       clearInterval(id)
@@ -181,15 +169,15 @@ function useHeroAwaken(enabled: boolean) {
       timers.forEach(clearTimeout)
     }
   }, [enabled])
-  return { awaken, strobe, bolt }
+  return { awaken }
 }
 
 function Hero({ primaryHref }: {
   primaryHref: string
 }) {
   const reduce = useReducedMotion()
-  const { awaken, strobe, bolt } = useHeroAwaken(!reduce)
-  const fadeMs = strobe ? 90 : 700 // estroboscópio na saída x cross-fade suave na entrada
+  const { awaken } = useHeroAwaken(!reduce)
+  const fadeMs = 900
   return (
     <section className="relative min-h-screen flex items-center pt-28 pb-20 overflow-hidden">
       {/* Arte cinematográfica: herói avançando pela Floresta Sombria com a
@@ -200,14 +188,13 @@ function Hero({ primaryHref }: {
         aria-hidden="true"
         className="absolute inset-0 h-full w-full object-cover object-center"
       />
-      {/* Forma Celestial: mesma cena com o elfo desperto (aura dourada) e o
-          chefe com aura verde — entra em cross-fade durante o "awaken". */}
+      {/* Forma Celestial — só opacity, sem strobe */}
       <img
         src="/hero-masmorra-floresta-celestial.webp"
         alt=""
         aria-hidden="true"
         className="absolute inset-0 h-full w-full object-cover object-center"
-        style={{ opacity: awaken ? 1 : 0, transition: `opacity ${fadeMs}ms ease-out` }}
+        style={{ opacity: awaken ? 1 : 0, transition: `opacity ${fadeMs}ms ease-in-out` }}
       />
       {/* Véu escuro sob o texto (coluna esquerda). Na forma celestial o amarelo
           da transformação cobria a tipografia — o scrim sobe junto do awaken. */}
@@ -215,37 +202,23 @@ function Hero({ primaryHref }: {
         aria-hidden="true"
         className="absolute inset-0 pointer-events-none"
         style={{
-          transition: `opacity ${fadeMs}ms ease-out`,
+          transition: `opacity ${fadeMs}ms ease-in-out`,
           background: awaken
             ? 'linear-gradient(90deg, rgba(4,4,10,0.88) 0%, rgba(4,4,10,0.62) 34%, rgba(4,4,10,0.22) 52%, transparent 68%)'
             : 'linear-gradient(90deg, rgba(4,4,10,0.48) 0%, rgba(4,4,10,0.22) 32%, transparent 52%)',
         }}
       />
-      {/* Brilho celestial — puxado pro centro da figura (não em cima do texto) */}
+      {/* Halo celestial estático (sem pulse/mix-blend animado — barato no paint) */}
       <div
         aria-hidden="true"
-        className="absolute inset-0 pointer-events-none mix-blend-screen"
+        className="absolute inset-0 pointer-events-none"
         style={{
-          opacity: awaken ? 1 : 0,
-          transition: `opacity ${fadeMs}ms ease-out`,
+          opacity: awaken ? 0.55 : 0,
+          transition: `opacity ${fadeMs}ms ease-in-out`,
           background:
-            'radial-gradient(38% 52% at 48% 52%, rgba(251,191,36,0.18), transparent 70%), radial-gradient(36% 48% at 78% 42%, rgba(74,222,128,0.14), transparent 72%)',
-          animation: awaken ? 'hero-aura-pulse 2.2s ease-in-out infinite' : 'none',
+            'radial-gradient(38% 52% at 48% 52%, rgba(251,191,36,0.14), transparent 70%), radial-gradient(36% 48% at 78% 42%, rgba(74,222,128,0.1), transparent 72%)',
         }}
       />
-      {/* Relâmpago: clarão branco-azulado curto, re-disparado a cada estalo */}
-      {bolt > 0 && (
-        <div
-          key={bolt}
-          aria-hidden="true"
-          className="absolute inset-0 pointer-events-none mix-blend-screen"
-          style={{
-            background:
-              'linear-gradient(180deg, rgba(226,232,240,0.9), rgba(148,163,255,0.35) 40%, transparent 75%)',
-            animation: 'hero-lightning 0.55s ease-out forwards',
-          }}
-        />
-      )}
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 w-full">
         <div className="grid lg:grid-cols-[1.2fr_0.8fr] items-center gap-12">
           <div
@@ -285,10 +258,6 @@ function Hero({ primaryHref }: {
                 Ver gameplay
               </Button>
             </Reveal>
-            {/* d20 3D pequeno, só no mobile — clique/arraste pra rolar */}
-            <Reveal delay={320} className="lg:hidden self-center">
-              <ShowcaseDie sides={20} size={72} interactive />
-            </Reveal>
             <Reveal
               delay={400}
               className={`flex flex-wrap items-center gap-3 text-xs transition-colors duration-700 ${
@@ -302,13 +271,13 @@ function Hero({ primaryHref }: {
               <span className="font-combat">testnet aberta</span>
             </Reveal>
           </div>
-          {/* d20 3D tombando devagar */}
+          {/* Um único d20 3D (menor, sem drag) — só desktop, pra não dobrar o RAF no mobile */}
           <Reveal delay={250} className="hidden lg:flex justify-center">
             <motion.div
-              animate={reduce ? {} : { y: [0, -14, 0] }}
-              transition={reduce ? {} : { repeat: Infinity, duration: 5, ease: 'easeInOut' }}
+              animate={reduce ? {} : { y: [0, -10, 0] }}
+              transition={reduce ? {} : { repeat: Infinity, duration: 6, ease: 'easeInOut' }}
             >
-              <ShowcaseDie sides={20} size={195} interactive />
+              <ShowcaseDie sides={20} size={120} />
             </motion.div>
           </Reveal>
         </div>
@@ -570,19 +539,9 @@ function ArenaSection({ glow }: { glow: number }) {
                       { name: 'Anel de Cristal Pulsante', rarity: 'RARE' },
                     ]}
                   />
-                  <div className="flex flex-col items-center gap-1 pb-20 shrink-0">
-                    <AnimatedDie
-                      sides={20}
-                      size={72}
-                      mode={phase === 'rolling' || phase === 'hit' ? 'rolling' : 'idle'}
-                      result={
-                        phase === 'rolling' || phase === 'hit'
-                          ? { roll: 18, modifier: 0, total: 18 }
-                          : null
-                      }
-                      minSpinMs={1200}
-                    />
-                    <span className="font-combat text-[10px] text-textsec/70 text-center leading-tight">
+                  <div className="flex flex-col items-center gap-3 pb-24 shrink-0">
+                    <DiceChip sides={20} value={18} rolling={phase === 'rolling'} />
+                    <span className="font-combat text-[10px] text-textsec/70 text-center">
                       d20 × AGI<br />vs DEF
                     </span>
                   </div>
@@ -2112,7 +2071,7 @@ function FinalCTA({ primaryHref, glow }: { primaryHref: string; glow: number }) 
         className="pointer-events-none select-none absolute right-0 top-1/2 -translate-y-1/2 h-[125%] w-auto max-w-none opacity-65 hidden md:block [mask-image:linear-gradient(to_left,black_55%,transparent)]"
       />
       <div className="relative mx-auto max-w-3xl px-4 sm:px-6 flex flex-col items-center gap-7 text-center">
-        <ShowcaseDie sides={20} size={72} />
+        <span className="inline-flex opacity-80"><D20 size={40} value="" /></span>
         <h2 className="text-3xl md:text-5xl font-bold text-balance leading-tight">
           A masmorra não vai se explorar sozinha.
         </h2>

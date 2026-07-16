@@ -4,7 +4,6 @@ import { useEffect, useState, useRef, useMemo, Suspense, type ReactNode } from '
 import { useRouter, useSearchParams } from 'next/navigation'
 import { X } from 'lucide-react'
 import { io, Socket } from 'socket.io-client'
-import TransformationDialog from '@/components/TransformationDialog'
 import BattleScene, { BattleEvent, DiceResult, EquipmentMap, FighterView } from '@/components/battle/BattleScene'
 import CombatShell, { type CombatAttackOption } from '@/components/battle/CombatShell'
 import { TRANSFORMATION_CONFIG, getRaceTransformations, type TransformationType } from '@/lib/transformationSystem'
@@ -262,7 +261,6 @@ function CombatPageContent() {
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting')
   const [hasRolledInitiative, setHasRolledInitiative] = useState(false)
   const [hasRolledDice, setHasRolledDice] = useState(false) // Novo estado para controlar se já rolou
-  const [showTransformationDialog, setShowTransformationDialog] = useState(false)
   const [isTransforming, setIsTransforming] = useState(false)
   // 🐉 Transformação é 1× POR LUTA: trava após o primeiro uso na partida atual.
   const [usedTransformThisMatch, setUsedTransformThisMatch] = useState(false)
@@ -1037,42 +1035,22 @@ function CombatPageContent() {
     })
   }
 
-  const handleTransformation = () => {
-    if (!currentPlayer || !characterId) return
-
-    // 🐉 1× por luta: bloqueia uma segunda transformação na mesma partida.
-    if (usedTransformThisMatch) {
-      socket.emit('chat_message', {
-        playerId: currentPlayer.id,
-        roomId,
-        message: '🔒 Você já se transformou nesta luta!'
-      })
-      return
-    }
-
-    // Verificar se a raça pode transformar
-    if (getRaceTransformations(currentPlayer.race).length === 0) {
-      socket.emit('chat_message', {
-        playerId: currentPlayer.id,
-        roomId,
-        message: `❌ Sua raça (${currentPlayer.race}) não possui transformações disponíveis!`
-      })
-      return
-    }
-    
-    // Abrir dialog de escolha de transformação
-    setShowTransformationDialog(true)
-  }
-
+  // Igual ao PvE: sem dialog — 1 forma ativa direto; Metamorfo abre flyout de formas.
   const handleTransformationChoice = async (transformationType: string) => {
-    if (!currentPlayer || !characterId) return
-    
+    if (!currentPlayer || !characterId || isTransforming) return
+    if (usedTransformThisMatch || currentPlayer.isTransformed) {
+      socket.emit('chat_message', {
+        playerId: currentPlayer.id,
+        roomId,
+        message: '🔒 Você já se transformou nesta luta!',
+      })
+      return
+    }
+
     setIsTransforming(true)
-    
+
     try {
-      // Primeiro, verificar e consumir stamina (custos vêm da config — fonte única)
       const cfg = TRANSFORMATION_CONFIG[transformationType as TransformationType]
-      // Imagem da forma escolhida: metamorfo tem o mapa; demais raças têm a única.
       const formImage =
         currentPlayer.transformationImages?.[transformationType] ??
         currentPlayer.transformationImage ??
@@ -1080,50 +1058,44 @@ function CombatPageContent() {
       const staminaCost = cfg?.cost.stamina ?? 30
       const mpCost = cfg?.cost.mp ?? 20
 
-      // Recursos da luta (sessão). A rota /transform também cobra STA/MP persistentes.
       if (currentPlayer.stamina < staminaCost) {
-        socket.emit('chat_message', { 
-          playerId: currentPlayer.id, 
-          roomId, 
-          message: `❌ Stamina insuficiente para transformar! (${staminaCost} stamina necessária)` 
+        socket.emit('chat_message', {
+          playerId: currentPlayer.id,
+          roomId,
+          message: `❌ Stamina insuficiente para transformar! (${staminaCost} stamina necessária)`,
         })
         return
       }
 
       if (currentPlayer.mp < mpCost) {
-        socket.emit('chat_message', { 
-          playerId: currentPlayer.id, 
-          roomId, 
-          message: `❌ MP insuficiente para transformar! (${mpCost} MP necessário)` 
+        socket.emit('chat_message', {
+          playerId: currentPlayer.id,
+          roomId,
+          message: `❌ MP insuficiente para transformar! (${mpCost} MP necessário)`,
         })
         return
       }
 
-      // Uma única cobrança: /transform já debita STA+MP no banco.
-      // (Antes chamávamos update-stamina + transform → 2× cobrança; e update-stamina
-      // 500ava ao serializar nftTokenId BigInt.)
+      // /transform cobra STA+MP no banco; a forma em si vive só na sessão (socket).
       const response = await fetch(`/api/character/${characterId}/transform`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transformationType })
+        body: JSON.stringify({ transformationType }),
       })
-      
+
       if (response.ok) {
         const data = await response.json()
         const updatedCharacter = data.character
         const nextStamina = Math.max(0, currentPlayer.stamina - staminaCost)
         const nextMp = Math.max(0, currentPlayer.mp - mpCost)
-        const duration =
-          (data.transformation?.duration ?? cfg?.duration ?? 5)
+        const duration = data.transformation?.duration ?? cfg?.duration ?? 5
 
-        // Igual ao PvE: só cobra MP+STA e marca a forma. NÃO importa hp/maxHp/maxMp
-        // da API (pool do personagem ≠ pool da luta) — senão a barra “reduz”.
         setCurrentPlayer(prev => prev ? {
           ...prev,
           stamina: nextStamina,
           mp: nextMp,
           isTransformed: true,
-          transformationType: transformationType,
+          transformationType,
           transformationImage: formImage ?? prev.transformationImage ?? null,
           transformationData: updatedCharacter.transformationData ?? {
             remainingTurns: duration,
@@ -1131,13 +1103,8 @@ function CombatPageContent() {
           },
         } : null)
 
-        // 🐉 1× por luta: marca como usada (não dá pra transformar de novo nesta partida).
         setUsedTransformThisMatch(true)
-        setShowTransformationDialog(false)
 
-        // Sincronizar com o servidor de combate para que o OPONENTE também veja a
-        // transformação (imagem/glow). Servidor aplica o buff nos levers e NÃO
-        // gasta o turno — pode atacar transformado no mesmo turno.
         socket.emit('sync_transformation', {
           playerId: currentPlayer.id,
           roomId,
@@ -1158,18 +1125,18 @@ function CombatPageContent() {
         })
       } else {
         const error = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
-        socket.emit('chat_message', { 
-          playerId: currentPlayer.id, 
-          roomId, 
-          message: `❌ Transformação falhou: ${error.error || 'erro'}` 
+        socket.emit('chat_message', {
+          playerId: currentPlayer.id,
+          roomId,
+          message: `❌ Transformação falhou: ${error.error || 'erro'}`,
         })
       }
     } catch (error) {
       console.error('Erro ao transformar:', error)
-      socket.emit('chat_message', { 
-        playerId: currentPlayer.id, 
-        roomId, 
-        message: `❌ Erro inesperado na transformação` 
+      socket.emit('chat_message', {
+        playerId: currentPlayer.id,
+        roomId,
+        message: `❌ Erro inesperado na transformação`,
       })
     } finally {
       setIsTransforming(false)
@@ -1229,12 +1196,14 @@ function CombatPageContent() {
     })
   }
 
+  // Formas da raça (igual PvE): Metamorfo = flyout; 1 forma = clique direto.
   const transformForms = currentPlayer ? getRaceTransformations(currentPlayer.race) : []
   const formType = (currentPlayerView?.transformationType || currentPlayer?.transformationType) as TransformationType | null | undefined
   const cds = (currentPlayerDisplay as { fx?: { abilityCd?: Record<string, number> } } | null)?.fx?.abilityCd || {}
   const classAtkName = classAttackName(currentPlayer?.class)
   const weaponMp = unlocks.classAttackMp
   const weaponDie = unlocks.classAttackDie
+  const singleTransformForm = transformForms.length === 1 ? TRANSFORMATION_CONFIG[transformForms[0]] : null
 
   const attackOptions: CombatAttackOption[] = []
   if (currentPlayer) {
@@ -1301,8 +1270,10 @@ function CombatPageContent() {
     (currentPlayer?.transformationData?.cooldownTurns || 0) > 0 ||
     isTransforming ||
     !currentPlayer ||
-    currentPlayer.stamina < 30 ||
-    currentPlayer.mp < 20
+    (!!singleTransformForm && (
+      currentPlayer.mp < singleTransformForm.cost.mp ||
+      currentPlayer.stamina < singleTransformForm.cost.stamina
+    ))
 
   let statusContent: ReactNode = null
   if (isSpectator) {
@@ -1453,14 +1424,43 @@ function CombatPageContent() {
                   ? 'Transformação já usada nesta luta (1× por luta)'
                   : isTransforming
                     ? 'Transformando...'
-                    : 'MP + stamina — 1× por luta',
+                    : singleTransformForm
+                      ? `${singleTransformForm.cost.mp} MP · ${singleTransformForm.cost.stamina}⚡ · ${singleTransformForm.duration} turnos`
+                      : `${transformForms.length} formas — MP+⚡ · 1× por luta`,
                 buttonLabel: usedTransformThisMatch
                   ? 'Transf. usada'
                   : isTransforming
                     ? 'Transformando...'
                     : 'Transformar',
-                costHint: !usedTransformThisMatch && !isTransforming ? 'MP+⚡' : undefined,
-                onClick: handleTransformation,
+                costHint: !usedTransformThisMatch && !isTransforming
+                  ? (singleTransformForm
+                    ? `${singleTransformForm.cost.mp}MP`
+                    : `${transformForms.length} formas`)
+                  : undefined,
+                onClick: () => {
+                  if (usedTransformThisMatch || isTransforming) return
+                  if (singleTransformForm) handleTransformationChoice(transformForms[0])
+                },
+                forms: transformForms.length > 1
+                  ? transformForms.map(t => {
+                      const cfg = TRANSFORMATION_CONFIG[t]
+                      const lockedForm = (currentPlayer?.unlockedTransformation || '') as TransformationType
+                      const formLocked = !!lockedForm && lockedForm !== t
+                      const resLocked =
+                        !currentPlayer ||
+                        currentPlayer.mp < cfg.cost.mp ||
+                        currentPlayer.stamina < cfg.cost.stamina
+                      return {
+                        key: t,
+                        label: cfg.name,
+                        sub: formLocked
+                          ? 'forma da criação'
+                          : `${cfg.cost.mp}MP · ${cfg.cost.stamina}⚡ · ${cfg.duration} turnos`,
+                        locked: formLocked || resLocked || isTransforming,
+                        onPick: () => handleTransformationChoice(t),
+                      }
+                    })
+                  : undefined,
               }
             : null
         }
@@ -1707,14 +1707,6 @@ function CombatPageContent() {
         </div>
       )}
 
-      <TransformationDialog
-        isOpen={showTransformationDialog}
-        onClose={() => setShowTransformationDialog(false)}
-        characterRace={currentPlayer?.race || ''}
-        lockedForm={currentPlayer?.unlockedTransformation || null}
-        onTransform={handleTransformationChoice}
-        loading={isTransforming}
-      />
     </div>
   )
 }

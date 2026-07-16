@@ -21,6 +21,12 @@ import { Button, Card, GlassCard, Badge, StatBar, SectionHeading, DiceChip, Reve
 import { ShowcaseDie } from '@/components/battle/AnimatedDice'
 import { itemImagePath } from '@/lib/itemCatalog'
 import { DUNGEON_RUNS, type DungeonRunId, type RunNode, type RunDrop } from './dungeonRuns'
+import { DUNGEON_BATTLE_BG, DUNGEON_RUN_MAP_BG } from '@/lib/walkSceneAssets'
+import { DUNGEONS, DUNGEON_LIST, type DungeonId, type DungeonMonsterDef, type DungeonBossDef } from '@/lib/dungeonAdventures'
+import { DiamondSlot, BevelButton, chanceColorClass } from '@/components/crafting/bdoTheme'
+import { GATHER_FIELDS } from '@/lib/gathering'
+import { FIELD_ACCENT } from '@/components/gathering/GatheringPanel'
+import { PROCESSING_GROUP_LABEL, type ProcessingRecipe } from '@/lib/processing'
 
 // ============================================================
 // Gear / raridade — molduras e tiles de equipamento reais
@@ -66,6 +72,7 @@ const NAV_LINKS = [
   { label: 'Personagens', href: '#racas' },
   { label: 'Masmorras', href: '#masmorras' },
   { label: 'Forja', href: '#aprimoramento' },
+  { label: 'Ofícios', href: '#oficios' },
   { label: 'Economia', href: '#economia' },
   { label: 'Docs', href: '/doc' },
 ]
@@ -471,7 +478,15 @@ function ArenaSection({ glow }: { glow: number }) {
           {/* mockup da batalha */}
           <Reveal className="order-1 lg:order-2">
             <GlassCard className="relative overflow-hidden p-5 sm:p-8">
-              <div className="absolute inset-0 arena-sky" aria-hidden="true">
+              <div className="absolute inset-0" aria-hidden="true">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={DUNGEON_BATTLE_BG.ruinas}
+                  alt=""
+                  className="absolute inset-0 h-full w-full object-cover"
+                  loading="lazy"
+                />
+                <div className="absolute inset-0 bg-black/35" />
                 <div
                   className="absolute top-5 right-8 w-12 h-12 rounded-full"
                   style={{
@@ -558,7 +573,7 @@ function ArenaSection({ glow }: { glow: number }) {
 // ============================================================
 
 interface DungeonCard {
-  id: string; name: string; emoji: string; tagline: string
+  id: DungeonId; name: string; emoji: string; tagline: string
   stars: number; rooms: number; minor: number; levelReq: number
   accent: string; boss: string
 }
@@ -691,12 +706,19 @@ function MiniDungeonMap({ dungeon }: { dungeon: DungeonCard }) {
   return (
     <div
       className="relative w-full overflow-hidden rounded-2xl border"
-      style={{
-        aspectRatio: '3 / 4',
-        borderColor: `${dungeon.accent}55`,
-        background: `radial-gradient(120% 80% at 50% 100%, ${dungeon.accent}22, rgba(10,10,25,0.92) 62%)`,
-      }}
+      style={{ aspectRatio: '3 / 4', borderColor: `${dungeon.accent}55` }}
     >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={DUNGEON_RUN_MAP_BG[dungeon.id]}
+        alt=""
+        className="absolute inset-0 h-full w-full object-cover"
+        loading="lazy"
+      />
+      <div
+        className="absolute inset-0"
+        style={{ background: `radial-gradient(120% 80% at 50% 100%, ${dungeon.accent}22, rgba(10,10,25,0.7) 62%)` }}
+      />
       <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" aria-hidden="true">
         <path d={bgPath} fill="none" stroke={`${dungeon.accent}40`} strokeWidth={1.4} strokeDasharray="3 3" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
         <path d={litPath} fill="none" stroke={dungeon.accent} strokeWidth={1.8} strokeLinecap="round" vectorEffect="non-scaling-stroke" style={{ filter: `drop-shadow(0 0 3px ${dungeon.accent})` }} />
@@ -856,10 +878,22 @@ function DungeonsSection() {
                   className="relative flex h-full flex-col justify-between overflow-hidden rounded-2xl border-2 p-5 text-left transition-all hover:scale-[1.02]"
                   style={{
                     borderColor: sel ? d.accent : `${d.accent}44`,
-                    background: `linear-gradient(150deg, ${d.accent}22, rgba(12,12,28,0.85))`,
                     boxShadow: sel ? `0 0 22px ${d.accent}55` : 'none',
                   }}
                 >
+                  <div className="absolute inset-0 -z-10">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={DUNGEON_BATTLE_BG[d.id]}
+                      alt=""
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                    />
+                    <div
+                      className="absolute inset-0"
+                      style={{ background: `linear-gradient(150deg, ${d.accent}33, rgba(12,12,28,0.88))` }}
+                    />
+                  </div>
                   <div className="flex items-start justify-between">
                     <div className="text-3xl drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]">{d.emoji}</div>
                     <div className="text-right">
@@ -934,6 +968,88 @@ function DungeonsSection() {
               <p className="text-xs leading-relaxed text-textsec">{dsc}</p>
             </GlassCard>
           ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ============================================================
+// Bestiário — galeria de monstros reais por masmorra (arte gerada,
+// os mesmos assets usados no combate). Fica logo abaixo das masmorras.
+// ============================================================
+
+function MonsterCard({ monster, accent, boss = false }: { monster: DungeonMonsterDef; accent: string; boss?: boolean }) {
+  const [failed, setFailed] = useState(false)
+  const title = boss ? (monster as DungeonBossDef).title : undefined
+  return (
+    <motion.div
+      whileHover={{ scale: 1.04 }}
+      className="group relative flex flex-col overflow-hidden rounded-2xl border-2"
+      style={{
+        borderColor: boss ? '#fbbf24' : `${accent}44`,
+        boxShadow: boss ? '0 0 24px rgba(251,191,36,0.35)' : `0 0 14px ${accent}22`,
+      }}
+    >
+      <div className="relative aspect-square overflow-hidden bg-black/50">
+        {monster.image && !failed ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={monster.image}
+            alt={monster.name}
+            loading="lazy"
+            onError={() => setFailed(true)}
+            className="art-bright h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+          />
+        ) : (
+          <div className="grid h-full w-full place-items-center text-5xl">{monster.emoji}</div>
+        )}
+        {boss && (
+          <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full border border-amber-400/70 bg-black/60 px-2 py-0.5 text-[10px] font-bold text-amber-300">
+            👑 Chefe
+          </span>
+        )}
+      </div>
+      <div className="flex flex-col gap-0.5 p-3">
+        <h3 className={`text-sm font-bold leading-tight ${boss ? 'text-amber-300' : 'text-white'}`}>{monster.name}</h3>
+        {title && <span className="font-combat text-[11px] text-textsec">{title}</span>}
+      </div>
+    </motion.div>
+  )
+}
+
+function MonsterGallerySection() {
+  const [active, setActive] = useState<DungeonId>('floresta')
+  const dungeon = DUNGEONS[active]
+  return (
+    <section className="relative py-24 bg-secondary/40">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 flex flex-col gap-10">
+        <SectionHeading
+          eyebrow="Bestiário"
+          title="Cada masmorra tem seus próprios monstros"
+          sub="Da Floresta Sombria às Ruínas Arcanas, cada bioma esconde ameaças diferentes — e um chefe que guarda o melhor espólio."
+        />
+        <div className="flex flex-wrap justify-center gap-2">
+          {DUNGEON_LIST.map((d) => (
+            <button
+              key={d.id}
+              onClick={() => setActive(d.id)}
+              className="rounded-full border px-4 py-1.5 text-xs font-semibold transition-all"
+              style={{
+                borderColor: active === d.id ? d.accent : `${d.accent}33`,
+                background: active === d.id ? `${d.accent}22` : 'transparent',
+                color: active === d.id ? d.accent : 'rgba(255,255,255,0.6)',
+              }}
+            >
+              {d.emoji} {d.name}
+            </button>
+          ))}
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          {dungeon.monsters.map((m) => (
+            <MonsterCard key={m.name} monster={m} accent={dungeon.accent} />
+          ))}
+          <MonsterCard monster={dungeon.boss} accent={dungeon.accent} boss />
         </div>
       </div>
     </section>
@@ -1048,29 +1164,19 @@ function EnhancementDemo() {
         <span className="rounded-lg px-2 py-1 text-gray-500">✕</span>
       </div>
 
-      {/* Item + progressão de nível */}
+      {/* Item + progressão de nível — mesma moldura em losango do diálogo real */}
       <div className="mb-4 flex flex-col items-center gap-3 rounded-lg border border-white/10 bg-black/40 p-4 text-center">
-        <div className="relative">
-          <GearTile piece={ENHANCE_ITEM} size="lg" />
-          {/* selo do nível atual no canto, estilo jogo */}
-          <span
-            className="absolute -bottom-1 right-0 rounded-md bg-black/80 px-1.5 text-sm font-black"
-            style={{ color: '#f1d79a', textShadow: '0 1px 2px #000' }}
-          >
-            {success ? 'IV' : 'III'}
-          </span>
-          <AnimatePresence>
-            {success && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.4 }}
-                animate={{ opacity: [0, 1, 0], scale: [0.4, 1.6, 2.2] }}
-                transition={{ duration: 1 }}
-                className="pointer-events-none absolute -inset-6"
-                style={{ background: 'radial-gradient(circle, rgba(253,224,71,0.9) 0%, rgba(245,158,11,0.35) 40%, transparent 70%)' }}
-              />
-            )}
-          </AnimatePresence>
-        </div>
+        <DiamondSlot
+          size={140}
+          active
+          plate={success ? 'IV' : 'III'}
+          verdict={success ? 'success' : null}
+          charging={phase === 'charging'}
+          verdictKey={run}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={itemImagePath(ENHANCE_ITEM.name)} alt={ENHANCE_ITEM.name} className="h-full w-full object-cover" loading="lazy" />
+        </DiamondSlot>
         <div className="text-base font-semibold text-cyan-300">{ENHANCE_ITEM.name}</div>
         <div className="flex items-center justify-center gap-3 text-2xl font-bold">
           <span className="text-gray-400">III</span>
@@ -1084,7 +1190,7 @@ function EnhancementDemo() {
       <div className="mb-4 grid grid-cols-2 gap-3">
         <div className="rounded-lg border border-white/10 bg-black/40 p-3 text-center">
           <div className="text-xs uppercase tracking-wide text-gray-500">Chance de sucesso</div>
-          <div className={`mt-1 text-2xl font-bold ${success ? 'text-red-400' : 'text-yellow-400'}`}>{chance.toFixed(1)}%</div>
+          <div className={`mt-1 text-2xl font-bold ${success ? 'text-red-400' : chanceColorClass(chance / 100)}`}>{chance.toFixed(1)}%</div>
           <div className="mt-0.5 h-3 text-[10px] text-red-300/70">{success ? 'próx.: V · PEN' : ' '}</div>
         </div>
         <div className="rounded-lg border border-white/10 bg-black/40 p-3 text-center">
@@ -1138,10 +1244,10 @@ function EnhancementDemo() {
         )}
       </div>
 
-      {/* Botão (decorativo, espelha o diálogo) */}
-      <div className="w-full rounded-lg bg-gradient-to-r from-amber-600 to-amber-500 py-3 text-center text-lg font-bold text-black shadow-lg shadow-amber-900/50">
+      {/* Botão (decorativo, espelha o diálogo real) */}
+      <BevelButton onClick={() => {}} busy={phase === 'charging'} busyLabel="⚒️ Forjando...">
         ⚒️ Aprimorar
-      </div>
+      </BevelButton>
     </div>
   )
 }
@@ -1345,67 +1451,30 @@ function AlchemyDemo() {
           />
         </svg>
 
-        {/* vértices */}
+        {/* vértices — mesma moldura em losango do diálogo real */}
         {ALCH_INGREDIENTS.map((ing, i) => {
           const on = i < placed
           return (
             <div
               key={i}
-              className="absolute flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-2xl border-2 transition-all duration-300"
-              style={{
-                left: `${ing.pos.x}%`, top: `${ing.pos.y}%`,
-                borderColor: on ? ing.accent : '#ffffff33',
-                borderStyle: on ? 'solid' : 'dashed',
-                background: 'radial-gradient(circle at 50% 35%, rgba(16,40,32,0.9), rgba(5,8,10,0.95))',
-                boxShadow: on ? `0 0 14px ${ing.accent}99` : 'inset 0 0 8px rgba(0,0,0,0.6)',
-              }}
+              className="absolute -translate-x-1/2 -translate-y-1/2"
+              style={{ left: `${ing.pos.x}%`, top: `${ing.pos.y}%` }}
             >
-              {on ? (
-                <span className="grid h-full w-full place-items-center overflow-hidden rounded-2xl drop-shadow-[0_2px_3px_rgba(0,0,0,0.9)]">
-                  <AlchThumb name={ing.name} emoji={ing.emoji} className="text-2xl" />
-                </span>
-              ) : <span className="text-xl text-white/25">＋</span>}
+              <DiamondSlot size={56} active={on} dashed={!on} glowColor={`${ing.accent}99`}>
+                {on && <AlchThumb name={ing.name} emoji={ing.emoji} className="text-2xl" />}
+              </DiamondSlot>
             </div>
           )
         })}
 
         {/* resultado no centro */}
         <div
-          className="absolute grid h-16 w-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 transition-all duration-300"
-          style={{
-            left: `${ALCH_PTS.center.x}%`, top: `${ALCH_PTS.center.y}%`,
-            borderColor: crafted ? accent : '#ffffff22',
-            background: 'radial-gradient(circle at 50% 35%, rgba(20,50,40,0.95), rgba(4,6,8,0.98))',
-            boxShadow: crafted ? `0 0 26px ${accent}` : 'inset 0 0 12px rgba(0,0,0,0.7)',
-          }}
+          className="absolute -translate-x-1/2 -translate-y-1/2"
+          style={{ left: `${ALCH_PTS.center.x}%`, top: `${ALCH_PTS.center.y}%` }}
         >
-          <AnimatePresence mode="wait">
-            {crafted ? (
-              <motion.span
-                key="potion"
-                initial={{ scale: 0, rotate: -30 }}
-                animate={{ scale: 1, rotate: 0 }}
-                exit={{ scale: 0 }}
-                transition={{ type: 'spring', stiffness: 240, damping: 14 }}
-                className="grid h-full w-full place-items-center overflow-hidden rounded-full drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]"
-              >
-                <AlchThumb name={ALCH_RESULT} emoji="🧪" className="text-4xl" />
-              </motion.span>
-            ) : (
-              <span key="q" className="text-2xl text-white/20">?</span>
-            )}
-          </AnimatePresence>
-          <AnimatePresence>
-            {crafted && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.4 }}
-                animate={{ opacity: [0, 0.9, 0], scale: [0.4, 1.5, 2.1] }}
-                transition={{ duration: 1 }}
-                className="pointer-events-none absolute -inset-4"
-                style={{ background: `radial-gradient(circle, ${accent}cc 0%, ${accent}44 40%, transparent 70%)` }}
-              />
-            )}
-          </AnimatePresence>
+          <DiamondSlot size={72} active={crafted} dashed={!crafted} verdict={crafted ? 'success' : null} glowColor={accent}>
+            {crafted && <AlchThumb name={ALCH_RESULT} emoji="🧪" className="text-4xl" />}
+          </DiamondSlot>
         </div>
       </div>
       </div>
@@ -1546,6 +1615,90 @@ function RaceFlipCard({ card }: { card: RaceCard }) {
         </span>
       </div>
     </div>
+  )
+}
+
+// ============================================================
+// Ofícios — Coleta, Processamento e Craft (sem assets de imagem
+// dedicados; usa o mesmo painel chumbo+ouro do Aprimoramento/Reparo).
+// ============================================================
+
+const PROCESSING_GROUP_EMOJI: Record<ProcessingRecipe['group'], string> = {
+  smelt: '🔥', wood: '🪚', textile: '🧵', mill: '🌾', still: '⚗️', refine: '🪨',
+}
+
+function TradesSection() {
+  const fields = Object.values(GATHER_FIELDS)
+  const groups = Object.keys(PROCESSING_GROUP_LABEL) as ProcessingRecipe['group'][]
+  return (
+    <section id="oficios" className="relative py-24">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 flex flex-col gap-12">
+        <SectionHeading
+          eyebrow="Ofícios"
+          title="Colete, processe, forje"
+          sub="A cadeia de produção do jogo: colete recursos brutos pelo reino, processe-os em materiais refinados e leve tudo para o ferreiro, alquimista ou fazenda transformar em equipamento e consumíveis."
+        />
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* Coleta */}
+          <div className="flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-gradient-to-b from-gray-900 to-gray-950 p-6 shadow-2xl shadow-amber-900/30">
+            <h3 className="text-lg font-bold text-amber-400">⛏️ Coleta</h3>
+            <p className="text-xs text-textsec">Cada personagem da conta pode render recursos pelo Mapa do Reino, gastando stamina em tempo real.</p>
+            <div className="mt-1 flex flex-col gap-2">
+              {fields.map((f) => (
+                <div
+                  key={f.id}
+                  className="flex items-center gap-3 rounded-lg border border-white/10 bg-black/40 p-2.5"
+                  style={{ borderColor: `${FIELD_ACCENT[f.id]}44` }}
+                >
+                  <span className="text-2xl">{f.emoji}</span>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-semibold text-white">{f.name}</span>
+                    <span className="text-[11px] text-textsec">{f.tagline}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Processamento */}
+          <div className="flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-gradient-to-b from-gray-900 to-gray-950 p-6 shadow-2xl shadow-amber-900/30">
+            <h3 className="text-lg font-bold text-amber-400">⚙️ Processamento</h3>
+            <p className="text-xs text-textsec">Transforme o bruto da Coleta em material refinado — sem falha, só tempo e insumo.</p>
+            <div className="mt-1 grid grid-cols-2 gap-2">
+              {groups.map((g) => (
+                <div key={g} className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/40 p-2.5">
+                  <span className="text-xl">{PROCESSING_GROUP_EMOJI[g]}</span>
+                  <span className="text-xs font-semibold text-white">{PROCESSING_GROUP_LABEL[g]}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Craft */}
+          <div className="flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-gradient-to-b from-gray-900 to-gray-950 p-6 shadow-2xl shadow-amber-900/30">
+            <h3 className="text-lg font-bold text-amber-400">🔨 Craft</h3>
+            <p className="text-xs text-textsec">O material refinado vira equipamento na Forja, poção na Alquimia ou receita na Culinária.</p>
+            <div className="mt-1 flex flex-col gap-2 text-sm text-white/80">
+              <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/40 p-2.5">
+                <span className="text-xl">⛏️</span><span>Bruto</span>
+                <ArrowRight size={14} className="text-amber-400" />
+                <span className="text-xl">⚙️</span><span>Refinado</span>
+                <ArrowRight size={14} className="text-amber-400" />
+                <span className="text-xl">⚔️</span><span>Equipamento</span>
+              </div>
+              <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/40 p-2.5">
+                <span className="text-xl">🌿</span><span>Ingrediente</span>
+                <ArrowRight size={14} className="text-amber-400" />
+                <span className="text-xl">🧪</span><span>Poção</span>
+              </div>
+            </div>
+            <div className="mt-auto flex flex-col gap-2 pt-2">
+              <Button as="a" href="/gathering" variant="outline" className="justify-center">Ir para a Coleta</Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
   )
 }
 
@@ -1805,9 +1958,11 @@ export default function DolrathLanding() {
         <Features />
         <ArenaSection glow={glow} />
         <DungeonsSection />
+        <MonsterGallerySection />
         <RelicsSection />
         <EnhancementSection />
         <CraftingSection />
+        <TradesSection />
         <RacesSection />
         <EconomySection />
         <HowSection />

@@ -111,6 +111,45 @@ function trackFightStamina(player, amount) {
   player.fightStaminaSpent = (player.fightStaminaSpent || 0) + amount
 }
 
+/** Multiplicador de aprimoramento (espelho leve de enhancementSystem.getStatMultiplier). */
+function enhancementStatMult(level) {
+  const lvl = Math.max(0, Math.floor(Number(level) || 0))
+  if (lvl <= 0) return 1
+  if (lvl <= 15) return 1 + lvl * 0.05
+  const TIER = { 16: 2.0, 17: 2.2, 18: 2.45, 19: 2.8, 20: 3.3 }
+  return TIER[lvl] != null ? TIER[lvl] : 2.8
+}
+
+/**
+ * HP extra do equipamento (igual PvE / DungeonRun.equipmentPower.hp).
+ * Peça quebrada (durability <= 0) não soma.
+ */
+function sumEquipmentHp(equipment) {
+  if (!Array.isArray(equipment)) return 0
+  let hp = 0
+  for (const eq of equipment) {
+    if (eq == null) continue
+    if (eq.durability != null && Number(eq.durability) <= 0) continue
+    const stats = (eq.item && eq.item.stats) || eq.stats || {}
+    const base = Number(stats.hp) || 0
+    if (base <= 0) continue
+    hp += base * enhancementStatMult(eq.enhancementLevel)
+  }
+  return Math.round(hp)
+}
+
+/**
+ * Pool de vida da luta = ficha (maxHp do personagem) + HP do gear × passiva.
+ * Igual ao PvE — NÃO usar levers.hp (isso gerava barras tipo 36/36).
+ * Levers continuam mandando em dano/armadura/esquiva.
+ */
+function fightHpPool(player, maxHpPct) {
+  const sheet = Math.max(1, Number(player.maxHp) || Number(player.hp) || 1)
+  const gearHp = sumEquipmentHp(player.equipment)
+  const pct = Number(maxHpPct) || 0
+  return Math.max(1, Math.round((sheet + gearHp) * (1 + pct)))
+}
+
 // Configuração de porta - Railway usa PORT, Heroku também
 const PORT = process.env.PORT || 3001
 
@@ -731,6 +770,9 @@ io.on('connection', (socket) => {
       // Escala SIMÉTRICA (power/armor/hp/K juntos), igual à transformação: é o que faz o
       // multiplicador significar a mesma dificuldade em qualquer ponto da progressão.
       const finalLevers = trainMult !== 1 ? CM.transformLevers(levers, trainMult) : levers
+      // Levers = ofensa/defesa/esquiva. HP da barra = ficha+gear (igual PvE).
+      // Em treino o peer ainda escala power/armor/K pelo difficultyMult, mas o pool
+      // de vida espelha o humano × mult (não levers.hp — isso gerava 36/29).
       player.levers = finalLevers
       player.baseLevers = finalLevers // guardado p/ reverter o buff de transformação
       player.combatClass = cls
@@ -748,7 +790,12 @@ io.on('connection', (socket) => {
       }
       // 🌳 Vitalidade/Reservas Arcanas (maxHpPct/maxMpPct): passivas permanentes da árvore.
       const joinUnlocks = getUnlocksFor(player)
-      player.maxHp = Math.round(finalLevers.hp * (1 + joinUnlocks.passives.maxHpPct))
+      const mirrorHp = Number(player.trainingMirrorMaxHp)
+      if (training && Number.isFinite(mirrorHp) && mirrorHp > 0) {
+        player.maxHp = Math.max(1, Math.round(mirrorHp * (trainMult || 1)))
+      } else {
+        player.maxHp = fightHpPool(player, joinUnlocks.passives.maxHpPct)
+      }
       player.hp = player.maxHp
       player.fightStaminaSpent = 0
       player.initialHp = player.maxHp
@@ -811,7 +858,7 @@ io.on('connection', (socket) => {
         timestamp: new Date()
       })
 
-      // O peer espelha o poder do humano: o join ACIMA já derivou gearTier/levers dele.
+      // O peer espelha poder (levers) e pool de vida do humano.
       setTimeout(() => {
         spawnTrainingBot({
           roomId,
@@ -819,6 +866,7 @@ io.on('connection', (socket) => {
           playerLevel: player.level || 1,
           playerGearTier: player.gearTier,
           playerAttrs: readAttrs(player),
+          playerMaxHp: player.maxHp,
           monsterKey
         })
       }, 1000)

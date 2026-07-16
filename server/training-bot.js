@@ -48,11 +48,13 @@ function pickWeighted(weights) {
  * O servidor recomputa os levers no join (derivePlayerLevers + trainingTargetGearTier +
  * trainingLeverMult, tudo gateado por room.isTraining) — este payload é só a entrada.
  */
-function buildMonsterPlayer(monsterKey, playerLevel, playerGearTier, playerAttrs) {
+function buildMonsterPlayer(monsterKey, playerLevel, playerGearTier, playerAttrs, playerMaxHp) {
   const def = getTrainingOpponent(monsterKey)
   const level = Math.max(1, Number(playerLevel) || 1)
   const attrs = playerAttrs && typeof playerAttrs === 'object' ? { ...playerAttrs } : fallbackPeerAttrs(level)
   const gearTier = Number.isFinite(Number(playerGearTier)) ? Number(playerGearTier) : 0
+  // Pool do humano (já ficha+gear). O join aplica difficultyMult em cima deste espelho.
+  const mirrorMaxHp = Math.max(1, Number(playerMaxHp) || 100)
 
   // MP/stamina de sessão generosos o bastante para uma luta (faucet de treino)
   const maxMp = 60 + level * 4 + attrs.int
@@ -64,8 +66,8 @@ function buildMonsterPlayer(monsterKey, playerLevel, playerGearTier, playerAttrs
     level,
     race: def.race,
     class: def.classNamePt,
-    hp: 100, // sobrescrito pelos levers no join
-    maxHp: 100,
+    hp: mirrorMaxHp,
+    maxHp: mirrorMaxHp,
     mp: maxMp,
     maxMp,
     stamina: maxStamina,
@@ -88,6 +90,7 @@ function buildMonsterPlayer(monsterKey, playerLevel, playerGearTier, playerAttrs
     // Lidos pelo servidor SÓ em sala de treino (room.isTraining) — ver o join.
     trainingTargetGearTier: gearTier,
     trainingLeverMult: def.difficultyMult || 1,
+    trainingMirrorMaxHp: mirrorMaxHp,
     trainingUnbeatable: !!def.unbeatable,
     skillTree: null, // legado → Ataque de Classe liberado
     isReady: false,
@@ -96,9 +99,9 @@ function buildMonsterPlayer(monsterKey, playerLevel, playerGearTier, playerAttrs
   }
 }
 
-function spawnTrainingBot({ roomId, port, playerLevel, playerGearTier, playerAttrs, monsterKey }) {
+function spawnTrainingBot({ roomId, port, playerLevel, playerGearTier, playerAttrs, playerMaxHp, monsterKey }) {
   const def = getTrainingOpponent(monsterKey)
-  const monster = buildMonsterPlayer(def.key, playerLevel, playerGearTier, playerAttrs)
+  const monster = buildMonsterPlayer(def.key, playerLevel, playerGearTier, playerAttrs, playerMaxHp)
   const behavior = { attackWeights: { ...def.attackWeights } }
 
   const socket = io(`http://localhost:${port}`, {

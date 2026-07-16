@@ -536,11 +536,13 @@ function ActiveSessionDetail({ node, status, countdown, busy, onCollect, onStopN
 }
 
 function RegionActiveBody({
-  node, characters, sessions, expandedId, status, countdown, busy, sendHeroId,
+  node, characters, sessions, expandedId, status, countdown, busy, sendHeroId, hideDispatch,
   onExpand, onSelectSend, onDispatch, onCollect, onStopNow, onStopAfter, onCancelStop,
 }: {
   node: MapNode; characters: GatherCharacter[]; sessions: OpenSession[]
   expandedId: string | null; status: StatusPayload | null; countdown: number; busy: boolean; sendHeroId: string | null
+  /** Campo travado por nível: mostra sessões ativas (para encerrar), mas esconde o envio. */
+  hideDispatch?: boolean
   onExpand: (characterId: string) => void; onSelectSend: (characterId: string | null) => void
   onDispatch: (fieldId: GatherFieldId, characterId: string) => void
   onCollect: () => void; onStopNow: () => void; onStopAfter: () => void; onCancelStop: () => void
@@ -587,46 +589,54 @@ function RegionActiveBody({
         </div>
       )}
 
-      <div className="text-[10px] uppercase tracking-[0.18em] ink-soft font-bold mb-2">Enviar herói</div>
-      {freeHeroes.length === 0 ? (
-        <p className="text-[13px] ink-soft italic px-1 py-2">Nenhum herói livre — todos estão em campo ou você ainda não criou um. Recolha um espólio para liberar alguém.</p>
+      {hideDispatch ? (
+        here.length === 0 ? (
+          <p className="text-[13px] ink-soft italic px-1 py-2">Nenhum herói coletando neste campo.</p>
+        ) : null
       ) : (
         <>
-          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-            {freeHeroes.map((h) => {
-              const dead = h.isAlive === false
-              const noStamina = h.stamina < GATHER_TICK_STAMINA
-              const lowLevel = gatherLevelOf(h.gatherXp) < (node.unlockLevel ?? 1)
-              const apto = !dead && !noStamina && !lowLevel
-              const sel = sendHeroId === h.id
-              const hint = dead ? '💀 morto'
-                : lowLevel ? `🔒 Coleta Nv.${node.unlockLevel}`
-                : noStamina ? '⚡ sem stamina'
-                : `⛏️ Nv.${gatherLevelOf(h.gatherXp)}`
-              return (
-                <button key={h.id} onClick={() => apto && onSelectSend(sel ? null : h.id)} disabled={!apto}
-                  className="shrink-0 w-[94px] rounded-xl px-2 py-2.5 text-center transition-all active:scale-95"
-                  style={{
-                    background: sel ? 'rgba(94,64,26,0.16)' : 'rgba(94,64,26,0.05)',
-                    border: sel ? `2px solid ${node.acc}` : '1.5px solid rgba(74,52,24,0.25)',
-                    opacity: apto ? 1 : 0.5,
-                  }}>
-                  <Portrait size={38} tone={node.acc} busy={sel} className="mx-auto mb-1" />
-                  <div className="font-map font-bold text-[12px] ink truncate">{h.name}</div>
-                  <div className="text-[10px] font-combat mt-0.5" style={{ color: apto ? '#6b4f28' : '#7a2f26' }}>{hint}</div>
-                </button>
-              )
-            })}
-          </div>
-          <div className="text-[11px] ink-soft mt-1.5 mb-3 px-1">
-            Cada tique de 15 min custa <b className="ink">{GATHER_TICK_STAMINA} ⚡</b> e o herói fica ocupado até você encerrar.
-          </div>
-          <button disabled={!sendHeroId || busy} onClick={() => sendHeroId && onDispatch(fieldId, sendHeroId)}
-            className="w-full py-3.5 rounded-xl font-map font-bold text-[15px] text-white inline-flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ background: sendHeroId ? `linear-gradient(90deg, ${node.acc}, ${node.acc}cc)` : 'rgba(74,52,24,0.4)', boxShadow: sendHeroId ? `0 0 20px ${node.acc}66` : 'none' }}>
-            <ArrowRight size={18} />
-            {sendHeroId ? `Enviar ${charById.get(sendHeroId)?.name ?? 'herói'} para coletar` : 'Escolha um herói'}
-          </button>
+          <div className="text-[10px] uppercase tracking-[0.18em] ink-soft font-bold mb-2">Enviar herói</div>
+          {freeHeroes.length === 0 ? (
+            <p className="text-[13px] ink-soft italic px-1 py-2">Nenhum herói livre — todos estão em campo ou você ainda não criou um. Recolha um espólio para liberar alguém.</p>
+          ) : (
+            <>
+              <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                {freeHeroes.map((h) => {
+                  const dead = h.isAlive === false
+                  const noStamina = h.stamina < GATHER_TICK_STAMINA
+                  const lowLevel = gatherLevelOf(h.gatherXp) < (node.unlockLevel ?? 1)
+                  const apto = !dead && !noStamina && !lowLevel
+                  const sel = sendHeroId === h.id
+                  const hint = dead ? '💀 morto'
+                    : lowLevel ? `🔒 Coleta Nv.${node.unlockLevel}`
+                    : noStamina ? '⚡ sem stamina'
+                    : `⛏️ Nv.${gatherLevelOf(h.gatherXp)}`
+                  return (
+                    <button key={h.id} onClick={() => apto && onSelectSend(sel ? null : h.id)} disabled={!apto}
+                      className="shrink-0 w-[94px] rounded-xl px-2 py-2.5 text-center transition-all active:scale-95"
+                      style={{
+                        background: sel ? 'rgba(94,64,26,0.16)' : 'rgba(94,64,26,0.05)',
+                        border: sel ? `2px solid ${node.acc}` : '1.5px solid rgba(74,52,24,0.25)',
+                        opacity: apto ? 1 : 0.5,
+                      }}>
+                      <Portrait size={38} tone={node.acc} busy={sel} className="mx-auto mb-1" />
+                      <div className="font-map font-bold text-[12px] ink truncate">{h.name}</div>
+                      <div className="text-[10px] font-combat mt-0.5" style={{ color: apto ? '#6b4f28' : '#7a2f26' }}>{hint}</div>
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="text-[11px] ink-soft mt-1.5 mb-3 px-1">
+                Cada tique de 15 min custa <b className="ink">{GATHER_TICK_STAMINA} ⚡</b> e o herói fica ocupado até você encerrar.
+              </div>
+              <button disabled={!sendHeroId || busy} onClick={() => sendHeroId && onDispatch(fieldId, sendHeroId)}
+                className="w-full py-3.5 rounded-xl font-map font-bold text-[15px] text-white inline-flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ background: sendHeroId ? `linear-gradient(90deg, ${node.acc}, ${node.acc}cc)` : 'rgba(74,52,24,0.4)', boxShadow: sendHeroId ? `0 0 20px ${node.acc}66` : 'none' }}>
+                <ArrowRight size={18} />
+                {sendHeroId ? `Enviar ${charById.get(sendHeroId)?.name ?? 'herói'} para coletar` : 'Escolha um herói'}
+              </button>
+            </>
+          )}
         </>
       )}
     </>
@@ -703,25 +713,24 @@ function RegionPanel(props: {
                   ⏳ Em breve
                 </span>
               </div>
-            ) : levelLocked ? (
-              <div className="rounded-xl px-4 py-4 text-center" style={{ background: 'rgba(94,64,26,0.08)', border: '1px dashed rgba(74,52,24,0.45)' }}>
-                <div className="text-2xl mb-1">🔒</div>
-                <div className="font-map font-bold ink text-[14px] mb-1">Desbloqueia com Coleta Nv.{node.unlockLevel}</div>
-                <p className="text-[13px] ink-soft leading-snug">
-                  Nenhum herói seu alcançou esse nível ainda. Cada tique de coleta rende XP de Coleta — continue nos campos já abertos.
-                </p>
-                <span className="inline-block mt-2 text-[11px] font-combat px-2.5 py-1 rounded-md"
-                  style={{ background: 'rgba(94,64,26,0.12)', border: '1px solid rgba(74,52,24,0.3)', color: '#6b4f28' }}>
-                  ⛏️ Melhor herói: Nv.{maxGatherLevel}
-                </span>
-              </div>
             ) : (
-              <RegionActiveBody
-                node={node} characters={props.characters} sessions={props.sessions}
-                expandedId={props.expandedId} status={props.status} countdown={props.countdown} busy={props.busy} sendHeroId={props.sendHeroId}
-                onExpand={props.onExpand} onSelectSend={props.onSelectSend} onDispatch={props.onDispatch}
-                onCollect={props.onCollect} onStopNow={props.onStopNow} onStopAfter={props.onStopAfter} onCancelStop={props.onCancelStop}
-              />
+              <>
+                {levelLocked && (
+                  <div className="rounded-xl px-4 py-3 text-center mb-3" style={{ background: 'rgba(94,64,26,0.08)', border: '1px dashed rgba(74,52,24,0.45)' }}>
+                    <div className="font-map font-bold ink text-[13px] mb-0.5">🔒 Enviar novos heróis: Coleta Nv.{node.unlockLevel}</div>
+                    <p className="text-[12px] ink-soft leading-snug">
+                      Melhor herói: Nv.{maxGatherLevel}. Se alguém já estiver coletando aqui, você ainda pode encerrar a sessão abaixo.
+                    </p>
+                  </div>
+                )}
+                <RegionActiveBody
+                  node={node} characters={props.characters} sessions={props.sessions}
+                  expandedId={props.expandedId} status={props.status} countdown={props.countdown} busy={props.busy} sendHeroId={props.sendHeroId}
+                  hideDispatch={levelLocked}
+                  onExpand={props.onExpand} onSelectSend={props.onSelectSend} onDispatch={props.onDispatch}
+                  onCollect={props.onCollect} onStopNow={props.onStopNow} onStopAfter={props.onStopAfter} onCancelStop={props.onCancelStop}
+                />
+              </>
             )}
           </motion.div>
         </motion.div>

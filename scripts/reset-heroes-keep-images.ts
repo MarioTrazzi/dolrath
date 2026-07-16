@@ -12,7 +12,8 @@
  *   • level=1, experience=0, gold=0, availablePoints=1
  *   • skillTree limpa { version, purchased: [] }
  *   • hp/mp/stamina cheios; failstacks=0; transformação limpa
- *   • apaga inventário, equipamento, histórico e dungeon runs
+ *   • apaga inventário, equipamento, histórico, dungeon runs e sessões de coleta
+ *   • zera XP de profissões (gather/farm/forge/alchemy/process/cook)
  *
  * Conta: goldBalance=1000, globalInventorySlots=50, UserInventory vazio.
  *
@@ -184,6 +185,7 @@ async function main() {
       prisma.characterEquipment.deleteMany({ where: { characterId: p.id } }),
       prisma.characterHistory.deleteMany({ where: { characterId: p.id } }),
       prisma.dungeonRun.deleteMany({ where: { characterId: p.id } }),
+      prisma.gatheringSession.deleteMany({ where: { characterId: p.id } }),
       prisma.character.update({
         where: { id: p.id },
         data: {
@@ -193,6 +195,13 @@ async function main() {
           availablePoints: AVAILABLE_POINTS,
           inventorySlots: DEFAULT_INV_SLOTS,
           failstacks: 0,
+          // Profissões zeradas junto do herói (evita sessão em campo travado por nível).
+          gatherXp: 0,
+          farmXp: 0,
+          forgeXp: 0,
+          alchemyXp: 0,
+          processXp: 0,
+          cookXp: 0,
           skillTree: { version: SKILL_TREE_VERSION, purchased: [] },
           baseStats,
           attributes,

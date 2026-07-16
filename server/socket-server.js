@@ -415,6 +415,16 @@ function queueBandForWaitMs(waitMs) {
 
 function tryMatchmake() {
   const entries = [...matchQueue.values()]
+  // Preferir humano↔bot (score 0), depois humano↔humano (1), bot↔bot por último (2).
+  const pairRank = (a, b) => {
+    const aBot = !!a.isBot
+    const bBot = !!b.isBot
+    if (aBot !== bBot) return 0
+    if (!aBot && !bBot) return 1
+    return 2
+  }
+
+  let best = null
   for (let i = 0; i < entries.length; i++) {
     const a = entries[i]
     if (!matchQueue.has(a.characterId)) continue
@@ -427,32 +437,40 @@ function tryMatchmake() {
       const waitB = Date.now() - b.joinedAt
       const band = Math.max(bandA, queueBandForWaitMs(waitB))
       if (Math.abs((a.level || 1) - (b.level || 1)) > band) continue
-
-      matchQueue.delete(a.characterId)
-      matchQueue.delete(b.characterId)
-      const roomId = 'mm_' + Math.random().toString(36).slice(2, 11)
-      const payloadA = {
-        roomId,
-        opponentPreview: { id: b.characterId, name: b.name, level: b.level },
+      const rank = pairRank(a, b)
+      if (!best || rank < best.rank) {
+        best = { a, b, rank }
+        if (rank === 0) break
       }
-      const payloadB = {
-        roomId,
-        opponentPreview: { id: a.characterId, name: a.name, level: a.level },
-      }
-      const sockA = io.sockets.sockets.get(a.socketId)
-      const sockB = io.sockets.sockets.get(b.socketId)
-      if (sockA) {
-        sockA.emit('match_found', payloadA)
-        sockA.emit('queue_status', { status: 'matched', ...payloadA })
-      }
-      if (sockB) {
-        sockB.emit('match_found', payloadB)
-        sockB.emit('queue_status', { status: 'matched', ...payloadB })
-      }
-      console.log(`🔎 Match: ${a.name} vs ${b.name} → ${roomId}`)
-      return
     }
+    if (best && best.rank === 0) break
   }
+
+  if (!best) return
+
+  const { a, b } = best
+  matchQueue.delete(a.characterId)
+  matchQueue.delete(b.characterId)
+  const roomId = 'mm_' + Math.random().toString(36).slice(2, 11)
+  const payloadA = {
+    roomId,
+    opponentPreview: { id: b.characterId, name: b.name, level: b.level },
+  }
+  const payloadB = {
+    roomId,
+    opponentPreview: { id: a.characterId, name: a.name, level: a.level },
+  }
+  const sockA = io.sockets.sockets.get(a.socketId)
+  const sockB = io.sockets.sockets.get(b.socketId)
+  if (sockA) {
+    sockA.emit('match_found', payloadA)
+    sockA.emit('queue_status', { status: 'matched', ...payloadA })
+  }
+  if (sockB) {
+    sockB.emit('match_found', payloadB)
+    sockB.emit('queue_status', { status: 'matched', ...payloadB })
+  }
+  console.log(`🔎 Match: ${a.name} vs ${b.name} → ${roomId}`)
 }
 
 setInterval(tryMatchmake, 2000)

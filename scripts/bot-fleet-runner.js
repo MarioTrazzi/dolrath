@@ -1,10 +1,10 @@
 /**
- * Frota headless: 50% STA eco (gather/farm/craft) + 50% PvP matchmaking + drain.
+ * Frota headless: PvP matchmaking primeiro (fila "Buscar oponente"), depois eco.
  *
  * Env:
  *   BOT_FLEET_SECRET   — obrigatório
  *   APP_URL            — default https://dolrath.vercel.app
- *   SOCKET_URL         — default https://dolrath.onrender.com (ou ws://localhost:3001)
+ *   SOCKET_URL         — default https://dolrath.onrender.com
  *   BOT_FLEET_REGISTRY — path do registry (default scripts/bot-fleet-registry.json)
  *   BOT_FLEET_LOG      — JSONL log path (default scripts/bot-fleet-events.jsonl)
  *
@@ -15,10 +15,13 @@ const path = require('path')
 const { io } = require('socket.io-client')
 
 const APP_URL = (process.env.APP_URL || 'https://dolrath.vercel.app').replace(/\/$/, '')
-const SOCKET_URL =
+// Sempre preferir o socket de produção a menos que SOCKET_URL seja explícito —
+// o runner costuma rodar na máquina local mirando APP_URL de prod.
+const SOCKET_URL = (
   process.env.SOCKET_URL ||
   process.env.NEXT_PUBLIC_SOCKET_URL ||
-  (process.env.NODE_ENV === 'production' ? 'https://dolrath.onrender.com' : 'http://localhost:3001')
+  'https://dolrath.onrender.com'
+).replace(/\/$/, '')
 const SECRET = process.env.BOT_FLEET_SECRET || ''
 const REGISTRY_PATH =
   process.env.BOT_FLEET_REGISTRY || path.join(__dirname, 'bot-fleet-registry.json')
@@ -351,7 +354,7 @@ async function runPvpBudget(bot, budgetSta) {
 
     const player = buildPlayerPayload(char, bot.userId)
     logEvent('queue_join', { characterId: bot.characterId, level: player.level })
-    await sleep(jitter(2000, 8000))
+    await sleep(jitter(200, 1500))
     const result = await queueForMatch(SOCKET_URL, bot, player)
     if (!result) {
       logEvent('queue_timeout', { characterId: bot.characterId })
@@ -380,13 +383,19 @@ async function botLoop(bot) {
       }
 
       const half = Math.floor(sta / 2)
-      logEvent('sta_budget', { characterId: bot.characterId, stamina: sta, eco: half, pvp: sta - half })
+      logEvent('sta_budget', { characterId: bot.characterId, stamina: sta, eco: half, pvp: half })
 
-      const eco = await runEcoBudget(bot, half)
-      const pvpBudget = half + (eco.remainingToPvp || 0)
-      await runPvpBudget(bot, Math.max(pvpBudget, half))
+      // PvP primeiro — assim a fila "Buscar oponente" tem bots esperando.
+      // Eco depois (gather/farm) com o restante do budget.
+      await runPvpBudget(bot, half)
 
-      // Drain residual
+      char = await getCharacter(bot.characterId)
+      const ecoBudget = Math.min(half, Math.max(0, (char.stamina || 0) - PVP_MIN_STA))
+      if (ecoBudget > 0) {
+        await runEcoBudget(bot, ecoBudget)
+      }
+
+      // Drain residual em PvP (mantém bots na fila enquanto tiver STA)
       char = await getCharacter(bot.characterId)
       if ((char.stamina || 0) >= PVP_MIN_STA) {
         await runPvpBudget(bot, char.stamina)

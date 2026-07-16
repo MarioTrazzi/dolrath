@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import BattleScene, { BattleEvent, DiceResult, EquipmentMap, FighterView } from '@/components/battle/BattleScene'
+import CombatShell, { type CombatAttackOption } from '@/components/battle/CombatShell'
 import DungeonBackdrop from '@/components/dungeon/DungeonBackdrop'
 import {
   buildTrailPoints,
@@ -767,10 +768,6 @@ export default function DungeonRun({
   const [transformedThisFight, setTransformedThisFight] = useState(false)
   const transformedThisFightRef = useRef(false)
   transformedThisFightRef.current = transformedThisFight
-  const [showFormPicker, setShowFormPicker] = useState(false)
-  // 🌳 Submenu "⚔️ Ataque": lista Golpe + Ataque de Classe (se desbloqueado) + specials
-  // da forma (filtradas/patchadas pela árvore) — substitui a fileira fixa de botões.
-  const [showAttackMenu, setShowAttackMenu] = useState(false)
   const transformRef = useRef(transform)
   transformRef.current = transform
   const transformCdRef = useRef(transformCd)
@@ -1403,7 +1400,6 @@ export default function DungeonRun({
     setTransformedThisFight(false)
     transformedThisFightRef.current = false
     setPendingAbility(null)
-    setShowFormPicker(false)
     setPhase('combat')
     setStage('initiative')
     pushLog(
@@ -1440,7 +1436,6 @@ export default function DungeonRun({
     setTransform({ type, turns: cfg.duration + unlocks.passives.transformExtraTurns })
     setTransformedThisFight(true)
     transformedThisFightRef.current = true
-    setShowFormPicker(false)
     // Explosão de energia na cor da forma sobre o card do jogador (a arena lê o
     // transformationType do FighterView, que já terá virado no próximo render).
     later(() => pushBattleEvent({ kind: 'transform', actorId: character.id }), 50)
@@ -3500,87 +3495,110 @@ export default function DungeonRun({
         )}
 
         {/* ============================================================ */}
-        {/* FASE: COMBATE — com WalkScene fica overlay in-loco no mapa */}
+        {/* FASE: COMBATE — shell compartilhado com PvP (CombatShell) */}
         {/* ============================================================ */}
-        {phase === 'combat' && monster && (
-          <div className="flex-1 flex flex-col min-h-0 relative z-10">
-            <BattleScene
-              className="flex-1 min-h-[280px]"
-              left={playerFighter}
-              right={monsterFighter}
-              rightGroup={packFighters}
-              hideEnemyBars={isPack}
-              enemyHpOnly
-              focusEnemyId={focusEnemyId}
-              brightenEnemyImage
+        {phase === 'combat' && monster && (() => {
+          const formSpecials = transform
+            ? getFormSpecials(transform.type)
+                .filter(def => {
+                  if (def.id === 'stunning_blow') return unlocks.stunningBlow
+                  if (def.kind === 'util') return unlocks.formBuff
+                  return true
+                })
+                .map(def => applyRankPatch(def, unlocks, transform.type))
+            : []
+          const attackOptions: CombatAttackOption[] = [
+            {
+              key: 'basic',
+              label: ATTACKS.basic.label,
+              locked: mp < ATTACKS.basic.mp,
+              sub: `d${PVE_DIE.basic} • grátis`,
+              onPick: () => choosePlayerAttack('basic'),
+            },
+            ...(unlocks.classAttack
+              ? [{
+                  key: 'weapon',
+                  label: classAtkName,
+                  locked: mp < effWeaponMp,
+                  sub: `d${effWeaponDie} • ${effWeaponMp} MP`,
+                  onPick: () => choosePlayerAttack('weapon'),
+                }]
+              : []),
+            ...formSpecials.map(def => {
+              const cd = combatFx.cd[def.id] || 0
+              const mpCost = def.cost.mp || 0
+              return {
+                key: def.id,
+                label: def.name,
+                locked: cd > 0 || mp < mpCost,
+                sub: cd > 0 ? `recarga ${cd}` : `${def.kind === 'dmg' ? `d${def.die ?? 20}·` : ''}${mpCost}MP`,
+                onPick: () => useAbility(def),
+              }
+            }),
+          ]
+          const singleForm = transformForms.length === 1 ? TRANSFORMATION_CONFIG[transformForms[0]] : null
+          const transformDisabled = transformedThisFight || (!!singleForm && mp < singleForm.cost.mp)
 
-              currentTurnId={currentTurnId}
-              winnerId={winnerId}
-              combatEnded={combatEnded}
-              event={battleEvent}
-              diceResults={diceResults}
-              dicePanel={dicePanel}
-              backdrop={null}
-            />
-
-            {/* Roster do pacote (só com >1 inimigo): clique para escolher o alvo no seu
-                turno. O ativo fica destacado; os outros fustigam com chip leve por rodada. */}
-            {pack.length > 1 && !combatEnded && (
-              <div className="flex-shrink-0 bg-black/55 border-t border-white/5 px-3 sm:px-6 py-1.5">
-                <div className="mx-auto max-w-2xl flex items-center justify-center gap-2 flex-wrap">
-                  <span className="text-[10px] text-white/45 font-bold mr-0.5">Alvo:</span>
-                  {pack.map(mm => {
-                    const active = mm.id === monster?.id
-                    const canTarget = stage === 'playerSelect' && !active
-                    return (
-                      <button
-                        key={mm.id}
-                        onClick={() => canTarget && setActiveTarget(mm.id)}
-                        disabled={!canTarget}
-                        title={canTarget ? `Focar ${mm.name}` : active ? 'Alvo atual' : 'Escolha o alvo no seu turno'}
-                        className={`flex items-center gap-1.5 px-2.5 py-1.5 min-h-[36px] rounded-lg border transition-all ${
-                          active
-                            ? 'bg-red-600/30 border-red-400/70'
-                            : canTarget
-                              ? 'bg-white/5 border-white/15 hover:border-white/40 hover:scale-105 cursor-pointer'
-                              : 'bg-white/5 border-white/10 opacity-70 cursor-default'
-                        }`}
-                      >
-                        <span className="w-7 h-7 inline-flex items-center justify-center shrink-0">
-                          <MonsterThumb name={mm.name} image={mm.image} emoji={mm.emoji} className="text-base" />
-                        </span>
-                        {/* Só nome/foco — o HP agora vive no card da arena (sem duplicar). */}
-                        <span className="text-[11px] font-bold text-white/80 leading-none">{active ? '🎯 ' : ''}{mm.name}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Log de combate (estilo RiPG): mostra a conta dos dados e o dano resultante */}
-            <div className="flex-shrink-0 bg-black/60 border-t border-white/5 px-3 sm:px-6 py-1.5">
-              <div className="mx-auto max-w-2xl h-[54px] overflow-y-auto overscroll-contain flex flex-col justify-end gap-0.5 font-mono text-[11px] leading-tight text-white/65">
-                {log.slice(-4).map((line, i) => (
-                  <div key={`${log.length}-${i}`} className="break-words last:text-white/90">{line}</div>
-                ))}
-              </div>
-            </div>
-
-            {/* Barra de ações do combate — altura ESTÁVEL entre os estados (botões ↔
-                "rolando" ↔ "resolvendo"), senão a arena inteira pula a cada turno.
-                Os toggles do piloto têm uma LINHA própria (antes eram absolute no canto
-                e sobrepunham os botões de ataque no celular). */}
-            <div
-              className="relative flex-shrink-0 bg-black/70 backdrop-blur-md border-t border-white/10 px-3 sm:px-6 pt-1.5 flex flex-col"
-              style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
-            >
-              {/* Toggle do piloto automático (+ switch de poções) — liga/desliga a qualquer momento */}
-              <div className="h-9 flex items-center justify-end gap-1.5">
-                {!combatEnded && (
+          return (
+            <CombatShell
+              logLines={log}
+              showActions={!combatEnded && stage === 'playerSelect'}
+              attackOptions={attackOptions}
+              onOpenItems={() => { loadConsumables(); setShowItems(true) }}
+              transform={
+                transformForms.length > 0
+                  ? {
+                      available: true,
+                      activeLabel: transform ? activeTransformCfg?.name : null,
+                      activeTurnsHint: transform ? `${transform.turns} turno(s)` : undefined,
+                      used: transformedThisFight && !transform,
+                      disabled: transformDisabled,
+                      title: transformedThisFight
+                        ? 'Transformação já usada nesta luta (1× por luta)'
+                        : singleForm
+                          ? `${singleForm.cost.mp} MP • ${singleForm.duration} turnos`
+                          : `${transformForms.length} formas disponíveis`,
+                      buttonLabel: transformedThisFight ? 'Transf. usada' : 'Transformar',
+                      costHint: !transformedThisFight
+                        ? (singleForm ? `${singleForm.cost.mp}MP` : `${transformForms.length} formas`)
+                        : undefined,
+                      onClick: () => {
+                        if (transformedThisFight) return
+                        if (singleForm) activateTransform(transformForms[0])
+                      },
+                      forms: transformForms.length > 1
+                        ? transformForms.map(t => {
+                            const cfg = TRANSFORMATION_CONFIG[t]
+                            return {
+                              key: t,
+                              label: cfg.name,
+                              sub: `${cfg.cost.mp}🔮 • ${cfg.duration} turnos`,
+                              locked: mp < cfg.cost.mp,
+                              onPick: () => activateTransform(t),
+                            }
+                          })
+                        : undefined,
+                    }
+                  : null
+              }
+              extraActions={
+                !monster?.isBoss ? (
+                  <button
+                    type="button"
+                    onClick={handleRetreat}
+                    title="Recuar em segurança — você mantém o XP e o espólio dos inimigos já derrotados."
+                    className="px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white whitespace-nowrap transition-all shadow-lg bg-gradient-to-r from-slate-600 to-slate-500 hover:scale-105"
+                  >
+                    Recuar
+                  </button>
+                ) : null
+              }
+              toolbar={
+                !combatEnded ? (
                   <>
                     {auto && (
                       <button
+                        type="button"
                         onClick={() => setAutoConsumables(v => !v)}
                         title={autoConsumables ? 'O piloto usa poções de HP/MP — clique para desligar' : 'O piloto NÃO usa poções — clique para ligar'}
                         className={`px-3 py-1.5 rounded-full text-[10px] font-black border transition-colors ${
@@ -3593,6 +3611,7 @@ export default function DungeonRun({
                       </button>
                     )}
                     <button
+                      type="button"
                       onClick={() => setAuto(a => !a)}
                       title={auto ? 'Desligar o piloto automático' : 'Ligar farm visual (aba aberta — joga os turnos por você)'}
                       className={`px-3 py-1.5 rounded-full text-[10px] font-black border transition-colors ${
@@ -3604,171 +3623,78 @@ export default function DungeonRun({
                       {auto ? '⚡ Auto ON' : '⚡ Auto'}
                     </button>
                   </>
-                )}
-              </div>
-              <div className="min-h-[56px] flex items-center justify-center">
-              {combatEnded ? (
-                <div className="text-white/70 text-sm font-bold animate-pulse">
-                  {winnerId === character.id ? '🏆 Vitória! Coletando recompensas...' : '💀 Derrotado...'}
-                </div>
-              ) : stage === 'playerSelect' ? (
-                <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
-                  {/* 🌳 Submenu único "⚔️ Ataque": Golpe + Ataque de Classe (se a árvore já
-                      desbloqueou) + specials da forma (filtradas por unlock, com ranks
-                      aplicados). Nível 1 sem nó nenhum comprado = só Golpe aparece. */}
-                  {(() => {
-                    const formSpecials = transform
-                      ? getFormSpecials(transform.type)
-                          .filter(def => {
-                            if (def.id === 'stunning_blow') return unlocks.stunningBlow
-                            if (def.kind === 'util') return unlocks.formBuff
-                            return true // especial assinatura: sempre disponível transformado
-                          })
-                          .map(def => applyRankPatch(def, unlocks, transform.type))
-                      : []
-                    const options: { key: string; label: string; sub: string; locked: boolean; onPick: () => void; tone: 'basic' | 'weapon' | 'ability' }[] = [
-                      {
-                        key: 'basic', label: ATTACKS.basic.label, tone: 'basic', locked: mp < ATTACKS.basic.mp,
-                        sub: `d${PVE_DIE.basic} • grátis`, onPick: () => choosePlayerAttack('basic'),
-                      },
-                      ...(unlocks.classAttack ? [{
-                        key: 'weapon', label: classAtkName, tone: 'weapon' as const, locked: mp < effWeaponMp,
-                        sub: `d${effWeaponDie} • ${effWeaponMp} MP`, onPick: () => choosePlayerAttack('weapon'),
-                      }] : []),
-                      ...formSpecials.map(def => {
-                        const cd = combatFx.cd[def.id] || 0
-                        const mpCost = def.cost.mp || 0
-                        return {
-                          key: def.id, label: def.name, tone: 'ability' as const, locked: cd > 0 || mp < mpCost,
-                          sub: cd > 0 ? `recarga ${cd}` : `${def.kind === 'dmg' ? `d${def.die ?? 20}·` : ''}${mpCost}MP`,
-                          onPick: () => useAbility(def),
-                        }
-                      }),
-                    ]
-                    return (
-                      <div className="relative">
-                        <button
-                          onClick={() => setShowAttackMenu(v => !v)}
-                          className="px-4 sm:px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white whitespace-nowrap transition-all shadow-lg bg-gradient-to-r from-red-700 to-red-500 hover:scale-105"
-                        >
-                          ⚔️ Ataque
-                        </button>
-                        {showAttackMenu && (
-                          <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-50 w-64 bg-black/90 backdrop-blur-md border border-white/15 rounded-xl p-2 shadow-2xl space-y-1">
-                            {options.map(opt => (
-                              <button
-                                key={opt.key}
-                                onClick={() => { setShowAttackMenu(false); opt.onPick() }}
-                                disabled={opt.locked}
-                                title={opt.locked ? 'Indisponível — MP/recarga insuficiente' : undefined}
-                                className={`w-full flex items-center justify-between text-left px-3 py-2 rounded-lg transition-colors ${
-                                  opt.locked ? 'opacity-40 cursor-not-allowed bg-white/5' : 'bg-white/10 hover:bg-white/20'
-                                }`}
-                              >
-                                <span className="font-bold text-white text-xs">{opt.label}</span>
-                                <span className="text-[10px] text-white/60">{opt.sub}</span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })()}
-
-                  {/* Transformação (apenas raças com formas) — custa só MP */}
-                  {transformForms.length > 0 && (
-                    <div className="relative">
-                      {transform ? (
-                        <div className="px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white whitespace-nowrap bg-gradient-to-r from-fuchsia-700 to-purple-600 shadow-lg shadow-purple-900/50">
-                          {activeTransformCfg?.name}
-                          <span className="ml-1.5 text-[10px] opacity-75 font-semibold">{transform.turns} turno(s)</span>
-                        </div>
-                      ) : (() => {
-                        const single = transformForms.length === 1 ? TRANSFORMATION_CONFIG[transformForms[0]] : null
-                        // 🐉 Transformação é 1× POR LUTA.
-                        const disabled = transformedThisFight || (!!single && mp < single.cost.mp)
+                ) : null
+              }
+              statusContent={
+                combatEnded ? (
+                  <div className="text-white/70 text-sm font-bold animate-pulse">
+                    {winnerId === character.id ? '🏆 Vitória! Coletando recompensas...' : '💀 Derrotado...'}
+                  </div>
+                ) : stage === 'initiative' || stage === 'playerRoll' ? (
+                  <div className="text-white/60 text-xs sm:text-sm font-bold">
+                    🎲 {hasRolled ? 'Rolando...' : 'Clique no dado na arena para rolar!'}
+                  </div>
+                ) : (
+                  <div className="text-white/50 text-xs sm:text-sm font-bold animate-pulse">⚔️ Resolvendo ação...</div>
+                )
+              }
+              aboveLog={
+                pack.length > 1 && !combatEnded ? (
+                  <div className="flex-shrink-0 bg-black/55 border-t border-white/5 px-3 sm:px-6 py-1.5">
+                    <div className="mx-auto max-w-2xl flex items-center justify-center gap-2 flex-wrap">
+                      <span className="text-[10px] text-white/45 font-bold mr-0.5">Alvo:</span>
+                      {pack.map(mm => {
+                        const active = mm.id === monster?.id
+                        const canTarget = stage === 'playerSelect' && !active
                         return (
-                          <>
-                            <button
-                              onClick={() => {
-                                if (transformedThisFight) return
-                                if (single) activateTransform(transformForms[0])
-                                else setShowFormPicker(v => !v)
-                              }}
-                              disabled={disabled}
-                              title={transformedThisFight ? 'Transformação já usada nesta luta (1× por luta)' : single ? `${single.cost.mp} MP • ${single.duration} turnos` : `${transformForms.length} formas disponíveis`}
-                              className={`px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white whitespace-nowrap transition-all shadow-lg ${
-                                disabled
-                                  ? 'bg-gray-700/60 opacity-50 cursor-not-allowed'
-                                  : 'bg-gradient-to-r from-fuchsia-700 to-purple-600 hover:scale-105'
-                              }`}
-                            >
-                              {transformedThisFight ? 'Transf. usada' : 'Transformar'}
-                              {!transformedThisFight && (
-                                <span className="ml-1.5 text-[10px] opacity-75 font-semibold">
-                                  {single ? `${single.cost.mp}MP` : `${transformForms.length} formas`}
-                                </span>
-                              )}
-                            </button>
-
-                            {showFormPicker && !single && (
-                              <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-50 w-60 bg-black/90 backdrop-blur-md border border-white/15 rounded-xl p-2 shadow-2xl space-y-1">
-                                {transformForms.map(t => {
-                                  const cfg = TRANSFORMATION_CONFIG[t]
-                                  const dis = mp < cfg.cost.mp
-                                  return (
-                                    <button
-                                      key={t}
-                                      onClick={() => activateTransform(t)}
-                                      disabled={dis}
-                                      className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
-                                        dis ? 'opacity-40 cursor-not-allowed bg-white/5' : 'bg-white/10 hover:bg-white/20'
-                                      }`}
-                                    >
-                                      <span className="font-bold text-white text-xs">{cfg.name}</span>
-                                      <span className="block text-[10px] text-white/60">{cfg.cost.mp}🔮 • {cfg.duration} turnos</span>
-                                    </button>
-                                  )
-                                })}
-                              </div>
-                            )}
-                          </>
+                          <button
+                            key={mm.id}
+                            type="button"
+                            onClick={() => canTarget && setActiveTarget(mm.id)}
+                            disabled={!canTarget}
+                            title={canTarget ? `Focar ${mm.name}` : active ? 'Alvo atual' : 'Escolha o alvo no seu turno'}
+                            className={`flex items-center gap-1.5 px-2.5 py-1.5 min-h-[36px] rounded-lg border transition-all ${
+                              active
+                                ? 'bg-red-600/30 border-red-400/70'
+                                : canTarget
+                                  ? 'bg-white/5 border-white/15 hover:border-white/40 hover:scale-105 cursor-pointer'
+                                  : 'bg-white/5 border-white/10 opacity-70 cursor-default'
+                            }`}
+                          >
+                            <span className="w-7 h-7 inline-flex items-center justify-center shrink-0">
+                              <MonsterThumb name={mm.name} image={mm.image} emoji={mm.emoji} className="text-base" />
+                            </span>
+                            <span className="text-[11px] font-bold text-white/80 leading-none">
+                              {active ? '🎯 ' : ''}{mm.name}
+                            </span>
+                          </button>
                         )
-                      })()}
+                      })}
                     </div>
-                  )}
-
-                  {/* Usar consumível (consome o turno) */}
-                  <button
-                    onClick={() => { loadConsumables(); setShowItems(true) }}
-                    title="Poções de HP/MP — usar gasta o turno"
-                    className="px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white whitespace-nowrap transition-all shadow-lg bg-gradient-to-r from-emerald-700 to-green-600 hover:scale-105"
-                  >
-                    Item
-                  </button>
-
-                  {/* Recuar: sai em segurança mantendo XP/espólio dos abates. Não no boss. */}
-                  {!monster?.isBoss && (
-                    <button
-                      onClick={handleRetreat}
-                      title="Recuar em segurança — você mantém o XP e o espólio dos inimigos já derrotados."
-                      className="px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white whitespace-nowrap transition-all shadow-lg bg-gradient-to-r from-slate-600 to-slate-500 hover:scale-105"
-                    >
-                      Recuar
-                    </button>
-                  )}
-                </div>
-              ) : stage === 'initiative' || stage === 'playerRoll' ? (
-                <div className="text-white/60 text-xs sm:text-sm font-bold">
-                  🎲 {hasRolled ? 'Rolando...' : 'Clique no dado na arena para rolar!'}
-                </div>
-              ) : (
-                <div className="text-white/50 text-xs sm:text-sm font-bold animate-pulse">⚔️ Resolvendo ação...</div>
-              )}
-              </div>
-            </div>
-          </div>
-        )}
+                  </div>
+                ) : null
+              }
+            >
+              <BattleScene
+                className="flex-1 min-h-[280px]"
+                left={playerFighter}
+                right={monsterFighter}
+                rightGroup={packFighters}
+                hideEnemyBars={isPack}
+                enemyHpOnly
+                focusEnemyId={focusEnemyId}
+                brightenEnemyImage
+                currentTurnId={currentTurnId}
+                winnerId={winnerId}
+                combatEnded={combatEnded}
+                event={battleEvent}
+                diceResults={diceResults}
+                dicePanel={dicePanel}
+                backdrop={null}
+              />
+            </CombatShell>
+          )
+        })()}
 
         {/* ============================================================ */}
         {/* FASE: RESUMO (vitória / saída) */}

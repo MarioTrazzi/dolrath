@@ -1,13 +1,21 @@
 'use client'
 
-import { useEffect, useState, useRef, useCallback, Suspense } from 'react'
+import { useEffect, useState, useRef, useMemo, Suspense, type ReactNode } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { X, Users, Sword, Shield, Zap, Heart, Sparkles } from 'lucide-react'
+import { X } from 'lucide-react'
 import { io, Socket } from 'socket.io-client'
 import TransformationDialog from '@/components/TransformationDialog'
 import BattleScene, { BattleEvent, DiceResult, EquipmentMap, FighterView } from '@/components/battle/BattleScene'
+import CombatShell, { type CombatAttackOption } from '@/components/battle/CombatShell'
 import { TRANSFORMATION_CONFIG, getRaceTransformations, type TransformationType } from '@/lib/transformationSystem'
 import { TRANSFORM_SCALE, classAttackName } from '@/lib/combatModel'
+import { getFormSpecials } from '@/lib/transformationSpecials'
+import {
+  getSkillTree,
+  getSkillTreeState,
+  getSkillUnlocks,
+  applyRankPatch,
+} from '@/lib/skillTree'
 import { getTrainingOpponent, DEFAULT_TRAINING_OPPONENT_KEY } from '@/lib/trainingOpponents'
 
 interface Equipment {
@@ -270,13 +278,12 @@ function CombatPageContent() {
     [ActionType.USE_ITEM]: 0        // Usar item: 0 stamina
   }
 
-  const combatLogRef = useRef<HTMLDivElement>(null)
   // 🏆 Resumo da aposta: o que ESTE jogador levou da luta (antes isto virava uma
   // mensagem de chat que o próprio jogador mandava pra si mesmo).
   const [battleReward, setBattleReward] = useState<BattleRewardSide | null>(null)
-  // 📱 Mobile: o chat/log sai do rodapé (onde disputava espaço com as ações) e vira
-  // um bottom-sheet aberto pelo botão 💬; o badge conta mensagens de chat não lidas.
+  // Chat em bottom-sheet (igual mobile antigo; não compete com a barra de ações).
   const [chatOpen, setChatOpen] = useState(false)
+  const [showItems, setShowItems] = useState(false)
   const [unreadChat, setUnreadChat] = useState(0)
   const seenChatCount = useRef(0)
   const sheetLogRef = useRef<HTMLDivElement>(null)
@@ -310,20 +317,24 @@ function CombatPageContent() {
   const isSpectator = userRole === 'spectator'
   const isModerator = userRole === 'moderator'
 
-  // 🎯 CÁLCULOS DE EXIBIÇÃO (modelo enxuto): crítico = rolagem máxima do d12 (fixo),
-  // evasão = lever da classe, poder = lever de ataque.
-  const calculateDisplayStats = (player: Player | null | undefined) => {
-    if (!player) return { critChance: 0, evade: 0, power: 0 }
-
-    const critChance = Math.round(100 / 12) // rolagem máxima do d12 ≈ 8%
-    const evade = Math.round((player.levers?.evade || 0) * 100)
-    const power = Math.round(player.levers?.power || 0)
-
-    return { critChance, evade, power }
-  }
-
-  const playerStats = calculateDisplayStats(currentPlayerDisplay)
-  const opponentStats = calculateDisplayStats(opponent)
+  const skillTreeDef = useMemo(
+    () => getSkillTree(
+      currentPlayer?.class || 'Guerreiro',
+      currentPlayer?.unlockedTransformation || currentPlayer?.transformationType || null
+    ),
+    [currentPlayer?.class, currentPlayer?.unlockedTransformation, currentPlayer?.transformationType]
+  )
+  const unlocks = useMemo(
+    () => getSkillUnlocks(getSkillTreeState(currentPlayer?.skillTree ?? null), skillTreeDef),
+    [currentPlayer?.skillTree, skillTreeDef]
+  )
+  const logLines = useMemo(() => {
+    const entries = combatRoom?.combatLog || []
+    return entries
+      .filter(e => e.type !== 'chat')
+      .slice(-8)
+      .map(e => (e.player ? `${e.player}: ${e.message}` : e.message))
+  }, [combatRoom?.combatLog])
 
   // ⚔️ PODER / ARMADURA / HP exibidos no card de cada lutador (modelo enxuto, dos levers
   // computados pelo servidor). O delta entre parênteses é o ganho da transformação
@@ -353,12 +364,10 @@ function CombatPageContent() {
     }
   }
 
-  // Auto scroll para o chat quando novas mensagens chegam (painel desktop e sheet mobile)
+  // Auto scroll do sheet de chat
   useEffect(() => {
-    if (!combatRoom?.combatLog) return
-    for (const el of [combatLogRef.current, sheetLogRef.current]) {
-      if (el) el.scrollTop = el.scrollHeight
-    }
+    if (!combatRoom?.combatLog || !sheetLogRef.current) return
+    sheetLogRef.current.scrollTop = sheetLogRef.current.scrollHeight
   }, [combatRoom?.combatLog, chatOpen])
 
   // Badge de não lidas: só mensagens de chat (ações/resultados já aparecem no ticker)
@@ -839,6 +848,7 @@ function CombatPageContent() {
         .map(c => c.itemId === item.itemId ? { ...c, quantity: c.quantity - 1 } : c)
         .filter(c => c.quantity > 0)
     )
+    setShowItems(false)
 
     // Servidor aplica o efeito, registra no log e passa o turno
     socket.emit('use_consumable', {
@@ -1234,68 +1244,288 @@ function CombatPageContent() {
     })
   }
 
-  return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 overscroll-none p-0 sm:p-2">
-      <div className="bg-[#1e1e21]/95 backdrop-blur-xl border border-[#46464c] rounded-none sm:rounded-[4px] shadow-2xl w-full h-full sm:h-[95dvh] sm:max-w-6xl flex flex-col">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-primary to-primary-dark text-white p-2 sm:p-3 rounded-t-none sm:rounded-t-2xl flex justify-between items-center flex-shrink-0">
-          <div className="flex items-center">
-            <h2 className="text-sm sm:text-lg font-bold">
-              {isTraining && trainingDef
-                ? `🏟️ Treino · ${trainingDef.name} (${Math.round(trainingDef.difficultyMult * 100)}% do seu poder${trainingDef.unbeatable ? ' · imbatível' : ''})`
-                : `⚔️ Combate PvP - Sala ${roomId}`}
-              {isSpectator && <span className="ml-2 text-xs bg-blue-500/30 px-2 py-1 rounded-full">👁️ Espectador</span>}
-              {isModerator && <span className="ml-2 text-xs bg-purple-500/30 px-2 py-1 rounded-full">🛡️ Moderador</span>}
-            </h2>
-            <div className={`ml-2 sm:ml-3 px-1 sm:px-2 py-1 rounded-full text-xs font-bold ${
-              connectionStatus === 'connected' 
-                ? 'bg-success/20 text-success border border-success/30' 
-                : connectionStatus === 'connecting'
-                ? 'bg-warning/20 text-warning border border-warning/30'
-                : 'bg-error/20 text-error border border-error/30'
-            }`}>
-              <span className="hidden sm:inline">
-                {connectionStatus === 'connected' ? '🟢 Conectado' : 
-                 connectionStatus === 'connecting' ? '🟡 Conectando...' : '🔴 Desconectado'}
-              </span>
-              <span className="sm:hidden">
-                {connectionStatus === 'connected' ? '🟢' : 
-                 connectionStatus === 'connecting' ? '🟡' : '🔴'}
-              </span>
+  const transformForms = currentPlayer ? getRaceTransformations(currentPlayer.race) : []
+  const formType = (currentPlayerView?.transformationType || currentPlayer?.transformationType) as TransformationType | null | undefined
+  const cds = (currentPlayerDisplay as { fx?: { abilityCd?: Record<string, number> } } | null)?.fx?.abilityCd || {}
+  const classAtkName = classAttackName(currentPlayer?.class)
+  const weaponMp = unlocks.classAttackMp
+  const weaponDie = unlocks.classAttackDie
+
+  const attackOptions: CombatAttackOption[] = []
+  if (currentPlayer) {
+    attackOptions.push({
+      key: 'basic',
+      label: 'Golpe',
+      sub: `d${ATTACK_DIE.light_attack}·${ATTACK_STA.light_attack}⚡`,
+      locked: currentPlayer.stamina < ATTACK_STA.light_attack,
+      onPick: () => handlePlayerAction(ActionType.LIGHT_ATTACK),
+    })
+    if (unlocks.classAttack) {
+      attackOptions.push({
+        key: 'weapon',
+        label: classAtkName,
+        sub: `d${weaponDie}·${weaponMp}MP·${ATTACK_STA.heavy_attack}⚡`,
+        locked:
+          currentPlayer.mp < weaponMp ||
+          currentPlayer.stamina < ATTACK_STA.heavy_attack,
+        onPick: () => handlePlayerAction(ActionType.HEAVY_ATTACK),
+      })
+    }
+    if (currentPlayer.isTransformed && formType) {
+      const formSpecials = getFormSpecials(formType)
+        .filter(def => {
+          if (def.id === 'stunning_blow') return unlocks.stunningBlow
+          if (def.kind === 'util') return unlocks.formBuff
+          return true
+        })
+        .map(def => applyRankPatch(def, unlocks, formType))
+      for (const def of formSpecials) {
+        const cost = SPECIAL_COST[def.id] || { stamina: def.cost.stamina || 0, mp: def.cost.mp || 0, cd: def.cd }
+        const sCost = cost.stamina || 0
+        const mCost = cost.mp || 0
+        const cd = cds[def.id] || 0
+        const locked =
+          cd > 0 ||
+          currentPlayer.stamina < sCost ||
+          currentPlayer.mp < mCost
+        const costLabel = cd > 0
+          ? `recarga ${cd}`
+          : `${def.kind === 'dmg' ? `d${def.die ?? 20}·` : ''}${mCost ? `${mCost}MP` : ''}${mCost && sCost ? '·' : ''}${sCost ? `${sCost}⚡` : ''}`
+        attackOptions.push({
+          key: def.id,
+          label: def.name,
+          sub: costLabel,
+          locked,
+          onPick: () => handleSpecialAbility(def.id),
+        })
+      }
+    }
+  }
+
+  const showPlayerActions =
+    !isSpectator &&
+    !isModerator &&
+    !!combatRoom?.isActive &&
+    combatRoom?.phase === CombatPhase.PLAYER_TURN &&
+    isMyTurn
+
+  const transformCfg = TRANSFORMATION_CONFIG[(formType || '') as TransformationType]
+  const transformDisabled =
+    !!currentPlayer?.isTransformed ||
+    usedTransformThisMatch ||
+    (currentPlayer?.transformationData?.cooldownTurns || 0) > 0 ||
+    isTransforming ||
+    !currentPlayer ||
+    currentPlayer.stamina < 30 ||
+    currentPlayer.mp < 20
+
+  let statusContent: ReactNode = null
+  if (isSpectator) {
+    statusContent = (
+      <div className="text-center space-y-2 px-2">
+        <div className="text-sm text-blue-300 font-bold">👁️ Modo Espectador</div>
+        <div className="text-xs text-white/55">Use o chat para acompanhar a luta.</div>
+        {combatRoom?.phase === CombatPhase.COMBAT_END && (
+          <button
+            type="button"
+            onClick={() => router.push('/combat-lobby')}
+            className="mt-1 px-4 py-2 rounded-xl font-bold text-xs text-white bg-gradient-to-r from-red-700 to-red-500"
+          >
+            Voltar ao Lobby
+          </button>
+        )}
+      </div>
+    )
+  } else if (isModerator) {
+    statusContent = (
+      <div className="text-center px-2">
+        <div className="text-sm text-purple-300 font-bold">🛡️ Moderando</div>
+        <div className="text-xs text-white/55">Funcionalidades em desenvolvimento.</div>
+      </div>
+    )
+  } else if (combatRoom?.phase === CombatPhase.INITIATIVE_ROLL) {
+    statusContent = (
+      <div className="text-white/60 text-xs sm:text-sm font-bold text-center">
+        🎲 {initiativeWinnerName || 'Rolando iniciativa...'}
+      </div>
+    )
+  } else if (!combatRoom?.isActive) {
+    statusContent = (
+      <div className="flex flex-col items-center gap-2 px-2">
+        <div className="text-xs sm:text-sm text-white/60 font-bold text-center">
+          {!opponent ? 'Aguardando oponente...' : 'Preparando para o combate...'}
+        </div>
+        {opponent && (
+          <button
+            type="button"
+            onClick={toggleReady}
+            className={`px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all shadow-lg ${
+              isReady
+                ? 'bg-emerald-600'
+                : 'bg-gradient-to-r from-red-700 to-red-500 hover:scale-105'
+            }`}
+          >
+            {isReady ? '✅ Pronto!' : '🏁 Ficar Pronto'}
+          </button>
+        )}
+      </div>
+    )
+  } else if (combatRoom?.phase === CombatPhase.COMBAT_END) {
+    statusContent = (
+      <div className="text-center space-y-2 px-2 max-w-sm">
+        <div className={`text-base sm:text-lg font-bold ${isWinner ? 'text-emerald-400' : 'text-red-400'}`}>
+          {isWinner ? '🏆 VITÓRIA!' : '💀 DERROTA!'}
+        </div>
+        {battleReward && (
+          battleReward.failed ? (
+            <div className="rounded-lg border border-amber-500/40 bg-amber-900/20 p-2 text-[11px] text-amber-200">
+              ⚠️ As recompensas não puderam ser creditadas. Nada foi perdido.
             </div>
-          </div>
-          <div className="flex items-center space-x-2">
+          ) : battleReward.skipped ? (
+            <div className="rounded-lg border border-white/15 bg-black/30 p-2 text-[11px] text-white/60">
+              {battleReward.skipped === 'same_user'
+                ? '🤝 Luta entre personagens da mesma conta — sem recompensa.'
+                : '⚡ Luta curta demais para valer recompensa.'}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-900/15 p-2 space-y-1">
+              <div className="text-[10px] font-bold text-amber-300">💰 A BOLSA DA ARENA</div>
+              <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-xs font-bold">
+                {battleReward.xpGained > 0 && <span className="text-sky-300">+{battleReward.xpGained} XP</span>}
+                {battleReward.goldGained > 0 && <span className="text-amber-300">+{battleReward.goldGained} 💰</span>}
+                {!!battleReward.staminaCharged && <span className="text-emerald-300">−{battleReward.staminaCharged} ⚡</span>}
+                {battleReward.rankPoints != null && <span className="text-fuchsia-300">{battleReward.rankPoints} pts</span>}
+              </div>
+              {battleReward.leveledUp && (
+                <div className="text-xs font-bold text-emerald-400">🎉 Subiu para o nível {battleReward.newLevel}!</div>
+              )}
+              {!!battleReward.equipmentWear?.some((w) => w.justBroke) && (
+                <div className="text-[11px] text-red-400 font-bold">
+                  💥 Quebrou: {battleReward.equipmentWear.filter((w) => w.justBroke).map((w) => w.name).join(', ')}
+                </div>
+              )}
+            </div>
+          )
+        )}
+        <button
+          type="button"
+          onClick={() => router.push('/combat-lobby')}
+          className="px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white bg-gradient-to-r from-red-700 to-red-500 hover:scale-105 transition-all shadow-lg"
+        >
+          Voltar ao Lobby
+        </button>
+      </div>
+    )
+  } else {
+    statusContent = (
+      <div className="text-white/50 text-xs sm:text-sm font-bold animate-pulse text-center">
+        {combatRoom?.phase === CombatPhase.DICE_ROLL
+          ? '🎲 Resolvendo golpe…'
+          : !isMyTurn
+            ? '⏳ Turno do oponente...'
+            : '⚔️ Executando ação...'}
+      </div>
+    )
+  }
+
+  const titleLabel = isTraining && trainingDef
+    ? `🏟️ Treino · ${trainingDef.name}`
+    : `⚔️ Sala ${roomId}`
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-hidden overscroll-none touch-pan-y bg-black flex flex-col">
+      <CombatShell
+        logLines={logLines}
+        showActions={showPlayerActions}
+        attackOptions={attackOptions}
+        statusContent={statusContent}
+        onOpenItems={() => setShowItems(true)}
+        showItemButton={!isSpectator && !isModerator}
+        transform={
+          transformForms.length > 0 && !isSpectator && !isModerator
+            ? {
+                available: true,
+                activeLabel: currentPlayer?.isTransformed
+                  ? (transformCfg?.name || 'Transformado')
+                  : null,
+                activeTurnsHint: currentPlayer?.isTransformed
+                  ? (currentPlayer.transformationData?.remainingTurns != null
+                    ? `${currentPlayer.transformationData.remainingTurns} turno(s)`
+                    : undefined)
+                  : undefined,
+                used: usedTransformThisMatch && !currentPlayer?.isTransformed,
+                disabled: transformDisabled && !currentPlayer?.isTransformed,
+                title: usedTransformThisMatch
+                  ? 'Transformação já usada nesta luta (1× por luta)'
+                  : isTransforming
+                    ? 'Transformando...'
+                    : 'MP + stamina — 1× por luta',
+                buttonLabel: usedTransformThisMatch
+                  ? 'Transf. usada'
+                  : isTransforming
+                    ? 'Transformando...'
+                    : 'Transformar',
+                costHint: !usedTransformThisMatch && !isTransforming ? 'MP+⚡' : undefined,
+                onClick: handleTransformation,
+              }
+            : null
+        }
+        toolbar={
+          <>
+            <span className="mr-auto text-[10px] sm:text-xs font-bold text-white/55 truncate max-w-[45%]">
+              {titleLabel}
+              {isSpectator && ' · 👁️'}
+              {connectionStatus !== 'connected' && (
+                <span className="ml-1 text-amber-300">
+                  {connectionStatus === 'connecting' ? '🟡' : '🔴'}
+                </span>
+              )}
+            </span>
+            <button
+              type="button"
+              onClick={() => setChatOpen(true)}
+              className="relative px-3 py-1.5 rounded-full text-[10px] font-black border bg-white/5 border-white/15 text-white/70 hover:text-white transition-colors"
+              title="Chat"
+            >
+              💬
+              {unreadChat > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-600 text-[10px] font-black grid place-items-center text-white">
+                  {unreadChat}
+                </span>
+              )}
+            </button>
             {isCreator && (
               <button
+                type="button"
                 onClick={closeRoom}
-                className="text-white/80 hover:text-white transition-colors p-2.5 sm:p-1 rounded-lg hover:bg-white/10"
+                className="px-3 py-1.5 rounded-full text-[10px] font-black border bg-white/5 border-white/15 text-white/60 hover:text-white"
                 title="Fechar sala"
               >
                 🚪
               </button>
             )}
             <button
+              type="button"
               onClick={() => router.push('/combat-lobby')}
-              className="text-white/80 hover:text-white transition-colors p-2.5 sm:p-1 rounded-lg hover:bg-white/10"
+              className="px-2 py-1.5 rounded-full text-white/70 hover:text-white border border-white/15 bg-white/5"
+              title="Voltar ao lobby"
             >
-              <X size={20} className="sm:w-5 sm:h-5" />
+              <X size={14} />
             </button>
-          </div>
-        </div>
-
-        <div className="flex-1 flex flex-col min-h-0">
-          {/* 🎬 Arena de Batalha - estilo Adventure Quest */}
-          <BattleScene
-            className="flex-1 min-h-[220px] sm:min-h-[260px]"
-            left={withFighterStats((isSpectator || isModerator ? combatRoom?.player1 : (currentPlayerView || currentPlayer)) || null)}
-            right={withFighterStats((isSpectator || isModerator ? combatRoom?.player2 : opponent) || null)}
-            currentTurnId={combatRoom?.currentTurn}
-            winnerId={combatRoom?.winner || null}
-            combatEnded={combatRoom?.phase === CombatPhase.COMBAT_END}
-            event={battleEvent}
-            diceResults={diceResults}
-            dicePanel={
-              isSpectator || isModerator ? null
+          </>
+        }
+      >
+        <BattleScene
+          className="flex-1 min-h-[280px]"
+          left={withFighterStats((isSpectator || isModerator ? combatRoom?.player1 : (currentPlayerView || currentPlayer)) || null)}
+          right={withFighterStats((isSpectator || isModerator ? combatRoom?.player2 : opponent) || null)}
+          currentTurnId={combatRoom?.currentTurn}
+          winnerId={combatRoom?.winner || null}
+          combatEnded={combatRoom?.phase === CombatPhase.COMBAT_END}
+          event={battleEvent}
+          diceResults={diceResults}
+          dicePanel={
+            isSpectator || isModerator ? null
               : combatRoom?.phase === CombatPhase.INITIATIVE_ROLL
                 ? {
                     visible: true,
@@ -1325,402 +1555,101 @@ function CombatPageContent() {
                       : (opponent ? !diceResults[opponent.id] : false)
                   }
                 : null
-            }
-          />
+          }
+        />
+      </CombatShell>
 
-          {/* Resumo compacto de atributos (CRIT/ESQ/ESP) */}
-          {!isSpectator && !isModerator && currentPlayerDisplay && (
-            <div className="bg-background/40 border-y border-white/10 px-2 py-1 flex items-center justify-center gap-3 text-[11px] text-text-secondary flex-shrink-0">
-              <span>CRIT: <span className="font-bold text-yellow-300">{playerStats.critChance}%</span></span>
-              <span>EVA: <span className="font-bold text-cyan-300">{playerStats.evade}%</span></span>
-              <span>PWR: <span className="font-bold text-purple-300">{playerStats.power}</span></span>
-              <span className="text-white/20">|</span>
-              <span>Oponente → EVA: <span className="font-bold text-cyan-300/80">{opponentStats.evade}%</span></span>
-              <span>PWR: <span className="font-bold text-yellow-300/80">{opponentStats.power}</span></span>
-            </div>
-          )}
-
-          {/* Participants Panel - Só para espectadores/moderadores */}
-          {(isSpectator || isModerator) && combatRoom?.participants && (
-            <div className="bg-background/20 border-b border-white/10 p-2 sm:p-3 flex-shrink-0">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-                {/* Lutadores */}
-                <div className="rounded-[3px] border border-black/60 bg-[#19191c] p-2">
-                  <h4 className="font-bold text-red-400 mb-1">⚔️ Lutadores ({combatRoom.participants.fighters.length}/2)</h4>
-                  {combatRoom.participants.fighters.map((fighter, index) => (
-                    <div key={fighter.id} className="text-text-secondary">
-                      {fighter.name} (Nv.{fighter.level})
-                    </div>
-                  ))}
+      {showItems && (
+        <div className="fixed inset-0 z-[55] grid place-items-center px-5" onClick={() => setShowItems(false)}>
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+          <div
+            className="relative w-full max-w-sm rounded-2xl p-5 border border-white/15 bg-black/90 shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-black text-white text-lg">🧪 Consumíveis</h3>
+              {currentPlayer && (
+                <div className="flex gap-3 text-xs">
+                  <span className="text-emerald-400">❤️ {Math.round(currentPlayer.hp)}/{currentPlayer.maxHp}</span>
+                  <span className="text-blue-400">🔮 {currentPlayer.mp}/{currentPlayer.maxMp}</span>
+                  <span className="text-yellow-300">⚡ {currentPlayer.stamina}/{currentPlayer.maxStamina}</span>
                 </div>
-                
-                {/* Espectadores */}
-                <div className="rounded-[3px] border border-black/60 bg-[#19191c] p-2">
-                  <h4 className="font-bold text-blue-400 mb-1">👁️ Espectadores ({combatRoom.participants.spectators.length}/8)</h4>
-                  <div className="max-h-16 overflow-y-auto">
-                    {combatRoom.participants.spectators.map((spectator, index) => (
-                      <div key={spectator.id} className="text-text-secondary">
-                        {spectator.name}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                
-                {/* Moderadores */}
-                <div className="rounded-[3px] border border-black/60 bg-[#19191c] p-2">
-                  <h4 className="font-bold text-purple-400 mb-1">🛡️ Moderadores ({combatRoom.participants.moderators.length}/2)</h4>
-                  {combatRoom.participants.moderators.map((moderator, index) => (
-                    <div key={moderator.id} className="text-text-secondary">
-                      {moderator.name}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 📱 Ticker mobile: última linha do log + botão do chat (o painel completo
-              vira bottom-sheet — no celular ele disputava o rodapé com as ações) */}
-          <div className="sm:hidden flex-shrink-0 bg-black/60 border-t border-white/10 px-3 py-1 flex items-center gap-2">
-            <div className="flex-1 text-[11px] text-white/70 truncate">
-              {(() => {
-                const last = combatRoom?.combatLog?.[combatRoom.combatLog.length - 1]
-                return last ? `${last.player ? `${last.player}: ` : ''}${last.message}` : '⚔️ O log da luta aparece aqui'
-              })()}
-            </div>
-            <button
-              onClick={() => setChatOpen(true)}
-              className="relative flex-shrink-0 w-10 h-10 rounded-lg bg-white/5 border border-white/15 flex items-center justify-center text-base active:bg-white/15 transition-colors"
-            >
-              💬
-              {unreadChat > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-primary text-[10px] font-black grid place-items-center text-white">
-                  {unreadChat}
-                </span>
               )}
+            </div>
+            {consumables.length === 0 ? (
+              <p className="text-white/50 text-sm text-center py-6">Nenhum consumível restaurador no inventário.</p>
+            ) : (
+              <div className="space-y-2 max-h-72 overflow-y-auto">
+                {consumables.map(c => {
+                  const hpFull = !!currentPlayer && currentPlayer.hp >= currentPlayer.maxHp
+                  const mpFull = !!currentPlayer && currentPlayer.mp >= currentPlayer.maxMp
+                  const staminaFull = !!currentPlayer && currentPlayer.stamina >= currentPlayer.maxStamina
+                  const disabled =
+                    !showPlayerActions ||
+                    ((c.hpRestore > 0 || c.mpRestore > 0 || c.staminaRestore > 0) &&
+                      (c.hpRestore === 0 || hpFull) &&
+                      (c.mpRestore === 0 || mpFull) &&
+                      (c.staminaRestore === 0 || staminaFull))
+                  return (
+                    <div key={c.itemId} className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="w-8 h-8 shrink-0 inline-flex items-center justify-center overflow-hidden rounded-lg bg-black/40">
+                          {c.image ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={c.image} alt="" className="w-full h-full object-cover art-bright" />
+                          ) : (
+                            <span className="text-xl">{c.icon}</span>
+                          )}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="text-white text-sm font-bold truncate">
+                            {c.name} <span className="text-white/50 font-normal">×{c.quantity}</span>
+                          </div>
+                          <div className="text-white/50 text-[11px]">
+                            {c.hpRestore > 0 ? `+${c.hpRestore} ❤️` : ''}
+                            {c.hpRestore > 0 && c.mpRestore > 0 ? ' • ' : ''}
+                            {c.mpRestore > 0 ? `+${c.mpRestore} 🔮` : ''}
+                            {(c.hpRestore > 0 || c.mpRestore > 0) && c.staminaRestore > 0 ? ' • ' : ''}
+                            {c.staminaRestore > 0 ? `+${c.staminaRestore} ⚡` : ''}
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleUseConsumable(c)}
+                        disabled={disabled}
+                        className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-black text-white disabled:opacity-40 bg-gradient-to-r from-emerald-700 to-green-600"
+                      >
+                        Usar
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+            <p className="text-white/40 text-[10px] text-center mt-2">Usar um item consome seu turno.</p>
+            <button
+              type="button"
+              onClick={() => setShowItems(false)}
+              className="mt-3 w-full py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm font-bold transition-colors"
+            >
+              Fechar
             </button>
           </div>
-
-          {/* Ações + Chat (abaixo da arena) */}
-          <div className="flex flex-col sm:flex-row min-h-0 sm:flex-shrink-0 sm:max-h-[36vh]">
-            {/* Mobile: só as ações (chat no sheet), Desktop: lado a lado */}
-
-            {/* Chat/Log Unificado - painel fixo só no desktop */}
-            <div className="hidden sm:flex order-2 sm:order-2 flex-1 sm:w-80 bg-[#19191c] p-2 sm:p-4 flex-col min-h-0">
-              <h3 className="font-bold text-text-primary mb-2 sm:mb-3 text-xs sm:text-sm text-center">💬 Chat & Log</h3>
-              <div className="flex-1 bg-background/50 backdrop-blur-xl border border-white/10 rounded-xl p-2 sm:p-3 flex flex-col min-h-0">
-                <div
-                  ref={combatLogRef}
-                  className="flex-1 overflow-y-auto overscroll-contain space-y-2 mb-3 min-h-[120px] sm:min-h-[160px]"
-                  style={{ maxHeight: '200px' }}
-                >
-                  {combatRoom?.combatLog.map((log, index) => (
-                    <div key={index} className={`rounded-lg p-2 ${
-                      log.type === 'chat' ? 'bg-blue-500/20 border border-blue-500/30' :
-                      log.type === 'system' ? 'bg-gray-500/20 border border-gray-500/30' :
-                      log.type === 'action' ? 'bg-yellow-500/20 border border-yellow-500/30' :
-                      log.type === 'result' ? 'bg-purple-500/20 border border-purple-500/30' :
-                      log.type === 'damage' ? 'bg-red-500/20 border border-red-500/30' :
-                      log.type === 'victory' ? 'bg-green-500/20 border border-green-500/30' :
-                      'bg-surface/40'
-                    }`}>
-                      {log.player && <div className="text-xs text-text-secondary font-bold">{log.player}:</div>}
-                      <div className="text-xs sm:text-sm text-text-primary break-words">{log.message}</div>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex flex-shrink-0">
-                  <input
-                    type="text"
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-                    placeholder="Digite sua mensagem..."
-                    className="flex-1 bg-background/50 border border-white/20 rounded-l-lg px-2 sm:px-3 py-2 text-xs sm:text-sm text-text-primary placeholder-text-secondary focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
-                  <button
-                    onClick={sendMessage}
-                    className="bg-primary hover:bg-primary-dark text-white px-2 sm:px-3 py-2 rounded-r-lg transition-colors text-xs sm:text-sm"
-                  >
-                    ➤
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Actions - Sempre visível e responsivo. No mobile o rodapé tem altura FIXA
-                (os estados alternam entre muitos botões e uma linha de espera — sem altura
-                fixa a arena inteira pulava a cada turno); o scroll interno é a válvula de
-                escape quando transformado (mais botões). */}
-            <div
-              className="order-1 sm:order-3 w-full sm:w-64 bg-[#19191c] p-2 sm:p-4 flex flex-col sm:flex-shrink-0 h-[256px] sm:h-auto min-h-0 space-y-4 overflow-y-auto overscroll-contain"
-              style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
-            >
-              <h3 className="hidden sm:block font-bold text-text-primary mb-2 sm:mb-3 text-xs sm:text-sm text-center">
-                {isSpectator ? '👁️ Espectando' : isModerator ? '🛡️ Moderando' : '🎯 Ações'}
-              </h3>
-              
-              {isSpectator ? (
-                // Interface para espectadores
-                <div className="text-center space-y-3">
-                  <div className="bg-blue-500/20 border border-blue-500/30 rounded-lg p-3">
-                    <div className="text-sm text-blue-300 mb-2">Modo Espectador</div>
-                    <div className="text-xs text-text-secondary">
-                      Você está assistindo ao combate. Use o chat para conversar com outros espectadores!
-                    </div>
-                  </div>
-                  
-                  {combatRoom?.phase === CombatPhase.COMBAT_END && (
-                    <button
-                      onClick={() => router.push('/combat-lobby')}
-                      className="bg-primary hover:bg-primary-dark text-white px-6 py-2 rounded-lg w-full transition-colors"
-                    >
-                      Voltar ao Lobby
-                    </button>
-                  )}
-                </div>
-              ) : isModerator ? (
-                // Interface para moderadores (futura)
-                <div className="text-center space-y-3">
-                  <div className="bg-purple-500/20 border border-purple-500/30 rounded-lg p-3">
-                    <div className="text-sm text-purple-300 mb-2">Modo Moderador</div>
-                    <div className="text-xs text-text-secondary">
-                      Funcionalidades de moderação em desenvolvimento...
-                    </div>
-                  </div>
-                </div>
-              ) : combatRoom?.phase === CombatPhase.INITIATIVE_ROLL ? (
-                <div className="text-center space-y-2 flex-1 flex flex-col items-center justify-center">
-                  <div className="text-2xl animate-bounce">🎲</div>
-                  <div className="text-xs sm:text-sm text-text-secondary">
-                    {initiativeWinnerName || 'Rolando os dados de iniciativa...'}
-                  </div>
-                </div>
-              ) : !combatRoom?.isActive ? (
-                <div className="space-y-3">
-                  <div className="text-center">
-                    <div className="text-xl sm:text-2xl mb-2">⏳</div>
-                    <div className="text-xs sm:text-sm text-text-secondary mb-3">
-                      {!opponent ? 'Aguardando oponente...' : 'Preparando para o combate...'}
-                    </div>
-                  </div>
-                  {opponent && (
-                    <button
-                      onClick={toggleReady}
-                      className={`w-full py-3 sm:py-2 px-4 rounded-lg font-bold text-sm sm:text-sm transition-all duration-200 ${
-                        isReady 
-                          ? 'bg-success text-white' 
-                          : 'bg-gradient-to-r from-primary to-primary-dark text-white hover:shadow-lg hover:shadow-primary/25'
-                      }`}
-                    >
-                      {isReady ? '✅ Pronto!' : '🏁 Ficar Pronto'}
-                    </button>
-                  )}
-                </div>
-              ) : combatRoom?.phase === CombatPhase.COMBAT_END ? (
-                <div className="text-center space-y-3">
-                  <div className={`text-xl sm:text-2xl font-bold ${isWinner ? 'text-success' : 'text-error'}`}>
-                    {isWinner ? '🏆 VITÓRIA!' : '💀 DERROTA!'}
-                  </div>
-
-                  {/* 💰 O acerto da aposta: ouro + XP, sem espólio (a arena não dropa item) */}
-                  {battleReward && (
-                    battleReward.failed ? (
-                      <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-warning">
-                        ⚠️ As recompensas não puderam ser creditadas. Nada foi perdido — tente a próxima luta.
-                      </div>
-                    ) : battleReward.skipped ? (
-                      <div className="rounded-lg border border-white/15 bg-black/30 p-3 text-xs text-text-secondary">
-                        {battleReward.skipped === 'same_user'
-                          ? '🤝 Luta entre personagens da mesma conta — vale como treino, sem recompensa.'
-                          : '⚡ Luta curta demais para valer recompensa.'}
-                      </div>
-                    ) : (
-                      <div className="rounded-lg border border-amber-500/30 bg-amber-900/15 p-3 space-y-2">
-                        <div className="text-[10px] font-bold text-amber-300">💰 A BOLSA DA ARENA</div>
-                        <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-xs font-bold">
-                          {battleReward.xpGained > 0 && <span className="text-sky-300">+{battleReward.xpGained} XP</span>}
-                          {battleReward.goldGained > 0 && <span className="text-amber-300">+{battleReward.goldGained} 💰</span>}
-                          {!!battleReward.staminaCharged && <span className="text-emerald-300">−{battleReward.staminaCharged} ⚡</span>}
-                          {battleReward.rankPoints != null && <span className="text-fuchsia-300">{battleReward.rankPoints} pts</span>}
-                        </div>
-                        {battleReward.leveledUp && (
-                          <div className="text-xs font-bold text-success">🎉 Subiu para o nível {battleReward.newLevel}!</div>
-                        )}
-                        {/* 🔧 A luta gasta o equipamento (igual ao abate na masmorra) */}
-                        {!!battleReward.equipmentWear?.some((w) => w.justBroke) && (
-                          <div className="text-[11px] text-error font-bold">
-                            💥 Quebrou: {battleReward.equipmentWear.filter((w) => w.justBroke).map((w) => w.name).join(', ')} — repare no ferreiro!
-                          </div>
-                        )}
-                      </div>
-                    )
-                  )}
-
-                  <button
-                    onClick={() => router.push('/combat-lobby')}
-                    className="bg-primary hover:bg-primary-dark text-white px-6 py-2 rounded-lg w-full transition-colors"
-                  >
-                    Voltar ao Lobby
-                  </button>
-                </div>
-              ) : isMyTurn && combatRoom?.phase === CombatPhase.PLAYER_TURN ? (
-                <div className="space-y-2">
-                  {/* 👊 Golpe (d6, grátis) — o ataque básico de todos */}
-                  <button
-                    onClick={() => handlePlayerAction(ActionType.LIGHT_ATTACK)}
-                    disabled={!currentPlayer || currentPlayer.stamina < ATTACK_STA.light_attack}
-                    className={`w-full ${!currentPlayer || currentPlayer.stamina < ATTACK_STA.light_attack
-                      ? 'bg-gray-600 opacity-50 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-warning to-yellow-500 hover:from-yellow-500 hover:to-warning'
-                    } text-white py-3 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
-                  >
-                    Golpe <span className="text-[10px] opacity-75">d6·1⚡</span>
-                  </button>
-                  {/* ⚔️ Ataque de Classe (d8, 8 MP / 2 STA) */}
-                  <button
-                    onClick={() => handlePlayerAction(ActionType.HEAVY_ATTACK)}
-                    disabled={!currentPlayer || currentPlayer.mp < ATTACK_MP.heavy_attack || currentPlayer.stamina < ATTACK_STA.heavy_attack}
-                    className={`w-full ${!currentPlayer || currentPlayer.mp < ATTACK_MP.heavy_attack || currentPlayer.stamina < ATTACK_STA.heavy_attack
-                      ? 'bg-gray-600 opacity-50 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-error to-red-600 hover:from-red-600 hover:to-error'
-                    } text-white py-3 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
-                  >
-                    {classAttackName(currentPlayer?.class)} <span className="text-[10px] opacity-75">d8·{ATTACK_MP.heavy_attack}MP·2⚡</span>
-                  </button>
-
-                  {/* 🐉 Habilidades especiais da FORMA (só transformado; consomem o turno, sem dado) */}
-                  {currentPlayer?.isTransformed && currentPlayer.transformationType && (() => {
-                    const form = currentPlayer.transformationType as TransformationType
-                    const abilities = TRANSFORMATION_CONFIG[form]?.specialAbilities || []
-                    const cds = (currentPlayerDisplay as { fx?: { abilityCd?: Record<string, number> } })?.fx?.abilityCd || {}
-                    if (abilities.length === 0) return null
-                    return (
-                      <div className="mt-2 rounded-lg border border-purple-500/30 bg-purple-900/15 p-2">
-                        <div className="text-[10px] text-purple-300 font-bold mb-1.5">🐉 Habilidades da Forma (usa o turno)</div>
-                        <div className="space-y-1.5">
-                          {abilities.map((ab) => {
-                            const cost = SPECIAL_COST[ab.id] || { cd: 0 }
-                            const sCost = cost.stamina || 0, mCost = cost.mp || 0
-                            const cd = cds[ab.id] || 0
-                            const disabled = !currentPlayer || cd > 0 || currentPlayer.stamina < sCost || currentPlayer.mp < mCost
-                            const costLabel = cd > 0 ? `⏰${cd}` : `${sCost ? `${sCost}⚡` : ''}${sCost && mCost ? ' ' : ''}${mCost ? `${mCost}MP` : ''}`
-                            return (
-                              <button
-                                key={ab.id}
-                                onClick={() => handleSpecialAbility(ab.id)}
-                                disabled={disabled}
-                                title={ab.description}
-                                className={`w-full flex items-center justify-between gap-2 ${disabled
-                                  ? 'bg-gray-600 opacity-50 cursor-not-allowed'
-                                  : 'bg-gradient-to-r from-fuchsia-600 to-purple-600 hover:from-purple-600 hover:to-fuchsia-600'
-                                } text-white py-2.5 sm:py-1.5 px-3 rounded-lg font-bold text-xs sm:text-[11px] transition-all duration-200`}
-                              >
-                                <span className="truncate">{ab.name}</span>
-                                <span className="shrink-0 opacity-90">{costLabel}</span>
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )
-                  })()}
-
-                  <div className="border-t border-white/10 my-3"></div>
-
-                  {consumables.length > 0 ? (
-                    <div>
-                      <div className="text-[10px] text-text-secondary font-bold mb-1.5">🧪 Consumíveis (usa o turno)</div>
-                      <div className="flex gap-1.5 flex-wrap">
-                        {consumables.map(item => (
-                          <button
-                            key={item.itemId}
-                            onClick={() => handleUseConsumable(item)}
-                            title={`${item.name}${item.hpRestore ? ` • +${item.hpRestore} HP` : ''}${item.mpRestore ? ` • +${item.mpRestore} MP` : ''}${item.staminaRestore ? ` • +${item.staminaRestore} ⚡` : ''}`}
-                            className="relative w-12 h-12 sm:w-10 sm:h-10 rounded-lg bg-emerald-900/40 border border-emerald-500/40 hover:border-emerald-400 hover:scale-110 transition-all flex items-center justify-center overflow-hidden shadow-lg"
-                          >
-                            {item.image ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={item.image} alt={item.name} className="w-full h-full object-cover art-bright" />
-                            ) : (
-                              <span className="text-lg">{item.icon}</span>
-                            )}
-                            <span className="absolute bottom-0 right-0 bg-black/80 text-white text-[9px] font-bold px-1 rounded-tl">
-                              {item.quantity}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-[10px] text-text-secondary text-center">
-                      🧪 Sem consumíveis de batalha
-                    </div>
-                  )}
-                  
-                  {/* Botão de Transformação (todas as raças têm uma forma) */}
-                  {currentPlayer && getRaceTransformations(currentPlayer.race).length > 0 && (
-                    <button
-                      onClick={handleTransformation}
-                      disabled={
-                        currentPlayer.isTransformed ||
-                        usedTransformThisMatch ||
-                        (currentPlayer.transformationData?.cooldownTurns || 0) > 0 ||
-                        isTransforming ||
-                        // Verificar recursos mínimos (assumindo dragon como mais caro)
-                        currentPlayer.stamina < 30 ||
-                        currentPlayer.mp < 20
-                      }
-                      className={`w-full ${
-                        currentPlayer.isTransformed ||
-                        usedTransformThisMatch ||
-                        (currentPlayer.transformationData?.cooldownTurns || 0) > 0 ||
-                        isTransforming ||
-                        currentPlayer.stamina < 30 ||
-                        currentPlayer.mp < 20
-                        ? 'bg-gray-600 opacity-50 cursor-not-allowed'
-                        : 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-blue-600 hover:to-purple-600'
-                      } text-white py-3 sm:py-2 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 transform hover:scale-[1.02] shadow-lg`}
-                    >
-                      {currentPlayer.isTransformed ?
-                        'Transformado' :
-                        usedTransformThisMatch ?
-                        'Transf. já usada' :
-                        (currentPlayer.transformationData?.cooldownTurns || 0) > 0 ?
-                        `Cooldown (${currentPlayer.transformationData?.cooldownTurns || 0})` :
-                        isTransforming ? 'Transformando...' :
-                        currentPlayer.stamina < 30 || currentPlayer.mp < 20 ?
-                        'Recursos insuficientes' :
-                        'Transformar'
-                      }
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="text-center text-text-secondary font-bold text-xs flex-1 flex items-center justify-center">
-                  {combatRoom?.phase === CombatPhase.DICE_ROLL ? '🎲 Resolvendo golpe…' :
-                   !isMyTurn ? '⏳ Turno do oponente...' : '⚔️ Executando ação...'}
-                </div>
-              )}
-            </div>
-
-            {/* Combat Log removido - agora tudo está unificado no chat */}
-          </div>
-
         </div>
-      </div>
-      
-      {/* 📱 Bottom-sheet do Chat & Log (mobile) */}
+      )}
+
       {chatOpen && (
-        <div className="sm:hidden fixed inset-0 z-[60]" onClick={() => setChatOpen(false)}>
+        <div className="fixed inset-0 z-[60]" onClick={() => setChatOpen(false)}>
           <div className="absolute inset-0 bg-black/50" />
           <div
-            className="absolute inset-x-0 bottom-0 max-h-[60dvh] rounded-t-[4px] bg-[#1e1e21]/95 backdrop-blur-xl border-t border-[#46464c] flex flex-col shadow-2xl"
+            className="absolute inset-x-0 bottom-0 max-h-[60dvh] rounded-t-2xl bg-black/95 backdrop-blur-xl border-t border-white/15 flex flex-col shadow-2xl"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 pt-3 pb-2 flex-shrink-0">
-              <h3 className="font-bold text-text-primary text-sm">💬 Chat & Log</h3>
+              <h3 className="font-bold text-white text-sm">💬 Chat</h3>
               <button
+                type="button"
                 onClick={() => setChatOpen(false)}
                 className="text-white/70 hover:text-white p-2 -m-1 rounded-lg"
               >
@@ -1731,15 +1660,15 @@ function CombatPageContent() {
               {combatRoom?.combatLog.map((log, index) => (
                 <div key={index} className={`rounded-lg p-2 ${
                   log.type === 'chat' ? 'bg-blue-500/20 border border-blue-500/30' :
-                  log.type === 'system' ? 'bg-gray-500/20 border border-gray-500/30' :
-                  log.type === 'action' ? 'bg-yellow-500/20 border border-yellow-500/30' :
-                  log.type === 'result' ? 'bg-purple-500/20 border border-purple-500/30' :
-                  log.type === 'damage' ? 'bg-red-500/20 border border-red-500/30' :
-                  log.type === 'victory' ? 'bg-green-500/20 border border-green-500/30' :
-                  'bg-surface/40'
+                  log.type === 'system' ? 'bg-white/5 border border-white/10' :
+                  log.type === 'action' ? 'bg-yellow-500/15 border border-yellow-500/25' :
+                  log.type === 'result' ? 'bg-purple-500/15 border border-purple-500/25' :
+                  log.type === 'damage' ? 'bg-red-500/15 border border-red-500/25' :
+                  log.type === 'victory' ? 'bg-green-500/15 border border-green-500/25' :
+                  'bg-white/5'
                 }`}>
-                  {log.player && <div className="text-xs text-text-secondary font-bold">{log.player}:</div>}
-                  <div className="text-xs text-text-primary break-words">{log.message}</div>
+                  {log.player && <div className="text-xs text-white/50 font-bold">{log.player}:</div>}
+                  <div className="text-xs text-white break-words">{log.message}</div>
                 </div>
               ))}
             </div>
@@ -1753,11 +1682,12 @@ function CombatPageContent() {
                 onChange={(e) => setNewMessage(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
                 placeholder="Digite sua mensagem..."
-                className="flex-1 min-h-[44px] bg-background/50 border border-white/20 rounded-l-lg px-3 py-2 text-sm text-text-primary placeholder-text-secondary focus:outline-none focus:ring-2 focus:ring-primary/50"
+                className="flex-1 min-h-[44px] bg-white/5 border border-white/20 rounded-l-lg px-3 py-2 text-sm text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-red-500/40"
               />
               <button
+                type="button"
                 onClick={sendMessage}
-                className="bg-primary hover:bg-primary-dark text-white px-4 py-2 min-h-[44px] rounded-r-lg transition-colors text-sm"
+                className="bg-red-700 hover:bg-red-600 text-white px-4 py-2 min-h-[44px] rounded-r-lg transition-colors text-sm"
               >
                 ➤
               </button>
@@ -1766,7 +1696,6 @@ function CombatPageContent() {
         </div>
       )}
 
-      {/* Dialog de Transformação */}
       <TransformationDialog
         isOpen={showTransformationDialog}
         onClose={() => setShowTransformationDialog(false)}
@@ -1782,7 +1711,7 @@ function CombatPageContent() {
 export default function CombatPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-white text-xl">Carregando combate...</div>
       </div>
     }>

@@ -1041,18 +1041,8 @@ export default function DungeonRun({
       (transform && character.transformationImages?.[transform.type]) ||
       character.transformationImage ||
       null,
-    // ATK = poder ofensivo, DEF = armadura (ambos do lever; deltas = ganho da transformação),
-    // STR = atributo de força distribuído (não muda na transformação).
-    combatStats: {
-      ad: Math.round(playerLevers.power),
-      ap: Math.round(playerLevers.armor),
-      dp: Math.max(0, Math.round(character.str ?? 0)),
-      adDelta: Math.round(playerLevers.power - baseLevers.power),
-      apDelta: Math.round(playerLevers.armor - baseLevers.armor),
-      dpDelta: 0,
-    },
-    combatStatLabels: { ad: 'ATK', ap: 'DEF', dp: 'STR' },
-  }), [character, charLevel, hp, mp, stamina, transform, effMaxHp, effMaxMp, playerLevers, baseLevers, equipList])
+    // Card enxuto: só barras HP/MP/STA — sem pills ATK/DEF/STR.
+  }), [character, charLevel, hp, mp, stamina, transform, effMaxHp, effMaxMp, equipList])
 
   const monsterFighter: FighterView | null = useMemo(() => monster ? {
     id: monster.id,
@@ -1069,13 +1059,6 @@ export default function DungeonRun({
     stamina: 0,
     maxStamina: 0,
     isAlive: monster.hp > 0,
-    // Monstro não tem atributo STR: card mostra só ATK (ataque) e DEF (defesa).
-    combatStats: {
-      ad: Math.floor(monster.attack + monster.level / 2),
-      ap: monster.defense,
-      dp: undefined,
-    },
-    combatStatLabels: { ad: 'ATK', ap: 'DEF' },
   } : null, [monster, dungeon.name])
 
   // Cards do PACOTE (>1 inimigo) na arena (cascata sobreposta). Cada card mantém a
@@ -1098,8 +1081,6 @@ export default function DungeonRun({
       stamina: 0,
       maxStamina: 0,
       isAlive: m.hp > 0,
-      combatStats: { ad: Math.floor(m.attack + m.level / 2), ap: m.defense, dp: undefined },
-      combatStatLabels: { ad: 'ATK', ap: 'DEF' },
     }))
   }, [pack, isPack, monster?.id, dungeon.name])
 
@@ -3688,7 +3669,6 @@ export default function DungeonRun({
                 winnerId={winnerId}
                 combatEnded={combatEnded}
                 event={battleEvent}
-                diceResults={diceResults}
                 dicePanel={dicePanel}
                 backdrop={null}
               />

@@ -15,35 +15,30 @@ export async function POST(
 
   const userId = session.user.id
   const { characterId } = context.params
-  console.log('Extracted characterId:', characterId)
 
   try {
     const { staminaCost } = await req.json()
-    
-    console.log('API received:', { staminaCost, characterId, userId })
 
     if (!staminaCost || staminaCost <= 0) {
-      console.log('Invalid stamina cost:', staminaCost)
       return NextResponse.json(
         { error: 'Stamina cost must be positive' },
         { status: 400 }
       )
     }
 
-    // Verificar se o personagem existe e pertence ao usuário
     const character = await prisma.character.findFirst({
       where: {
         id: characterId,
         userId: userId
-      }
+      },
+      select: {
+        id: true,
+        name: true,
+        stamina: true,
+        maxStamina: true,
+        staminaUpdatedAt: true,
+      },
     })
-
-    console.log('Character found:', character ? {
-      id: character.id,
-      name: character.name,
-      stamina: character.stamina,
-      maxStamina: character.maxStamina
-    } : 'null')
 
     if (!character) {
       return NextResponse.json(
@@ -56,10 +51,7 @@ export async function POST(
     // o personagem está coletando, debita os tiques da sessão (sem regen fantasma).
     const { stamina: liveStamina } = await regenAndPersist(character)
 
-    // Verificar se tem stamina suficiente
-    console.log(`Checking stamina: ${liveStamina} >= ${staminaCost}?`)
     if (liveStamina < staminaCost) {
-      console.log(`❌ Insufficient stamina: has ${liveStamina}, needs ${staminaCost}`)
       return NextResponse.json(
         {
           error: 'Stamina insuficiente',
@@ -71,18 +63,22 @@ export async function POST(
       )
     }
 
-    // Atualizar stamina. Gastar zera o cronômetro de 15 min (âncora = agora).
-    const updatedCharacter = await prisma.character.update({
+    const newStamina = liveStamina - staminaCost
+    // Gastar zera o cronômetro de 15 min (âncora = agora).
+    await prisma.character.update({
       where: { id: characterId },
       data: {
-        stamina: liveStamina - staminaCost,
+        stamina: newStamina,
         staminaUpdatedAt: new Date(),
       }
     })
 
+    // NÃO devolver o Character inteiro — `nftTokenId` é BigInt e
+    // NextResponse.json() estoura (vira 500 "Failed to update stamina").
     return NextResponse.json({
       success: true,
-      character: updatedCharacter,
+      stamina: newStamina,
+      maxStamina: character.maxStamina,
       message: `Stamina consumida: -${staminaCost}`
     })
 

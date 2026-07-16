@@ -8,7 +8,7 @@ import TransformationDialog from '@/components/TransformationDialog'
 import BattleScene, { BattleEvent, DiceResult, EquipmentMap, FighterView } from '@/components/battle/BattleScene'
 import CombatShell, { type CombatAttackOption } from '@/components/battle/CombatShell'
 import { TRANSFORMATION_CONFIG, getRaceTransformations, type TransformationType } from '@/lib/transformationSystem'
-import { TRANSFORM_SCALE, classAttackName } from '@/lib/combatModel'
+import { classAttackName } from '@/lib/combatModel'
 import { getFormSpecials } from '@/lib/transformationSpecials'
 import {
   getSkillTree,
@@ -351,33 +351,8 @@ function CombatPageContent() {
   // Fundo provisório: arte de masmorra (aleatória por sala). Depois → arenas exclusivas.
   const arenaBackdrop = useMemo(() => pickArenaBackdrop(roomId || 'arena'), [roomId])
 
-  // ⚔️ PODER / ARMADURA / HP exibidos no card de cada lutador (modelo enxuto, dos levers
-  // computados pelo servidor). O delta entre parênteses é o ganho da transformação
-  // (buff simétrico ×TRANSFORM_SCALE). Fallback p/ atributos crus se ainda não houver levers.
-  const withFighterStats = (p: Player | null | undefined): FighterView | null => {
-    if (!p) return null
-    if (p.levers) {
-      const round = (v: number) => Math.round(v || 0)
-      const delta = (v: number) => (p.isTransformed ? round(v) - round(v / TRANSFORM_SCALE) : 0)
-      return {
-        ...p,
-        combatStats: {
-          ad: round(p.levers.power), adDelta: delta(p.levers.power),
-          ap: round(p.levers.armor), apDelta: delta(p.levers.armor),
-          dp: round(p.levers.hp), dpDelta: delta(p.levers.hp),
-        },
-      }
-    }
-    // Fallback (sem levers ainda): mostra os atributos crus, sem delta.
-    return {
-      ...p,
-      combatStats: {
-        ad: Math.round(p.attack || 0), adDelta: 0,
-        ap: Math.round(p.defense || 0), apDelta: 0,
-        dp: Math.round(p.maxHp || 0), dpDelta: 0,
-      },
-    }
-  }
+  // Card enxuto (igual PvE): só nome + barras HP/MP/STA — sem pills PWR/ARM/HP.
+  const asFighter = (p: Player | null | undefined): FighterView | null => (p ? { ...p } : null)
 
   // Auto scroll do sheet de chat
   useEffect(() => {
@@ -1085,7 +1060,7 @@ function CombatPageContent() {
       const staminaCost = cfg?.cost.stamina ?? 30
       const mpCost = cfg?.cost.mp ?? 20
 
-      // Verificar recursos antes de tentar transformar
+      // Recursos da luta (sessão). A rota /transform também cobra STA/MP persistentes.
       if (currentPlayer.stamina < staminaCost) {
         socket.emit('chat_message', { 
           playerId: currentPlayer.id, 
@@ -1104,31 +1079,9 @@ function CombatPageContent() {
         return
       }
 
-      // Consumir stamina primeiro
-      const staminaResponse = await fetch(`/api/character/${characterId}/update-stamina`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ staminaCost })
-      })
-
-      if (!staminaResponse.ok) {
-        const staminaError = await staminaResponse.json()
-        socket.emit('chat_message', { 
-          playerId: currentPlayer.id, 
-          roomId, 
-          message: `❌ Erro ao consumir stamina: ${staminaError.error}` 
-        })
-        return
-      }
-
-      // Atualizar stamina localmente
-      setCurrentPlayer(prev => prev ? {
-        ...prev,
-        stamina: prev.stamina - staminaCost,
-        mp: prev.mp - mpCost
-      } : null)
-      
-      // Aplicar transformação
+      // Uma única cobrança: /transform já debita STA+MP no banco.
+      // (Antes chamávamos update-stamina + transform → 2× cobrança; e update-stamina
+      // 500ava ao serializar nftTokenId BigInt.)
       const response = await fetch(`/api/character/${characterId}/transform`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1138,17 +1091,18 @@ function CombatPageContent() {
       if (response.ok) {
         const data = await response.json()
         const updatedCharacter = data.character
+        const nextStamina = Math.max(0, currentPlayer.stamina - staminaCost)
+        const nextMp = Math.max(0, currentPlayer.mp - mpCost)
         
         // Atualizar dados do player com os novos stats transformados
         setCurrentPlayer(prev => prev ? {
           ...prev,
           ...updatedCharacter,
-          // Preservar dados de combate atualizados (CRÍTICO: manter HP atual do combate)
-          hp: prev.hp, // 🔥 CORREÇÃO: Preservar HP atual do combate, não resetar
-          stamina: prev.stamina - staminaCost,
-          mp: prev.mp - mpCost,
-          // Aplicar stats transformados do baseStats
-          maxHp: updatedCharacter.maxHp, // Pode aumentar maxHP mas não resetar HP atual
+          // Preservar HP atual do combate (a API pode devolver HP do banco)
+          hp: prev.hp,
+          stamina: nextStamina,
+          mp: nextMp,
+          maxHp: updatedCharacter.maxHp ?? prev.maxHp,
           attack: updatedCharacter.baseStats?.attack || prev.attack,
           defense: updatedCharacter.baseStats?.defense || prev.defense,
           strength: updatedCharacter.baseStats?.str || prev.strength,
@@ -1157,7 +1111,6 @@ function CombatPageContent() {
           critical: updatedCharacter.baseStats?.critical || prev.critical,
           isTransformed: true,
           transformationType: transformationType,
-          // Troca para a arte da forma escolhida (metamorfo muda por forma).
           transformationImage: formImage ?? prev.transformationImage ?? null,
           transformationData: updatedCharacter.transformationData
         } : null)
@@ -1181,8 +1134,8 @@ function CombatPageContent() {
           stats: {
             maxHp: updatedCharacter.maxHp,
             maxMp: updatedCharacter.maxMp ?? currentPlayer.maxMp,
-            mp: updatedCharacter.mp ?? (currentPlayer.mp - mpCost),
-            stamina: currentPlayer.stamina - staminaCost,
+            mp: nextMp,
+            stamina: nextStamina,
             attack: updatedCharacter.baseStats?.attack ?? currentPlayer.attack,
             defense: updatedCharacter.baseStats?.defense ?? currentPlayer.defense,
             strength: updatedCharacter.baseStats?.str ?? currentPlayer.strength,
@@ -1192,11 +1145,11 @@ function CombatPageContent() {
           }
         })
       } else {
-        const error = await response.json()
+        const error = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
         socket.emit('chat_message', { 
           playerId: currentPlayer.id, 
           roomId, 
-          message: `❌ Transformação falhou: ${error.error}` 
+          message: `❌ Transformação falhou: ${error.error || 'erro'}` 
         })
       }
     } catch (error) {
@@ -1546,13 +1499,12 @@ function CombatPageContent() {
       >
         <BattleScene
           className="flex-1 min-h-[280px]"
-          left={withFighterStats((isSpectator || isModerator ? combatRoom?.player1 : (currentPlayerView || currentPlayer)) || null)}
-          right={withFighterStats((isSpectator || isModerator ? combatRoom?.player2 : opponent) || null)}
+          left={asFighter((isSpectator || isModerator ? combatRoom?.player1 : (currentPlayerView || currentPlayer)) || null)}
+          right={asFighter((isSpectator || isModerator ? combatRoom?.player2 : opponent) || null)}
           currentTurnId={combatRoom?.currentTurn}
           winnerId={combatRoom?.winner || null}
           combatEnded={combatRoom?.phase === CombatPhase.COMBAT_END}
           event={battleEvent}
-          diceResults={diceResults}
           backdrop={
             <ImageBackdrop
               src={arenaBackdrop.src}

@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import ItemIcon from '@/components/ItemIcon'
-import { AnimatedDie, MiniDie } from '@/components/battle/AnimatedDice'
+import { AnimatedDie } from '@/components/battle/AnimatedDice'
 import { getTransformationGlow } from '@/lib/transformationSystem'
 import { applyEnhancementToStats, getLevelLabel } from '@/lib/enhancementSystem'
 import { formatItemStats } from '@/lib/itemStats'
@@ -119,7 +119,6 @@ interface BattleSceneProps {
   winnerId?: string | null
   combatEnded?: boolean
   event?: BattleEvent | null
-  diceResults?: Record<string, DiceResult | undefined>
   dicePanel?: DicePanelInfo | null
   className?: string
   /** Cenário customizado (ex.: fundo temático de masmorra). Substitui o céu noturno
@@ -365,7 +364,6 @@ function FighterFigure({
   shaking,
   dodging,
   defending,
-  diceResult,
   fxOverlay,
   hideBars = false,
   compact = false,
@@ -385,7 +383,6 @@ function FighterFigure({
   shaking: boolean
   dodging: boolean
   defending: boolean
-  diceResult?: DiceResult
   /** FX de habilidade (impacto/aura/esquiva/crítico) ancorado no SPRITE do lutador. */
   fxOverlay?: React.ReactNode
   /** Esconde as barras de recurso (HP/MP/stamina) — usado p/ inimigos cujo HP vive no roster. */
@@ -457,40 +454,8 @@ function FighterFigure({
             </div>
           )}
 
-          {/* Pills de combate (modelo enxuto) — rótulos por-lutador; bônus da transformação entre parênteses */}
-          {!hideBars && fighter.combatStats && (() => {
-            const cs = fighter.combatStats
-            const L = fighter.combatStatLabels ?? { ad: 'PWR', ap: 'ARM', dp: 'HP' }
-            const pills = [
-              cs.ad != null ? { label: L.ad, val: cs.ad, delta: cs.adDelta, color: '#e8a07a' } : null,
-              cs.ap != null ? { label: L.ap ?? 'ARM', val: cs.ap, delta: cs.apDelta, color: '#c08ae8' } : null,
-              cs.dp != null ? { label: L.dp ?? 'HP', val: cs.dp, delta: cs.dpDelta, color: '#7ab6e8' } : null,
-            ].filter(Boolean) as { label: string; val: number; delta?: number; color: string }[]
-            return (
-              <div className="mt-1 flex flex-wrap items-baseline justify-center gap-x-1.5 gap-y-0.5 text-[10px] leading-none">
-                {pills.map((s) => (
-                  <span key={s.label} className="flex items-baseline gap-0.5">
-                    <span className="font-bold" style={{ color: s.color }}>{s.label}</span>
-                    <span className="font-bold text-white">{s.val}</span>
-                    {s.delta ? (
-                      <span className="font-bold text-emerald-400">({s.delta > 0 ? '+' : ''}{s.delta})</span>
-                    ) : null}
-                  </span>
-                ))}
-              </div>
-            )
-          })()}
         </div>
         )}
-
-        {/* Resultado do dado (mini-dado girando) — slot menor no compacto */}
-        <div className={`${compact ? 'h-6' : 'h-11'} flex items-center`}>
-          <AnimatePresence>
-            {diceResult && (
-              <MiniDie sides={diceResult.sides} result={diceResult} />
-            )}
-          </AnimatePresence>
-        </div>
 
         {/* Barra de HP ACIMA do card (cascata do pacote) — só a barra, sem números */}
         {showHpBar && hpAbove && (
@@ -640,7 +605,6 @@ export default function BattleScene({
   winnerId,
   combatEnded,
   event,
-  diceResults,
   dicePanel,
   className = '',
   backdrop,
@@ -820,14 +784,6 @@ export default function BattleScene({
   useEffect(() => () => { timeouts.current.forEach(clearTimeout) }, [])
 
   // Enquanto o dado grande do centro gira para o jogador local (lado esquerdo),
-  // esconder o mini-dado dele para não revelar o resultado antes da hora
-  const miniDieFor = (fighter: FighterView, side: 'left' | 'right') => {
-    // Modo dual (ex.: iniciativa) já mostra os 2 dados juntos no centro — evita duplicar
-    if (dicePanel?.visible && dicePanel.dual) return undefined
-    if (side === 'left' && dicePanel?.visible) return undefined
-    return diceResults?.[fighter.id]
-  }
-
   const renderFighter = (
     fighter: FighterView | null,
     side: 'left' | 'right',
@@ -874,7 +830,6 @@ export default function BattleScene({
           shaking={shakingId === fighter.id}
           dodging={dodgingId === fighter.id}
           defending={defendingId === fighter.id}
-          diceResult={miniDieFor(fighter, side)}
           fxOverlay={fxOverlay}
           hideBars={opts.hideBars}
           compact={opts.compact}
@@ -1011,7 +966,7 @@ export default function BattleScene({
           // Pacote em CASCATA sobreposta e COMPACTA (centralizada, p/ não estourar a tela
           // em fullscreen). Mais FORTE ao centro (vertical); mais FRACO mais à FRENTE
           // (z maior); o FOCADO (alvo do jogador / atacante atual) vem à frente + iluminado.
-          const byStrength = [...rightGroup].sort((a, b) => (b.combatStats?.ad ?? 0) - (a.combatStats?.ad ?? 0))
+          const byStrength = [...rightGroup].sort((a, b) => (b.level - a.level) || (b.maxHp - a.maxHp))
           // Ordem VERTICAL: mais forte no meio (n=3 → [2º, 1º, 3º]); n≤2 mantém ordem.
           const arranged = rightGroup.length === 3
             ? [byStrength[1], byStrength[0], byStrength[2]]
@@ -1050,8 +1005,9 @@ export default function BattleScene({
           )
         })() : (
           renderFighter(right, 'right', enemyHpOnly
+            // PvE monstro: HP só na barra (sem número). PvP: card simétrico com HP 12/80 etc.
             ? { hideNamePlate: true, nameInCard: true, showHpBar: true, hpAbove: true, brightenImage: brightenEnemyImage }
-            : { hideBars: hideEnemyBars, brightenImage: brightenEnemyImage, hideHpValue: true })
+            : { hideBars: hideEnemyBars, brightenImage: brightenEnemyImage })
         )}
       </div>
     </div>

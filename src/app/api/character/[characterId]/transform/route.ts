@@ -86,10 +86,25 @@ export async function POST(
 
     const config = TRANSFORMATION_CONFIG[transformationType as TransformationType]
 
+    // Payload sem BigInt (`nftTokenId`) — NextResponse.json() não serializa BigInt.
     return NextResponse.json({
       success: true,
       message: `🎯 Transformação em ${config.name} ativada!`,
-      character: updatedCharacter,
+      character: {
+        id: updatedCharacter.id,
+        name: updatedCharacter.name,
+        hp: updatedCharacter.hp,
+        maxHp: updatedCharacter.maxHp,
+        mp: updatedCharacter.mp,
+        maxMp: updatedCharacter.maxMp,
+        stamina: updatedCharacter.stamina,
+        maxStamina: updatedCharacter.maxStamina,
+        isTransformed: updatedCharacter.isTransformed,
+        transformationType: updatedCharacter.transformationType,
+        transformationData: updatedCharacter.transformationData,
+        unlockedTransformation: updatedCharacter.unlockedTransformation,
+        baseStats: updatedCharacter.baseStats,
+      },
       transformation: {
         name: config.name,
         description: config.description,

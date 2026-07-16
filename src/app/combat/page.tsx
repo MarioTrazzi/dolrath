@@ -480,6 +480,17 @@ function CombatPageContent() {
         if (room.phase === CombatPhase.WAITING_PLAYERS) {
           setHasRolledInitiative(false)
           setHasRolledDice(false) // Reset também o estado do dado
+          setUsedTransformThisMatch(false)
+        }
+
+        // Fim da luta: forma acaba (servidor já limpou; reforça no cliente).
+        if (room.phase === CombatPhase.COMBAT_END) {
+          setUsedTransformThisMatch(false)
+          setCurrentPlayer(prev => prev ? {
+            ...prev,
+            isTransformed: false,
+            transformationType: null,
+          } : null)
         }
         
         // APENAS na fase DICE_ROLL, setamos para ambos verem os dados
@@ -633,12 +644,13 @@ function CombatPageContent() {
               resistance: charDetails.baseStats?.res ?? Math.floor((charDetails.baseStats?.def || 10) * 0.8),
               critical: charDetails.baseStats?.crit || 1.0,
               speed: charDetails.baseStats?.speed || 2.5,
-              equipment: charDetails.equipment || {},
+              equipment: Array.isArray(charDetails.equipment) ? charDetails.equipment : [],
               avatar: charDetails.avatar || null,
               equipmentMap: mapEquipment(charDetails.equipment),
-              // Transformação: forma travada + arte gerada (para glow e troca de imagem)
-              isTransformed: charDetails.isTransformed || false,
-              transformationType: charDetails.transformationType || null,
+              // Forma é só da LUTA (socket). Nunca herdar isTransformed do banco —
+              // senão a próxima partida começa já transformada / com especial liberado.
+              isTransformed: false,
+              transformationType: null,
               unlockedTransformation: charDetails.unlockedTransformation || null,
               // 🌳 Árvore de habilidades (lib/skillTree.ts): null = personagem legado, tudo liberado.
               skillTree: charDetails.skillTree ?? null,
@@ -647,6 +659,10 @@ function CombatPageContent() {
               isReady: false,
               isConnected: true,
               isAlive: charDetails.isAlive
+            }
+            // Limpa flag stale no banco (lutas antigas gravavam isTransformed=true).
+            if (charDetails.isTransformed) {
+              fetch(`/api/character/${characterId}/detransform`, { method: 'POST' }).catch(() => {})
             }
           } else {
             throw new Error('Personagem não encontrado')

@@ -735,6 +735,17 @@ io.on('connection', (socket) => {
       player.baseLevers = finalLevers // guardado p/ reverter o buff de transformação
       player.combatClass = cls
       player.gearTier = gearTier
+      // Toda luta começa SEM forma — a forma é só da sessão (sync_transformation).
+      // Nunca herdar isTransformed do payload/DB (bug: entrava já transformado).
+      player.isTransformed = false
+      player.transformationType = null
+      if (player.transformationData && typeof player.transformationData === 'object') {
+        player.transformationData = {
+          ...player.transformationData,
+          remainingTurns: 0,
+          cooldownTurns: 0,
+        }
+      }
       // 🌳 Vitalidade/Reservas Arcanas (maxHpPct/maxMpPct): passivas permanentes da árvore.
       const joinUnlocks = getUnlocksFor(player)
       player.maxHp = Math.round(finalLevers.hp * (1 + joinUnlocks.passives.maxHpPct))
@@ -1596,37 +1607,37 @@ io.on('connection', (socket) => {
 // 💚 REGENERAÇÃO AUTOMÁTICA DE RECURSOS
 function regeneratePlayerResources(player, context = 'Activity') {
   if (!player) return
-  
-  // Restaurar HP completo
+
+  // Restaurar HP/MP da luta
   player.hp = player.maxHp
-  
-  // Restaurar MP completo
   player.mp = player.maxMp
-  
-  // 🔥 NOVO: Resetar transformações ao final da batalha
-  if (player.isTransformed) {
+
+  // Forma é só da sessão: sempre limpa ao sair da luta (vitória/derrota/disconnect).
+  const wasTransformed = !!player.isTransformed || !!player.transformationType
+  if (wasTransformed) {
     revertPlayerTransformation(player)
     console.log(`🔄 ${context}: ${player.name} teve transformação resetada`)
-    
-    // 🔥 PERSISTIR RESET NO BANCO DE DADOS
-    if (player.id) {
-      fetch(`http://localhost:3000/api/character/${player.id}/detransform`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      }).catch(error => {
-        console.error(`❌ Erro ao persistir reset de transformação para ${player.name}:`, error)
-      })
-    }
   }
-  
-  // 🔥 NOVO: Limpar cooldowns de transformação
+  player.isTransformed = false
+  player.transformationType = null
   if (player.transformationData) {
     player.transformationData.cooldownTurns = 0
     player.transformationData.remainingTurns = 0
-    console.log(`⏰ ${context}: ${player.name} teve cooldowns resetados`)
   }
-  
-  // Stamina NÃO é restaurada - essa é a limitação do sistema
+
+  // Persistir limpeza no banco (personagens reais — ids de bot de treino começam com monster_)
+  const isRealCharacter = player.id && !String(player.id).startsWith('monster_')
+  if (isRealCharacter && wasTransformed) {
+    const appUrl = (process.env.APP_URL || process.env.NEXTAUTH_URL || 'https://dolrath.vercel.app').replace(/\/$/, '')
+    fetch(`${appUrl}/api/character/${player.id}/detransform`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    }).catch((error) => {
+      console.error(`❌ Erro ao persistir reset de transformação para ${player.name}:`, error)
+    })
+  }
+
+  // Stamina NÃO é restaurada — limitação do sistema
   console.log(`💚 ${context}: ${player.name} teve HP e MP restaurados, transformação resetada (Stamina: ${player.stamina}/${player.maxStamina})`)
 }
 

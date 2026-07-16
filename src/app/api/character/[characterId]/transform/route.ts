@@ -1,13 +1,15 @@
 /**
  * 🔄 API de Transformação
  * /api/character/[characterId]/transform
+ *
+ * No combate (PvP/treino) a FORMA é só da sessão (socket `sync_transformation`).
+ * Esta rota cobra MP+stamina persistentes e NÃO grava isTransformed no personagem —
+ * senão a próxima luta começava já transformada.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import {
-  canTransform,
-  applyTransformation,
   TransformationType,
   TRANSFORMATION_CONFIG,
   getRaceTransformations
@@ -30,15 +32,13 @@ export async function POST(
       return NextResponse.json({ error: 'Tipo de transformação é obrigatório' }, { status: 400 })
     }
 
-    // Verificar se o tipo de transformação é válido
     if (!Object.keys(TRANSFORMATION_CONFIG).includes(transformationType)) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Tipo de transformação inválido',
         validTypes: Object.keys(TRANSFORMATION_CONFIG)
       }, { status: 400 })
     }
 
-    // Buscar personagem
     const character = await prisma.character.findUnique({
       where: { id: characterId }
     })
@@ -47,52 +47,58 @@ export async function POST(
       return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
     }
 
-    // Stamina viva sincronizada antes de checar/cobrar o custo da forma (regen
-    // passivo ou, se coletando, débito dos tiques da sessão).
     character.stamina = (await regenAndPersist(character)).stamina
 
-    // Verificar se pode transformar
-    const validationResult = canTransform(character, transformationType as TransformationType)
-    if (!validationResult.canTransform) {
-      return NextResponse.json({ 
-        error: validationResult.reason,
-        canTransform: false 
+    const type = transformationType as TransformationType
+    const allowed = getRaceTransformations(character.race)
+    if (allowed.length === 0) {
+      return NextResponse.json({ error: 'Sua raça não possui habilidade de transformação', canTransform: false }, { status: 400 })
+    }
+    if (!allowed.includes(type)) {
+      return NextResponse.json({ error: 'Sua raça não pode assumir essa forma', canTransform: false }, { status: 400 })
+    }
+    const unlocked = (character.unlockedTransformation || '') as TransformationType
+    if (allowed.length > 1 && unlocked && unlocked !== type) {
+      return NextResponse.json({ error: 'Você só pode assumir a forma escolhida na criação', canTransform: false }, { status: 400 })
+    }
+
+    const config = TRANSFORMATION_CONFIG[type]
+    if (!config) {
+      return NextResponse.json({ error: 'Tipo de transformação inválido' }, { status: 400 })
+    }
+
+    if (character.mp < config.cost.mp) {
+      return NextResponse.json({
+        error: `MP insuficiente: precisa de ${config.cost.mp}, tem ${character.mp}`,
+        canTransform: false,
+      }, { status: 400 })
+    }
+    if (character.stamina < config.cost.stamina) {
+      return NextResponse.json({
+        error: `Stamina insuficiente: precisa de ${config.cost.stamina}, tem ${character.stamina}`,
+        canTransform: false,
       }, { status: 400 })
     }
 
-    // Aplicar transformação (custo + metadata). No modelo enxuto o buff de combate
-    // vive nos levers da sala (socket) — NÃO persistir hp/maxHp/maxMp/baseStats
-    // alterados, senão a barra da luta e o personagem fora do combate “encolhem”.
-    const transformedCharacter = applyTransformation(character, transformationType as TransformationType)
-    const config = TRANSFORMATION_CONFIG[transformationType as TransformationType]
     const nextMp = Math.max(0, (character.mp || 0) - config.cost.mp)
     const nextStamina = Math.max(0, (character.stamina || 0) - config.cost.stamina)
 
-    // Atualizar no banco de dados
+    // Só cobra recursos. Limpa flag stale (lutas antigas que gravavam isTransformed).
     const updatedCharacter = await prisma.character.update({
       where: { id: characterId },
       data: {
-        isTransformed: true,
-        transformationType,
-        // Guarda duração/originalStats p/ detransform; sem stats de pool alterados.
+        isTransformed: false,
+        transformationType: null,
         transformationData: {
-          ...transformedCharacter.transformationData,
-          originalStats: {
-            ...(transformedCharacter.transformationData?.originalStats || {}),
-            // Pool real (pré-forma) — detransform não deve mexer no teto da luta.
-            hp: character.hp,
-            maxHp: character.maxHp,
-            mp: nextMp,
-            maxMp: character.maxMp,
-          },
+          remainingTurns: 0,
+          cooldownTurns: 0,
         },
         mp: nextMp,
         stamina: nextStamina,
-        staminaUpdatedAt: new Date(), // transformar gasta stamina: reinicia a espera do regen
+        staminaUpdatedAt: new Date(),
       }
     })
 
-    // Payload sem BigInt (`nftTokenId`) — NextResponse.json() não serializa BigInt.
     return NextResponse.json({
       success: true,
       message: `🎯 Transformação em ${config.name} ativada!`,
@@ -105,9 +111,12 @@ export async function POST(
         maxMp: updatedCharacter.maxMp,
         stamina: updatedCharacter.stamina,
         maxStamina: updatedCharacter.maxStamina,
-        isTransformed: updatedCharacter.isTransformed,
-        transformationType: updatedCharacter.transformationType,
-        transformationData: updatedCharacter.transformationData,
+        isTransformed: false,
+        transformationType: null,
+        transformationData: {
+          remainingTurns: config.duration,
+          cooldownTurns: 0,
+        },
         unlockedTransformation: updatedCharacter.unlockedTransformation,
         baseStats: updatedCharacter.baseStats,
       },
@@ -123,14 +132,13 @@ export async function POST(
 
   } catch (error) {
     console.error('Erro ao aplicar transformação:', error)
-    return NextResponse.json({ 
+    return NextResponse.json({
       error: 'Erro interno do servidor',
       details: error instanceof Error ? error.message : 'Erro desconhecido'
     }, { status: 500 })
   }
 }
 
-// Endpoint GET para listar transformações disponíveis
 export async function GET(
   req: NextRequest,
   { params }: { params: { characterId: string } }
@@ -138,7 +146,6 @@ export async function GET(
   try {
     const { characterId } = params
 
-    // Buscar personagem
     const character = await prisma.character.findUnique({
       where: { id: characterId }
     })
@@ -147,14 +154,22 @@ export async function GET(
       return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
     }
 
-    // Determinar transformações disponíveis baseado na raça
-    const availableTransformations: string[] = getRaceTransformations(character.race)
+    const availableTransformations = getRaceTransformations(character.race)
 
-    // Verificar status de cada transformação
     const transformationStatus = availableTransformations.map(type => {
-      const config = TRANSFORMATION_CONFIG[type as TransformationType]
-      const validation = canTransform(character, type as TransformationType)
-      
+      const config = TRANSFORMATION_CONFIG[type]
+      const mpOk = character.mp >= config.cost.mp
+      const staOk = character.stamina >= config.cost.stamina
+      const unlocked = (character.unlockedTransformation || '') as TransformationType
+      const multi = availableTransformations.length > 1
+      const lockedForm = multi && !!unlocked && unlocked !== type
+      const available = mpOk && staOk && !lockedForm
+
+      let reason: string | undefined
+      if (lockedForm) reason = 'Você só pode assumir a forma escolhida na criação'
+      else if (!mpOk) reason = `MP insuficiente: precisa de ${config.cost.mp}`
+      else if (!staOk) reason = `Stamina insuficiente: precisa de ${config.cost.stamina}`
+
       return {
         type,
         name: config.name,
@@ -162,8 +177,8 @@ export async function GET(
         cost: config.cost,
         duration: config.duration,
         cooldown: config.cooldown,
-        available: validation.canTransform,
-        reason: validation.reason,
+        available,
+        reason,
         specialAbilities: config.specialAbilities.map(ability => ({
           name: ability.name,
           description: ability.description
@@ -176,17 +191,16 @@ export async function GET(
         id: character.id,
         name: character.name,
         race: character.race,
-        isTransformed: character.isTransformed,
-        transformationType: character.transformationType,
-        currentTransformation: character.isTransformed ? 
-          TRANSFORMATION_CONFIG[character.transformationType as TransformationType] : null
+        isTransformed: false,
+        transformationType: null,
+        currentTransformation: null
       },
       availableTransformations: transformationStatus
     })
 
   } catch (error) {
     console.error('Erro ao buscar transformações:', error)
-    return NextResponse.json({ 
+    return NextResponse.json({
       error: 'Erro interno do servidor',
       details: error instanceof Error ? error.message : 'Erro desconhecido'
     }, { status: 500 })

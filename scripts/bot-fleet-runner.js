@@ -121,15 +121,30 @@ function buildPlayerPayload(char, userId) {
   }
 }
 
-/** AI de combate estilo training-bot, com delays humanos. */
+/** AI de combate — mesmo fluxo do training-bot (ready → iniciativa → atacar no turno). */
 function playMatch(socketUrl, roomId, player, userId) {
   return new Promise((resolve) => {
     const socket = io(socketUrl, { transports: ['websocket', 'polling'], reconnection: false })
-    let done = false
-    let lastPhase = ''
+    let finished = false
+    let isReady = false
+    let rolledInitiative = false
+    let lastPhase = null
+    let lastTurnKey = null
+    const timers = new Set()
+
+    const after = (ms, fn) => {
+      const t = setTimeout(() => {
+        timers.delete(t)
+        if (!finished) fn()
+      }, ms)
+      timers.add(t)
+    }
+
     const finish = (result) => {
-      if (done) return
-      done = true
+      if (finished) return
+      finished = true
+      timers.forEach(clearTimeout)
+      timers.clear()
       try {
         socket.disconnect()
       } catch {
@@ -138,9 +153,10 @@ function playMatch(socketUrl, roomId, player, userId) {
       resolve(result)
     }
 
-    const timer = setTimeout(() => finish({ ok: false, reason: 'timeout' }), 12 * 60 * 1000)
+    after(12 * 60 * 1000, () => finish({ ok: false, reason: 'timeout' }))
 
     socket.on('connect', () => {
+      logEvent('pvp_join', { characterId: player.id, roomId })
       socket.emit('join_room', {
         roomId,
         player: { ...player, userId },
@@ -150,9 +166,23 @@ function playMatch(socketUrl, roomId, player, userId) {
       })
     })
 
+    socket.on('connect_error', (err) => {
+      logEvent('pvp_connect_error', { characterId: player.id, roomId, error: String(err?.message || err) })
+      finish({ ok: false, reason: 'connect_error' })
+    })
+
+    socket.on('error', (err) => {
+      logEvent('pvp_socket_error', { characterId: player.id, roomId, error: err?.message || String(err) })
+    })
+
+    socket.on('room_closed', () => finish({ ok: false, reason: 'room_closed' }))
+
     socket.on('room_updated', (room) => {
-      if (!room || done) return
-      const phase = room.phase
+      if (finished || !room) return
+
+      const phaseChanged = room.phase !== lastPhase
+      lastPhase = room.phase
+
       const me =
         room.player1?.id === player.id
           ? room.player1
@@ -161,50 +191,64 @@ function playMatch(socketUrl, roomId, player, userId) {
             : null
       if (!me) return
 
-      if (phase === 'waiting_players' && room.player1 && room.player2 && !me.isReady) {
-        if (lastPhase !== 'ready') {
-          lastPhase = 'ready'
-          setTimeout(() => {
-            socket.emit('toggle_ready', { playerId: player.id, roomId })
-          }, jitter(1200, 2400))
+      switch (room.phase) {
+        case 'waiting_players': {
+          if (room.player1 && room.player2 && !isReady && !me.isReady) {
+            isReady = true
+            after(jitter(800, 1800), () => {
+              socket.emit('toggle_ready', { playerId: player.id, roomId })
+            })
+          }
+          break
         }
-      }
 
-      if (phase === 'initiative_roll' && lastPhase !== 'init') {
-        lastPhase = 'init'
-        setTimeout(() => {
-          socket.emit('roll_initiative', { playerId: player.id, roomId })
-        }, jitter(1500, 3000))
-      }
+        case 'initiative_roll': {
+          if (!rolledInitiative) {
+            rolledInitiative = true
+            after(jitter(1000, 2200), () => {
+              socket.emit('roll_initiative', { playerId: player.id, roomId })
+            })
+          }
+          break
+        }
 
-      if (phase === 'player_turn' && room.currentTurn === player.id && lastPhase !== `turn-${room.turnNumber}`) {
-        lastPhase = `turn-${room.turnNumber}`
-        setTimeout(() => {
-          const sta = me.stamina || 0
-          const mp = me.mp || 0
-          let action = 'light_attack'
-          if (sta >= 2 && mp >= 8 && Math.random() < 0.35) action = 'heavy_attack'
-          socket.emit('player_action', { playerId: player.id, roomId, action })
-        }, jitter(1800, 3500))
-      }
+        case 'player_turn': {
+          // Chave por turno real (currentTurn + tamanho do log) — room.turnNumber não existe.
+          const turnKey = `${room.currentTurn}:${(room.combatLog || []).length}`
+          if (room.currentTurn === player.id && (phaseChanged || turnKey !== lastTurnKey)) {
+            lastTurnKey = turnKey
+            after(jitter(1200, 2600), () => {
+              if (finished) return
+              const sta = me.stamina || 0
+              const mp = me.mp || 0
+              // Preferir golpe básico (sempre liberado); classe só se tiver MP/STA e nó.
+              let action = 'light_attack'
+              if (sta >= 2 && mp >= 8 && Math.random() < 0.3) action = 'heavy_attack'
+              logEvent('pvp_action', { characterId: player.id, roomId, action, sta, mp })
+              socket.emit('player_action', { playerId: player.id, roomId, action })
+            })
+          }
+          break
+        }
 
-      if (phase === 'combat_end') {
-        clearTimeout(timer)
-        const winnerId = room.winnerId || room.winner?.id
-        logEvent('pvp_end', {
-          characterId: player.id,
-          roomId,
-          won: winnerId === player.id,
-        })
-        setTimeout(() => finish({ ok: true, won: winnerId === player.id }), 2000)
+        case 'dice_roll':
+          break
+
+        case 'combat_end': {
+          const winnerId = room.winnerId || room.winner?.id || room.winner
+          logEvent('pvp_end', {
+            characterId: player.id,
+            roomId,
+            won: winnerId === player.id,
+          })
+          after(1500, () => finish({ ok: true, won: winnerId === player.id }))
+          break
+        }
       }
     })
 
     socket.on('disconnect', () => {
-      if (!done) {
-        clearTimeout(timer)
-        finish({ ok: false, reason: 'disconnect' })
-      }
+      if (!finished) finish({ ok: false, reason: 'disconnect' })
     })
   })
 }

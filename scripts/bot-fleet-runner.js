@@ -28,6 +28,21 @@ const REGISTRY_PATH =
 const LOG_PATH = process.env.BOT_FLEET_LOG || path.join(__dirname, 'bot-fleet-events.jsonl')
 const PVP_MIN_STA = 5
 const GATHER_FIELD = 'ervas'
+/** Quantos bots podem esperar na fila ao mesmo tempo (evita bot↔bot esvaziar a fila). */
+const MAX_QUEUE_WAITERS = 4
+let queueWaiters = 0
+
+async function withQueueSlot(fn) {
+  while (queueWaiters >= MAX_QUEUE_WAITERS) {
+    await sleep(2000)
+  }
+  queueWaiters++
+  try {
+    return await fn()
+  } finally {
+    queueWaiters--
+  }
+}
 
 if (!SECRET) {
   console.error('BOT_FLEET_SECRET is required')
@@ -355,7 +370,7 @@ async function runPvpBudget(bot, budgetSta) {
     const player = buildPlayerPayload(char, bot.userId)
     logEvent('queue_join', { characterId: bot.characterId, level: player.level })
     await sleep(jitter(200, 1500))
-    const result = await queueForMatch(SOCKET_URL, bot, player)
+    const result = await withQueueSlot(() => queueForMatch(SOCKET_URL, bot, player))
     if (!result) {
       logEvent('queue_timeout', { characterId: bot.characterId })
       break

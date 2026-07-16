@@ -17,13 +17,20 @@ import {
   AlertTriangle, Zap, Gem, RefreshCw, Palette, Crown, Skull,
   Lock, Hammer, Flame, Scale,
 } from 'lucide-react'
-import { Button, Card, GlassCard, Badge, StatBar, SectionHeading, DiceChip, Reveal, ArenaSky } from './ui'
-import { ShowcaseDie } from '@/components/battle/AnimatedDice'
+import { ShowcaseDie, AnimatedDie } from '@/components/battle/AnimatedDice'
+import { Button, Card, GlassCard, Badge, StatBar, SectionHeading, Reveal, ArenaSky } from './ui'
 import { itemImagePath } from '@/lib/itemCatalog'
 import { DUNGEON_RUNS, type DungeonRunId, type RunNode, type RunDrop } from './dungeonRuns'
 import { DUNGEON_BATTLE_BG, DUNGEON_RUN_MAP_BG } from '@/lib/walkSceneAssets'
 import { DUNGEONS, DUNGEON_LIST, type DungeonId, type DungeonMonsterDef, type DungeonBossDef } from '@/lib/dungeonAdventures'
-import { DiamondSlot, BevelButton, chanceColorClass } from '@/components/crafting/bdoTheme'
+import {
+  DiamondSlot,
+  BevelButton,
+  chanceColorClass,
+  GOLD,
+  GOLD_BRIGHT,
+  CHARGE_MS as BDO_CHARGE_MS,
+} from '@/components/crafting/bdoTheme'
 import { GATHER_FIELDS } from '@/lib/gathering'
 import { FIELD_ACCENT } from '@/components/gathering/GatheringPanel'
 import { PROCESSING_GROUP_LABEL, type ProcessingRecipe } from '@/lib/processing'
@@ -535,9 +542,19 @@ function ArenaSection({ glow }: { glow: number }) {
                       { name: 'Anel de Cristal Pulsante', rarity: 'RARE' },
                     ]}
                   />
-                  <div className="flex flex-col items-center gap-3 pb-24 shrink-0">
-                    <DiceChip sides={20} value={18} rolling={phase === 'rolling'} />
-                    <span className="font-combat text-[10px] text-textsec/70 text-center">
+                  <div className="flex flex-col items-center gap-1 pb-20 shrink-0">
+                    <AnimatedDie
+                      sides={20}
+                      size={72}
+                      mode={phase === 'rolling' || phase === 'hit' ? 'rolling' : 'idle'}
+                      result={
+                        phase === 'rolling' || phase === 'hit'
+                          ? { roll: 18, modifier: 0, total: 18 }
+                          : null
+                      }
+                      minSpinMs={1200}
+                    />
+                    <span className="font-combat text-[10px] text-textsec/70 text-center leading-tight">
                       d20 × AGI<br />vs DEF
                     </span>
                   </div>
@@ -982,37 +999,40 @@ function DungeonsSection() {
 function MonsterCard({ monster, accent, boss = false }: { monster: DungeonMonsterDef; accent: string; boss?: boolean }) {
   const [failed, setFailed] = useState(false)
   const title = boss ? (monster as DungeonBossDef).title : undefined
+  // Arte dos monstros é retrato 2:3 — card 3/4 + object-top (mesmo padrão do
+  // combat-lobby) preenche o quadro sem letterbox nem cortar a cabeça.
   return (
     <motion.div
-      whileHover={{ scale: 1.04 }}
-      className="group relative flex flex-col overflow-hidden rounded-2xl border-2"
+      whileHover={{ scale: 1.03 }}
+      className="group relative aspect-[3/4] overflow-hidden rounded-2xl border-2 bg-black/60"
       style={{
         borderColor: boss ? '#fbbf24' : `${accent}44`,
         boxShadow: boss ? '0 0 24px rgba(251,191,36,0.35)' : `0 0 14px ${accent}22`,
       }}
     >
-      <div className="relative aspect-square overflow-hidden bg-black/50">
-        {monster.image && !failed ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={monster.image}
-            alt={monster.name}
-            loading="lazy"
-            onError={() => setFailed(true)}
-            className="art-bright h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
-          />
-        ) : (
-          <div className="grid h-full w-full place-items-center text-5xl">{monster.emoji}</div>
-        )}
-        {boss && (
-          <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full border border-amber-400/70 bg-black/60 px-2 py-0.5 text-[10px] font-bold text-amber-300">
-            👑 Chefe
-          </span>
-        )}
-      </div>
-      <div className="flex flex-col gap-0.5 p-3">
-        <h3 className={`text-sm font-bold leading-tight ${boss ? 'text-amber-300' : 'text-white'}`}>{monster.name}</h3>
-        {title && <span className="font-combat text-[11px] text-textsec">{title}</span>}
+      {monster.image && !failed ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={monster.image}
+          alt={monster.name}
+          loading="lazy"
+          onError={() => setFailed(true)}
+          className="art-bright absolute inset-0 h-full w-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
+        />
+      ) : (
+        <div className="absolute inset-0 grid place-items-center bg-black/50 text-5xl">{monster.emoji}</div>
+      )}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-transparent" />
+      {boss && (
+        <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full border border-amber-400/70 bg-black/60 px-2 py-0.5 text-[10px] font-bold text-amber-300 backdrop-blur-sm">
+          👑 Chefe
+        </span>
+      )}
+      <div className="absolute inset-x-0 bottom-0 p-3 text-center">
+        <h3 className={`text-sm font-bold leading-tight drop-shadow ${boss ? 'text-amber-300' : 'text-white'}`}>
+          {monster.name}
+        </h3>
+        {title && <span className="mt-0.5 block font-combat text-[11px] text-white/70">{title}</span>}
       </div>
     </motion.div>
   )
@@ -1305,9 +1325,9 @@ function EnhancementSection() {
 }
 
 // ============================================================
-// Bancadas — Ferreiro (reparo) + Alquimista (transmutação).
-// Espelha RepairBench.tsx e AlchemyBench.tsx (durabilidade que
-// reenche; triângulo com 3 ingredientes → poção no centro).
+// Bancadas — Ferreiro (reparo) + Alquimia (dialog estilo BDO).
+// Reparo espelha RepairBench; alquimia espelha AlchemyDialog.tsx
+// (triângulo de transmutação, chance, canalização, veredito).
 // ============================================================
 
 // — Ferreiro: durabilidade desgastada que reenche queimando uma cópia —
@@ -1397,15 +1417,27 @@ const REPAIR_INVENTORY_FILLER: GearPiece[] = [
   { name: 'Cajado da Aurora Arcana', rarity: 'EPIC' },
 ]
 
-// — Alquimista: 3 ingredientes caem nos vértices → poção surge no centro —
-// Receita real (alchemy.ts): Erva Medicinal + Flor de Mana + Seiva Ancestral = Elixir Menor.
-const ALCH_PTS = { top: { x: 50, y: 16 }, left: { x: 18, y: 82 }, right: { x: 82, y: 82 }, center: { x: 50, y: 58 } }
-const ALCH_INGREDIENTS = [
-  { name: 'Erva Medicinal', emoji: '🌿', accent: '#34d399', pos: ALCH_PTS.top },
-  { name: 'Flor de Mana', emoji: '💠', accent: '#38bdf8', pos: ALCH_PTS.left },
-  { name: 'Seiva Ancestral', emoji: '🩸', accent: '#e879f9', pos: ALCH_PTS.right },
+// — Alquimia: simulação do AlchemyDialog (triângulo BDO) —
+// Receita real (alchemy.ts): Extrato Herbal + Essência de Mana + Seiva Ancestral = Elixir Menor.
+const ALCH_BOX_W = 300
+const ALCH_BOX_H = 270
+const ALCH_SLOT = 64
+const ALCH_CENTER = 92
+const ALCH_POS = {
+  top: { x: 150, y: 48 },
+  left: { x: 52, y: 214 },
+  right: { x: 248, y: 214 },
+  center: { x: 150, y: 156 },
+}
+const ALCH_SLOT_KEYS = ['top', 'left', 'right'] as const
+const ALCH_INGS = [
+  { name: 'Extrato Herbal', emoji: '🌿', accent: '#34d399' },
+  { name: 'Essência de Mana', emoji: '💠', accent: '#38bdf8' },
+  { name: 'Seiva Ancestral', emoji: '🩸', accent: '#e879f9' },
 ]
 const ALCH_RESULT = 'Elixir Menor'
+const ALCH_TRACE_MS = 800
+const ALCH_CHANCE = 0.78 // nv 8, receita incomum (base 75% + 3×1%)
 
 // Ícone do item com a arte real (/items/<slug>.webp) e fallback de emoji.
 function AlchThumb({ name, emoji, className }: { name: string; emoji: string; className?: string }) {
@@ -1419,72 +1451,270 @@ function AlchThumb({ name, emoji, className }: { name: string; emoji: string; cl
 
 function AlchemyDemo() {
   const reduce = useReducedMotion()
-  // 0..3 = ingredientes colocados; 4 = poção criada; depois reseta
-  const [step, setStep] = useState(0)
+  // place0 → place1 → place2 → charging → success → (loop)
+  const [phase, setPhase] = useState<'place0' | 'place1' | 'place2' | 'charging' | 'success'>('place0')
+  const [run, setRun] = useState(0)
+
   useEffect(() => {
-    if (reduce) { setStep(4); return }
-    const id = setInterval(() => setStep((s) => (s + 1) % 6), 850)
-    return () => clearInterval(id)
-  }, [reduce])
-  const placed = Math.min(step, 3)
-  const crafted = step >= 4
-  const accent = '#34d399'
+    if (reduce) { setPhase('success'); return }
+    let t: ReturnType<typeof setTimeout>
+    if (phase === 'place0') t = setTimeout(() => setPhase('place1'), 700)
+    else if (phase === 'place1') t = setTimeout(() => setPhase('place2'), 700)
+    else if (phase === 'place2') t = setTimeout(() => setPhase('charging'), 900)
+    else if (phase === 'charging') t = setTimeout(() => setPhase('success'), BDO_CHARGE_MS)
+    else t = setTimeout(() => { setRun((r) => r + 1); setPhase('place0') }, 2600)
+    return () => clearTimeout(t)
+  }, [phase, reduce])
+
+  const placed =
+    phase === 'place0' ? 0
+    : phase === 'place1' ? 1
+    : phase === 'place2' ? 2
+    : 3
+  const matched = placed >= 3
+  const charging = phase === 'charging'
+  const success = phase === 'success'
+  const edgePoints = `${ALCH_POS.top.x},${ALCH_POS.top.y} ${ALCH_POS.left.x},${ALCH_POS.left.y} ${ALCH_POS.right.x},${ALCH_POS.right.y}`
+  const chancePct = Math.round(ALCH_CHANCE * 100)
 
   return (
-    <div className="relative flex h-full flex-col overflow-hidden rounded-2xl border-2 border-emerald-500/40 bg-gradient-to-br from-emerald-950/40 to-purple-950/30 p-5">
-      <h3 className="mb-1 text-xl font-black text-emerald-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">⚗️ Triângulo de Transmutação</h3>
-      <p className="mb-4 text-sm text-white/55">A alquimista junta 3 ingredientes nos vértices; se formarem uma receita, a poção surge no centro e vai pro inventário.</p>
+    <div className="w-full max-w-md rounded-xl border border-amber-500/30 bg-gradient-to-b from-gray-900 to-gray-950 shadow-2xl shadow-emerald-900/20 overflow-hidden">
+      {/* Cabeçalho — mesma assinatura do AlchemyDialog */}
+      <div className="flex items-center justify-between border-b border-black/60 bg-[#19191c] px-5 py-3">
+        <h3 className="text-lg font-bold tracking-wide" style={{ color: GOLD_BRIGHT }}>⚗ Alquimia</h3>
+        <span className="rounded-lg px-2 py-1 text-gray-500">✕</span>
+      </div>
 
-      {/* flex-1 + centralizado: o triângulo cresce com a sobra de altura,
-          até casar com a bancada de reparo ao lado (mesma linha do grid). */}
-      <div className="relative flex flex-1 w-full items-center justify-center">
-      <div className="relative w-full" style={{ maxWidth: 320, aspectRatio: '1 / 0.92' }}>
-        <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 92" preserveAspectRatio="none" aria-hidden="true">
-          <polygon
-            points={`${ALCH_PTS.top.x},${ALCH_PTS.top.y} ${ALCH_PTS.left.x},${ALCH_PTS.left.y} ${ALCH_PTS.right.x},${ALCH_PTS.right.y}`}
-            fill="none"
-            stroke={crafted ? accent : 'rgba(52,211,153,0.35)'}
-            strokeWidth={1.2}
-            strokeDasharray={crafted ? undefined : '4 4'}
-            vectorEffect="non-scaling-stroke"
-            style={{ filter: crafted ? `drop-shadow(0 0 6px ${accent})` : undefined }}
-          />
-        </svg>
-
-        {/* vértices — mesma moldura em losango do diálogo real */}
-        {ALCH_INGREDIENTS.map((ing, i) => {
-          const on = i < placed
-          return (
-            <div
-              key={i}
-              className="absolute -translate-x-1/2 -translate-y-1/2"
-              style={{ left: `${ing.pos.x}%`, top: `${ing.pos.y}%` }}
-            >
-              <DiamondSlot size={56} active={on} dashed={!on} glowColor={`${ing.accent}99`}>
-                {on && <AlchThumb name={ing.name} emoji={ing.emoji} className="text-2xl" />}
-              </DiamondSlot>
-            </div>
-          )
-        })}
-
-        {/* resultado no centro */}
-        <div
-          className="absolute -translate-x-1/2 -translate-y-1/2"
-          style={{ left: `${ALCH_PTS.center.x}%`, top: `${ALCH_PTS.center.y}%` }}
-        >
-          <DiamondSlot size={72} active={crafted} dashed={!crafted} verdict={crafted ? 'success' : null} glowColor={accent}>
-            {crafted && <AlchThumb name={ALCH_RESULT} emoji="🧪" className="text-4xl" />}
-          </DiamondSlot>
+      {/* Mini barra de profissão */}
+      <div className="border-b border-black/60 bg-[#19191c] px-5 py-2.5">
+        <div className="mb-1 flex items-center justify-between text-[11px]">
+          <span className="font-semibold text-[#c9c9ce]">⚗️ Alquimia · Nv 8</span>
+          <span className="tabular-nums text-[#8a8a90]">1.240 / 2.100 XP</span>
+        </div>
+        <div className="h-1.5 overflow-hidden rounded-full bg-black/50">
+          <div className="h-full rounded-full" style={{ width: '59%', background: GOLD }} />
         </div>
       </div>
+
+      {/* Triângulo de Transmutação */}
+      <div className="relative px-4 pb-1 pt-4">
+        <div
+          className="pointer-events-none absolute left-1/2 top-1/2 h-36 w-36 -translate-x-1/2 -translate-y-1/2"
+          style={{ background: 'radial-gradient(circle, rgba(201,162,95,0.14) 0%, transparent 65%)' }}
+        />
+        <div className="relative mx-auto" style={{ width: ALCH_BOX_W, height: ALCH_BOX_H }}>
+          <svg className="pointer-events-none absolute inset-0" width={ALCH_BOX_W} height={ALCH_BOX_H} viewBox={`0 0 ${ALCH_BOX_W} ${ALCH_BOX_H}`}>
+            <polygon
+              points={edgePoints}
+              fill="none"
+              stroke={matched ? 'rgba(201,162,95,0.8)' : 'rgba(201,162,95,0.25)'}
+              strokeWidth={1.5}
+              strokeDasharray={matched ? undefined : '5 6'}
+              style={matched ? { filter: 'drop-shadow(0 0 6px rgba(201,162,95,0.5))' } : undefined}
+            />
+            {ALCH_SLOT_KEYS.map((k) => (
+              <line
+                key={k}
+                x1={ALCH_POS[k].x}
+                y1={ALCH_POS[k].y}
+                x2={ALCH_POS.center.x}
+                y2={ALCH_POS.center.y}
+                stroke={matched ? 'rgba(201,162,95,0.45)' : 'rgba(201,162,95,0.12)'}
+                strokeWidth={1}
+              />
+            ))}
+            {charging && (
+              <polygon
+                key={`trace-${run}`}
+                points={edgePoints}
+                pathLength={100}
+                fill="none"
+                stroke={GOLD_BRIGHT}
+                strokeWidth={3.5}
+                strokeLinecap="round"
+                strokeDasharray="14 86"
+                className="alchemy-landing-trace"
+                style={{ filter: 'drop-shadow(0 0 8px rgba(231,198,130,0.85))' }}
+              />
+            )}
+          </svg>
+
+          {ALCH_SLOT_KEYS.map((k) => (
+            <span
+              key={`node-${k}`}
+              className="absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rotate-45 border bg-[#1e1e21]"
+              style={{
+                left: (ALCH_POS[k].x + ALCH_POS.center.x) / 2,
+                top: (ALCH_POS[k].y + ALCH_POS.center.y) / 2,
+                borderColor: matched ? GOLD : '#3c3c41',
+              }}
+            />
+          ))}
+
+          {charging &&
+            ALCH_SLOT_KEYS.map((k, i) => (
+              <motion.span
+                key={`comet-${run}-${k}`}
+                initial={{ left: ALCH_POS[k].x, top: ALCH_POS[k].y, opacity: 0 }}
+                animate={{
+                  left: [ALCH_POS[k].x, ALCH_POS.center.x],
+                  top: [ALCH_POS[k].y, ALCH_POS.center.y],
+                  opacity: [0, 1, 0.9],
+                }}
+                transition={{
+                  delay: ALCH_TRACE_MS / 1000 + i * 0.09,
+                  duration: (BDO_CHARGE_MS - ALCH_TRACE_MS - 300) / 1000,
+                  ease: 'easeIn',
+                }}
+                className="absolute z-10 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full"
+                style={{
+                  background: GOLD_BRIGHT,
+                  boxShadow: '0 0 10px 4px rgba(231,198,130,0.85), 0 0 22px 8px rgba(201,162,95,0.35)',
+                }}
+              />
+            ))}
+
+          {/* Chance */}
+          <div className="absolute left-0 top-1" style={{ width: 80 }}>
+            {matched && (
+              <div className="text-center">
+                <span className={`text-xl font-bold tabular-nums ${chanceColorClass(ALCH_CHANCE)}`}>
+                  {success ? '100' : chancePct}%
+                </span>
+                <div className="text-[9px] uppercase tracking-[0.14em] text-[#77777d]">chance</div>
+              </div>
+            )}
+          </div>
+
+          {/* Vértices */}
+          {ALCH_SLOT_KEYS.map((k, idx) => {
+            const on = idx < placed
+            const ing = ALCH_INGS[idx]
+            return (
+              <div
+                key={k}
+                className="absolute"
+                style={{ left: ALCH_POS[k].x - ALCH_SLOT / 2, top: ALCH_POS[k].y - ALCH_SLOT / 2 }}
+              >
+                <DiamondSlot
+                  size={ALCH_SLOT}
+                  active={on}
+                  dashed={!on}
+                  charging={charging && on}
+                  glowColor={on ? `${ing.accent}99` : undefined}
+                >
+                  {on ? (
+                    <span className="block h-[62%] w-[62%] overflow-hidden">
+                      <AlchThumb name={ing.name} emoji={ing.emoji} className="text-2xl" />
+                    </span>
+                  ) : (
+                    <span className="text-xl text-white/25">＋</span>
+                  )}
+                </DiamondSlot>
+              </div>
+            )
+          })}
+
+          {/* Centro — veredito */}
+          <div
+            className="absolute"
+            style={{ left: ALCH_POS.center.x - ALCH_CENTER / 2, top: ALCH_POS.center.y - ALCH_CENTER / 2 }}
+          >
+            <DiamondSlot
+              size={ALCH_CENTER}
+              active={matched}
+              dashed={!matched}
+              verdict={success ? 'success' : null}
+              verdictKey={run}
+              charging={charging}
+              glowColor={matched ? 'rgba(52,211,153,0.6)' : undefined}
+            >
+              {charging ? (
+                <span className="animate-ping text-2xl text-white/40">✦</span>
+              ) : matched ? (
+                <span
+                  className={`block h-[64%] w-[64%] overflow-hidden ${success ? 'alchemy-landing-pop' : ''}`}
+                  style={{ opacity: success ? 1 : 0.4 }}
+                >
+                  <AlchThumb name={ALCH_RESULT} emoji="🧪" className="text-3xl" />
+                </span>
+              ) : (
+                <span className="text-2xl text-white/20">?</span>
+              )}
+            </DiamondSlot>
+          </div>
+        </div>
+        <style>{`
+          @keyframes alchemy-landing-trace {
+            from { stroke-dashoffset: 0; }
+            to { stroke-dashoffset: -200; }
+          }
+          .alchemy-landing-trace { animation: alchemy-landing-trace ${ALCH_TRACE_MS * 2}ms linear both; }
+          @keyframes alchemy-landing-pop {
+            0% { opacity: 0; transform: scale(0.2); filter: brightness(2.4); }
+            55% { opacity: 1; transform: scale(1.14); filter: brightness(1.6); }
+            100% { opacity: 1; transform: scale(1); filter: brightness(1); }
+          }
+          .alchemy-landing-pop { animation: alchemy-landing-pop 0.6s cubic-bezier(.2,.9,.3,1.3) both; }
+          @media (prefers-reduced-motion: reduce) {
+            .alchemy-landing-trace, .alchemy-landing-pop { animation: none; }
+          }
+        `}</style>
       </div>
 
-      <div className="mt-4 min-h-[1.5rem] text-center text-sm">
-        {crafted ? (
-          <span className="font-bold text-emerald-300">✨ Poção de Cura Maior criada!</span>
+      {/* Status */}
+      <div className="min-h-[3.25rem] px-5 pb-2 text-center">
+        {!matched ? (
+          <p className="text-sm text-[#8a8a90]">
+            Vértices preenchidos: <span className="font-semibold text-white">{placed}/3</span>
+          </p>
+        ) : charging ? (
+          <motion.span
+            animate={{ opacity: [0.5, 1, 0.5] }}
+            transition={{ repeat: Infinity, duration: 0.7 }}
+            className="text-sm font-semibold"
+            style={{ color: GOLD_BRIGHT }}
+          >
+            ⚗ Transmutando...
+          </motion.span>
+        ) : success ? (
+          <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
+            <div className="text-sm font-semibold" style={{ color: GOLD_BRIGHT }}>✨ SUCESSO!</div>
+            <div className="mt-0.5 text-sm font-bold text-emerald-300">⚗️ {ALCH_RESULT} criada com sucesso!</div>
+            <div className="mt-0.5 text-xs" style={{ color: GOLD }}>+25 XP de Alquimia</div>
+          </motion.div>
         ) : (
-          <span className="text-white/50">Vértices preenchidos: <span className="font-semibold text-white">{placed}/3</span></span>
+          <p className="text-sm">
+            <span className="font-bold text-emerald-300">{ALCH_RESULT}</span>
+            <span style={{ color: GOLD }}> · taxa 36 🪙</span>
+          </p>
         )}
+      </div>
+
+      <div className="px-4 pb-4 pt-1">
+        <BevelButton onClick={() => {}} busy={charging} busyLabel="⚗ Transmutando...">
+          ⚗ Transmutar
+        </BevelButton>
+      </div>
+
+      {/* Paleta de ingredientes (decorativa) */}
+      <div className="border-t border-black/60 bg-[#19191c] px-4 py-3">
+        <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8a8a90]">
+          Seus ingredientes
+        </div>
+        <div className="flex flex-wrap justify-center gap-2">
+          {ALCH_INGS.map((ing, i) => (
+            <div
+              key={ing.name}
+              className={`relative h-11 w-11 overflow-hidden rounded-lg border bg-black/40 ${
+                i < placed ? 'border-amber-400/70 ring-1 ring-amber-400/40' : 'border-white/10'
+              }`}
+              title={ing.name}
+            >
+              <AlchThumb name={ing.name} emoji={ing.emoji} className="grid h-full w-full place-items-center text-lg" />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )
@@ -1497,11 +1727,13 @@ function CraftingSection() {
         <SectionHeading
           eyebrow="Ferreiro & Alquimista"
           title="Repare, transmute, mantenha sua build"
-          sub="Na loja, o ferreiro restaura a durabilidade das suas peças e a alquimista combina ingredientes do loot em poções de combate. Tudo com os mesmos ingredientes que caem nas masmorras."
+          sub="O ferreiro restaura a durabilidade das suas peças; a alquimia é profissão sua — monte o Triângulo de Transmutação, role a chance do seu nível e transforme ingredientes de masmorra em poções."
         />
         <div className="grid items-stretch gap-8 lg:grid-cols-2">
           <Reveal className="h-full"><RepairDemo /></Reveal>
-          <Reveal delay={120} className="h-full"><AlchemyDemo /></Reveal>
+          <Reveal delay={120} className="flex h-full justify-center lg:justify-end">
+            <AlchemyDemo />
+          </Reveal>
         </div>
       </div>
     </section>

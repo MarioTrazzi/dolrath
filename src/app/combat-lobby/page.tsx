@@ -86,9 +86,16 @@ export default function CombatLobbyPage() {
   const [roomPassword, setRoomPassword] = useState('')
   const [joinRoomId, setJoinRoomId] = useState('')
   const [joinPassword, setJoinPassword] = useState('')
-  const [isSearching, setIsSearching] = useState(false)
-  const [searchStatus, setSearchStatus] = useState('')
+  const [showSearchDialog, setShowSearchDialog] = useState(false)
+  const [searchPhase, setSearchPhase] = useState<'idle' | 'searching' | 'found'>('idle')
+  const [searchElapsedSec, setSearchElapsedSec] = useState(0)
+  const [matchedOpponent, setMatchedOpponent] = useState<{
+    id: string
+    name: string
+    level: number
+  } | null>(null)
   const queueSocketRef = useRef<Socket | null>(null)
+  const searchStartedAtRef = useRef<number>(0)
   const [selectedRole, setSelectedRole] = useState<RoomRole>(RoomRole.FIGHTER)
   const [showRoleSelector, setShowRoleSelector] = useState<string | null>(null)
   const [showTrainingPicker, setShowTrainingPicker] = useState(false)
@@ -321,22 +328,42 @@ export default function CombatLobbyPage() {
     router.push(`/combat?room=${id}&character=${selectedCharacter.id}&role=fighter${pwQ}`)
   }
 
-  const stopSearchOpponent = () => {
+  const estimatedWaitLabel = (elapsedSec: number) => {
+    // Banda do matchmaker: ±0 → 15s, ±1 → 30s, ±2 depois — estimativa amigável.
+    if (elapsedSec < 8) return '5–20 s'
+    if (elapsedSec < 20) return '10–30 s'
+    if (elapsedSec < 40) return '20–45 s'
+    return 'até ~1 min'
+  }
+
+  const closeSearchDialog = () => {
     const sock = queueSocketRef.current
-    if (sock && selectedCharacter) {
+    if (sock && selectedCharacter && searchPhase === 'searching') {
       sock.emit('queue_leave', { characterId: selectedCharacter.id })
       sock.disconnect()
     }
     queueSocketRef.current = null
-    setIsSearching(false)
-    setSearchStatus('')
+    setShowSearchDialog(false)
+    setSearchPhase('idle')
+    setSearchElapsedSec(0)
+    setMatchedOpponent(null)
   }
 
   const startSearchOpponent = () => {
     if (!selectedCharacter?.isAlive) return
-    stopSearchOpponent()
-    setIsSearching(true)
-    setSearchStatus(`Procurando lutador nível ~${selectedCharacter.level}…`)
+
+    // Limpa socket anterior sem fechar o dialog novo
+    if (queueSocketRef.current) {
+      queueSocketRef.current.emit('queue_leave', { characterId: selectedCharacter.id })
+      queueSocketRef.current.disconnect()
+      queueSocketRef.current = null
+    }
+
+    setShowSearchDialog(true)
+    setSearchPhase('searching')
+    setSearchElapsedSec(0)
+    setMatchedOpponent(null)
+    searchStartedAtRef.current = Date.now()
 
     const sock = io(lobbySocketUrl(), {
       transports: ['websocket', 'polling'],
@@ -354,29 +381,39 @@ export default function CombatLobbyPage() {
       })
     })
 
-    sock.on('queue_status', (data: { status: string; error?: string }) => {
-      if (data.status === 'searching') {
-        setSearchStatus(`Procurando lutador nível ~${selectedCharacter.level}…`)
-      } else if (data.status === 'cancelled') {
-        setIsSearching(false)
-        setSearchStatus(data.error || '')
+    sock.on(
+      'match_found',
+      (data: {
+        roomId: string
+        opponentPreview?: { id: string; name: string; level: number }
+      }) => {
+        sock.disconnect()
+        queueSocketRef.current = null
+        setMatchedOpponent(
+          data.opponentPreview || { id: '', name: 'Oponente', level: selectedCharacter.level }
+        )
+        setSearchPhase('found')
+        // Mostra o oponente no dialog e só então entra na luta
+        window.setTimeout(() => {
+          router.push(
+            `/combat?room=${data.roomId}&character=${selectedCharacter.id}&role=fighter`
+          )
+        }, 1800)
       }
-    })
-
-    sock.on('match_found', (data: { roomId: string }) => {
-      setIsSearching(false)
-      setSearchStatus('Oponente encontrado!')
-      sock.disconnect()
-      queueSocketRef.current = null
-      router.push(`/combat?room=${data.roomId}&character=${selectedCharacter.id}&role=fighter`)
-    })
+    )
 
     sock.on('disconnect', () => {
-      if (queueSocketRef.current === sock) {
-        setIsSearching(false)
-      }
+      /* dialog controla o ciclo; não fecha sozinho no disconnect */
     })
   }
+
+  useEffect(() => {
+    if (searchPhase !== 'searching') return
+    const id = setInterval(() => {
+      setSearchElapsedSec(Math.floor((Date.now() - searchStartedAtRef.current) / 1000))
+    }, 250)
+    return () => clearInterval(id)
+  }, [searchPhase])
 
   useEffect(() => {
     return () => {
@@ -577,30 +614,15 @@ export default function CombatLobbyPage() {
             <p className="text-sm text-[#8a8a90] mb-4">
               Encontra alguém do mesmo nível (fila aleatória). Salas com amigos ficam em Criar Sala / Entrar com ID.
             </p>
-            <div className="flex flex-wrap items-center gap-3">
-              {!isSearching ? (
-                <button
-                  onClick={startSearchOpponent}
-                  disabled={!selectedCharacter?.isAlive}
-                  className={`${BEVEL_COLOR_BTN_CLASS} px-6 py-2 flex items-center disabled:opacity-40`}
-                  style={BEVEL_VARIANTS.gold}
-                >
-                  <Search className="mr-2" size={18} />
-                  Buscar Oponente
-                </button>
-              ) : (
-                <button
-                  onClick={stopSearchOpponent}
-                  className={`${BEVEL_BTN_CLASS} px-6 py-2 flex items-center`}
-                >
-                  <X className="mr-2" size={18} />
-                  Cancelar busca
-                </button>
-              )}
-              {searchStatus && (
-                <span className="text-sm text-[#c9c9ce]">{searchStatus}</span>
-              )}
-            </div>
+            <button
+              onClick={startSearchOpponent}
+              disabled={!selectedCharacter?.isAlive || showSearchDialog}
+              className={`${BEVEL_COLOR_BTN_CLASS} px-6 py-2 flex items-center disabled:opacity-40`}
+              style={BEVEL_VARIANTS.gold}
+            >
+              <Search className="mr-2" size={18} />
+              Buscar Oponente
+            </button>
           </div>
 
           {/* Create Room Section */}
@@ -961,6 +983,100 @@ export default function CombatLobbyPage() {
           </div>
         </div>
       </div>
+
+      {/* Dialog: busca de oponente */}
+      {showSearchDialog && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="matchmaking-title"
+        >
+          <div
+            className="w-full max-w-md overflow-hidden rounded-[4px] border border-[#3c3c41] shadow-2xl"
+            style={{ background: 'linear-gradient(165deg, #232327, #101013)' }}
+          >
+            <div
+              className="flex items-center justify-between border-b border-black/60 px-5 py-3"
+              style={{ background: TITLEBAR_BG }}
+            >
+              <h3
+                id="matchmaking-title"
+                className="text-sm font-semibold tracking-wide text-[#ece7da] flex items-center"
+              >
+                {searchPhase === 'found' ? (
+                  <>
+                    <Sword className="mr-2" size={16} style={{ color: GOLD }} />
+                    Oponente encontrado
+                  </>
+                ) : (
+                  <>
+                    <Search className="mr-2" size={16} style={{ color: GOLD }} />
+                    Procurando oponente
+                  </>
+                )}
+              </h3>
+              {searchPhase === 'searching' && (
+                <button
+                  type="button"
+                  onClick={closeSearchDialog}
+                  className="rounded-[3px] p-1 text-[#8a8a90] hover:bg-white/5 hover:text-[#ece7da]"
+                  aria-label="Cancelar busca"
+                >
+                  <X size={18} />
+                </button>
+              )}
+            </div>
+
+            <div className="px-6 py-8 text-center">
+              {searchPhase === 'searching' && (
+                <>
+                  <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full border border-[#8a6d3b]/50 bg-[#19191c]">
+                    <RefreshCw className="animate-spin" size={26} style={{ color: GOLD }} />
+                  </div>
+                  <p className="text-base font-medium text-[#ece7da]">
+                    Buscando lutador nível ~{selectedCharacter?.level ?? '—'}
+                  </p>
+                  <p className="mt-2 text-sm text-[#8a8a90]">
+                    Tempo estimado:{' '}
+                    <span className="tabular-nums text-[#c9a25f]">
+                      {estimatedWaitLabel(searchElapsedSec)}
+                    </span>
+                  </p>
+                  <p className="mt-1 text-xs tabular-nums text-[#77777d]">
+                    Esperando há {searchElapsedSec}s
+                  </p>
+                  <button
+                    type="button"
+                    onClick={closeSearchDialog}
+                    className={`${BEVEL_BTN_CLASS} mt-6 px-5 py-2 text-sm`}
+                  >
+                    Cancelar
+                  </button>
+                </>
+              )}
+
+              {searchPhase === 'found' && matchedOpponent && (
+                <>
+                  <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-emerald-700/60 bg-emerald-950/40 text-2xl">
+                    ⚔️
+                  </div>
+                  <p className="text-xs uppercase tracking-[0.14em] text-[#77777d]">
+                    Entrando na arena
+                  </p>
+                  <p className="mt-2 text-xl font-bold text-[#ece7da]">
+                    {matchedOpponent.name}
+                  </p>
+                  <p className="mt-1 text-sm tabular-nums" style={{ color: GOLD_BRIGHT }}>
+                    Nível {matchedOpponent.level}
+                  </p>
+                  <p className="mt-4 text-xs text-[#8a8a90]">Preparando combate…</p>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

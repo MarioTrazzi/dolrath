@@ -49,7 +49,8 @@ export async function POST(request: NextRequest) {
       await prisma.pvpSeason.update({ where: { id: season.id }, data: { status: 'ended' } })
     }
 
-    const board = await getLeaderboard(season.id, 10)
+    // Top 10 humanos apenas — bots pontuam no leaderboard visual, mas não recebem DOL.
+    const board = await getLeaderboard(season.id, 10, { includeBots: false })
     const pot = season.potDol
 
     const payouts = []

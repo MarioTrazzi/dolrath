@@ -320,7 +320,8 @@ export async function POST(req: Request) {
         // 🌳 Já nasce com a Árvore de Habilidades inicializada (vazia). Sem isto o
         // personagem seria "legado" (skillTree null) e cairia no painel de atributos
         // antigo em vez da árvore. Os 18 pontos de criação já entraram nos atributos;
-        // os pontos de nível é que se gastam na árvore.
+        // nasce com 1 ponto livre para gastar na árvore (level-ups somam mais).
+        availablePoints: 1,
         skillTree: { version: SKILL_TREE_VERSION, purchased: [] },
         attributes: {
           ...attributes,

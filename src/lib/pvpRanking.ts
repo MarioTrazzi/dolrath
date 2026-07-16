@@ -97,11 +97,16 @@ export async function applyPvpMatchRating(opts: {
   return { winnerPoints: winnerRating.points, loserPoints: loserRating.points }
 }
 
-export async function getLeaderboard(seasonId: string, limit = 50) {
+export async function getLeaderboard(
+  seasonId: string,
+  limit = 50,
+  opts: { includeBots?: boolean } = {}
+) {
+  const includeBots = opts.includeBots !== false
   return prisma.pvpRating.findMany({
     where: {
       seasonId,
-      character: { user: { isBot: false } },
+      ...(includeBots ? {} : { character: { user: { isBot: false } } }),
     },
     orderBy: [{ points: 'desc' }, { wins: 'desc' }],
     take: limit,

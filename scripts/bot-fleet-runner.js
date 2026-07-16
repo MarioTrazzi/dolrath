@@ -1,5 +1,6 @@
 /**
- * Frota headless: PvP matchmaking primeiro (fila "Buscar oponente"), depois eco.
+ * Frota headless: standby PvP contínuo na fila "Buscar oponente".
+ * Cancela coleta/masmorra antes de entrar na fila. Eco opcional (ENABLE_ECO=1).
  *
  * Env:
  *   BOT_FLEET_SECRET   — obrigatório
@@ -7,6 +8,8 @@
  *   SOCKET_URL         — default https://dolrath.onrender.com
  *   BOT_FLEET_REGISTRY — path do registry (default scripts/bot-fleet-registry.json)
  *   BOT_FLEET_LOG      — JSONL log path (default scripts/bot-fleet-events.jsonl)
+ *   ENABLE_ECO         — se "1", faz gather/farm entre filas (default off)
+ *   MAX_QUEUE_WAITERS  — bots simultâneos na fila (default 8)
  *
  * Usage: node scripts/bot-fleet-runner.js
  */
@@ -28,8 +31,11 @@ const REGISTRY_PATH =
 const LOG_PATH = process.env.BOT_FLEET_LOG || path.join(__dirname, 'bot-fleet-events.jsonl')
 const PVP_MIN_STA = 5
 const GATHER_FIELD = 'ervas'
-/** Quantos bots podem esperar na fila ao mesmo tempo (evita bot↔bot esvaziar a fila). */
-const MAX_QUEUE_WAITERS = 4
+const ENABLE_ECO = process.env.ENABLE_ECO === '1'
+/** Bots simultâneos esperando humano na fila. */
+const MAX_QUEUE_WAITERS = Math.max(1, Number(process.env.MAX_QUEUE_WAITERS) || 8)
+/** Tempo máximo esperando match antes de re-entrar na fila. */
+const QUEUE_WAIT_MS = Math.max(30_000, Number(process.env.QUEUE_WAIT_MS) || 300_000)
 let queueWaiters = 0
 
 async function withQueueSlot(fn) {
@@ -210,7 +216,7 @@ function queueForMatch(socketUrl, bot, player) {
       socket.emit('queue_leave', { characterId: bot.characterId })
       socket.disconnect()
       resolve(null)
-    }, 180000)
+    }, QUEUE_WAIT_MS)
 
     socket.on('connect', () => {
       socket.emit('queue_join', {
@@ -234,6 +240,35 @@ function queueForMatch(socketUrl, bot, player) {
       /* wait for timeout or match */
     })
   })
+}
+
+/** Libera o bot de coleta/masmorra para poder ir ao PvP na hora. */
+async function freeBotForPvp(bot) {
+  try {
+    const stop = await api('POST', '/api/gather/stop', bot.characterId, {
+      characterId: bot.characterId,
+      mode: 'now',
+    })
+    if (stop.ok) {
+      logEvent('gather_cancel_for_pvp', { characterId: bot.characterId })
+    }
+  } catch {
+    /* ignore */
+  }
+
+  try {
+    const abd = await api('POST', '/api/dungeon/run/abandon', bot.characterId, {
+      characterId: bot.characterId,
+    })
+    if (abd.ok && (abd.json?.abandoned ?? 0) > 0) {
+      logEvent('dungeon_abandon_for_pvp', {
+        characterId: bot.characterId,
+        abandoned: abd.json.abandoned,
+      })
+    }
+  } catch {
+    /* ignore */
+  }
 }
 
 async function runEcoBudget(bot, budgetSta) {
@@ -367,57 +402,52 @@ async function runPvpBudget(bot, budgetSta) {
       }).catch(() => null)
     }
 
+    await freeBotForPvp(bot)
+
     const player = buildPlayerPayload(char, bot.userId)
     logEvent('queue_join', { characterId: bot.characterId, level: player.level })
-    await sleep(jitter(200, 1500))
+    await sleep(jitter(200, 800))
     const result = await withQueueSlot(() => queueForMatch(SOCKET_URL, bot, player))
     if (!result) {
-      logEvent('queue_timeout', { characterId: bot.characterId })
-      break
+      // Sem humano — re-entra na fila (não sai pro eco).
+      logEvent('queue_timeout_requeue', { characterId: bot.characterId })
+      continue
     }
-    // Aproximação: luta típica gasta ~8–20 STA; lemos o personagem
     const after = await getCharacter(bot.characterId)
     const delta = Math.max(0, (char.stamina || 0) - (after.stamina || 0))
     spentApprox += delta || 10
-    await sleep(jitter(2000, 5000))
+    await sleep(jitter(1500, 3500))
   }
   return spentApprox
 }
 
 async function botLoop(bot) {
-  console.log(`[${bot.name}] loop start`)
+  console.log(`[${bot.name}] loop start (pvp-standby${ENABLE_ECO ? '+eco' : ''})`)
   for (;;) {
     try {
       let char = await getCharacter(bot.characterId)
       const sta = char.stamina || 0
       if (sta < PVP_MIN_STA) {
         logEvent('idle_regen', { characterId: bot.characterId, stamina: sta })
-        // Espera um tique de regen (~15 min) com polls
         await sleep(60_000)
         continue
       }
 
-      const half = Math.floor(sta / 2)
-      logEvent('sta_budget', { characterId: bot.characterId, stamina: sta, eco: half, pvp: half })
+      logEvent('sta_budget', { characterId: bot.characterId, stamina: sta, pvp: sta, eco: ENABLE_ECO ? Math.floor(sta / 4) : 0 })
 
-      // PvP primeiro — assim a fila "Buscar oponente" tem bots esperando.
-      // Eco depois (gather/farm) com o restante do budget.
-      await runPvpBudget(bot, half)
+      // Standby PvP: fica na fila até achar humano (bot↔bot é bloqueado no socket).
+      await runPvpBudget(bot, sta)
 
-      char = await getCharacter(bot.characterId)
-      const ecoBudget = Math.min(half, Math.max(0, (char.stamina || 0) - PVP_MIN_STA))
-      if (ecoBudget > 0) {
-        await runEcoBudget(bot, ecoBudget)
-      }
-
-      // Drain residual em PvP (mantém bots na fila enquanto tiver STA)
-      char = await getCharacter(bot.characterId)
-      if ((char.stamina || 0) >= PVP_MIN_STA) {
-        await runPvpBudget(bot, char.stamina)
+      if (ENABLE_ECO) {
+        char = await getCharacter(bot.characterId)
+        const ecoBudget = Math.min(Math.floor(sta / 4), Math.max(0, (char.stamina || 0) - PVP_MIN_STA))
+        if (ecoBudget > 0) {
+          await runEcoBudget(bot, ecoBudget)
+        }
       }
 
       logEvent('cycle_done', { characterId: bot.characterId })
-      await sleep(jitter(5000, 15000))
+      await sleep(jitter(2000, 5000))
     } catch (e) {
       console.error(`[${bot.name}] error`, e)
       logEvent('bot_error', { characterId: bot.characterId, error: String(e) })

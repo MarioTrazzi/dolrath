@@ -415,16 +415,14 @@ function queueBandForWaitMs(waitMs) {
 
 function tryMatchmake() {
   const entries = [...matchQueue.values()]
-  // Preferir humano↔bot (score 0), depois humano↔humano (1), bot↔bot por último (2).
-  // Bot↔bot só após ~45s de espera — senão a frota se consome sozinha e a fila
-  // fica vazia quando o jogador clica "Buscar oponente".
-  const BOT_BOT_MIN_WAIT_MS = 45000
+  // Preferir humano↔bot (score 0), depois humano↔humano (1).
+  // NUNCA matchar bot↔bot — a frota deve ficar esperando jogadores, não se consumir.
   const pairRank = (a, b) => {
     const aBot = !!a.isBot
     const bBot = !!b.isBot
+    if (aBot && bBot) return -1 // inválido
     if (aBot !== bBot) return 0
-    if (!aBot && !bBot) return 1
-    return 2
+    return 1
   }
 
   let best = null
@@ -441,7 +439,7 @@ function tryMatchmake() {
       const band = Math.max(bandA, queueBandForWaitMs(waitB))
       if (Math.abs((a.level || 1) - (b.level || 1)) > band) continue
       const rank = pairRank(a, b)
-      if (rank === 2 && Math.min(waitA, waitB) < BOT_BOT_MIN_WAIT_MS) continue
+      if (rank < 0) continue
       if (!best || rank < best.rank) {
         best = { a, b, rank }
         if (rank === 0) break

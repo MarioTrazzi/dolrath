@@ -490,6 +490,15 @@ export function DiceOverlay({
   rolling: boolean
   result: { roll: number; modifier: number; total: number } | null
 }) {
+  // 88px no desktop, 64px no mobile
+  const [small, setSmall] = React.useState(false)
+  React.useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)')
+    const update = () => setSmall(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [])
   return (
     <AnimatePresence>
       {rolling && (
@@ -506,7 +515,7 @@ export function DiceOverlay({
             className="flex flex-col items-center gap-3"
           >
             {/* Giro bem mais curto que o combate — o resultado da exploração crava rápido. */}
-            <AnimatedDie sides={20} size={130} mode={rolling ? 'rolling' : 'idle'} result={result} minSpinMs={250} />
+            <AnimatedDie sides={20} size={small ? 64 : 88} mode={rolling ? 'rolling' : 'idle'} result={result} minSpinMs={250} />
             <span className="text-xs uppercase tracking-[0.25em] text-textsec font-bold">
               Rolando o destino...
             </span>

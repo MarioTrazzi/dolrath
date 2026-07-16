@@ -17,7 +17,8 @@ import {
   AlertTriangle, Zap, Gem, RefreshCw, Palette, Crown, Skull,
   Lock, Hammer, Flame, Scale,
 } from 'lucide-react'
-import { Button, Card, GlassCard, Badge, StatBar, SectionHeading, D20, DiceChip, Reveal, ArenaSky } from './ui'
+import { Button, Card, GlassCard, Badge, StatBar, SectionHeading, DiceChip, Reveal, ArenaSky } from './ui'
+import { ShowcaseDie } from '@/components/battle/AnimatedDice'
 import { itemImagePath } from '@/lib/itemCatalog'
 import { DUNGEON_RUNS, type DungeonRunId, type RunNode, type RunDrop } from './dungeonRuns'
 
@@ -169,11 +170,10 @@ function useHeroAwaken(enabled: boolean) {
   return { awaken, strobe, bolt }
 }
 
-function Hero({ primaryHref, spinDice }: {
-  primaryHref: string; spinDice: boolean
+function Hero({ primaryHref }: {
+  primaryHref: string
 }) {
   const reduce = useReducedMotion()
-  const spin = spinDice && !reduce
   const { awaken, strobe, bolt } = useHeroAwaken(!reduce)
   const fadeMs = strobe ? 90 : 700 // estroboscópio na saída x cross-fade suave na entrada
   return (
@@ -256,18 +256,13 @@ function Hero({ primaryHref, spinDice }: {
               <span className="font-combat">testnet aberta</span>
             </Reveal>
           </div>
-          {/* d20 girando */}
+          {/* d20 3D tombando devagar */}
           <Reveal delay={250} className="hidden lg:flex justify-center">
             <motion.div
-              animate={spin ? { rotate: 360 } : {}}
-              transition={spin ? { repeat: Infinity, duration: 14, ease: 'linear' } : {}}
+              animate={reduce ? {} : { y: [0, -14, 0] }}
+              transition={reduce ? {} : { repeat: Infinity, duration: 5, ease: 'easeInOut' }}
             >
-              <motion.div
-                animate={reduce ? {} : { y: [0, -14, 0] }}
-                transition={reduce ? {} : { repeat: Infinity, duration: 5, ease: 'easeInOut' }}
-              >
-                <D20 size={260} value={20} />
-              </motion.div>
+              <ShowcaseDie sides={20} size={260} />
             </motion.div>
           </Reveal>
         </div>
@@ -1700,7 +1695,7 @@ function FinalCTA({ primaryHref, glow }: { primaryHref: string; glow: number }) 
         className="pointer-events-none select-none absolute right-0 top-1/2 -translate-y-1/2 h-[125%] w-auto max-w-none opacity-65 hidden md:block [mask-image:linear-gradient(to_left,black_55%,transparent)]"
       />
       <div className="relative mx-auto max-w-3xl px-4 sm:px-6 flex flex-col items-center gap-7 text-center">
-        <D20 size={72} value={20} />
+        <ShowcaseDie sides={20} size={72} />
         <h2 className="text-3xl md:text-5xl font-bold text-balance leading-tight">
           A masmorra não vai se explorar sozinha.
         </h2>
@@ -1791,7 +1786,6 @@ export default function DolrathLanding() {
   // Entrada no app: logado vai ao dashboard, senão ao login (espelha a home antiga)
   const primaryHref = session ? '/dashboard' : '/auth/login'
   const glow = 1
-  const spinDice = true
 
   return (
     <div className="min-h-screen bg-background text-white">
@@ -1803,7 +1797,7 @@ export default function DolrathLanding() {
       </a>
       <Navbar primaryHref={primaryHref} />
       <main id="conteudo">
-        <Hero primaryHref={primaryHref} spinDice={spinDice} />
+        <Hero primaryHref={primaryHref} />
         <Features />
         <ArenaSection glow={glow} />
         <DungeonsSection />

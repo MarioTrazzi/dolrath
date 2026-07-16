@@ -1,13 +1,28 @@
 'use client'
 
-import React, { useEffect, useRef, useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
+import {
+  getDieGeometry,
+  qMul,
+  qFromAxisAngle,
+  qSlerp,
+  qRotate,
+  qToMatrix3d,
+  qNormalize,
+  v3Dot,
+  v3Normalize,
+  type Quat,
+  type V3,
+} from './diceGeometry'
 
 // ============================================================
-// Dados animados estilo mesa de RPG
-// - Forma SVG própria por tipo (d4, d6, d8, d10, d12, d20)
-// - Giram embaralhando números e param revelando o resultado
-//   real (vindo do servidor) na própria face
+// Dados animados estilo mesa de RPG — agora poliedros 3D reais
+// (CSS perspective + preserve-3d + uma face por lado).
+// - O dado tomba caoticamente no espaço enquanto o resultado
+//   não chega e POUSA com a face certa virada para a câmera.
+// - O pouso termina exatamente em minSpinMs (mesmo instante em
+//   que o dado antigo "cravava"), então o ritmo do jogo não muda.
 // ============================================================
 
 export interface DieResult {
@@ -25,65 +40,263 @@ const DICE_THEME: Record<number, { from: string; to: string; glow: string }> = {
   20: { from: '#ec4899', to: '#831843', glow: 'rgba(236,72,153,0.7)' },
 }
 
-// Polígonos (viewBox 0 0 100 100) imitando a silhueta de cada dado físico
-const DIE_POINTS: Record<number, string> = {
-  4: '50,6 96,90 4,90',
-  8: '50,4 96,50 50,96 4,50',
-  10: '50,3 92,38 50,97 8,38',
-  12: '50,4 94,37 77,95 23,95 6,37',
-  20: '50,3 91,26 91,74 50,97 9,74 9,26',
+// ============================================================
+// Die3D — o poliedro em si
+// ============================================================
+
+/** Luz fixa no mundo (cima-esquerda, puxando pro espectador). */
+const LIGHT: V3 = v3Normalize([-0.42, -0.72, 0.55])
+/** Inclinação final: dado pousado levemente visto de cima (vende o volume). */
+const FINAL_TILT = qFromAxisAngle([1, 0, 0], -0.26)
+const IDLE_AXIS: V3 = v3Normalize([0.35, 1, 0.22])
+const TUMBLE_RAD_S = 9
+
+/** easeOutBack suave — o pouso passa um tiquinho do alvo e volta. */
+function easeOutBack(t: number) {
+  const c1 = 0.9
+  return 1 + (c1 + 1) * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2)
 }
 
-// Linhas internas sutis para dar volume de poliedro
-const DIE_FACETS: Record<number, string[]> = {
-  4: ['50,6 50,55', '50,55 4,90', '50,55 96,90'],
-  8: ['4,50 96,50'],
-  10: ['8,38 50,55 92,38', '50,55 50,97'],
-  12: ['23,95 50,70 77,95', '50,70 50,40', '6,37 50,40 94,37'],
-  20: ['9,26 50,40 91,26', '50,40 50,97', '9,74 50,40', '91,74 50,40'],
+interface Die3DProps {
+  sides: number
+  size: number
+  phase: 'idle' | 'tumbling' | 'settling'
+  /** Rolagem do servidor — define em qual face o dado pousa. */
+  targetRoll?: number | null
+  settleMs: number
+  dimmed?: boolean
+  reduceMotion?: boolean
+  onSettled?: () => void
 }
 
-function DieSvg({ sides, size, dimmed }: { sides: number; size: number; dimmed?: boolean }) {
+function Die3D({ sides, size, phase, targetRoll, settleMs, dimmed, reduceMotion, onSettled }: Die3DProps) {
+  const geom = useMemo(() => getDieGeometry(sides), [sides])
   const theme = DICE_THEME[sides] || DICE_THEME[6]
-  const gid = `die-grad-${sides}-${size}`
+  const uid = useId()
+  const k = size * 0.47 // px por unidade (circunraio 1 → raio em px)
+
+  const innerRef = useRef<HTMLDivElement>(null)
+  const hopRef = useRef<HTMLDivElement>(null)
+  const shadowRef = useRef<HTMLDivElement>(null)
+  const shadeRefs = useRef<(SVGPolygonElement | null)[]>([])
+  const glintRefs = useRef<(SVGPolygonElement | null)[]>([])
+  const qRef = useRef<Quat>(qMul(FINAL_TILT, geom.faces[geom.faces.length - 1].settle))
+  const hopValRef = useRef(0)
+  const onSettledRef = useRef(onSettled)
+  onSettledRef.current = onSettled
+  const [settledFace, setSettledFace] = useState<number | null>(null)
+
+  const faceTransforms = useMemo(
+    () =>
+      geom.faces.map(f => {
+        const [Xx, Xy, Xz] = f.basisX
+        const [Yx, Yy, Yz] = f.basisY
+        const [Nx, Ny, Nz] = f.normal
+        const [cx, cy, cz] = f.center
+        return `matrix3d(${Xx},${Xy},${Xz},0,${Yx},${Yy},${Yz},0,${Nx},${Ny},${Nz},0,${cx * k},${cy * k},${cz * k},1)`
+      }),
+    [geom, k],
+  )
+
+  useEffect(() => {
+    const targetFace =
+      targetRoll != null
+        ? Math.min(Math.max(targetRoll - 1, 0), geom.faces.length - 1)
+        : geom.faces.length - 1
+    const targetQ = qMul(FINAL_TILT, geom.faces[targetFace].settle)
+
+    // Aplica transform + iluminação por face + sombra — 1x por frame
+    const apply = (q: Quat, hop: number) => {
+      hopValRef.current = hop
+      if (innerRef.current) innerRef.current.style.transform = qToMatrix3d(q)
+      if (hopRef.current)
+        hopRef.current.style.transform = `translate3d(0, ${(-hop * size * 0.06).toFixed(2)}px, 0)`
+      if (shadowRef.current) {
+        shadowRef.current.style.opacity = (0.5 - hop * 0.28).toFixed(3)
+        shadowRef.current.style.transform = `translateX(-50%) scaleX(${(1 - hop * 0.22).toFixed(3)})`
+      }
+      for (let i = 0; i < geom.faces.length; i++) {
+        const b = v3Dot(qRotate(q, geom.faces[i].normal), LIGHT)
+        const sh = shadeRefs.current[i]
+        if (sh) sh.style.opacity = Math.min(0.62, Math.max(0, (1 - b) * 0.34)).toFixed(3)
+        const gl = glintRefs.current[i]
+        if (gl) gl.style.opacity = (Math.max(0, b - 0.62) * 0.75).toFixed(3)
+      }
+    }
+
+    if (phase !== 'settling') setSettledFace(null)
+
+    if (reduceMotion) {
+      // Sem tombo: mostra direto a orientação final (ou a de descanso)
+      qRef.current = phase === 'settling' ? targetQ : qRef.current
+      apply(qRef.current, 0)
+      if (phase === 'settling') {
+        setSettledFace(targetFace)
+        onSettledRef.current?.()
+      }
+      return
+    }
+
+    let raf = 0
+    let last = performance.now()
+    let axis: V3 = v3Normalize([Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5])
+    let hopPhase = Math.random() * Math.PI
+    let settleFrom: Quat | null = null
+    let settleStart = 0
+    let hopAtStart = 0
+
+    const tick = (now: number) => {
+      const dt = Math.min((now - last) / 1000, 0.05)
+      last = now
+      let hop = 0
+
+      if (phase === 'idle') {
+        qRef.current = qNormalize(qMul(qFromAxisAngle(IDLE_AXIS, dt * 0.55), qRef.current))
+      } else if (phase === 'tumbling') {
+        // eixo deriva a cada frame → tombo caótico, não um giro de pião
+        axis = v3Normalize([
+          axis[0] + (Math.random() - 0.5) * 0.4,
+          axis[1] + (Math.random() - 0.5) * 0.4,
+          axis[2] + (Math.random() - 0.5) * 0.4,
+        ])
+        qRef.current = qNormalize(qMul(qFromAxisAngle(axis, dt * TUMBLE_RAD_S), qRef.current))
+        hopPhase += dt * 9
+        hop = Math.abs(Math.sin(hopPhase))
+      } else {
+        // settling: desacelera do tombo até a face do resultado
+        if (!settleFrom) {
+          settleFrom = qRef.current
+          settleStart = now
+          hopAtStart = hopValRef.current
+        }
+        const t = Math.min((now - settleStart) / settleMs, 1)
+        qRef.current = qSlerp(settleFrom, targetQ, easeOutBack(t))
+        hop = hopAtStart * (1 - t)
+        if (t >= 1) {
+          qRef.current = targetQ
+          apply(targetQ, 0)
+          setSettledFace(targetFace)
+          onSettledRef.current?.()
+          return // pousado — para o loop
+        }
+      }
+
+      apply(qRef.current, hop)
+      raf = requestAnimationFrame(tick)
+    }
+
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [phase, targetRoll, geom, size, settleMs, reduceMotion])
+
   return (
-    <svg width={size} height={size} viewBox="0 0 100 100" className="block">
-      <defs>
-        <linearGradient id={gid} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor={theme.from} />
-          <stop offset="100%" stopColor={theme.to} />
-        </linearGradient>
-      </defs>
-      {sides === 6 ? (
-        <rect x="6" y="6" width="88" height="88" rx="18" fill={`url(#${gid})`} stroke="rgba(255,255,255,0.45)" strokeWidth="2.5" opacity={dimmed ? 0.45 : 1} />
-      ) : (
-        <polygon points={DIE_POINTS[sides] || DIE_POINTS[20]} fill={`url(#${gid})`} stroke="rgba(255,255,255,0.45)" strokeWidth="2.5" strokeLinejoin="round" opacity={dimmed ? 0.45 : 1} />
-      )}
-      {(DIE_FACETS[sides] || []).map((pts, i) => (
-        <polyline key={i} points={pts} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="1.5" />
-      ))}
-    </svg>
+    <div
+      className="relative"
+      style={{ width: size, height: size, perspective: size * 3.4, opacity: dimmed ? 0.45 : 1 }}
+    >
+      {/* gradiente compartilhado pelas faces (referência cruzada entre SVGs) */}
+      <svg width={0} height={0} className="absolute" aria-hidden>
+        <defs>
+          <linearGradient id={`${uid}-grad`} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor={theme.from} />
+            <stop offset="100%" stopColor={theme.to} />
+          </linearGradient>
+        </defs>
+      </svg>
+
+      {/* sombra no chão — o que vende o quique */}
+      <div
+        ref={shadowRef}
+        className="absolute pointer-events-none"
+        style={{
+          left: '50%',
+          bottom: -size * 0.07,
+          width: size * 0.72,
+          height: size * 0.17,
+          borderRadius: '50%',
+          background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0) 70%)',
+          transform: 'translateX(-50%)',
+          opacity: 0.5,
+        }}
+      />
+
+      <div ref={hopRef} className="absolute inset-0" style={{ transformStyle: 'preserve-3d' }}>
+        <div
+          ref={innerRef}
+          style={{
+            position: 'absolute',
+            left: '50%',
+            top: '50%',
+            width: 0,
+            height: 0,
+            transformStyle: 'preserve-3d',
+            transform: qToMatrix3d(qRef.current),
+          }}
+        >
+          {geom.faces.map((f, i) => {
+            const R2 = f.radius * 1.15
+            const W = 2 * R2 * k
+            const num = i + 1
+            const isTarget = settledFace === i
+            const fs = f.inradius * (isTarget ? 1.4 : 1.0)
+            const pts = f.verts2d.map(([x, y]) => `${x.toFixed(4)},${y.toFixed(4)}`).join(' ')
+            return (
+              <div
+                key={i}
+                style={{
+                  position: 'absolute',
+                  left: -W / 2,
+                  top: -W / 2,
+                  width: W,
+                  height: W,
+                  transform: faceTransforms[i],
+                  backfaceVisibility: 'hidden',
+                }}
+              >
+                <svg viewBox={`${-R2} ${-R2} ${2 * R2} ${2 * R2}`} width="100%" height="100%" style={{ display: 'block' }}>
+                  <polygon
+                    points={pts}
+                    fill={`url(#${uid}-grad)`}
+                    stroke={isTarget ? 'rgba(255,222,130,0.95)' : 'rgba(236,202,122,0.45)'}
+                    strokeWidth={f.radius * 0.055}
+                    strokeLinejoin="round"
+                  />
+                  {/* sombra e brilho por face — opacidade dirigida pelo rAF (luz fixa no mundo) */}
+                  <polygon ref={el => { shadeRefs.current[i] = el }} points={pts} fill="#000" style={{ opacity: 0 }} />
+                  <polygon ref={el => { glintRefs.current[i] = el }} points={pts} fill="#fff" style={{ opacity: 0 }} />
+                  <text x={0} y={fs * 0.07} textAnchor="middle" dominantBaseline="central" fontWeight={900} fontSize={fs} fill="rgba(15,6,0,0.6)">
+                    {num}
+                  </text>
+                  <text x={0} y={0} textAnchor="middle" dominantBaseline="central" fontWeight={900} fontSize={fs} fill={isTarget ? '#ffeeb8' : '#f6e6c2'}>
+                    {num}
+                  </text>
+                  {sides >= 9 && (num === 6 || num === 9) && (
+                    <line x1={-fs * 0.3} x2={fs * 0.3} y1={fs * 0.56} y2={fs * 0.56} stroke="#f6e6c2" strokeWidth={fs * 0.09} strokeLinecap="round" />
+                  )}
+                </svg>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
   )
 }
 
-// Posição vertical do número: dados triangulares centram mais para baixo
-const NUMBER_OFFSET: Record<number, string> = {
-  4: '12%',
-  10: '-4%',
-  12: '2%',
-  20: '0%',
-}
+// ============================================================
+// AnimatedDie — orquestra fases e efeitos ao redor do Die3D
+// ============================================================
 
 interface AnimatedDieProps {
   sides: number
   size?: number
-  /** 'idle': aguardando clique | 'rolling': girando até o resultado chegar */
+  /** 'idle': aguardando clique | 'rolling': tombando até o resultado chegar */
   mode: 'idle' | 'rolling'
-  /** Resultado real do servidor — o dado só "crava" quando ele chega */
+  /** Resultado real do servidor — o dado só pousa quando ele chega */
   result?: DieResult | null
   onClick?: () => void
   disabled?: boolean
-  /** Giro mínimo (ms) antes do dado cravar o resultado. Default = combate (1100). */
+  /** Instante (ms) em que o dado termina de pousar. Default = combate (1100). */
   minSpinMs?: number
 }
 
@@ -91,47 +304,37 @@ const MIN_SPIN_MS = 1100
 
 export function AnimatedDie({ sides, size = 80, mode, result, onClick, disabled, minSpinMs = MIN_SPIN_MS }: AnimatedDieProps) {
   const theme = DICE_THEME[sides] || DICE_THEME[6]
-  const [displayNum, setDisplayNum] = useState<number | string>(`d${sides}`)
-  const [revealed, setRevealed] = useState(false)
+  const reduceMotion = useReducedMotion()
+  const [settling, setSettling] = useState(false)
+  const [landed, setLanded] = useState(false)
   const spinStart = useRef<number | null>(null)
+  // O pouso (settle) roda DENTRO da janela do minSpinMs: começa antes e termina
+  // exatamente quando o dado antigo cravava — o ritmo dos consumidores não muda.
+  const settleMs = Math.round(Math.min(620, Math.max(260, minSpinMs * 0.55)))
 
   useEffect(() => {
     if (mode !== 'rolling') {
-      setRevealed(false)
+      setSettling(false)
+      setLanded(false)
       spinStart.current = null
-      setDisplayNum(`d${sides}`)
       return
     }
-
     if (spinStart.current === null) spinStart.current = Date.now()
+    if (settling) return
 
-    if (revealed) return
-
-    // Embaralhar números enquanto gira
-    const shuffle = setInterval(() => {
-      setDisplayNum(1 + Math.floor(Math.random() * sides))
-    }, 75)
-
-    // Revelar quando o resultado chegou E o giro mínimo passou
-    const tryReveal = setInterval(() => {
+    const leadMs = Math.max(0, minSpinMs - settleMs)
+    const tryStart = setInterval(() => {
       const elapsed = Date.now() - (spinStart.current || 0)
-      if (result && elapsed >= minSpinMs) {
-        clearInterval(shuffle)
-        clearInterval(tryReveal)
-        setDisplayNum(result.roll)
-        setRevealed(true)
+      if (result && elapsed >= leadMs) {
+        clearInterval(tryStart)
+        setSettling(true)
       }
-    }, 60)
+    }, 50)
+    return () => clearInterval(tryStart)
+  }, [mode, result, settling, minSpinMs, settleMs])
 
-    return () => {
-      clearInterval(shuffle)
-      clearInterval(tryReveal)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, result, revealed, sides, minSpinMs])
-
-  const isMax = revealed && result?.roll === sides
-  const numberSize = revealed || mode === 'rolling' ? size * 0.34 : size * 0.26
+  const isMax = landed && result?.roll === sides
+  const phase: 'idle' | 'tumbling' | 'settling' = mode !== 'rolling' ? 'idle' : settling ? 'settling' : 'tumbling'
 
   return (
     <div className="flex flex-col items-center gap-1">
@@ -140,54 +343,40 @@ export function AnimatedDie({ sides, size = 80, mode, result, onClick, disabled,
         disabled={disabled || mode === 'rolling'}
         className="relative focus:outline-none"
         style={{ width: size, height: size, cursor: mode === 'idle' && !disabled ? 'pointer' : 'default' }}
-        whileHover={mode === 'idle' && !disabled ? { scale: 1.12 } : undefined}
-        whileTap={mode === 'idle' && !disabled ? { scale: 0.92 } : undefined}
-        animate={
-          mode === 'idle' && !disabled
-            ? { rotate: [0, -6, 6, -6, 0], scale: [1, 1.05, 1] }
-            : mode === 'rolling' && !revealed
-            ? { rotate: 360 }
-            : { rotate: 0, scale: 1 }
-        }
-        transition={
-          mode === 'idle' && !disabled
-            ? { repeat: Infinity, duration: 1.6, ease: 'easeInOut' }
-            : mode === 'rolling' && !revealed
-            ? { repeat: Infinity, duration: 0.45, ease: 'linear' }
-            : { type: 'spring', stiffness: 260, damping: 14 }
-        }
+        whileHover={mode === 'idle' && !disabled ? { scale: 1.1 } : undefined}
+        whileTap={mode === 'idle' && !disabled ? { scale: 0.94 } : undefined}
+        animate={mode === 'idle' && !disabled ? { scale: [1, 1.04, 1] } : { scale: 1 }}
+        transition={mode === 'idle' && !disabled ? { repeat: Infinity, duration: 1.8, ease: 'easeInOut' } : { duration: 0.2 }}
       >
         {/* Brilho de fundo */}
         <div
           className="absolute inset-0 rounded-full blur-xl transition-opacity duration-300"
           style={{
             backgroundColor: theme.glow,
-            opacity: revealed ? 0.9 : mode === 'rolling' ? 0.5 : 0.3,
+            opacity: landed ? 0.9 : mode === 'rolling' ? 0.5 : 0.3,
           }}
         />
 
-        <div className="relative">
-          <DieSvg sides={sides} size={size} dimmed={!!disabled} />
-          {/* Número na face do dado */}
-          <motion.span
-            key={revealed ? 'final' : 'shuffle'}
-            initial={revealed ? { scale: 2.2, opacity: 0 } : false}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 16 }}
-            className="absolute inset-0 flex items-center justify-center font-black text-white select-none"
-            style={{
-              fontSize: numberSize,
-              marginTop: NUMBER_OFFSET[sides] || '0%',
-              textShadow: '0 2px 6px rgba(0,0,0,0.8)',
-            }}
-          >
-            {displayNum}
-          </motion.span>
-        </div>
+        {/* Baque do pouso: squash rápido quando o dado assenta */}
+        <motion.div
+          animate={landed && !reduceMotion ? { scale: [1.12, 0.96, 1], y: [0, 1.5, 0] } : { scale: 1, y: 0 }}
+          transition={{ duration: 0.32, ease: 'easeOut' }}
+        >
+          <Die3D
+            sides={sides}
+            size={size}
+            phase={phase}
+            targetRoll={result?.roll}
+            settleMs={settleMs}
+            dimmed={!!disabled}
+            reduceMotion={!!reduceMotion}
+            onSettled={() => setLanded(true)}
+          />
+        </motion.div>
 
-        {/* Anel de impacto ao revelar */}
+        {/* Anel de impacto ao pousar */}
         <AnimatePresence>
-          {revealed && (
+          {landed && (
             <motion.div
               initial={{ scale: 0.6, opacity: 0.9 }}
               animate={{ scale: 1.9, opacity: 0 }}
@@ -200,10 +389,10 @@ export function AnimatedDie({ sides, size = 80, mode, result, onClick, disabled,
         </AnimatePresence>
       </motion.button>
 
-      {/* Total com modificador (ex.: 7 + 2 = 9) */}
+      {/* Total com modificador (ex.: 7 + 2 = 9) — ou o tipo do dado em repouso */}
       <div className="h-5 flex items-center">
         <AnimatePresence>
-          {revealed && result && (
+          {landed && result ? (
             <motion.span
               initial={{ y: -6, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
@@ -215,7 +404,9 @@ export function AnimatedDie({ sides, size = 80, mode, result, onClick, disabled,
                 : `= ${result.total}`}
               {isMax && ' 🔥'}
             </motion.span>
-          )}
+          ) : mode === 'idle' ? (
+            <span className="text-[10px] font-bold uppercase tracking-widest text-white/50">d{sides}</span>
+          ) : null}
         </AnimatePresence>
       </div>
     </div>
@@ -223,38 +414,20 @@ export function AnimatedDie({ sides, size = 80, mode, result, onClick, disabled,
 }
 
 // ============================================================
-// Dado em miniatura: aparece girando e já mostra o resultado
-// (usado como "chip" de rolagem sobre cada lutador)
+// ShowcaseDie — dado 3D decorativo em rotação lenta (landing,
+// vitrines): sem botão, sem rolagem, só o objeto girando.
 // ============================================================
 
-export function MiniDie({ sides, result, size = 38 }: { sides: number; result: DieResult; size?: number }) {
+export function ShowcaseDie({ sides = 20, size = 260, className = '' }: { sides?: number; size?: number; className?: string }) {
+  const reduceMotion = useReducedMotion()
+  const theme = DICE_THEME[sides] || DICE_THEME[6]
   return (
-    <motion.div
-      initial={{ rotate: -540, scale: 0, opacity: 0 }}
-      animate={{ rotate: 0, scale: 1, opacity: 1 }}
-      exit={{ scale: 0, opacity: 0 }}
-      transition={{ type: 'spring', stiffness: 200, damping: 15 }}
-      className="relative flex flex-col items-center"
-      title={`d${sides}: ${result.roll}${result.modifier > 0 ? ` + ${result.modifier} = ${result.total}` : ''}`}
-    >
-      <div className="relative">
-        <DieSvg sides={sides} size={size} />
-        <span
-          className="absolute inset-0 flex items-center justify-center font-black text-white select-none"
-          style={{
-            fontSize: size * 0.38,
-            marginTop: NUMBER_OFFSET[sides] || '0%',
-            textShadow: '0 1px 3px rgba(0,0,0,0.9)',
-          }}
-        >
-          {result.roll}
-        </span>
-      </div>
-      {result.modifier !== 0 && (
-        <span className={`text-[9px] font-bold leading-none mt-0.5 ${result.modifier > 0 ? 'text-cyan-300' : 'text-orange-300'}`}>
-          {result.modifier > 0 ? '+' : '−'}{Math.abs(result.modifier)}={result.total}
-        </span>
-      )}
-    </motion.div>
+    <div className={`relative ${className}`} style={{ width: size, height: size }}>
+      <div
+        className="absolute inset-4 rounded-full blur-2xl pointer-events-none"
+        style={{ backgroundColor: theme.glow, opacity: 0.35 }}
+      />
+      <Die3D sides={sides} size={size} phase="idle" settleMs={600} reduceMotion={!!reduceMotion} />
+    </div>
   )
 }

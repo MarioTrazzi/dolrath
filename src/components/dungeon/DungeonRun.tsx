@@ -1243,7 +1243,7 @@ export default function DungeonRun({
         return [{ id: dest, age: 0, emoji: typeof emoji === 'string' ? emoji : '❔' }, ...aged]
       })
       later(() => setEventCard(resolved), 80)
-    }, 320)
+    }, 620) // folga pro pouso do dado 3D (~260ms de settle) ficar legível
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dungeon.boss.name])
 
@@ -1317,7 +1317,7 @@ export default function DungeonRun({
       const resolved = applyServerEvent(data, dest)
       later(() => setMoving(false), 425)
       later(() => setEventCard(resolved), 325)
-    }, 375)
+    }, 650) // folga pro pouso do dado 3D (~260ms de settle) ficar legível
   }
 
   // Fecha o card de evento e o Mestre narra a transição.

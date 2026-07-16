@@ -18,6 +18,7 @@ import {
   Lock, Hammer, Flame, Scale,
 } from 'lucide-react'
 import { Button, Card, GlassCard, Badge, StatBar, SectionHeading, Reveal, ArenaSky } from './ui'
+import JourneyShowcase from './journey/JourneyCarousel'
 import { itemImagePath } from '@/lib/itemCatalog'
 import { DUNGEON_RUNS, type DungeonRunId, type RunNode, type RunDrop } from './dungeonRuns'
 import { DUNGEON_BATTLE_BG, DUNGEON_RUN_MAP_BG } from '@/lib/walkSceneAssets'
@@ -259,9 +260,10 @@ function Hero({ primaryHref }: {
           </Reveal>
           <Reveal delay={200}>
             <p className="text-lg text-white/85 max-w-xl text-pretty">
-              Crie um personagem que é seu de verdade, aprimore seu gear e busque
-              tesouros épicos. Combate tático por turnos: desperte sua forma —
-              Dragão, Celestial e mais — e deixe cada rolagem de dado mudar a batalha.
+            Crie um personagem no estilo RPG de mesa, Escolha sua raça e sua classe,
+            aprimore seu gear e busque tesouros lendários derrotando os chefes,
+            fique forte e desafie jogadores reais em PvPs épicos com rolagem de dados.
+            Combate tático por turnos: desperte sua forma — Dragão, Celestial e mais — e deixe cada rolagem de dado mudar a batalha.
             </p>
           </Reveal>
           <Reveal delay={300} className="flex flex-wrap items-center gap-4">
@@ -2169,6 +2171,7 @@ export default function DolrathLanding() {
       <Navbar primaryHref={primaryHref} />
       <main id="conteudo">
         <Hero primaryHref={primaryHref} />
+        <JourneyShowcase primaryHref={primaryHref} />
         <Features />
         <ArenaSection glow={glow} />
         <DungeonsSection />

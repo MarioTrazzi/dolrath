@@ -262,7 +262,7 @@ function Hero({ primaryHref }: {
               animate={reduce ? {} : { y: [0, -14, 0] }}
               transition={reduce ? {} : { repeat: Infinity, duration: 5, ease: 'easeInOut' }}
             >
-              <ShowcaseDie sides={20} size={260} />
+              <ShowcaseDie sides={20} size={195} interactive />
             </motion.div>
           </Reveal>
         </div>

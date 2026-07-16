@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react'
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
+import { motion, AnimatePresence, useReducedMotion, type PanInfo } from 'framer-motion'
 import {
   getDieGeometry,
   qMul,
@@ -418,16 +418,98 @@ export function AnimatedDie({ sides, size = 80, mode, result, onClick, disabled,
 // vitrines): sem botão, sem rolagem, só o objeto girando.
 // ============================================================
 
-export function ShowcaseDie({ sides = 20, size = 260, className = '' }: { sides?: number; size?: number; className?: string }) {
+interface ShowcaseDieProps {
+  sides?: number
+  size?: number
+  className?: string
+  /** Arraste e solte (efeito estilingue) rola o dado e mostra um resultado. */
+  interactive?: boolean
+}
+
+/** Abaixo desta velocidade de soltura (px/s), o arraste é só um "cutucão" — não conta como jogada. */
+const THROW_VELOCITY = 260
+
+export function ShowcaseDie({ sides = 20, size = 260, className = '', interactive = false }: ShowcaseDieProps) {
   const reduceMotion = useReducedMotion()
   const theme = DICE_THEME[sides] || DICE_THEME[6]
+  const [phase, setPhase] = useState<'idle' | 'tumbling' | 'settling'>('idle')
+  const [targetRoll, setTargetRoll] = useState<number | null>(null)
+  const [result, setResult] = useState<number | null>(null)
+  const rollingRef = useRef(false)
+
+  const throwDie = () => {
+    if (rollingRef.current) return
+    rollingRef.current = true
+    setResult(null)
+    setPhase('tumbling')
+    const tumbleMs = 550 + Math.random() * 300
+    window.setTimeout(() => {
+      setTargetRoll(1 + Math.floor(Math.random() * sides))
+      setPhase('settling')
+    }, tumbleMs)
+  }
+
+  const handleSettled = () => {
+    setResult(targetRoll)
+    window.setTimeout(() => {
+      rollingRef.current = false
+      setPhase('idle')
+      setTargetRoll(null)
+    }, 1400)
+  }
+
+  const handleDragEnd = (_e: unknown, info: PanInfo) => {
+    const speed = Math.hypot(info.velocity.x, info.velocity.y)
+    if (speed > THROW_VELOCITY) throwDie()
+  }
+
+  const isIdle = phase === 'idle'
+
   return (
     <div className={`relative ${className}`} style={{ width: size, height: size }}>
       <div
         className="absolute inset-4 rounded-full blur-2xl pointer-events-none"
         style={{ backgroundColor: theme.glow, opacity: 0.35 }}
       />
-      <Die3D sides={sides} size={size} phase="idle" settleMs={600} reduceMotion={!!reduceMotion} />
+      <motion.div
+        drag={interactive && isIdle}
+        dragElastic={0.6}
+        dragSnapToOrigin
+        dragTransition={{ bounceStiffness: 420, bounceDamping: 22 }}
+        onDragEnd={interactive ? handleDragEnd : undefined}
+        onTap={interactive && isIdle ? throwDie : undefined}
+        whileDrag={{ scale: 1.08 }}
+        style={{
+          width: size,
+          height: size,
+          cursor: interactive && isIdle ? 'grab' : 'default',
+          touchAction: interactive ? 'none' : undefined,
+        }}
+      >
+        <Die3D
+          sides={sides}
+          size={size}
+          phase={phase}
+          targetRoll={targetRoll}
+          settleMs={600}
+          reduceMotion={!!reduceMotion}
+          onSettled={interactive ? handleSettled : undefined}
+        />
+      </motion.div>
+      {interactive && (
+        <AnimatePresence>
+          {result != null && (
+            <motion.div
+              initial={{ y: -6, opacity: 0, scale: 0.8 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute left-1/2 -translate-x-1/2 bottom-0 translate-y-full pt-2 text-sm font-bold text-white/90 pointer-events-none whitespace-nowrap"
+            >
+              🎲 {result}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
     </div>
   )
 }

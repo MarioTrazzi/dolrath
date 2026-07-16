@@ -60,31 +60,37 @@ export async function POST(
       }, { status: 400 })
     }
 
-    // Aplicar transformação
+    // Aplicar transformação (custo + metadata). No modelo enxuto o buff de combate
+    // vive nos levers da sala (socket) — NÃO persistir hp/maxHp/maxMp/baseStats
+    // alterados, senão a barra da luta e o personagem fora do combate “encolhem”.
     const transformedCharacter = applyTransformation(character, transformationType as TransformationType)
+    const config = TRANSFORMATION_CONFIG[transformationType as TransformationType]
+    const nextMp = Math.max(0, (character.mp || 0) - config.cost.mp)
+    const nextStamina = Math.max(0, (character.stamina || 0) - config.cost.stamina)
 
     // Atualizar no banco de dados
     const updatedCharacter = await prisma.character.update({
       where: { id: characterId },
       data: {
-        isTransformed: transformedCharacter.isTransformed,
-        transformationType: transformedCharacter.transformationType,
-        transformationData: transformedCharacter.transformationData,
-        
-        // Atualizar stats temporários no banco
-        hp: transformedCharacter.hp,
-        maxHp: transformedCharacter.maxHp,
-        mp: transformedCharacter.mp,
-        maxMp: transformedCharacter.maxMp, // mpPool amplia a reserva durante a forma
-        stamina: transformedCharacter.stamina,
+        isTransformed: true,
+        transformationType,
+        // Guarda duração/originalStats p/ detransform; sem stats de pool alterados.
+        transformationData: {
+          ...transformedCharacter.transformationData,
+          originalStats: {
+            ...(transformedCharacter.transformationData?.originalStats || {}),
+            // Pool real (pré-forma) — detransform não deve mexer no teto da luta.
+            hp: character.hp,
+            maxHp: character.maxHp,
+            mp: nextMp,
+            maxMp: character.maxMp,
+          },
+        },
+        mp: nextMp,
+        stamina: nextStamina,
         staminaUpdatedAt: new Date(), // transformar gasta stamina: reinicia a espera do regen
-
-        // Atualizar baseStats que agora contém os stats modificados
-        baseStats: transformedCharacter.baseStats
       }
     })
-
-    const config = TRANSFORMATION_CONFIG[transformationType as TransformationType]
 
     // Payload sem BigInt (`nftTokenId`) — NextResponse.json() não serializa BigInt.
     return NextResponse.json({

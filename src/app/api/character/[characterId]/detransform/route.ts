@@ -35,32 +35,33 @@ export async function POST(
       }, { status: 400 })
     }
 
-    // Reverter transformação
+    // Reverter: só limpa flags/cooldown. O pool HP/MP e baseStats não são mais
+    // alterados em /transform (buff de combate = levers na sala).
     const revertedCharacter = revertTransformation(character)
 
-    // Atualizar no banco de dados
     const updatedCharacter = await prisma.character.update({
       where: { id: characterId },
       data: {
-        isTransformed: revertedCharacter.isTransformed,
-        transformationType: revertedCharacter.transformationType,
+        isTransformed: false,
+        transformationType: null,
         transformationData: revertedCharacter.transformationData,
-        
-        // Restaurar stats originais
-        hp: revertedCharacter.hp,
-        maxHp: revertedCharacter.maxHp,
-        mp: revertedCharacter.mp,
-        maxMp: revertedCharacter.maxMp, // reverte a reserva ampliada pelo mpPool
-
-        // Restaurar baseStats originais
-        baseStats: revertedCharacter.baseStats
       }
     })
 
     return NextResponse.json({
       success: true,
       message: '🔄 Transformação revertida com sucesso!',
-      character: updatedCharacter,
+      character: {
+        id: updatedCharacter.id,
+        name: updatedCharacter.name,
+        hp: updatedCharacter.hp,
+        maxHp: updatedCharacter.maxHp,
+        mp: updatedCharacter.mp,
+        maxMp: updatedCharacter.maxMp,
+        isTransformed: updatedCharacter.isTransformed,
+        transformationType: updatedCharacter.transformationType,
+        transformationData: updatedCharacter.transformationData,
+      },
       cooldownInfo: {
         cooldownTurns: revertedCharacter.transformationData?.cooldownTurns || 0,
         message: revertedCharacter.transformationData?.cooldownTurns > 0 ? 

@@ -431,6 +431,8 @@ function CombatPageContent() {
               isTransformed: p1.isTransformed,
               transformationType: p1.transformationType,
               transformationData: p1.transformationData,
+              transformationImage: p1.transformationImage ?? prev.transformationImage,
+              levers: p1.levers ?? prev.levers,
               isReady: p1.isReady,
               isConnected: p1.isConnected,
               isAlive: p1.isAlive
@@ -465,6 +467,8 @@ function CombatPageContent() {
               isTransformed: p2.isTransformed,
               transformationType: p2.transformationType,
               transformationData: p2.transformationData,
+              transformationImage: p2.transformationImage ?? prev.transformationImage,
+              levers: p2.levers ?? prev.levers,
               isReady: p2.isReady,
               isConnected: p2.isConnected,
               isAlive: p2.isAlive
@@ -1093,34 +1097,31 @@ function CombatPageContent() {
         const updatedCharacter = data.character
         const nextStamina = Math.max(0, currentPlayer.stamina - staminaCost)
         const nextMp = Math.max(0, currentPlayer.mp - mpCost)
-        
-        // Atualizar dados do player com os novos stats transformados
+        const duration =
+          (data.transformation?.duration ?? cfg?.duration ?? 5)
+
+        // Igual ao PvE: só cobra MP+STA e marca a forma. NÃO importa hp/maxHp/maxMp
+        // da API (pool do personagem ≠ pool da luta) — senão a barra “reduz”.
         setCurrentPlayer(prev => prev ? {
           ...prev,
-          ...updatedCharacter,
-          // Preservar HP atual do combate (a API pode devolver HP do banco)
-          hp: prev.hp,
           stamina: nextStamina,
           mp: nextMp,
-          maxHp: updatedCharacter.maxHp ?? prev.maxHp,
-          attack: updatedCharacter.baseStats?.attack || prev.attack,
-          defense: updatedCharacter.baseStats?.defense || prev.defense,
-          strength: updatedCharacter.baseStats?.str || prev.strength,
-          agility: updatedCharacter.baseStats?.agi || prev.agility,
-          intelligence: updatedCharacter.baseStats?.int || prev.intelligence,
-          critical: updatedCharacter.baseStats?.critical || prev.critical,
           isTransformed: true,
           transformationType: transformationType,
           transformationImage: formImage ?? prev.transformationImage ?? null,
-          transformationData: updatedCharacter.transformationData
+          transformationData: updatedCharacter.transformationData ?? {
+            remainingTurns: duration,
+            cooldownTurns: 0,
+          },
         } : null)
 
         // 🐉 1× por luta: marca como usada (não dá pra transformar de novo nesta partida).
         setUsedTransformThisMatch(true)
+        setShowTransformationDialog(false)
 
         // Sincronizar com o servidor de combate para que o OPONENTE também veja a
-        // transformação (imagem/glow) — o servidor não sabe nada disso até aqui,
-        // já que tudo acima foi feito via API REST, sem nenhum evento de socket.
+        // transformação (imagem/glow). Servidor aplica o buff nos levers e NÃO
+        // gasta o turno — pode atacar transformado no mesmo turno.
         socket.emit('sync_transformation', {
           playerId: currentPlayer.id,
           roomId,
@@ -1129,20 +1130,15 @@ function CombatPageContent() {
           isTransformed: true,
           transformationImage: formImage ?? currentPlayer.transformationImage,
           unlockedTransformation: updatedCharacter.unlockedTransformation ?? currentPlayer.unlockedTransformation,
-          transformationData: updatedCharacter.transformationData,
-          duration: data.transformation.duration,
+          transformationData: updatedCharacter.transformationData ?? {
+            remainingTurns: duration,
+            cooldownTurns: 0,
+          },
+          duration,
           stats: {
-            maxHp: updatedCharacter.maxHp,
-            maxMp: updatedCharacter.maxMp ?? currentPlayer.maxMp,
             mp: nextMp,
             stamina: nextStamina,
-            attack: updatedCharacter.baseStats?.attack ?? currentPlayer.attack,
-            defense: updatedCharacter.baseStats?.defense ?? currentPlayer.defense,
-            strength: updatedCharacter.baseStats?.str ?? currentPlayer.strength,
-            agility: updatedCharacter.baseStats?.agi ?? currentPlayer.agility,
-            intelligence: updatedCharacter.baseStats?.int ?? currentPlayer.intelligence,
-            critical: updatedCharacter.baseStats?.critical ?? currentPlayer.critical,
-          }
+          },
         })
       } else {
         const error = await response.json().catch(() => ({ error: 'Erro desconhecido' }))

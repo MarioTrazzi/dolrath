@@ -461,12 +461,10 @@ function revertPlayerTransformation(player) {
     remainingTurns: 0
   }
 
-  // ⚔️ MODELO ENXUTO: restaurar os levers-base (desfaz o buff simétrico) e o HP máximo.
+  // ⚔️ MODELO ENXUTO: restaurar os levers-base (desfaz o buff). Igual ao PvE —
+  // a barra de HP/MP da luta NÃO muda com a forma; só poder/armadura/K.
   if (player.baseLevers) {
     player.levers = player.baseLevers
-    const newMaxHp = Math.round(player.baseLevers.hp)
-    player.hp = Math.min(player.hp, newMaxHp)
-    player.maxHp = newMaxHp
   }
 }
 
@@ -1091,6 +1089,11 @@ io.on('connection', (socket) => {
     player.mp -= reducedMpCost
     player.stamina -= reducedStaminaCost
 
+    // Buff de combate (levers) — sem mexer na barra de HP (igual PvE / sync_transformation).
+    if (player.baseLevers) {
+      player.levers = CM.transformLevers(player.baseLevers)
+    }
+
     room.combatLog.push({
       type: 'transformation',
       player: player.name,
@@ -1098,17 +1101,7 @@ io.on('connection', (socket) => {
       timestamp: new Date()
     })
 
-    // 🔥 NOVA MECÂNICA: Transformação custa 1 turno completo
-    room.currentTurn = room.currentTurn === room.player1?.id ? room.player2?.id : room.player1?.id
-    room.phase = CombatPhase.PLAYER_TURN
-    regenTurnStamina(room)
-
-    room.combatLog.push({
-      type: 'system',
-      message: `🔄 ${player.name} gastou o turno se transformando! Vez de ${room.currentTurn === room.player1?.id ? room.player1?.name : room.player2?.name}`,
-      timestamp: new Date()
-    })
-
+    // Igual ao PvE: transformação NÃO gasta o turno — pode atacar transformado agora.
     io.to(roomId).emit('room_updated', room)
     io.to(roomId).emit('transformation_applied', {
       playerId,
@@ -1116,7 +1109,6 @@ io.on('connection', (socket) => {
       config,
       remainingTurns: player.transformationData.remainingTurns
     })
-    maybeScheduleTrainingBot(room, roomId)
   })
 
   // 🐉 Sincroniza a transformação aplicada via API REST (criação) no estado da sala.
@@ -1142,43 +1134,31 @@ io.on('connection', (socket) => {
     player.unlockedTransformation = unlockedTransformation || null
     if (transformationData) player.transformationData = transformationData
 
+    // Recursos da luta (MP/STA). NUNCA aceitar hp/maxHp/maxMp da API REST aqui —
+    // applyTransformation persiste o pool do personagem no banco, que não é o pool
+    // da sala (levers + passivas). Sobrescrever maxHp corrompia a barra e o ratio.
     if (stats && typeof stats === 'object') {
-      for (const [key, value] of Object.entries(stats)) {
-        if (value !== undefined && value !== null) player[key] = value
-      }
+      if (stats.mp != null) player.mp = stats.mp
+      if (stats.stamina != null) player.stamina = stats.stamina
     }
 
-    // ⚔️ MODELO ENXUTO: a transformação vira um buff SIMÉTRICO de escala nos levers
-    // (poder/armadura/hp/K ×TRANSFORM_SCALE; evasão invariante) + libera o especial.
-    // Aplica sobre os levers-base; o HP máximo sobe proporcional (mantém a fração de HP).
+    // ⚔️ MODELO ENXUTO (igual PvE): buff SIMÉTRICO nos levers (poder/armadura/K).
+    // A barra HP/MP da luta permanece — só o dano/defesa sobem, e o especial libera.
     if (player.baseLevers) {
-      if (player.isTransformed) {
-        player.levers = CM.transformLevers(player.baseLevers)
-        const newMaxHp = Math.round(player.levers.hp)
-        const ratio = player.maxHp > 0 ? player.hp / player.maxHp : 1
-        player.maxHp = newMaxHp
-        player.hp = Math.max(1, Math.min(newMaxHp, Math.round(newMaxHp * ratio)))
-      } else {
-        player.levers = player.baseLevers
-        const newMaxHp = Math.round(player.baseLevers.hp)
-        player.maxHp = newMaxHp
-        player.hp = Math.min(player.hp, newMaxHp)
-      }
+      player.levers = player.isTransformed
+        ? CM.transformLevers(player.baseLevers)
+        : player.baseLevers
     }
 
     room.combatLog.push({
       type: 'transformation',
       player: player.name,
-      message: `🌟 ${player.name} se transformou${transformationName ? ` em ${transformationName}` : ''}!${duration ? ` (+${duration} turnos)` : ''}`,
+      message: `🌟 ${player.name} se transformou${transformationName ? ` em ${transformationName}` : ''}!${duration ? ` (${duration} turnos)` : ''}`,
       timestamp: new Date()
     })
 
-    // Transformação consome o turno — advanceTurn notifica o bot de treino com certeza
-    if (room.currentTurn === playerId) {
-      advanceTurn(room, roomId)
-    } else {
-      io.to(roomId).emit('room_updated', room)
-    }
+    // Igual ao PvE: não gasta turno — o jogador pode usar o golpe transformado agora.
+    io.to(roomId).emit('room_updated', room)
   })
 
   // Handler para usar habilidades especiais de transformação

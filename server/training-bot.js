@@ -110,8 +110,13 @@ function spawnTrainingBot({ roomId, port, playerLevel, playerGearTier, playerAtt
 
   let isReady = false
   let rolledInitiative = false
-  let lastPhase = null
   let finished = false
+  // 🐛 Antes o bot só atacava quando `phase` mudava. Usar Item / especial / imobilizar
+  // avança o turno mantendo phase=player_turn — o bot travava e a luta nunca acabava
+  // (ex.: jogador a 4 HP usa poção → turno do monstro → silêncio).
+  let latestRoom = null
+  let turnActionScheduled = false
+  let ourTurnSince = 0
 
   const timers = new Set()
   const after = (ms, fn) => {
@@ -126,12 +131,87 @@ function spawnTrainingBot({ roomId, port, playerLevel, playerGearTier, playerAtt
     if (finished) return
     finished = true
     log(`saindo (${reason})`)
-    timers.forEach(clearTimeout)
+    timers.forEach((t) => {
+      clearTimeout(t)
+      clearInterval(t)
+    })
     timers.clear()
     socket.disconnect()
   }
 
+  const meFrom = (room) =>
+    room.player1?.id === monster.id ? room.player1
+      : room.player2?.id === monster.id ? room.player2
+        : null
+
+  const scheduleBotAttack = () => {
+    const room = latestRoom
+    if (!room || finished || turnActionScheduled) return
+    if (!room.isActive || room.phase !== 'player_turn' || room.currentTurn !== monster.id) return
+    if (room.pendingAction) return
+
+    const me = meFrom(room)
+    if (!me) return
+
+    turnActionScheduled = true
+    after(randomDelay(1800, 3200), () => {
+      const r = latestRoom
+      if (finished || !r || !r.isActive || r.phase !== 'player_turn' || r.currentTurn !== monster.id || r.pendingAction) {
+        turnActionScheduled = false
+        return
+      }
+      const now = meFrom(r)
+      if (!now) { turnActionScheduled = false; return }
+
+      const snapMp = now.mp || 0
+      const snapSta = now.stamina || 0
+      const weights = { ...behavior.attackWeights }
+      if (snapMp < mpFor('heavy_attack')) weights.heavy_attack = 0
+      if (snapSta < staminaFor('heavy_attack')) weights.heavy_attack = 0
+
+      const lightCost = staminaFor('light_attack')
+      const action = snapSta < lightCost ? 'light_attack' : pickWeighted(weights)
+      if (snapSta < lightCost) log(`stamina baixa (${snapSta}) — tentando golpe`)
+
+      log(`atacando: ${action} (−${staminaFor(action)} STA${mpFor(action) ? ` · −${mpFor(action)} MP` : ''})`)
+      // Servidor é autoridade de custo/dado — mandamos só a ação.
+      socket.emit('player_action', { playerId: monster.id, roomId, action })
+
+      // Se rejeitar (STA/MP) não vem room_updated → libera e retenta.
+      after(2800, () => {
+        const cur = latestRoom
+        if (
+          cur &&
+          cur.isActive &&
+          cur.phase === 'player_turn' &&
+          cur.currentTurn === monster.id &&
+          !cur.pendingAction
+        ) {
+          log('ação não avançou o turno — retentando')
+          turnActionScheduled = false
+          scheduleBotAttack()
+        }
+      })
+    })
+  }
+
   after(30 * 60 * 1000, () => shutdown('tempo máximo de treino'))
+
+  // Watchdog: se ficarmos >4s no nosso turno sem pendingAction, força novo schedule
+  // (cobre race onde turnActionScheduled ficou true e o emit foi engolido).
+  const watchdog = setInterval(() => {
+    if (finished) return
+    const room = latestRoom
+    if (!room?.isActive || room.phase !== 'player_turn' || room.currentTurn !== monster.id) return
+    if (room.pendingAction) return
+    if (!ourTurnSince) ourTurnSince = Date.now()
+    if (Date.now() - ourTurnSince < 4000) return
+    log('watchdog: turno parado — resetando e atacando')
+    turnActionScheduled = false
+    ourTurnSince = Date.now()
+    scheduleBotAttack()
+  }, 1500)
+  timers.add(watchdog)
 
   socket.on('connect', () => {
     log(`entrando (espelho a ${Math.round(def.difficultyMult * 100)}%${def.unbeatable ? ' · imbatível' : ''})`)
@@ -148,17 +228,23 @@ function spawnTrainingBot({ roomId, port, playerLevel, playerGearTier, playerAtt
 
   socket.on('room_updated', (room) => {
     if (finished || !room) return
-
-    const phaseChanged = room.phase !== lastPhase
-    lastPhase = room.phase
+    latestRoom = room
 
     const fighters = room.participants?.fighters || []
-    const me = room.player1?.id === monster.id ? room.player1 : room.player2?.id === monster.id ? room.player2 : null
+    const me = meFrom(room)
 
     if (fighters.length === 1 && fighters[0]?.id === monster.id) {
       return shutdown('jogador saiu da sala')
     }
     if (!me) return
+
+    // Saiu do nosso turno → pode agendar de novo na próxima vez.
+    if (room.currentTurn !== monster.id || room.phase !== 'player_turn' || !room.isActive) {
+      turnActionScheduled = false
+      ourTurnSince = 0
+    } else if (!ourTurnSince) {
+      ourTurnSince = Date.now()
+    }
 
     switch (room.phase) {
       case 'waiting_players': {
@@ -184,25 +270,9 @@ function spawnTrainingBot({ roomId, port, playerLevel, playerGearTier, playerAtt
         break
       }
 
-      case 'player_turn': {
-        if (room.currentTurn === monster.id && phaseChanged) {
-          after(randomDelay(1800, 3200), () => {
-            const weights = { ...behavior.attackWeights }
-            if ((me.mp || 0) < mpFor('heavy_attack')) weights.heavy_attack = 0
-            if ((me.stamina || 0) < staminaFor('heavy_attack')) weights.heavy_attack = 0
-
-            const action = (me.stamina || 0) < staminaFor('light_attack')
-              ? 'light_attack'
-              : pickWeighted(weights)
-
-            log(`atacando: ${action} (−${staminaFor(action)} STA${mpFor(action) ? ` · −${mpFor(action)} MP` : ''})`)
-            // O servidor recalcula custo e dado a partir do combatModel e IGNORA o que
-            // vem aqui (é a autoridade); mandamos só a ação.
-            socket.emit('player_action', { playerId: monster.id, roomId, action })
-          })
-        }
+      case 'player_turn':
+        scheduleBotAttack()
         break
-      }
 
       case 'dice_roll':
         break

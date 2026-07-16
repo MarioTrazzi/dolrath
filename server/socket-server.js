@@ -288,6 +288,130 @@ function advanceTurn(room, roomId) {
   }
   room.pendingAction = null
   io.to(roomId).emit('room_updated', room)
+  maybeScheduleTrainingBot(room, roomId)
+}
+
+/** Id do bot de treino começa com `monster_` (ver training-bot.js). */
+function isTrainingBotId(id) {
+  return typeof id === 'string' && id.startsWith('monster_')
+}
+
+/**
+ * Fallback servidor: se o cliente-bot travar (turno passa sem phase change / STA reject),
+ * o servidor age sozinho após ~4.5s. Se o bot-cliente já jogou, pendingAction/turno
+ * mudam e este timer no-op.
+ */
+function maybeScheduleTrainingBot(room, roomId) {
+  if (!room?.isTraining || !room.isActive) return
+  if (room.phase !== CombatPhase.PLAYER_TURN) return
+  if (!isTrainingBotId(room.currentTurn)) return
+
+  if (room._trainBotTimer) clearTimeout(room._trainBotTimer)
+  const scheduledFor = room.currentTurn
+  room._trainBotTimer = setTimeout(() => {
+    room._trainBotTimer = null
+    if (!rooms.has(roomId)) return
+    if (!room.isActive || room.phase !== CombatPhase.PLAYER_TURN) return
+    if (room.currentTurn !== scheduledFor || room.pendingAction) return
+    console.log(`🤖 [treino:${roomId}] fallback servidor — bot parado, forçando golpe`)
+    executeTrainingBotAttack(room, roomId)
+  }, 4500)
+}
+
+function executeTrainingBotAttack(room, roomId) {
+  const playerId = room.currentTurn
+  const bot = room.player1?.id === playerId ? room.player1 : room.player2
+  const opponent = room.player1?.id === playerId ? room.player2 : room.player1
+  if (!bot || !opponent) return
+
+  if (bot.fx?.immobilizeTurns > 0) {
+    bot.fx.immobilizeTurns--
+    room.combatLog.push({
+      type: 'system',
+      message: `🚫 ${bot.name} está imobilizado e perde o turno!`,
+      timestamp: new Date(),
+    })
+    advanceTurn(room, roomId)
+    return
+  }
+
+  const unlocks = getUnlocksFor(bot)
+  const stam = bot.stamina || 0
+  const mp = bot.mp || 0
+  let action = 'light_attack'
+  let attackType = 'basic'
+  if (
+    unlocks.classAttack &&
+    stam >= attackStaminaCost('weapon') &&
+    mp >= unlocks.classAttackMp &&
+    Math.random() < 0.4
+  ) {
+    action = 'heavy_attack'
+    attackType = 'weapon'
+  }
+
+  const stamCost = attackStaminaCost(attackType)
+  const mpCost = attackType === 'weapon' ? unlocks.classAttackMp : 0
+
+  if (stam < stamCost) {
+    room.combatLog.push({
+      type: 'system',
+      message: `😮‍💨 ${bot.name} está exausto e perde o turno!`,
+      timestamp: new Date(),
+    })
+    advanceTurn(room, roomId)
+    return
+  }
+
+  bot.stamina = Math.max(0, stam - stamCost)
+  trackFightStamina(bot, stamCost)
+  if (mpCost > 0) bot.mp = Math.max(0, mp - mpCost)
+
+  const diceType = attackType === 'weapon' ? unlocks.classAttackDie : (CM.PVE_DIE[attackType] || CM.DICE_SIDES)
+  const label = attackType === 'weapon' ? CM.classAttackName(bot.combatClass) : 'Golpe'
+
+  room.pendingAction = {
+    action,
+    diceType,
+    playerId,
+    type: 'attack',
+    defenseAction: 'passive',
+    attackRoll: undefined,
+    defenseRoll: 0,
+    resolving: false,
+  }
+  room.phase = CombatPhase.DICE_ROLL
+  room.combatLog.push({
+    type: 'action',
+    player: bot.name,
+    message: `🎯 ${label}! (−${stamCost} STA${mpCost ? ` · −${mpCost} MP` : ''}) — rolando d${diceType}…`,
+    timestamp: new Date(),
+  })
+  io.to(roomId).emit('room_updated', room)
+
+  const pending = room.pendingAction
+  setTimeout(() => {
+    if (room.pendingAction !== pending || pending.resolving) return
+    pending.resolving = true
+    const roll = Math.floor(Math.random() * diceType) + 1
+    pending.attackRoll = roll
+    room.combatLog.push({
+      type: 'action',
+      player: bot.name,
+      message: `🎲 ${bot.name}: Rolou d${diceType} = ${roll}`,
+      timestamp: new Date(),
+    })
+    io.to(roomId).emit('dice_rolled', {
+      playerId,
+      sides: diceType,
+      result: { roll, modifier: 0, total: roll },
+    })
+    io.to(roomId).emit('room_updated', room)
+    setTimeout(() => {
+      if (room.pendingAction !== pending) return
+      processCompleteAction(room, pending.action, pending.attackRoll, 'passive', 0, roomId)
+    }, 900)
+  }, 400)
 }
 
 function revertPlayerTransformation(player) {
@@ -833,6 +957,7 @@ io.on('connection', (socket) => {
 
         r.phase = CombatPhase.PLAYER_TURN
         io.to(roomId).emit('room_updated', r)
+        maybeScheduleTrainingBot(r, roomId)
       }, 1600)
 
       return
@@ -975,7 +1100,9 @@ io.on('connection', (socket) => {
 
     // 🔥 NOVA MECÂNICA: Transformação custa 1 turno completo
     room.currentTurn = room.currentTurn === room.player1?.id ? room.player2?.id : room.player1?.id
-    
+    room.phase = CombatPhase.PLAYER_TURN
+    regenTurnStamina(room)
+
     room.combatLog.push({
       type: 'system',
       message: `🔄 ${player.name} gastou o turno se transformando! Vez de ${room.currentTurn === room.player1?.id ? room.player1?.name : room.player2?.name}`,
@@ -989,6 +1116,7 @@ io.on('connection', (socket) => {
       config,
       remainingTurns: player.transformationData.remainingTurns
     })
+    maybeScheduleTrainingBot(room, roomId)
   })
 
   // 🐉 Sincroniza a transformação aplicada via API REST (criação) no estado da sala.
@@ -1045,20 +1173,12 @@ io.on('connection', (socket) => {
       timestamp: new Date()
     })
 
-    // Transformação consome o turno (mesma regra do fluxo legado acima)
+    // Transformação consome o turno — advanceTurn notifica o bot de treino com certeza
     if (room.currentTurn === playerId) {
-      const nextTurn = room.player1?.id === playerId ? room.player2?.id : room.player1?.id
-      if (nextTurn) {
-        room.currentTurn = nextTurn
-        room.combatLog.push({
-          type: 'system',
-          message: `🔄 Vez de ${room.currentTurn === room.player1?.id ? room.player1?.name : room.player2?.name}`,
-          timestamp: new Date()
-        })
-      }
+      advanceTurn(room, roomId)
+    } else {
+      io.to(roomId).emit('room_updated', room)
     }
-
-    io.to(roomId).emit('room_updated', room)
   })
 
   // Handler para usar habilidades especiais de transformação
@@ -1323,16 +1443,8 @@ io.on('connection', (socket) => {
       newStamina: player.stamina
     })
 
-    // Usar item consome o turno
-    room.currentTurn = opponent.id
-    regenTurnStamina(room)
-    room.combatLog.push({
-      type: 'system',
-      message: `🔄 Turno de ${opponent.name}`,
-      timestamp: new Date()
-    })
-
-    io.to(roomId).emit('room_updated', room)
+    // Item consome o turno — advanceTurn (regen + status + nudge do bot de treino)
+    advanceTurn(room, roomId)
   })
 
   socket.on('chat_message', ({ playerId, roomId, message }) => {
@@ -1807,6 +1919,9 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
 
   room.pendingAction = null
   io.to(roomId).emit('room_updated', room)
+  if (room.isActive && room.phase === CombatPhase.PLAYER_TURN) {
+    maybeScheduleTrainingBot(room, roomId)
+  }
 }
 
 function processActionResult(room, action, playerRoll, roomId) {
@@ -1848,6 +1963,7 @@ function processActionResult(room, action, playerRoll, roomId) {
 
   room.pendingAction = null
   io.to(roomId).emit('room_updated', room)
+  maybeScheduleTrainingBot(room, roomId)
 }
 
 // 🏆 SISTEMA DE RECOMPENSAS PVP — stamina gasta na luta → gold/XP (paridade masmorra)

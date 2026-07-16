@@ -17,6 +17,18 @@ import {
   applyRankPatch,
 } from '@/lib/skillTree'
 import { getTrainingOpponent, DEFAULT_TRAINING_OPPONENT_KEY } from '@/lib/trainingOpponents'
+import { DUNGEON_BATTLE_BG } from '@/lib/walkSceneAssets'
+import ImageBackdrop from '@/components/dungeon/ImageBackdrop'
+import type { DungeonId } from '@/lib/dungeonAdventures'
+
+const ARENA_BG_POOL = Object.entries(DUNGEON_BATTLE_BG) as [DungeonId, string][]
+
+function pickArenaBackdrop(seed: string): { theme: DungeonId; src: string } {
+  let h = 0
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0
+  const [theme, src] = ARENA_BG_POOL[h % ARENA_BG_POOL.length]
+  return { theme, src }
+}
 
 interface Equipment {
   id: string
@@ -336,6 +348,9 @@ function CombatPageContent() {
       .map(e => (e.player ? `${e.player}: ${e.message}` : e.message))
   }, [combatRoom?.combatLog])
 
+  // Fundo provisório: arte de masmorra (aleatória por sala). Depois → arenas exclusivas.
+  const arenaBackdrop = useMemo(() => pickArenaBackdrop(roomId || 'arena'), [roomId])
+
   // ⚔️ PODER / ARMADURA / HP exibidos no card de cada lutador (modelo enxuto, dos levers
   // computados pelo servidor). O delta entre parênteses é o ganho da transformação
   // (buff simétrico ×TRANSFORM_SCALE). Fallback p/ atributos crus se ainda não houver levers.
@@ -490,9 +505,13 @@ function CombatPageContent() {
         
         // APENAS na fase DICE_ROLL, setamos para ambos verem os dados
         if (room.phase === CombatPhase.DICE_ROLL && room.pendingAction) {
-          // NÃO resetar hasRolledDice aqui - apenas quando sai da fase
-          
-          // Ambos setam o mesmo diceType para rolar o mesmo dado
+          // 🎲 Ataques são auto-rolados pelo servidor (~400ms). Entrar em mode=rolling
+          // AGORA (antes do resultado) — senão o dado fica idle (só "d6" sem giro),
+          // diferente do PvE onde hasRolled=true dispara o spin.
+          if (room.pendingAction.type === 'attack') {
+            setHasRolledDice(true)
+          }
+
           const diceType = room.pendingAction.diceType
           setPendingAction({
             action: room.pendingAction.action,
@@ -524,7 +543,8 @@ function CombatPageContent() {
 
       socket.on('dice_rolled', (data: {playerId: string, sides: number, result: any}) => {
         console.log('🎲 Dado rolado:', data)
-        // Mostrar o resultado do dado na cena de batalha
+        // Garante mode=rolling mesmo se room_updated chegou depois do dice_rolled
+        setHasRolledDice(true)
         setDiceResults(prev => ({
           ...prev,
           [data.playerId]: {
@@ -1349,34 +1369,20 @@ function CombatPageContent() {
         🎲 {initiativeWinnerName || 'Rolando iniciativa...'}
       </div>
     )
-  } else if (!combatRoom?.isActive) {
-    statusContent = (
-      <div className="flex flex-col items-center gap-2 px-2">
-        <div className="text-xs sm:text-sm text-white/60 font-bold text-center">
-          {!opponent ? 'Aguardando oponente...' : 'Preparando para o combate...'}
-        </div>
-        {opponent && (
-          <button
-            type="button"
-            onClick={toggleReady}
-            className={`px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all shadow-lg ${
-              isReady
-                ? 'bg-emerald-600'
-                : 'bg-gradient-to-r from-red-700 to-red-500 hover:scale-105'
-            }`}
-          >
-            {isReady ? '✅ Pronto!' : '🏁 Ficar Pronto'}
-          </button>
-        )}
-      </div>
-    )
   } else if (combatRoom?.phase === CombatPhase.COMBAT_END) {
+    // ⚠️ COMBAT_END vem com isActive=false — checar ANTES do branch !isActive,
+    // senão a tela de vitória/derrota nunca aparece.
     statusContent = (
       <div className="text-center space-y-2 px-2 max-w-sm">
         <div className={`text-base sm:text-lg font-bold ${isWinner ? 'text-emerald-400' : 'text-red-400'}`}>
           {isWinner ? '🏆 VITÓRIA!' : '💀 DERROTA!'}
         </div>
-        {battleReward && (
+        {isTraining ? (
+          <div className="rounded-lg border border-white/15 bg-black/30 p-2 text-[11px] text-white/65">
+            🏟️ Treino concluído — sem XP, gold ou ranking.
+            <span className="block mt-1 text-white/45">Recompensas só em luta ranqueada (Buscar Oponente / sala).</span>
+          </div>
+        ) : battleReward ? (
           battleReward.failed ? (
             <div className="rounded-lg border border-amber-500/40 bg-amber-900/20 p-2 text-[11px] text-amber-200">
               ⚠️ As recompensas não puderam ser creditadas. Nada foi perdido.
@@ -1406,6 +1412,8 @@ function CombatPageContent() {
               )}
             </div>
           )
+        ) : (
+          <div className="text-[11px] text-white/45 animate-pulse">Contando a bolsa da arena…</div>
         )}
         <button
           type="button"
@@ -1414,6 +1422,27 @@ function CombatPageContent() {
         >
           Voltar ao Lobby
         </button>
+      </div>
+    )
+  } else if (!combatRoom?.isActive) {
+    statusContent = (
+      <div className="flex flex-col items-center gap-2 px-2">
+        <div className="text-xs sm:text-sm text-white/60 font-bold text-center">
+          {!opponent ? 'Aguardando oponente...' : 'Preparando para o combate...'}
+        </div>
+        {opponent && (
+          <button
+            type="button"
+            onClick={toggleReady}
+            className={`px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all shadow-lg ${
+              isReady
+                ? 'bg-emerald-600'
+                : 'bg-gradient-to-r from-red-700 to-red-500 hover:scale-105'
+            }`}
+          >
+            {isReady ? '✅ Pronto!' : '🏁 Ficar Pronto'}
+          </button>
+        )}
       </div>
     )
   } else {
@@ -1524,6 +1553,14 @@ function CombatPageContent() {
           combatEnded={combatRoom?.phase === CombatPhase.COMBAT_END}
           event={battleEvent}
           diceResults={diceResults}
+          backdrop={
+            <ImageBackdrop
+              src={arenaBackdrop.src}
+              theme={arenaBackdrop.theme}
+              overlayOpacity={0.35}
+              showParticles
+            />
+          }
           dicePanel={
             isSpectator || isModerator ? null
               : combatRoom?.phase === CombatPhase.INITIATIVE_ROLL
@@ -1541,19 +1578,29 @@ function CombatPageContent() {
                   }
               : combatRoom?.phase === CombatPhase.DICE_ROLL && combatRoom?.pendingAction &&
                 !(combatRoom.pendingAction.defenseAction === 'exhausted' && !isMyTurn)
-                ? {
-                    visible: true,
-                    diceType: combatRoom.pendingAction.diceType,
-                    hasRolled: hasRolledDice,
-                    label: combatRoom.pendingAction.defenseAction === 'exhausted'
-                      ? `😮‍💨 Oponente exausto! Role o d${combatRoom.pendingAction.diceType}!`
-                      : `🎲 Role o d${combatRoom.pendingAction.diceType}!`,
-                    onRoll: () => handleRollDice(combatRoom.pendingAction.diceType),
-                    myResult: currentPlayer ? diceResults[currentPlayer.id] : null,
-                    waitingForOpponent: combatRoom.pendingAction.defenseAction === 'exhausted'
-                      ? false
-                      : (opponent ? !diceResults[opponent.id] : false)
-                  }
+                ? (() => {
+                    const pending = combatRoom.pendingAction
+                    const sides = pending.diceType
+                    // Resultado é do ATACANTE (servidor auto-rola só o golpe) — os dois
+                    // lutadores veem o mesmo dado girando, como no PvE.
+                    const attackerId = pending.playerId as string | undefined
+                    const attackResult = attackerId ? (diceResults[attackerId] ?? null) : null
+                    const autoAttack = pending.type === 'attack'
+                    return {
+                      visible: true,
+                      diceType: sides,
+                      // Auto-roll: sempre rolling. Legado (clique): hasRolledDice.
+                      hasRolled: autoAttack ? true : hasRolledDice,
+                      label: autoAttack
+                        ? `🎲 Rolando d${sides}…`
+                        : pending.defenseAction === 'exhausted'
+                          ? `😮‍💨 Oponente exausto! Role o d${sides}!`
+                          : `🎲 Role o d${sides}!`,
+                      onRoll: autoAttack ? () => {} : () => handleRollDice(sides),
+                      myResult: attackResult,
+                      waitingForOpponent: false,
+                    }
+                  })()
                 : null
           }
         />

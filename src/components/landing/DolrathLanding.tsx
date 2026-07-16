@@ -248,6 +248,10 @@ function Hero({ primaryHref }: {
                 Ver gameplay
               </Button>
             </Reveal>
+            {/* d20 3D pequeno, só no mobile — clique/arraste pra rolar */}
+            <Reveal delay={320} className="lg:hidden self-center">
+              <ShowcaseDie sides={20} size={72} interactive />
+            </Reveal>
             <Reveal delay={400} className="flex flex-wrap items-center gap-3 text-xs text-textsec/80">
               <span className="font-combat">ERC-721</span>
               <span aria-hidden="true">·</span>

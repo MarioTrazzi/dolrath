@@ -434,13 +434,11 @@ export function ShowcaseDie({ sides = 20, size = 260, className = '', interactiv
   const theme = DICE_THEME[sides] || DICE_THEME[6]
   const [phase, setPhase] = useState<'idle' | 'tumbling' | 'settling'>('idle')
   const [targetRoll, setTargetRoll] = useState<number | null>(null)
-  const [result, setResult] = useState<number | null>(null)
   const rollingRef = useRef(false)
 
   const throwDie = () => {
     if (rollingRef.current) return
     rollingRef.current = true
-    setResult(null)
     setPhase('tumbling')
     const tumbleMs = 550 + Math.random() * 300
     window.setTimeout(() => {
@@ -450,7 +448,6 @@ export function ShowcaseDie({ sides = 20, size = 260, className = '', interactiv
   }
 
   const handleSettled = () => {
-    setResult(targetRoll)
     window.setTimeout(() => {
       rollingRef.current = false
       setPhase('idle')
@@ -496,20 +493,6 @@ export function ShowcaseDie({ sides = 20, size = 260, className = '', interactiv
           onSettled={interactive ? handleSettled : undefined}
         />
       </motion.div>
-      {interactive && (
-        <AnimatePresence>
-          {result != null && (
-            <motion.div
-              initial={{ y: -6, opacity: 0, scale: 0.8 }}
-              animate={{ y: 0, opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute left-1/2 -translate-x-1/2 bottom-0 translate-y-full pt-2 text-sm font-bold text-white/90 pointer-events-none whitespace-nowrap"
-            >
-              🎲 {result}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      )}
     </div>
   )
 }

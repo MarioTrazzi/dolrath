@@ -209,7 +209,19 @@ function Hero({ primaryHref }: {
         className="absolute inset-0 h-full w-full object-cover object-center"
         style={{ opacity: awaken ? 1 : 0, transition: `opacity ${fadeMs}ms ease-out` }}
       />
-      {/* Brilho celestial dourado que pulsa enquanto a forma está desperta */}
+      {/* Véu escuro sob o texto (coluna esquerda). Na forma celestial o amarelo
+          da transformação cobria a tipografia — o scrim sobe junto do awaken. */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          transition: `opacity ${fadeMs}ms ease-out`,
+          background: awaken
+            ? 'linear-gradient(90deg, rgba(4,4,10,0.88) 0%, rgba(4,4,10,0.62) 34%, rgba(4,4,10,0.22) 52%, transparent 68%)'
+            : 'linear-gradient(90deg, rgba(4,4,10,0.48) 0%, rgba(4,4,10,0.22) 32%, transparent 52%)',
+        }}
+      />
+      {/* Brilho celestial — puxado pro centro da figura (não em cima do texto) */}
       <div
         aria-hidden="true"
         className="absolute inset-0 pointer-events-none mix-blend-screen"
@@ -217,7 +229,7 @@ function Hero({ primaryHref }: {
           opacity: awaken ? 1 : 0,
           transition: `opacity ${fadeMs}ms ease-out`,
           background:
-            'radial-gradient(45% 60% at 24% 55%, rgba(251,191,36,0.28), transparent 70%), radial-gradient(40% 55% at 76% 45%, rgba(74,222,128,0.16), transparent 72%)',
+            'radial-gradient(38% 52% at 48% 52%, rgba(251,191,36,0.18), transparent 70%), radial-gradient(36% 48% at 78% 42%, rgba(74,222,128,0.14), transparent 72%)',
           animation: awaken ? 'hero-aura-pulse 2.2s ease-in-out infinite' : 'none',
         }}
       />
@@ -236,12 +248,19 @@ function Hero({ primaryHref }: {
       )}
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 w-full">
         <div className="grid lg:grid-cols-[1.2fr_0.8fr] items-center gap-12">
-          <div className="flex flex-col items-start gap-6 max-w-2xl [text-shadow:0_2px_16px_rgba(0,0,0,0.85)]">
+          <div
+            className="flex flex-col items-start gap-6 max-w-2xl transition-[text-shadow] duration-700"
+            style={{
+              textShadow: awaken
+                ? '0 2px 18px rgba(0,0,0,0.95), 0 0 42px rgba(0,0,0,0.75)'
+                : '0 2px 16px rgba(0,0,0,0.85)',
+            }}
+          >
             <Reveal delay={0}>
               <Badge tone="primary" icon={<Sparkles size={14} />}>RPG on-chain · NFT</Badge>
             </Reveal>
             <Reveal delay={100}>
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold leading-[1.08] tracking-tight text-balance">
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold leading-[1.08] tracking-tight text-balance text-white">
                 Forje sua{' '}
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-purple-400">
                   lenda
@@ -250,7 +269,11 @@ function Hero({ primaryHref }: {
               </h1>
             </Reveal>
             <Reveal delay={200}>
-              <p className="text-lg text-textsec max-w-xl text-pretty">
+              <p
+                className={`text-lg max-w-xl text-pretty transition-colors duration-700 ${
+                  awaken ? 'text-white/90' : 'text-textsec'
+                }`}
+              >
                 Crie um personagem que é seu de verdade, aprimore seu gear e busque
                 tesouros épicos. Combate tático por turnos: desperte sua forma —
                 Dragão, Celestial e mais — e deixe cada rolagem de dado mudar a batalha.
@@ -266,7 +289,12 @@ function Hero({ primaryHref }: {
             <Reveal delay={320} className="lg:hidden self-center">
               <ShowcaseDie sides={20} size={72} interactive />
             </Reveal>
-            <Reveal delay={400} className="flex flex-wrap items-center gap-3 text-xs text-textsec/80">
+            <Reveal
+              delay={400}
+              className={`flex flex-wrap items-center gap-3 text-xs transition-colors duration-700 ${
+                awaken ? 'text-white/75' : 'text-textsec/80'
+              }`}
+            >
               <span className="font-combat">ERC-721</span>
               <span aria-hidden="true">·</span>
               <span>Sem compra obrigatória para testar</span>

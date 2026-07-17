@@ -143,10 +143,20 @@ export function Navbar() {
                 </span>
               </button>
             ) : (
-              <span aria-hidden="true" className="text-lg">⚔️</span>
+              <Image
+                src="/logo-bdi-icon.png"
+                alt=""
+                aria-hidden="true"
+                width={36}
+                height={36}
+                className="shrink-0"
+              />
             )}
-            <Link href="/" className="font-bold text-lg tracking-tight text-white">
-              Dolrath
+            <Link href="/" className="flex flex-col leading-none text-white">
+              <span className="font-bold text-lg tracking-tight">BDI</span>
+              <span className="text-[8px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
+                Black Dolrath Idle
+              </span>
             </Link>
           </div>
 

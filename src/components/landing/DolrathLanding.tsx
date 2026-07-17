@@ -1,7 +1,7 @@
 'use client'
 
 // ============================================================
-// DOLRATH — Landing page
+// BDI — BLACK DOLRATH IDLE — Landing page
 // Navbar de vidro, hero cinematográfico, Jornada Dolrath (carrossel com as
 // telas REAIS do jogo em ./journey/), bestiário, relíquias, ofícios,
 // economia, como funciona, CTA e footer.
@@ -9,6 +9,7 @@
 
 import React, { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useSession } from 'next-auth/react'
 import { motion, useReducedMotion } from 'framer-motion'
 import {
@@ -61,9 +62,21 @@ function Navbar({ primaryHref }: { primaryHref: string }) {
     <header className="fixed top-0 inset-x-0 z-50">
       <nav className="mx-auto max-w-7xl px-4 sm:px-6" aria-label="Navegação principal">
         <div className="mt-3 flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-secondary/70 backdrop-blur-xl px-4 sm:px-6 py-3 shadow-2xl shadow-black/20">
-          <Link href="/" className="flex items-center gap-2 font-bold text-lg tracking-tight text-white">
-            <span aria-hidden="true">⚔️</span>
-            <span>Dolrath</span>
+          <Link href="/" className="flex items-center gap-2.5 text-white">
+            <Image
+              src="/logo-bdi-icon.png"
+              alt=""
+              aria-hidden="true"
+              width={38}
+              height={38}
+              className="shrink-0 drop-shadow-[0_0_10px_rgba(251,191,36,0.35)]"
+            />
+            <span className="flex flex-col leading-none">
+              <span className="font-bold text-lg tracking-tight">BDI</span>
+              <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
+                Black Dolrath Idle
+              </span>
+            </span>
           </Link>
           <div className="hidden md:flex items-center gap-1">
             {NAV_LINKS.map((l) => (
@@ -252,10 +265,18 @@ function Hero({ primaryHref }: {
             <span className="font-combat">testnet aberta</span>
           </Reveal>
         </div>
-        {/* Trio de dados "pedra amaldiçoada" — só desktop (3 poliedros CSS
-            girando é RAF demais pro mobile). Arraste/toque rola de verdade. */}
-        <Reveal delay={250} className="hidden lg:block shrink-0 pr-2">
-          <div className="relative h-[340px] w-[290px]">
+        {/* Emblema BDI + trio de dados "pedra amaldiçoada" — só desktop (3
+            poliedros CSS girando é RAF demais pro mobile). Arraste/toque rola. */}
+        <Reveal delay={250} className="hidden lg:flex flex-col items-center gap-1 shrink-0 pr-2">
+          <Image
+            src="/logo-bdi.png"
+            alt="BDI — Black Dolrath Idle"
+            width={230}
+            height={230}
+            priority
+            className="drop-shadow-[0_0_32px_rgba(251,191,36,0.28)]"
+          />
+          <div className="relative h-[300px] w-[290px]">
             <motion.div
               className="absolute right-2 top-0"
               animate={reduce ? {} : { y: [0, -12, 0] }}
@@ -744,8 +765,14 @@ function Footer() {
     <footer className="relative border-t border-white/10 bg-secondary/60 backdrop-blur-xl">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 py-14 grid gap-10 md:grid-cols-[1.4fr_repeat(3,1fr)]">
         <div className="flex flex-col gap-4 items-start">
-          <span className="flex items-center gap-2 font-bold text-lg text-white">
-            <span aria-hidden="true">⚔️</span> Dolrath
+          <span className="flex items-center gap-2.5 text-white">
+            <Image src="/logo-bdi-icon.png" alt="" aria-hidden="true" width={36} height={36} />
+            <span className="flex flex-col leading-none">
+              <span className="font-bold text-lg">BDI</span>
+              <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
+                Black Dolrath Idle
+              </span>
+            </span>
           </span>
           <p className="text-sm text-textsec max-w-xs">
             RPG de fantasia sombria on-chain. Seus heróis, suas relíquias, suas
@@ -780,7 +807,7 @@ function Footer() {
       </div>
       <div className="border-t border-white/5">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 py-5 flex flex-col sm:flex-row gap-2 items-center justify-between text-xs text-textsec/70">
-          <span>© 2026 Dolrath. Todos os direitos reservados.</span>
+          <span>© 2026 BDI — Black Dolrath Idle. Todos os direitos reservados.</span>
           <span className="font-combat">v0.4.2 · Sepolia testnet</span>
         </div>
       </div>

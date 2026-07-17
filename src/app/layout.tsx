@@ -30,8 +30,9 @@ const cinzelDecorative = Cinzel_Decorative({
 })
 
 export const metadata: Metadata = {
-  title: 'Dolrath RPG - Sistema de Combate Tokenizado',
-  description: 'RPG com IA como juiz automático e sistema de tokenização',
+  title: 'BDI — Black Dolrath Idle',
+  description: 'RPG idle de fantasia sombria on-chain: rolagens de dado, masmorras, PvP e relíquias NFT.',
+  icons: { icon: '/logo-bdi-icon.png' },
 }
 
 export const viewport: Viewport = {

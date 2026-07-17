@@ -265,34 +265,35 @@ function Hero({ primaryHref }: {
             <span className="font-combat">testnet aberta</span>
           </Reveal>
         </div>
-        {/* Emblema BDI + trio de dados "pedra amaldiçoada" — só desktop (3
-            poliedros CSS girando é RAF demais pro mobile). Arraste/toque rola. */}
-        <Reveal delay={250} className="hidden lg:flex flex-col items-center gap-1 shrink-0 pr-2">
-          <Image
-            src="/logo-bdi.png"
-            alt="BDI — Black Dolrath Idle"
-            width={230}
-            height={230}
-            priority
-            className="drop-shadow-[0_0_32px_rgba(251,191,36,0.28)]"
-          />
-          <div className="relative h-[300px] w-[290px]">
+        {/* Emblema BDI no centro com o trio de dados "pedra amaldiçoada"
+            orbitando ao redor — só desktop (3 poliedros CSS girando é RAF
+            demais pro mobile). Arraste/toque rola de verdade. */}
+        <Reveal delay={250} className="hidden lg:block shrink-0 pr-2">
+          <div className="relative h-[440px] w-[420px]">
+            <Image
+              src="/logo-bdi.png"
+              alt="BDI — Black Dolrath Idle"
+              width={270}
+              height={270}
+              priority
+              className="absolute inset-0 m-auto drop-shadow-[0_0_36px_rgba(251,191,36,0.3)]"
+            />
             <motion.div
-              className="absolute right-2 top-0"
+              className="absolute right-6 top-0 z-10"
               animate={reduce ? {} : { y: [0, -12, 0] }}
               transition={reduce ? {} : { repeat: Infinity, duration: 5.2, ease: 'easeInOut' }}
             >
               <ShowcaseDie sides={6} size={84} interactive />
             </motion.div>
             <motion.div
-              className="absolute left-0 top-[104px]"
+              className="absolute left-0 top-[190px] z-10"
               animate={reduce ? {} : { y: [0, -14, 0] }}
               transition={reduce ? {} : { repeat: Infinity, duration: 6.4, ease: 'easeInOut', delay: 0.9 }}
             >
               <ShowcaseDie sides={20} size={128} interactive />
             </motion.div>
             <motion.div
-              className="absolute bottom-0 right-8"
+              className="absolute bottom-2 right-12 z-10"
               animate={reduce ? {} : { y: [0, -10, 0] }}
               transition={reduce ? {} : { repeat: Infinity, duration: 5.8, ease: 'easeInOut', delay: 1.7 }}
             >

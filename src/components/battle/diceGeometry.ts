@@ -383,7 +383,20 @@ function buildGeometry(sides: number): DieGeometry {
     return { center, normal: n, basisX, basisY, verts2d, radius, inradius, settle }
   })
 
-  return { sides, faces }
+  // Normalizar só pelo circunraio deixa sólidos pontudos (d4/d20) com corpo
+  // pequeno na caixa — os vértices dominam a silhueta. Mistura com o inraio
+  // do sólido p/ todos os dados terem presença visual parecida no mesmo size.
+  const solidInradius = Math.min(...faces.map(f => vDot(f.normal, f.center)))
+  const s = 1 / (0.55 + 0.45 * solidInradius)
+  const scaledFaces: DieFace[] = faces.map(f => ({
+    ...f,
+    center: vScale(f.center, s),
+    verts2d: f.verts2d.map(([x, y]) => [x * s, y * s] as [number, number]),
+    radius: f.radius * s,
+    inradius: f.inradius * s,
+  }))
+
+  return { sides, faces: scaledFaces }
 }
 
 const geomCache = new Map<number, DieGeometry>()

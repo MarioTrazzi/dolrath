@@ -31,13 +31,15 @@ export interface DieResult {
   total: number
 }
 
+// Pedra amaldiçoada: chumbo tingido por uma gema sombria no coração da face,
+// borda quase-preta — o tipo do dado vive na veia de cor, não na face inteira.
 const DICE_THEME: Record<number, { from: string; to: string; glow: string }> = {
-  4: { from: '#ef4444', to: '#7f1d1d', glow: 'rgba(239,68,68,0.7)' },
-  6: { from: '#3b82f6', to: '#1e3a8a', glow: 'rgba(59,130,246,0.7)' },
-  8: { from: '#22c55e', to: '#14532d', glow: 'rgba(34,197,94,0.7)' },
-  10: { from: '#eab308', to: '#713f12', glow: 'rgba(234,179,8,0.7)' },
-  12: { from: '#a855f7', to: '#581c87', glow: 'rgba(168,85,247,0.7)' },
-  20: { from: '#ec4899', to: '#831843', glow: 'rgba(236,72,153,0.7)' },
+  4: { from: '#5c1a1a', to: '#0c0c0f', glow: 'rgba(170,40,40,0.55)' },
+  6: { from: '#1c2f57', to: '#0c0c0f', glow: 'rgba(70,110,220,0.5)' },
+  8: { from: '#173f26', to: '#0c0c0f', glow: 'rgba(50,170,100,0.5)' },
+  10: { from: '#4d3312', to: '#0c0c0f', glow: 'rgba(210,150,50,0.5)' },
+  12: { from: '#38195c', to: '#0c0c0f', glow: 'rgba(150,85,230,0.5)' },
+  20: { from: '#4d1230', to: '#0c0c0f', glow: 'rgba(220,70,120,0.5)' },
 }
 
 // ============================================================
@@ -118,9 +120,9 @@ function Die3D({ sides, size, phase, targetRoll, settleMs, dimmed, reduceMotion,
       for (let i = 0; i < geom.faces.length; i++) {
         const b = v3Dot(qRotate(q, geom.faces[i].normal), LIGHT)
         const sh = shadeRefs.current[i]
-        if (sh) sh.style.opacity = Math.min(0.62, Math.max(0, (1 - b) * 0.34)).toFixed(3)
+        if (sh) sh.style.opacity = Math.min(0.78, Math.max(0, (1 - b) * 0.45)).toFixed(3)
         const gl = glintRefs.current[i]
-        if (gl) gl.style.opacity = (Math.max(0, b - 0.62) * 0.75).toFixed(3)
+        if (gl) gl.style.opacity = (Math.max(0, b - 0.7) * 0.5).toFixed(3)
       }
     }
 
@@ -192,15 +194,15 @@ function Die3D({ sides, size, phase, targetRoll, settleMs, dimmed, reduceMotion,
   return (
     <div
       className="relative"
-      style={{ width: size, height: size, perspective: size * 3.4, opacity: dimmed ? 0.45 : 1 }}
+      style={{ width: size, height: size, perspective: size * 6, opacity: dimmed ? 0.45 : 1 }}
     >
       {/* gradiente compartilhado pelas faces (referência cruzada entre SVGs) */}
       <svg width={0} height={0} className="absolute" aria-hidden>
         <defs>
-          <linearGradient id={`${uid}-grad`} x1="0%" y1="0%" x2="100%" y2="100%">
+          <radialGradient id={`${uid}-grad`} cx="50%" cy="42%" r="72%">
             <stop offset="0%" stopColor={theme.from} />
             <stop offset="100%" stopColor={theme.to} />
-          </linearGradient>
+          </radialGradient>
         </defs>
       </svg>
 
@@ -214,7 +216,7 @@ function Die3D({ sides, size, phase, targetRoll, settleMs, dimmed, reduceMotion,
           width: size * 0.72,
           height: size * 0.17,
           borderRadius: '50%',
-          background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0) 70%)',
+          background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0) 70%)',
           transform: 'translateX(-50%)',
           opacity: 0.5,
         }}
@@ -257,21 +259,22 @@ function Die3D({ sides, size, phase, targetRoll, settleMs, dimmed, reduceMotion,
                   <polygon
                     points={pts}
                     fill={`url(#${uid}-grad)`}
-                    stroke={isTarget ? 'rgba(255,222,130,0.95)' : 'rgba(236,202,122,0.45)'}
-                    strokeWidth={f.radius * 0.055}
+                    stroke={isTarget ? 'rgba(231,198,130,0.95)' : 'rgba(201,162,95,0.35)'}
+                    strokeWidth={f.radius * 0.1}
                     strokeLinejoin="round"
                   />
                   {/* sombra e brilho por face — opacidade dirigida pelo rAF (luz fixa no mundo) */}
                   <polygon ref={el => { shadeRefs.current[i] = el }} points={pts} fill="#000" style={{ opacity: 0 }} />
                   <polygon ref={el => { glintRefs.current[i] = el }} points={pts} fill="#fff" style={{ opacity: 0 }} />
-                  <text x={0} y={fs * 0.07} textAnchor="middle" dominantBaseline="central" fontWeight={900} fontSize={fs} fill="rgba(15,6,0,0.6)">
+                  {/* numeral gravado na pedra: entalhe escuro acima + ouro */}
+                  <text x={0} y={-fs * 0.06} textAnchor="middle" dominantBaseline="central" fontWeight={900} fontSize={fs} fill="rgba(0,0,0,0.75)">
                     {num}
                   </text>
-                  <text x={0} y={0} textAnchor="middle" dominantBaseline="central" fontWeight={900} fontSize={fs} fill={isTarget ? '#ffeeb8' : '#f6e6c2'}>
+                  <text x={0} y={0} textAnchor="middle" dominantBaseline="central" fontWeight={900} fontSize={fs} fill={isTarget ? '#ffeeb8' : '#c9a25f'}>
                     {num}
                   </text>
                   {sides >= 9 && (num === 6 || num === 9) && (
-                    <line x1={-fs * 0.3} x2={fs * 0.3} y1={fs * 0.56} y2={fs * 0.56} stroke="#f6e6c2" strokeWidth={fs * 0.09} strokeLinecap="round" />
+                    <line x1={-fs * 0.3} x2={fs * 0.3} y1={fs * 0.56} y2={fs * 0.56} stroke={isTarget ? '#ffeeb8' : '#c9a25f'} strokeWidth={fs * 0.09} strokeLinecap="round" />
                   )}
                 </svg>
               </div>
@@ -352,8 +355,8 @@ export function AnimatedDie({ sides, size = 80, mode, result, onClick, disabled,
         <div
           className="absolute inset-0 rounded-full blur-xl transition-opacity duration-300"
           style={{
-            backgroundColor: theme.glow,
-            opacity: landed ? 0.9 : mode === 'rolling' ? 0.5 : 0.3,
+            backgroundColor: isMax ? 'rgba(231,198,130,0.7)' : theme.glow,
+            opacity: landed ? 0.85 : mode === 'rolling' ? 0.4 : 0.2,
           }}
         />
 
@@ -383,7 +386,7 @@ export function AnimatedDie({ sides, size = 80, mode, result, onClick, disabled,
               exit={{ opacity: 0 }}
               transition={{ duration: 0.7, ease: 'easeOut' }}
               className="absolute inset-0 rounded-full border-4 pointer-events-none"
-              style={{ borderColor: theme.glow }}
+              style={{ borderColor: isMax ? '#e7c682' : theme.glow }}
             />
           )}
         </AnimatePresence>

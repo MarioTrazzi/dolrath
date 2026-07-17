@@ -149,6 +149,14 @@ export default function Slide1Creation({ active, onNext }: JourneySlideProps) {
               ))}
             </div>
           </div>
+          {/* Prompt da arte junto do gráfico de stats — fora da imagem do herói */}
+          <div className="hidden md:block">
+            <TypewriterText
+              key={`${raceId}-${classId}`}
+              text={promptExcerpt}
+              label="✍️ prompt da sua arte · você ajuda a escolher o estilo"
+            />
+          </div>
           {/* Radar de atributos (o mesmo da tela de criação) */}
           <div className="hidden md:flex flex-1 min-h-0 items-start justify-center overflow-hidden">
             <div className="origin-top scale-[0.62]">
@@ -183,15 +191,6 @@ export default function Slide1Creation({ active, onNext }: JourneySlideProps) {
                 className="absolute inset-x-0 bottom-0 mx-auto h-[72%] object-contain drop-shadow-[0_8px_24px_rgba(0,0,0,0.7)]"
               />
             </AnimatePresence>
-
-            {/* Prompt REAL da arte, digitando sobre a foto */}
-            <div className="absolute top-2 inset-x-2 z-10">
-              <TypewriterText
-                key={`${raceId}-${classId}`}
-                text={promptExcerpt}
-                label="✍️ prompt da sua arte · você ajuda a escolher o estilo"
-              />
-            </div>
 
             <div className="absolute inset-x-0 bottom-0 p-3 sm:p-4">
               <AnimatePresence mode="popLayout">
@@ -229,10 +228,17 @@ export default function Slide1Creation({ active, onNext }: JourneySlideProps) {
             </div>
           </div>
 
-          {/* Radar no mobile (desktop mostra na coluna esquerda) */}
-          <div className="md:hidden flex justify-center overflow-hidden max-h-[220px]">
-            <div className="origin-top scale-[0.6]">
-              <StatRevealRadar key={`m-${raceId}`} str={stats.str} agi={stats.agi} int={stats.int} def={stats.res} />
+          {/* Prompt + radar no mobile (desktop mostra na coluna esquerda) */}
+          <div className="md:hidden flex flex-col gap-2">
+            <TypewriterText
+              key={`m-${raceId}-${classId}`}
+              text={promptExcerpt}
+              label="✍️ prompt da sua arte · você ajuda a escolher o estilo"
+            />
+            <div className="flex justify-center overflow-hidden max-h-[220px]">
+              <div className="origin-top scale-[0.6]">
+                <StatRevealRadar key={`m-${raceId}`} str={stats.str} agi={stats.agi} int={stats.int} def={stats.res} />
+              </div>
             </div>
           </div>
         </div>

@@ -7,7 +7,6 @@
 
 import React, { useMemo } from 'react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
-import CreationCardBackdrop from '@/components/character/CreationCardBackdrop'
 import { CharacterStatChips } from '@/components/character/CharacterStatChips'
 import { TRANSFORMATION_CONFIG, type TransformationType } from '@/lib/transformationSystem'
 import { useJourney } from '../JourneyContext'
@@ -76,16 +75,20 @@ export default function Slide2Sheet({ active, onNext }: JourneySlideProps) {
             initial={{ rotateY: 70, opacity: 0, scale: 0.85 }}
             animate={{ rotateY: 0, opacity: 1, scale: 1 }}
             transition={{ type: 'spring', stiffness: 130, damping: 16 }}
-            className="relative w-full max-w-[330px] sm:max-w-[360px] aspect-square rounded-xl border-2 overflow-hidden"
+            className="relative w-full max-w-[250px] sm:max-w-[280px] aspect-[5/7] rounded-xl border-2 overflow-hidden"
             style={{
               borderColor: flipped ? formLabel.glow : visual.borderColor,
               boxShadow: flipped ? `0 0 34px ${formLabel.glow}66` : visual.glow,
               perspective: 900,
             }}
           >
-            <div className="absolute inset-0">
-              <CreationCardBackdrop theme={visual.backdropTheme} />
-            </div>
+            {/* Mesmo cenário da trilha usado no card do Slide 1 */}
+            <img
+              src="/backgrounds/_reserva/floresta-walk-map-v1-dolrath.webp"
+              alt=""
+              aria-hidden="true"
+              className="absolute inset-0 h-full w-full object-cover"
+            />
             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-black/35" />
 
             {/* aura da forma */}
@@ -200,20 +203,8 @@ export default function Slide2Sheet({ active, onNext }: JourneySlideProps) {
           </motion.div>
         </div>
 
-        {/* Coluna direita: prompt da transformação + árvore de skills */}
+        {/* Coluna direita: árvore de skills + prompt da transformação embaixo */}
         <div className="md:w-[54%] flex flex-col gap-2 min-h-0 w-full">
-          <AnimatePresence>
-            {step >= 5 && (
-              <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-                <TypewriterText
-                  key={`${raceId}-form-prompt`}
-                  text={`${formLabel.emoji} ${FORM_PROMPT_PT[raceId].slice(0, 150)}…`}
-                  label="✍️ prompt da forma transformada · gerada da SUA arte base"
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
-
           <div className="relative flex-1 min-h-[220px] rounded-lg border border-white/10 bg-black/30 overflow-hidden">
             <div className="absolute top-2 left-3 z-10 text-[10px] font-bold uppercase tracking-[0.2em] text-primary">
               🌳 Árvore de habilidades · {CLASS_LABEL[classId]}
@@ -225,6 +216,21 @@ export default function Slide2Sheet({ active, onNext }: JourneySlideProps) {
             <div className="absolute bottom-2 inset-x-3 text-[10px] text-white/60 text-center">
               A cada nível, pontos para evoluir os caminhos da sua classe — em página dedicada no jogo.
             </div>
+          </div>
+
+          {/* Prompt embaixo, em espaço RESERVADO — a árvore não deforma quando ele entra */}
+          <div className="min-h-[84px] shrink-0">
+            <AnimatePresence>
+              {step >= 5 && (
+                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+                  <TypewriterText
+                    key={`${raceId}-form-prompt`}
+                    text={`${formLabel.emoji} ${FORM_PROMPT_PT[raceId].slice(0, 150)}…`}
+                    label="✍️ prompt da forma transformada · gerada da SUA arte base"
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       </div>

@@ -11,7 +11,6 @@ import { motion, AnimatePresence } from 'framer-motion'
 import CreationCardBackdrop from '@/components/character/CreationCardBackdrop'
 import { getCreationVisual } from '@/lib/creationVisuals'
 import { StatRevealRadar } from '@/app/character/create/components/StatRevealRadar'
-import { RACE_STYLE, CLASS_STYLE } from '@/lib/characterImagePrompt'
 import { useJourney } from '../JourneyContext'
 import TypewriterText from './TypewriterText'
 import {
@@ -19,6 +18,8 @@ import {
   CLASS_LIST,
   CANON_CLASS,
   CANON_RACE,
+  RACE_PROMPT_PT,
+  CLASS_PROMPT_PT,
   heroArt,
   heroBaseStats,
   type JourneySlideProps,
@@ -109,8 +110,8 @@ export default function Slide1Creation({ active, onNext }: JourneySlideProps) {
   const stats = heroBaseStats(raceId)
   const race = RACE_LIST.find(r => r.id === raceId)
   const promptExcerpt =
-    `Race: ${race?.name}. ${RACE_STYLE[raceId].slice(0, 132)}… ` +
-    `Class: ${CLASS_STYLE[classId].slice(0, 86)}…`
+    `Raça: ${race?.name}. ${RACE_PROMPT_PT[raceId].slice(0, 132)}… ` +
+    `${CLASS_PROMPT_PT[classId].slice(0, 86)}…`
 
   return (
     <div className="relative h-full w-full overflow-y-auto md:overflow-hidden">
@@ -162,9 +163,13 @@ export default function Slide1Creation({ active, onNext }: JourneySlideProps) {
             className="relative flex-1 min-h-[280px] rounded-xl border-2 overflow-hidden"
             style={{ borderColor: visual.borderColor, boxShadow: visual.glow }}
           >
-            <div className="absolute inset-0">
-              <CreationCardBackdrop theme={visual.backdropTheme} />
-            </div>
+            {/* Trilha da Floresta Sombria (arte reaproveitada) como cenário do herói */}
+            <img
+              src="/backgrounds/_reserva/floresta-walk-map-v1-dolrath.webp"
+              alt=""
+              aria-hidden="true"
+              className="absolute inset-0 h-full w-full object-cover"
+            />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/40" />
             <AnimatePresence mode="popLayout">
               <motion.img

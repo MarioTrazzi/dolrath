@@ -53,34 +53,91 @@ export const CANON_RACE: Record<JourneyClassId, JourneyRaceId> = {
   monk: 'metamorfo',
 }
 
-/** Forma de transformação de cada raça (ids de TRANSFORMATION_ART/transformationSystem). */
+/** Forma de transformação de cada raça (ids de TRANSFORMATION_ART/transformationSystem).
+    Metamorfo = URSO: é a forma da arte metamorfo_transformed.png (Kaira vira um urso). */
 export const FORM_BY_RACE: Record<JourneyRaceId, string> = {
   humano: 'seventh_sense',
   elfo: 'celestial',
   draconiano: 'dragon',
-  metamorfo: 'wolf',
+  metamorfo: 'bear',
 }
 
 export const FORM_LABEL: Record<JourneyRaceId, { emoji: string; name: string; glow: string }> = {
   humano: { emoji: '✨', name: 'Sétimo Sentido', glow: '#e2e8f0' },
   elfo: { emoji: '🌟', name: 'Forma Celestial', glow: '#fbbf24' },
   draconiano: { emoji: '🐉', name: 'Dragão', glow: '#ef4444' },
-  metamorfo: { emoji: '🐺', name: 'Lobo', glow: '#93c5fd' },
+  metamorfo: { emoji: '🐻', name: 'Urso', glow: '#d97706' },
 }
 
 /** Especial de forma (mesmos action ids de transformationSpecials → AbilityFX). */
 export const FORM_SPECIAL_ACTION: Record<JourneyRaceId, string> = {
   draconiano: 'dragon_breath',
-  metamorfo: 'bite_bleeding',
+  metamorfo: 'unstoppable_charge',
   humano: 'cosmo_burst',
   elfo: 'super_nova',
 }
 
 export const FORM_SPECIAL_NAME: Record<JourneyRaceId, string> = {
   draconiano: '🔥 Sopro de Fogo',
-  metamorfo: '🩸 Mordida Sangrenta',
+  metamorfo: '💥 Investida Imparável',
   humano: '🌌 Explosão de Cosmo',
   elfo: '💥 Super Nova',
+}
+
+// ---------- Prompts em PT-BR (vitrine da landing) ----------
+// Traduções fiéis dos prompts REAIS de characterImagePrompt.ts — a geração
+// de imagem usa o texto em inglês; aqui é o que o visitante lê.
+
+export const RACE_PROMPT_PT: Record<JourneyRaceId, string> = {
+  draconiano:
+    'Herança draconiana: escamas sutis de dragão nos braços, mandíbula e fronte, olhos reptilianos, ' +
+    'um brilho de brasa sob a pele e um porte imponente que insinua o dragão adormecido. ' +
+    'Paleta: carmesim profundo e ouro derretido.',
+  metamorfo:
+    'Herança metamorfa: um aventureiro plenamente humano na forma normal — nada de pelos, garras ou ' +
+    'traços animais; só a presença selvagem e os olhos atentos denunciam a fera que ele pode se tornar. ' +
+    'Paleta: verde-musgo e osso.',
+  humano:
+    'Herança humana: um aventureiro determinado e adaptável, de traços expressivos e porte resiliente, ' +
+    'com uma centelha interior que anuncia o despertar do 7º Sentido. Paleta: âmbar quente e azul-aço.',
+  elfo:
+    'Herança élfica: traços elegantes e etéreos, longas orelhas pontudas, olhos luminosos e uma beleza ' +
+    'arcana graciosa, com um leve brilho astral que insinua a Forma Celestial. Paleta: verde-prata e ouro pálido.',
+}
+
+export const CLASS_PROMPT_PT: Record<JourneyClassId, string> = {
+  warrior:
+    'Classe Guerreiro: armadura pesada marcada por batalhas, uma grande arma corpo a corpo, ' +
+    'postura ampla e poderosa, cicatrizes e expressão endurecida.',
+  rogue:
+    'Classe Ladino: armadura leve de couro e capuz, adagas ou arco, postura ágil e agachada, ' +
+    'rosto na sombra e linguagem corporal rápida e perigosa.',
+  mage:
+    'Classe Mago: vestes arcanas com detalhes rúnicos, cajado brilhante, energia mágica vívida ' +
+    'com runas flutuando ao redor das mãos e um olhar inteligente e penetrante.',
+  monk:
+    'Classe Monge: trajes monásticos simples com punhos enfaixados, postura marcial disciplinada ' +
+    'e equilibrada, expressão serena e uma leve energia de chi ao redor do corpo.',
+}
+
+/** Prompt (PT) da arte da forma transformada — só as formas usadas na Jornada. */
+export const FORM_PROMPT_PT: Record<JourneyRaceId, string> = {
+  draconiano:
+    'Ascensão dracônica: o mesmo personagem irrompendo na forma ancestral de dragão — escamas carmesim ' +
+    'e ouro se espalhando pelo rosto e braços, olhos reptilianos brilhando, chifres e lufadas de fogo, ' +
+    'aura de brasas rubro-alaranjada. O traje original segue visível sob as escamas.',
+  metamorfo:
+    'Forma de urso possante: o mesmo personagem crescendo num urso colossal — pelagem parda espessa, ' +
+    'torso maciço, garras enormes e postura inabalável, aura âmbar de pura resiliência. ' +
+    'O traje original permanece no corpo, esticado pela nova massa.',
+  humano:
+    'Despertar do 7º Sentido: corpo, rosto e traje seguem exatamente como na arte base. Uma aura cósmica ' +
+    'branca explode ao redor: luz interior radiante, olhos brilhando, galáxias e estrelas de cosmo ' +
+    'girando pelo corpo, cabelo erguido pelo poder.',
+  elfo:
+    'Forma Celestial: o mesmo personagem ascendendo a um ser de luz astral — radiância dourado-branca, ' +
+    'runas arcanas orbitando o corpo, pele e olhos luminosos, feixes angélicos translúcidos. ' +
+    'Rosto e traje originais seguem claramente visíveis sob a luz.',
 }
 
 export const RACE_LIST = races

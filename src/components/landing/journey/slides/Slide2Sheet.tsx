@@ -9,17 +9,17 @@ import React, { useMemo } from 'react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import CreationCardBackdrop from '@/components/character/CreationCardBackdrop'
 import { CharacterStatChips } from '@/components/character/CharacterStatChips'
-import SkillTreePanel from '@/components/SkillTreePanel'
-import { getSkillTree, getSkillPaths } from '@/lib/skillTree'
-import { TRANSFORMATION_ART, type TransformationArtId } from '@/lib/characterImagePrompt'
+import { TRANSFORMATION_CONFIG, type TransformationType } from '@/lib/transformationSystem'
 import { useJourney } from '../JourneyContext'
 import TypewriterText from './TypewriterText'
+import MiniSkillTree from './MiniSkillTree'
 import {
   heroBaseStats,
   RACE_HERO,
   RACE_LIST,
   FORM_BY_RACE,
   FORM_LABEL,
+  FORM_PROMPT_PT,
   CLASS_LABEL,
   type JourneySlideProps,
 } from '../journeyData'
@@ -41,9 +41,22 @@ export default function Slide2Sheet({ active, onNext }: JourneySlideProps) {
   const flipped = step === 5
   const img = flipped ? RACE_HERO[raceId].artTransformed : heroArt
 
-  const tree = useMemo(() => getSkillTree(classId, form), [classId, form])
-  const paths = useMemo(() => getSkillPaths(classId, form), [classId, form])
-  const purchased = useMemo(() => tree.filter(n => n.tier === 1).slice(0, 3).map(n => n.id), [tree])
+  // Stats REAIS da forma: multiplicadores de transformationSystem sobre a base
+  // — o flip mostra que transformar muda os números, não só a arte.
+  const shown = useMemo(() => {
+    const mods = TRANSFORMATION_CONFIG[form as TransformationType]?.statModifiers
+    if (!flipped || !mods) return { ...stats, boosted: false }
+    return {
+      ...stats,
+      str: Math.round(stats.str * mods.strength),
+      agi: Math.round(stats.agi * mods.agility),
+      int: Math.round(stats.int * mods.intelligence),
+      res: Math.round(stats.res * mods.defense),
+      hp: Math.floor(stats.hp * mods.hp),
+      mp: Math.floor(stats.mp * (mods.mpPool ?? 1)),
+      boosted: true,
+    }
+  }, [flipped, form, stats])
 
   return (
     <div className="relative h-full w-full overflow-y-auto md:overflow-hidden">
@@ -158,18 +171,29 @@ export default function Slide2Sheet({ active, onNext }: JourneySlideProps) {
                 <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-1.5">
                   <CharacterStatChips
                     vitals={{
-                      hp: stats.hp, maxHp: stats.hp,
-                      mp: stats.mp, maxMp: stats.mp,
+                      hp: shown.hp, maxHp: shown.hp,
+                      mp: shown.mp, maxMp: shown.mp,
                       stamina: 100, maxStamina: 100,
-                      power: stats.str + stats.agi + stats.int + stats.res,
+                      power: shown.str + shown.agi + shown.int + shown.res,
                     }}
                   />
-                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-[11px] font-combat text-white/80">
-                    <span className="text-red-300">💪 STR {stats.str}</span>
-                    <span className="text-emerald-300">🌀 AGI {stats.agi}</span>
-                    <span className="text-sky-300">🧠 INT {stats.int}</span>
-                    <span className="text-amber-300">🛡️ RES {stats.res}</span>
-                  </div>
+                  {/* Stats pulam junto com o flip: a forma multiplica os números */}
+                  <motion.div
+                    key={shown.boosted ? 'form-stats' : 'base-stats'}
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-[11px] font-combat text-white/80"
+                  >
+                    <span className="text-red-300">💪 STR {shown.str}{shown.boosted && ' ⬆'}</span>
+                    <span className="text-emerald-300">🌀 AGI {shown.agi}{shown.boosted && ' ⬆'}</span>
+                    <span className="text-sky-300">🧠 INT {shown.int}{shown.boosted && ' ⬆'}</span>
+                    <span className="text-amber-300">🛡️ RES {shown.res}{shown.boosted && ' ⬆'}</span>
+                    {shown.boosted && (
+                      <span className="font-bold" style={{ color: formLabel.glow }}>
+                        {formLabel.emoji} stats da forma
+                      </span>
+                    )}
+                  </motion.div>
                 </motion.div>
               )}
             </div>
@@ -183,7 +207,7 @@ export default function Slide2Sheet({ active, onNext }: JourneySlideProps) {
               <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
                 <TypewriterText
                   key={`${raceId}-form-prompt`}
-                  text={`${formLabel.emoji} ${TRANSFORMATION_ART[form as TransformationArtId].slice(0, 150)}…`}
+                  text={`${formLabel.emoji} ${FORM_PROMPT_PT[raceId].slice(0, 150)}…`}
                   label="✍️ prompt da forma transformada · gerada da SUA arte base"
                 />
               </motion.div>
@@ -194,20 +218,10 @@ export default function Slide2Sheet({ active, onNext }: JourneySlideProps) {
             <div className="absolute top-2 left-3 z-10 text-[10px] font-bold uppercase tracking-[0.2em] text-primary">
               🌳 Árvore de habilidades · {CLASS_LABEL[classId]}
             </div>
-            <div className="absolute inset-0 pt-8 flex justify-center overflow-hidden pointer-events-none">
-              <div className="origin-top scale-[0.55] md:scale-[0.6]">
-                <SkillTreePanel
-                  tree={tree}
-                  paths={paths}
-                  purchased={purchased}
-                  availablePoints={3}
-                  onSpend={() => {}}
-                  classId={classId}
-                />
-              </div>
+            {/* Geometria REAL da classe (espiral/espada/flecha/mandala), ajustada à caixa */}
+            <div className="absolute inset-0 pt-9 pb-7 px-2 pointer-events-none">
+              <MiniSkillTree key={classId} classId={classId} form={form} />
             </div>
-            {/* fade inferior */}
-            <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/80 to-transparent pointer-events-none" />
             <div className="absolute bottom-2 inset-x-3 text-[10px] text-white/60 text-center">
               A cada nível, pontos para evoluir os caminhos da sua classe — em página dedicada no jogo.
             </div>

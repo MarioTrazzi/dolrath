@@ -10,6 +10,8 @@ import { getBlendedVisual, type BlendedVisual } from '@/lib/creationVisuals'
 import {
   heroName,
   heroArt,
+  CANON_CLASS,
+  CANON_RACE,
   type JourneyChoice,
   type JourneyRaceId,
   type JourneyClassId,
@@ -24,6 +26,9 @@ interface JourneyState extends JourneyChoice {
   /** Destino do CTA final (login ou dashboard, decidido pela landing). */
   primaryHref: string
   setChoice: (raceId: JourneyRaceId, classId: JourneyClassId, byUser?: boolean) => void
+  /** Escolha por raça/classe travando o par CANÔNICO (a arte nunca mente). */
+  pickRace: (raceId: JourneyRaceId, byUser?: boolean) => void
+  pickClass: (classId: JourneyClassId, byUser?: boolean) => void
 }
 
 const JourneyCtx = createContext<JourneyState | null>(null)
@@ -49,6 +54,14 @@ export function JourneyProvider({
       primaryHref,
       setChoice: (raceId, classId, byUser = false) => {
         setChoiceState({ raceId, classId })
+        if (byUser) setUserPicked(true)
+      },
+      pickRace: (raceId, byUser = false) => {
+        setChoiceState({ raceId, classId: CANON_CLASS[raceId] })
+        if (byUser) setUserPicked(true)
+      },
+      pickClass: (classId, byUser = false) => {
+        setChoiceState({ raceId: CANON_RACE[classId], classId })
         if (byUser) setUserPicked(true)
       },
     }

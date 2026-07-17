@@ -1,133 +1,231 @@
 'use client'
 
-// Slide 2 — A ficha: o card quadrado do personagem (mesma composição do
-// dashboard: CreationCardBackdrop + arte da raça + chips de vitals),
-// revelado em sequência como um "unboxing" da NFT.
+// Slide 2 — A ficha: card quadrado do personagem com FLIP automático
+// base⇄forma transformada (mesma animação do RaceFlipCard da landing),
+// o prompt REAL que criou a arte transformada, stats base e a árvore de
+// habilidades da classe ao lado.
 
-import React from 'react'
-import { motion } from 'framer-motion'
+import React, { useMemo } from 'react'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import CreationCardBackdrop from '@/components/character/CreationCardBackdrop'
 import { CharacterStatChips } from '@/components/character/CharacterStatChips'
+import SkillTreePanel from '@/components/SkillTreePanel'
+import { getSkillTree, getSkillPaths } from '@/lib/skillTree'
+import { TRANSFORMATION_ART, type TransformationArtId } from '@/lib/characterImagePrompt'
 import { useJourney } from '../JourneyContext'
-import { heroBaseStats, type JourneySlideProps } from '../journeyData'
+import TypewriterText from './TypewriterText'
+import {
+  heroBaseStats,
+  RACE_HERO,
+  RACE_LIST,
+  FORM_BY_RACE,
+  FORM_LABEL,
+  CLASS_LABEL,
+  type JourneySlideProps,
+} from '../journeyData'
 import { useSlideScript } from '../useSlideScript'
 
-// 0 entrada · 1 nome · 2 chips raça/classe · 3 vitals · 4 selo NFT · 5 hint
-const TIMES = [0, 700, 1400, 2100, 2900, 3800]
+// 0 entrada · 1 nome · 2 chips · 3 vitals · 4 selo NFT · 5 FLIP p/ forma +
+// prompt · 6 flip de volta · 7 CTA
+const TIMES = [0, 700, 1400, 2100, 2900, 4200, 8200, 9800]
 
 export default function Slide2Sheet({ active, onNext }: JourneySlideProps) {
   const { raceId, classId, heroName, heroArt, visual } = useJourney()
-  const { step, cycle } = useSlideScript(active, TIMES, { loopDelayMs: 5200 })
+  const { step, cycle } = useSlideScript(active, TIMES, { loopDelayMs: 5600 })
+  const reduced = useReducedMotion()
   const stats = heroBaseStats(raceId)
+  const race = RACE_LIST.find(r => r.id === raceId)
+
+  const form = FORM_BY_RACE[raceId]
+  const formLabel = FORM_LABEL[raceId]
+  const flipped = step === 5
+  const img = flipped ? RACE_HERO[raceId].artTransformed : heroArt
+
+  const tree = useMemo(() => getSkillTree(classId, form), [classId, form])
+  const paths = useMemo(() => getSkillPaths(classId, form), [classId, form])
+  const purchased = useMemo(() => tree.filter(n => n.tier === 1).slice(0, 3).map(n => n.id), [tree])
 
   return (
-    <div className="relative h-full w-full grid place-items-center p-4 pt-12 overflow-hidden">
+    <div className="relative h-full w-full overflow-y-auto md:overflow-hidden">
       {/* brilho ambiente */}
       <div
         className="absolute inset-0 pointer-events-none"
-        style={{ background: `radial-gradient(60% 45% at 50% 45%, ${visual.raceVisual.accentSoft}, transparent 70%)` }}
+        style={{
+          background: `radial-gradient(60% 45% at 32% 45%, ${flipped ? `${formLabel.glow}2e` : visual.raceVisual.accentSoft}, transparent 70%)`,
+        }}
       />
 
-      <motion.div
-        key={`${cycle}-${raceId}-${classId}`}
-        initial={{ rotateY: 70, opacity: 0, scale: 0.85 }}
-        animate={{ rotateY: 0, opacity: 1, scale: 1 }}
-        transition={{ type: 'spring', stiffness: 130, damping: 16 }}
-        className="relative w-full max-w-[340px] sm:max-w-[380px] aspect-square rounded-xl border-2 overflow-hidden"
-        style={{ borderColor: visual.borderColor, boxShadow: visual.glow, perspective: 800 }}
-      >
-        <div className="absolute inset-0">
-          <CreationCardBackdrop theme={visual.backdropTheme} />
-        </div>
-        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-black/35" />
-
-        {/* Arte do herói */}
-        <motion.img
-          src={heroArt}
-          alt={heroName}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2, duration: 0.5 }}
-          className="absolute inset-x-0 bottom-6 mx-auto h-[72%] object-contain drop-shadow-[0_10px_28px_rgba(0,0,0,0.75)]"
-        />
-
-        {/* Selo NFT */}
-        {step >= 4 && (
-          <motion.span
-            initial={{ scale: 2.2, opacity: 0, rotate: -18 }}
-            animate={{ scale: 1, opacity: 1, rotate: -8 }}
-            transition={{ type: 'spring', stiffness: 220, damping: 14 }}
-            className="absolute top-9 right-3 px-2 py-1 rounded border-2 text-[10px] font-black uppercase tracking-[0.2em]"
-            style={{ borderColor: visual.raceVisual.accent, color: visual.raceVisual.accent, background: 'rgba(0,0,0,0.5)' }}
+      <div className="h-full flex flex-col md:flex-row gap-3 p-3 pt-5 sm:p-4 items-center md:items-stretch">
+        {/* Card quadrado com flip */}
+        <div className="md:w-[46%] flex items-center justify-center min-h-0">
+          <motion.div
+            key={`${cycle}-${raceId}`}
+            initial={{ rotateY: 70, opacity: 0, scale: 0.85 }}
+            animate={{ rotateY: 0, opacity: 1, scale: 1 }}
+            transition={{ type: 'spring', stiffness: 130, damping: 16 }}
+            className="relative w-full max-w-[330px] sm:max-w-[360px] aspect-square rounded-xl border-2 overflow-hidden"
+            style={{
+              borderColor: flipped ? formLabel.glow : visual.borderColor,
+              boxShadow: flipped ? `0 0 34px ${formLabel.glow}66` : visual.glow,
+              perspective: 900,
+            }}
           >
-            NFT · sua de verdade
-          </motion.span>
-        )}
+            <div className="absolute inset-0">
+              <CreationCardBackdrop theme={visual.backdropTheme} />
+            </div>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-black/35" />
 
-        {/* Placa inferior */}
-        <div className="absolute inset-x-0 bottom-0 p-3.5">
-          {step >= 1 && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-              <span className="text-xl font-black text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.95)]">
-                {heroName}
-              </span>
-              <span className="ml-2 text-[11px] font-bold text-amber-300/90">Lv 1</span>
-            </motion.div>
-          )}
-          {step >= 2 && (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex flex-wrap gap-1.5 mt-1"
-            >
-              <span
-                className="px-2 py-0.5 rounded-[3px] text-[10px] font-bold text-white border"
-                style={{ background: `${visual.raceVisual.accent}2e`, borderColor: `${visual.raceVisual.accent}66` }}
-              >
-                {visual.raceVisual.emoji} {raceId.charAt(0).toUpperCase() + raceId.slice(1)}
-              </span>
-              <span
-                className="px-2 py-0.5 rounded-[3px] text-[10px] font-bold text-white border"
-                style={{ background: `${visual.classVisual.accent}2e`, borderColor: `${visual.classVisual.accent}66` }}
-              >
-                {visual.classVisual.emoji} {classId === 'warrior' ? 'Guerreiro' : classId === 'rogue' ? 'Ladino' : classId === 'mage' ? 'Mago' : 'Monge'}
-              </span>
-            </motion.div>
-          )}
-          {step >= 3 && (
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-1.5">
-              <CharacterStatChips
-                vitals={{
-                  hp: stats.hp,
-                  maxHp: stats.hp,
-                  mp: stats.mp,
-                  maxMp: stats.mp,
-                  stamina: 100,
-                  maxStamina: 100,
-                  power: stats.str + stats.agi + stats.int + stats.res,
-                }}
+            {/* aura da forma */}
+            <AnimatePresence>
+              {flipped && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute inset-0 pointer-events-none"
+                  style={{ background: `radial-gradient(60% 55% at 50% 45%, ${formLabel.glow}33, transparent 70%)` }}
+                />
+              )}
+            </AnimatePresence>
+
+            {/* Arte com flip (padrão RaceFlipCard) */}
+            <AnimatePresence mode="wait">
+              <motion.img
+                key={img}
+                src={img}
+                alt={heroName}
+                initial={reduced ? { opacity: 0 } : { rotateY: -90, opacity: 0 }}
+                animate={reduced ? { opacity: 1 } : { rotateY: 0, opacity: 1 }}
+                exit={reduced ? { opacity: 0 } : { rotateY: 90, opacity: 0 }}
+                transition={{ duration: 0.3, ease: 'easeInOut' }}
+                className="absolute inset-x-0 bottom-6 mx-auto h-[72%] object-contain drop-shadow-[0_10px_28px_rgba(0,0,0,0.75)]"
+                style={{ backfaceVisibility: 'hidden' }}
               />
-            </motion.div>
-          )}
-        </div>
-      </motion.div>
+            </AnimatePresence>
 
-      {/* Legenda + CTA */}
-      <div className="absolute bottom-3 inset-x-3 flex items-end justify-between gap-3 z-30">
-        <p className="text-[11px] text-textsec max-w-[60%]">
-          Ficha viva: XP, gear e aprimoramentos refletem direto na sua NFT.
-        </p>
-        {step >= 5 && (
-          <motion.button
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            onClick={onNext}
-            className="px-3.5 py-2 rounded-lg bg-primary hover:bg-primary-dark text-white text-xs font-bold shadow-[0_0_18px_rgba(233,69,96,0.5)] animate-pulse"
-          >
-            Entrar na masmorra →
-          </motion.button>
-        )}
+            {/* Selo NFT / selo da forma */}
+            {step >= 4 && (
+              <motion.span
+                key={flipped ? 'form' : 'nft'}
+                initial={{ scale: 2.2, opacity: 0, rotate: -18 }}
+                animate={{ scale: 1, opacity: 1, rotate: -8 }}
+                transition={{ type: 'spring', stiffness: 220, damping: 14 }}
+                className="absolute top-2 right-2 px-2 py-1 rounded border-2 text-[10px] font-black uppercase tracking-[0.18em]"
+                style={{
+                  borderColor: flipped ? formLabel.glow : visual.raceVisual.accent,
+                  color: flipped ? formLabel.glow : visual.raceVisual.accent,
+                  background: 'rgba(0,0,0,0.55)',
+                }}
+              >
+                {flipped ? `${formLabel.emoji} ${formLabel.name}` : 'NFT · sua de verdade'}
+              </motion.span>
+            )}
+
+            {/* Placa inferior */}
+            <div className="absolute inset-x-0 bottom-0 p-3.5">
+              {step >= 1 && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                  <span className="text-xl font-black text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.95)]">
+                    {heroName}
+                  </span>
+                  <span className="ml-2 text-[11px] font-bold text-amber-300/90">Lv 1</span>
+                </motion.div>
+              )}
+              {step >= 2 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex flex-wrap gap-1.5 mt-1"
+                >
+                  <span
+                    className="px-2 py-0.5 rounded-[3px] text-[10px] font-bold text-white border"
+                    style={{ background: `${visual.raceVisual.accent}2e`, borderColor: `${visual.raceVisual.accent}66` }}
+                  >
+                    {visual.raceVisual.emoji} {race?.name}
+                  </span>
+                  <span
+                    className="px-2 py-0.5 rounded-[3px] text-[10px] font-bold text-white border"
+                    style={{ background: `${visual.classVisual.accent}2e`, borderColor: `${visual.classVisual.accent}66` }}
+                  >
+                    {visual.classVisual.emoji} {CLASS_LABEL[classId]}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-[3px] text-[10px] font-bold text-white/85 border border-white/25 bg-white/10">
+                    {formLabel.emoji} {formLabel.name}
+                  </span>
+                </motion.div>
+              )}
+              {step >= 3 && (
+                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-1.5">
+                  <CharacterStatChips
+                    vitals={{
+                      hp: stats.hp, maxHp: stats.hp,
+                      mp: stats.mp, maxMp: stats.mp,
+                      stamina: 100, maxStamina: 100,
+                      power: stats.str + stats.agi + stats.int + stats.res,
+                    }}
+                  />
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-[11px] font-combat text-white/80">
+                    <span className="text-red-300">💪 STR {stats.str}</span>
+                    <span className="text-emerald-300">🌀 AGI {stats.agi}</span>
+                    <span className="text-sky-300">🧠 INT {stats.int}</span>
+                    <span className="text-amber-300">🛡️ RES {stats.res}</span>
+                  </div>
+                </motion.div>
+              )}
+            </div>
+          </motion.div>
+        </div>
+
+        {/* Coluna direita: prompt da transformação + árvore de skills */}
+        <div className="md:w-[54%] flex flex-col gap-2 min-h-0 w-full">
+          <AnimatePresence>
+            {step >= 5 && (
+              <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+                <TypewriterText
+                  key={`${raceId}-form-prompt`}
+                  text={`${formLabel.emoji} ${TRANSFORMATION_ART[form as TransformationArtId].slice(0, 150)}…`}
+                  label="✍️ prompt da forma transformada · gerada da SUA arte base"
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <div className="relative flex-1 min-h-[220px] rounded-lg border border-white/10 bg-black/30 overflow-hidden">
+            <div className="absolute top-2 left-3 z-10 text-[10px] font-bold uppercase tracking-[0.2em] text-primary">
+              🌳 Árvore de habilidades · {CLASS_LABEL[classId]}
+            </div>
+            <div className="absolute inset-0 pt-8 flex justify-center overflow-hidden pointer-events-none">
+              <div className="origin-top scale-[0.55] md:scale-[0.6]">
+                <SkillTreePanel
+                  tree={tree}
+                  paths={paths}
+                  purchased={purchased}
+                  availablePoints={3}
+                  onSpend={() => {}}
+                  classId={classId}
+                />
+              </div>
+            </div>
+            {/* fade inferior */}
+            <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/80 to-transparent pointer-events-none" />
+            <div className="absolute bottom-2 inset-x-3 text-[10px] text-white/60 text-center">
+              A cada nível, pontos para evoluir os caminhos da sua classe — em página dedicada no jogo.
+            </div>
+          </div>
+        </div>
       </div>
+
+      {/* CTA */}
+      {step >= 7 && (
+        <motion.button
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          onClick={onNext}
+          className="absolute bottom-3 right-3 z-30 px-3.5 py-2 rounded-lg bg-primary hover:bg-primary-dark text-white text-xs font-bold shadow-[0_0_18px_rgba(233,69,96,0.5)] animate-pulse"
+        >
+          Entrar na masmorra →
+        </motion.button>
+      )}
     </div>
   )
 }

@@ -37,6 +37,52 @@ export const RACE_HERO: Record<
   metamorfo: { name: 'Kaira', art: '/metamorfo_pvp.png', artTransformed: '/metamorfo_transformed.png' },
 }
 
+// Pares canônicos raça↔classe (espelham as artes reais dos NFTs de vitrine —
+// a arte do Draconiano É um guerreiro, a da Elfa É uma ladina etc.; travar o
+// par garante que a imagem nunca minta sobre a classe).
+export const CANON_CLASS: Record<JourneyRaceId, JourneyClassId> = {
+  humano: 'mage',
+  elfo: 'rogue',
+  draconiano: 'warrior',
+  metamorfo: 'monk',
+}
+export const CANON_RACE: Record<JourneyClassId, JourneyRaceId> = {
+  mage: 'humano',
+  rogue: 'elfo',
+  warrior: 'draconiano',
+  monk: 'metamorfo',
+}
+
+/** Forma de transformação de cada raça (ids de TRANSFORMATION_ART/transformationSystem). */
+export const FORM_BY_RACE: Record<JourneyRaceId, string> = {
+  humano: 'seventh_sense',
+  elfo: 'celestial',
+  draconiano: 'dragon',
+  metamorfo: 'wolf',
+}
+
+export const FORM_LABEL: Record<JourneyRaceId, { emoji: string; name: string; glow: string }> = {
+  humano: { emoji: '✨', name: 'Sétimo Sentido', glow: '#e2e8f0' },
+  elfo: { emoji: '🌟', name: 'Forma Celestial', glow: '#fbbf24' },
+  draconiano: { emoji: '🐉', name: 'Dragão', glow: '#ef4444' },
+  metamorfo: { emoji: '🐺', name: 'Lobo', glow: '#93c5fd' },
+}
+
+/** Especial de forma (mesmos action ids de transformationSpecials → AbilityFX). */
+export const FORM_SPECIAL_ACTION: Record<JourneyRaceId, string> = {
+  draconiano: 'dragon_breath',
+  metamorfo: 'bite_bleeding',
+  humano: 'cosmo_burst',
+  elfo: 'super_nova',
+}
+
+export const FORM_SPECIAL_NAME: Record<JourneyRaceId, string> = {
+  draconiano: '🔥 Sopro de Fogo',
+  metamorfo: '🩸 Mordida Sangrenta',
+  humano: '🌌 Explosão de Cosmo',
+  elfo: '💥 Super Nova',
+}
+
 export const RACE_LIST = races
 export const CLASS_LIST = CLASSES
 
@@ -54,12 +100,12 @@ export const RACE_LABEL: Record<JourneyRaceId, string> = {
   elfo: 'Elfo',
 }
 
-/** Arma primária + secundária por classe (espelha os slots reais do jogo). */
-const CLASS_GEAR: Record<JourneyClassId, { weapon: string; offhand: string; classAttack: string }> = {
-  warrior: { weapon: 'Espada Longa', offhand: 'Escudo do Guardião', classAttack: 'Investida Pesada' },
-  rogue: { weapon: 'Adaga Gêmea', offhand: 'Adaga de Parada', classAttack: 'Ataque Furtivo' },
-  mage: { weapon: 'Cajado Arcano', offhand: 'Orbe de Cristal', classAttack: 'Bola de Fogo' },
-  monk: { weapon: 'Manoplas de Batalha', offhand: 'Talismã do Equilíbrio', classAttack: 'Golpe Triplo' },
+/** Arma primária + secundária por classe — itens REAIS do catálogo (arte em /items). */
+export const CLASS_GEAR: Record<JourneyClassId, { weapon: string; offhand: string; classAttack: string }> = {
+  warrior: { weapon: 'Lâmina do Carrasco', offhand: 'Égide do Baluarte', classAttack: 'Investida Pesada' },
+  rogue: { weapon: 'Arco da Tormenta', offhand: 'Adaga de Parada', classAttack: 'Ataque Furtivo' },
+  mage: { weapon: 'Cajado do Bosque Antigo', offhand: 'Orbe de Cristal', classAttack: 'Bola de Fogo' },
+  monk: { weapon: 'Manoplas da Fera', offhand: 'Talismã do Discípulo', classAttack: 'Golpe Triplo' },
 }
 
 export function classAttackName(classId: JourneyClassId): string {
@@ -82,28 +128,35 @@ export function heroBaseStats(raceId: JourneyRaceId) {
 
 // ---------- FighterView (BattleScene) ----------
 
-function buildEquipment(classId: JourneyClassId, enhanced: boolean): EquipmentMap {
+// Gear com nomes REAIS do catálogo — o EquipSlot do BattleScene e o
+// EquipmentSlot da ficha resolvem a arte /items/<slug>.webp sozinhos.
+// enhanced ⇒ nível 18 (tier III) no set inteiro e 19 (tier IV) na ARMA
+// (a arma que o slide de Aprimoramento leva de III para IV).
+export const JOURNEY_ENHANCED_GEAR_LEVEL = 18 // III
+export const JOURNEY_WEAPON_LEVEL = 19 // IV
+
+export function buildEquipment(classId: JourneyClassId, enhanced: boolean): EquipmentMap {
   const gear = CLASS_GEAR[classId]
-  const lvl = enhanced ? 15 : 0
+  const lvl = enhanced ? JOURNEY_ENHANCED_GEAR_LEVEL : 0
   const eq: EquipmentMap = {
-    WEAPON: { id: 'w', name: gear.weapon, type: 'WEAPON', enhancementLevel: lvl, stats: { attackDamage: enhanced ? 38 : 8 } },
+    WEAPON: { id: 'w', name: gear.weapon, type: 'WEAPON', enhancementLevel: enhanced ? JOURNEY_WEAPON_LEVEL : 0, stats: { attackDamage: enhanced ? 38 : 8 } },
     SHIELD: { id: 's', name: gear.offhand, type: 'SHIELD', enhancementLevel: lvl, stats: { defense: enhanced ? 22 : 4 } },
-    HELMET: { id: 'h', name: 'Elmo de Placas', type: 'HELMET', enhancementLevel: lvl, stats: { defense: enhanced ? 18 : 3 } },
-    ARMOR: { id: 'a', name: 'Peitoral de Placas', type: 'ARMOR', enhancementLevel: lvl, stats: { defense: enhanced ? 26 : 5 } },
-    GLOVES: { id: 'g', name: 'Manoplas Reforçadas', type: 'GLOVES', enhancementLevel: lvl, stats: { defense: enhanced ? 14 : 2 } },
-    BOOTS: { id: 'b', name: 'Botas de Placas', type: 'BOOTS', enhancementLevel: lvl, stats: { defense: enhanced ? 12 : 2 } },
+    HELMET: { id: 'h', name: 'Elmo de Ferro', type: 'HELMET', enhancementLevel: lvl, stats: { defense: enhanced ? 18 : 3 } },
+    ARMOR: { id: 'a', name: 'Couraça de Aço', type: 'ARMOR', enhancementLevel: lvl, stats: { defense: enhanced ? 26 : 5 } },
+    GLOVES: { id: 'g', name: 'Manoplas do Sentinela', type: 'GLOVES', enhancementLevel: lvl, stats: { defense: enhanced ? 14 : 2 } },
+    BOOTS: { id: 'b', name: 'Grevas de Aço', type: 'BOOTS', enhancementLevel: lvl, stats: { defense: enhanced ? 12 : 2 } },
   }
   if (enhanced) {
-    eq.NECKLACE = { id: 'n', name: 'Amuleto do Vigor I', type: 'NECKLACE', stats: { attackDamage: 12 } }
-    eq.RING_1 = { id: 'r1', name: 'Anel da Fúria I', type: 'RING', stats: { attackDamage: 9 } }
-    eq.RING_2 = { id: 'r2', name: 'Anel da Guarda I', type: 'RING', stats: { defense: 9 } }
+    eq.NECKLACE = { id: 'n', name: 'Amuleto de Ferro', type: 'NECKLACE', stats: { attackDamage: 12 } }
+    eq.RING_1 = { id: 'r1', name: 'Anel do Duelista', type: 'RING', stats: { attackDamage: 9 } }
+    eq.RING_2 = { id: 'r2', name: 'Anel do Sentinela', type: 'RING', stats: { defense: 9 } }
   }
   return eq
 }
 
 export function buildHeroFighter(
   choice: JourneyChoice,
-  opts: { enhanced?: boolean; hp?: number; maxHp?: number } = {},
+  opts: { enhanced?: boolean; hp?: number; maxHp?: number; transformed?: boolean } = {},
 ): FighterView {
   const enhanced = !!opts.enhanced
   const maxHp = opts.maxHp ?? (enhanced ? 240 : 120)
@@ -120,6 +173,9 @@ export function buildHeroFighter(
     maxMp: enhanced ? 80 : 50,
     stamina: 46,
     maxStamina: 60,
+    isTransformed: !!opts.transformed,
+    transformationType: opts.transformed ? FORM_BY_RACE[choice.raceId] : null,
+    transformationImage: RACE_HERO[choice.raceId].artTransformed,
     combatStats: enhanced ? { ad: 58, ap: 44, dp: 32 } : { ad: 14, ap: 9, dp: 8 },
     combatStatLabels: { ad: 'ATK', ap: 'DEF', dp: 'STR' },
     equipmentMap: buildEquipment(choice.classId, enhanced),
@@ -150,12 +206,22 @@ export function buildBossFighter(hp: number): FighterView {
   }
 }
 
-/** Oponente de PvP contrastante com o herói escolhido. */
-export function buildPvpOpponent(choice: JourneyChoice, hp: number, maxHp: number): FighterView {
-  const raceId: JourneyRaceId = choice.raceId === 'elfo' ? 'draconiano' : 'elfo'
-  const classId: JourneyClassId = choice.classId === 'rogue' ? 'warrior' : 'rogue'
+/** Raça do oponente de PvP: Gorrak (draconiano); se o herói FOR o draconiano, Lyra (elfa). */
+export function pvpOpponentRace(choice: JourneyChoice): JourneyRaceId {
+  return choice.raceId === 'draconiano' ? 'elfo' : 'draconiano'
+}
+
+/** Oponente de PvP com gear real; `transformed` liga a forma no meio da luta. */
+export function buildPvpOpponent(
+  choice: JourneyChoice,
+  hp: number,
+  maxHp: number,
+  opts: { transformed?: boolean } = {},
+): FighterView {
+  const raceId = pvpOpponentRace(choice)
+  const classId = CANON_CLASS[raceId]
   return {
-    ...buildHeroFighter({ raceId, classId }, { enhanced: true, hp, maxHp }),
+    ...buildHeroFighter({ raceId, classId }, { enhanced: true, hp, maxHp, transformed: opts.transformed }),
     id: 'foe',
     level: 13,
   }
@@ -179,6 +245,9 @@ export interface BattleStep {
   dice?: 'ask' | 'reveal' | null
   /** Slide 7: barra de ações visível (vez do jogador). */
   showActions?: boolean
+  /** Liga a forma transformada do lutador a partir deste passo. */
+  heroTransformed?: boolean
+  foeTransformed?: boolean
   ended?: boolean
   loot?: boolean
   rewards?: boolean

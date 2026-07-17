@@ -16,6 +16,8 @@ export interface BattleSnapshot {
   log: string
   dice: 'ask' | 'reveal' | null
   showActions: boolean
+  heroTransformed: boolean
+  foeTransformed: boolean
   ended: boolean
   loot: boolean
   rewards: boolean
@@ -41,6 +43,8 @@ export function useBattleScript(
       log: '',
       dice: null,
       showActions: false,
+      heroTransformed: false,
+      foeTransformed: false,
       ended: false,
       loot: false,
       rewards: false,
@@ -54,6 +58,8 @@ export function useBattleScript(
       if (s.log !== undefined) out.log = s.log
       if (s.dice !== undefined) out.dice = s.dice
       if (s.showActions !== undefined) out.showActions = s.showActions
+      if (s.heroTransformed !== undefined) out.heroTransformed = s.heroTransformed
+      if (s.foeTransformed !== undefined) out.foeTransformed = s.foeTransformed
       if (s.ended) out.ended = true
       if (s.loot) out.loot = true
       if (s.rewards) out.rewards = true

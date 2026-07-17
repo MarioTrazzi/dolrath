@@ -1,18 +1,24 @@
 'use client'
 
-// Slide 1 — Criação de personagem: raças e classes REAIS (dados +
-// identidade visual da tela de criação), em cards compactos p/ caber
-// no viewport do carrossel. Um "cursor fantasma" cicla as combinações
-// até o primeiro clique do visitante — a escolha atravessa a jornada.
+// Slide 1 — Criação de personagem: raças e classes REAIS em pares
+// CANÔNICOS (a arte do Draconiano É um guerreiro, a da Elfa É uma
+// ladina...) — escolher raça trava a classe casada e vice-versa, então a
+// imagem nunca mente. Inclui o radar de atributos real da criação e o
+// trecho do prompt que gera a arte (o jogador ajuda a escolher o estilo).
 
 import React, { useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import CreationCardBackdrop from '@/components/character/CreationCardBackdrop'
 import { getCreationVisual } from '@/lib/creationVisuals'
+import { StatRevealRadar } from '@/app/character/create/components/StatRevealRadar'
+import { RACE_STYLE, CLASS_STYLE } from '@/lib/characterImagePrompt'
 import { useJourney } from '../JourneyContext'
+import TypewriterText from './TypewriterText'
 import {
   RACE_LIST,
   CLASS_LIST,
+  CANON_CLASS,
+  CANON_RACE,
   heroArt,
   heroBaseStats,
   type JourneySlideProps,
@@ -20,24 +26,22 @@ import {
   type JourneyClassId,
 } from '../journeyData'
 
-const GHOST_COMBOS: [JourneyRaceId, JourneyClassId][] = [
-  ['draconiano', 'warrior'],
-  ['elfo', 'mage'],
-  ['metamorfo', 'rogue'],
-  ['humano', 'monk'],
-]
+const GHOST_RACES: JourneyRaceId[] = ['draconiano', 'elfo', 'metamorfo', 'humano']
 
 function MiniPickCard({
   id,
   name,
   hint,
   selected,
+  linked,
   onPick,
 }: {
   id: string
   name: string
   hint: string
   selected: boolean
+  /** Selecionado por arrasto do par canônico (selo 🔗). */
+  linked?: boolean
   onPick: () => void
 }) {
   const visual = getCreationVisual(id)
@@ -75,8 +79,9 @@ function MiniPickCard({
             animate={{ scale: 1 }}
             className="ml-auto w-5 h-5 rounded-full grid place-items-center text-[11px] text-white shrink-0"
             style={{ backgroundColor: visual.accent }}
+            title={linked ? 'Dupla canônica da raça escolhida' : undefined}
           >
-            ✓
+            {linked ? '🔗' : '✓'}
           </motion.span>
         )}
       </div>
@@ -86,29 +91,32 @@ function MiniPickCard({
 
 export default function Slide1Creation({ active, onNext }: JourneySlideProps) {
   const journey = useJourney()
-  const { raceId, classId, heroName, visual, userPicked, setChoice } = journey
+  const { raceId, classId, heroName, visual, userPicked, pickRace, pickClass } = journey
 
-  // Cursor fantasma: cicla combinações a cada 2.6s até o visitante clicar
+  // Cursor fantasma: cicla os pares canônicos até o visitante clicar
   useEffect(() => {
     if (!active || userPicked) return
     if (typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
-    let i = GHOST_COMBOS.findIndex(([r]) => r === raceId)
+    let i = GHOST_RACES.indexOf(raceId)
     const id = setInterval(() => {
-      i = (i + 1) % GHOST_COMBOS.length
-      setChoice(GHOST_COMBOS[i][0], GHOST_COMBOS[i][1])
-    }, 2600)
+      i = (i + 1) % GHOST_RACES.length
+      pickRace(GHOST_RACES[i])
+    }, 2800)
     return () => clearInterval(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, userPicked])
 
   const stats = heroBaseStats(raceId)
   const race = RACE_LIST.find(r => r.id === raceId)
+  const promptExcerpt =
+    `Race: ${race?.name}. ${RACE_STYLE[raceId].slice(0, 132)}… ` +
+    `Class: ${CLASS_STYLE[classId].slice(0, 86)}…`
 
   return (
     <div className="relative h-full w-full overflow-y-auto md:overflow-hidden">
-      <div className="h-full flex flex-col md:flex-row gap-3 p-3 pt-12 sm:p-4 sm:pt-12">
-        {/* Coluna de escolha */}
-        <div className="md:w-1/2 flex flex-col gap-2.5 min-h-0">
+      <div className="h-full flex flex-col md:flex-row gap-3 p-3 pt-5 sm:p-4">
+        {/* Coluna de escolha + radar */}
+        <div className="md:w-[42%] flex flex-col gap-2 min-h-0">
           <div>
             <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary mb-1.5">1 · Escolha sua raça</div>
             <div className="grid grid-cols-2 gap-2">
@@ -119,13 +127,13 @@ export default function Slide1Creation({ active, onNext }: JourneySlideProps) {
                   name={r.name}
                   hint={r.specialAbility}
                   selected={r.id === raceId}
-                  onPick={() => setChoice(r.id as JourneyRaceId, classId, true)}
+                  onPick={() => pickRace(r.id as JourneyRaceId, true)}
                 />
               ))}
             </div>
           </div>
           <div>
-            <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary mb-1.5">2 · Escolha sua classe</div>
+            <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary mb-1.5">2 · Classe (dupla canônica)</div>
             <div className="grid grid-cols-2 gap-2">
               {CLASS_LIST.map(c => (
                 <MiniPickCard
@@ -134,28 +142,30 @@ export default function Slide1Creation({ active, onNext }: JourneySlideProps) {
                   name={c.name}
                   hint={c.abilities[0]}
                   selected={c.id === classId}
-                  onPick={() => setChoice(raceId, c.id as JourneyClassId, true)}
+                  linked={c.id === CANON_CLASS[raceId] && CANON_RACE[c.id as JourneyClassId] === raceId}
+                  onPick={() => pickClass(c.id as JourneyClassId, true)}
                 />
               ))}
             </div>
           </div>
-          <p className="text-[11px] text-textsec mt-auto hidden md:block">
-            {userPicked
-              ? 'Boa escolha — o resto da jornada é dele(a).'
-              : 'Clique para escolher — o herói atravessa todas as etapas com você.'}
-          </p>
+          {/* Radar de atributos (o mesmo da tela de criação) */}
+          <div className="hidden md:flex flex-1 min-h-0 items-start justify-center overflow-hidden">
+            <div className="origin-top scale-[0.62]">
+              <StatRevealRadar key={raceId} str={stats.str} agi={stats.agi} int={stats.int} def={stats.res} />
+            </div>
+          </div>
         </div>
 
-        {/* Prévia do herói */}
-        <div className="md:w-1/2 min-h-[240px] md:min-h-0">
+        {/* Prévia do herói com o prompt sobre a imagem */}
+        <div className="md:w-[58%] min-h-[300px] md:min-h-0 flex flex-col gap-2">
           <div
-            className="relative h-full min-h-[240px] rounded-xl border-2 overflow-hidden"
+            className="relative flex-1 min-h-[280px] rounded-xl border-2 overflow-hidden"
             style={{ borderColor: visual.borderColor, boxShadow: visual.glow }}
           >
             <div className="absolute inset-0">
               <CreationCardBackdrop theme={visual.backdropTheme} />
             </div>
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/30" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/40" />
             <AnimatePresence mode="popLayout">
               <motion.img
                 key={raceId}
@@ -165,13 +175,23 @@ export default function Slide1Creation({ active, onNext }: JourneySlideProps) {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -10, scale: 1.02 }}
                 transition={{ duration: 0.35 }}
-                className="absolute inset-x-0 bottom-0 mx-auto h-[78%] object-contain drop-shadow-[0_8px_24px_rgba(0,0,0,0.7)]"
+                className="absolute inset-x-0 bottom-0 mx-auto h-[72%] object-contain drop-shadow-[0_8px_24px_rgba(0,0,0,0.7)]"
               />
             </AnimatePresence>
+
+            {/* Prompt REAL da arte, digitando sobre a foto */}
+            <div className="absolute top-2 inset-x-2 z-10">
+              <TypewriterText
+                key={`${raceId}-${classId}`}
+                text={promptExcerpt}
+                label="✍️ prompt da sua arte · você ajuda a escolher o estilo"
+              />
+            </div>
+
             <div className="absolute inset-x-0 bottom-0 p-3 sm:p-4">
               <AnimatePresence mode="popLayout">
                 <motion.div
-                  key={`${raceId}-${classId}`}
+                  key={`${raceId}-${classId}-plate`}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
@@ -199,14 +219,15 @@ export default function Slide1Creation({ active, onNext }: JourneySlideProps) {
                       </span>
                     )}
                   </div>
-                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-[11px] font-combat text-white/80">
-                    <span className="text-red-300">💪 STR {stats.str}</span>
-                    <span className="text-emerald-300">🌀 AGI {stats.agi}</span>
-                    <span className="text-sky-300">🧠 INT {stats.int}</span>
-                    <span className="text-amber-300">🛡️ RES {stats.res}</span>
-                  </div>
                 </motion.div>
               </AnimatePresence>
+            </div>
+          </div>
+
+          {/* Radar no mobile (desktop mostra na coluna esquerda) */}
+          <div className="md:hidden flex justify-center overflow-hidden max-h-[220px]">
+            <div className="origin-top scale-[0.6]">
+              <StatRevealRadar key={`m-${raceId}`} str={stats.str} agi={stats.agi} int={stats.int} def={stats.res} />
             </div>
           </div>
         </div>

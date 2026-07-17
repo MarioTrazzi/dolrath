@@ -9,30 +9,27 @@ import React from 'react'
 import { Dices } from 'lucide-react'
 import { GOLD, GOLD_BRIGHT, BORDER_GOLD, PANEL_BG } from '@/components/crafting/bdoTheme'
 
-/** Divisória: linha dupla dourada com um d20 em losango ao centro. */
+/** Divisória: linha dupla dourada com um d20 em losango ao centro.
+    Montada sobre a borda inferior do hero — o losango fica metade na
+    imagem, metade na seção da Jornada. */
 export function JourneyDivider() {
   return (
-    <div className="flex flex-col items-center gap-3 mb-8">
-      <span className="text-[10px] uppercase tracking-[0.3em] text-[#8a8a90]">
-        a partir daqui, você está dentro do jogo
-      </span>
-      <div className="w-full flex items-center gap-3">
-        <div className="flex-1 flex flex-col gap-[3px]">
-          <div className="h-px" style={{ background: `linear-gradient(90deg, transparent, ${BORDER_GOLD})` }} />
-          <div className="h-px opacity-50" style={{ background: `linear-gradient(90deg, transparent, ${BORDER_GOLD})` }} />
-        </div>
-        <span className="h-1.5 w-1.5 rotate-45 border" style={{ borderColor: BORDER_GOLD, background: '#1e1e21' }} />
-        <div
-          className="grid h-10 w-10 rotate-45 place-items-center border-2 shrink-0"
-          style={{ borderColor: BORDER_GOLD, background: '#141210', boxShadow: '0 0 18px rgba(201,162,95,0.35)' }}
-        >
-          <Dices className="-rotate-45 h-5 w-5" style={{ color: GOLD }} />
-        </div>
-        <span className="h-1.5 w-1.5 rotate-45 border" style={{ borderColor: BORDER_GOLD, background: '#1e1e21' }} />
-        <div className="flex-1 flex flex-col gap-[3px]">
-          <div className="h-px" style={{ background: `linear-gradient(90deg, ${BORDER_GOLD}, transparent)` }} />
-          <div className="h-px opacity-50" style={{ background: `linear-gradient(90deg, ${BORDER_GOLD}, transparent)` }} />
-        </div>
+    <div className="w-full flex items-center gap-3">
+      <div className="flex-1 flex flex-col gap-[3px]">
+        <div className="h-px" style={{ background: `linear-gradient(90deg, transparent, ${BORDER_GOLD} 12%)` }} />
+        <div className="h-px opacity-50" style={{ background: `linear-gradient(90deg, transparent, ${BORDER_GOLD} 12%)` }} />
+      </div>
+      <span className="h-1.5 w-1.5 rotate-45 border" style={{ borderColor: BORDER_GOLD, background: '#1e1e21' }} />
+      <div
+        className="grid h-12 w-12 rotate-45 place-items-center border-2 shrink-0"
+        style={{ borderColor: BORDER_GOLD, background: '#141210', boxShadow: '0 0 18px rgba(201,162,95,0.35)' }}
+      >
+        <Dices className="-rotate-45 h-6 w-6" style={{ color: GOLD }} />
+      </div>
+      <span className="h-1.5 w-1.5 rotate-45 border" style={{ borderColor: BORDER_GOLD, background: '#1e1e21' }} />
+      <div className="flex-1 flex flex-col gap-[3px]">
+        <div className="h-px" style={{ background: `linear-gradient(90deg, ${BORDER_GOLD} 88%, transparent)` }} />
+        <div className="h-px opacity-50" style={{ background: `linear-gradient(90deg, ${BORDER_GOLD} 88%, transparent)` }} />
       </div>
     </div>
   )

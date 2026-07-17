@@ -220,9 +220,13 @@ function JourneyCarouselInner() {
 
 export default function JourneyShowcase({ primaryHref }: { primaryHref: string }) {
   return (
-    <section id="jornada" className="relative py-12 sm:py-16">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+    <section id="jornada" className="relative pb-12 sm:pb-16">
+      {/* Divisória full-bleed sobre a fronteira hero/Jornada: -mt-6 alinha o
+          centro do losango (h-12) com a borda inferior da imagem do hero. */}
+      <div className="relative z-10 -mt-6 px-4 sm:px-6">
         <JourneyDivider />
+      </div>
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 pt-10 sm:pt-12">
         <SectionHeading
           eyebrow="A jornada completa"
           title={

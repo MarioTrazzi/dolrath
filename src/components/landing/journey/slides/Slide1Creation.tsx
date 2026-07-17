@@ -187,7 +187,7 @@ export default function Slide1Creation({ active, onNext }: JourneySlideProps) {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -10, scale: 1.02 }}
                 transition={{ duration: 0.35 }}
-                className="absolute inset-x-0 bottom-0 mx-auto h-[72%] object-contain drop-shadow-[0_8px_24px_rgba(0,0,0,0.7)]"
+                className="absolute inset-0 m-auto h-[72%] object-contain drop-shadow-[0_8px_24px_rgba(0,0,0,0.7)]"
               />
             </AnimatePresence>
 

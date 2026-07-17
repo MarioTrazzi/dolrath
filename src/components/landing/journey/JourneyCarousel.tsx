@@ -231,10 +231,10 @@ export default function JourneyShowcase({ primaryHref }: { primaryHref: string }
           eyebrow="A jornada completa"
           title={
             <>
-              Jogue agora, <span className="text-primary">aqui mesmo</span>
+              Experimente agora, <span className="text-primary">aqui mesmo</span>
             </>
           }
-          sub="Do primeiro clique ao topo do ranking: crie um herói e veja — com as telas reais do jogo — tudo o que espera por ele em Dolrath."
+          sub="As masmorras também pode ser 100% idle, deixe explorando enquanto gerencia seu personagem em outra guia. Do primeiro clique ao topo do ranking: crie um herói e veja — com as telas reais do jogo — tudo o que espera por ele em Dolrath."
         />
         <div className="mt-8">
           <JourneyProvider primaryHref={primaryHref}>

@@ -17,11 +17,18 @@ import {
   PANEL_BG,
   CHARGE_MS,
 } from '@/components/crafting/bdoTheme'
-import { itemImagePath } from '@/lib/itemCatalog'
+import { itemImagePath, getCatalogItemByName } from '@/lib/itemCatalog'
+import { applyEnhancementToStats } from '@/lib/enhancementSystem'
+import { itemStatEntries, formatStatValue } from '@/lib/itemStats'
 import { ItemThumb } from './LootTiles'
 import { useJourney } from '../JourneyContext'
 import { useSlideScript } from '../useSlideScript'
-import { CLASS_GEAR, type JourneySlideProps } from '../journeyData'
+import {
+  CLASS_GEAR,
+  JOURNEY_ENHANCED_GEAR_LEVEL,
+  JOURNEY_WEAPON_LEVEL,
+  type JourneySlideProps,
+} from '../journeyData'
 
 // 0 apresenta · 1 chance/failstacks · 2 forjando (CHARGE_MS) · 3 ✨SUCESSO ·
 // 4 placa IV + mensagem · 5 CTA
@@ -39,10 +46,27 @@ export default function Slide5Enhancement({ active, onNext }: JourneySlideProps)
   const chance = success ? 1.0 : 24.0
   const failstacks = success ? 0 : 41
 
+  // Prévia "atual (III) → projetado (IV)" — o MESMO cálculo da EnhancementDialog
+  // real: stats do catálogo × multiplicador do nível atual e do nível alvo.
+  const weaponCatalog = getCatalogItemByName(weapon)
+  const statComparison = React.useMemo(() => {
+    if (!weaponCatalog?.stats) return []
+    const cur = applyEnhancementToStats(weaponCatalog.stats, JOURNEY_ENHANCED_GEAR_LEVEL)
+    const next = applyEnhancementToStats(weaponCatalog.stats, JOURNEY_WEAPON_LEVEL)
+    const curEntries = itemStatEntries(cur, weaponCatalog.type)
+    const nextEntries = itemStatEntries(next, weaponCatalog.type)
+    const keys = Array.from(new Set([...curEntries, ...nextEntries].map(e => e.key)))
+    return keys.map(key => {
+      const c = curEntries.find(e => e.key === key)
+      const n = nextEntries.find(e => e.key === key)
+      return { key, label: (c ?? n)!.label, from: c?.value ?? 0, to: n?.value ?? 0 }
+    })
+  }, [weaponCatalog])
+
   return (
-    <div className="relative h-full w-full overflow-y-auto md:overflow-hidden grid place-items-center p-3">
+    <div className="relative h-full w-full overflow-y-auto flex p-3">
       <div
-        className="w-full max-w-md rounded-[4px] border shadow-2xl shadow-black/70"
+        className="m-auto w-full max-w-md rounded-[4px] border shadow-2xl shadow-black/70"
         style={{ borderColor: BORDER_GOLD, background: PANEL_BG }}
       >
         {/* Barra de título em bisel (como a dialog real) */}
@@ -53,7 +77,16 @@ export default function Slide5Enhancement({ active, onNext }: JourneySlideProps)
           <span className="text-[10px] text-[#8a8a90]">Mesa de Forja · {heroName}</span>
         </div>
 
-        <div className="p-4">
+        {/* O que é o Aprimoramento (texto didático da landing) */}
+        <p className="px-4 pt-3 text-[11px] leading-relaxed text-[#b8b8be]">
+          As <span className="font-semibold" style={{ color: GOLD_BRIGHT }}>Pedras Negras</span> que caem
+          nas masmorras aprimoram seu equipamento de +1 até o lendário{' '}
+          <span className="font-semibold text-orange-300">V</span> — cada nível multiplica os stats do
+          item. Falhou? Você acumula <span className="font-semibold text-purple-300">failstacks</span>,
+          que aumentam a chance da próxima tentativa.
+        </p>
+
+        <div className="p-4 pt-3">
           {/* Circuito: pedra → trilha → losango do item */}
           <div className="flex items-center justify-center gap-2.5 sm:gap-4 mb-3">
             {/* Tile do material */}
@@ -112,7 +145,7 @@ export default function Slide5Enhancement({ active, onNext }: JourneySlideProps)
           </div>
 
           {/* Nome + progressão */}
-          <div className="text-center mb-3">
+          <div className="text-center mb-2.5">
             <div className="text-sm font-semibold text-cyan-300">{weapon}</div>
             <div className="flex items-center justify-center gap-3 text-xl font-bold">
               <span className={success ? 'text-gray-500' : 'text-gray-300'}>III</span>
@@ -120,6 +153,38 @@ export default function Slide5Enhancement({ active, onNext }: JourneySlideProps)
               <span className={success ? 'text-amber-300' : 'text-gray-500'}>IV</span>
             </div>
           </div>
+
+          {/* Faixa de stats "atual → projetado" — idêntica à da dialog real */}
+          {statComparison.length > 0 && (
+            <div className="-mx-4 mb-3 border-y border-black/60 bg-[#19191c] px-5 py-2 space-y-1">
+              {statComparison.map(s => {
+                const delta = Math.round((s.to - s.from) * 10) / 10
+                return (
+                  <div
+                    key={s.key}
+                    className="flex items-center justify-between gap-2 border-b border-white/5 pb-1 text-[12.5px] last:border-0 last:pb-0"
+                  >
+                    <span className="flex items-center gap-1.5 text-[#c9c9ce]">
+                      <span className="text-[9px]" style={{ color: GOLD }}>✦</span>
+                      {s.label}
+                    </span>
+                    <span className="flex items-center gap-1.5 font-semibold tabular-nums">
+                      <span className={success ? 'text-gray-500 line-through' : 'text-[#8a8a90]'}>
+                        {formatStatValue(s.from)}
+                      </span>
+                      <span style={{ color: GOLD }}>→</span>
+                      <span className="text-emerald-300">{formatStatValue(s.to)}</span>
+                      {delta !== 0 && (
+                        <span className={`text-[11px] ${delta > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          ({delta > 0 ? '+' : ''}{formatStatValue(delta)})
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
 
           {/* Chance + failstacks */}
           <AnimatePresence>

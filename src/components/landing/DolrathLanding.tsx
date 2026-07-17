@@ -17,6 +17,7 @@ import {
   AlertTriangle, Gem, Lock, Flame, Scale,
 } from 'lucide-react'
 import { Button, Card, GlassCard, Badge, SectionHeading, Reveal, ArenaSky } from './ui'
+import { ShowcaseDie } from '@/components/battle/AnimatedDice'
 import JourneyShowcase from './journey/JourneyCarousel'
 import { itemImagePath } from '@/lib/itemCatalog'
 import { DUNGEONS, DUNGEON_LIST, type DungeonId, type DungeonMonsterDef, type DungeonBossDef } from '@/lib/dungeonAdventures'
@@ -215,6 +216,7 @@ function Hero({ primaryHref }: {
         />
       )}
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 w-full">
+        <div className="flex items-center justify-between gap-8">
         <div className="flex flex-col items-start gap-6 max-w-2xl [text-shadow:0_2px_16px_rgba(0,0,0,0.9)]">
           <Reveal delay={0}>
             <Badge tone="primary" icon={<Sparkles size={14} />}>RPG on-chain · NFT</Badge>
@@ -249,6 +251,34 @@ function Hero({ primaryHref }: {
             <span aria-hidden="true">·</span>
             <span className="font-combat">testnet aberta</span>
           </Reveal>
+        </div>
+        {/* Trio de dados "pedra amaldiçoada" — só desktop (3 poliedros CSS
+            girando é RAF demais pro mobile). Arraste/toque rola de verdade. */}
+        <Reveal delay={250} className="hidden lg:block shrink-0 pr-2">
+          <div className="relative h-[340px] w-[290px]">
+            <motion.div
+              className="absolute right-2 top-0"
+              animate={reduce ? {} : { y: [0, -12, 0] }}
+              transition={reduce ? {} : { repeat: Infinity, duration: 5.2, ease: 'easeInOut' }}
+            >
+              <ShowcaseDie sides={6} size={84} interactive />
+            </motion.div>
+            <motion.div
+              className="absolute left-0 top-[104px]"
+              animate={reduce ? {} : { y: [0, -14, 0] }}
+              transition={reduce ? {} : { repeat: Infinity, duration: 6.4, ease: 'easeInOut', delay: 0.9 }}
+            >
+              <ShowcaseDie sides={20} size={128} interactive />
+            </motion.div>
+            <motion.div
+              className="absolute bottom-0 right-8"
+              animate={reduce ? {} : { y: [0, -10, 0] }}
+              transition={reduce ? {} : { repeat: Infinity, duration: 5.8, ease: 'easeInOut', delay: 1.7 }}
+            >
+              <ShowcaseDie sides={8} size={72} interactive />
+            </motion.div>
+          </div>
+        </Reveal>
         </div>
       </div>
     </section>

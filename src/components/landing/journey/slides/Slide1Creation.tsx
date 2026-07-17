@@ -12,7 +12,7 @@ import CreationCardBackdrop from '@/components/character/CreationCardBackdrop'
 import { getCreationVisual } from '@/lib/creationVisuals'
 import { StatRevealRadar } from '@/app/character/create/components/StatRevealRadar'
 import { useJourney } from '../JourneyContext'
-import TypewriterText from './TypewriterText'
+import PromptPanel from './PromptPanel'
 import {
   RACE_LIST,
   CLASS_LIST,
@@ -110,8 +110,8 @@ export default function Slide1Creation({ active, onNext }: JourneySlideProps) {
   const stats = heroBaseStats(raceId)
   const race = RACE_LIST.find(r => r.id === raceId)
   const promptExcerpt =
-    `Raça: ${race?.name}. ${RACE_PROMPT_PT[raceId].slice(0, 132)}… ` +
-    `${CLASS_PROMPT_PT[classId].slice(0, 86)}…`
+    `Raça: ${race?.name}. ${RACE_PROMPT_PT[raceId].slice(0, 100)}… ` +
+    `${CLASS_PROMPT_PT[classId].slice(0, 60)}…`
 
   return (
     <div className="relative h-full w-full overflow-y-auto md:overflow-hidden">
@@ -149,10 +149,9 @@ export default function Slide1Creation({ active, onNext }: JourneySlideProps) {
               ))}
             </div>
           </div>
-          {/* Prompt da arte junto do gráfico de stats — fora da imagem do herói */}
+          {/* Prompt da arte junto do gráfico de stats — estático, fora da imagem */}
           <div className="hidden md:block">
-            <TypewriterText
-              key={`${raceId}-${classId}`}
+            <PromptPanel
               text={promptExcerpt}
               label="✍️ prompt da sua arte · você ajuda a escolher o estilo"
             />
@@ -230,8 +229,7 @@ export default function Slide1Creation({ active, onNext }: JourneySlideProps) {
 
           {/* Prompt + radar no mobile (desktop mostra na coluna esquerda) */}
           <div className="md:hidden flex flex-col gap-2">
-            <TypewriterText
-              key={`m-${raceId}-${classId}`}
+            <PromptPanel
               text={promptExcerpt}
               label="✍️ prompt da sua arte · você ajuda a escolher o estilo"
             />

@@ -10,7 +10,7 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { CharacterStatChips } from '@/components/character/CharacterStatChips'
 import { TRANSFORMATION_CONFIG, type TransformationType } from '@/lib/transformationSystem'
 import { useJourney } from '../JourneyContext'
-import TypewriterText from './TypewriterText'
+import PromptPanel from './PromptPanel'
 import MiniSkillTree from './MiniSkillTree'
 import {
   heroBaseStats,
@@ -218,19 +218,12 @@ export default function Slide2Sheet({ active, onNext }: JourneySlideProps) {
             </div>
           </div>
 
-          {/* Prompt embaixo, em espaço RESERVADO — a árvore não deforma quando ele entra */}
-          <div className="min-h-[84px] shrink-0">
-            <AnimatePresence>
-              {step >= 5 && (
-                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-                  <TypewriterText
-                    key={`${raceId}-form-prompt`}
-                    text={`${formLabel.emoji} ${FORM_PROMPT_PT[raceId].slice(0, 150)}…`}
-                    label="✍️ prompt da forma transformada · gerada da SUA arte base"
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
+          {/* Prompt embaixo, estático e sempre visível — nada se move na coluna */}
+          <div className="shrink-0">
+            <PromptPanel
+              text={`${formLabel.emoji} ${FORM_PROMPT_PT[raceId].slice(0, 130)}…`}
+              label="✍️ prompt da forma transformada · gerada da SUA arte base"
+            />
           </div>
         </div>
       </div>

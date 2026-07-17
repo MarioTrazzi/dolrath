@@ -65,8 +65,10 @@ const JOBS: { key: string; file: string; prompt: string }[] = [
       `twenty-sided die (d20) carved from dark cursed obsidian stone, its top ` +
       `face engraved with a glowing golden "20", edges beveled in antique gold. ` +
       `The die sits inside an ornate gothic gold ring with subtle rune marks. ` +
-      `Below the die, the monogram "BDI" in bold engraved gold gothic-serif ` +
-      `capital letters (exactly the three letters B, D, I). ` + STYLE,
+      `Below the die, the full wordmark "BLACK DOLRATH IDLE" in bold engraved ` +
+      `gold gothic-serif capital letters — spelled EXACTLY "BLACK DOLRATH IDLE", ` +
+      `slightly smaller letters so all three words fit the emblem width, ` +
+      `stacked as "BLACK DOLRATH" over "IDLE" or on a curved banner. ` + STYLE,
   },
   {
     key: 'icon',

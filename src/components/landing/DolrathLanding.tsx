@@ -279,7 +279,7 @@ function Hero({ primaryHref }: {
               className="absolute inset-0 m-auto drop-shadow-[0_0_36px_rgba(251,191,36,0.3)]"
             />
             <motion.div
-              className="absolute right-6 top-0 z-10"
+              className="absolute right-16 top-0 z-10"
               animate={reduce ? {} : { y: [0, -12, 0] }}
               transition={reduce ? {} : { repeat: Infinity, duration: 5.2, ease: 'easeInOut' }}
             >
@@ -293,7 +293,7 @@ function Hero({ primaryHref }: {
               <ShowcaseDie sides={20} size={128} interactive />
             </motion.div>
             <motion.div
-              className="absolute bottom-2 right-12 z-10"
+              className="absolute bottom-2 right-24 z-10"
               animate={reduce ? {} : { y: [0, -10, 0] }}
               transition={reduce ? {} : { repeat: Infinity, duration: 5.8, ease: 'easeInOut', delay: 1.7 }}
             >

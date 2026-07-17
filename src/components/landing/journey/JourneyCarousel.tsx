@@ -15,18 +15,21 @@ import dynamic from 'next/dynamic'
 import { motion, AnimatePresence } from 'framer-motion'
 import { SectionHeading } from '@/components/landing/ui'
 import { JourneyProvider } from './JourneyContext'
+import { JourneyDivider, JourneyWindow } from './JourneyFrame'
 import SlidePoster, { type SlideMeta } from './SlidePoster'
 import type { JourneySlideProps } from './journeyData'
 
 export const JOURNEY_STEPS: SlideMeta[] = [
-  { n: 1, emoji: '🧬', label: 'Crie seu herói', sub: 'Escolha raça e classe' },
-  { n: 2, emoji: '📜', label: 'A ficha', sub: 'Seu personagem, sua NFT' },
+  { n: 1, emoji: '🧬', label: 'Crie seu herói', sub: 'Raça + classe canônica' },
+  { n: 2, emoji: '📜', label: 'A ficha', sub: 'Transformação e skills' },
   { n: 3, emoji: '🌲', label: 'Masmorra', sub: 'Explore sob a névoa' },
-  { n: 4, emoji: '⚒️', label: 'Forja & Craft', sub: 'Evolua seu gear' },
-  { n: 5, emoji: '👑', label: 'Rumo ao boss', sub: 'Gear +15 equipado' },
-  { n: 6, emoji: '⚔️', label: 'Boss fight', sub: 'Anciã da Mata' },
-  { n: 7, emoji: '🏟️', label: 'PvP', sub: 'Combate por turnos' },
-  { n: 8, emoji: '🏆', label: 'Ranking', sub: 'Top 10 divide o prêmio' },
+  { n: 4, emoji: '⚒️', label: 'Forja & Craft', sub: 'Materiais viram poder' },
+  { n: 5, emoji: '💎', label: 'Aprimoramento', sub: 'Arma III → IV' },
+  { n: 6, emoji: '🎒', label: 'Gear & Mochila', sub: 'Set III + arma IV' },
+  { n: 7, emoji: '👑', label: 'Rumo ao boss', sub: 'Fim da trilha' },
+  { n: 8, emoji: '⚔️', label: 'Boss fight', sub: 'Anciã da Mata' },
+  { n: 9, emoji: '🏟️', label: 'PvP', sub: 'Combate por turnos' },
+  { n: 10, emoji: '🏆', label: 'Ranking', sub: 'Top 10 divide o prêmio' },
 ]
 
 // Loaders separados p/ permitir prefetch manual do próximo slide.
@@ -35,10 +38,12 @@ const SLIDE_LOADERS = [
   () => import('./slides/Slide2Sheet'),
   () => import('./slides/Slide3Dungeon'),
   () => import('./slides/Slide4Crafting'),
-  () => import('./slides/Slide5BossApproach'),
-  () => import('./slides/Slide6BossFight'),
-  () => import('./slides/Slide7Pvp'),
-  () => import('./slides/Slide8Ranking'),
+  () => import('./slides/Slide5Enhancement'),
+  () => import('./slides/Slide6GearSheet'),
+  () => import('./slides/Slide7BossApproach'),
+  () => import('./slides/Slide8BossFight'),
+  () => import('./slides/Slide9Pvp'),
+  () => import('./slides/Slide10Ranking'),
 ] as const
 
 const SLIDES = SLIDE_LOADERS.map((loader, i) =>
@@ -147,41 +152,35 @@ function JourneyCarouselInner() {
         ))}
       </div>
 
-      {/* Viewport */}
+      {/* Viewport dentro da "janela do jogo" */}
       <div className="relative mt-3">
-        <div
-          className="relative h-[540px] sm:h-[560px] md:h-[600px] rounded-2xl border border-white/10 bg-secondary/40 backdrop-blur-xl overflow-hidden"
-          style={{ touchAction: 'pan-y' }}
-        >
-          <AnimatePresence mode="popLayout" initial={false} custom={direction}>
-            <motion.div
-              key={index}
-              className="absolute inset-0"
-              custom={direction}
-              initial={{ x: direction * 64, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: direction * -64, opacity: 0 }}
-              transition={{ duration: 0.32, ease: 'easeOut' }}
-              drag="x"
-              dragConstraints={{ left: 0, right: 0 }}
-              dragElastic={0.15}
-              onDragEnd={(_, info) => {
-                if (info.offset.x < -60 || info.velocity.x < -400) goNext()
-                else if (info.offset.x > 60 || info.velocity.x > 400) goPrev()
-              }}
-            >
-              <Active active={inView} onNext={goNext} />
-            </motion.div>
-          </AnimatePresence>
-
-          {/* Legenda da etapa (canto superior esquerdo) */}
-          <div className="absolute top-3 left-3 z-30 pointer-events-none">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/55 border border-white/15 backdrop-blur-md text-[11px] font-bold text-white/90">
-              {meta.emoji} {meta.label}
-              <span className="text-white/50 font-medium hidden sm:inline">· {meta.sub}</span>
-            </span>
+        <JourneyWindow stepLabel={`${meta.emoji} ${meta.n}/10 · ${meta.label}`}>
+          <div
+            className="relative h-[540px] sm:h-[560px] md:h-[600px] overflow-hidden rounded-b-[3px]"
+            style={{ touchAction: 'pan-y' }}
+          >
+            <AnimatePresence mode="popLayout" initial={false} custom={direction}>
+              <motion.div
+                key={index}
+                className="absolute inset-0"
+                custom={direction}
+                initial={{ x: direction * 64, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: direction * -64, opacity: 0 }}
+                transition={{ duration: 0.32, ease: 'easeOut' }}
+                drag="x"
+                dragConstraints={{ left: 0, right: 0 }}
+                dragElastic={0.15}
+                onDragEnd={(_, info) => {
+                  if (info.offset.x < -60 || info.velocity.x < -400) goNext()
+                  else if (info.offset.x > 60 || info.velocity.x > 400) goPrev()
+                }}
+              >
+                <Active active={inView} onNext={goNext} />
+              </motion.div>
+            </AnimatePresence>
           </div>
-        </div>
+        </JourneyWindow>
 
         {/* Setas (desktop) */}
         <button
@@ -221,8 +220,9 @@ function JourneyCarouselInner() {
 
 export default function JourneyShowcase({ primaryHref }: { primaryHref: string }) {
   return (
-    <section id="jornada" className="relative py-16 sm:py-20">
+    <section id="jornada" className="relative py-12 sm:py-16">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <JourneyDivider />
         <SectionHeading
           eyebrow="A jornada completa"
           title={

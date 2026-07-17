@@ -1,6 +1,6 @@
 'use client'
 
-// Slide 8 — Ranking PvP + premiação: top 10 ilustrativo com o herói do
+// Slide 10 — Ranking PvP + premiação: top 10 ilustrativo com o herói do
 // visitante em #3 e o split REAL do pot em DOL (PVP_TOP10_DOL_SPLIT).
 // Fecho do arco: CTA "Comece sua jornada".
 
@@ -40,7 +40,7 @@ function useCountUp(target: number, run: boolean, ms = 1000): number {
 
 const MEDAL: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' }
 
-export default function Slide8Ranking({ active }: JourneySlideProps) {
+export default function Slide10Ranking({ active }: JourneySlideProps) {
   const { raceId, classId, heroName, heroArt, visual, primaryHref } = useJourney()
   const { step } = useSlideScript(active, TIMES, { loop: false })
 

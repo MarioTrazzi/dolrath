@@ -1,8 +1,10 @@
 'use client'
 
-// Slide 7 — PvP didático: mesmo BattleScene real + a barra de ações do
-// CombatShell, com roteiro que EXPLICA a lógica de turnos (iniciativa com
-// dado duplo → seu turno com menu de ações → turno do oponente → ...).
+// Slide 9 — PvP didático: BattleScene real + barra de ações do CombatShell.
+// O roteiro explica a lógica de turnos (iniciativa em dado duplo → seu
+// turno com menu → turno do oponente) e tem clímax: o oponente TRANSFORMA
+// no meio da luta e mesmo assim cai, porque o herói tira NAT 20 no dado
+// final. Gear real nos dois lutadores.
 
 import React, { useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -12,7 +14,7 @@ import ArenaBackdrop from '@/components/combat/ArenaBackdrop'
 import { useJourney } from '../JourneyContext'
 import { useBattleScript } from '../useBattleScript'
 import {
-  PVP_SCRIPT,
+  buildPvpScript,
   PVP_HERO_MAX_HP,
   PVP_FOE_MAX_HP,
   PVP_RANK_WIN_POINTS,
@@ -22,9 +24,10 @@ import {
   type JourneySlideProps,
 } from '../journeyData'
 
-export default function Slide7Pvp({ active, onNext }: JourneySlideProps) {
+export default function Slide9Pvp({ active, onNext }: JourneySlideProps) {
   const { raceId, classId, heroName } = useJourney()
-  const battle = useBattleScript(active, PVP_SCRIPT, {
+  const script = useMemo(() => buildPvpScript({ raceId, classId }), [raceId, classId])
+  const battle = useBattleScript(active, script, {
     heroHp: PVP_HERO_MAX_HP,
     foeHp: PVP_FOE_MAX_HP,
   })
@@ -34,22 +37,33 @@ export default function Slide7Pvp({ active, onNext }: JourneySlideProps) {
     [raceId, classId, battle.heroHp],
   )
   const foe = useMemo(
-    () => buildPvpOpponent({ raceId, classId }, battle.foeHp, PVP_FOE_MAX_HP),
-    [raceId, classId, battle.foeHp],
+    () => buildPvpOpponent({ raceId, classId }, battle.foeHp, PVP_FOE_MAX_HP, { transformed: battle.foeTransformed }),
+    [raceId, classId, battle.foeHp, battle.foeTransformed],
   )
 
+  // Passos 0-1 = iniciativa (dado duplo); o dado do fim da luta é single.
+  const isInitiative = battle.step <= 1
   const dicePanel: DicePanelInfo | null = battle.dice
-    ? {
-        visible: true,
-        diceType: 20,
-        hasRolled: battle.dice === 'reveal',
-        label: 'Iniciativa: quem age primeiro?',
-        onRoll: battle.advance,
-        dual: true,
-        myResult: battle.dice === 'reveal' ? { sides: 20, roll: 17, modifier: 2, total: 19 } : null,
-        opponentResult: battle.dice === 'reveal' ? { sides: 20, roll: 9, modifier: 2, total: 11 } : null,
-        resultBanner: battle.dice === 'reveal' ? `${heroName} venceu a iniciativa!` : null,
-      }
+    ? isInitiative
+      ? {
+          visible: true,
+          diceType: 20,
+          hasRolled: battle.dice === 'reveal',
+          label: 'Iniciativa: quem age primeiro?',
+          onRoll: battle.advance,
+          dual: true,
+          myResult: battle.dice === 'reveal' ? { sides: 20, roll: 17, modifier: 2, total: 19 } : null,
+          opponentResult: battle.dice === 'reveal' ? { sides: 20, roll: 9, modifier: 2, total: 11 } : null,
+          resultBanner: battle.dice === 'reveal' ? `${heroName} venceu a iniciativa!` : null,
+        }
+      : {
+          visible: true,
+          diceType: 20,
+          hasRolled: battle.dice === 'reveal',
+          label: '🎲 Tudo no dado final — toque para rolar!',
+          onRoll: battle.advance,
+          myResult: battle.dice === 'reveal' ? { sides: 20, roll: 20, modifier: 4, total: 24 } : null,
+        }
     : null
 
   const attackOptions: CombatAttackOption[] = [
@@ -69,7 +83,11 @@ export default function Slide7Pvp({ active, onNext }: JourneySlideProps) {
         statusContent={
           !battle.ended ? (
             <span className="text-[11px] text-white/60 font-bold">
-              {battle.dice ? '🎲 Rolando iniciativa...' : '⏳ Aguardando o turno do oponente...'}
+              {battle.dice
+                ? '🎲 Rolando os dados...'
+                : battle.foeTransformed
+                  ? '⚠️ Oponente transformado — aguente firme...'
+                  : '⏳ Aguardando o turno do oponente...'}
             </span>
           ) : (
             <span className="text-[11px] text-emerald-300 font-bold">🏆 Vitória de {heroName}!</span>
@@ -93,6 +111,7 @@ export default function Slide7Pvp({ active, onNext }: JourneySlideProps) {
             event={battle.event}
             dicePanel={dicePanel}
             backdrop={null}
+            diceSize={72}
           />
 
           {/* Faixa do turno (didática) */}
@@ -128,7 +147,7 @@ export default function Slide7Pvp({ active, onNext }: JourneySlideProps) {
                 +310 🪙 · +115 XP · +{PVP_RANK_WIN_POINTS} pts de ranking
               </span>
               <p className="text-[10px] text-white/60 mt-0.5">
-                Arena paga ouro e pontos — e os pontos valem prêmio em DOL.
+                Nem a transformação salva de um NAT 20 — o dado decide.
               </p>
             </div>
             <button

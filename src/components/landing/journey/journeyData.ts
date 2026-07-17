@@ -255,36 +255,49 @@ export interface BattleStep {
 
 export const BOSS_HERO_MAX_HP = 240
 
-/** Slide 6 — boss fight: {hero} +15 vs Anciã da Mata. */
-export const BOSS_SCRIPT: BattleStep[] = [
-  { at: 0, banner: 'O confronto final da Floresta Sombria', heroHp: 240, foeHp: 160, dice: null, log: 'A Anciã da Mata desperta...' },
-  { at: 1600, event: { kind: 'resolve', attackerId: 'hero', defenderId: 'boss', action: 'weapon', defenseAction: 'none', hit: true, damage: 34 }, foeHp: 126, log: 'Seu golpe de classe acerta em cheio: 34 de dano!' },
-  { at: 3800, event: { kind: 'resolve', attackerId: 'boss', defenderId: 'hero', action: 'special', defenseAction: 'none', hit: true, damage: 18 }, heroHp: 222, log: 'A Anciã responde com raízes corrompidas: 18 de dano.' },
-  { at: 6000, event: { kind: 'item', actorId: 'hero', itemName: 'Poção de Vida Maior', hpRestored: 18 }, heroHp: 240, log: 'Você bebe uma Poção de Vida Maior (+18 HP).' },
-  { at: 7800, dice: 'ask', banner: 'Golpe decisivo — role o d20!', log: 'O destino da luta está no dado...' },
-  { at: 11000, dice: 'reveal', log: '🎲 19! Acerto crítico garantido.' },
-  { at: 12600, event: { kind: 'resolve', attackerId: 'hero', defenderId: 'boss', action: 'weapon', defenseAction: 'none', hit: true, damage: 61, isCritical: true }, foeHp: 65, dice: null, log: 'CRÍTICO! 61 de dano — a Anciã cambaleia!' },
-  { at: 15000, event: { kind: 'resolve', attackerId: 'boss', defenderId: 'hero', action: 'weapon', defenseAction: 'none', hit: false, damage: 0 }, log: 'Você esquiva do golpe desesperado!' },
-  { at: 17000, event: { kind: 'resolve', attackerId: 'hero', defenderId: 'boss', action: 'weapon', defenseAction: 'none', hit: true, damage: 65 }, foeHp: 0, ended: true, log: 'Golpe final! A Guardiã Corrompida tomba.' },
-  { at: 18800, loot: true, banner: null, log: 'A floresta silencia. O tesouro é seu.' },
-]
+/** Slide 8 — boss fight: golpes normais → TRANSFORMAÇÃO → especial de forma → d20 decisivo. */
+export function buildBossScript(raceId: JourneyRaceId): BattleStep[] {
+  const form = FORM_LABEL[raceId]
+  const name = heroName(raceId)
+  return [
+    { at: 0, banner: 'O confronto final da Floresta Sombria', heroHp: 240, foeHp: 160, dice: null, log: 'A Anciã da Mata desperta...' },
+    { at: 1600, event: { kind: 'resolve', attackerId: 'hero', defenderId: 'boss', action: 'weapon', defenseAction: 'none', hit: true, damage: 30 }, foeHp: 130, log: 'Seu ataque de classe acerta em cheio: 30 de dano!' },
+    { at: 3800, event: { kind: 'resolve', attackerId: 'boss', defenderId: 'hero', action: 'special', defenseAction: 'none', hit: true, damage: 22 }, heroHp: 218, log: 'A Anciã responde com raízes corrompidas: 22 de dano.' },
+    { at: 6000, event: { kind: 'transform', actorId: 'hero' }, heroTransformed: true, banner: `${form.emoji} ${name} desperta: ${form.name}!`, log: `TRANSFORMAÇÃO! ${form.emoji} ${form.name} liberado(a).` },
+    { at: 8600, event: { kind: 'resolve', attackerId: 'hero', defenderId: 'boss', action: FORM_SPECIAL_ACTION[raceId], defenseAction: 'none', hit: true, damage: 52 }, foeHp: 78, banner: null, log: `${FORM_SPECIAL_NAME[raceId]}: 52 de dano!` },
+    { at: 11000, dice: 'ask', banner: 'Golpe decisivo — role o d20!', log: 'O destino da luta está no dado...' },
+    { at: 14200, dice: 'reveal', log: '🎲 19! Acerto crítico garantido.' },
+    { at: 15800, event: { kind: 'resolve', attackerId: 'hero', defenderId: 'boss', action: FORM_SPECIAL_ACTION[raceId], defenseAction: 'none', hit: true, damage: 78, isCritical: true }, foeHp: 0, dice: null, ended: true, banner: null, log: 'CRÍTICO! 78 de dano — a Guardiã Corrompida tomba.' },
+    { at: 17800, loot: true, log: 'A floresta silencia. O tesouro é seu.' },
+  ]
+}
 
 export const PVP_HERO_MAX_HP = 240
 export const PVP_FOE_MAX_HP = 230
 
-/** Slide 7 — PvP didático por turnos. */
-export const PVP_SCRIPT: BattleStep[] = [
-  { at: 0, dice: 'ask', banner: 'Iniciativa — os dois jogadores rolam d20', heroHp: 240, foeHp: 230, log: 'A arena ruge. Dois heróis, um vencedor.' },
-  { at: 1800, dice: 'reveal', log: '🎲 19 × 11 — você age primeiro!' },
-  { at: 4200, dice: null, banner: '⚔️ Seu turno — escolha uma ação', showActions: true, log: 'Sua vez: Golpe, Ataque de Classe ou Especial.' },
-  { at: 6600, event: { kind: 'resolve', attackerId: 'hero', defenderId: 'foe', action: 'weapon', defenseAction: 'none', hit: true, damage: 28 }, foeHp: 202, showActions: false, log: 'Ataque de Classe: 28 de dano!' },
-  { at: 9000, banner: '🛡️ Turno do oponente', event: { kind: 'resolve', attackerId: 'foe', defenderId: 'hero', action: 'weapon', defenseAction: 'none', hit: true, damage: 15 }, heroHp: 225, log: 'O oponente contra-ataca: 15 de dano.' },
-  { at: 11400, banner: '⚔️ Seu turno', showActions: true, log: 'Os turnos alternam — cada escolha conta.' },
-  { at: 13400, event: { kind: 'resolve', attackerId: 'hero', defenderId: 'foe', action: 'weapon', defenseAction: 'none', hit: true, damage: 44, isCritical: true }, foeHp: 158, showActions: false, log: 'CRÍTICO! 44 de dano!' },
-  { at: 15800, banner: '🛡️ Turno do oponente', event: { kind: 'resolve', attackerId: 'foe', defenderId: 'hero', action: 'basic', defenseAction: 'none', hit: false, damage: 0 }, log: 'Você esquiva por um triz!' },
-  { at: 18000, banner: '⚔️ Seu turno', event: { kind: 'resolve', attackerId: 'hero', defenderId: 'foe', action: 'special', defenseAction: 'none', hit: true, damage: 158 }, foeHp: 0, ended: true, log: 'Especial de forma encerra a luta!' },
-  { at: 20000, rewards: true, banner: null, log: 'Vitória! Ouro, XP e pontos de ranking.' },
-]
+/** Slide 9 — PvP didático: o oponente TRANSFORMA no meio da luta e mesmo
+ *  assim perde, porque o herói tira sorte grande (nat 20) no dado final. */
+export function buildPvpScript(choice: JourneyChoice): BattleStep[] {
+  const foeRace = pvpOpponentRace(choice)
+  const foeName = heroName(foeRace)
+  const foeForm = FORM_LABEL[foeRace]
+  const name = heroName(choice.raceId)
+  return [
+    { at: 0, dice: 'ask', banner: 'Iniciativa — os dois jogadores rolam d20', heroHp: 240, foeHp: 230, log: 'A arena ruge. Dois heróis, um vencedor.' },
+    { at: 1800, dice: 'reveal', log: `🎲 19 × 11 — ${name} age primeiro!` },
+    { at: 4200, dice: null, banner: '⚔️ Seu turno — escolha uma ação', showActions: true, log: 'Sua vez: Golpe, Ataque de Classe ou Especial.' },
+    { at: 6600, event: { kind: 'resolve', attackerId: 'hero', defenderId: 'foe', action: 'weapon', defenseAction: 'none', hit: true, damage: 28 }, foeHp: 202, showActions: false, log: 'Ataque de Classe: 28 de dano!' },
+    { at: 9000, banner: '🛡️ Turno do oponente', event: { kind: 'resolve', attackerId: 'foe', defenderId: 'hero', action: 'weapon', defenseAction: 'none', hit: true, damage: 15 }, heroHp: 225, log: `${foeName} contra-ataca: 15 de dano.` },
+    { at: 11400, event: { kind: 'transform', actorId: 'foe' }, foeTransformed: true, banner: `${foeForm.emoji} ${foeName} desperta: ${foeForm.name}!`, log: `${foeName} se transforma — o poder dele(a) dispara!` },
+    { at: 14000, event: { kind: 'resolve', attackerId: 'foe', defenderId: 'hero', action: FORM_SPECIAL_ACTION[foeRace], defenseAction: 'none', hit: true, damage: 34 }, heroHp: 191, log: `Especial de forma de ${foeName}: 34 de dano. A luta apertou!` },
+    { at: 16600, banner: '⚔️ Seu turno', showActions: true, log: 'Transformado ou não, ele sangra. Responda!' },
+    { at: 18800, event: { kind: 'resolve', attackerId: 'hero', defenderId: 'foe', action: 'weapon', defenseAction: 'none', hit: true, damage: 26 }, foeHp: 176, showActions: false, log: 'Ataque de Classe: 26 de dano!' },
+    { at: 21200, dice: 'ask', banner: '🎲 Tudo no dado final!', log: 'Um golpe. Um dado. Um vencedor.' },
+    { at: 24200, dice: 'reveal', log: '🎲 NAT 20! Sorte grande no dado!' },
+    { at: 25800, event: { kind: 'resolve', attackerId: 'hero', defenderId: 'foe', action: 'special', defenseAction: 'none', hit: true, damage: 176, isCritical: true }, foeHp: 0, dice: null, ended: true, banner: null, log: `CRÍTICO MÁXIMO! ${foeName} cai mesmo transformado.` },
+    { at: 27800, rewards: true, log: 'Vitória! Ouro, XP e pontos de ranking.' },
+  ]
+}
 
 // ---------- Slide 8: ranking fake + premiação real ----------
 

@@ -13,6 +13,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { motion, AnimatePresence } from 'framer-motion'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { GOLD, GOLD_BRIGHT, BORDER_GOLD } from '@/components/crafting/bdoTheme'
 import { SectionHeading } from '@/components/landing/ui'
 import { JourneyProvider } from './JourneyContext'
 import { JourneyDivider, JourneyWindow } from './JourneyFrame'
@@ -82,10 +84,80 @@ function TimelineChip({
   )
 }
 
+/** Seta do carrossel no estilo do jogo: losango chumbo+ouro (mesma linguagem
+    dos pips/divisória) com burst dourado a cada troca de etapa e pulso de
+    brilho enquanto o visitante ainda não navegou. */
+function DiamondArrow({
+  dir,
+  onClick,
+  disabled,
+  flashKey,
+  attract = false,
+  className = '',
+  boxClass = 'w-11 h-11',
+  iconClass = 'w-6 h-6',
+}: {
+  dir: 'prev' | 'next'
+  onClick: () => void
+  disabled: boolean
+  flashKey: number
+  attract?: boolean
+  className?: string
+  boxClass?: string
+  iconClass?: string
+}) {
+  const Chevron = dir === 'prev' ? ChevronLeft : ChevronRight
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={dir === 'prev' ? 'Etapa anterior' : 'Próxima etapa'}
+      className={`group z-30 disabled:opacity-25 disabled:pointer-events-none ${className}`}
+    >
+      <span className="relative grid place-items-center">
+        {/* Burst: anel dourado que se expande a cada mudança de slide */}
+        {!disabled && (
+          <motion.span
+            key={flashKey}
+            className={`absolute rotate-45 border-2 pointer-events-none ${boxClass}`}
+            style={{ borderColor: GOLD_BRIGHT }}
+            initial={{ opacity: 0.9, scale: 1 }}
+            animate={{ opacity: 0, scale: 1.8 }}
+            transition={{ duration: 0.7, ease: 'easeOut' }}
+          />
+        )}
+        <motion.span
+          className={`grid place-items-center rotate-45 border-2 transition-transform duration-200 group-hover:scale-110 ${boxClass}`}
+          style={{ borderColor: BORDER_GOLD, background: '#141210' }}
+          animate={
+            attract && !disabled
+              ? {
+                  boxShadow: [
+                    '0 0 10px rgba(201,162,95,0.25)',
+                    '0 0 26px rgba(231,198,130,0.75)',
+                    '0 0 10px rgba(201,162,95,0.25)',
+                  ],
+                }
+              : { boxShadow: '0 0 14px rgba(201,162,95,0.35)' }
+          }
+          transition={
+            attract && !disabled
+              ? { duration: 1.5, repeat: Infinity, ease: 'easeInOut' }
+              : { duration: 0.3 }
+          }
+        >
+          <Chevron className={`-rotate-45 ${iconClass}`} style={{ color: GOLD }} strokeWidth={2.75} />
+        </motion.span>
+      </span>
+    </button>
+  )
+}
+
 function JourneyCarouselInner() {
   const [index, setIndex] = useState(0)
   const [direction, setDirection] = useState(1)
   const [inView, setInView] = useState(false)
+  const [hasNavigated, setHasNavigated] = useState(false)
   const sectionRef = useRef<HTMLDivElement>(null)
   const chipRefs = useRef<(HTMLDivElement | null)[]>([])
 
@@ -109,6 +181,7 @@ function JourneyCarouselInner() {
       const clamped = Math.max(0, Math.min(SLIDES.length - 1, next))
       setDirection(clamped >= index ? 1 : -1)
       setIndex(clamped)
+      if (clamped !== index) setHasNavigated(true)
     },
     [index],
   )
@@ -182,36 +255,54 @@ function JourneyCarouselInner() {
           </div>
         </JourneyWindow>
 
-        {/* Setas (desktop) */}
-        <button
+        {/* Setas (desktop) — losangos chumbo+ouro, no estilo do jogo */}
+        <DiamondArrow
+          dir="prev"
           onClick={goPrev}
           disabled={index === 0}
-          aria-label="Etapa anterior"
-          className="hidden md:grid place-items-center absolute -left-5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full border border-white/15 bg-secondary/90 backdrop-blur-xl text-white text-lg shadow-xl transition-all hover:bg-secondary hover:border-primary/50 disabled:opacity-30 disabled:pointer-events-none z-30"
-        >
-          ‹
-        </button>
-        <button
+          flashKey={index}
+          className="hidden md:block absolute -left-8 top-1/2 -translate-y-1/2"
+        />
+        <DiamondArrow
+          dir="next"
           onClick={goNext}
           disabled={index === SLIDES.length - 1}
-          aria-label="Próxima etapa"
-          className="hidden md:grid place-items-center absolute -right-5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full border border-white/15 bg-secondary/90 backdrop-blur-xl text-white text-lg shadow-xl transition-all hover:bg-secondary hover:border-primary/50 disabled:opacity-30 disabled:pointer-events-none z-30"
-        >
-          ›
-        </button>
+          flashKey={index}
+          attract={!hasNavigated}
+          className="hidden md:block absolute -right-8 top-1/2 -translate-y-1/2"
+        />
 
-        {/* Dots (mobile) */}
-        <div className="flex md:hidden justify-center gap-1.5 mt-3">
-          {JOURNEY_STEPS.map((m, i) => (
-            <button
-              key={m.n}
-              onClick={() => goTo(i)}
-              aria-label={`Ir para a etapa ${m.n}`}
-              className={`h-1.5 rounded-full transition-all ${
-                i === index ? 'w-6 bg-primary' : 'w-1.5 bg-white/25'
-              }`}
-            />
-          ))}
+        {/* Setas + dots (mobile) */}
+        <div className="flex md:hidden items-center justify-center gap-4 mt-4">
+          <DiamondArrow
+            dir="prev"
+            onClick={goPrev}
+            disabled={index === 0}
+            flashKey={index}
+            boxClass="w-7 h-7"
+            iconClass="w-4 h-4"
+          />
+          <div className="flex justify-center gap-1.5">
+            {JOURNEY_STEPS.map((m, i) => (
+              <button
+                key={m.n}
+                onClick={() => goTo(i)}
+                aria-label={`Ir para a etapa ${m.n}`}
+                className={`h-1.5 rounded-full transition-all ${
+                  i === index ? 'w-6 bg-primary' : 'w-1.5 bg-white/25'
+                }`}
+              />
+            ))}
+          </div>
+          <DiamondArrow
+            dir="next"
+            onClick={goNext}
+            disabled={index === SLIDES.length - 1}
+            flashKey={index}
+            attract={!hasNavigated}
+            boxClass="w-7 h-7"
+            iconClass="w-4 h-4"
+          />
         </div>
       </div>
     </div>

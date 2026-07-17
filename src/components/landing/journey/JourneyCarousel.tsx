@@ -14,7 +14,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { GOLD, GOLD_BRIGHT, BORDER_GOLD } from '@/components/crafting/bdoTheme'
+import { GOLD, GOLD_BRIGHT } from '@/components/crafting/bdoTheme'
 import { SectionHeading } from '@/components/landing/ui'
 import { JourneyProvider } from './JourneyContext'
 import { JourneyDivider, JourneyWindow } from './JourneyFrame'
@@ -84,18 +84,17 @@ function TimelineChip({
   )
 }
 
-/** Seta do carrossel no estilo do jogo: losango chumbo+ouro (mesma linguagem
-    dos pips/divisória) com burst dourado a cada troca de etapa e pulso de
-    brilho enquanto o visitante ainda não navegou. */
-function DiamondArrow({
+/** Seta do carrossel DENTRO do card: um chevron ( › ) dourado grande sobre o
+    slide, com eco que dispara a cada troca de etapa e aceno ("vem por aqui")
+    enquanto o visitante ainda não navegou. Some quando não há mais etapa. */
+function ChevronArrow({
   dir,
   onClick,
   disabled,
   flashKey,
   attract = false,
   className = '',
-  boxClass = 'w-11 h-11',
-  iconClass = 'w-6 h-6',
+  iconClass = 'w-10 h-10 md:w-16 md:h-16',
 }: {
   dir: 'prev' | 'next'
   onClick: () => void
@@ -103,50 +102,48 @@ function DiamondArrow({
   flashKey: number
   attract?: boolean
   className?: string
-  boxClass?: string
   iconClass?: string
 }) {
   const Chevron = dir === 'prev' ? ChevronLeft : ChevronRight
+  const nudge = dir === 'prev' ? -6 : 6
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       aria-label={dir === 'prev' ? 'Etapa anterior' : 'Próxima etapa'}
-      className={`group z-30 disabled:opacity-25 disabled:pointer-events-none ${className}`}
+      className={`group z-30 transition-opacity duration-300 disabled:opacity-0 disabled:pointer-events-none ${className}`}
     >
       <span className="relative grid place-items-center">
-        {/* Burst: anel dourado que se expande a cada mudança de slide */}
+        {/* Eco: chevron que se expande e desvanece a cada mudança de slide */}
         {!disabled && (
           <motion.span
             key={flashKey}
-            className={`absolute rotate-45 border-2 pointer-events-none ${boxClass}`}
-            style={{ borderColor: GOLD_BRIGHT }}
-            initial={{ opacity: 0.9, scale: 1 }}
-            animate={{ opacity: 0, scale: 1.8 }}
+            className="absolute pointer-events-none"
+            initial={{ opacity: 0.9, scale: 1, x: 0 }}
+            animate={{ opacity: 0, scale: 1.8, x: nudge * 2 }}
             transition={{ duration: 0.7, ease: 'easeOut' }}
-          />
+          >
+            <Chevron className={iconClass} style={{ color: GOLD_BRIGHT }} strokeWidth={3} />
+          </motion.span>
         )}
         <motion.span
-          className={`grid place-items-center rotate-45 border-2 transition-transform duration-200 group-hover:scale-110 ${boxClass}`}
-          style={{ borderColor: BORDER_GOLD, background: '#141210' }}
+          className="grid place-items-center transition-transform duration-200 group-hover:scale-125"
+          style={{
+            filter:
+              'drop-shadow(0 0 8px rgba(201,162,95,0.85)) drop-shadow(0 2px 5px rgba(0,0,0,0.95))',
+          }}
           animate={
             attract && !disabled
-              ? {
-                  boxShadow: [
-                    '0 0 10px rgba(201,162,95,0.25)',
-                    '0 0 26px rgba(231,198,130,0.75)',
-                    '0 0 10px rgba(201,162,95,0.25)',
-                  ],
-                }
-              : { boxShadow: '0 0 14px rgba(201,162,95,0.35)' }
+              ? { x: [0, nudge, 0], scale: [1, 1.1, 1] }
+              : { x: 0, scale: 1 }
           }
           transition={
             attract && !disabled
-              ? { duration: 1.5, repeat: Infinity, ease: 'easeInOut' }
+              ? { duration: 1.3, repeat: Infinity, ease: 'easeInOut' }
               : { duration: 0.3 }
           }
         >
-          <Chevron className={`-rotate-45 ${iconClass}`} style={{ color: GOLD }} strokeWidth={2.75} />
+          <Chevron className={iconClass} style={{ color: GOLD }} strokeWidth={3} />
         </motion.span>
       </span>
     </button>
@@ -252,57 +249,38 @@ function JourneyCarouselInner() {
                 <Active active={inView} onNext={goNext} />
               </motion.div>
             </AnimatePresence>
+
+            {/* Setas DENTRO do card: chevrons ( ‹ › ) dourados sobre o slide */}
+            <ChevronArrow
+              dir="prev"
+              onClick={goPrev}
+              disabled={index === 0}
+              flashKey={index}
+              className="absolute left-0 top-1/2 -translate-y-1/2 pl-1 pr-2 py-6 md:pl-2 md:pr-4"
+            />
+            <ChevronArrow
+              dir="next"
+              onClick={goNext}
+              disabled={index === SLIDES.length - 1}
+              flashKey={index}
+              attract={!hasNavigated}
+              className="absolute right-0 top-1/2 -translate-y-1/2 pr-1 pl-2 py-6 md:pr-2 md:pl-4"
+            />
           </div>
         </JourneyWindow>
 
-        {/* Setas (desktop) — losangos chumbo+ouro, no estilo do jogo */}
-        <DiamondArrow
-          dir="prev"
-          onClick={goPrev}
-          disabled={index === 0}
-          flashKey={index}
-          className="hidden md:block absolute -left-8 top-1/2 -translate-y-1/2"
-        />
-        <DiamondArrow
-          dir="next"
-          onClick={goNext}
-          disabled={index === SLIDES.length - 1}
-          flashKey={index}
-          attract={!hasNavigated}
-          className="hidden md:block absolute -right-8 top-1/2 -translate-y-1/2"
-        />
-
-        {/* Setas + dots (mobile) */}
-        <div className="flex md:hidden items-center justify-center gap-4 mt-4">
-          <DiamondArrow
-            dir="prev"
-            onClick={goPrev}
-            disabled={index === 0}
-            flashKey={index}
-            boxClass="w-7 h-7"
-            iconClass="w-4 h-4"
-          />
-          <div className="flex justify-center gap-1.5">
-            {JOURNEY_STEPS.map((m, i) => (
-              <button
-                key={m.n}
-                onClick={() => goTo(i)}
-                aria-label={`Ir para a etapa ${m.n}`}
-                className={`h-1.5 rounded-full transition-all ${
-                  i === index ? 'w-6 bg-primary' : 'w-1.5 bg-white/25'
-                }`}
-              />
-            ))}
-          </div>
-          <DiamondArrow
-            dir="next"
-            onClick={goNext}
-            disabled={index === SLIDES.length - 1}
-            flashKey={index}
-            attract={!hasNavigated}
-            boxClass="w-7 h-7"
-            iconClass="w-4 h-4"
-          />
+        {/* Dots (mobile) */}
+        <div className="flex md:hidden justify-center gap-1.5 mt-3">
+          {JOURNEY_STEPS.map((m, i) => (
+            <button
+              key={m.n}
+              onClick={() => goTo(i)}
+              aria-label={`Ir para a etapa ${m.n}`}
+              className={`h-1.5 rounded-full transition-all ${
+                i === index ? 'w-6 bg-primary' : 'w-1.5 bg-white/25'
+              }`}
+            />
+          ))}
         </div>
       </div>
     </div>

@@ -7,7 +7,7 @@
 // economia, como funciona, CTA e footer.
 // ============================================================
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { motion, useReducedMotion } from 'framer-motion'
@@ -337,9 +337,40 @@ function MonsterCard({ monster, accent, boss = false }: { monster: DungeonMonste
 
 function MonsterGallerySection() {
   const [active, setActive] = useState<DungeonId>('floresta')
+  const [userPicked, setUserPicked] = useState(false)
+  const [inView, setInView] = useState(false)
+  const sectionRef = useRef<HTMLElement>(null)
   const dungeon = DUNGEONS[active]
+
+  // Auto-cycle: com a seção visível, troca de masmorra sozinho a cada 4s
+  // (como se clicasse nos botões) até o visitante escolher uma de verdade.
+  useEffect(() => {
+    const el = sectionRef.current
+    if (!el || typeof IntersectionObserver === 'undefined') {
+      setInView(true)
+      return
+    }
+    const obs = new IntersectionObserver(
+      (entries) => setInView(entries[0]?.isIntersecting ?? false),
+      { threshold: 0.25 },
+    )
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [])
+
+  useEffect(() => {
+    if (!inView || userPicked) return
+    const id = window.setInterval(() => {
+      setActive((prev) => {
+        const i = DUNGEON_LIST.findIndex((d) => d.id === prev)
+        return DUNGEON_LIST[(i + 1) % DUNGEON_LIST.length].id
+      })
+    }, 4000)
+    return () => window.clearInterval(id)
+  }, [inView, userPicked])
+
   return (
-    <section id="bestiario" className="relative py-24 bg-secondary/40">
+    <section ref={sectionRef} id="bestiario" className="relative py-24 bg-secondary/40">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 flex flex-col gap-10">
         <SectionHeading
           eyebrow="Bestiário"
@@ -350,7 +381,10 @@ function MonsterGallerySection() {
           {DUNGEON_LIST.map((d) => (
             <button
               key={d.id}
-              onClick={() => setActive(d.id)}
+              onClick={() => {
+                setActive(d.id)
+                setUserPicked(true)
+              }}
               className="rounded-full border px-4 py-1.5 text-xs font-semibold transition-all"
               style={{
                 borderColor: active === d.id ? d.accent : `${d.accent}33`,
@@ -362,12 +396,18 @@ function MonsterGallerySection() {
             </button>
           ))}
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <motion.div
+          key={active}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: 'easeOut' }}
+          className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5"
+        >
           {dungeon.monsters.map((m) => (
             <MonsterCard key={m.name} monster={m} accent={dungeon.accent} />
           ))}
           <MonsterCard monster={dungeon.boss} accent={dungeon.accent} boss />
-        </div>
+        </motion.div>
       </div>
     </section>
   )

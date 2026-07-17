@@ -10,7 +10,7 @@ import React, { useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import BattleScene, { type DicePanelInfo } from '@/components/battle/BattleScene'
 import CombatShell, { type CombatAttackOption } from '@/components/battle/CombatShell'
-import ArenaBackdrop from '@/components/combat/ArenaBackdrop'
+import { DUNGEON_BATTLE_BG } from '@/lib/walkSceneAssets'
 import { useJourney } from '../JourneyContext'
 import { useBattleScript } from '../useBattleScript'
 import {
@@ -97,9 +97,15 @@ export default function Slide9Pvp({ active, onNext }: JourneySlideProps) {
         showItemButton={false}
       >
         <div className="relative h-[320px] sm:h-[340px] md:h-[380px]">
+          {/* Arena de PvP nas Ruínas Arcanas — mesmo battle BG do combate real */}
           <div className="absolute inset-0 overflow-hidden">
-            <ArenaBackdrop />
-            <div className="absolute inset-0 bg-black/25" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={DUNGEON_BATTLE_BG.ruinas}
+              alt=""
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-black/35" />
           </div>
           <BattleScene
             className="h-full"

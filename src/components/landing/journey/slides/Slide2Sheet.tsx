@@ -68,8 +68,8 @@ export default function Slide2Sheet({ active, onNext }: JourneySlideProps) {
       />
 
       <div className="h-full flex flex-col md:flex-row gap-3 p-3 pt-5 sm:p-4 items-center md:items-stretch">
-        {/* Card quadrado com flip */}
-        <div className="md:w-[46%] flex items-center justify-center min-h-0">
+        {/* Card com flip + prompt da forma logo abaixo */}
+        <div className="md:w-[46%] flex flex-col items-center justify-center gap-2 min-h-0">
           <motion.div
             key={`${cycle}-${raceId}`}
             initial={{ rotateY: 70, opacity: 0, scale: 0.85 }}
@@ -104,7 +104,7 @@ export default function Slide2Sheet({ active, onNext }: JourneySlideProps) {
               )}
             </AnimatePresence>
 
-            {/* Arte com flip (padrão RaceFlipCard) */}
+            {/* Arte com flip (padrão RaceFlipCard) — cobre o card inteiro */}
             <AnimatePresence mode="wait">
               <motion.img
                 key={img}
@@ -114,10 +114,12 @@ export default function Slide2Sheet({ active, onNext }: JourneySlideProps) {
                 animate={reduced ? { opacity: 1 } : { rotateY: 0, opacity: 1 }}
                 exit={reduced ? { opacity: 0 } : { rotateY: 90, opacity: 0 }}
                 transition={{ duration: 0.3, ease: 'easeInOut' }}
-                className="absolute inset-x-0 bottom-6 mx-auto h-[72%] object-contain drop-shadow-[0_10px_28px_rgba(0,0,0,0.75)]"
+                className="absolute inset-0 h-full w-full object-cover object-top"
                 style={{ backfaceVisibility: 'hidden' }}
               />
             </AnimatePresence>
+            {/* Véu p/ leitura da placa por cima da arte */}
+            <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/90 to-transparent pointer-events-none" />
 
             {/* Selo NFT / selo da forma */}
             {step >= 4 && (
@@ -201,9 +203,17 @@ export default function Slide2Sheet({ active, onNext }: JourneySlideProps) {
               )}
             </div>
           </motion.div>
+
+          {/* Prompt da forma, estático abaixo do card — deixa a árvore inteira p/ ela */}
+          <div className="w-full max-w-[250px] sm:max-w-[280px] shrink-0">
+            <PromptPanel
+              text={`${formLabel.emoji} ${FORM_PROMPT_PT[raceId].slice(0, 130)}…`}
+              label="✍️ prompt da forma transformada · gerada da SUA arte base"
+            />
+          </div>
         </div>
 
-        {/* Coluna direita: árvore de skills + prompt da transformação embaixo */}
+        {/* Coluna direita: só a árvore de skills, no tamanho cheio */}
         <div className="md:w-[54%] flex flex-col gap-2 min-h-0 w-full">
           <div className="relative flex-1 min-h-[220px] rounded-lg border border-white/10 bg-black/30 overflow-hidden">
             <div className="absolute top-2 left-3 z-10 text-[10px] font-bold uppercase tracking-[0.2em] text-primary">
@@ -216,14 +226,6 @@ export default function Slide2Sheet({ active, onNext }: JourneySlideProps) {
             <div className="absolute bottom-2 inset-x-3 text-[10px] text-white/60 text-center">
               A cada nível, pontos para evoluir os caminhos da sua classe — em página dedicada no jogo.
             </div>
-          </div>
-
-          {/* Prompt embaixo, estático e sempre visível — nada se move na coluna */}
-          <div className="shrink-0">
-            <PromptPanel
-              text={`${formLabel.emoji} ${FORM_PROMPT_PT[raceId].slice(0, 130)}…`}
-              label="✍️ prompt da forma transformada · gerada da SUA arte base"
-            />
           </div>
         </div>
       </div>

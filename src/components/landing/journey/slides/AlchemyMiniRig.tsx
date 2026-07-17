@@ -8,6 +8,7 @@ import React from 'react'
 import { motion } from 'framer-motion'
 import { GOLD, GOLD_BRIGHT, type CraftPhase } from '@/components/crafting/bdoTheme'
 import type { RigMaterial } from '@/components/crafting/professionFx'
+import { ItemThumb } from './LootTiles'
 
 const BOX_W = 320
 const BOX_H = 240
@@ -23,7 +24,7 @@ function SlotFrame({ m, charging }: { m: RigMaterial; charging: boolean }) {
   return (
     <div className="flex flex-col items-center gap-0.5">
       <motion.div
-        className="grid h-12 w-12 place-items-center border text-xl"
+        className="grid h-12 w-12 place-items-center overflow-hidden border text-xl"
         style={{
           background: '#1e1e21',
           borderColor: charging ? GOLD : '#3c3c41',
@@ -32,7 +33,7 @@ function SlotFrame({ m, charging }: { m: RigMaterial; charging: boolean }) {
         animate={charging ? { scale: [1, 1.06, 1] } : { scale: 1 }}
         transition={charging ? { repeat: Infinity, duration: 1.2 } : undefined}
       >
-        {m.emoji}
+        <ItemThumb name={m.name} emoji={m.emoji} className="text-xl" />
       </motion.div>
       <span className="text-[9px] font-bold text-[#a8a8ae] whitespace-nowrap">
         {m.name} <span style={{ color: GOLD }}>{m.have}/{m.need}</span>
@@ -138,7 +139,7 @@ export default function AlchemyMiniRig({
       >
         <motion.div
           key={done ? `out-${chargeId}` : 'idle'}
-          className="grid h-14 w-14 place-items-center border-2 text-2xl"
+          className="grid h-14 w-14 place-items-center overflow-hidden border-2 text-2xl"
           style={{
             background: '#141210',
             borderColor: done ? GOLD_BRIGHT : '#3c3c41',
@@ -148,7 +149,7 @@ export default function AlchemyMiniRig({
           animate={{ scale: 1, opacity: 1 }}
           transition={{ type: 'spring', stiffness: 260, damping: 16 }}
         >
-          {done ? outputEmoji : '❔'}
+          {done ? <ItemThumb name={outputName} emoji={outputEmoji} className="text-2xl" /> : '❔'}
         </motion.div>
         {done && (
           <span className="text-[10px] font-bold whitespace-nowrap" style={{ color: GOLD_BRIGHT }}>

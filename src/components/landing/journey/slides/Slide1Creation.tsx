@@ -114,7 +114,7 @@ export default function Slide1Creation({ active, onNext }: JourneySlideProps) {
     `${CLASS_PROMPT_PT[classId].slice(0, 60)}…`
 
   return (
-    <div className="relative h-full w-full overflow-y-auto md:overflow-hidden">
+    <div className="relative h-full w-full overflow-y-auto md:overflow-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <div className="h-full flex flex-col md:flex-row gap-3 p-3 pt-5 sm:p-4">
         {/* Coluna de escolha + radar */}
         <div className="md:w-[42%] flex flex-col gap-2 min-h-0">

@@ -89,7 +89,12 @@ export default function Slide4Crafting({ active, onNext }: JourneySlideProps) {
       </div>
 
       {/* Bancadas: faixa com scroll-snap no mobile, 3 colunas no desktop */}
-      <div className="flex-1 min-h-0 flex md:grid md:grid-cols-3 gap-3 px-3 pb-2 overflow-x-auto md:overflow-visible snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div
+        className="flex-1 min-h-0 flex md:grid md:grid-cols-3 gap-3 px-3 pb-2 overflow-x-auto md:overflow-visible snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        // Sem isto o drag="x" do carrossel sequestra o gesto e a faixa não rola no mobile
+        style={{ touchAction: 'pan-x pan-y' }}
+        onPointerDownCapture={e => e.stopPropagation()}
+      >
         {BENCHES.map(bench => {
           const auto = benchPhase(step, bench.chargeStep)
           const phase = manual?.key === bench.key ? manual.phase : auto

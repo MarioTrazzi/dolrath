@@ -64,7 +64,7 @@ export default function Slide5Enhancement({ active, onNext }: JourneySlideProps)
   }, [weaponCatalog])
 
   return (
-    <div className="relative h-full w-full overflow-y-auto flex p-3">
+    <div className="relative h-full w-full overflow-y-auto flex p-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <div
         className="m-auto w-full max-w-md rounded-[4px] border shadow-2xl shadow-black/70"
         style={{ borderColor: BORDER_GOLD, background: PANEL_BG }}

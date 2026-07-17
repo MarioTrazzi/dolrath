@@ -49,14 +49,14 @@ export default function Slide10Ranking({ active }: JourneySlideProps) {
   const countedPrize = useCountUp(heroPrize, step >= 2)
 
   return (
-    <div className="relative h-full w-full flex flex-col md:flex-row gap-3 p-3 pt-12 sm:p-4 sm:pt-12 overflow-y-auto md:overflow-hidden">
+    <div className="relative h-full w-full flex flex-col md:flex-row gap-3 p-3 pt-12 sm:p-4 sm:pt-12 overflow-y-auto md:overflow-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {/* Tabela top 10 */}
       <div className="md:w-3/5 min-h-0 flex flex-col">
         <div className="flex items-baseline justify-between mb-2">
           <span className="text-xs font-black uppercase tracking-[0.2em] text-primary">🏆 Ranking da temporada</span>
           <span className="text-[10px] text-textsec">pot ilustrativo: {RANK_POOL_DOL.toLocaleString('pt-BR')} DOL</span>
         </div>
-        <div className="flex-1 min-h-0 overflow-y-auto rounded-xl border border-white/10 bg-black/30 backdrop-blur-md">
+        <div className="flex-1 min-h-0 overflow-y-auto rounded-xl border border-white/10 bg-black/30 backdrop-blur-md [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {rows.map((row, i) => {
             const prize = Math.round(RANK_POOL_DOL * PVP_TOP10_DOL_SPLIT[row.rank - 1])
             const isHero = !!row.isHero

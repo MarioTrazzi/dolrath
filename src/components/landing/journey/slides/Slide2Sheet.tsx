@@ -58,7 +58,7 @@ export default function Slide2Sheet({ active, onNext }: JourneySlideProps) {
   }, [flipped, form, stats])
 
   return (
-    <div className="relative h-full w-full overflow-y-auto md:overflow-hidden">
+    <div className="relative h-full w-full overflow-y-auto md:overflow-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {/* brilho ambiente */}
       <div
         className="absolute inset-0 pointer-events-none"

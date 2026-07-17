@@ -286,7 +286,7 @@ function Hero({ primaryHref }: {
               <ShowcaseDie sides={6} size={84} interactive />
             </motion.div>
             <motion.div
-              className="absolute left-0 top-[190px] z-10"
+              className="absolute -left-14 top-[190px] z-10"
               animate={reduce ? {} : { y: [0, -14, 0] }}
               transition={reduce ? {} : { repeat: Infinity, duration: 6.4, ease: 'easeInOut', delay: 0.9 }}
             >

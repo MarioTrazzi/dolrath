@@ -172,7 +172,7 @@ export default function Slide6GearSheet({ active, onNext }: JourneySlideProps) {
 
   return (
     <DndProvider backend={HTML5Backend}>
-      <div className="relative h-full w-full overflow-y-auto md:overflow-hidden">
+      <div className="relative h-full w-full overflow-y-auto md:overflow-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="h-full flex flex-col md:flex-row gap-3 p-3 pt-5 sm:p-4">
           {/* Paperdoll real da ficha + stats */}
           <div

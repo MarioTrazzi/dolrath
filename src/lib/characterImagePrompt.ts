@@ -118,7 +118,7 @@ export type TransformationArtId =
   | 'seventh_sense'
   | 'celestial';
 
-const TRANSFORMATION_ART: Record<TransformationArtId, string> = {
+export const TRANSFORMATION_ART: Record<TransformationArtId, string> = {
   dragon:
     'Draconic ascension: the same character erupting into their ancestral dragon ' +
     'form — crimson and molten-gold scales spreading across face and arms, ' +

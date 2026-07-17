@@ -139,6 +139,10 @@ interface BattleSceneProps {
   focusEnemyId?: string | null
   /** Clareia via CSS as imagens do lado inimigo (artes de monstro escuras). */
   brightenEnemyImage?: boolean
+  /** Escala visual do card do lado direito (ex.: boss maior). Default 1 = atual. */
+  enemyCardScale?: number
+  /** Tamanho do d20 do painel single. Default 88 = atual. */
+  diceSize?: number
 }
 
 interface FloatingText {
@@ -613,6 +617,8 @@ export default function BattleScene({
   enemyHpOnly = false,
   focusEnemyId,
   brightenEnemyImage = false,
+  enemyCardScale = 1,
+  diceSize = 88,
 }: BattleSceneProps) {
   const [floatingTexts, setFloatingTexts] = useState<FloatingText[]>([])
   // Animações são por-ID (não por-lado): num pacote, só o monstro alvo sacode/avança,
@@ -819,7 +825,15 @@ export default function BattleScene({
     )
 
     return (
-      <div className="relative" key={fighter.id}>
+      <div
+        className="relative"
+        key={fighter.id}
+        style={
+          side === 'right' && enemyCardScale !== 1
+            ? { transform: `scale(${enemyCardScale})`, transformOrigin: 'bottom center' }
+            : undefined
+        }
+      >
         <FighterFigure
           fighter={fighter}
           side={side}
@@ -938,7 +952,7 @@ export default function BattleScene({
                   <div className="flex justify-center">
                     <AnimatedDie
                       sides={dicePanel.diceType}
-                      size={88}
+                      size={diceSize}
                       mode={dicePanel.hasRolled ? 'rolling' : 'idle'}
                       result={dicePanel.myResult || null}
                       onClick={dicePanel.onRoll}

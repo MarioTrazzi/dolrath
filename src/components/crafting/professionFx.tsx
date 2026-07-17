@@ -10,7 +10,7 @@
 // Cada rig é puramente presentacional: recebe a fase da canalização
 // (idle/charging/done, CHARGE_MS de bdoTheme) e os insumos já contados.
 
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { CraftItemThumb as ItemThumb } from '@/components/store/CraftItemThumb';
 import { GOLD_BRIGHT, type CraftPhase, type SlotVerdict } from './bdoTheme';
@@ -30,6 +30,8 @@ export interface RigMaterial {
   emoji: string;
   have: number;
   need: number;
+  /** Override explícito da arte (default: /items/<slug>.webp resolvido pelo nome). */
+  image?: string;
 }
 
 interface RigBaseProps {
@@ -38,12 +40,39 @@ interface RigBaseProps {
   materials: RigMaterial[];
   outputName: string;
   outputEmoji: string;
+  /** Override explícito da arte da saída (default: resolvida pelo nome). */
+  outputImage?: string;
   /** Glow da raridade da saída. */
   glowColor?: string;
   /** Plaquinha ×N do lote concluído. */
   plate?: string | null;
   /** Canto superior esquerdo: chance / 🔒 / selo. */
   statusNode?: ReactNode;
+}
+
+/** Arte de insumo/saída: usa o override quando presente, senão resolve pelo nome. */
+function RigArt({
+  name,
+  emoji,
+  image,
+  className,
+}: {
+  name: string;
+  emoji: string;
+  image?: string;
+  className?: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  if (!image || failed) return <ItemThumb name={name} emoji={emoji} className={className} />;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={image}
+      alt={name}
+      onError={() => setFailed(true)}
+      className="w-full h-full object-cover art-bright"
+    />
+  );
 }
 
 const BOX_W = 320;
@@ -100,7 +129,7 @@ function MaterialFrame({
           className={`block h-full w-full overflow-hidden ${enough ? '' : 'opacity-40 grayscale'}`}
           style={{ borderRadius: radius, clipPath: clip }}
         >
-          <ItemThumb name={m.name} emoji={m.emoji} className="text-xl" />
+          <RigArt name={m.name} emoji={m.emoji} image={m.image} className="text-xl" />
         </span>
       </div>
       <span
@@ -159,6 +188,7 @@ export function AnvilRig({
   materials,
   outputName,
   outputEmoji,
+  outputImage,
   glowColor,
   plate,
   statusNode,
@@ -317,7 +347,7 @@ export function AnvilRig({
                 }}
               >
                 <span className="block h-[70%] w-[70%] overflow-hidden">
-                  <ItemThumb name={outputName} emoji={outputEmoji} className="text-3xl" />
+                  <RigArt name={outputName} emoji={outputEmoji} image={outputImage} className="text-3xl" />
                 </span>
               </div>
               {/* Metal incandescendo enquanto o martelo trabalha */}
@@ -546,6 +576,7 @@ export function StoveRig({
   materials,
   outputName,
   outputEmoji,
+  outputImage,
   glowColor,
   plate,
   statusNode,
@@ -678,7 +709,7 @@ export function StoveRig({
               }}
             >
               <span className="block h-[62%] w-[62%] overflow-hidden">
-                <ItemThumb name={outputName} emoji={outputEmoji} className="text-3xl" />
+                <RigArt name={outputName} emoji={outputEmoji} image={outputImage} className="text-3xl" />
               </span>
             </div>
             {/* Caldo borbulhando */}
@@ -907,6 +938,7 @@ export function GrinderRig({
   materials,
   outputName,
   outputEmoji,
+  outputImage,
   glowColor,
   plate,
   statusNode,
@@ -1062,7 +1094,7 @@ export function GrinderRig({
               }}
             >
               <span className="block h-[58%] w-[58%] overflow-hidden">
-                <ItemThumb name={outputName} emoji={outputEmoji} className="text-3xl" />
+                <RigArt name={outputName} emoji={outputEmoji} image={outputImage} className="text-3xl" />
               </span>
             </motion.div>
           </div>

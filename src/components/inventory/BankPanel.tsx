@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider'
 import { claimGoldOnChain } from '@/lib/goldClaimClient'
+import { getChainInfo } from '@/lib/chainConfig'
 
 interface CharWallet { id: string; name: string; class: string; gold: number }
 
@@ -171,6 +172,18 @@ export default function BankPanel({ characterId, onChanged }: { characterId?: st
       </p>
       {!walletLinked && (
         <p className="text-xs mb-2" style={{ color: '#e09a3a' }}>⚠️ Vincule sua carteira no painel para reivindicar GOLD on-chain.</p>
+      )}
+      {walletLinked && (
+        <p className="text-xs mb-2 flex items-start gap-1" style={{ color: '#8a8a90' }}>
+          <span style={{ color: '#c9a25f' }}>⛽</span>
+          <span>
+            Reivindicar é uma transação na {getChainInfo().name} — você precisa de um pouco de{' '}
+            <b className="text-[#c9c9ce]">POL</b> na carteira para a taxa de rede (gas).{' '}
+            {getChainInfo().isMainnet
+              ? 'Você compra POL em qualquer corretora e envia para sua carteira.'
+              : 'Pegue POL de teste no faucet oficial da Polygon.'}
+          </span>
+        </p>
       )}
       {hasBankGold && (
         <div className="flex flex-wrap items-center gap-2 mb-3 rounded-[3px] border px-3 py-2" style={{ borderColor: '#8a6d3b', background: 'linear-gradient(180deg, rgba(58,51,37,0.7), rgba(36,31,22,0.7))' }}>

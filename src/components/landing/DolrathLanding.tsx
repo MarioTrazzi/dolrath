@@ -22,6 +22,7 @@ import { ShowcaseDie } from '@/components/battle/AnimatedDice'
 import JourneyShowcase from './journey/JourneyCarousel'
 import { itemImagePath } from '@/lib/itemCatalog'
 import { getChainInfo } from '@/lib/chainConfig'
+import WaitlistForm from './WaitlistForm'
 import { DUNGEONS, DUNGEON_LIST, type DungeonId, type DungeonMonsterDef, type DungeonBossDef } from '@/lib/dungeonAdventures'
 import { GATHER_FIELDS } from '@/lib/gathering'
 import { FIELD_ACCENT } from '@/components/gathering/GatheringPanel'
@@ -741,6 +742,9 @@ function FinalCTA({ primaryHref, glow }: { primaryHref: string; glow: number }) 
           <Button as="a" href={primaryHref} size="lg" icon={<Wallet size={18} />}>Conectar Carteira</Button>
           <Button as="a" href="#jornada" size="lg" variant="secondary" icon={<Play size={16} />}>Ver gameplay</Button>
         </div>
+        <div className="flex flex-col items-center gap-1 w-full">
+          <WaitlistForm source="final-cta" />
+        </div>
       </div>
     </section>
   )
@@ -750,16 +754,53 @@ function FinalCTA({ primaryHref, glow }: { primaryHref: string; glow: number }) 
 // Footer
 // ============================================================
 
-const FOOT_COLS = [
-  { title: 'Jogo', links: ['Jogar', 'Personagens', 'Masmorras', 'Modo treino'] },
-  { title: 'Economia', links: ['Marketplace', 'Ouro', 'Itens NFT', 'Contratos'] },
-  { title: 'Comunidade', links: ['Discord', 'X / Twitter', 'GitHub', 'Lore & Wiki'] },
+// URLs de comunidade vêm de env (NEXT_PUBLIC_*) — placeholders viram '#' até o
+// Mario criar os canais. Assim o footer nunca aponta para lugar nenhum sem querer.
+const DISCORD_URL = process.env.NEXT_PUBLIC_DISCORD_URL || '#'
+const TWITTER_URL = process.env.NEXT_PUBLIC_TWITTER_URL || '#'
+const GITHUB_URL = process.env.NEXT_PUBLIC_GITHUB_URL || '#'
+
+const FOOT_COLS: { title: string; links: { label: string; href: string }[] }[] = [
+  {
+    title: 'Jogo',
+    links: [
+      { label: 'Jogar', href: '/dashboard' },
+      { label: 'Personagens', href: '/character/create' },
+      { label: 'Masmorras', href: '/dashboard' },
+      { label: 'Documentação', href: '/doc' },
+    ],
+  },
+  {
+    title: 'Economia',
+    links: [
+      { label: 'Marketplace', href: '/marketplace' },
+      { label: 'Tokenomics', href: '/tokenomics/dashboard.html' },
+      { label: 'Itens NFT', href: '/doc#tokenomics' },
+      { label: 'Contratos', href: '/doc#tokenomics' },
+    ],
+  },
+  {
+    title: 'Comunidade',
+    links: [
+      { label: 'Discord', href: DISCORD_URL },
+      { label: 'X / Twitter', href: TWITTER_URL },
+      { label: 'GitHub', href: GITHUB_URL },
+    ],
+  },
+  {
+    title: 'Legal',
+    links: [
+      { label: 'Termos de Uso', href: '/terms' },
+      { label: 'Privacidade', href: '/privacy' },
+      { label: 'Aviso de Risco', href: '/disclaimer' },
+    ],
+  },
 ]
 
 const SOCIALS = [
-  { Icon: MessageCircle, label: 'Discord' },
-  { Icon: Twitter, label: 'X / Twitter' },
-  { Icon: Github, label: 'GitHub' },
+  { Icon: MessageCircle, label: 'Discord', href: DISCORD_URL },
+  { Icon: Twitter, label: 'X / Twitter', href: TWITTER_URL },
+  { Icon: Github, label: 'GitHub', href: GITHUB_URL },
 ]
 
 function Footer() {
@@ -790,10 +831,12 @@ function Footer() {
             </Badge>
           )}
           <div className="flex gap-2">
-            {SOCIALS.map((s) => (
+            {SOCIALS.filter((s) => s.href && s.href !== '#').map((s) => (
               <a
                 key={s.label}
-                href="#"
+                href={s.href}
+                target="_blank"
+                rel="noopener noreferrer"
                 aria-label={s.label}
                 className="w-9 h-9 rounded-lg border border-white/10 bg-white/5 flex items-center justify-center text-textsec hover:text-white hover:border-white/20 transition-colors"
               >
@@ -801,15 +844,26 @@ function Footer() {
               </a>
             ))}
           </div>
+          <WaitlistForm source="footer" compact />
         </div>
         {FOOT_COLS.map((col) => (
           <nav key={col.title} aria-label={col.title} className="flex flex-col gap-3">
             <h3 className="text-sm font-semibold text-white">{col.title}</h3>
-            {col.links.map((l) => (
-              <a key={l} href="#" className="text-sm text-textsec hover:text-white transition-colors w-fit">
-                {l}
-              </a>
-            ))}
+            {col.links
+              .filter((l) => l.href && l.href !== '#')
+              .map((l) => {
+                const external = l.href.startsWith('http')
+                return (
+                  <a
+                    key={l.label}
+                    href={l.href}
+                    {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                    className="text-sm text-textsec hover:text-white transition-colors w-fit"
+                  >
+                    {l.label}
+                  </a>
+                )
+              })}
           </nav>
         ))}
       </div>

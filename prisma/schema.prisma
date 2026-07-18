@@ -478,6 +478,16 @@ model AiGenPayment {
 // compra do item em si segue off-chain — comprar item-NFT direto na loja fica
 // fora da lore; isso é papel do market). O txHash único impede que a mesma
 // transação credite gold mais de uma vez (replay = gold grátis).
+// Pré-registro do lançamento (landing): email + carteira opcional. Quem entra
+// antes do go-live ganha um título cosmético no launch.
+model WaitlistEntry {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  wallet    String?
+  source    String?
+  createdAt DateTime @default(now())
+}
+
 model GoldTopup {
   id          String   @id @default(cuid())
   txHash      String   @unique

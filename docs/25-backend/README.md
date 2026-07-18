@@ -6,7 +6,7 @@
 |---|---|
 | Runtime web + API | Next.js 14 (App Router) na **Vercel** (projeto "dolrath"; push no `main` = deploy automático) |
 | Tempo real (PvP) | Socket.IO standalone (`server/socket-server.js`) |
-| Banco | PostgreSQL **Neon** com Prisma (Accelerate na frente); scripts administrativos usam `DATABASE_URL_NEON` |
+| Banco | PostgreSQL **Supabase** com Prisma (desde 2026-07-11; conectar via pooler Supavisor `aws-1-sa-east-1`, NÃO host direto). Antes era Neon (estourou cota) |
 | ORM | Prisma 6 (`prisma/schema.prisma`) |
 | Blockchain | ethers v6 + Hardhat (`web3/`) |
 | IA | Anthropic + OpenAI (juiz de combate, geração de imagens gpt-image-1) |
@@ -25,7 +25,7 @@
 
 ## Ambientes
 
-- **Produção:** Vercel + Neon + Polygon; envs no painel da Vercel (segredos de auth/DB não existem no dev local — UI é validada com páginas mock).
+- **Produção:** Vercel + Supabase + Polygon; envs no painel da Vercel (segredos de auth/DB não existem no dev local — UI é validada com páginas mock).
 - **Dev local:** `npm run dev` + `npm run socket:dev`; typecheck direcionado aos arquivos tocados (53 erros históricos conhecidos no projeto).
 
 ## EM BREVE

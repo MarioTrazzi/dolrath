@@ -98,5 +98,73 @@ for (const marketName of ["DolrathItemMarket", "DolrathCharacterMarket"] as cons
 
       expect(await nft.ownerOf(1n)).to.equal(seller.address);
     });
+
+    it(`pays in ${marketName === "DolrathItemMarket" ? "GOLD" : "DOL"} (currency invariant)`, async () => {
+      const { token, market } = await deployFixture(marketName);
+      // Items trade only in GOLD; characters trade only in DOL. The payment
+      // token is immutable, wired at deploy — assert the getter matches.
+      const paymentToken =
+        marketName === "DolrathItemMarket" ? await (market as any).gold() : await (market as any).dol();
+      expect(paymentToken).to.equal(await token.getAddress());
+    });
+
+    it("pause blocks createListing and buy, cancel stays open, unpause restores", async () => {
+      const { deployer, seller, buyer, token, nft, market } = await deployFixture(marketName);
+      const price = ethers.parseUnits("10", 18);
+
+      await nft.connect(seller).approve(await market.getAddress(), 1n);
+      await market.connect(seller).createListing(1n, price);
+
+      await expect(market.connect(seller).pause()).to.be.reverted; // owner-only
+      await market.connect(deployer).pause();
+
+      await token.connect(buyer).approve(await market.getAddress(), price);
+      await expect(market.connect(buyer).buy(1n)).to.be.revertedWithCustomError(market, "EnforcedPause");
+
+      await nft.mint(seller.address); // tokenId 2
+      await nft.connect(seller).approve(await market.getAddress(), 2n);
+      await expect(market.connect(seller).createListing(2n, price)).to.be.revertedWithCustomError(
+        market,
+        "EnforcedPause"
+      );
+
+      // Sellers can always exit even while paused.
+      await market.connect(seller).cancelListing(1n);
+      expect(await nft.ownerOf(1n)).to.equal(seller.address);
+
+      await market.connect(deployer).unpause();
+      await nft.connect(seller).approve(await market.getAddress(), 1n);
+      await market.connect(seller).createListing(1n, price);
+      await market.connect(buyer).buy(2n);
+      expect(await nft.ownerOf(1n)).to.equal(buyer.address);
+    });
+
+    it("rescueERC721 recovers a directly-sent NFT but never an escrowed one", async () => {
+      const { deployer, seller, buyer, nft, market } = await deployFixture(marketName);
+      const marketAddr = await market.getAddress();
+
+      // NFT sent directly without a listing gets stuck — owner can rescue it.
+      await nft.connect(seller)["safeTransferFrom(address,address,uint256)"](seller.address, marketAddr, 1n);
+      expect(await nft.ownerOf(1n)).to.equal(marketAddr);
+
+      await expect(market.connect(buyer).rescueERC721(await nft.getAddress(), 1n, seller.address)).to.be.reverted;
+      await expect(market.connect(deployer).rescueERC721(await nft.getAddress(), 1n, seller.address))
+        .to.emit(market, "ERC721Rescued")
+        .withArgs(await nft.getAddress(), 1n, seller.address);
+      expect(await nft.ownerOf(1n)).to.equal(seller.address);
+
+      // Escrowed by an active listing → rescue must revert.
+      await nft.connect(seller).approve(marketAddr, 1n);
+      await market.connect(seller).createListing(1n, ethers.parseUnits("10", 18));
+      await expect(
+        market.connect(deployer).rescueERC721(await nft.getAddress(), 1n, deployer.address)
+      ).to.be.revertedWithCustomError(market, "TokenEscrowed");
+
+      // After cancel the escrow flag clears; a stray re-send is rescuable again.
+      await market.connect(seller).cancelListing(1n);
+      await nft.connect(seller)["safeTransferFrom(address,address,uint256)"](seller.address, marketAddr, 1n);
+      await market.connect(deployer).rescueERC721(await nft.getAddress(), 1n, seller.address);
+      expect(await nft.ownerOf(1n)).to.equal(seller.address);
+    });
   });
 }

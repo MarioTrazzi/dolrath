@@ -5,14 +5,16 @@ import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {ERC721URIStorage} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * DolrathCharacters
  * - ERC-721 where each token represents one game character.
  * - Mint is user-paid, but requires a server signature to prevent arbitrary mints.
  * - tokenURI can point to a dynamic API endpoint (metadata can evolve over time).
+ * - The signer is rotatable by the owner so a leaked server key does not force a redeploy.
  */
-contract DolrathCharacters is ERC721URIStorage, EIP712 {
+contract DolrathCharacters is ERC721URIStorage, EIP712, Ownable {
     using ECDSA for bytes32;
 
     struct MintRequest {
@@ -24,7 +26,7 @@ contract DolrathCharacters is ERC721URIStorage, EIP712 {
     bytes32 private constant MINT_REQUEST_TYPEHASH =
         keccak256("MintRequest(address to,string tokenURI,uint256 deadline)");
 
-    address public immutable signer;
+    address public signer;
 
     uint256 public nextTokenId = 1;
 
@@ -35,9 +37,23 @@ contract DolrathCharacters is ERC721URIStorage, EIP712 {
     error AlreadyMinted();
     error OnlyRecipient();
 
-    constructor(address signer_) ERC721("Dolrath Characters", "DOLCHAR") EIP712("DolrathCharacters", "1") {
+    event SignerUpdated(address indexed oldSigner, address indexed newSigner);
+
+    constructor(address signer_)
+        ERC721("Dolrath Characters", "DOLCHAR")
+        EIP712("DolrathCharacters", "1")
+        Ownable(msg.sender)
+    {
         require(signer_ != address(0), "signer required");
         signer = signer_;
+        emit SignerUpdated(address(0), signer_);
+    }
+
+    function setSigner(address newSigner) external onlyOwner {
+        require(newSigner != address(0), "signer required");
+        address old = signer;
+        signer = newSigner;
+        emit SignerUpdated(old, newSigner);
     }
 
     function mintWithSig(

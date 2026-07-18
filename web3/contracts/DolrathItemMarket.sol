@@ -6,6 +6,7 @@ import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {ERC721Holder} from "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 
 interface IERC20Burnable is IERC20 {
     function burnFrom(address account, uint256 value) external;
@@ -18,8 +19,10 @@ interface IERC20Burnable is IERC20 {
  * - Buyer pays GOLD via transferFrom and receives the NFT.
  * - Market fee (basis points of the price) is split between a real burn
  *   (supply destruction) and the game treasury; the seller receives the rest.
+ * - Pausable: pause blocks new listings and purchases; cancel stays open so
+ *   sellers can always recover escrowed NFTs.
  */
-contract DolrathItemMarket is ERC721Holder, Ownable, ReentrancyGuard {
+contract DolrathItemMarket is ERC721Holder, Ownable, ReentrancyGuard, Pausable {
     struct Listing {
         address seller;
         uint256 tokenId;
@@ -42,12 +45,14 @@ contract DolrathItemMarket is ERC721Holder, Ownable, ReentrancyGuard {
 
     uint256[] private activeListingIds;
     mapping(uint256 => uint256) private activeIndex; // listingId -> index+1
+    mapping(uint256 => uint256) private activeListingByTokenId; // tokenId -> listingId (0 = none)
 
     error NotSeller();
     error NotActive();
     error PriceZero();
     error FeeTooHigh();
     error TreasuryZero();
+    error TokenEscrowed();
 
     event ListingCreated(uint256 indexed listingId, address indexed seller, uint256 indexed tokenId, uint256 priceGold);
     event ListingCancelled(uint256 indexed listingId, address indexed seller);
@@ -55,6 +60,7 @@ contract DolrathItemMarket is ERC721Holder, Ownable, ReentrancyGuard {
     event MarketFeePaid(uint256 indexed listingId, uint256 burned, uint256 toTreasury);
     event FeesUpdated(uint16 burnFeeBps, uint16 treasuryFeeBps);
     event FeeTreasuryUpdated(address indexed oldTreasury, address indexed newTreasury);
+    event ERC721Rescued(address indexed token, uint256 indexed tokenId, address indexed to);
 
     constructor(address goldToken, address itemsNft, address feeTreasury_) Ownable(msg.sender) {
         require(goldToken != address(0), "gold=0");
@@ -80,6 +86,23 @@ contract DolrathItemMarket is ERC721Holder, Ownable, ReentrancyGuard {
         emit FeeTreasuryUpdated(old, newTreasury);
     }
 
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    function unpause() external onlyOwner {
+        _unpause();
+    }
+
+    /// Recover an NFT sent directly to the market (without createListing).
+    /// Never touches tokens escrowed by an active listing.
+    function rescueERC721(address token, uint256 tokenId, address to) external onlyOwner nonReentrant {
+        require(to != address(0), "to=0");
+        if (token == address(items) && activeListingByTokenId[tokenId] != 0) revert TokenEscrowed();
+        IERC721(token).safeTransferFrom(address(this), to, tokenId);
+        emit ERC721Rescued(token, tokenId, to);
+    }
+
     function getActiveListingIds() external view returns (uint256[] memory) {
         return activeListingIds;
     }
@@ -91,7 +114,7 @@ contract DolrathItemMarket is ERC721Holder, Ownable, ReentrancyGuard {
         sellerAmount = priceGold - burnAmount - treasuryAmount;
     }
 
-    function createListing(uint256 tokenId, uint256 priceGold) external nonReentrant returns (uint256 listingId) {
+    function createListing(uint256 tokenId, uint256 priceGold) external nonReentrant whenNotPaused returns (uint256 listingId) {
         if (priceGold == 0) revert PriceZero();
 
         // Escrow the NFT. Requires prior approval.
@@ -104,6 +127,7 @@ contract DolrathItemMarket is ERC721Holder, Ownable, ReentrancyGuard {
 
         activeIndex[listingId] = activeListingIds.length + 1;
         activeListingIds.push(listingId);
+        activeListingByTokenId[tokenId] = listingId;
 
         emit ListingCreated(listingId, msg.sender, tokenId, priceGold);
 
@@ -117,18 +141,20 @@ contract DolrathItemMarket is ERC721Holder, Ownable, ReentrancyGuard {
 
         l.active = false;
         _removeActive(listingId);
+        delete activeListingByTokenId[l.tokenId];
 
         items.safeTransferFrom(address(this), msg.sender, l.tokenId);
 
         emit ListingCancelled(listingId, msg.sender);
     }
 
-    function buy(uint256 listingId) external nonReentrant {
+    function buy(uint256 listingId) external nonReentrant whenNotPaused {
         Listing storage l = listings[listingId];
         if (!l.active) revert NotActive();
 
         l.active = false;
         _removeActive(listingId);
+        delete activeListingByTokenId[l.tokenId];
 
         // Buyer must approve GOLD (the full price) to this contract.
         (uint256 sellerAmount, uint256 burnAmount, uint256 treasuryAmount) = quoteProceeds(l.priceGold);

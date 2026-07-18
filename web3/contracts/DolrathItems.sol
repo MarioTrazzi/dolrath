@@ -13,6 +13,7 @@ import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
  * - Mint requires a server signature (EIP-712) and is executed by the buyer.
  * - Each minted token stores the amount of GOLD paid (in base units).
  * - Token metadata is served via baseURI + tokenId.
+ * - The signer is rotatable by the owner so a leaked server key does not force a redeploy.
  */
 contract DolrathItems is ERC721, EIP712, Ownable {
     using ECDSA for bytes32;
@@ -29,7 +30,7 @@ contract DolrathItems is ERC721, EIP712, Ownable {
     bytes32 private constant MINT_ITEM_REQUEST_TYPEHASH =
         keccak256("MintItemRequest(address to,bytes32 purchaseId,bytes32 itemKey,uint256 paidGold,string tokenURI,uint256 deadline)");
 
-    address public immutable signer;
+    address public signer;
 
     uint256 public nextTokenId = 1;
 
@@ -46,13 +47,22 @@ contract DolrathItems is ERC721, EIP712, Ownable {
     error OnlyRecipient();
 
     event BaseURIUpdated(string oldBaseURI, string newBaseURI);
+    event SignerUpdated(address indexed oldSigner, address indexed newSigner);
     event ItemMinted(address indexed to, uint256 indexed tokenId, bytes32 indexed purchaseId, bytes32 itemKey, uint256 paidGold);
 
     constructor(address signer_, string memory baseURI_) ERC721("Dolrath Items", "DOLITEM") EIP712("DolrathItems", "1") Ownable(msg.sender) {
         require(signer_ != address(0), "signer required");
         signer = signer_;
         baseTokenURI = baseURI_;
+        emit SignerUpdated(address(0), signer_);
         emit BaseURIUpdated("", baseURI_);
+    }
+
+    function setSigner(address newSigner) external onlyOwner {
+        require(newSigner != address(0), "signer required");
+        address old = signer;
+        signer = newSigner;
+        emit SignerUpdated(old, newSigner);
     }
 
     function setBaseURI(string calldata newBaseURI) external onlyOwner {

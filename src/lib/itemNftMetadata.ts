@@ -1,4 +1,5 @@
 import { resolveImageUrl, absolutizeUrl } from '@/lib/imageUrl'
+import { getChainInfo } from '@/lib/chainConfig'
 
 function base64EncodeUtf8(input: string): string {
   return Buffer.from(input, 'utf8').toString('base64')
@@ -140,7 +141,7 @@ export function buildItemNftMetadata(params: {
   <g transform="translate(64, 520)">
     <rect x="0" y="0" width="672" height="220" rx="18" fill="#0b1020" stroke="#1f2937" stroke-width="2"/>
     <text x="24" y="56" fill="#e2e8f0" font-size="22" font-family="ui-sans-serif, system-ui" font-weight="700">Dolrath RPG</text>
-    <text x="24" y="92" fill="#94a3b8" font-size="18" font-family="ui-sans-serif, system-ui">Item NFT minted on Polygon Amoy</text>
+    <text x="24" y="92" fill="#94a3b8" font-size="18" font-family="ui-sans-serif, system-ui">Item NFT minted on ${getChainInfo().name}</text>
   </g>
 </svg>`
 

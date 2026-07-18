@@ -14,6 +14,7 @@ import { useSession } from 'next-auth/react';
 import { ethers } from 'ethers';
 import Image from 'next/image';
 import { decodeContractCustomErrorMessage, getWalletTxErrorMessage } from '@/lib/walletErrors';
+import { ensureTargetNetwork } from '@/lib/chainConfig';
 
 export function NameConfirmStep() {
   const { data: session } = useSession();
@@ -44,9 +45,6 @@ export function NameConfirmStep() {
   // Pontos brutos rolados na criação (antes dos bônus de raça/classe) — usados
   // só para destacar quando o stat principal da classe saiu "sortudo" no reveal.
   const [rolledPoints, setRolledPoints] = useState<null | { str: number; agi: number; int: number; def: number }>(null);
-
-  const POLYGON_AMOY_CHAIN_ID_DEC = BigInt(80002);
-  const POLYGON_AMOY_CHAIN_ID_HEX = '0x13882';
 
   const safeReadJson = async (res: Response) => {
     const raw = await res.text().catch(() => '');
@@ -126,27 +124,8 @@ export function NameConfirmStep() {
       const provider = new ethers.BrowserProvider(eth);
       await provider.send('eth_requestAccounts', []);
 
-      // Ensure Polygon Amoy (user pays gas)
-      const network = await provider.getNetwork();
-      if (network.chainId !== POLYGON_AMOY_CHAIN_ID_DEC) {
-        try {
-          await provider.send('wallet_switchEthereumChain', [{ chainId: POLYGON_AMOY_CHAIN_ID_HEX }]);
-        } catch (switchErr: any) {
-          if (switchErr?.code === 4902) {
-            await provider.send('wallet_addEthereumChain', [
-              {
-                chainId: POLYGON_AMOY_CHAIN_ID_HEX,
-                chainName: 'Polygon Amoy',
-                nativeCurrency: { name: 'POL', symbol: 'POL', decimals: 18 },
-                rpcUrls: ['https://rpc-amoy.polygon.technology/'],
-                blockExplorerUrls: ['https://amoy.polygonscan.com/'],
-              },
-            ]);
-          } else {
-            throw new Error('Conecte sua MetaMask à rede Polygon Amoy (chainId 80002) para continuar.');
-          }
-        }
-      }
+      // Garante a rede alvo (usuário paga o gas)
+      await ensureTargetNetwork(provider);
 
       const providerAfterSwitch = new ethers.BrowserProvider(eth);
       const signerAfterSwitch = await providerAfterSwitch.getSigner();

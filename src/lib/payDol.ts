@@ -1,39 +1,13 @@
-// Client-side: paga DOL para a tesouraria via MetaMask (Polygon Amoy) e
-// devolve o txHash confirmado. Mesmo padrão usado pela taxa de criação; as
+// Client-side: paga DOL para a tesouraria via MetaMask (rede via chainConfig)
+// e devolve o txHash confirmado. Mesmo padrão usado pela taxa de criação; as
 // regerações de imagem por IA reutilizam este helper.
 
 import { ethers } from 'ethers';
 import { getPolygonFeeOverrides } from '@/lib/gasFees';
-
-const POLYGON_AMOY_CHAIN_ID_DEC = BigInt(80002);
-const POLYGON_AMOY_CHAIN_ID_HEX = '0x13882';
+import { ensureTargetNetwork, getChainInfo } from '@/lib/chainConfig';
 
 export function getImageRegenCostDol(): string {
   return (process.env.NEXT_PUBLIC_IMAGE_REGEN_COST_DOL || '1').trim();
-}
-
-// Garante que a MetaMask está na Polygon Amoy (troca ou adiciona a rede).
-async function ensureAmoyNetwork(provider: ethers.BrowserProvider) {
-  const network = await provider.getNetwork();
-  if (network.chainId === POLYGON_AMOY_CHAIN_ID_DEC) return;
-  try {
-    await provider.send('wallet_switchEthereumChain', [{ chainId: POLYGON_AMOY_CHAIN_ID_HEX }]);
-  } catch (switchErr: any) {
-    // 4902: Unrecognized chain.
-    if (switchErr?.code === 4902) {
-      await provider.send('wallet_addEthereumChain', [
-        {
-          chainId: POLYGON_AMOY_CHAIN_ID_HEX,
-          chainName: 'Polygon Amoy',
-          nativeCurrency: { name: 'POL', symbol: 'POL', decimals: 18 },
-          rpcUrls: ['https://rpc-amoy.polygon.technology/'],
-          blockExplorerUrls: ['https://amoy.polygonscan.com/'],
-        },
-      ]);
-    } else {
-      throw new Error('Conecte sua MetaMask à rede Polygon Amoy (chainId 80002) para pagar.');
-    }
-  }
 }
 
 export async function payDolToTreasury(amountDol: string): Promise<string> {
@@ -53,7 +27,7 @@ export async function payDolToTreasury(amountDol: string): Promise<string> {
 
   const provider = new ethers.BrowserProvider(eth);
   await provider.send('eth_requestAccounts', []);
-  await ensureAmoyNetwork(provider);
+  await ensureTargetNetwork(provider);
 
   // Recria provider/signer após trocar de rede (a MetaMask pode mudar o contexto).
   const providerAfterSwitch = new ethers.BrowserProvider(eth);
@@ -63,7 +37,7 @@ export async function payDolToTreasury(amountDol: string): Promise<string> {
   const code = await providerAfterSwitch.getCode(tokenAddress);
   if (!code || code === '0x') {
     throw new Error(
-      'O token DOL não foi encontrado na rede atual. Verifique se sua MetaMask está na Polygon Amoy e se o NEXT_PUBLIC_DOL_TOKEN_ADDRESS está correto.'
+      `O token DOL não foi encontrado na rede atual. Verifique se sua MetaMask está na ${getChainInfo().name} e se o NEXT_PUBLIC_DOL_TOKEN_ADDRESS está correto.`
     );
   }
 

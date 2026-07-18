@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { ethers } from 'ethers';
 import { decodeContractCustomErrorMessage, getWalletTxErrorMessage } from '@/lib/walletErrors';
+import { ensureTargetNetwork } from '@/lib/chainConfig';
 
 const POLYGON_AMOY_CHAIN_ID_HEX = '0x13882';
 
@@ -46,26 +47,7 @@ export default function RemintCharactersPage() {
       const provider = new ethers.BrowserProvider(eth);
       await provider.send('eth_requestAccounts', []);
 
-      const network = await provider.getNetwork();
-      if (Number(network.chainId) !== 80002) {
-        try {
-          await provider.send('wallet_switchEthereumChain', [{ chainId: POLYGON_AMOY_CHAIN_ID_HEX }]);
-        } catch (switchErr: any) {
-          if (switchErr?.code === 4902) {
-            await provider.send('wallet_addEthereumChain', [
-              {
-                chainId: POLYGON_AMOY_CHAIN_ID_HEX,
-                chainName: 'Polygon Amoy',
-                nativeCurrency: { name: 'POL', symbol: 'POL', decimals: 18 },
-                rpcUrls: ['https://rpc-amoy.polygon.technology/'],
-                blockExplorerUrls: ['https://amoy.polygonscan.com/'],
-              },
-            ]);
-          } else {
-            throw new Error('Troque a MetaMask para a rede Polygon Amoy (chainId 80002).');
-          }
-        }
-      }
+      await ensureTargetNetwork(provider);
 
       const providerAfterSwitch = new ethers.BrowserProvider(eth);
       const signer = await providerAfterSwitch.getSigner();

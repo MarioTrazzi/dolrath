@@ -25,6 +25,7 @@ import { ethers } from 'ethers';
 import Image from 'next/image';
 import { getWalletTxErrorMessage } from '@/lib/walletErrors';
 import { getPolygonFeeOverrides } from '@/lib/gasFees';
+import { ensureTargetNetwork } from '@/lib/chainConfig';
 // ...existing code...
 // ...existing code...
 
@@ -67,9 +68,6 @@ export default function DashboardPage() {
   const [walletLinkError, setWalletLinkError] = useState<string>('');
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; item?: any; input: string }>({ open: false, item: null, input: '' });
   const inputRef = useRef<HTMLInputElement>(null);
-
-  const POLYGON_AMOY_CHAIN_ID_DEC = BigInt(80002);
-  const POLYGON_AMOY_CHAIN_ID_HEX = '0x13882';
 
   const handleLinkWallet = async () => {
     setWalletLinkError('');
@@ -326,26 +324,7 @@ export default function DashboardPage() {
       const provider = new ethers.BrowserProvider(eth);
       await provider.send('eth_requestAccounts', []);
 
-      const network = await provider.getNetwork();
-      if (network.chainId !== POLYGON_AMOY_CHAIN_ID_DEC) {
-        try {
-          await provider.send('wallet_switchEthereumChain', [{ chainId: POLYGON_AMOY_CHAIN_ID_HEX }]);
-        } catch (switchErr: any) {
-          if (switchErr?.code === 4902) {
-            await provider.send('wallet_addEthereumChain', [
-              {
-                chainId: POLYGON_AMOY_CHAIN_ID_HEX,
-                chainName: 'Polygon Amoy',
-                nativeCurrency: { name: 'POL', symbol: 'POL', decimals: 18 },
-                rpcUrls: ['https://rpc-amoy.polygon.technology/'],
-                blockExplorerUrls: ['https://amoy.polygonscan.com/'],
-              },
-            ]);
-          } else {
-            throw new Error('Conecte sua MetaMask à rede Polygon Amoy (chainId 80002) para continuar.');
-          }
-        }
-      }
+      await ensureTargetNetwork(provider);
 
       const providerAfterSwitch = new ethers.BrowserProvider(eth);
       const signer = await providerAfterSwitch.getSigner();

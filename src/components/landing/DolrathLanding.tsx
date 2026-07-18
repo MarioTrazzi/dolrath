@@ -21,6 +21,7 @@ import { Button, Card, GlassCard, Badge, SectionHeading, Reveal, ArenaSky } from
 import { ShowcaseDie } from '@/components/battle/AnimatedDice'
 import JourneyShowcase from './journey/JourneyCarousel'
 import { itemImagePath } from '@/lib/itemCatalog'
+import { getChainInfo } from '@/lib/chainConfig'
 import { DUNGEONS, DUNGEON_LIST, type DungeonId, type DungeonMonsterDef, type DungeonBossDef } from '@/lib/dungeonAdventures'
 import { GATHER_FIELDS } from '@/lib/gathering'
 import { FIELD_ACCENT } from '@/components/gathering/GatheringPanel'
@@ -779,9 +780,15 @@ function Footer() {
             RPG de fantasia sombria on-chain. Seus heróis, suas relíquias, suas
             rolagens — para sempre seus.
           </p>
-          <Badge tone="warning" icon={<AlertTriangle size={13} />}>
-            Em testnet — ativos sem valor real
-          </Badge>
+          {getChainInfo().isMainnet ? (
+            <Badge tone="warning" icon={<AlertTriangle size={13} />}>
+              Cripto envolve risco — jogue com responsabilidade
+            </Badge>
+          ) : (
+            <Badge tone="warning" icon={<AlertTriangle size={13} />}>
+              Em testnet — ativos sem valor real
+            </Badge>
+          )}
           <div className="flex gap-2">
             {SOCIALS.map((s) => (
               <a
@@ -809,7 +816,9 @@ function Footer() {
       <div className="border-t border-white/5">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 py-5 flex flex-col sm:flex-row gap-2 items-center justify-between text-xs text-textsec/70">
           <span>© 2026 BDI — Black Dolrath Idle. Todos os direitos reservados.</span>
-          <span className="font-combat">v0.4.2 · Sepolia testnet</span>
+          <span className="font-combat">
+            v0.4.2 · {getChainInfo().isMainnet ? 'Polygon Mainnet' : `${getChainInfo().name} (testnet)`}
+          </span>
         </div>
       </div>
     </footer>

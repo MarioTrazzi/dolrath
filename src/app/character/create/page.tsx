@@ -14,6 +14,7 @@ import { ethers } from 'ethers';
 import { getWalletTxErrorMessage } from '@/lib/walletErrors';
 import { getPolygonFeeOverrides } from '@/lib/gasFees';
 import { payDolToTreasury } from '@/lib/payDol';
+import { ensureTargetNetwork } from '@/lib/chainConfig';
 import { CreationStepIndicator } from './components/CreationStepIndicator';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -25,9 +26,6 @@ const STEP_ICONS: Record<string, React.ComponentType<{ className?: string }>> = 
   'transformation': Sparkles,
   'name-confirm': ScrollText,
 };
-
-const POLYGON_AMOY_CHAIN_ID_DEC = BigInt(80002);
-const POLYGON_AMOY_CHAIN_ID_HEX = '0x13882';
 
 export default function CharacterCreationPage() {
   const { data: session, status, update } = useSession();
@@ -260,26 +258,7 @@ export default function CharacterCreationPage() {
     const provider = new ethers.BrowserProvider(eth);
     await provider.send('eth_requestAccounts', []);
 
-    const network = await provider.getNetwork();
-    if (network.chainId !== POLYGON_AMOY_CHAIN_ID_DEC) {
-      try {
-        await provider.send('wallet_switchEthereumChain', [{ chainId: POLYGON_AMOY_CHAIN_ID_HEX }]);
-      } catch (switchErr: any) {
-        if (switchErr?.code === 4902) {
-          await provider.send('wallet_addEthereumChain', [
-            {
-              chainId: POLYGON_AMOY_CHAIN_ID_HEX,
-              chainName: 'Polygon Amoy',
-              nativeCurrency: { name: 'POL', symbol: 'POL', decimals: 18 },
-              rpcUrls: ['https://rpc-amoy.polygon.technology/'],
-              blockExplorerUrls: ['https://amoy.polygonscan.com/'],
-            },
-          ]);
-        } else {
-          throw new Error('Conecte sua MetaMask à rede Polygon Amoy (chainId 80002) para continuar.');
-        }
-      }
-    }
+    await ensureTargetNetwork(provider);
 
     const providerAfterSwitch = new ethers.BrowserProvider(eth);
     const signer = await providerAfterSwitch.getSigner();

@@ -157,6 +157,7 @@ function JourneyCarouselInner() {
   const [hasNavigated, setHasNavigated] = useState(false)
   const sectionRef = useRef<HTMLDivElement>(null)
   const chipRefs = useRef<(HTMLDivElement | null)[]>([])
+  const touchStart = useRef<{ x: number; y: number } | null>(null)
 
   // Anima/roteiriza só com a seção visível (economiza CPU de quem nem rolou até aqui)
   useEffect(() => {
@@ -225,9 +226,29 @@ function JourneyCarouselInner() {
       {/* Viewport dentro da "janela do jogo" */}
       <div className="relative mt-3">
         <JourneyWindow stepLabel={`${meta.emoji} ${meta.n}/10 · ${meta.label}`}>
+          {/* Swipe manual (touchstart/touchend, listeners passivos) em vez do
+              drag="x" do framer: o drag iniciava em QUALQUER movimento do dedo
+              e bloqueava via preventDefault a rolagem vertical nativa dos
+              slides no mobile. Assim nada intercepta o scroll. */}
           <div
             className="relative h-[540px] sm:h-[560px] md:h-[600px] overflow-hidden rounded-b-[3px]"
-            style={{ touchAction: 'pan-y' }}
+            onTouchStart={e => {
+              const t = e.touches[0]
+              touchStart.current = { x: t.clientX, y: t.clientY }
+            }}
+            onTouchEnd={e => {
+              const s = touchStart.current
+              touchStart.current = null
+              if (!s) return
+              const t = e.changedTouches[0]
+              const dx = t.clientX - s.x
+              const dy = t.clientY - s.y
+              // Só troca de slide num swipe claramente horizontal
+              if (Math.abs(dx) > 56 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+                if (dx < 0) goNext()
+                else goPrev()
+              }
+            }}
           >
             <AnimatePresence mode="popLayout" initial={false} custom={direction}>
               <motion.div
@@ -238,13 +259,6 @@ function JourneyCarouselInner() {
                 animate={{ x: 0, opacity: 1 }}
                 exit={{ x: direction * -64, opacity: 0 }}
                 transition={{ duration: 0.32, ease: 'easeOut' }}
-                drag="x"
-                dragConstraints={{ left: 0, right: 0 }}
-                dragElastic={0.15}
-                onDragEnd={(_, info) => {
-                  if (info.offset.x < -60 || info.velocity.x < -400) goNext()
-                  else if (info.offset.x > 60 || info.velocity.x > 400) goPrev()
-                }}
               >
                 <Active active={inView} onNext={goNext} />
               </motion.div>

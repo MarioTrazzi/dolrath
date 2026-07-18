@@ -9,6 +9,7 @@ import {
 } from '@/lib/processing'
 import { itemImagePath } from '@/lib/itemCatalog'
 import { addHistoryEntry } from '@/lib/characterHistory'
+import { advanceQuestProgress } from '@/lib/questServer'
 import { assertInventoryRoom } from '@/lib/inventoryMutations'
 import { getUserProcessXp } from '@/lib/craftingServer'
 import { getProfessionLevel, getProfessionLevelInfo } from '@/lib/professionSystem'
@@ -277,6 +278,11 @@ export async function POST(
       })
     } catch (historyError) {
       console.error('Erro ao registrar histórico de processamento:', historyError)
+    }
+
+    // 🗺️ Missões: pós-commit e fire-and-forget.
+    if (roll.succeeded > 0) {
+      advanceQuestProgress(character.id, { type: 'craft_process', amount: roll.succeeded }).catch(() => {})
     }
 
     // levelInfo pós-crédito (a UI anima a barra de XP com isto).

@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { collectGatheringSession, findOpenGatheringSession, syncGatheringSession } from '@/lib/gatheringServer'
 import { getProfessionLevelInfo } from '@/lib/professionSystem'
 import { addHistoryEntry } from '@/lib/characterHistory'
+import { advanceQuestProgress } from '@/lib/questServer'
 
 export const dynamic = 'force-dynamic'
 
@@ -42,6 +43,10 @@ export async function POST(req: Request) {
         activityType: 'ITEM_GAINED',
         description: `⛏️ Coletou ${itens || 'nada'} (+${synced.autoStopped.xpGained} XP de Coleta).`,
       }).catch(() => {})
+      const depositedQty = synced.autoStopped.deposited.reduce((s, d) => s + d.qty, 0)
+      if (depositedQty > 0) {
+        advanceQuestProgress(characterId, { type: 'gather_collect', amount: depositedQty }).catch(() => {})
+      }
 
       return NextResponse.json({
         deposited: synced.autoStopped.deposited,
@@ -62,6 +67,10 @@ export async function POST(req: Request) {
         activityType: 'ITEM_GAINED',
         description: `⛏️ Coletou ${itens || 'nada'} (+${result.xpGained} XP de Coleta).`,
       }).catch(() => {})
+    }
+    const depositedQty = result.deposited.reduce((s, d) => s + d.qty, 0)
+    if (depositedQty > 0) {
+      advanceQuestProgress(characterId, { type: 'gather_collect', amount: depositedQty }).catch(() => {})
     }
 
     return NextResponse.json({

@@ -14,6 +14,7 @@ import {
   type RunPending,
 } from '@/lib/dungeonRunServer'
 import { wearFor } from '@/lib/durability'
+import { advanceQuestProgress } from '@/lib/questServer'
 import { firstBossBonusStones, FIRST_BOSS_BONUS, MAX_DUNGEON_TIER, clampDungeonTier, type LootDrop } from '@/lib/dungeonAdventures'
 
 export const dynamic = 'force-dynamic'
@@ -218,6 +219,15 @@ export async function POST(req: Request) {
 
       return { killGold, lootGold, skippedDrops, equipmentWear }
     })
+
+    // 🗺️ Missões: pós-commit e fire-and-forget (fail-soft, nunca afeta a rota).
+    advanceQuestProgress(character.id, { type: 'dungeon_monster_kill', amount: newlyKilled.length }).catch(() => {})
+    if (allDead && isBoss) {
+      advanceQuestProgress(character.id, { type: 'dungeon_boss_kill', amount: 1 }).catch(() => {})
+    }
+    if (xp.leveledUp) {
+      advanceQuestProgress(character.id, { type: 'level_reach', value: xp.newLevelInfo.level }).catch(() => {})
+    }
 
     return NextResponse.json({
       granted: {

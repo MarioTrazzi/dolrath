@@ -135,6 +135,7 @@ model User {
   dungeonRuns   DungeonRun[]
   gatheringSessions GatheringSession[]
   farmPlots     FarmPlot[]
+  dailyLoginClaims DailyLoginClaim[]
 }
 
 model UserInventory {
@@ -218,6 +219,7 @@ model Character {
   dungeonProgress DungeonProgress[]
   gatheringSessions GatheringSession[]
   pvpRatings        PvpRating[]
+  questProgress     QuestProgress[]
 
   // On-chain payment for creation (testnet: fixed DOL fee; mainnet: will be oracle-priced)
   creationTxHash String?         @unique
@@ -588,4 +590,43 @@ model PvpSeasonPayout {
 
   @@unique([seasonId, characterId])
   @@index([seasonId, rank])
+}
+
+// 🗺️ Progresso de missão POR PERSONAGEM. questId é String contra o catálogo em
+// código (src/lib/questCatalog.ts) — sem enum novo: migração de enum travada em prod
+// (ver characterHistory.ts). periodKey: '' para TUTORIAL (linha única e permanente),
+// 'YYYY-MM-DD' (UTC) para DAILY, 'YYYY-Www' para WEEKLY. A linha nasce no primeiro
+// incremento (upsert); goldGranted/xpGranted auditam a emissão do resgate.
+model QuestProgress {
+  id          String    @id @default(cuid())
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  characterId String
+  questId     String
+  periodKey   String    @default("")
+  progress    Int       @default(0)
+  completedAt DateTime?
+  claimedAt   DateTime?
+  goldGranted Int       @default(0)
+  xpGranted   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([characterId, questId, periodKey])
+  @@index([characterId, claimedAt])
+}
+
+// 🎁 Login diário POR USUÁRIO (recompensa da CONTA → User.goldBalance, o banco).
+// 1 linha por dia UTC; o unique impede resgate duplo (P2002 = já resgatou hoje).
+// streak = streak de ontem + 1 (ou 1 se ontem não tem linha). gold audita a emissão.
+model DailyLoginClaim {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  dayKey    String
+  streak    Int      @default(1)
+  gold      Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, dayKey])
+  @@index([userId, createdAt])
 }

@@ -4,7 +4,7 @@ import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Wallet, ChevronDown } from 'lucide-react'
 import { ethers } from 'ethers'
@@ -28,6 +28,24 @@ export function Navbar() {
   const activeAvatarUrl = resolveImageUrl(activeCharacter?.avatar ?? null)
 
   const walletAddress = session?.user?.walletAddress
+
+  // 🗺️ Ponto dourado no link "Missões" quando há algo resgatável. Um fetch leve
+  // por troca de herói/sessão — o número exato fica na própria página /quests.
+  const [questsClaimable, setQuestsClaimable] = useState(false)
+  useEffect(() => {
+    if (!session || !activeCharacterId) {
+      setQuestsClaimable(false)
+      return
+    }
+    let cancelled = false
+    fetch(`/api/quests?characterId=${activeCharacterId}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data) setQuestsClaimable((data.claimableCount ?? 0) > 0)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [session, activeCharacterId])
 
   // Rotas públicas: acessíveis sem login (ex.: documentação)
   const PUBLIC_ROUTES = ['/doc']
@@ -95,6 +113,7 @@ export function Navbar() {
 
   const navLinks = [
     { label: 'Personagem', href: fichaHref },
+    { label: 'Missões', href: '/quests' },
     { label: 'Masmorras', href: '/dungeons' },
     { label: 'Coleta', href: '/gathering' },
     { label: 'Fazenda', href: '/farm' },
@@ -166,10 +185,13 @@ export function Navbar() {
               <Link
                 key={l.href}
                 href={l.href}
-                className="px-3 py-2 rounded-lg text-sm font-medium text-textsec hover:text-white hover:bg-white/5 transition-colors"
+                className="relative px-3 py-2 rounded-lg text-sm font-medium text-textsec hover:text-white hover:bg-white/5 transition-colors"
                 onClick={(e) => handleProtectedRoute(e, l.href)}
               >
                 {l.label}
+                {l.href === '/quests' && questsClaimable && (
+                  <span className="absolute right-1 top-1.5 h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.9)]" aria-label="Missão resgatável" />
+                )}
               </Link>
             ))}
           </div>
@@ -249,6 +271,9 @@ export function Navbar() {
                   }}
                 >
                   {l.label}
+                  {l.href === '/quests' && questsClaimable && (
+                    <span className="ml-2 inline-block h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.9)]" aria-label="Missão resgatável" />
+                  )}
                 </Link>
               ))}
               {session ? (

@@ -1,4 +1,5 @@
 import { auth } from '@/app/api/auth/[...nextauth]/route'
+import { rateLimitAllow, rateLimited429 } from '@/lib/rateLimit'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { Contract, parseUnits } from 'ethers'
@@ -26,6 +27,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   const userId = session.user.id
+
+  // A resposta carrega uma assinatura EIP-712 do servidor — throttle por usuário.
+  if (!rateLimitAllow(`marketplace-list-intent:${userId}`, { windowMs: 60_000, max: 10 })) {
+    return rateLimited429()
+  }
 
   try {
     const { inventoryId } = await req.json()

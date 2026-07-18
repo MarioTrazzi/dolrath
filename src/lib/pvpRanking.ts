@@ -35,6 +35,8 @@ export async function ensureActivePvpSeason() {
 }
 
 export async function applyPvpMatchRating(opts: {
+  /** Quando presente, a rota de recompensas JÁ criou a linha PvpMatch (lock de idempotência) — só atualizamos. */
+  matchKey?: string
   seasonId: string
   winnerId: string
   loserId: string
@@ -78,21 +80,29 @@ export async function applyPvpMatchRating(opts: {
     }),
   ])
 
-  await prisma.pvpMatch.create({
-    data: {
-      seasonId: opts.seasonId,
-      winnerId: opts.winnerId,
-      loserId: opts.loserId,
-      winnerStaminaSpent: opts.winnerStaminaSpent,
-      loserStaminaSpent: opts.loserStaminaSpent,
-      winnerGold: opts.winnerGold,
-      loserGold: opts.loserGold,
-      winnerXp: opts.winnerXp,
-      loserXp: opts.loserXp,
-      winnerPoints: opts.winPoints,
-      loserPoints: opts.lossPoints,
-    },
-  })
+  const matchStats = {
+    winnerStaminaSpent: opts.winnerStaminaSpent,
+    loserStaminaSpent: opts.loserStaminaSpent,
+    winnerGold: opts.winnerGold,
+    loserGold: opts.loserGold,
+    winnerXp: opts.winnerXp,
+    loserXp: opts.loserXp,
+    winnerPoints: opts.winPoints,
+    loserPoints: opts.lossPoints,
+  }
+  if (opts.matchKey) {
+    // A linha já existe (lock criado antes do crédito) — completa as estatísticas.
+    await prisma.pvpMatch.update({ where: { matchKey: opts.matchKey }, data: matchStats })
+  } else {
+    await prisma.pvpMatch.create({
+      data: {
+        seasonId: opts.seasonId,
+        winnerId: opts.winnerId,
+        loserId: opts.loserId,
+        ...matchStats,
+      },
+    })
+  }
 
   return { winnerPoints: winnerRating.points, loserPoints: loserRating.points }
 }

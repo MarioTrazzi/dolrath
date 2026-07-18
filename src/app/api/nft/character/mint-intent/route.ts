@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
+import { rateLimitAllow, rateLimited429 } from '@/lib/rateLimit'
 import { signMintRequest } from '@/lib/characterNftSigning'
 import { getCharacterNftChainId, getCharacterNftContractAddress } from '@/lib/characterNftOnchain'
 import crypto from 'node:crypto'
@@ -10,6 +11,11 @@ export async function POST(req: Request) {
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // A resposta carrega uma assinatura EIP-712 do servidor — throttle por usuário.
+    if (!rateLimitAllow(`char-mint-intent:${session.user.id}`, { windowMs: 60_000, max: 6 })) {
+      return rateLimited429()
     }
 
     const to = (session.user.walletAddress || '').trim()

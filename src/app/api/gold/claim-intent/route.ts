@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { ethers } from 'ethers'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
+import { rateLimitAllow, rateLimited429 } from '@/lib/rateLimit'
 import { prisma } from '@/lib/prisma'
 import { getGoldChainId, getGoldContractAddress } from '@/lib/goldOnchain'
 import { signGoldClaim } from '@/lib/goldSigning'
@@ -33,6 +34,11 @@ export async function POST() {
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // A resposta carrega uma assinatura EIP-712 do servidor — throttle por usuário.
+    if (!rateLimitAllow(`gold-claim-intent:${session.user.id}`, { windowMs: 60_000, max: 6 })) {
+      return rateLimited429()
     }
 
     const rawWallet = String((session.user as any)?.walletAddress || '').trim()

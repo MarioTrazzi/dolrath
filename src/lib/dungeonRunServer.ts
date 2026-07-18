@@ -195,16 +195,14 @@ function startOfUtcDay(): Date {
 // estourar 20k lutando e MAIS 20k masmorrando. Com a arena virando a fonte principal
 // de ouro (PVP_GOLD_PER_STA 31), essa assimetria deixou de ser detalhe.
 export async function pvpGoldEmittedTodayTx(tx: Prisma.TransactionClient, userId: string): Promise<number> {
-  const agg = await tx.characterHistory.aggregate({
-    _sum: { goldAmount: true },
-    where: {
-      createdAt: { gte: startOfUtcDay() },
-      goldAmount: { gt: 0 },
-      description: { startsWith: 'PvP' },
-      character: { userId },
-    },
-  })
-  return agg._sum.goldAmount ?? 0
+  // Fonte: ledger PvpMatch (transacional), não mais o characterHistory best-effort
+  // por prefixo de description — history perdido deixava ouro invisível ao teto.
+  const gte = startOfUtcDay()
+  const [asWinner, asLoser] = await Promise.all([
+    tx.pvpMatch.aggregate({ _sum: { winnerGold: true }, where: { winnerUserId: userId, createdAt: { gte } } }),
+    tx.pvpMatch.aggregate({ _sum: { loserGold: true }, where: { loserUserId: userId, createdAt: { gte } } }),
+  ])
+  return (asWinner._sum?.winnerGold ?? 0) + (asLoser._sum?.loserGold ?? 0)
 }
 
 async function goldEmittedToday(tx: Prisma.TransactionClient, userId: string): Promise<number> {

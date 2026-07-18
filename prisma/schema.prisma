@@ -543,10 +543,18 @@ model PvpRating {
 
 model PvpMatch {
   id                  String    @id @default(cuid())
+  // Lock de idempotência: o socket gera uma matchKey única por luta e a rota de
+  // recompensas cria esta linha ANTES de creditar — retry bate no @unique (P2002)
+  // e não credita de novo. Null só em linhas legadas (criadas pelo ranking antigo).
+  matchKey            String?   @unique
   seasonId            String
   season              PvpSeason @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   winnerId            String
   loserId             String
+  // Donos das contas — alimentam a soma do teto diário de ouro por usuário
+  // (substitui a soma por prefixo de description no characterHistory best-effort).
+  winnerUserId        String?
+  loserUserId         String?
   winnerStaminaSpent  Int       @default(0)
   loserStaminaSpent   Int       @default(0)
   winnerGold          Int       @default(0)
@@ -558,8 +566,10 @@ model PvpMatch {
   createdAt           DateTime  @default(now())
 
   @@index([seasonId, createdAt])
-  @@index([winnerId])
+  @@index([winnerId, createdAt])
   @@index([loserId])
+  @@index([winnerUserId, createdAt])
+  @@index([loserUserId, createdAt])
 }
 
 model PvpSeasonPayout {

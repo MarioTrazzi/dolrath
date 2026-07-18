@@ -2014,6 +2014,14 @@ async function processBattleRewards(room, winner, loser, roomId) {
 
     // Nível NÃO vai no corpo: a rota lê do banco (o payload do cliente não é autoridade).
     // updateRanking também saiu — o gate do treino é `room.isTraining`, checado no caller.
+    //
+    // matchKey: lock de idempotência (PvpMatch.matchKey @unique na rota). Gerada UMA vez
+    // por luta e presa na room — se processBattleRewards rodar de novo p/ a mesma luta
+    // (evento duplicado, retry), a rota reconhece e não credita duas vezes. Limpa no
+    // sucesso p/ uma revanche na mesma sala ganhar chave nova.
+    if (!room.rewardMatchKey) {
+      room.rewardMatchKey = `${roomId}:${require('crypto').randomUUID()}`
+    }
     const battleResult = {
       winnerId: winner.id,
       loserId: loser.id,
@@ -2022,6 +2030,7 @@ async function processBattleRewards(room, winner, loser, roomId) {
       loserTransformed,
       winnerStaminaSpent: winner.fightStaminaSpent || 0,
       loserStaminaSpent: loser.fightStaminaSpent || 0,
+      matchKey: room.rewardMatchKey,
     }
 
     const appUrl = (process.env.APP_URL || process.env.NEXTAUTH_URL || 'https://dolrath.vercel.app').replace(/\/$/, '')
@@ -2040,6 +2049,7 @@ async function processBattleRewards(room, winner, loser, roomId) {
 
       if (apiResponse.ok) {
         rewardData = await apiResponse.json()
+        delete room.rewardMatchKey
         console.log('✅ Recompensas PvP creditadas:', rewardData)
       } else {
         const errText = await apiResponse.text().catch(() => '')

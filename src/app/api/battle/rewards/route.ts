@@ -27,6 +27,8 @@ interface BattleResult {
   /** Stamina que o socket contabilizou na luta (`fightStaminaSpent`), clampada pelo saldo real. */
   winnerStaminaSpent?: number
   loserStaminaSpent?: number
+  /** Chave única da luta gerada pelo socket — lock de idempotência via PvpMatch.matchKey. */
+  matchKey?: string
 }
 
 function isServiceCall(request: NextRequest): boolean {
@@ -119,47 +121,37 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(noReward('same_user', winner, loser))
     }
 
-    // ⚠️ DEDUP FRÁGIL (dívida conhecida): casa por PREFIXO DE STRING numa janela de
-    // 120s, e depende do addHistoryEntry lá embaixo — que é best-effort. Se o history
-    // falhar e o socket der retry no fetch, esta luta credita ouro E desgasta o gear
-    // DE NOVO. O mesmo vale para o teto diário, que soma o ouro de PvP pela description
-    // ('PvP%'): history perdido = ouro invisível ao cap. E a leitura do teto acontece
-    // fora de transação, então duas lutas simultâneas do mesmo dono podem estourá-lo.
-    // 🔧 A correção é a mesma para os três: `PvpMatch.matchKey @unique` (o socket gera
-    // uma chave por luta) como lock de idempotência + `winnerUserId`/`loserUserId`
-    // indexados, tudo dentro de UMA transação. Precisa de migration — ficou fora deste
-    // PR, que já sobe o ouro da arena de 6.6 → 31/STA e fecha a rota para o cliente.
-    const dedupWindow = new Date(Date.now() - 120_000)
-    const alreadyCredited = await prisma.characterHistory.findFirst({
-      where: {
-        characterId: battleResult.winnerId,
-        description: { startsWith: `PvP Victory vs ${loser.name}` },
-        createdAt: { gte: dedupWindow },
-      },
-      select: { id: true },
-    })
-    if (alreadyCredited) {
-      return NextResponse.json({
-        success: true,
-        deduped: true,
-        winner: { id: battleResult.winnerId, xpGained: 0, goldGained: 0, leveledUp: false, newLevel: winner.level },
-        loser: { id: battleResult.loserId, xpGained: 0, goldGained: 0, leveledUp: false, newLevel: loser.level },
+    // 🔒 IDEMPOTÊNCIA: o socket manda uma matchKey única por luta; a criação do
+    // PvpMatch (matchKey @unique) é o lock — retry da MESMA luta bate no P2002 e
+    // devolve `deduped` sem creditar/desgastar de novo. O ledger criado aqui também
+    // alimenta o teto diário e o bônus de 1ª vitória (antes tudo dependia do
+    // characterHistory best-effort, por prefixo de string — crédito duplo possível).
+    // Fallback: socket antigo sem matchKey ganha uma chave gerada (ledger sempre
+    // existe) + o dedup legado por prefixo cobre a janela de deploy skew.
+    const matchKeyRaw = typeof battleResult.matchKey === 'string' ? battleResult.matchKey.trim() : ''
+    const matchKey = matchKeyRaw ? matchKeyRaw.slice(0, 200) : `srv:${crypto.randomUUID()}`
+    if (!matchKeyRaw) {
+      const dedupWindow = new Date(Date.now() - 120_000)
+      const alreadyCredited = await prisma.characterHistory.findFirst({
+        where: {
+          characterId: battleResult.winnerId,
+          description: { startsWith: `PvP Victory vs ${loser.name}` },
+          createdAt: { gte: dedupWindow },
+        },
+        select: { id: true },
       })
+      if (alreadyCredited) {
+        return NextResponse.json({
+          success: true,
+          deduped: true,
+          winner: { id: battleResult.winnerId, xpGained: 0, goldGained: 0, leveledUp: false, newLevel: winner.level },
+          loser: { id: battleResult.loserId, xpGained: 0, goldGained: 0, leveledUp: false, newLevel: loser.level },
+        })
+      }
     }
 
     const winnerLevel = winner.level
     const loserLevel = loser.level
-
-    const startOfDay = new Date()
-    startOfDay.setUTCHours(0, 0, 0, 0)
-    const winsToday = await prisma.characterHistory.count({
-      where: {
-        characterId: battleResult.winnerId,
-        createdAt: { gte: startOfDay },
-        description: { startsWith: 'PvP Victory' },
-      },
-    })
-    const isFirstWin = winsToday === 0
 
     const winnerStaWanted = Math.max(0, Math.floor(Number(battleResult.winnerStaminaSpent) || 0))
     const loserStaWanted = Math.max(0, Math.floor(Number(battleResult.loserStaminaSpent) || 0))
@@ -177,9 +169,44 @@ export async function POST(request: NextRequest) {
 
     // ⚡ Piso de entrada: uma luta que mal gastou stamina não gera faucet nem ranking.
     // Mata o farm de lutas de 1 turno (render/desistir em looping) — que com a arena
-    // pagando 31 gold/STA seria o caminho mais barato de emitir ouro.
+    // pagando 31 gold/STA seria o caminho mais barato de emitir ouro. Checado ANTES
+    // do lock p/ uma luta curta não virar linha no ledger (inflaria wins/1ª vitória).
     if (winnerStaWanted < PVP_MIN_ENTRY_STAMINA && loserStaWanted < PVP_MIN_ENTRY_STAMINA) {
       return NextResponse.json(noReward('below_min_stamina', winner, loser))
+    }
+
+    const season = await ensureActivePvpSeason()
+
+    const startOfDay = new Date()
+    startOfDay.setUTCHours(0, 0, 0, 0)
+    const winsToday = await prisma.pvpMatch.count({
+      where: { winnerId: battleResult.winnerId, createdAt: { gte: startOfDay } },
+    })
+    const isFirstWin = winsToday === 0
+
+    // O lock (e ledger) da luta: uma linha por matchKey. O ranking atualiza esta
+    // mesma linha com stamina/XP/pontos lá no fim.
+    try {
+      await prisma.pvpMatch.create({
+        data: {
+          matchKey,
+          seasonId: season.id,
+          winnerId: battleResult.winnerId,
+          loserId: battleResult.loserId,
+          winnerUserId: winner.userId,
+          loserUserId: loser.userId,
+        },
+      })
+    } catch (err: any) {
+      if (err?.code === 'P2002') {
+        return NextResponse.json({
+          success: true,
+          deduped: true,
+          winner: { id: battleResult.winnerId, xpGained: 0, goldGained: 0, leveledUp: false, newLevel: winner.level },
+          loser: { id: battleResult.loserId, xpGained: 0, goldGained: 0, leveledUp: false, newLevel: loser.level },
+        })
+      }
+      throw err
     }
 
     const [winnerCharged, loserCharged] = await Promise.all([
@@ -197,36 +224,33 @@ export async function POST(request: NextRequest) {
       loserLevel,
     })
 
-    // Teto diário compartilhado com a masmorra (mesma função — a arena não tem mais
-    // a própria cópia da conta). `prisma` serve de TransactionClient aqui: o crédito
-    // do PvP não roda em transação própria.
-    const [wRemain, lRemain] = await Promise.all([
-      dailyGoldRemainingTx(prisma, winner.userId),
-      dailyGoldRemainingTx(prisma, loser.userId),
-    ])
-    const winnerGold = Math.min(calc.winner.gold, wRemain)
-    const loserGold = Math.min(calc.loser.gold, lRemain)
+    // Teto diário compartilhado com a masmorra, agora DENTRO de uma transação com o
+    // crédito e o registro no ledger PvpMatch — duas lutas simultâneas do mesmo dono
+    // não estouram mais o cap, e o valor pago fica auditável na própria luta.
+    const { winnerGold, loserGold } = await prisma.$transaction(async (tx) => {
+      const [wRemain, lRemain] = await Promise.all([
+        dailyGoldRemainingTx(tx, winner.userId),
+        dailyGoldRemainingTx(tx, loser.userId),
+      ])
+      const wGold = Math.min(calc.winner.gold, wRemain)
+      const lGold = Math.min(calc.loser.gold, lRemain)
+      if (wGold > 0) {
+        await tx.character.update({ where: { id: battleResult.winnerId }, data: { gold: { increment: wGold } } })
+      }
+      if (lGold > 0) {
+        await tx.character.update({ where: { id: battleResult.loserId }, data: { gold: { increment: lGold } } })
+      }
+      if (wGold > 0 || lGold > 0) {
+        await tx.pvpMatch.update({ where: { matchKey }, data: { winnerGold: wGold, loserGold: lGold } })
+      }
+      return { winnerGold: wGold, loserGold: lGold }
+    })
     const winnerXp = calc.winner.xp
     const loserXp = calc.loser.xp
 
-    const [winnerXpResult] = await Promise.all([
+    const [winnerXpResult, loserXpResult] = await Promise.all([
       addExperienceToCharacter(battleResult.winnerId, winnerXp),
-      winnerGold > 0
-        ? prisma.character.update({
-            where: { id: battleResult.winnerId },
-            data: { gold: { increment: winnerGold } },
-          })
-        : Promise.resolve(),
-    ])
-
-    const [loserXpResult] = await Promise.all([
       addExperienceToCharacter(battleResult.loserId, loserXp),
-      loserGold > 0
-        ? prisma.character.update({
-            where: { id: battleResult.loserId },
-            data: { gold: { increment: loserGold } },
-          })
-        : Promise.resolve(),
     ])
 
     // ⚔️ Desgaste da luta (2026-07-15): a arena era a ÚNICA atividade sem custo
@@ -279,8 +303,8 @@ export async function POST(request: NextRequest) {
     let ranking: { winnerPoints?: number; loserPoints?: number } = {}
     {
       try {
-        const season = await ensureActivePvpSeason()
         ranking = await applyPvpMatchRating({
+          matchKey,
           seasonId: season.id,
           winnerId: battleResult.winnerId,
           loserId: battleResult.loserId,

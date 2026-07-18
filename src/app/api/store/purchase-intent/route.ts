@@ -1,4 +1,5 @@
 import { auth } from '@/app/api/auth/[...nextauth]/route'
+import { rateLimitAllow, rateLimited429 } from '@/lib/rateLimit'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { verifyGoldTransferTx } from '@/lib/goldPayments'
@@ -17,6 +18,11 @@ export async function POST(req: Request) {
 
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // A resposta carrega uma assinatura EIP-712 do servidor — throttle por usuário.
+  if (!rateLimitAllow(`store-purchase-intent:${session.user.id}`, { windowMs: 60_000, max: 10 })) {
+    return rateLimited429()
   }
 
   try {

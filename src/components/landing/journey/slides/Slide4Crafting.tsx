@@ -88,13 +88,8 @@ export default function Slide4Crafting({ active, onNext }: JourneySlideProps) {
         </p>
       </div>
 
-      {/* Bancadas: faixa com scroll-snap no mobile, 3 colunas no desktop */}
-      <div
-        className="flex-1 min-h-0 flex md:grid md:grid-cols-3 gap-3 px-3 pb-2 overflow-x-auto md:overflow-visible snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        // Sem isto o drag="x" do carrossel sequestra o gesto e a faixa não rola no mobile
-        style={{ touchAction: 'pan-x pan-y' }}
-        onPointerDownCapture={e => e.stopPropagation()}
-      >
+      {/* Bancadas: empilhadas com rolagem vertical no mobile, 3 colunas no desktop */}
+      <div className="flex-1 min-h-0 flex flex-col md:grid md:grid-cols-3 gap-3 px-3 pb-2 overflow-y-auto md:overflow-visible [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {BENCHES.map(bench => {
           const auto = benchPhase(step, bench.chargeStep)
           const phase = manual?.key === bench.key ? manual.phase : auto
@@ -103,7 +98,7 @@ export default function Slide4Crafting({ active, onNext }: JourneySlideProps) {
             <button
               key={bench.key}
               onClick={() => setManual({ key: bench.key, phase: 'charging', id: Date.now() })}
-              className="relative shrink-0 snap-center w-[86%] sm:w-[330px] md:w-auto rounded-lg border text-left overflow-hidden"
+              className="relative shrink-0 w-full md:w-auto rounded-lg border text-left overflow-hidden"
               style={{ borderColor: BORDER_GOLD, background: PANEL_BG }}
             >
               <div className="flex items-center justify-between px-3 py-2 border-b border-black/60">

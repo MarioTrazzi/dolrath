@@ -173,10 +173,11 @@ export default function Slide6GearSheet({ active, onNext }: JourneySlideProps) {
   return (
     <DndProvider backend={HTML5Backend}>
       <div className="relative h-full w-full overflow-y-auto md:overflow-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <div className="h-full flex flex-col md:flex-row gap-3 p-3 pt-5 sm:p-4">
+        {/* min-h-full no mobile: paperdoll+stats e inventário empilham inteiros e a raiz rola */}
+        <div className="min-h-full md:h-full flex flex-col md:flex-row gap-3 p-3 pt-5 pb-14 md:pb-4 sm:p-4">
           {/* Paperdoll real da ficha + stats */}
           <div
-            className="md:w-[58%] rounded-[4px] border overflow-hidden flex flex-col md:overflow-y-auto md:[scrollbar-width:none] md:[&::-webkit-scrollbar]:hidden"
+            className="md:w-[58%] shrink-0 md:shrink rounded-[4px] border overflow-hidden flex flex-col md:overflow-y-auto md:[scrollbar-width:none] md:[&::-webkit-scrollbar]:hidden"
             style={{ borderColor: BORDER_GOLD, background: PANEL_BG }}
           >
             <div className="flex items-center justify-between px-3 h-8 border-b border-black/70 bg-gradient-to-b from-[#2b2b2f] to-[#1a1a1d] shrink-0">
@@ -341,7 +342,7 @@ export default function Slide6GearSheet({ active, onNext }: JourneySlideProps) {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             onClick={onNext}
-            className="absolute bottom-3 right-3 z-30 px-3.5 py-2 rounded-lg bg-primary hover:bg-primary-dark text-white text-xs font-bold shadow-[0_0_18px_rgba(233,69,96,0.5)] animate-pulse"
+            className="sticky md:absolute bottom-3 md:right-3 z-30 block ml-auto mr-3 md:ml-0 md:mr-0 -mt-11 md:mt-0 px-3.5 py-2 rounded-lg bg-primary hover:bg-primary-dark text-white text-xs font-bold shadow-[0_0_18px_rgba(233,69,96,0.5)] animate-pulse"
           >
             Voltar à trilha →
           </motion.button>

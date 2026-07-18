@@ -563,18 +563,27 @@ function FighterFigure({
           {/* Sombra no chão */}
           <div className={`mx-auto mt-1 ${compact ? 'w-16 sm:w-24' : 'w-24 sm:w-32'} h-3 bg-black/50 rounded-[100%] blur-sm`} />
 
-          {/* Armas em punho À FRENTE do card, voltadas para o oponente (lado interno).
-              Ficam dentro do sprite, então acompanham a investida/tremor do golpe. */}
+          {/* Armas em punho: no mobile ficam EMBAIXO do card (à frente os tiles
+              invadiam o espaço do oponente e sobrepunham o card dele); a partir
+              de sm: voltam À FRENTE do card, voltadas para o oponente. Ficam
+              dentro do sprite, então acompanham a investida/tremor do golpe. */}
           {heldSlots.length > 0 && (
-            <div
-              className={`absolute top-1/2 -translate-y-1/2 z-20 flex flex-col gap-1.5 ${
-                side === 'left' ? 'left-full ml-1 items-start' : 'right-full mr-1 items-end'
-              }`}
-            >
-              {heldSlots.map(slot => (
-                <EquipSlot key={slot} slot={slot} item={fighter.equipmentMap![slot]!} size="lg" />
-              ))}
-            </div>
+            <>
+              <div className="sm:hidden mt-1 flex justify-center gap-1.5">
+                {heldSlots.map(slot => (
+                  <EquipSlot key={slot} slot={slot} item={fighter.equipmentMap![slot]!} size="lg" />
+                ))}
+              </div>
+              <div
+                className={`hidden sm:flex absolute top-1/2 -translate-y-1/2 z-20 flex-col gap-1.5 ${
+                  side === 'left' ? 'left-full ml-1 items-start' : 'right-full mr-1 items-end'
+                }`}
+              >
+                {heldSlots.map(slot => (
+                  <EquipSlot key={slot} slot={slot} item={fighter.equipmentMap![slot]!} size="lg" />
+                ))}
+              </div>
+            </>
           )}
 
           {/* FX de habilidade sobre o corpo do lutador (acompanha o shake do card) */}

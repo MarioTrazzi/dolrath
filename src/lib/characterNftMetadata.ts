@@ -1,4 +1,5 @@
 import { getRaceById, getClassById } from '@/lib/gameData'
+import { raceNameEn, classNameEn } from '@/lib/i18n/gameNames'
 import { resolveImageUrl, absolutizeUrl } from '@/lib/imageUrl'
 import { getChainInfo } from '@/lib/chainConfig'
 
@@ -65,8 +66,9 @@ export function buildCharacterNftMetadata(params: {
   const race = getRaceById(params.raceId)
   const cls = getClassById(params.classId)
 
-  const displayRace = race?.name || params.raceId
-  const displayClass = cls?.name || params.classId
+  // 🌐 Metadata imutável on-chain → raça/classe sempre em EN.
+  const displayRace = raceNameEn(params.raceId) || race?.name || params.raceId
+  const displayClass = classNameEn(params.classId) || cls?.name || params.classId
 
   const title = `${params.name} — ${displayClass}`
   const level = Number.isFinite(params.level) && (params.level as number) > 0 ? (params.level as number) : 1

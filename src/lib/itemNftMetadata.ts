@@ -1,5 +1,7 @@
 import { resolveImageUrl, absolutizeUrl } from '@/lib/imageUrl'
 import { getChainInfo } from '@/lib/chainConfig'
+// 🌐 NFT metadata é IMUTÁVEL on-chain → sempre EN, independente do locale do request.
+import { catalogNameEn, localizeItemDesc, localizeSpecialEffect } from '@/lib/i18n/catalog'
 
 function base64EncodeUtf8(input: string): string {
   return Buffer.from(input, 'utf8').toString('base64')
@@ -53,7 +55,8 @@ function flattenStatsToAttributes(stats: unknown): Array<{ trait_type: string; v
     if (typeof v === 'string') {
       const trimmed = v.trim()
       if (!trimmed) continue
-      out.push({ trait_type: k, value: trimmed })
+      // specialEffect é gravado em PT nos stats — a metadata publica o EN.
+      out.push({ trait_type: k, value: k === 'specialEffect' ? localizeSpecialEffect(trimmed, 'en') : trimmed })
       continue
     }
 
@@ -82,11 +85,15 @@ export function buildItemNftMetadata(params: {
   }
   paidGoldWei?: string | null
 }) {
-  const baseName = safeString(params.item.name).trim() || 'Item'
+  // O Item do banco chega com nome/descrição PT (chave interna) — a metadata usa o EN canônico.
+  const ptName = safeString(params.item.name).trim() || 'Item'
+  const baseName = catalogNameEn(ptName)
   const level = safeNumber(params.item.level, 1)
   const type = safeString(params.item.type).trim()
   const subtype = safeString(params.item.subtype).trim()
-  const descriptionRaw = safeString(params.item.description).trim()
+  const descriptionRaw = safeString(
+    localizeItemDesc(ptName, safeString(params.item.description), 'en')
+  ).trim()
 
   // Aprimoramento (+N): vem explícito ou de stats.enhancementLevel. É o "+7" da peça.
   const enhancement = Math.max(
@@ -103,10 +110,10 @@ export function buildItemNftMetadata(params: {
 
   const lines: string[] = []
   if (descriptionRaw) lines.push(descriptionRaw)
-  lines.push(`Tipo: ${type || 'UNKNOWN'}`)
+  lines.push(`Type: ${type || 'UNKNOWN'}`)
   lines.push(`Lv.${level}`)
-  if (subtype) lines.push(`Subtipo: ${subtype}`)
-  if (enhancement > 0) lines.push(`Aprimoramento: +${enhancement}`)
+  if (subtype) lines.push(`Subtype: ${subtype}`)
+  if (enhancement > 0) lines.push(`Enhancement: +${enhancement}`)
 
   const description = lines.join('\n')
 
@@ -134,7 +141,7 @@ export function buildItemNftMetadata(params: {
 
   <g transform="translate(64, 220)">
     <rect x="0" y="0" width="672" height="260" rx="18" fill="#0f172a" stroke="#1f2937" stroke-width="2"/>
-    <text x="24" y="56" fill="#e2e8f0" font-size="22" font-family="ui-sans-serif, system-ui" font-weight="700">Descrição</text>
+    <text x="24" y="56" fill="#e2e8f0" font-size="22" font-family="ui-sans-serif, system-ui" font-weight="700">Description</text>
     <text x="24" y="110" fill="#94a3b8" font-size="18" font-family="ui-sans-serif, system-ui">${escapeXml(descriptionRaw || '—')}</text>
   </g>
 

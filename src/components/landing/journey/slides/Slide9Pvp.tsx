@@ -13,6 +13,7 @@ import CombatShell, { type CombatAttackOption } from '@/components/battle/Combat
 import { DUNGEON_BATTLE_BG } from '@/lib/walkSceneAssets'
 import { useJourney } from '../JourneyContext'
 import { useBattleScript } from '../useBattleScript'
+import { useT } from '@/lib/i18n/I18nProvider'
 import {
   buildPvpScript,
   PVP_HERO_MAX_HP,
@@ -25,8 +26,9 @@ import {
 } from '../journeyData'
 
 export default function Slide9Pvp({ active, onNext }: JourneySlideProps) {
+  const t = useT()
   const { raceId, classId, heroName } = useJourney()
-  const script = useMemo(() => buildPvpScript({ raceId, classId }), [raceId, classId])
+  const script = useMemo(() => buildPvpScript({ raceId, classId }, t), [raceId, classId, t])
   const battle = useBattleScript(active, script, {
     heroHp: PVP_HERO_MAX_HP,
     foeHp: PVP_FOE_MAX_HP,
@@ -49,27 +51,27 @@ export default function Slide9Pvp({ active, onNext }: JourneySlideProps) {
           visible: true,
           diceType: 20,
           hasRolled: battle.dice === 'reveal',
-          label: 'Iniciativa: quem age primeiro?',
+          label: t('Initiative: who acts first?'),
           onRoll: battle.advance,
           dual: true,
           myResult: battle.dice === 'reveal' ? { sides: 20, roll: 17, modifier: 2, total: 19 } : null,
           opponentResult: battle.dice === 'reveal' ? { sides: 20, roll: 9, modifier: 2, total: 11 } : null,
-          resultBanner: battle.dice === 'reveal' ? `${heroName} venceu a iniciativa!` : null,
+          resultBanner: battle.dice === 'reveal' ? t('{name} won the initiative!', { name: heroName }) : null,
         }
       : {
           visible: true,
           diceType: 20,
           hasRolled: battle.dice === 'reveal',
-          label: '🎲 Tudo no dado final — toque para rolar!',
+          label: t('🎲 Everything on the final roll — tap to roll!'),
           onRoll: battle.advance,
           myResult: battle.dice === 'reveal' ? { sides: 20, roll: 20, modifier: 4, total: 24 } : null,
         }
     : null
 
   const attackOptions: CombatAttackOption[] = [
-    { key: 'basic', label: '👊 Golpe', sub: 'd6 · sem custo', locked: false, onPick: battle.advance },
-    { key: 'weapon', label: `🗡️ ${classAttackName(classId)}`, sub: 'd8 · ataque de classe', locked: false, onPick: battle.advance },
-    { key: 'special', label: '💫 Especial de forma', sub: 'd20 · 12 MP', locked: false, onPick: battle.advance },
+    { key: 'basic', label: t('👊 Strike'), sub: t('d6 · no cost'), locked: false, onPick: battle.advance },
+    { key: 'weapon', label: `🗡️ ${t(classAttackName(classId))}`, sub: t('d8 · class attack'), locked: false, onPick: battle.advance },
+    { key: 'special', label: t('💫 Form special'), sub: 'd20 · 12 MP', locked: false, onPick: battle.advance },
   ]
 
   const currentTurnId = battle.showActions || battle.dice ? 'hero' : 'foe'
@@ -84,13 +86,13 @@ export default function Slide9Pvp({ active, onNext }: JourneySlideProps) {
           !battle.ended ? (
             <span className="text-[11px] text-white/60 font-bold">
               {battle.dice
-                ? '🎲 Rolando os dados...'
+                ? t('🎲 Rolling the dice...')
                 : battle.foeTransformed
-                  ? '⚠️ Oponente transformado — aguente firme...'
-                  : '⏳ Aguardando o turno do oponente...'}
+                  ? t('⚠️ Opponent transformed — hold the line...')
+                  : t("⏳ Waiting for the opponent's turn...")}
             </span>
           ) : (
-            <span className="text-[11px] text-emerald-300 font-bold">🏆 Vitória de {heroName}!</span>
+            <span className="text-[11px] text-emerald-300 font-bold">{t('🏆 Victory for {name}!', { name: heroName })}</span>
           )
         }
         attackOptions={attackOptions}
@@ -150,17 +152,17 @@ export default function Slide9Pvp({ active, onNext }: JourneySlideProps) {
           >
             <div className="px-4 py-2 rounded-xl bg-black/75 border border-amber-400/50 backdrop-blur-md text-center">
               <span className="text-xs font-black text-amber-200">
-                +310 🪙 · +115 XP · +{PVP_RANK_WIN_POINTS} pts de ranking
+                +310 🪙 · +115 XP · {t('+{n} ranking pts', { n: PVP_RANK_WIN_POINTS })}
               </span>
               <p className="text-[10px] text-white/60 mt-0.5">
-                Nem a transformação salva de um NAT 20 — o dado decide.
+                {t('Not even the transformation survives a NAT 20 — the dice decides.')}
               </p>
             </div>
             <button
               onClick={onNext}
               className="px-3.5 py-2 rounded-lg bg-primary hover:bg-primary-dark text-white text-xs font-bold shadow-[0_0_18px_rgba(233,69,96,0.5)] animate-pulse"
             >
-              Ver o ranking e o prêmio →
+              {t('See the ranking and the prize →')}
             </button>
           </motion.div>
         )}

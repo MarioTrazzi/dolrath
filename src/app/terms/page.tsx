@@ -1,12 +1,98 @@
 import type { Metadata } from 'next'
 import LegalShell, { LegalSection } from '@/components/legal/LegalShell'
+import { getLocale } from '@/lib/i18n/server'
 
+// SEO fixo em EN (idioma principal do lançamento).
 export const metadata: Metadata = {
-  title: 'Termos de Uso — BDI',
-  description: 'Termos de uso do Black Dolrath Idle.',
+  title: 'Terms of Use — BDI',
+  description: 'Terms of use for Black Dolrath Idle.',
 }
 
-export default function TermsPage() {
+// ⚠️ A prosa EN é tradução nova do texto legal PT — pendente de revisão humana.
+function TermsEn() {
+  return (
+    <LegalShell title="Terms of Use" updatedAt="July 18, 2026">
+      <p>
+        By accessing or using Black Dolrath Idle (&quot;BDI&quot;, &quot;the game&quot;, &quot;we&quot;), you agree to these
+        Terms of Use, to our <a href="/disclaimer" className="text-amber-300 hover:underline">Risk Notice</a> and
+        to our <a href="/privacy" className="text-amber-300 hover:underline">Privacy Policy</a>. If you
+        do not agree, do not use the game.
+      </p>
+
+      <LegalSection heading="1. Account and access">
+        <p>
+          Access is exclusively via Web3 wallet (SIWE). You are solely responsible for keeping your
+          credentials safe and for all activity performed with your wallet. You must have the legal
+          capacity to enter into contracts in your jurisdiction.
+        </p>
+      </LegalSection>
+
+      <LegalSection heading="2. Game assets">
+        <p>
+          Characters, items and tokens (DOL, GOLD) may exist as NFTs or ERC-20 tokens on the Polygon
+          network. They are game assets intended for entertainment. DOL is a utility token and grants
+          no corporate or economic rights and no promise of return (see the Risk Notice). We do not
+          guarantee value, liquidity or a market for any asset.
+        </p>
+      </LegalSection>
+
+      <LegalSection heading="3. Prohibited conduct">
+        <p>You agree not to:</p>
+        <ul className="list-disc pl-5 flex flex-col gap-1">
+          <li>exploit bugs, economic flaws or vulnerabilities to gain an unfair advantage;</li>
+          <li>use bots, automation or multiple accounts to manipulate rewards, rankings or the market;</li>
+          <li>attempt to mint, duplicate or issue assets outside the flows intended by the game;</li>
+          <li>attack, overload or attempt to compromise the infrastructure or the contracts;</li>
+          <li>use the game for money laundering or any unlawful purpose.</li>
+        </ul>
+        <p>
+          We may suspend accounts, reverse improper off-chain credits and block access for anyone who
+          violates these rules.
+        </p>
+      </LegalSection>
+
+      <LegalSection heading="4. Fees and transactions">
+        <p>
+          On-chain transactions require a network fee (gas) in POL, paid by you. In-game markets may
+          charge fees (part burned, part to the treasury), as described in the game documentation. All
+          on-chain transactions are irreversible.
+        </p>
+      </LegalSection>
+
+      <LegalSection heading="5. No warranties">
+        <p>
+          The game is provided &quot;as is&quot;, without warranties of any kind. We do not guarantee
+          continuous availability, absence of errors, or that the game will meet your expectations. We
+          may change, pause or discontinue features at any time.
+        </p>
+      </LegalSection>
+
+      <LegalSection heading="6. Limitation of liability">
+        <p>
+          To the maximum extent permitted by law, we will not be liable for loss of assets, lost
+          profits, or indirect, incidental or consequential damages arising from use of the game, from
+          smart-contract failures, from the Polygon network, from your wallet or from third parties.
+        </p>
+      </LegalSection>
+
+      <LegalSection heading="7. Changes">
+        <p>
+          We may update these Terms. Continued use after changes means acceptance of the current
+          version. The &quot;last updated&quot; date indicates the most recent revision.
+        </p>
+      </LegalSection>
+
+      <LegalSection heading="8. Contact">
+        <p>
+          Questions about these Terms can be sent through the official community channels listed in
+          the site footer.
+        </p>
+      </LegalSection>
+    </LegalShell>
+  )
+}
+
+function TermsPt() {
   return (
     <LegalShell title="Termos de Uso" updatedAt="18 de julho de 2026">
       <p>
@@ -87,4 +173,8 @@ export default function TermsPage() {
       </LegalSection>
     </LegalShell>
   )
+}
+
+export default function TermsPage() {
+  return getLocale() === 'pt' ? <TermsPt /> : <TermsEn />
 }

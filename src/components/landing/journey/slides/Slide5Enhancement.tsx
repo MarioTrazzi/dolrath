@@ -23,6 +23,7 @@ import { itemStatEntries, formatStatValue } from '@/lib/itemStats'
 import { ItemThumb } from './LootTiles'
 import { useJourney } from '../JourneyContext'
 import { useSlideScript } from '../useSlideScript'
+import { useT } from '@/lib/i18n/I18nProvider'
 import {
   CLASS_GEAR,
   JOURNEY_ENHANCED_GEAR_LEVEL,
@@ -37,6 +38,7 @@ const TIMES = [0, 1100, 2600, 4400, 5300, 6600]
 const STONE = 'Pedra Negra Mágica Concentrada (Arma)'
 
 export default function Slide5Enhancement({ active, onNext }: JourneySlideProps) {
+  const t = useT()
   const { classId, heroName } = useJourney()
   const { step, cycle, advance } = useSlideScript(active, TIMES, { loopDelayMs: 4800 })
 
@@ -72,18 +74,18 @@ export default function Slide5Enhancement({ active, onNext }: JourneySlideProps)
         {/* Barra de título em bisel (como a dialog real) */}
         <div className="flex items-center justify-between px-3 h-9 border-b border-black/70 bg-gradient-to-b from-[#2b2b2f] to-[#1a1a1d]">
           <span className="text-sm font-bold" style={{ color: GOLD_BRIGHT }}>
-            <span style={{ color: GOLD }}>⚒</span> Aprimoramento
+            <span style={{ color: GOLD }}>⚒</span> {t('Enhancement')}
           </span>
-          <span className="text-[10px] text-[#8a8a90]">Mesa de Forja · {heroName}</span>
+          <span className="text-[10px] text-[#8a8a90]">{t('Forge Bench')} · {heroName}</span>
         </div>
 
         {/* O que é o Aprimoramento (texto didático da landing) */}
         <p className="px-4 pt-3 text-[11px] leading-relaxed text-[#b8b8be]">
-          As <span className="font-semibold" style={{ color: GOLD_BRIGHT }}>Pedras Negras</span> que caem
-          nas masmorras aprimoram seu equipamento de +1 até o lendário{' '}
-          <span className="font-semibold text-orange-300">V</span> — cada nível multiplica os stats do
-          item. Falhou? Você acumula <span className="font-semibold text-purple-300">failstacks</span>,
-          que aumentam a chance da próxima tentativa.
+          {t('The')} <span className="font-semibold" style={{ color: GOLD_BRIGHT }}>{t('Black Stones')}</span>{' '}
+          {t('that drop in dungeons enhance your equipment from +1 up to the legendary')}{' '}
+          <span className="font-semibold text-orange-300">V</span> — {t('each level multiplies the item\'s stats. Failed? You build up')}{' '}
+          <span className="font-semibold text-purple-300">failstacks</span>,{' '}
+          {t('which raise the odds of the next attempt.')}
         </p>
 
         <div className="p-4 pt-3">
@@ -195,16 +197,16 @@ export default function Slide5Enhancement({ active, onNext }: JourneySlideProps)
                 className="grid grid-cols-2 gap-2.5 mb-3"
               >
                 <div className="rounded-[3px] border border-white/10 bg-black/40 p-2 text-center">
-                  <div className="text-[9px] uppercase tracking-wide text-gray-500">Chance de sucesso</div>
+                  <div className="text-[9px] uppercase tracking-wide text-gray-500">{t('Success chance')}</div>
                   <div className={`text-lg font-bold ${success ? 'text-red-400' : chanceColorClass(chance / 100)}`}>
                     {chance.toFixed(1)}%
                   </div>
-                  <div className="h-3 text-[9px] text-red-300/70">{success ? 'próx.: V · PEN' : ' '}</div>
+                  <div className="h-3 text-[9px] text-red-300/70">{success ? t('next: V · PEN') : ' '}</div>
                 </div>
                 <div className="rounded-[3px] border border-white/10 bg-black/40 p-2 text-center">
                   <div className="text-[9px] uppercase tracking-wide text-gray-500">Failstacks</div>
                   <div className={`text-lg font-bold ${success ? 'text-gray-500' : 'text-purple-400'}`}>🔥 {failstacks}</div>
-                  <div className="h-3 text-[9px] text-white/40">{success ? 'zerado no sucesso' : ' '}</div>
+                  <div className="h-3 text-[9px] text-white/40">{success ? t('reset on success') : ' '}</div>
                 </div>
               </motion.div>
             )}
@@ -218,19 +220,19 @@ export default function Slide5Enhancement({ active, onNext }: JourneySlideProps)
                 transition={{ repeat: Infinity, duration: 0.7 }}
                 className="text-sm font-semibold text-amber-300"
               >
-                ⚒️ Forjando...
+                {t('⚒️ Forging...')}
               </motion.span>
             )}
             {success && (
               <motion.div initial={{ scale: 1.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
-                <span className="text-base font-black text-yellow-300">✨ SUCESSO!</span>
+                <span className="text-base font-black text-yellow-300">{t('✨ SUCCESS!')}</span>
                 {step >= 4 && (
                   <motion.div
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
                     className="text-xs font-bold text-green-300 mt-0.5"
                   >
-                    {weapon} agora é <span className="text-amber-300">IV (TET)</span> — dano em outro patamar.
+                    {weapon} {t('is now')} <span className="text-amber-300">IV (TET)</span> — {t('damage on another level.')}
                   </motion.div>
                 )}
               </motion.div>
@@ -242,10 +244,10 @@ export default function Slide5Enhancement({ active, onNext }: JourneySlideProps)
               if (step < 2) advance()
             }}
             busy={charging}
-            busyLabel="⚒️ Forjando..."
+            busyLabel={t('⚒️ Forging...')}
             disabled={success}
           >
-            ⚒️ Aprimoramento
+            {t('⚒️ Enhance')}
           </BevelButton>
         </div>
       </div>
@@ -258,7 +260,7 @@ export default function Slide5Enhancement({ active, onNext }: JourneySlideProps)
           onClick={onNext}
           className="absolute bottom-3 right-3 z-30 px-3.5 py-2 rounded-lg bg-primary hover:bg-primary-dark text-white text-xs font-bold shadow-[0_0_18px_rgba(233,69,96,0.5)] animate-pulse"
         >
-          Ver a ficha equipada →
+          {t('See the equipped sheet →')}
         </motion.button>
       )}
     </div>

@@ -12,11 +12,13 @@ import JourneyWalkStage, { FOREST } from './JourneyWalkStage'
 import { useJourney } from '../JourneyContext'
 import { useSlideScript } from '../useSlideScript'
 import type { JourneySlideProps } from '../journeyData'
+import { useI18n } from '@/lib/i18n/I18nProvider'
+import { pickName, pickTitle } from '@/lib/i18n/names'
 
 // 0 idle+chips do gear · 1 scroll (5.2s) · 2 approach · 3 chegada no covil · 4 CTA
 const TIMES = [0, 1600, 6800, 7700, 9400]
 
-const GEAR_CHIPS = ['⚔️ Arma IV', '🛡️ Set III', '🎒 Poções na mochila']
+const GEAR_CHIPS = ['⚔️ Weapon IV', '🛡️ Set III', '🎒 Potions in the bag']
 
 const TRAIL_FULL: WalkTrailMark[] = [
   { id: 1, age: 1, emoji: '📦' },
@@ -28,6 +30,7 @@ const TRAIL_FULL: WalkTrailMark[] = [
 const MODE_BY_STEP: WalkMode[] = ['idle', 'scroll', 'approach', 'idle', 'idle']
 
 export default function Slide7BossApproach({ active, onNext }: JourneySlideProps) {
+  const { locale, t } = useI18n()
   const { heroArt, heroName } = useJourney()
   const { step, advance } = useSlideScript(active, TIMES, { loopDelayMs: 6200 })
 
@@ -54,7 +57,7 @@ export default function Slide7BossApproach({ active, onNext }: JourneySlideProps
           }}
         >
           <NarrationDialog
-            text="A trilha termina adiante. Algo antigo respira entre as raízes..."
+            text={t('The trail ends ahead. Something ancient breathes among the roots...')}
             open={step === 0}
             onClose={advance}
           />
@@ -84,7 +87,7 @@ export default function Slide7BossApproach({ active, onNext }: JourneySlideProps
               boxShadow: '0 0 12px rgba(201,162,95,0.35)',
             }}
           >
-            {chip}
+            {t(chip)}
           </motion.span>
         ))}
       </div>
@@ -101,9 +104,9 @@ export default function Slide7BossApproach({ active, onNext }: JourneySlideProps
             className="px-4 py-2 rounded-xl border-2 text-center backdrop-blur-md"
             style={{ borderColor: '#f39c12', background: 'rgba(10,8,5,0.8)', boxShadow: '0 0 30px rgba(243,156,18,0.35)' }}
           >
-            <div className="text-lg font-black text-amber-300">👑 {FOREST.boss.name}</div>
+            <div className="text-lg font-black text-amber-300">👑 {pickName(FOREST.boss, locale)}</div>
             <div className="text-[11px] font-bold text-amber-100/80 uppercase tracking-[0.2em]">
-              {FOREST.boss.title}
+              {pickTitle(FOREST.boss, locale)}
             </div>
           </div>
         </motion.div>
@@ -113,8 +116,8 @@ export default function Slide7BossApproach({ active, onNext }: JourneySlideProps
       <div className="absolute bottom-3 inset-x-3 z-30 flex items-end justify-between gap-3">
         <p className="text-[11px] text-white/80 max-w-[58%] drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
           {arrived
-            ? 'O covil. Sem mais nós, sem mais fog — só você e a Guardiã.'
-            : `${heroName} volta à Floresta Sombria — desta vez, até o fim da trilha.`}
+            ? t('The lair. No more nodes, no more fog — just you and the Warden.')
+            : t('{name} returns to the Gloomwood Forest — this time, to the end of the trail.', { name: heroName })}
         </p>
         {step >= 4 && (
           <motion.button
@@ -123,7 +126,7 @@ export default function Slide7BossApproach({ active, onNext }: JourneySlideProps
             onClick={onNext}
             className="px-3.5 py-2 rounded-lg bg-primary hover:bg-primary-dark text-white text-xs font-bold shadow-[0_0_18px_rgba(233,69,96,0.55)] animate-pulse"
           >
-            ⚔️ Enfrentar a Anciã →
+            {t('⚔️ Face the Elder →')}
           </motion.button>
         )}
       </div>

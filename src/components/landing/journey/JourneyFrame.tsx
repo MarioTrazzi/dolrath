@@ -8,6 +8,7 @@
 import React from 'react'
 import { Dices } from 'lucide-react'
 import { GOLD, GOLD_BRIGHT, BORDER_GOLD, PANEL_BG } from '@/components/crafting/bdoTheme'
+import { useT } from '@/lib/i18n/I18nProvider'
 
 /** Divisória: linha dupla dourada com um d20 em losango ao centro.
     Montada sobre a borda inferior do hero — o losango fica metade na
@@ -53,6 +54,7 @@ export function JourneyWindow({
   stepLabel: string
   children: React.ReactNode
 }) {
+  const t = useT()
   return (
     <div
       className="relative rounded-[4px] border shadow-2xl shadow-black/80"
@@ -66,7 +68,7 @@ export function JourneyWindow({
       {/* Barra de título em bisel */}
       <div className="flex items-center justify-between px-3 h-9 border-b border-black/70 bg-gradient-to-b from-[#2b2b2f] to-[#1a1a1d] rounded-t-[3px]">
         <span className="text-sm font-bold" style={{ color: GOLD_BRIGHT }}>
-          <span style={{ color: GOLD }}>⚔</span> Jornada Dolrath
+          <span style={{ color: GOLD }}>⚔</span> {t('Dolrath Journey')}
         </span>
         <span className="text-[11px] font-bold" style={{ color: GOLD_BRIGHT }}>
           {stepLabel}

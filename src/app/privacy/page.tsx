@@ -1,12 +1,80 @@
 import type { Metadata } from 'next'
 import LegalShell, { LegalSection } from '@/components/legal/LegalShell'
+import { getLocale } from '@/lib/i18n/server'
 
 export const metadata: Metadata = {
-  title: 'Política de Privacidade — BDI',
-  description: 'Como o Black Dolrath Idle trata seus dados.',
+  title: 'Privacy Policy — BDI',
+  description: 'How Black Dolrath Idle handles your data.',
 }
 
-export default function PrivacyPage() {
+// ⚠️ A prosa EN é tradução nova do texto legal PT — pendente de revisão humana.
+function PrivacyEn() {
+  return (
+    <LegalShell title="Privacy Policy" updatedAt="July 18, 2026">
+      <p>
+        This policy describes what data Black Dolrath Idle (&quot;BDI&quot;) collects and how it is used.
+        We take data minimization seriously: we collect the minimum needed to run the game.
+      </p>
+
+      <LegalSection heading="Data we collect">
+        <ul className="list-disc pl-5 flex flex-col gap-1">
+          <li><strong>Public wallet address</strong> — used for login (SIWE) and to credit assets. It is public by nature on the blockchain.</li>
+          <li><strong>Email (optional)</strong> — only if you provide it, for launch notices, recovery and news. You can remove it at any time.</li>
+          <li><strong>Game data</strong> — characters, progress, inventory, combat history and rewards, tied to your account.</li>
+          <li><strong>Technical data</strong> — access and error logs (including IP and user-agent) for security, abuse prevention and diagnostics.</li>
+        </ul>
+      </LegalSection>
+
+      <LegalSection heading="On-chain data is public">
+        <p>
+          Transactions on the Polygon network (claims, mints, market purchases) are recorded on a
+          public, permanent ledger. We do not control and cannot delete on-chain data.
+        </p>
+      </LegalSection>
+
+      <LegalSection heading="How we use data">
+        <ul className="list-disc pl-5 flex flex-col gap-1">
+          <li>run the game, sync progress and credit rewards;</li>
+          <li>prevent fraud, abuse and economic exploitation;</li>
+          <li>share news and launch updates (if you joined the waitlist);</li>
+          <li>improve stability and performance through aggregated metrics.</li>
+        </ul>
+      </LegalSection>
+
+      <LegalSection heading="Sharing">
+        <p>
+          We do not sell your data. We share it only with providers essential to operations
+          (hosting, database, RPC/infrastructure providers), under confidentiality obligations, or
+          when required by law.
+        </p>
+      </LegalSection>
+
+      <LegalSection heading="Retention">
+        <p>
+          We keep account data for as long as the account exists and as needed for legal obligations
+          and security. You can request deletion of your email and off-chain data through the official
+          channels; on-chain data is immutable.
+        </p>
+      </LegalSection>
+
+      <LegalSection heading="Your rights">
+        <p>
+          Under applicable law (for example, the LGPD in Brazil), you may request access, correction,
+          portability or deletion of your off-chain data. Contact us through the official channels
+          listed on the site.
+        </p>
+      </LegalSection>
+
+      <LegalSection heading="Changes">
+        <p>
+          This policy may be updated. The &quot;last updated&quot; date indicates the current version.
+        </p>
+      </LegalSection>
+    </LegalShell>
+  )
+}
+
+function PrivacyPt() {
   return (
     <LegalShell title="Política de Privacidade" updatedAt="18 de julho de 2026">
       <p>
@@ -70,4 +138,8 @@ export default function PrivacyPage() {
       </LegalSection>
     </LegalShell>
   )
+}
+
+export default function PrivacyPage() {
+  return getLocale() === 'pt' ? <PrivacyPt /> : <PrivacyEn />
 }

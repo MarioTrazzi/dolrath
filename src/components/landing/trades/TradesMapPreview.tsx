@@ -15,6 +15,7 @@ import {
 } from '@/components/gathering/KingdomMap'
 import { getProfessionLevelInfo } from '@/lib/professionSystem'
 import { type GatherFieldId } from '@/lib/gathering'
+import { useT } from '@/lib/i18n/I18nProvider'
 
 const HEROES: GatherCharacter[] = [
   { id: 'h1', name: 'Aldric', level: 12, isAlive: true, stamina: 61, maxStamina: 100, gatherXp: 320 },
@@ -25,6 +26,7 @@ const HEROES: GatherCharacter[] = [
 const iso = (secondsAgo: number) => new Date(Date.now() - secondsAgo * 1000).toISOString()
 
 export default function TradesMapPreview() {
+  const t = useT()
   const wrapRef = useRef<HTMLDivElement>(null)
   const [inView, setInView] = useState(false)
   const [openSessions, setOpenSessions] = useState<OpenSession[]>([
@@ -77,12 +79,12 @@ export default function TradesMapPreview() {
     setOpenSessions((prev) => [...prev, { characterId, fieldId, status: 'active', startedAt: new Date().toISOString(), inventoryFull: false }])
     setSendHeroId(null)
     setExpandedId(characterId)
-    flash(`⚔️ ${characters.find((c) => c.id === characterId)?.name} partiu pro campo — rendendo em stake.`)
+    flash(t('⚔️ {name} set out for the field — earning like a stake.', { name: characters.find((c) => c.id === characterId)?.name ?? '' }))
   }
   const stop = (characterId: string) => {
     setOpenSessions((prev) => prev.filter((s) => s.characterId !== characterId))
     setExpandedId(null)
-    flash('🎒 Coletado: 4× Erva Medicinal (+25 XP).')
+    flash(t('🎒 Collected: 4× Medicinal Herb (+25 XP).'))
   }
 
   return (
@@ -104,10 +106,10 @@ export default function TradesMapPreview() {
         onExpand={(id) => setExpandedId(id || null)}
         onSelectSend={setSendHeroId}
         onDispatch={dispatchHero}
-        onCollect={() => flash('🎒 Coletado: 3× Erva Medicinal, 2× Água Pura (+25 XP).')}
+        onCollect={() => flash(t('🎒 Collected: 3× Medicinal Herb, 2× Pure Water (+25 XP).'))}
         onStopNow={() => expandedId && stop(expandedId)}
-        onStopAfter={() => flash('⏳ Encerramento agendado — fecha ao fim do ciclo.')}
-        onCancelStop={() => flash('▶️ Encerramento cancelado.')}
+        onStopAfter={() => flash(t('⏳ Stop scheduled — closes at the end of the cycle.'))}
+        onCancelStop={() => flash(t('▶️ Stop cancelled.'))}
       />
     </div>
   )

@@ -14,6 +14,8 @@ import { getCatalogItemByName } from '@/lib/itemCatalog'
 import { useJourney } from '../JourneyContext'
 import { useBattleScript } from '../useBattleScript'
 import { ItemThumb } from './LootTiles'
+import { useI18n } from '@/lib/i18n/I18nProvider'
+import { pickName } from '@/lib/i18n/names'
 import {
   buildBossScript,
   BOSS_HERO_MAX_HP,
@@ -39,8 +41,9 @@ const Backdrop = (
 const LOOT_ITEM = 'Égide do Baluarte'
 
 export default function Slide8BossFight({ active, onNext }: JourneySlideProps) {
+  const { locale, t } = useI18n()
   const { raceId, classId, heroName } = useJourney()
-  const script = useMemo(() => buildBossScript(raceId), [raceId])
+  const script = useMemo(() => buildBossScript(raceId, t), [raceId, t])
   const battle = useBattleScript(active, script, {
     heroHp: BOSS_HERO_MAX_HP,
     foeHp: BOSS_SHOW_MAX_HP,
@@ -54,7 +57,7 @@ export default function Slide8BossFight({ active, onNext }: JourneySlideProps) {
       ),
     [raceId, classId, battle.heroHp, battle.heroTransformed],
   )
-  const boss = useMemo(() => buildBossFighter(battle.foeHp), [battle.foeHp])
+  const boss = useMemo(() => buildBossFighter(battle.foeHp, locale), [battle.foeHp, locale])
   const lootMeta = getCatalogItemByName(LOOT_ITEM)
 
   const dicePanel: DicePanelInfo | null = battle.dice
@@ -62,7 +65,7 @@ export default function Slide8BossFight({ active, onNext }: JourneySlideProps) {
         visible: true,
         diceType: 20,
         hasRolled: battle.dice === 'reveal',
-        label: 'Golpe decisivo — toque no d20!',
+        label: t('Decisive blow — tap the d20!'),
         onRoll: battle.advance,
         myResult: battle.dice === 'reveal' ? { sides: 20, roll: 19, modifier: 4, total: 23 } : null,
       }
@@ -106,7 +109,7 @@ export default function Slide8BossFight({ active, onNext }: JourneySlideProps) {
       {/* Log de 1 linha */}
       <div className="shrink-0 px-3 py-2 bg-black/60 border-t border-white/10 backdrop-blur-md">
         <p className="font-combat text-[11px] text-white/75 truncate">
-          {battle.log || `${heroName} encara ${FOREST_BOSS.name}...`}
+          {battle.log || t('{hero} faces {boss}...', { hero: heroName, boss: pickName(FOREST_BOSS, locale) })}
         </p>
       </div>
 
@@ -132,21 +135,21 @@ export default function Slide8BossFight({ active, onNext }: JourneySlideProps) {
                 <ItemThumb name={LOOT_ITEM} emoji="🛡️" className="text-4xl" />
               </div>
               <div className="text-[10px] font-black uppercase tracking-[0.3em] text-fuchsia-300 mb-1">
-                Item épico obtido
+                {t('Epic item obtained')}
               </div>
               <div className="text-lg font-black text-white">{LOOT_ITEM}</div>
               <div className="text-[11px] text-textsec mt-1">
-                🛡️ {lootMeta?.description ?? 'Escudo colossal da Guardiã.'}
+                🛡️ {lootMeta?.description ?? t("The Warden's colossal shield.")}
               </div>
               <div className="text-[11px] font-bold text-fuchsia-300 mt-1">
-                {lootMeta?.stats?.def ? `+${lootMeta.stats.def} DEF` : ''}{lootMeta?.stats?.hp ? ` · +${lootMeta.stats.hp} HP` : ''} · ÉPICO
+                {lootMeta?.stats?.def ? `+${lootMeta.stats.def} DEF` : ''}{lootMeta?.stats?.hp ? ` · +${lootMeta.stats.hp} HP` : ''} · {t('EPIC')}
               </div>
               <div className="mt-2 text-xs font-bold text-emerald-300">+320 XP · +240 🪙</div>
               <button
                 onClick={onNext}
                 className="mt-4 w-full px-3.5 py-2 rounded-lg bg-primary hover:bg-primary-dark text-white text-xs font-bold shadow-[0_0_18px_rgba(233,69,96,0.5)] animate-pulse"
               >
-                Desafiar jogadores reais →
+                {t('Challenge real players →')}
               </button>
             </motion.div>
           </motion.div>

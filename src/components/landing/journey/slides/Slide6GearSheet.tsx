@@ -22,6 +22,7 @@ import { GOLD, GOLD_BRIGHT, BORDER_GOLD, PANEL_BG } from '@/components/crafting/
 import type { Item } from '@/types/item'
 import { useJourney } from '../JourneyContext'
 import { useSlideScript } from '../useSlideScript'
+import { useT } from '@/lib/i18n/I18nProvider'
 import {
   CLASS_GEAR,
   JOURNEY_ENHANCED_GEAR_LEVEL,
@@ -83,6 +84,7 @@ function slotLevel(slot: string): number {
 const noop = () => {}
 
 export default function Slide6GearSheet({ active, onNext }: JourneySlideProps) {
+  const t = useT()
   const { classId, raceId, heroName, heroArt, visual } = useJourney()
   const { step } = useSlideScript(active, TIMES, { loopDelayMs: 5600 })
 
@@ -133,13 +135,13 @@ export default function Slide6GearSheet({ active, onNext }: JourneySlideProps) {
       })
     }
     rows.push(
-      supplyRow('Poção de Vida Grande', 4, 'Restaura 80 HP instantaneamente em combate.', { healAmount: 80, effect: 'instant', battleUsable: true }, 5),
-      supplyRow('Poção de Mana', 3, 'Restaura 30 MP instantaneamente em combate.', { manaAmount: 30, effect: 'instant', battleUsable: true }),
-      supplyRow('Pedra Negra (Arma)', 2, 'Fragmento de poder antigo. Aprimora armas de +1 a +15 na Mesa de Forja.', null),
-      supplyRow('Barra de Ferro', 6, 'Ferro fundido e batido em barra; o esqueleto de todo equipamento incomum.', null),
+      supplyRow('Poção de Vida Grande', 4, t('Instantly restores 80 HP in combat.'), { healAmount: 80, effect: 'instant', battleUsable: true }, 5),
+      supplyRow('Poção de Mana', 3, t('Instantly restores 30 MP in combat.'), { manaAmount: 30, effect: 'instant', battleUsable: true }),
+      supplyRow('Pedra Negra (Arma)', 2, t('Fragment of ancient power. Enhances weapons from +1 to +15 at the Forge Bench.'), null),
+      supplyRow('Barra de Ferro', 6, t('Iron smelted and hammered into a bar; the skeleton of every uncommon piece.'), null),
     )
     return rows
-  }, [items, weaponEquipped])
+  }, [items, weaponEquipped, t])
 
   // Anel de slots da ficha real (coords de character/[characterId]/page.tsx)
   const RING: Array<{ key: string; type: string; top: number; left: number }> = [
@@ -161,13 +163,13 @@ export default function Slide6GearSheet({ active, onNext }: JourneySlideProps) {
     { icon: <Shield size={16} style={{ color: '#6aa9d6' }} />, label: 'DEF', value: Math.round(base.res + eq.def) },
     { icon: <Zap size={16} style={{ color: '#8fd6e0' }} />, label: 'AGI', value: Math.round(base.agi + eq.agi) },
     { icon: <Brain size={16} style={{ color: '#c3a6ec' }} />, label: 'INT', value: Math.round(base.int + eq.int) },
-    { icon: <Star size={16} style={{ color: '#f0c873' }} />, label: 'CRÍT', value: `${((base.agi + eq.agi) * 0.2).toFixed(1)}%` },
+    { icon: <Star size={16} style={{ color: '#f0c873' }} />, label: t('CRIT'), value: `${((base.agi + eq.agi) * 0.2).toFixed(1)}%` },
   ]
 
   const mainRows = [
-    { icon: <Sword size={16} style={{ color: '#c98a6a' }} />, label: 'Ataque (AD)', base: base.str, bonus: Math.round(eq.str) },
-    { icon: <Zap size={16} style={{ color: '#b06ae0' }} />, label: 'Poder Mágico (AP)', base: base.int, bonus: Math.round(eq.int) },
-    { icon: <Shield size={16} style={{ color: '#6aa9d6' }} />, label: 'Defesa (DP)', base: base.res, bonus: Math.round(eq.def) },
+    { icon: <Sword size={16} style={{ color: '#c98a6a' }} />, label: t('Attack (AD)'), base: base.str, bonus: Math.round(eq.str) },
+    { icon: <Zap size={16} style={{ color: '#b06ae0' }} />, label: t('Magic Power (AP)'), base: base.int, bonus: Math.round(eq.int) },
+    { icon: <Shield size={16} style={{ color: '#6aa9d6' }} />, label: t('Defense (DP)'), base: base.res, bonus: Math.round(eq.def) },
   ]
 
   return (
@@ -182,9 +184,9 @@ export default function Slide6GearSheet({ active, onNext }: JourneySlideProps) {
           >
             <div className="flex items-center justify-between px-3 h-8 border-b border-black/70 bg-gradient-to-b from-[#2b2b2f] to-[#1a1a1d] shrink-0">
               <span className="text-xs font-bold" style={{ color: GOLD_BRIGHT }}>
-                <span style={{ color: GOLD }}>🛡</span> Equipamento · {heroName}
+                <span style={{ color: GOLD }}>🛡</span> {t('Equipment')} · {heroName}
               </span>
-              <span className="text-[10px] text-[#8a8a90]">set tier III · arma IV</span>
+              <span className="text-[10px] text-[#8a8a90]">{t('tier III set · weapon IV')}</span>
             </div>
 
             <div className="relative min-h-[240px] sm:min-h-[260px] md:min-h-[280px] flex items-start justify-center overflow-hidden py-2 pointer-events-none">
@@ -250,7 +252,7 @@ export default function Slide6GearSheet({ active, onNext }: JourneySlideProps) {
             {/* Seletor de forma da ficha (estático na landing) */}
             <div className="flex items-center justify-center shrink-0" style={{ gap: 10, marginTop: 2 }}>
               <span style={{ fontSize: 12, fontWeight: 700, color: visual.borderColor, letterSpacing: '0.3px' }}>
-                Forma Original
+                {t('Original Form')}
               </span>
               <div className="flex items-center" style={{ gap: 6 }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: visual.borderColor, boxShadow: `0 0 8px ${visual.borderColor}` }} />
@@ -316,9 +318,9 @@ export default function Slide6GearSheet({ active, onNext }: JourneySlideProps) {
               totalSlots={10}
               accent={visual.borderColor}
               characterId="journey"
-              slotLabel="Slots do Inventário"
+              slotLabel={t('Inventory Slots')}
               onExpand={noop}
-              expandTitle="Expandir +5 slots (custo: 1000 GOLD)"
+              expandTitle={t('Expand +5 slots (cost: 1000 GOLD)')}
               goldText="1009.0"
             />
             <AnimatePresence>
@@ -329,8 +331,8 @@ export default function Slide6GearSheet({ active, onNext }: JourneySlideProps) {
                   className="text-[11px] font-bold text-center shrink-0"
                   style={{ color: GOLD_BRIGHT }}
                 >
-                  {weaponEquipped ? '⚔️ Arma IV equipada — os stats subiram na hora! ' : ''}
-                  Gear III dos pés à cabeça: pronto(a) para a próxima masmorra.
+                  {weaponEquipped ? t('⚔️ Weapon IV equipped — stats jumped instantly! ') : ''}
+                  {t('Tier III gear head to toe: ready for the next dungeon.')}
                 </motion.p>
               )}
             </AnimatePresence>
@@ -344,7 +346,7 @@ export default function Slide6GearSheet({ active, onNext }: JourneySlideProps) {
             onClick={onNext}
             className="sticky md:absolute bottom-3 md:right-3 z-30 block ml-auto mr-3 md:ml-0 md:mr-0 -mt-11 md:mt-0 px-3.5 py-2 rounded-lg bg-primary hover:bg-primary-dark text-white text-xs font-bold shadow-[0_0_18px_rgba(233,69,96,0.5)] animate-pulse"
           >
-            Voltar à trilha →
+            {t('Back to the trail →')}
           </motion.button>
         )}
       </div>

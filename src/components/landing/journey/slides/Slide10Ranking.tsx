@@ -8,6 +8,7 @@ import React, { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useJourney } from '../JourneyContext'
 import { useSlideScript } from '../useSlideScript'
+import { useI18n } from '@/lib/i18n/I18nProvider'
 import {
   buildRankRows,
   RANK_POOL_DOL,
@@ -41,6 +42,7 @@ function useCountUp(target: number, run: boolean, ms = 1000): number {
 const MEDAL: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' }
 
 export default function Slide10Ranking({ active }: JourneySlideProps) {
+  const { locale, t } = useI18n()
   const { raceId, classId, heroName, heroArt, visual, primaryHref } = useJourney()
   const { step } = useSlideScript(active, TIMES, { loop: false })
 
@@ -53,8 +55,8 @@ export default function Slide10Ranking({ active }: JourneySlideProps) {
       {/* Tabela top 10 */}
       <div className="md:w-3/5 min-h-0 flex flex-col">
         <div className="flex items-baseline justify-between mb-2">
-          <span className="text-xs font-black uppercase tracking-[0.2em] text-primary">🏆 Ranking da temporada</span>
-          <span className="text-[10px] text-textsec">pot ilustrativo: {RANK_POOL_DOL.toLocaleString('pt-BR')} DOL</span>
+          <span className="text-xs font-black uppercase tracking-[0.2em] text-primary">{t('🏆 Season ranking')}</span>
+          <span className="text-[10px] text-textsec">{t('illustrative pot:')} {RANK_POOL_DOL.toLocaleString(locale === 'pt' ? 'pt-BR' : 'en-US')} DOL</span>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto rounded-xl border border-white/10 bg-black/30 backdrop-blur-md [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {rows.map((row, i) => {
@@ -83,14 +85,14 @@ export default function Slide10Ranking({ active }: JourneySlideProps) {
                 </span>
                 <span className="text-sm">{row.emoji}</span>
                 <span className={`flex-1 min-w-0 truncate text-xs ${isHero ? 'font-black text-white' : 'font-semibold text-white/80'}`}>
-                  {row.name}
+                  {t(row.name)}
                   {isHero && (
                     <span className="ml-1.5 text-[9px] font-bold px-1 py-px rounded" style={{ background: `${visual.raceVisual.accent}33`, color: visual.raceVisual.accent }}>
-                      VOCÊ
+                      {t('YOU')}
                     </span>
                   )}
                 </span>
-                <span className="font-combat text-[11px] text-white/60 hidden sm:inline">{row.points.toLocaleString('pt-BR')} pts</span>
+                <span className="font-combat text-[11px] text-white/60 hidden sm:inline">{row.points.toLocaleString(locale === 'pt' ? 'pt-BR' : 'en-US')} pts</span>
                 <span className={`font-combat text-xs w-20 text-right ${isHero ? 'font-black text-amber-300' : 'text-amber-200/70'}`}>
                   {isHero && step >= 2 ? countedPrize : prize} DOL
                 </span>
@@ -99,7 +101,7 @@ export default function Slide10Ranking({ active }: JourneySlideProps) {
           })}
         </div>
         <p className="text-[10px] text-textsec mt-1.5">
-          Split real do pot: 30% · 18% · 12% · 9% · 7% · 6% · 5% · 5% · 4% · 4% — toda temporada, o top 10 divide o prêmio em DOL.
+          {t('Real pot split: 30% · 18% · 12% · 9% · 7% · 6% · 5% · 5% · 4% · 4% — every season, the top 10 splits the prize in DOL.')}
         </p>
       </div>
 
@@ -118,8 +120,8 @@ export default function Slide10Ranking({ active }: JourneySlideProps) {
           </span>
         </motion.div>
         <p className="text-center text-sm text-white font-bold max-w-[240px]">
-          Do primeiro clique ao topo do ranking — {heroName} chegou lá.
-          <span className="block text-textsec text-[11px] font-normal mt-1">O próximo herói dessa lista pode ser o seu.</span>
+          {t('From the first click to the top of the ranking — {name} made it.', { name: heroName })}
+          <span className="block text-textsec text-[11px] font-normal mt-1">{t('The next hero on this list could be yours.')}</span>
         </p>
         <motion.a
           href={primaryHref}
@@ -127,7 +129,7 @@ export default function Slide10Ranking({ active }: JourneySlideProps) {
           animate={step >= 3 ? { opacity: 1, y: 0 } : {}}
           className="px-6 py-3 rounded-lg bg-gradient-to-r from-primary to-primary-dark text-white text-sm font-black shadow-[0_0_28px_rgba(233,69,96,0.55)] hover:brightness-110 transition-all animate-pulse"
         >
-          ⚔️ Comece sua jornada
+          {t('⚔️ Begin your journey')}
         </motion.a>
       </div>
     </div>

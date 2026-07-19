@@ -13,13 +13,19 @@ import { getCreationVisual } from '@/lib/creationVisuals'
 import { StatRevealRadar } from '@/app/character/create/components/StatRevealRadar'
 import { useJourney } from '../JourneyContext'
 import PromptPanel from './PromptPanel'
+import { useT } from '@/lib/i18n/I18nProvider'
 import {
   RACE_LIST,
   CLASS_LIST,
   CANON_CLASS,
   CANON_RACE,
-  RACE_PROMPT_PT,
-  CLASS_PROMPT_PT,
+  RACE_PROMPT,
+  CLASS_PROMPT,
+  RACE_LABEL,
+  CLASS_LABEL,
+  RACE_HINT,
+  CLASS_HINT,
+  RACE_TRANSFORM_HINT,
   heroArt,
   heroBaseStats,
   type JourneySlideProps,
@@ -35,6 +41,7 @@ function MiniPickCard({
   hint,
   selected,
   linked,
+  linkedTitle,
   onPick,
 }: {
   id: string
@@ -43,6 +50,7 @@ function MiniPickCard({
   selected: boolean
   /** Selecionado por arrasto do par canônico (selo 🔗). */
   linked?: boolean
+  linkedTitle?: string
   onPick: () => void
 }) {
   const visual = getCreationVisual(id)
@@ -80,7 +88,7 @@ function MiniPickCard({
             animate={{ scale: 1 }}
             className="ml-auto w-5 h-5 rounded-full grid place-items-center text-[11px] text-white shrink-0"
             style={{ backgroundColor: visual.accent }}
-            title={linked ? 'Dupla canônica da raça escolhida' : undefined}
+            title={linked ? linkedTitle : undefined}
           >
             {linked ? '🔗' : '✓'}
           </motion.span>
@@ -92,6 +100,7 @@ function MiniPickCard({
 
 export default function Slide1Creation({ active, onNext }: JourneySlideProps) {
   const journey = useJourney()
+  const t = useT()
   const { raceId, classId, heroName, visual, userPicked, pickRace, pickClass } = journey
 
   // Cursor fantasma: cicla os pares canônicos até o visitante clicar
@@ -110,8 +119,8 @@ export default function Slide1Creation({ active, onNext }: JourneySlideProps) {
   const stats = heroBaseStats(raceId)
   const race = RACE_LIST.find(r => r.id === raceId)
   const promptExcerpt =
-    `Raça: ${race?.name}. ${RACE_PROMPT_PT[raceId].slice(0, 100)}… ` +
-    `${CLASS_PROMPT_PT[classId].slice(0, 60)}…`
+    `${t('Race: {name}.', { name: t(RACE_LABEL[raceId]) })} ${t(RACE_PROMPT[raceId]).slice(0, 100)}… ` +
+    `${t(CLASS_PROMPT[classId]).slice(0, 60)}…`
 
   return (
     <div className="relative h-full w-full overflow-y-auto md:overflow-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -119,14 +128,14 @@ export default function Slide1Creation({ active, onNext }: JourneySlideProps) {
         {/* Coluna de escolha + radar */}
         <div className="md:w-[42%] flex flex-col gap-2 min-h-0">
           <div>
-            <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary mb-1.5">1 · Escolha sua raça</div>
+            <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary mb-1.5">{t('1 · Choose your race')}</div>
             <div className="grid grid-cols-2 gap-2">
               {RACE_LIST.map(r => (
                 <MiniPickCard
                   key={r.id}
                   id={r.id}
-                  name={r.name}
-                  hint={r.specialAbility}
+                  name={t(RACE_LABEL[r.id as JourneyRaceId] ?? r.name)}
+                  hint={t(RACE_HINT[r.id as JourneyRaceId] ?? r.specialAbility)}
                   selected={r.id === raceId}
                   onPick={() => pickRace(r.id as JourneyRaceId, true)}
                 />
@@ -134,16 +143,17 @@ export default function Slide1Creation({ active, onNext }: JourneySlideProps) {
             </div>
           </div>
           <div>
-            <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary mb-1.5">2 · Classe (dupla canônica)</div>
+            <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary mb-1.5">{t('2 · Class (canonical pair)')}</div>
             <div className="grid grid-cols-2 gap-2">
               {CLASS_LIST.map(c => (
                 <MiniPickCard
                   key={c.id}
                   id={c.id}
-                  name={c.name}
-                  hint={c.abilities[0]}
+                  name={t(CLASS_LABEL[c.id as JourneyClassId] ?? c.name)}
+                  hint={t(CLASS_HINT[c.id as JourneyClassId] ?? c.abilities[0])}
                   selected={c.id === classId}
                   linked={c.id === CANON_CLASS[raceId] && CANON_RACE[c.id as JourneyClassId] === raceId}
+                  linkedTitle={t('Canonical pair of the chosen race')}
                   onPick={() => pickClass(c.id as JourneyClassId, true)}
                 />
               ))}
@@ -153,7 +163,7 @@ export default function Slide1Creation({ active, onNext }: JourneySlideProps) {
           <div className="hidden md:block">
             <PromptPanel
               text={promptExcerpt}
-              label="✍️ prompt da sua arte · você ajuda a escolher o estilo"
+              label={t('✍️ your art prompt · you help pick the style')}
             />
           </div>
           {/* Radar de atributos (o mesmo da tela de criação) */}
@@ -208,17 +218,17 @@ export default function Slide1Creation({ active, onNext }: JourneySlideProps) {
                       className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white border"
                       style={{ background: `${visual.raceVisual.accent}33`, borderColor: `${visual.raceVisual.accent}77` }}
                     >
-                      {visual.raceVisual.emoji} {race?.name}
+                      {visual.raceVisual.emoji} {t(RACE_LABEL[raceId])}
                     </span>
                     <span
                       className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white border"
                       style={{ background: `${visual.classVisual.accent}33`, borderColor: `${visual.classVisual.accent}77` }}
                     >
-                      {visual.classVisual.emoji} {CLASS_LIST.find(c => c.id === classId)?.name}
+                      {visual.classVisual.emoji} {t(CLASS_LABEL[classId])}
                     </span>
                     {race?.transformation && (
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white/85 border border-white/25 bg-white/10">
-                        ✨ {race.transformation}
+                        ✨ {t(RACE_TRANSFORM_HINT[raceId])}
                       </span>
                     )}
                   </div>
@@ -231,7 +241,7 @@ export default function Slide1Creation({ active, onNext }: JourneySlideProps) {
           <div className="md:hidden flex flex-col gap-2">
             <PromptPanel
               text={promptExcerpt}
-              label="✍️ prompt da sua arte · você ajuda a escolher o estilo"
+              label={t('✍️ your art prompt · you help pick the style')}
             />
             <div className="flex justify-center overflow-hidden max-h-[220px]">
               <div className="origin-top scale-[0.6]">
@@ -250,7 +260,7 @@ export default function Slide1Creation({ active, onNext }: JourneySlideProps) {
           onClick={onNext}
           className="absolute bottom-3 right-3 z-30 px-3.5 py-2 rounded-lg bg-primary hover:bg-primary-dark text-white text-xs font-bold shadow-[0_0_18px_rgba(233,69,96,0.5)] animate-pulse"
         >
-          Ver a ficha →
+          {t('See the sheet →')}
         </motion.button>
       )}
     </div>

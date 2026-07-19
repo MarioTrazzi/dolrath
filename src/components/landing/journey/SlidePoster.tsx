@@ -10,7 +10,10 @@ export interface SlideMeta {
   sub: string
 }
 
+import { useT } from '@/lib/i18n/I18nProvider'
+
 export default function SlidePoster({ meta }: { meta: SlideMeta }) {
+  const t = useT()
   return (
     <div className="relative h-full w-full grid place-items-center overflow-hidden">
       <div
@@ -23,10 +26,10 @@ export default function SlidePoster({ meta }: { meta: SlideMeta }) {
       <div className="relative flex flex-col items-center gap-3 text-center px-6">
         <span className="text-5xl animate-pulse">{meta.emoji}</span>
         <span className="text-xs font-bold uppercase tracking-[0.25em] text-primary/80">
-          Etapa {meta.n}
+          {t('Step {n}', { n: meta.n })}
         </span>
-        <span className="text-lg font-bold text-white">{meta.label}</span>
-        <span className="text-xs text-textsec">{meta.sub}</span>
+        <span className="text-lg font-bold text-white">{t(meta.label)}</span>
+        <span className="text-xs text-textsec">{t(meta.sub)}</span>
       </div>
     </div>
   )

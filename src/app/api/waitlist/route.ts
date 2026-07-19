@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { rateLimitAllow, rateLimited429 } from '@/lib/rateLimit'
+import { getTFromRequest } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,6 +9,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 
 // Pré-registro público da landing — sem sessão. Idempotente por email (upsert).
 export async function POST(req: NextRequest) {
+  const t = getTFromRequest(req)
   const ip = (req.headers.get('x-forwarded-for') || 'unknown').split(',')[0].trim()
   if (!rateLimitAllow(`waitlist:${ip}`, { windowMs: 60_000, max: 5 })) {
     return rateLimited429()
@@ -20,10 +22,10 @@ export async function POST(req: NextRequest) {
     const source = String(body?.source || 'landing').trim().slice(0, 40)
 
     if (!email || email.length > 254 || !EMAIL_RE.test(email)) {
-      return NextResponse.json({ error: 'Informe um email válido.' }, { status: 400 })
+      return NextResponse.json({ error: t('Please enter a valid email.') }, { status: 400 })
     }
     if (wallet && !/^0x[0-9a-fA-F]{40}$/.test(wallet)) {
-      return NextResponse.json({ error: 'Endereço de carteira inválido.' }, { status: 400 })
+      return NextResponse.json({ error: t('Invalid wallet address.') }, { status: 400 })
     }
 
     await prisma.waitlistEntry.upsert({
@@ -35,6 +37,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('waitlist error:', err)
-    return NextResponse.json({ error: 'Não foi possível registrar agora. Tente de novo.' }, { status: 500 })
+    return NextResponse.json({ error: t("Couldn't sign you up right now. Please try again.") }, { status: 500 })
   }
 }

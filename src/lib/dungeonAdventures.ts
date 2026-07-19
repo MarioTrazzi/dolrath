@@ -13,6 +13,9 @@ export type DungeonId = 'floresta' | 'caverna' | 'pantano' | 'ruinas'
 
 export interface DungeonMonsterDef {
   name: string
+  /** Nome de exibição em inglês (i18n). O `name` PT segue sendo a chave interna
+   *  (slug de imagem, saves) e NUNCA muda — só o display troca por locale. */
+  nameEn?: string
   emoji: string
   /** Arte do bicho (webp gerado por scripts/generate-monster-images.ts). Quando
    *  ausente, a UI cai no emoji. */
@@ -42,6 +45,7 @@ export function monsterImagePath(name: string): string {
 
 export interface DungeonBossDef extends DungeonMonsterDef {
   title: string
+  titleEn?: string
 }
 
 export type DungeonEventKind = 'trap' | 'monster' | 'nothing' | 'gold' | 'item' | 'blessing'
@@ -68,6 +72,7 @@ export interface DungeonEventDef {
 export interface DungeonDef {
   id: DungeonId
   name: string
+  nameEn?: string
   emoji: string
   tagline: string
   description: string
@@ -103,6 +108,7 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
   floresta: {
     id: 'floresta',
     name: 'Floresta Sombria',
+    nameEn: 'Gloomwood Forest',
     emoji: '🌲',
     tagline: 'Trilhas vivas sob a luz da lua',
     description:
@@ -120,13 +126,13 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     exploreHint: 'Role o d20 para se embrenhar na mata',
     enterText: 'Você cruza a fronteira das árvores. A luz da lua mal atravessa a copa...',
     monsters: [
-      { name: 'Lobo Faminto', emoji: '🐺', image: '/monsters/lobo-faminto.webp', baseHp: 42, baseAttack: 9, baseDefense: 3, baseEvade: 0.16 },
-      { name: 'Aranha Gigante', emoji: '🕷️', image: '/monsters/aranha-gigante.webp', baseHp: 38, baseAttack: 11, baseDefense: 2, baseEvade: 0.12 },
-      { name: 'Javali Furioso', emoji: '🐗', image: '/monsters/javali-furioso.webp', baseHp: 55, baseAttack: 8, baseDefense: 5, baseEvade: 0.05 },
-      { name: 'Ent Corrompido', emoji: '🌳', image: '/monsters/ent-corrompido.webp', baseHp: 70, baseAttack: 10, baseDefense: 7, baseEvade: 0.02 },
+      { name: 'Lobo Faminto', nameEn: 'Ravenous Wolf', emoji: '🐺', image: '/monsters/lobo-faminto.webp', baseHp: 42, baseAttack: 9, baseDefense: 3, baseEvade: 0.16 },
+      { name: 'Aranha Gigante', nameEn: 'Giant Spider', emoji: '🕷️', image: '/monsters/aranha-gigante.webp', baseHp: 38, baseAttack: 11, baseDefense: 2, baseEvade: 0.12 },
+      { name: 'Javali Furioso', nameEn: 'Raging Boar', emoji: '🐗', image: '/monsters/javali-furioso.webp', baseHp: 55, baseAttack: 8, baseDefense: 5, baseEvade: 0.05 },
+      { name: 'Ent Corrompido', nameEn: 'Corrupted Ent', emoji: '🌳', image: '/monsters/ent-corrompido.webp', baseHp: 70, baseAttack: 10, baseDefense: 7, baseEvade: 0.02 },
     ],
     // Arte do boss já existe e é reaproveitada (gerada anteriormente).
-    boss: { name: 'Anciã da Mata', title: 'Guardiã Corrompida', emoji: '🌲', image: '/boss-ancia-da-mata.webp', baseHp: 110, baseAttack: 12, baseDefense: 7, baseEvade: 0.08 },
+    boss: { name: 'Anciã da Mata', nameEn: 'Elder of the Grove', title: 'Guardiã Corrompida', titleEn: 'Corrupted Warden', emoji: '🌲', image: '/boss-ancia-da-mata.webp', baseHp: 110, baseAttack: 12, baseDefense: 7, baseEvade: 0.08 },
     events: [
       {
         kind: 'trap', min: 1, max: 2, icon: '🌿', title: 'Espinhos Venenosos!',
@@ -168,6 +174,7 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
   caverna: {
     id: 'caverna',
     name: 'Caverna de Cristal',
+    nameEn: 'Crystal Cavern',
     emoji: '💎',
     tagline: 'Túneis que brilham no escuro',
     description:
@@ -185,12 +192,12 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     exploreHint: 'Role o d20 para explorar as galerias',
     enterText: 'O eco dos seus passos se mistura ao gotejar distante. Cristais iluminam o caminho...',
     monsters: [
-      { name: 'Morcego Sombrio', emoji: '🦇', image: '/monsters/morcego-sombrio.webp', baseHp: 34, baseAttack: 10, baseDefense: 2, baseEvade: 0.18 },
-      { name: 'Goblin Minerador', emoji: '👺', image: '/monsters/goblin-minerador.webp', baseHp: 45, baseAttack: 9, baseDefense: 4, baseEvade: 0.10 },
-      { name: 'Slime de Cristal', emoji: '🟣', image: '/monsters/slime-de-cristal.webp', baseHp: 50, baseAttack: 8, baseDefense: 6, baseEvade: 0.02 },
-      { name: 'Golem de Pedra', emoji: '🗿', image: '/monsters/golem-de-pedra.webp', baseHp: 78, baseAttack: 11, baseDefense: 9, baseEvade: 0.03 },
+      { name: 'Morcego Sombrio', nameEn: 'Shadow Bat', emoji: '🦇', image: '/monsters/morcego-sombrio.webp', baseHp: 34, baseAttack: 10, baseDefense: 2, baseEvade: 0.18 },
+      { name: 'Goblin Minerador', nameEn: 'Miner Goblin', emoji: '👺', image: '/monsters/goblin-minerador.webp', baseHp: 45, baseAttack: 9, baseDefense: 4, baseEvade: 0.10 },
+      { name: 'Slime de Cristal', nameEn: 'Crystal Slime', emoji: '🟣', image: '/monsters/slime-de-cristal.webp', baseHp: 50, baseAttack: 8, baseDefense: 6, baseEvade: 0.02 },
+      { name: 'Golem de Pedra', nameEn: 'Stone Golem', emoji: '🗿', image: '/monsters/golem-de-pedra.webp', baseHp: 78, baseAttack: 11, baseDefense: 9, baseEvade: 0.03 },
     ],
-    boss: { name: 'Wyrm Cristalino', title: 'Senhor das Profundezas', emoji: '🐉', image: '/monsters/wyrm-cristalino.webp', baseHp: 130, baseAttack: 14, baseDefense: 9, baseEvade: 0.08 },
+    boss: { name: 'Wyrm Cristalino', nameEn: 'Crystalline Wyrm', title: 'Senhor das Profundezas', titleEn: 'Lord of the Depths', emoji: '🐉', image: '/monsters/wyrm-cristalino.webp', baseHp: 130, baseAttack: 14, baseDefense: 9, baseEvade: 0.08 },
     events: [
       {
         kind: 'trap', min: 1, max: 3, icon: '🪨', title: 'Desabamento!',
@@ -233,6 +240,7 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
   pantano: {
     id: 'pantano',
     name: 'Pântano Maldito',
+    nameEn: 'Cursed Swamp',
     emoji: '🐊',
     tagline: 'Névoa, lodo e luzes que mentem',
     description:
@@ -250,12 +258,12 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     exploreHint: 'Role o d20 para avançar pela névoa',
     enterText: 'A lama engole suas botas. Luzes azuladas piscam na névoa, chamando você...',
     monsters: [
-      { name: 'Sapo Venenoso', emoji: '🐸', image: '/monsters/sapo-venenoso.webp', baseHp: 36, baseAttack: 12, baseDefense: 2, baseEvade: 0.14 },
-      { name: 'Serpente do Lodo', emoji: '🐍', image: '/monsters/serpente-do-lodo.webp', baseHp: 44, baseAttack: 13, baseDefense: 3, baseEvade: 0.13 },
-      { name: 'Bruxa do Brejo', emoji: '🧙‍♀️', image: '/monsters/bruxa-do-brejo.webp', baseHp: 52, baseAttack: 15, baseDefense: 4, baseEvade: 0.10 },
-      { name: 'Crocodilo Ancião', emoji: '🐊', image: '/monsters/crocodilo-anciao.webp', baseHp: 68, baseAttack: 14, baseDefense: 6, baseEvade: 0.04 },
+      { name: 'Sapo Venenoso', nameEn: 'Venomous Toad', emoji: '🐸', image: '/monsters/sapo-venenoso.webp', baseHp: 36, baseAttack: 12, baseDefense: 2, baseEvade: 0.14 },
+      { name: 'Serpente do Lodo', nameEn: 'Mire Serpent', emoji: '🐍', image: '/monsters/serpente-do-lodo.webp', baseHp: 44, baseAttack: 13, baseDefense: 3, baseEvade: 0.13 },
+      { name: 'Bruxa do Brejo', nameEn: 'Bog Witch', emoji: '🧙‍♀️', image: '/monsters/bruxa-do-brejo.webp', baseHp: 52, baseAttack: 15, baseDefense: 4, baseEvade: 0.10 },
+      { name: 'Crocodilo Ancião', nameEn: 'Elder Crocodile', emoji: '🐊', image: '/monsters/crocodilo-anciao.webp', baseHp: 68, baseAttack: 14, baseDefense: 6, baseEvade: 0.04 },
     ],
-    boss: { name: 'Hidra do Pântano', title: 'Terror de Três Cabeças', emoji: '🐲', image: '/monsters/hidra-do-pantano.webp', baseHp: 150, baseAttack: 16, baseDefense: 10, baseEvade: 0.07 },
+    boss: { name: 'Hidra do Pântano', nameEn: 'Swamp Hydra', title: 'Terror de Três Cabeças', titleEn: 'Three-Headed Terror', emoji: '🐲', image: '/monsters/hidra-do-pantano.webp', baseHp: 150, baseAttack: 16, baseDefense: 10, baseEvade: 0.07 },
     events: [
       {
         kind: 'trap', min: 1, max: 4, icon: '☠️', title: 'Gás Pantanoso!',
@@ -297,6 +305,7 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
   ruinas: {
     id: 'ruinas',
     name: 'Ruínas Arcanas',
+    nameEn: 'Arcane Ruins',
     emoji: '🏛️',
     tagline: 'Um império morto que ainda sonha',
     description:
@@ -314,12 +323,12 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     exploreHint: 'Role o d20 para investigar as ruínas',
     enterText: 'Poeira de séculos cobre o salão. Runas mortas acendem à sua passagem...',
     monsters: [
-      { name: 'Esqueleto Guerreiro', emoji: '💀', image: '/monsters/esqueleto-guerreiro.webp', baseHp: 48, baseAttack: 13, baseDefense: 5, baseEvade: 0.06 },
-      { name: 'Espectro Errante', emoji: '👻', image: '/monsters/espectro-errante.webp', baseHp: 40, baseAttack: 16, baseDefense: 3, baseEvade: 0.18 },
-      { name: 'Múmia Real', emoji: '🧟', image: '/monsters/mumia-real.webp', baseHp: 64, baseAttack: 14, baseDefense: 7, baseEvade: 0.03 },
-      { name: 'Gárgula de Obsidiana', emoji: '🦅', image: '/monsters/gargula-de-obsidiana.webp', baseHp: 74, baseAttack: 15, baseDefense: 9, baseEvade: 0.08 },
+      { name: 'Esqueleto Guerreiro', nameEn: 'Skeleton Warrior', emoji: '💀', image: '/monsters/esqueleto-guerreiro.webp', baseHp: 48, baseAttack: 13, baseDefense: 5, baseEvade: 0.06 },
+      { name: 'Espectro Errante', nameEn: 'Wandering Wraith', emoji: '👻', image: '/monsters/espectro-errante.webp', baseHp: 40, baseAttack: 16, baseDefense: 3, baseEvade: 0.18 },
+      { name: 'Múmia Real', nameEn: 'Royal Mummy', emoji: '🧟', image: '/monsters/mumia-real.webp', baseHp: 64, baseAttack: 14, baseDefense: 7, baseEvade: 0.03 },
+      { name: 'Gárgula de Obsidiana', nameEn: 'Obsidian Gargoyle', emoji: '🦅', image: '/monsters/gargula-de-obsidiana.webp', baseHp: 74, baseAttack: 15, baseDefense: 9, baseEvade: 0.08 },
     ],
-    boss: { name: 'Lich Imperador', title: 'O Que Não Morre', emoji: '👑', image: '/monsters/lich-imperador.webp', baseHp: 170, baseAttack: 18, baseDefense: 11, baseEvade: 0.09 },
+    boss: { name: 'Lich Imperador', nameEn: 'Lich Emperor', title: 'O Que Não Morre', titleEn: 'The Undying One', emoji: '👑', image: '/monsters/lich-imperador.webp', baseHp: 170, baseAttack: 18, baseDefense: 11, baseEvade: 0.09 },
     events: [
       {
         kind: 'trap', min: 1, max: 3, icon: '🏹', title: 'Armadilha de Flechas!',

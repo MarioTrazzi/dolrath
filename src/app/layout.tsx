@@ -7,6 +7,8 @@ import { GoldProvider } from '@/components/providers/GoldProvider'
 import { ActiveCharacterProvider } from '@/components/providers/ActiveCharacterProvider'
 import { AppShell } from '@/components/layout/AppShell'
 import { Toaster } from 'react-hot-toast'
+import { I18nProvider } from '@/lib/i18n/I18nProvider'
+import { getLocale } from '@/lib/i18n/server'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -29,10 +31,25 @@ const cinzelDecorative = Cinzel_Decorative({
   display: 'swap',
 })
 
+// SEO fica travado em EN (idioma principal do lançamento); o cookie só muda a UI.
 export const metadata: Metadata = {
   title: 'BDI — Black Dolrath Idle',
-  description: 'RPG idle de fantasia sombria on-chain: rolagens de dado, masmorras, PvP e relíquias NFT.',
+  description: 'On-chain dark-fantasy idle RPG: dice rolls, dungeons, PvP and NFT relics.',
   icons: { icon: '/logo-bdi-icon.png' },
+  openGraph: {
+    title: 'BDI — Black Dolrath Idle',
+    description: 'On-chain dark-fantasy idle RPG: dice rolls, dungeons, PvP and NFT relics.',
+    siteName: 'BDI — Black Dolrath Idle',
+    type: 'website',
+    locale: 'en_US',
+    images: [{ url: '/logo-bdi.png', width: 512, height: 512, alt: 'BDI — Black Dolrath Idle' }],
+  },
+  twitter: {
+    card: 'summary',
+    title: 'BDI — Black Dolrath Idle',
+    description: 'On-chain dark-fantasy idle RPG: dice rolls, dungeons, PvP and NFT relics.',
+    images: ['/logo-bdi.png'],
+  },
 }
 
 export const viewport: Viewport = {
@@ -46,9 +63,11 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
+  const locale = getLocale()
   return (
-    <html lang="pt-BR" className={`${inter.variable} ${cinzel.variable} ${cinzelDecorative.variable}`}>
+    <html lang={locale === 'pt' ? 'pt-BR' : 'en'} className={`${inter.variable} ${cinzel.variable} ${cinzelDecorative.variable}`}>
       <body className="bg-background text-text-primary min-h-[100dvh] font-primary">
+        <I18nProvider locale={locale}>
         <AuthProvider>
           <GoldProvider>
             <ActiveCharacterProvider>
@@ -58,6 +77,7 @@ export default function RootLayout({
             </ActiveCharacterProvider>
           </GoldProvider>
         </AuthProvider>
+        </I18nProvider>
         <Toaster
           position="top-right"
           containerStyle={{ top: 72 }}

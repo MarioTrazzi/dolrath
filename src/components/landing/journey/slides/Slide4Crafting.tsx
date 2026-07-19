@@ -12,6 +12,7 @@ import AlchemyMiniRig from './AlchemyMiniRig'
 import { LootTile, type LootTileDef } from './LootTiles'
 import { useSlideScript } from '../useSlideScript'
 import type { JourneySlideProps } from '../journeyData'
+import { useT } from '@/lib/i18n/I18nProvider'
 
 // 0 forja canaliza · 1 forja pronta · 2 proc canaliza · 3 proc pronto ·
 // 4 alq canaliza · 5 alq pronta · 6 balanço do espólio · 7 hold/CTA
@@ -32,10 +33,11 @@ const ALCH_MATS: RigMaterial[] = [
 ]
 
 // Balanço da sessão de craft: os 3 itens obtidos em maior quantidade.
+// `name` = chave PT do catálogo (arte); `label` = EN canônico (dict → PT).
 const HAUL_TILES: LootTileDef[] = [
-  { name: 'Barra de Ferro', emoji: '🧱', label: 'Barra de Ferro ×12', rarity: 'COMMON' },
-  { name: 'Couro Curtido', emoji: '🟤', label: 'Couro Curtido ×8', rarity: 'COMMON' },
-  { name: 'Poção de Vida', emoji: '🧪', label: 'Poção de Vida ×6', rarity: 'COMMON' },
+  { name: 'Barra de Ferro', emoji: '🧱', label: 'Iron Bar ×12', rarity: 'COMMON' },
+  { name: 'Couro Curtido', emoji: '🟤', label: 'Tanned Leather ×8', rarity: 'COMMON' },
+  { name: 'Poção de Vida', emoji: '🧪', label: 'Health Potion ×6', rarity: 'COMMON' },
 ]
 
 interface BenchDef {
@@ -49,10 +51,11 @@ interface BenchDef {
   hint: string
 }
 
+// title/hint = EN canônico (dict → PT); outputName segue PT (chave da arte).
 const BENCHES: BenchDef[] = [
-  { key: 'forge', icon: '🔨', title: 'Forja', chargeStep: 0, materials: FORGE_MATS, outputName: 'Couraça de Aço', outputEmoji: '🛡️', hint: 'Craft e reparo de gear' },
-  { key: 'proc', icon: '⚙️', title: 'Processamento', chargeStep: 2, materials: PROC_MATS, outputName: 'Barra de Ferro', outputEmoji: '🧱', hint: 'Refina insumos brutos' },
-  { key: 'alch', icon: '⚗️', title: 'Alquimia', chargeStep: 4, materials: ALCH_MATS, outputName: 'Poção de Vida', outputEmoji: '🧪', hint: 'Poções de combate' },
+  { key: 'forge', icon: '🔨', title: 'Forge', chargeStep: 0, materials: FORGE_MATS, outputName: 'Couraça de Aço', outputEmoji: '🛡️', hint: 'Craft and repair gear' },
+  { key: 'proc', icon: '⚙️', title: 'Processing', chargeStep: 2, materials: PROC_MATS, outputName: 'Barra de Ferro', outputEmoji: '🧱', hint: 'Refines raw materials' },
+  { key: 'alch', icon: '⚗️', title: 'Alchemy', chargeStep: 4, materials: ALCH_MATS, outputName: 'Poção de Vida', outputEmoji: '🧪', hint: 'Combat potions' },
 ]
 
 function benchPhase(step: number, chargeStep: number): CraftPhase {
@@ -62,6 +65,7 @@ function benchPhase(step: number, chargeStep: number): CraftPhase {
 }
 
 export default function Slide4Crafting({ active, onNext }: JourneySlideProps) {
+  const t = useT()
   const { step, cycle } = useSlideScript(active, TIMES, { loopDelayMs: 3800 })
   // Clique numa bancada dispara o craft dela na hora (override local)
   const [manual, setManual] = useState<{ key: string; phase: CraftPhase; id: number } | null>(null)
@@ -81,10 +85,10 @@ export default function Slide4Crafting({ active, onNext }: JourneySlideProps) {
     <div className="relative h-full w-full flex flex-col overflow-hidden">
       <div className="shrink-0 text-center px-4 pt-12 pb-2">
         <p className="text-sm sm:text-base font-bold text-white">
-          Forje, processe e transmute — <span style={{ color: GOLD_BRIGHT }}>tudo alimenta a evolução do seu herói</span>
+          {t('Forge, process and transmute —')} <span style={{ color: GOLD_BRIGHT }}>{t("everything feeds your hero's growth")}</span>
         </p>
         <p className="text-[11px] text-textsec mt-0.5">
-          Nível de profissão é da conta inteira · toque numa bancada para trabalhar
+          {t('Profession level is account-wide · tap a bench to work')}
         </p>
       </div>
 
@@ -103,9 +107,9 @@ export default function Slide4Crafting({ active, onNext }: JourneySlideProps) {
             >
               <div className="flex items-center justify-between px-3 py-2 border-b border-black/60">
                 <span className="text-xs font-bold" style={{ color: GOLD_BRIGHT }}>
-                  <span style={{ color: GOLD }}>{bench.icon}</span> {bench.title}
+                  <span style={{ color: GOLD }}>{bench.icon}</span> {t(bench.title)}
                 </span>
-                <span className="text-[10px] text-[#8a8a90]">{bench.hint}</span>
+                <span className="text-[10px] text-[#8a8a90]">{t(bench.hint)}</span>
               </div>
               <div className="relative py-2 origin-top scale-[0.82] sm:scale-90 md:scale-[0.82] lg:scale-90">
                 {bench.key === 'forge' && (
@@ -165,7 +169,7 @@ export default function Slide4Crafting({ active, onNext }: JourneySlideProps) {
                 </div>
                 <div className="flex flex-col items-center sm:items-end gap-1.5 shrink-0">
                   <span className="text-xs font-black" style={{ color: GOLD_BRIGHT }}>
-                    Prontos para mais uma masmorra — e mais gold! 💰
+                    {t('Ready for another dungeon — and more gold! 💰')}
                   </span>
                   {step >= 7 && (
                     <motion.button
@@ -174,7 +178,7 @@ export default function Slide4Crafting({ active, onNext }: JourneySlideProps) {
                       onClick={onNext}
                       className="px-3.5 py-2 rounded-lg bg-primary hover:bg-primary-dark text-white text-xs font-bold shadow-[0_0_18px_rgba(233,69,96,0.5)] animate-pulse"
                     >
-                      Aprimorar a arma →
+                      {t('Enhance the weapon →')}
                     </motion.button>
                   )}
                 </div>

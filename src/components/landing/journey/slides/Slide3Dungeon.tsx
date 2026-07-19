@@ -14,23 +14,26 @@ import LootTiles, { type LootTileDef } from './LootTiles'
 import { useJourney } from '../JourneyContext'
 import { useSlideScript } from '../useSlideScript'
 import type { JourneySlideProps } from '../journeyData'
+import { useT } from '@/lib/i18n/I18nProvider'
 
 // 0 idle+narração · 1 scroll (5.2s) · 2 approach · 3 chegada+d20 rolando ·
 // 4 d20 crava 19 · 5 card do drop · 6 CTA
 const TIMES = [0, 1600, 6800, 7700, 8700, 9700, 13800]
 
+// `name` = chave PT do catálogo (resolve a arte); `label` = EN canônico (dict → PT).
 const DROP_TILES: LootTileDef[] = [
-  { name: 'Ferro', emoji: '🔩', label: 'Ferro ×3', rarity: 'UNCOMMON' },
-  { name: 'Couro', emoji: '🟤', label: 'Couro ×2', rarity: 'COMMON' },
-  { name: 'Erva Medicinal', emoji: '🌿', label: 'Erva Medicinal ×2', rarity: 'COMMON' },
-  { name: 'Água Pura', emoji: '💧', label: 'Água Pura ×1', rarity: 'COMMON' },
-  { name: 'Cristal de Mana', emoji: '🔮', label: 'Cristal de Mana ×1', rarity: 'UNCOMMON' },
-  { name: 'Pedra Negra (Arma)', emoji: '⚒️', label: 'Pedra Negra (Arma) ×1', highlight: true },
+  { name: 'Ferro', emoji: '🔩', label: 'Iron ×3', rarity: 'UNCOMMON' },
+  { name: 'Couro', emoji: '🟤', label: 'Leather ×2', rarity: 'COMMON' },
+  { name: 'Erva Medicinal', emoji: '🌿', label: 'Medicinal Herb ×2', rarity: 'COMMON' },
+  { name: 'Água Pura', emoji: '💧', label: 'Pure Water ×1', rarity: 'COMMON' },
+  { name: 'Cristal de Mana', emoji: '🔮', label: 'Mana Crystal ×1', rarity: 'UNCOMMON' },
+  { name: 'Pedra Negra (Arma)', emoji: '⚒️', label: 'Black Stone (Weapon) ×1', highlight: true },
 ]
 
 const MODE_BY_STEP: WalkMode[] = ['idle', 'scroll', 'approach', 'idle', 'idle', 'idle', 'idle']
 
 export default function Slide3Dungeon({ active, onNext }: JourneySlideProps) {
+  const t = useT()
   const { heroArt } = useJourney()
   const { step, advance } = useSlideScript(active, TIMES, { loopDelayMs: 5200 })
 
@@ -50,7 +53,11 @@ export default function Slide3Dungeon({ active, onNext }: JourneySlideProps) {
         if (step === 2) advance()
       }}
     >
-      <NarrationDialog text={FOREST.enterText} open={showNarration} onClose={advance} />
+      <NarrationDialog
+        text={t('You cross the treeline. Moonlight barely pierces the canopy...')}
+        open={showNarration}
+        onClose={advance}
+      />
       <DiceOverlay
         rolling={dice != null}
         result={dice === 'result' ? { roll: 17, modifier: 2, total: 19 } : null}
@@ -74,12 +81,11 @@ export default function Slide3Dungeon({ active, onNext }: JourneySlideProps) {
               }}
             >
               <div className="flex items-baseline justify-between mb-2">
-                <span className="text-sm font-black text-white">🎲 19 — Achado de sorte!</span>
+                <span className="text-sm font-black text-white">{t('🎲 19 — Lucky find!')}</span>
                 <span className="text-[10px] font-bold text-amber-300">+120 🪙</span>
               </div>
               <p className="text-[11px] text-white/70 mb-2.5">
-                Entre as raízes, um esconderijo de contrabandistas: materiais de forja,
-                ingredientes de alquimia e uma Pedra Negra.
+                {t('Among the roots, a smugglers\' stash: forge materials, alchemy ingredients and a Black Stone.')}
               </p>
               <LootTiles tiles={DROP_TILES} />
             </div>
@@ -90,8 +96,7 @@ export default function Slide3Dungeon({ active, onNext }: JourneySlideProps) {
       {/* Legenda + CTA */}
       <div className="absolute bottom-3 inset-x-3 z-30 flex items-end justify-between gap-3 pointer-events-none">
         <p className="text-[11px] text-white/75 max-w-[58%] drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
-          🌫️ A exploração real: vasculhe a mata, role o d20 e descubra o que o nó esconde
-          — tesouro, emboscada ou bênção.
+          {t('🌫️ Real exploration: comb the woods, roll the d20 and find out what the node hides — treasure, ambush or blessing.')}
         </p>
         {step >= 6 ? (
           <motion.button
@@ -100,7 +105,7 @@ export default function Slide3Dungeon({ active, onNext }: JourneySlideProps) {
             onClick={onNext}
             className="pointer-events-auto px-3.5 py-2 rounded-lg bg-primary hover:bg-primary-dark text-white text-xs font-bold shadow-[0_0_18px_rgba(233,69,96,0.5)] animate-pulse"
           >
-            Forjar com o espólio →
+            {t('Forge with the spoils →')}
           </motion.button>
         ) : (
           step >= 3 && (
@@ -108,7 +113,7 @@ export default function Slide3Dungeon({ active, onNext }: JourneySlideProps) {
               onClick={advance}
               className="pointer-events-auto px-3 py-1.5 rounded-lg border border-white/20 bg-black/50 backdrop-blur-md text-white/85 text-[11px] font-bold hover:bg-black/70"
             >
-              Avançar ▸
+              {t('Continue ▸')}
             </button>
           )
         )}

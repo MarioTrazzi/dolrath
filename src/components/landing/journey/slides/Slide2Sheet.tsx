@@ -18,17 +18,20 @@ import {
   RACE_LIST,
   FORM_BY_RACE,
   FORM_LABEL,
-  FORM_PROMPT_PT,
+  FORM_PROMPT,
   CLASS_LABEL,
+  RACE_LABEL,
   type JourneySlideProps,
 } from '../journeyData'
 import { useSlideScript } from '../useSlideScript'
+import { useT } from '@/lib/i18n/I18nProvider'
 
 // 0 entrada · 1 nome · 2 chips · 3 vitals · 4 selo NFT · 5 FLIP p/ forma +
 // prompt · 6 flip de volta · 7 CTA
 const TIMES = [0, 700, 1400, 2100, 2900, 4200, 8200, 9800]
 
 export default function Slide2Sheet({ active, onNext }: JourneySlideProps) {
+  const t = useT()
   const { raceId, classId, heroName, heroArt, visual } = useJourney()
   const { step, cycle } = useSlideScript(active, TIMES, { loopDelayMs: 5600 })
   const reduced = useReducedMotion()
@@ -136,7 +139,7 @@ export default function Slide2Sheet({ active, onNext }: JourneySlideProps) {
                   background: 'rgba(0,0,0,0.55)',
                 }}
               >
-                {flipped ? `${formLabel.emoji} ${formLabel.name}` : 'NFT · sua de verdade'}
+                {flipped ? `${formLabel.emoji} ${t(formLabel.name)}` : t('NFT · truly yours')}
               </motion.span>
             )}
 
@@ -160,16 +163,16 @@ export default function Slide2Sheet({ active, onNext }: JourneySlideProps) {
                     className="px-2 py-0.5 rounded-[3px] text-[10px] font-bold text-white border"
                     style={{ background: `${visual.raceVisual.accent}2e`, borderColor: `${visual.raceVisual.accent}66` }}
                   >
-                    {visual.raceVisual.emoji} {race?.name}
+                    {visual.raceVisual.emoji} {t(RACE_LABEL[raceId])}
                   </span>
                   <span
                     className="px-2 py-0.5 rounded-[3px] text-[10px] font-bold text-white border"
                     style={{ background: `${visual.classVisual.accent}2e`, borderColor: `${visual.classVisual.accent}66` }}
                   >
-                    {visual.classVisual.emoji} {CLASS_LABEL[classId]}
+                    {visual.classVisual.emoji} {t(CLASS_LABEL[classId])}
                   </span>
                   <span className="px-2 py-0.5 rounded-[3px] text-[10px] font-bold text-white/85 border border-white/25 bg-white/10">
-                    {formLabel.emoji} {formLabel.name}
+                    {formLabel.emoji} {t(formLabel.name)}
                   </span>
                 </motion.div>
               )}
@@ -196,7 +199,7 @@ export default function Slide2Sheet({ active, onNext }: JourneySlideProps) {
                     <span className="text-amber-300">🛡️ RES {shown.res}{shown.boosted && ' ⬆'}</span>
                     {shown.boosted && (
                       <span className="font-bold" style={{ color: formLabel.glow }}>
-                        {formLabel.emoji} stats da forma
+                        {formLabel.emoji} {t('form stats')}
                       </span>
                     )}
                   </motion.div>
@@ -208,8 +211,8 @@ export default function Slide2Sheet({ active, onNext }: JourneySlideProps) {
           {/* Prompt da forma, estático abaixo do card — deixa a árvore inteira p/ ela */}
           <div className="w-full max-w-[250px] sm:max-w-[280px] shrink-0">
             <PromptPanel
-              text={`${formLabel.emoji} ${FORM_PROMPT_PT[raceId].slice(0, 130)}…`}
-              label="✍️ prompt da forma transformada · gerada da SUA arte base"
+              text={`${formLabel.emoji} ${t(FORM_PROMPT[raceId]).slice(0, 130)}…`}
+              label={t('✍️ transformed-form prompt · generated from YOUR base art')}
             />
           </div>
         </div>
@@ -218,14 +221,14 @@ export default function Slide2Sheet({ active, onNext }: JourneySlideProps) {
         <div className="md:w-[54%] flex flex-col gap-2 min-h-0 w-full">
           <div className="relative flex-1 min-h-[360px] md:min-h-[220px] rounded-lg border border-white/10 bg-black/30 overflow-hidden">
             <div className="absolute top-2 left-3 z-10 text-[10px] font-bold uppercase tracking-[0.2em] text-primary">
-              🌳 Árvore de habilidades · {CLASS_LABEL[classId]}
+              🌳 {t('Skill tree')} · {t(CLASS_LABEL[classId])}
             </div>
             {/* Geometria REAL da classe (espiral/espada/flecha/mandala), ajustada à caixa */}
             <div className="absolute inset-0 pt-9 pb-7 px-2 pointer-events-none">
               <MiniSkillTree key={classId} classId={classId} form={form} />
             </div>
             <div className="absolute bottom-2 inset-x-3 text-[10px] text-white/60 text-center">
-              A cada nível, pontos para evoluir os caminhos da sua classe — em página dedicada no jogo.
+              {t('Every level grants points to grow your class paths — on a dedicated page in the game.')}
             </div>
           </div>
         </div>
@@ -239,7 +242,7 @@ export default function Slide2Sheet({ active, onNext }: JourneySlideProps) {
           onClick={onNext}
           className="sticky md:absolute bottom-3 md:right-3 z-30 block ml-auto mr-3 md:ml-0 md:mr-0 -mt-11 md:mt-0 px-3.5 py-2 rounded-lg bg-primary hover:bg-primary-dark text-white text-xs font-bold shadow-[0_0_18px_rgba(233,69,96,0.5)] animate-pulse"
         >
-          Entrar na masmorra →
+          {t('Enter the dungeon →')}
         </motion.button>
       )}
     </div>

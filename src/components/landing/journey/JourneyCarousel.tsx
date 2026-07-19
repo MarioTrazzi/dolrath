@@ -16,22 +16,23 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { GOLD, GOLD_BRIGHT } from '@/components/crafting/bdoTheme'
 import { SectionHeading } from '@/components/landing/ui'
+import { useT } from '@/lib/i18n/I18nProvider'
 import { JourneyProvider } from './JourneyContext'
 import { JourneyDivider, JourneyWindow } from './JourneyFrame'
 import SlidePoster, { type SlideMeta } from './SlidePoster'
 import type { JourneySlideProps } from './journeyData'
 
 export const JOURNEY_STEPS: SlideMeta[] = [
-  { n: 1, emoji: '🧬', label: 'Crie seu herói', sub: 'Raça + classe canônica' },
-  { n: 2, emoji: '📜', label: 'A ficha', sub: 'Transformação e skills' },
-  { n: 3, emoji: '🌲', label: 'Masmorra', sub: 'Explore sob a névoa' },
-  { n: 4, emoji: '⚒️', label: 'Forja & Craft', sub: 'Materiais viram poder' },
-  { n: 5, emoji: '💎', label: 'Aprimoramento', sub: 'Arma III → IV' },
-  { n: 6, emoji: '🎒', label: 'Gear & Mochila', sub: 'Set III + arma IV' },
-  { n: 7, emoji: '👑', label: 'Rumo ao boss', sub: 'Fim da trilha' },
-  { n: 8, emoji: '⚔️', label: 'Boss fight', sub: 'Anciã da Mata' },
-  { n: 9, emoji: '🏟️', label: 'PvP', sub: 'Combate por turnos' },
-  { n: 10, emoji: '🏆', label: 'Ranking', sub: 'Top 10 divide o prêmio' },
+  { n: 1, emoji: '🧬', label: 'Create your hero', sub: 'Race + canonical class' },
+  { n: 2, emoji: '📜', label: 'The sheet', sub: 'Transformation and skills' },
+  { n: 3, emoji: '🌲', label: 'Dungeon', sub: 'Explore beneath the mist' },
+  { n: 4, emoji: '⚒️', label: 'Forge & Craft', sub: 'Materials become power' },
+  { n: 5, emoji: '💎', label: 'Enhancement', sub: 'Weapon III → IV' },
+  { n: 6, emoji: '🎒', label: 'Gear & Bag', sub: 'Set III + weapon IV' },
+  { n: 7, emoji: '👑', label: 'To the boss', sub: 'End of the trail' },
+  { n: 8, emoji: '⚔️', label: 'Boss fight', sub: 'Elder of the Grove' },
+  { n: 9, emoji: '🏟️', label: 'PvP', sub: 'Turn-based combat' },
+  { n: 10, emoji: '🏆', label: 'Ranking', sub: 'Top 10 splits the prize' },
 ]
 
 // Loaders separados p/ permitir prefetch manual do próximo slide.
@@ -64,6 +65,7 @@ function TimelineChip({
   state: 'done' | 'active' | 'todo'
   onClick: () => void
 }) {
+  const t = useT()
   return (
     <button
       onClick={onClick}
@@ -78,7 +80,7 @@ function TimelineChip({
     >
       <span className="text-sm leading-none">{state === 'done' ? '✓' : meta.emoji}</span>
       <span className="whitespace-nowrap">
-        {meta.n}. {meta.label}
+        {meta.n}. {t(meta.label)}
       </span>
     </button>
   )
@@ -106,11 +108,12 @@ function ChevronArrow({
 }) {
   const Chevron = dir === 'prev' ? ChevronLeft : ChevronRight
   const nudge = dir === 'prev' ? -6 : 6
+  const t = useT()
   return (
     <button
       onClick={onClick}
       disabled={disabled}
-      aria-label={dir === 'prev' ? 'Etapa anterior' : 'Próxima etapa'}
+      aria-label={dir === 'prev' ? t('Previous step') : t('Next step')}
       className={`group z-30 transition-opacity duration-300 disabled:opacity-0 disabled:pointer-events-none ${className}`}
     >
       <span className="relative grid place-items-center">
@@ -151,6 +154,7 @@ function ChevronArrow({
 }
 
 function JourneyCarouselInner() {
+  const t = useT()
   const [index, setIndex] = useState(0)
   const [direction, setDirection] = useState(1)
   const [inView, setInView] = useState(false)
@@ -227,7 +231,7 @@ function JourneyCarouselInner() {
 
       {/* Viewport dentro da "janela do jogo" */}
       <div className="relative mt-3">
-        <JourneyWindow stepLabel={`${meta.emoji} ${meta.n}/10 · ${meta.label}`}>
+        <JourneyWindow stepLabel={`${meta.emoji} ${meta.n}/10 · ${t(meta.label)}`}>
           {/* Swipe manual (touchstart/touchend, listeners passivos) em vez do
               drag="x" do framer: o drag iniciava em QUALQUER movimento do dedo
               e bloqueava via preventDefault a rolagem vertical nativa dos
@@ -291,7 +295,7 @@ function JourneyCarouselInner() {
             <button
               key={m.n}
               onClick={() => goTo(i)}
-              aria-label={`Ir para a etapa ${m.n}`}
+              aria-label={t('Go to step {n}', { n: m.n })}
               className={`h-1.5 rounded-full transition-all ${
                 i === index ? 'w-6 bg-primary' : 'w-1.5 bg-white/25'
               }`}
@@ -304,6 +308,7 @@ function JourneyCarouselInner() {
 }
 
 export default function JourneyShowcase({ primaryHref }: { primaryHref: string }) {
+  const t = useT()
   return (
     <section id="jornada" className="relative pb-12 sm:pb-16">
       {/* Divisória full-bleed sobre a fronteira hero/Jornada: -mt-6 alinha o
@@ -313,13 +318,13 @@ export default function JourneyShowcase({ primaryHref }: { primaryHref: string }
       </div>
       <div className="mx-auto max-w-6xl px-4 sm:px-6 pt-10 sm:pt-12">
         <SectionHeading
-          eyebrow="A jornada completa"
+          eyebrow={t('The full journey')}
           title={
             <>
-              Experimente agora, <span className="text-primary">aqui mesmo</span>
+              {t('Try it now,')} <span className="text-primary">{t('right here')}</span>
             </>
           }
-          sub="Do primeiro clique ao topo do ranking: crie um herói e veja — com as telas reais do jogo — tudo o que espera por ele em Dolrath."
+          sub={t('From the first click to the top of the ranking: create a hero and see — on the real game screens — everything waiting for them in Dolrath.')}
         />
         <div className="mt-8">
           <JourneyProvider primaryHref={primaryHref}>

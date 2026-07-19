@@ -10,6 +10,7 @@ import { races } from '@/lib/characterCreationData'
 import { CLASSES } from '@/lib/gameData'
 import { DUNGEONS } from '@/lib/dungeonAdventures'
 import { PVP_TOP10_DOL_SPLIT, PVP_RANK_WIN_POINTS } from '@/lib/pvpRewards'
+import type { TFunction } from '@/lib/i18n/t'
 
 export type JourneyRaceId = 'draconiano' | 'metamorfo' | 'humano' | 'elfo'
 export type JourneyClassId = 'warrior' | 'rogue' | 'mage' | 'monk'
@@ -62,11 +63,12 @@ export const FORM_BY_RACE: Record<JourneyRaceId, string> = {
   metamorfo: 'bear',
 }
 
+// Nomes EN canônicos (chaves do dicionário) — os slides renderizam via t().
 export const FORM_LABEL: Record<JourneyRaceId, { emoji: string; name: string; glow: string }> = {
-  humano: { emoji: '✨', name: 'Sétimo Sentido', glow: '#e2e8f0' },
-  elfo: { emoji: '🌟', name: 'Forma Celestial', glow: '#fbbf24' },
-  draconiano: { emoji: '🐉', name: 'Dragão', glow: '#ef4444' },
-  metamorfo: { emoji: '🐻', name: 'Urso', glow: '#d97706' },
+  humano: { emoji: '✨', name: 'Seventh Sense', glow: '#e2e8f0' },
+  elfo: { emoji: '🌟', name: 'Celestial Form', glow: '#fbbf24' },
+  draconiano: { emoji: '🐉', name: 'Dragon', glow: '#ef4444' },
+  metamorfo: { emoji: '🐻', name: 'Bear', glow: '#d97706' },
 }
 
 /** Especial de forma (mesmos action ids de transformationSpecials → AbilityFX). */
@@ -78,91 +80,116 @@ export const FORM_SPECIAL_ACTION: Record<JourneyRaceId, string> = {
 }
 
 export const FORM_SPECIAL_NAME: Record<JourneyRaceId, string> = {
-  draconiano: '🔥 Sopro de Fogo',
-  metamorfo: '💥 Investida Imparável',
-  humano: '🌌 Explosão de Cosmo',
+  draconiano: '🔥 Fire Breath',
+  metamorfo: '💥 Unstoppable Charge',
+  humano: '🌌 Cosmo Burst',
   elfo: '💥 Super Nova',
 }
 
-// ---------- Prompts em PT-BR (vitrine da landing) ----------
-// Traduções fiéis dos prompts REAIS de characterImagePrompt.ts — a geração
-// de imagem usa o texto em inglês; aqui é o que o visitante lê.
+// ---------- Prompts (vitrine da landing) ----------
+// EN canônico (espelha os prompts REAIS de characterImagePrompt.ts); a versão
+// PT vive no dicionário — os slides fazem t(prompt) ANTES de fatiar.
 
-export const RACE_PROMPT_PT: Record<JourneyRaceId, string> = {
+export const RACE_PROMPT: Record<JourneyRaceId, string> = {
   draconiano:
-    'Herança draconiana: escamas sutis de dragão nos braços, mandíbula e fronte, olhos reptilianos, ' +
-    'um brilho de brasa sob a pele e um porte imponente que insinua o dragão adormecido. ' +
-    'Paleta: carmesim profundo e ouro derretido.',
+    'Draconic heritage: subtle dragon scales on the arms, jaw and brow, reptilian eyes, ' +
+    'an ember glow beneath the skin and an imposing bearing that hints at the sleeping dragon. ' +
+    'Palette: deep crimson and molten gold.',
   metamorfo:
-    'Herança metamorfa: um aventureiro plenamente humano na forma normal — nada de pelos, garras ou ' +
-    'traços animais; só a presença selvagem e os olhos atentos denunciam a fera que ele pode se tornar. ' +
-    'Paleta: verde-musgo e osso.',
+    'Shapeshifter heritage: a fully human adventurer in normal form — no fur, claws or ' +
+    'animal traits; only the feral presence and watchful eyes betray the beast they can become. ' +
+    'Palette: moss green and bone.',
   humano:
-    'Herança humana: um aventureiro determinado e adaptável, de traços expressivos e porte resiliente, ' +
-    'com uma centelha interior que anuncia o despertar do 7º Sentido. Paleta: âmbar quente e azul-aço.',
+    'Human heritage: a determined, adaptable adventurer with expressive features and a resilient bearing, ' +
+    'an inner spark announcing the awakening of the 7th Sense. Palette: warm amber and steel blue.',
   elfo:
-    'Herança élfica: traços elegantes e etéreos, longas orelhas pontudas, olhos luminosos e uma beleza ' +
-    'arcana graciosa, com um leve brilho astral que insinua a Forma Celestial. Paleta: verde-prata e ouro pálido.',
+    'Elven heritage: elegant, ethereal features, long pointed ears, luminous eyes and a graceful ' +
+    'arcane beauty, with a faint astral glow hinting at the Celestial Form. Palette: silver-green and pale gold.',
 }
 
-export const CLASS_PROMPT_PT: Record<JourneyClassId, string> = {
+export const CLASS_PROMPT: Record<JourneyClassId, string> = {
   warrior:
-    'Classe Guerreiro: armadura pesada marcada por batalhas, uma grande arma corpo a corpo, ' +
-    'postura ampla e poderosa, cicatrizes e expressão endurecida.',
+    'Warrior class: battle-worn heavy armor, a great melee weapon, ' +
+    'a wide and powerful stance, scars and a hardened expression.',
   rogue:
-    'Classe Ladino: armadura leve de couro e capuz, adagas ou arco, postura ágil e agachada, ' +
-    'rosto na sombra e linguagem corporal rápida e perigosa.',
+    'Rogue class: light leather armor and hood, daggers or a bow, an agile crouched stance, ' +
+    'face in shadow and quick, dangerous body language.',
   mage:
-    'Classe Mago: vestes arcanas com detalhes rúnicos, cajado brilhante, energia mágica vívida ' +
-    'com runas flutuando ao redor das mãos e um olhar inteligente e penetrante.',
+    'Mage class: arcane robes with runic detailing, a glowing staff, vivid magical energy ' +
+    'with runes floating around the hands and a sharp, penetrating gaze.',
   monk:
-    'Classe Monge: trajes monásticos simples com punhos enfaixados, postura marcial disciplinada ' +
-    'e equilibrada, expressão serena e uma leve energia de chi ao redor do corpo.',
+    'Monk class: simple monastic garments with wrapped fists, a disciplined, balanced ' +
+    'martial stance, a serene expression and a faint chi energy around the body.',
 }
 
-/** Prompt (PT) da arte da forma transformada — só as formas usadas na Jornada. */
-export const FORM_PROMPT_PT: Record<JourneyRaceId, string> = {
+/** Prompt (EN canônico) da arte da forma transformada — só as formas usadas na Jornada. */
+export const FORM_PROMPT: Record<JourneyRaceId, string> = {
   draconiano:
-    'Ascensão dracônica: o mesmo personagem irrompendo na forma ancestral de dragão — escamas carmesim ' +
-    'e ouro se espalhando pelo rosto e braços, olhos reptilianos brilhando, chifres e lufadas de fogo, ' +
-    'aura de brasas rubro-alaranjada. O traje original segue visível sob as escamas.',
+    'Draconic ascension: the same character erupting into the ancestral dragon form — crimson and gold ' +
+    'scales spreading across the face and arms, reptilian eyes glowing, horns and gusts of fire, ' +
+    'a red-orange ember aura. The original outfit remains visible beneath the scales.',
   metamorfo:
-    'Forma de urso possante: o mesmo personagem crescendo num urso colossal — pelagem parda espessa, ' +
-    'torso maciço, garras enormes e postura inabalável, aura âmbar de pura resiliência. ' +
-    'O traje original permanece no corpo, esticado pela nova massa.',
+    'Mighty bear form: the same character growing into a colossal bear — thick brown fur, ' +
+    'a massive torso, enormous claws and an unshakable stance, an amber aura of pure resilience. ' +
+    'The original outfit remains on the body, stretched by the new mass.',
   humano:
-    'Despertar do 7º Sentido: corpo, rosto e traje seguem exatamente como na arte base. Uma aura cósmica ' +
-    'branca explode ao redor: luz interior radiante, olhos brilhando, galáxias e estrelas de cosmo ' +
-    'girando pelo corpo, cabelo erguido pelo poder.',
+    'Awakening of the 7th Sense: body, face and outfit stay exactly as in the base art. A white cosmic ' +
+    'aura explodes around them: radiant inner light, glowing eyes, galaxies and cosmo stars ' +
+    'swirling across the body, hair lifted by sheer power.',
   elfo:
-    'Forma Celestial: o mesmo personagem ascendendo a um ser de luz astral — radiância dourado-branca, ' +
-    'runas arcanas orbitando o corpo, pele e olhos luminosos, feixes angélicos translúcidos. ' +
-    'Rosto e traje originais seguem claramente visíveis sob a luz.',
+    'Celestial Form: the same character ascending into a being of astral light — golden-white radiance, ' +
+    'arcane runes orbiting the body, luminous skin and eyes, translucent angelic beams. ' +
+    'The original face and outfit remain clearly visible beneath the light.',
 }
 
 export const RACE_LIST = races
 export const CLASS_LIST = CLASSES
 
 export const CLASS_LABEL: Record<JourneyClassId, string> = {
-  warrior: 'Guerreiro',
-  rogue: 'Ladino',
-  mage: 'Mago',
-  monk: 'Monge',
+  warrior: 'Warrior',
+  rogue: 'Rogue',
+  mage: 'Mage',
+  monk: 'Monk',
 }
 
 export const RACE_LABEL: Record<JourneyRaceId, string> = {
-  draconiano: 'Draconiano',
-  metamorfo: 'Metamorfo',
-  humano: 'Humano',
-  elfo: 'Elfo',
+  draconiano: 'Draconian',
+  metamorfo: 'Shapeshifter',
+  humano: 'Human',
+  elfo: 'Elf',
 }
 
-/** Arma primária + secundária por classe — itens REAIS do catálogo (arte em /items). */
+// Hints EN canônicos p/ os cards do Slide 1 (os catálogos do jogo ainda são PT;
+// aqui a vitrine mostra EN e o dicionário devolve o PT original).
+export const RACE_HINT: Record<JourneyRaceId, string> = {
+  draconiano: 'Dragon Transformation',
+  metamorfo: 'Animal Transformation',
+  humano: 'Supreme Adaptability',
+  elfo: 'Arcane Mastery',
+}
+
+export const CLASS_HINT: Record<JourneyClassId, string> = {
+  warrior: 'Battle Fury',
+  rogue: 'Sneak Attack',
+  mage: 'Fireball',
+  monk: 'Iron Fist',
+}
+
+export const RACE_TRANSFORM_HINT: Record<JourneyRaceId, string> = {
+  draconiano: 'Dragon',
+  metamorfo: 'Any Animal',
+  humano: '7th Sense Awakening',
+  elfo: 'Celestial Form',
+}
+
+/** Arma primária + secundária por classe — itens REAIS do catálogo (arte em /items).
+ *  weapon/offhand ficam com o nome PT do catálogo (chave que resolve a imagem);
+ *  classAttack é EN canônico (dicionário traduz p/ PT no render). */
 export const CLASS_GEAR: Record<JourneyClassId, { weapon: string; offhand: string; classAttack: string }> = {
-  warrior: { weapon: 'Lâmina do Carrasco', offhand: 'Égide do Baluarte', classAttack: 'Investida Pesada' },
-  rogue: { weapon: 'Arco da Tormenta', offhand: 'Adaga de Parada', classAttack: 'Ataque Furtivo' },
-  mage: { weapon: 'Cajado do Bosque Antigo', offhand: 'Orbe de Cristal', classAttack: 'Bola de Fogo' },
-  monk: { weapon: 'Manoplas da Fera', offhand: 'Talismã do Discípulo', classAttack: 'Golpe Triplo' },
+  warrior: { weapon: 'Lâmina do Carrasco', offhand: 'Égide do Baluarte', classAttack: 'Heavy Charge' },
+  rogue: { weapon: 'Arco da Tormenta', offhand: 'Adaga de Parada', classAttack: 'Sneak Attack' },
+  mage: { weapon: 'Cajado do Bosque Antigo', offhand: 'Orbe de Cristal', classAttack: 'Fireball' },
+  monk: { weapon: 'Manoplas da Fera', offhand: 'Talismã do Discípulo', classAttack: 'Triple Strike' },
 }
 
 export function classAttackName(classId: JourneyClassId): string {
@@ -243,13 +270,14 @@ export function buildHeroFighter(
 export const FOREST_BOSS = DUNGEONS.floresta.boss
 export const BOSS_SHOW_MAX_HP = 160
 
-export function buildBossFighter(hp: number): FighterView {
+export function buildBossFighter(hp: number, locale: 'en' | 'pt' = 'en'): FighterView {
+  const en = locale === 'en'
   return {
     id: 'boss',
-    name: FOREST_BOSS.name,
+    name: en && FOREST_BOSS.nameEn ? FOREST_BOSS.nameEn : FOREST_BOSS.name,
     level: 10,
-    race: 'Floresta Sombria',
-    class: FOREST_BOSS.title,
+    race: en ? 'Gloomwood Forest' : 'Floresta Sombria',
+    class: en && FOREST_BOSS.titleEn ? FOREST_BOSS.titleEn : FOREST_BOSS.title,
     avatar: FOREST_BOSS.image ?? null,
     avatarEmoji: FOREST_BOSS.emoji,
     hp,
@@ -312,20 +340,22 @@ export interface BattleStep {
 
 export const BOSS_HERO_MAX_HP = 240
 
-/** Slide 8 — boss fight: golpes normais → TRANSFORMAÇÃO → especial de forma → d20 decisivo. */
-export function buildBossScript(raceId: JourneyRaceId): BattleStep[] {
+/** Slide 8 — boss fight: golpes normais → TRANSFORMAÇÃO → especial de forma → d20 decisivo.
+ *  Recebe t() do slide: os textos são EN canônico e o dicionário traduz p/ PT. */
+export function buildBossScript(raceId: JourneyRaceId, t: TFunction): BattleStep[] {
   const form = FORM_LABEL[raceId]
   const name = heroName(raceId)
+  const formName = t(form.name)
   return [
-    { at: 0, banner: 'O confronto final da Floresta Sombria', heroHp: 240, foeHp: 160, dice: null, log: 'A Anciã da Mata desperta...' },
-    { at: 1600, event: { kind: 'resolve', attackerId: 'hero', defenderId: 'boss', action: 'weapon', defenseAction: 'none', hit: true, damage: 30 }, foeHp: 130, log: 'Seu ataque de classe acerta em cheio: 30 de dano!' },
-    { at: 3800, event: { kind: 'resolve', attackerId: 'boss', defenderId: 'hero', action: 'special', defenseAction: 'none', hit: true, damage: 22 }, heroHp: 218, log: 'A Anciã responde com raízes corrompidas: 22 de dano.' },
-    { at: 6000, event: { kind: 'transform', actorId: 'hero' }, heroTransformed: true, banner: `${form.emoji} ${name} desperta: ${form.name}!`, log: `TRANSFORMAÇÃO! ${form.emoji} ${form.name} liberado(a).` },
-    { at: 8600, event: { kind: 'resolve', attackerId: 'hero', defenderId: 'boss', action: FORM_SPECIAL_ACTION[raceId], defenseAction: 'none', hit: true, damage: 52 }, foeHp: 78, banner: null, log: `${FORM_SPECIAL_NAME[raceId]}: 52 de dano!` },
-    { at: 11000, dice: 'ask', banner: 'Golpe decisivo — role o d20!', log: 'O destino da luta está no dado...' },
-    { at: 14200, dice: 'reveal', log: '🎲 19! Acerto crítico garantido.' },
-    { at: 15800, event: { kind: 'resolve', attackerId: 'hero', defenderId: 'boss', action: FORM_SPECIAL_ACTION[raceId], defenseAction: 'none', hit: true, damage: 78, isCritical: true }, foeHp: 0, dice: null, ended: true, banner: null, log: 'CRÍTICO! 78 de dano — a Guardiã Corrompida tomba.' },
-    { at: 17800, loot: true, log: 'A floresta silencia. O tesouro é seu.' },
+    { at: 0, banner: t('The final confrontation of the Gloomwood Forest'), heroHp: 240, foeHp: 160, dice: null, log: t('The Elder of the Grove awakens...') },
+    { at: 1600, event: { kind: 'resolve', attackerId: 'hero', defenderId: 'boss', action: 'weapon', defenseAction: 'none', hit: true, damage: 30 }, foeHp: 130, log: t('Your class attack lands true: 30 damage!') },
+    { at: 3800, event: { kind: 'resolve', attackerId: 'boss', defenderId: 'hero', action: 'special', defenseAction: 'none', hit: true, damage: 22 }, heroHp: 218, log: t('The Elder answers with corrupted roots: 22 damage.') },
+    { at: 6000, event: { kind: 'transform', actorId: 'hero' }, heroTransformed: true, banner: t('{emoji} {name} awakens: {form}!', { emoji: form.emoji, name, form: formName }), log: t('TRANSFORMATION! {emoji} {form} unleashed.', { emoji: form.emoji, form: formName }) },
+    { at: 8600, event: { kind: 'resolve', attackerId: 'hero', defenderId: 'boss', action: FORM_SPECIAL_ACTION[raceId], defenseAction: 'none', hit: true, damage: 52 }, foeHp: 78, banner: null, log: t('{special}: 52 damage!', { special: t(FORM_SPECIAL_NAME[raceId]) }) },
+    { at: 11000, dice: 'ask', banner: t('Decisive blow — roll the d20!'), log: t('The fate of the fight rides on the dice...') },
+    { at: 14200, dice: 'reveal', log: t('🎲 19! Guaranteed critical hit.') },
+    { at: 15800, event: { kind: 'resolve', attackerId: 'hero', defenderId: 'boss', action: FORM_SPECIAL_ACTION[raceId], defenseAction: 'none', hit: true, damage: 78, isCritical: true }, foeHp: 0, dice: null, ended: true, banner: null, log: t('CRITICAL! 78 damage — the Corrupted Warden falls.') },
+    { at: 17800, loot: true, log: t('The forest goes silent. The treasure is yours.') },
   ]
 }
 
@@ -334,25 +364,26 @@ export const PVP_FOE_MAX_HP = 230
 
 /** Slide 9 — PvP didático: o oponente TRANSFORMA no meio da luta e mesmo
  *  assim perde, porque o herói tira sorte grande (nat 20) no dado final. */
-export function buildPvpScript(choice: JourneyChoice): BattleStep[] {
+export function buildPvpScript(choice: JourneyChoice, t: TFunction): BattleStep[] {
   const foeRace = pvpOpponentRace(choice)
   const foeName = heroName(foeRace)
   const foeForm = FORM_LABEL[foeRace]
+  const foeFormName = t(foeForm.name)
   const name = heroName(choice.raceId)
   return [
-    { at: 0, dice: 'ask', banner: 'Iniciativa — os dois jogadores rolam d20', heroHp: 240, foeHp: 230, log: 'A arena ruge. Dois heróis, um vencedor.' },
-    { at: 1800, dice: 'reveal', log: `🎲 19 × 11 — ${name} age primeiro!` },
-    { at: 4200, dice: null, banner: '⚔️ Seu turno — escolha uma ação', showActions: true, log: 'Sua vez: Golpe, Ataque de Classe ou Especial.' },
-    { at: 6600, event: { kind: 'resolve', attackerId: 'hero', defenderId: 'foe', action: 'weapon', defenseAction: 'none', hit: true, damage: 28 }, foeHp: 202, showActions: false, log: 'Ataque de Classe: 28 de dano!' },
-    { at: 9000, banner: '🛡️ Turno do oponente', event: { kind: 'resolve', attackerId: 'foe', defenderId: 'hero', action: 'weapon', defenseAction: 'none', hit: true, damage: 15 }, heroHp: 225, log: `${foeName} contra-ataca: 15 de dano.` },
-    { at: 11400, event: { kind: 'transform', actorId: 'foe' }, foeTransformed: true, banner: `${foeForm.emoji} ${foeName} desperta: ${foeForm.name}!`, log: `${foeName} se transforma — o poder dele(a) dispara!` },
-    { at: 14000, event: { kind: 'resolve', attackerId: 'foe', defenderId: 'hero', action: FORM_SPECIAL_ACTION[foeRace], defenseAction: 'none', hit: true, damage: 34 }, heroHp: 191, log: `Especial de forma de ${foeName}: 34 de dano. A luta apertou!` },
-    { at: 16600, banner: '⚔️ Seu turno', showActions: true, log: 'Transformado ou não, ele sangra. Responda!' },
-    { at: 18800, event: { kind: 'resolve', attackerId: 'hero', defenderId: 'foe', action: 'weapon', defenseAction: 'none', hit: true, damage: 26 }, foeHp: 176, showActions: false, log: 'Ataque de Classe: 26 de dano!' },
-    { at: 21200, dice: 'ask', banner: '🎲 Tudo no dado final!', log: 'Um golpe. Um dado. Um vencedor.' },
-    { at: 24200, dice: 'reveal', log: '🎲 NAT 20! Sorte grande no dado!' },
-    { at: 25800, event: { kind: 'resolve', attackerId: 'hero', defenderId: 'foe', action: 'special', defenseAction: 'none', hit: true, damage: 176, isCritical: true }, foeHp: 0, dice: null, ended: true, banner: null, log: `CRÍTICO MÁXIMO! ${foeName} cai mesmo transformado.` },
-    { at: 27800, rewards: true, log: 'Vitória! Ouro, XP e pontos de ranking.' },
+    { at: 0, dice: 'ask', banner: t('Initiative — both players roll a d20'), heroHp: 240, foeHp: 230, log: t('The arena roars. Two heroes, one winner.') },
+    { at: 1800, dice: 'reveal', log: t('🎲 19 × 11 — {name} acts first!', { name }) },
+    { at: 4200, dice: null, banner: t('⚔️ Your turn — choose an action'), showActions: true, log: t('Your move: Strike, Class Attack or Special.') },
+    { at: 6600, event: { kind: 'resolve', attackerId: 'hero', defenderId: 'foe', action: 'weapon', defenseAction: 'none', hit: true, damage: 28 }, foeHp: 202, showActions: false, log: t('Class Attack: 28 damage!') },
+    { at: 9000, banner: t("⚔️ Opponent's turn"), event: { kind: 'resolve', attackerId: 'foe', defenderId: 'hero', action: 'weapon', defenseAction: 'none', hit: true, damage: 15 }, heroHp: 225, log: t('{name} counterattacks: 15 damage.', { name: foeName }) },
+    { at: 11400, event: { kind: 'transform', actorId: 'foe' }, foeTransformed: true, banner: t('{emoji} {name} awakens: {form}!', { emoji: foeForm.emoji, name: foeName, form: foeFormName }), log: t('{name} transforms — their power surges!', { name: foeName }) },
+    { at: 14000, event: { kind: 'resolve', attackerId: 'foe', defenderId: 'hero', action: FORM_SPECIAL_ACTION[foeRace], defenseAction: 'none', hit: true, damage: 34 }, heroHp: 191, log: t("{name}'s form special: 34 damage. The fight tightens!", { name: foeName }) },
+    { at: 16600, banner: t('⚔️ Your turn'), showActions: true, log: t('Transformed or not, they bleed. Answer back!') },
+    { at: 18800, event: { kind: 'resolve', attackerId: 'hero', defenderId: 'foe', action: 'weapon', defenseAction: 'none', hit: true, damage: 26 }, foeHp: 176, showActions: false, log: t('Class Attack: 26 damage!') },
+    { at: 21200, dice: 'ask', banner: t('🎲 Everything on the final roll!'), log: t('One strike. One die. One winner.') },
+    { at: 24200, dice: 'reveal', log: t('🎲 NAT 20! Huge luck on the dice!') },
+    { at: 25800, event: { kind: 'resolve', attackerId: 'hero', defenderId: 'foe', action: 'special', defenseAction: 'none', hit: true, damage: 176, isCritical: true }, foeHp: 0, dice: null, ended: true, banner: null, log: t('MAX CRITICAL! {name} falls even transformed.', { name: foeName }) },
+    { at: 27800, rewards: true, log: t('Victory! Gold, XP and ranking points.') },
   ]
 }
 
@@ -377,15 +408,15 @@ export function buildRankRows(choice: JourneyChoice): RankRow[] {
     draconiano: '🐉', elfo: '🧝', humano: '⚔️', metamorfo: '🐺',
   }
   const others: [string, string, number][] = [
-    ['Vharen, o Indomável', '🐉', 2140],
-    ['Selune Vidraluna', '🧝', 1985],
+    ['Vharen the Untamed', '🐉', 2140],
+    ['Selune Moonglass', '🧝', 1985],
     ['Bruma', '🐺', 1720],
     ['Sir Aldebrand', '⚔️', 1655],
-    ['Nyx das Adagas', '🧝', 1590],
-    ['Korga Quebra-Ossos', '🐉', 1470],
-    ['Iris do Sétimo Véu', '⚔️', 1385],
-    ['Fenn, o Errante', '🐺', 1290],
-    ['Maeve Corvo-Real', '🧝', 1210],
+    ['Nyx of the Daggers', '🧝', 1590],
+    ['Korga Bonebreaker', '🐉', 1470],
+    ['Iris of the Seventh Veil', '⚔️', 1385],
+    ['Fenn the Wanderer', '🐺', 1290],
+    ['Maeve Kingsraven', '🧝', 1210],
   ]
   const rows: RankRow[] = []
   let oi = 0

@@ -10,6 +10,7 @@ import {
 import { getProfessionLevel, getProfessionLevelInfo } from '@/lib/professionSystem'
 import { addDropToInventoryTx } from '@/lib/dungeonRunServer'
 import { addHistoryEntry } from '@/lib/characterHistory'
+import { advanceQuestProgress } from '@/lib/questServer'
 
 export const dynamic = 'force-dynamic'
 
@@ -172,6 +173,8 @@ export async function POST(req: Request) {
         ? `🌾 Colheu ${itemsDesc} + 💎 ${stoneNames.join(', ')} (+${result.xpGained} XP de Fazenda).`
         : `🌾 Colheu ${itemsDesc} (+${result.xpGained} XP de Fazenda).`,
     }).catch(() => {})
+    // 🗺️ Missões: pós-commit e fire-and-forget (amount = canteiros/ciclos colhidos).
+    advanceQuestProgress(characterId, { type: 'farm_harvest', amount: result.harvested }).catch(() => {})
 
     return NextResponse.json({
       results: result.results,

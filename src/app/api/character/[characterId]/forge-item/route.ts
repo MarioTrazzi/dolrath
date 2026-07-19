@@ -15,6 +15,7 @@ import {
   rollCraftBatch,
 } from '@/lib/craftingProfession'
 import { getUserForgeXp } from '@/lib/craftingServer'
+import { advanceQuestProgress } from '@/lib/questServer'
 import { getProfessionLevel, getProfessionLevelInfo } from '@/lib/professionSystem'
 
 // ⚒️ Profissão de FORJA — crafta equipamento OU refina pedra concentrada.
@@ -286,6 +287,11 @@ export async function POST(
       })
     } catch (historyError) {
       console.error('Erro ao registrar histórico de forja:', historyError)
+    }
+
+    // 🗺️ Missões: pós-commit e fire-and-forget (só unidades que passaram na rolagem).
+    if (roll.succeeded > 0) {
+      advanceQuestProgress(character.id, { type: 'craft_forge', amount: roll.succeeded }).catch(() => {})
     }
 
     // levelInfo pós-crédito (a UI anima a barra de XP com isto).

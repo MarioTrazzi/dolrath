@@ -188,9 +188,16 @@ export function buildWalkPathPoints(rooms: number, minorNodes: number, seed?: st
       // Penúltimo nó fica perto do eixo pro segmento final até o boss não chicotear.
       const lo = i === last - 1 ? 32 : X_MIN
       const hi = i === last - 1 ? 68 : X_MAX
-      // Tende a cruzar o centro; 25% de chance de insistir no mesmo lado.
-      let dir = prev >= 50 ? -1 : 1
-      if (rand() < 0.25) dir = -dir
+      // Perto do eixo a direção é 50/50 (senão a 1ª perna sai sempre pro mesmo
+      // lado e toda run vira o mesmo zigue-zague); num flanco tende a voltar
+      // pro centro (65%) mas pode aprofundar (35%).
+      let dir: 1 | -1
+      if (Math.abs(prev - 50) < 6) {
+        dir = rand() < 0.5 ? -1 : 1
+      } else {
+        dir = prev > 50 ? -1 : 1
+        if (rand() < 0.35) dir = (-dir as 1 | -1)
+      }
       // Se o lado sorteado não comporta o passo mínimo, inverte. Um dos lados
       // sempre comporta: os dois falharem exigiria hi - lo < 2×MIN_DX, e o
       // range mais apertado ([32,68]) tem largura 36 > 28.

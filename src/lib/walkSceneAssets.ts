@@ -149,8 +149,13 @@ export function segmentCountForTrail(nodeCount: number): number {
 /**
  * Trilha no mapa único (pan, sem tiling): começa bem embaixo, zigzag largo
  * nas laterais, boss no topo ao centro. Coordenadas em % do mapa (x/y 0–100).
+ *
+ * Com `seed`, o layout é sorteado (estável para o mesmo seed): x dos nós
+ * intermediários vagueia entre as laterais e o y sobe com espaçamento
+ * irregular — cada run parece uma exploração diferente. Sem seed, mantém o
+ * zigzag determinístico (landing/journey depende dele).
  */
-export function buildWalkPathPoints(rooms: number, minorNodes: number): MapPoint[] {
+export function buildWalkPathPoints(rooms: number, minorNodes: number, seed?: string): MapPoint[] {
   const seq: { kind: NodeKind; tier: number }[] = [{ kind: 'start', tier: 0 }]
   for (let t = 1; t <= rooms; t++) {
     for (let m = 0; m < minorNodes; m++) seq.push({ kind: 'minor', tier: t })
@@ -159,6 +164,49 @@ export function buildWalkPathPoints(rooms: number, minorNodes: number): MapPoint
   seq.push({ kind: 'boss', tier: rooms })
 
   const last = seq.length - 1
+  if (seed !== undefined && last > 1) {
+    const rand = seedRng('layout:' + seed)
+    // Margens seguras p/ card do herói + fog (câmera clampa com MAP_ZOOM 1.2).
+    const X_MIN = 18
+    const X_MAX = 82
+    // Zigue-zague garantido: nem segmento vertical morto, nem quase horizontal.
+    const MIN_DX = 14
+    const MAX_DX = 40
+
+    // Y: subida monotônica com gaps de peso sorteado (razão máx ~2:1).
+    const weights: number[] = []
+    let total = 0
+    for (let g = 0; g < last; g++) {
+      const w = 0.65 + rand() * 0.7
+      weights.push(w)
+      total += w
+    }
+
+    const xs: number[] = [50]
+    for (let i = 1; i < last; i++) {
+      const prev = xs[i - 1]
+      // Penúltimo nó fica perto do eixo pro segmento final até o boss não chicotear.
+      const lo = i === last - 1 ? 32 : X_MIN
+      const hi = i === last - 1 ? 68 : X_MAX
+      // Tende a cruzar o centro; 25% de chance de insistir no mesmo lado.
+      let dir = prev >= 50 ? -1 : 1
+      if (rand() < 0.25) dir = -dir
+      // Se o lado sorteado não comporta o passo mínimo, inverte. Um dos lados
+      // sempre comporta: os dois falharem exigiria hi - lo < 2×MIN_DX, e o
+      // range mais apertado ([32,68]) tem largura 36 > 28.
+      if (dir === 1 ? prev + MIN_DX > hi : prev - MIN_DX < lo) dir = -dir
+      const step = MIN_DX + rand() * (MAX_DX - MIN_DX)
+      xs.push(dir === 1 ? Math.min(prev + step, hi) : Math.max(prev - step, lo))
+    }
+    xs.push(50)
+
+    let acc = 0
+    return seq.map((n, i) => {
+      const t = i === 0 ? 0 : (acc += weights[i - 1]) / total
+      return { x: xs[i], y: 94 - t * 86, kind: n.kind, tier: n.tier }
+    })
+  }
+
   return seq.map((n, i) => {
     const t = last > 0 ? i / last : 0
     // Base ~94% → topo ~8% (boss)

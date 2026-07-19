@@ -16,7 +16,7 @@ import {
   NodeVisualState,
   RevealedNode,
 } from '@/components/dungeon/DungeonMap'
-import WalkScene, { type WalkMode, type WalkTrailMark } from '@/components/dungeon/WalkScene'
+import WalkScene, { WALK_SCROLL_MS, type WalkMode, type WalkTrailMark } from '@/components/dungeon/WalkScene'
 import {
   buildWalkPathPoints,
   walkSceneEnabled,
@@ -605,12 +605,17 @@ export default function DungeonRun({
   // entrada → (nós menores + sala principal) × salas → covil do boss.
   // WalkScene: pan sobre mapa único; fallback SVG: zigzag clássico.
   const useWalkScene = walkSceneEnabled(dungeon.id)
+  // Seed do layout: sorteado 1x por mount (lazy) — estável a run inteira
+  // (combate/re-render não re-embaralham o mapa), novo a cada run.
+  const [layoutSeed] = useState(
+    () => `${dungeon.id}:${Date.now().toString(36)}:${Math.floor(Math.random() * 0xffffffff).toString(36)}`
+  )
   const trailPoints = useMemo(
     () =>
       useWalkScene
-        ? buildWalkPathPoints(dungeon.rooms, dungeon.minorNodes)
+        ? buildWalkPathPoints(dungeon.rooms, dungeon.minorNodes, layoutSeed)
         : buildTrailPoints(dungeon.rooms, dungeon.minorNodes),
-    [dungeon.rooms, dungeon.minorNodes, useWalkScene]
+    [dungeon.rooms, dungeon.minorNodes, useWalkScene, layoutSeed]
   )
   const LAST = trailPoints.length - 1
   const [tokenIdx, setTokenIdx] = useState(0)
@@ -1265,7 +1270,7 @@ export default function DungeonRun({
       showNarration()
       later(() => {
         setWalkMode('approach')
-      }, 5200)
+      }, WALK_SCROLL_MS)
       return
     }
 

@@ -43,8 +43,10 @@ export interface WalkSceneProps {
 }
 
 const MAP_ZOOM = 1.2
-/** Dois vasculhares no ritmo do primeiro (~2.6s cada). Sync com DungeonRun. */
-const SCROLL_DUR = 5.2
+/** Dois vasculhares no ritmo do primeiro (~2.1s cada). */
+const SCROLL_DUR = 4.2
+/** Fonte única da duração do vasculhar — DungeonRun agenda o approach com isto. */
+export const WALK_SCROLL_MS = SCROLL_DUR * 1000
 /** Estilingada curta depois de avistar o "?". */
 const APPROACH_DUR = 0.7
 /** Quase todo o caminho no vasculhar; a estilingada só fecha. */

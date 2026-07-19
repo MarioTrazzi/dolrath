@@ -14,6 +14,8 @@ import { GatherItemThumb } from '@/components/gathering/GatheringPanel'
 import { GATHER_FIELDS, GATHER_TICK_SECONDS, GATHER_TICK_STAMINA, type GatherFieldId, type PendingYield } from '@/lib/gathering'
 import { getProfessionLevelInfo, type ProfessionLevelInfo } from '@/lib/professionSystem'
 import { getDisplayName } from '@/lib/enhancementSystem'
+import { useI18n, useT } from '@/lib/i18n/I18nProvider'
+import { localizeItemName } from '@/lib/i18n/catalog'
 
 // ============================================================
 // Tipos compartilhados
@@ -95,20 +97,22 @@ const levelLockedFor = (node: MapNode, maxGatherLevel: number) =>
 const HOME = { x: 50, y: 90 }
 
 // Merge: coordenadas/paleta do "Mapa do Reino" + nome/emoji/drops reais.
+// recurso/sabor/tagline = EN canônico (dicionário devolve o PT); `name` dos
+// campos reais segue PT (chave do GATHER_FIELDS) e localiza via CATALOG_EN.
 export const MAP_NODES: MapNode[] = [
   {
     key: 'ervas', fieldId: 'ervas',
     name: GATHER_FIELDS.ervas.name, emoji: GATHER_FIELDS.ervas.emoji,
-    recurso: 'Ervas & Sementes', tagline: GATHER_FIELDS.ervas.tagline,
-    sabor: 'Campinas abertas ao sol; o cheiro de hortelã paira no vento — e só aqui nascem sementes.',
+    recurso: 'Herbs & Seeds', tagline: GATHER_FIELDS.ervas.tagline,
+    sabor: 'Open meadows under the sun; the scent of mint drifts on the wind — and only here do seeds sprout.',
     x: 25, y: 71, acc: '#7f9d3a', accSoft: 'rgba(127,157,58,0.45)', locked: false,
     drops: GATHER_FIELDS.ervas.drops, seedField: true,
   },
   {
     key: 'minerios', fieldId: 'minerios',
     name: GATHER_FIELDS.minerios.name, emoji: GATHER_FIELDS.minerios.emoji,
-    recurso: 'Minério & Pedra', tagline: GATHER_FIELDS.minerios.tagline,
-    sabor: 'Encostas rachadas expõem veios metálicos que reluzem na penumbra.',
+    recurso: 'Ore & Stone', tagline: GATHER_FIELDS.minerios.tagline,
+    sabor: 'Cracked slopes expose metallic veins gleaming in the half-light.',
     x: 74, y: 63, acc: '#b5793a', accSoft: 'rgba(181,121,58,0.45)', locked: false,
     unlockLevel: GATHER_FIELDS.minerios.minGatherLevel,
     drops: GATHER_FIELDS.minerios.drops,
@@ -116,8 +120,8 @@ export const MAP_NODES: MapNode[] = [
   {
     key: 'bosque', fieldId: 'bosque',
     name: GATHER_FIELDS.bosque.name, emoji: GATHER_FIELDS.bosque.emoji,
-    recurso: 'Madeira & Seiva', tagline: GATHER_FIELDS.bosque.tagline,
-    sabor: 'Árvores milenares sussurram; a luz mal atravessa a copa cerrada.',
+    recurso: 'Wood & Sap', tagline: GATHER_FIELDS.bosque.tagline,
+    sabor: 'Millennial trees whisper; light barely pierces the dense canopy.',
     x: 35, y: 43, acc: '#3f8452', accSoft: 'rgba(63,132,82,0.45)', locked: false,
     unlockLevel: GATHER_FIELDS.bosque.minGatherLevel,
     drops: GATHER_FIELDS.bosque.drops,
@@ -125,8 +129,8 @@ export const MAP_NODES: MapNode[] = [
   {
     key: 'costa', fieldId: 'costa',
     name: GATHER_FIELDS.costa.name, emoji: GATHER_FIELDS.costa.emoji,
-    recurso: 'Peixe & Frutos do Mar', tagline: GATHER_FIELDS.costa.tagline,
-    sabor: 'Falésias varridas pelo vento salgado; a maré baixa desenha poças cheias de vida. Exige uma Vara de Pesca equipada.',
+    recurso: 'Fish & Seafood', tagline: GATHER_FIELDS.costa.tagline,
+    sabor: 'Cliffs swept by salty wind; low tide draws pools full of life. Requires an equipped Fishing Rod.',
     x: 12, y: 56, acc: '#3a7ea6', accSoft: 'rgba(58,126,166,0.45)', locked: false,
     unlockLevel: GATHER_FIELDS.costa.minGatherLevel,
     drops: GATHER_FIELDS.costa.drops,
@@ -134,24 +138,24 @@ export const MAP_NODES: MapNode[] = [
   {
     key: 'caca', fieldId: 'caca',
     name: GATHER_FIELDS.caca.name, emoji: GATHER_FIELDS.caca.emoji,
-    recurso: 'Carne & Couro', tagline: GATHER_FIELDS.caca.tagline,
-    sabor: 'Rastros frescos cruzam a orla da mata — carne e couro sem tocar no gado. Exige uma Faca de Caça equipada.',
+    recurso: 'Meat & Leather', tagline: GATHER_FIELDS.caca.tagline,
+    sabor: 'Fresh tracks cross the forest edge — meat and leather without touching the herd. Requires an equipped Hunting Knife.',
     x: 18, y: 27, acc: '#8f6b4a', accSoft: 'rgba(143,107,74,0.45)', locked: false,
     unlockLevel: GATHER_FIELDS.caca.minGatherLevel,
     drops: GATHER_FIELDS.caca.drops,
   },
   {
     key: 'pantano',
-    name: 'Pântano das Brumas', emoji: '🌫️',
-    recurso: 'Ingredientes raros', tagline: 'Reagentes alquímicos raros — em breve.',
-    sabor: 'Névoa densa esconde ingredientes raros. A trilha até lá ainda não foi aberta.',
+    name: 'Misty Marsh', emoji: '🌫️',
+    recurso: 'Rare ingredients', tagline: 'Rare alchemical reagents — coming soon.',
+    sabor: 'Dense fog hides rare ingredients. The trail there has not been opened yet.',
     x: 73, y: 36, acc: '#4a8a86', accSoft: 'rgba(74,138,134,0.45)', locked: true, soon: true,
   },
   {
     key: 'ermo',
-    name: 'Ermo Vulcânico', emoji: '🌋',
-    recurso: 'Reagentes lendários', tagline: 'Reagentes lendários — em breve.',
-    sabor: 'Rios de lava guardam reagentes de poções lendárias. Expedição ainda impossível.',
+    name: 'Volcanic Wastes', emoji: '🌋',
+    recurso: 'Legendary reagents', tagline: 'Legendary reagents — coming soon.',
+    sabor: 'Rivers of lava guard reagents of legendary potions. An expedition is still impossible.',
     x: 49, y: 15, acc: '#c0492f', accSoft: 'rgba(192,73,47,0.45)', locked: true, soon: true,
   },
 ]
@@ -256,6 +260,8 @@ function ProgressRing({ progress, color, size }: { progress: number; color: stri
 function RegionNode({ node, sessions, now, maxGatherLevel, onTap }: {
   node: MapNode; sessions: OpenSession[]; now: number; maxGatherLevel: number; onTap: (n: MapNode) => void
 }) {
+  const { locale, t } = useI18n()
+  const displayName = node.fieldId ? localizeItemName(node.name, locale) : t(node.name)
   const isLocked = node.locked || levelLockedFor(node, maxGatherLevel)
   const here = sessions.filter((s) => s.fieldId === node.fieldId)
   const first = here[0]
@@ -273,7 +279,7 @@ function RegionNode({ node, sessions, now, maxGatherLevel, onTap }: {
       onClick={() => onTap(node)}
       className="absolute -translate-x-1/2 -translate-y-1/2 group"
       style={{ left: `${node.x}%`, top: `${node.y}%`, zIndex: 6, ['--acc' as string]: node.acc, ['--acc-soft' as string]: node.accSoft }}
-      aria-label={node.name}
+      aria-label={displayName}
     >
       <span
         className={`relative grid place-items-center rounded-full transition-transform group-active:scale-95 ${!isLocked && here.length === 0 ? 'region-pulse' : ''}`}
@@ -321,9 +327,9 @@ function RegionNode({ node, sessions, now, maxGatherLevel, onTap }: {
 
       <span className="absolute left-1/2 -translate-x-1/2 top-full mt-1 whitespace-nowrap font-map font-bold text-[10.5px] tracking-wide ink text-center"
         style={{ textShadow: '0 1px 0 rgba(255,247,224,0.6)' }}>
-        {node.name}
+        {displayName}
         {!node.locked && levelLockedFor(node, maxGatherLevel) && (
-          <span className="block font-combat font-normal text-[9px]" style={{ color: '#7a2f26' }}>Coleta Nv.{node.unlockLevel}</span>
+          <span className="block font-combat font-normal text-[9px]" style={{ color: '#7a2f26' }}>{t('Gathering Lv.{n}', { n: node.unlockLevel ?? 1 })}</span>
         )}
       </span>
     </button>
@@ -331,6 +337,7 @@ function RegionNode({ node, sessions, now, maxGatherLevel, onTap }: {
 }
 
 function HomeMark() {
+  const t = useT()
   return (
     <div className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center" style={{ left: `${HOME.x}%`, top: `${HOME.y}%`, zIndex: 5 }}>
       <span className="grid place-items-center rounded-full" style={{
@@ -341,7 +348,7 @@ function HomeMark() {
       }}>
         <span className="text-[22px]">🏰</span>
       </span>
-      <span className="mt-1 font-mapd text-[11px] ink tracking-wide" style={{ textShadow: '0 1px 0 rgba(255,247,224,0.6)' }}>Vila de Dolrath</span>
+      <span className="mt-1 font-mapd text-[11px] ink tracking-wide" style={{ textShadow: '0 1px 0 rgba(255,247,224,0.6)' }}>{t('Dolrath Village')}</span>
     </div>
   )
 }
@@ -369,6 +376,7 @@ function Ambient() {
 }
 
 function DropChip({ name, seed, dim }: { name?: string; seed?: boolean; dim?: boolean }) {
+  const { locale, t } = useI18n()
   return (
     <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[12px] font-medium font-map"
       style={{
@@ -378,17 +386,18 @@ function DropChip({ name, seed, dim }: { name?: string; seed?: boolean; dim?: bo
       <span className="w-4 h-4 grid place-items-center overflow-hidden rounded-sm shrink-0">
         {seed ? '🫘' : dim ? '🔒' : <GatherItemThumb name={name!} className="text-[13px]" />}
       </span>
-      {seed ? 'Sementes de cultivo' : name}
+      {seed ? t('Crop seeds') : localizeItemName(name!, locale)}
     </span>
   )
 }
 
 function ParchProfessionBar({ info, acc }: { info: ProfessionLevelInfo; acc: string }) {
+  const t = useT()
   return (
     <div className="w-full">
       <div className="flex items-center justify-between text-[11px] mb-1">
-        <span className="font-map font-bold ink">⛏️ Coleta <span style={{ color: acc }}>Nv. {info.level}</span></span>
-        <span className="ink-soft font-combat">{info.isMax ? 'MÁX' : `${info.xpIntoLevel}/${info.xpForNext} XP`}</span>
+        <span className="font-map font-bold ink">⛏️ {t('Gathering')} <span style={{ color: acc }}>{t('Lv.')} {info.level}</span></span>
+        <span className="ink-soft font-combat">{info.isMax ? t('MAX') : `${info.xpIntoLevel}/${info.xpForNext} XP`}</span>
       </div>
       <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(74,52,24,0.18)' }}>
         <div className="h-full rounded-full" style={{ width: `${Math.round(info.progress * 100)}%`, background: `linear-gradient(90deg, ${acc}, ${acc}aa)` }} />
@@ -406,26 +415,26 @@ function StopConfirm({ acc, secondsToNextTick, onNow, onAfter, onClose }: {
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  const t = useT()
   return (
     <div className="absolute inset-0 z-40 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={onClose}>
       <div className="parchment parch-frame relative w-full max-w-xs rounded-2xl p-4" onClick={(e) => e.stopPropagation()}>
-        <h3 className="font-mapd text-[16px] ink mb-1">🚪 Encerrar a coleta?</h3>
+        <h3 className="font-mapd text-[16px] ink mb-1">{t('🚪 Stop gathering?')}</h3>
         <p className="text-[12px] ink-soft leading-snug mb-3">
-          Encerre agora (perde o ciclo em curso) ou espere o ciclo atual terminar — o último espólio cai sozinho
-          e o herói é liberado sem gastar stamina num ciclo novo.
+          {t('Stop now (losing the cycle in progress) or wait for the current cycle to finish — the last haul drops on its own and the hero is freed without spending stamina on a new cycle.')}
         </p>
         <div className="flex flex-col gap-2">
           <button onClick={() => { onAfter(); onClose() }}
             className="w-full py-2.5 rounded-xl font-map font-bold text-[13px] text-white active:scale-[0.98] transition-transform"
             style={{ background: `linear-gradient(90deg, ${acc}, ${acc}cc)` }}>
-            ⏳ Aguardar último ciclo ({fmtDuration(secondsToNextTick)})
+            {t('⏳ Wait for the last cycle ({time})', { time: fmtDuration(secondsToNextTick) })}
           </button>
           <button onClick={() => { onNow(); onClose() }}
             className="w-full py-2.5 rounded-xl font-map font-bold text-[13px] ink active:scale-[0.98] transition-transform"
             style={{ background: 'rgba(94,64,26,0.12)', border: '1px solid rgba(74,52,24,0.35)' }}>
-            🚪 Encerrar agora
+            {t('🚪 Stop now')}
           </button>
-          <button onClick={onClose} className="w-full py-2 rounded-xl font-semibold text-[13px] ink-soft">Cancelar</button>
+          <button onClick={onClose} className="w-full py-2 rounded-xl font-semibold text-[13px] ink-soft">{t('Cancel')}</button>
         </div>
       </div>
     </div>
@@ -437,6 +446,7 @@ function ActiveSessionDetail({ node, status, countdown, busy, onCollect, onStopN
   onCollect: () => void; onStopNow: () => void; onStopAfter: () => void; onCancelStop: () => void
 }) {
   const [showStop, setShowStop] = useState(false)
+  const { locale, t } = useI18n()
   const acc = node.acc
   const exhausted = status.session?.status === 'exhausted'
   const paused = !!status.inventoryFull && !exhausted
@@ -449,21 +459,21 @@ function ActiveSessionDetail({ node, status, countdown, busy, onCollect, onStopN
     <div className="rounded-xl px-3 py-3 mb-3" style={{ background: 'rgba(94,64,26,0.08)', border: '1px solid rgba(74,52,24,0.25)' }}>
       {paused && (
         <div className="mb-2.5 rounded-lg px-2.5 py-2 text-[11.5px] font-bold text-center ink" style={{ background: 'rgba(181,121,58,0.16)', border: '1px dashed rgba(122,47,38,0.4)' }}>
-          🎒 Inventário cheio — coleta pausada, sem gastar stamina. Abra espaço para continuar.
+          {t('🎒 Inventory full — gathering paused, no stamina spent. Free up space to continue.')}
         </div>
       )}
       {!exhausted && stopRequested && (
         <div className="mb-2.5 rounded-lg px-2.5 py-2 text-[11.5px] font-bold text-center ink" style={{ background: 'rgba(74,138,134,0.14)', border: '1px dashed rgba(74,138,134,0.5)' }}>
-          ⏳ Encerrando sozinho ao fim deste ciclo ({fmtDuration(countdown)}) — sem gastar stamina num ciclo novo.
+          {t('⏳ Stopping on its own at the end of this cycle ({time}) — no stamina spent on a new one.', { time: fmtDuration(countdown) })}
         </div>
       )}
 
       <div className="flex items-center justify-between gap-2 mb-1.5">
         <span className="font-map font-bold text-[13px] ink">
-          {exhausted ? '💤 Stamina esgotada' : paused ? 'Aguardando espaço…' : `Coletando · ${pending.ticks} tique${pending.ticks === 1 ? '' : 's'}`}
+          {exhausted ? t('💤 Stamina exhausted') : paused ? t('Waiting for space…') : pending.ticks === 1 ? t('Gathering · 1 tick') : t('Gathering · {n} ticks', { n: pending.ticks })}
         </span>
         <span className="font-combat text-[11px]" style={{ color: exhausted ? '#7a2f26' : acc }}>
-          {exhausted ? 'espólio pronto' : paused ? '🎒 pausado' : `⏳ ${fmtDuration(countdown)}`}
+          {exhausted ? t('haul ready') : paused ? t('🎒 paused') : `⏳ ${fmtDuration(countdown)}`}
         </span>
       </div>
 
@@ -475,33 +485,33 @@ function ActiveSessionDetail({ node, status, countdown, busy, onCollect, onStopN
 
       <div className="rounded-lg px-2.5 py-2 mb-2.5" style={{ background: 'rgba(94,64,26,0.06)', border: '1px solid rgba(74,52,24,0.2)' }}>
         <div className="text-[10px] uppercase tracking-[0.16em] ink-soft font-bold mb-1.5">
-          🎒 Espólio acumulado {totalItems > 0 ? `(${totalItems})` : ''}
+          {t('🎒 Accumulated haul')} {totalItems > 0 ? `(${totalItems})` : ''}
         </div>
         {pending.drops.length === 0 ? (
-          <p className="text-[11.5px] ink-soft italic">Nada ainda — o primeiro tique rende em até 15 min. Pode fechar a página: a coleta continua.</p>
+          <p className="text-[11.5px] ink-soft italic">{t('Nothing yet — the first tick yields within 15 min. You can close the page: gathering continues.')}</p>
         ) : (
           <div className="flex flex-wrap gap-1.5">
             {pending.drops.map((d) => (
-              <div key={d.name} title={d.name} className="flex items-center gap-1 rounded-md pr-1.5 overflow-hidden" style={{ background: 'rgba(74,52,24,0.1)', border: '1px solid rgba(74,52,24,0.22)' }}>
+              <div key={d.name} title={localizeItemName(d.name, locale)} className="flex items-center gap-1 rounded-md pr-1.5 overflow-hidden" style={{ background: 'rgba(74,52,24,0.1)', border: '1px solid rgba(74,52,24,0.22)' }}>
                 <span className="w-7 h-7 grid place-items-center overflow-hidden"><GatherItemThumb name={d.name} /></span>
                 <span className="ink font-combat text-[11px] font-bold">×{d.qty}</span>
               </div>
             ))}
           </div>
         )}
-        {pending.xp > 0 && <div className="text-[10.5px] mt-1.5 font-bold" style={{ color: acc }}>+{pending.xp} XP de Coleta ao coletar</div>}
+        {pending.xp > 0 && <div className="text-[10.5px] mt-1.5 font-bold" style={{ color: acc }}>{t('+{n} Gathering XP on collect', { n: pending.xp })}</div>}
       </div>
 
       <div className="mb-2.5"><ParchProfessionBar info={status.gather} acc={acc} /></div>
-      <div className="text-[10.5px] ink-soft mb-2.5">⚡ {status.stamina}/{status.maxStamina} de stamina · tique de 15 min custa {GATHER_TICK_STAMINA} ⚡</div>
+      <div className="text-[10.5px] ink-soft mb-2.5">{t('⚡ {cur}/{max} stamina · a 15-min tick costs {cost} ⚡', { cur: status.stamina, max: status.maxStamina, cost: GATHER_TICK_STAMINA })}</div>
       {(status.gear?.tool || status.gear?.garb) && (
         <div className="text-[10.5px] ink-soft mb-2.5 space-y-0.5">
           {[status.gear.tool, status.gear.garb].filter(Boolean).map((p) => (
             <div key={p!.name}>
-              🛠️ {getDisplayName(p!.name, p!.enhancementLevel)} ·{' '}
+              🛠️ {getDisplayName(localizeItemName(p!.name, locale), p!.enhancementLevel)} ·{' '}
               {p!.broken
-                ? <span className="font-bold" style={{ color: '#7a2f26' }}>quebrada — sem bônus (repare com uma cópia)</span>
-                : <>+{Math.round(p!.yieldBonus * 100)}% rendimento · durabilidade {p!.durability}/{p!.maxDurability}</>}
+                ? <span className="font-bold" style={{ color: '#7a2f26' }}>{t('broken — no bonus (repair with a copy)')}</span>
+                : <>{t('+{pct}% yield · durability {cur}/{max}', { pct: Math.round(p!.yieldBonus * 100), cur: p!.durability, max: p!.maxDurability })}</>}
             </div>
           ))}
         </div>
@@ -511,19 +521,19 @@ function ActiveSessionDetail({ node, status, countdown, busy, onCollect, onStopN
         <button onClick={onCollect} disabled={busy || (pending.drops.length === 0 && pending.xp === 0)}
           className="flex-1 py-2.5 rounded-xl font-map font-bold text-[13px] text-white active:scale-[0.98] transition-transform disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ background: `linear-gradient(90deg, ${acc}, ${acc}cc)`, boxShadow: `0 0 14px ${acc}55` }}>
-          🎒 Coletar espólio
+          {t('🎒 Collect haul')}
         </button>
         {!exhausted && stopRequested ? (
           <button onClick={onCancelStop} disabled={busy}
             className="px-3.5 py-2.5 rounded-xl font-map font-bold text-[13px] ink active:scale-[0.98] transition-transform disabled:opacity-40"
             style={{ background: 'rgba(74,138,134,0.16)', border: '1px solid rgba(74,138,134,0.5)' }}>
-            ↩️ Cancelar
+            {t('↩️ Cancel')}
           </button>
         ) : (
           <button onClick={() => (exhausted ? onStopNow() : setShowStop(true))} disabled={busy}
             className="px-3.5 py-2.5 rounded-xl font-map font-bold text-[13px] ink active:scale-[0.98] transition-transform disabled:opacity-40"
             style={{ background: 'rgba(94,64,26,0.12)', border: '1px solid rgba(74,52,24,0.35)' }}>
-            🚪 Encerrar
+            {t('🚪 Stop')}
           </button>
         )}
       </div>
@@ -547,6 +557,7 @@ function RegionActiveBody({
   onDispatch: (fieldId: GatherFieldId, characterId: string) => void
   onCollect: () => void; onStopNow: () => void; onStopAfter: () => void; onCancelStop: () => void
 }) {
+  const t = useT()
   const fieldId = node.fieldId!
   const charById = useMemo(() => new Map(characters.map((c) => [c.id, c])), [characters])
   const here = sessions.filter((s) => s.fieldId === fieldId)
@@ -556,11 +567,11 @@ function RegionActiveBody({
     <>
       {here.length > 0 && (
         <div className="flex flex-col gap-2 mb-4">
-          <div className="text-[10px] uppercase tracking-[0.18em] ink-soft font-bold">Em coleta ({here.length})</div>
+          <div className="text-[10px] uppercase tracking-[0.18em] ink-soft font-bold">{t('Gathering now')} ({here.length})</div>
           {here.map((s) => {
             const hero = charById.get(s.characterId)
             const expanded = expandedId === s.characterId
-            const label = s.inventoryFull ? '🎒 pausada' : s.status === 'exhausted' ? 'espólio pronto' : 'coletando'
+            const label = s.inventoryFull ? t('🎒 paused') : s.status === 'exhausted' ? t('haul ready') : t('gathering')
             return (
               <div key={s.characterId}>
                 <button onClick={() => onExpand(expanded ? '' : s.characterId)}
@@ -569,7 +580,7 @@ function RegionActiveBody({
                   <Portrait size={34} tone={node.acc} busy />
                   <div className="flex-1 min-w-0">
                     <div className="font-map font-bold text-[13px] ink truncate">
-                      {hero?.name ?? 'Herói'} <span className="ink-soft font-normal">Nv.{hero?.level ?? '?'}</span>
+                      {hero?.name ?? t('Hero')} <span className="ink-soft font-normal">{t('Lv.')}{hero?.level ?? '?'}</span>
                     </div>
                     <div className="text-[11px] font-combat" style={{ color: s.status === 'exhausted' ? '#7a2f26' : node.acc }}>{label}</div>
                   </div>
@@ -591,13 +602,13 @@ function RegionActiveBody({
 
       {hideDispatch ? (
         here.length === 0 ? (
-          <p className="text-[13px] ink-soft italic px-1 py-2">Nenhum herói coletando neste campo.</p>
+          <p className="text-[13px] ink-soft italic px-1 py-2">{t('No hero gathering in this field.')}</p>
         ) : null
       ) : (
         <>
-          <div className="text-[10px] uppercase tracking-[0.18em] ink-soft font-bold mb-2">Enviar herói</div>
+          <div className="text-[10px] uppercase tracking-[0.18em] ink-soft font-bold mb-2">{t('Send hero')}</div>
           {freeHeroes.length === 0 ? (
-            <p className="text-[13px] ink-soft italic px-1 py-2">Nenhum herói livre — todos estão em campo ou você ainda não criou um. Recolha um espólio para liberar alguém.</p>
+            <p className="text-[13px] ink-soft italic px-1 py-2">{t("No free hero — everyone is in the field or you haven't created one yet. Collect a haul to free someone up.")}</p>
           ) : (
             <>
               <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
@@ -607,10 +618,10 @@ function RegionActiveBody({
                   const lowLevel = gatherLevelOf(h.gatherXp) < (node.unlockLevel ?? 1)
                   const apto = !dead && !noStamina && !lowLevel
                   const sel = sendHeroId === h.id
-                  const hint = dead ? '💀 morto'
-                    : lowLevel ? `🔒 Coleta Nv.${node.unlockLevel}`
-                    : noStamina ? '⚡ sem stamina'
-                    : `⛏️ Nv.${gatherLevelOf(h.gatherXp)}`
+                  const hint = dead ? t('💀 dead')
+                    : lowLevel ? t('🔒 Gathering Lv.{n}', { n: node.unlockLevel ?? 1 })
+                    : noStamina ? t('⚡ no stamina')
+                    : `⛏️ ${t('Lv.')}${gatherLevelOf(h.gatherXp)}`
                   return (
                     <button key={h.id} onClick={() => apto && onSelectSend(sel ? null : h.id)} disabled={!apto}
                       className="shrink-0 w-[94px] rounded-xl px-2 py-2.5 text-center transition-all active:scale-95"
@@ -627,13 +638,13 @@ function RegionActiveBody({
                 })}
               </div>
               <div className="text-[11px] ink-soft mt-1.5 mb-3 px-1">
-                Cada tique de 15 min custa <b className="ink">{GATHER_TICK_STAMINA} ⚡</b> e o herói fica ocupado até você encerrar.
+                {t('Each 15-min tick costs')} <b className="ink">{GATHER_TICK_STAMINA} ⚡</b> {t('and the hero stays busy until you stop.')}
               </div>
               <button disabled={!sendHeroId || busy} onClick={() => sendHeroId && onDispatch(fieldId, sendHeroId)}
                 className="w-full py-3.5 rounded-xl font-map font-bold text-[15px] text-white inline-flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ background: sendHeroId ? `linear-gradient(90deg, ${node.acc}, ${node.acc}cc)` : 'rgba(74,52,24,0.4)', boxShadow: sendHeroId ? `0 0 20px ${node.acc}66` : 'none' }}>
                 <ArrowRight size={18} />
-                {sendHeroId ? `Enviar ${charById.get(sendHeroId)?.name ?? 'herói'} para coletar` : 'Escolha um herói'}
+                {sendHeroId ? t('Send {name} to gather', { name: charById.get(sendHeroId)?.name ?? t('hero') }) : t('Pick a hero')}
               </button>
             </>
           )}
@@ -651,6 +662,7 @@ function RegionPanel(props: {
   onCollect: () => void; onStopNow: () => void; onStopAfter: () => void; onCancelStop: () => void
 }) {
   const { node, maxGatherLevel, onClose } = props
+  const { locale, t } = useI18n()
   const levelLocked = node ? !node.locked && levelLockedFor(node, maxGatherLevel) : false
   return (
     <AnimatePresence>
@@ -666,7 +678,7 @@ function RegionPanel(props: {
             style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}>
             <div className="mx-auto w-11 h-1.5 rounded-full mb-3" style={{ background: 'rgba(74,52,24,0.35)' }} />
             <button onClick={onClose} className="absolute top-3 right-3 w-8 h-8 grid place-items-center rounded-full ink"
-              style={{ background: 'rgba(94,64,26,0.12)', border: '1px solid rgba(74,52,24,0.3)' }} aria-label="Fechar">
+              style={{ background: 'rgba(94,64,26,0.12)', border: '1px solid rgba(74,52,24,0.3)' }} aria-label={t('Close')}>
               <X size={16} />
             </button>
 
@@ -679,19 +691,19 @@ function RegionPanel(props: {
                 <span className="text-[28px]">{node.emoji}</span>
               </span>
               <div className="min-w-0">
-                <h2 className="font-mapd text-[20px] leading-tight ink truncate">{node.name}</h2>
+                <h2 className="font-mapd text-[20px] leading-tight ink truncate">{node.fieldId ? localizeItemName(node.name, locale) : t(node.name)}</h2>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-[11px] font-map font-bold" style={{ color: node.acc }}>{node.recurso}</span>
-                  <span className="text-[11px] ink-soft font-combat">· tique 15 min</span>
+                  <span className="text-[11px] font-map font-bold" style={{ color: node.acc }}>{t(node.recurso)}</span>
+                  <span className="text-[11px] ink-soft font-combat">· {t('15-min tick')}</span>
                 </div>
               </div>
             </div>
 
-            <p className="text-[13px] ink-soft leading-snug mb-3 italic">{node.sabor}</p>
+            <p className="text-[13px] ink-soft leading-snug mb-3 italic">{t(node.sabor)}</p>
 
             {node.drops && (
               <div className="mb-4">
-                <div className="text-[10px] uppercase tracking-[0.18em] ink-soft font-bold mb-1.5">Espólio da região</div>
+                <div className="text-[10px] uppercase tracking-[0.18em] ink-soft font-bold mb-1.5">{t('Region haul')}</div>
                 <div className="flex flex-wrap gap-1.5">
                   {node.drops.map((d) => (
                     <DropChip key={d.name} name={d.name} dim={(d.minLevel ?? 1) > maxGatherLevel} />
@@ -706,20 +718,20 @@ function RegionPanel(props: {
             {node.locked ? (
               <div className="rounded-xl px-4 py-4 text-center" style={{ background: 'rgba(122,47,38,0.10)', border: '1px dashed rgba(122,47,38,0.5)' }}>
                 <div className="text-2xl mb-1">🔒</div>
-                <div className="font-map font-bold ink text-[14px] mb-1">Região bloqueada</div>
-                <p className="text-[13px] ink-soft leading-snug">Ainda não há trilha até aqui — esta região chega numa próxima expedição.</p>
+                <div className="font-map font-bold ink text-[14px] mb-1">{t('Region locked')}</div>
+                <p className="text-[13px] ink-soft leading-snug">{t('There is no trail here yet — this region arrives in a future expedition.')}</p>
                 <span className="inline-block mt-2 text-[11px] font-combat px-2.5 py-1 rounded-md"
                   style={{ background: 'rgba(94,64,26,0.12)', border: '1px solid rgba(74,52,24,0.3)', color: '#7a2f26' }}>
-                  ⏳ Em breve
+                  {t('⏳ Coming soon')}
                 </span>
               </div>
             ) : (
               <>
                 {levelLocked && (
                   <div className="rounded-xl px-4 py-3 text-center mb-3" style={{ background: 'rgba(94,64,26,0.08)', border: '1px dashed rgba(74,52,24,0.45)' }}>
-                    <div className="font-map font-bold ink text-[13px] mb-0.5">🔒 Enviar novos heróis: Coleta Nv.{node.unlockLevel}</div>
+                    <div className="font-map font-bold ink text-[13px] mb-0.5">{t('🔒 Sending new heroes: Gathering Lv.{n}', { n: node.unlockLevel ?? 1 })}</div>
                     <p className="text-[12px] ink-soft leading-snug">
-                      Melhor herói: Nv.{maxGatherLevel}. Se alguém já estiver coletando aqui, você ainda pode encerrar a sessão abaixo.
+                      {t('Best hero: Lv.{n}. If someone is already gathering here, you can still stop the session below.', { n: maxGatherLevel })}
                     </p>
                   </div>
                 )}
@@ -740,18 +752,19 @@ function RegionPanel(props: {
 }
 
 function Hud({ livres, emCampo, prontos }: { livres: number; emCampo: number; prontos: number }) {
+  const t = useT()
   return (
     <header className="shrink-0 px-4 py-2.5 border-b border-white/10 bg-black/50 backdrop-blur-xl flex items-center justify-between gap-3">
       <div className="min-w-0">
-        <div className="text-[10px] uppercase tracking-[0.24em] text-textsec/80 leading-none mb-1">⛏️ Coleta</div>
-        <div className="font-map font-bold text-[15px] leading-none text-white truncate">Mapa do Reino</div>
+        <div className="text-[10px] uppercase tracking-[0.24em] text-textsec/80 leading-none mb-1">⛏️ {t('Gathering')}</div>
+        <div className="font-map font-bold text-[15px] leading-none text-white truncate">{t('Kingdom Map')}</div>
       </div>
       <div className="flex items-center gap-2 shrink-0">
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-white/10 bg-black/40 text-[11px]">
           <Portrait size={16} />
           <b className="text-white font-combat">{livres}</b>
-          <span className="text-textsec/70">livre{livres === 1 ? '' : 's'}</span>
-          {emCampo > 0 && <span className="text-warning/90 font-combat">· {emCampo} em campo</span>}
+          <span className="text-textsec/70">{livres === 1 ? t('free') : t('free (plural)')}</span>
+          {emCampo > 0 && <span className="text-warning/90 font-combat">· {t('{n} in the field', { n: emCampo })}</span>}
         </span>
         {prontos > 0 && (
           <span className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-emerald-400/30 bg-emerald-500/10 text-[11px]">
@@ -793,6 +806,7 @@ export interface KingdomMapViewProps {
 }
 
 export function KingdomMapView(props: KingdomMapViewProps) {
+  const t = useT()
   const { characters, openSessions, now, selectedKey, notice, levelUpBanner, onSelectNode, minHeight } = props
 
   const activeKeys = useMemo(
@@ -836,8 +850,8 @@ export function KingdomMapView(props: KingdomMapViewProps) {
           <Ambient />
 
           <div className="absolute top-2 left-0 right-0 text-center pointer-events-none z-[4]">
-            <div className="font-mapd text-[15px] ink tracking-wide" style={{ textShadow: '0 1px 0 rgba(255,247,224,0.6)' }}>Reino de Dolrath</div>
-            <div className="font-map text-[9px] ink-soft tracking-[0.3em] uppercase">Regiões de Coleta</div>
+            <div className="font-mapd text-[15px] ink tracking-wide" style={{ textShadow: '0 1px 0 rgba(255,247,224,0.6)' }}>{t('Kingdom of Dolrath')}</div>
+            <div className="font-map text-[9px] ink-soft tracking-[0.3em] uppercase">{t('Gathering Regions')}</div>
           </div>
 
           <div className="absolute bottom-2 right-2 pointer-events-none z-[4]"><Compass size={54} /></div>
@@ -850,8 +864,8 @@ export function KingdomMapView(props: KingdomMapViewProps) {
         </div>
 
         <p className="text-center text-white/30 text-[11px] mt-3 max-w-md mx-auto">
-          🫘 Sementes só caem nos Campos de Ervas — plante-as na <a href="/farm" className="underline">Fazenda</a>.
-          Recursos raros de chefe seguem exclusivos das masmorras.
+          {t('🫘 Seeds only drop in the Herb Fields — plant them at the')} <a href="/farm" className="underline">{t('Farm')}</a>.
+          {' '}{t('Rare boss resources remain exclusive to dungeons.')}
         </p>
       </main>
 

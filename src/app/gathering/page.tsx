@@ -17,16 +17,21 @@ import {
 } from '@/components/gathering/KingdomMap'
 import { type GatherFieldId } from '@/lib/gathering'
 import { MAP_NODES } from '@/components/gathering/KingdomMap'
+import { useI18n } from '@/lib/i18n/I18nProvider'
+import { localizeItemName } from '@/lib/i18n/catalog'
+import type { TFunction } from '@/lib/i18n/t'
+import type { Locale } from '@/lib/i18n/config'
 
-function formatDepositNotice(deposited: { name: string; qty: number }[], xpGained: number, skipped: number): string {
-  const got = deposited.map((d) => `${d.qty}× ${d.name}`).join(', ')
-  return got
-    ? `🎒 Coletado: ${got} (+${xpGained} XP)${skipped > 0 ? ` — ⚠️ ${skipped} item(ns) não couberam no inventário` : ''}`
-    : '🎒 Nada para coletar ainda.'
+function formatDepositNotice(t: TFunction, locale: Locale, deposited: { name: string; qty: number }[], xpGained: number, skipped: number): string {
+  const got = deposited.map((d) => `${d.qty}× ${localizeItemName(d.name, locale)}`).join(', ')
+  if (!got) return t('🎒 Nothing to collect yet.')
+  const base = t('🎒 Collected: {items} (+{xp} XP)', { items: got, xp: xpGained })
+  return skipped > 0 ? `${base} — ${t("⚠️ {n} item(s) didn't fit in the inventory", { n: skipped })}` : base
 }
 
 export default function GatheringPage() {
   const { data: session } = useSession()
+  const { locale, t } = useI18n()
   const router = useRouter()
 
   const [characters, setCharacters] = useState<GatherCharacter[]>([])
@@ -99,18 +104,18 @@ export default function GatheringPage() {
       setStatus(data)
       setCountdown(data.secondsToNextTick ?? 0)
       if (data.autoStopped) {
-        setNotice(`⏳ Encerramento agendado concluído — ${formatDepositNotice(data.autoStopped.deposited, data.autoStopped.xpGained, data.autoStopped.skipped.length)}`)
+        setNotice(`${t('⏳ Scheduled stop completed —')} ${formatDepositNotice(t, locale, data.autoStopped.deposited, data.autoStopped.xpGained, data.autoStopped.skipped.length)}`)
         setExpandedId(null)
         loadData()
       }
       const lvl = data.gather?.level ?? 1
       if (lastGatherLevelRef.current != null && lvl > lastGatherLevelRef.current) {
-        setLevelUpBanner(`⛏️ Você subiu para o Nível ${lvl} de Coleta!`)
+        setLevelUpBanner(t('⛏️ You reached Gathering Level {n}!', { n: lvl }))
         setTimeout(() => setLevelUpBanner(null), 6000)
       }
       lastGatherLevelRef.current = lvl
     } catch { /* rede: próximo poll */ }
-  }, [loadData])
+  }, [loadData, t, locale])
 
   useEffect(() => {
     if (!expandedId) { setStatus(null); return }
@@ -140,13 +145,13 @@ export default function GatheringPage() {
       })
       const data = await res.json().catch(() => null)
       if (!res.ok) {
-        setNotice(`❌ ${data?.error ?? 'Erro ao executar a ação'}`)
+        setNotice(`❌ ${data?.error ?? t('Failed to perform the action')}`)
       } else if (data?.waiting) {
-        setNotice('⏳ Encerramento agendado — a coleta termina o ciclo atual e fecha sozinha, sem gastar stamina num ciclo novo.')
+        setNotice(t('⏳ Stop scheduled — gathering finishes the current cycle and closes on its own, without spending stamina on a new one.'))
       } else if (data?.cancelled) {
-        setNotice('▶️ Encerramento agendado cancelado — a coleta continua normalmente.')
+        setNotice(t('▶️ Scheduled stop cancelled — gathering continues normally.'))
       } else if (path === 'collect' || path === 'stop') {
-        setNotice(formatDepositNotice(data?.deposited ?? [], data?.xpGained ?? 0, (data?.skipped ?? []).length))
+        setNotice(formatDepositNotice(t, locale, data?.deposited ?? [], data?.xpGained ?? 0, (data?.skipped ?? []).length))
       }
       await loadData()
       if (path === 'stop' && !data?.waiting && !data?.cancelled) {
@@ -157,7 +162,7 @@ export default function GatheringPage() {
     } finally {
       setBusy(false)
     }
-  }, [loadData, refreshStatus, expandedId])
+  }, [loadData, refreshStatus, expandedId, t, locale])
 
   const dispatchHero = useCallback(async (fieldId: GatherFieldId, characterId: string) => {
     await act('start', characterId, { fieldId })
@@ -165,8 +170,8 @@ export default function GatheringPage() {
     setExpandedId(characterId)
     const hero = characters.find((c) => c.id === characterId)
     const node = MAP_NODES.find((n) => n.fieldId === fieldId)
-    if (hero && node) setNotice(`⚔️ ${hero.name} partiu para ${node.name}.`)
-  }, [act, characters])
+    if (hero && node) setNotice(t('⚔️ {hero} set out for {field}.', { hero: hero.name, field: localizeItemName(node.name, locale) }))
+  }, [act, characters, t, locale])
 
   const selectNode = useCallback((key: string | null) => {
     setSelectedKey(key)
@@ -190,7 +195,7 @@ export default function GatheringPage() {
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
-          <p className="text-textsec">Desenrolando o mapa do reino…</p>
+          <p className="text-textsec">{t('Unrolling the kingdom map…')}</p>
         </div>
       </div>
     )

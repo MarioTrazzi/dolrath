@@ -11,22 +11,21 @@ import React, { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useSession } from 'next-auth/react'
-import { motion, useReducedMotion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import {
-  Swords, Shield, Coins, Wallet, Play, Sparkles, ArrowRight, Menu, X,
+  Swords, Shield, Coins, Wallet, Play, Sparkles, Menu, X,
   Github, Twitter, MessageCircle, Scroll,
   AlertTriangle, Gem, Lock, Flame, Scale,
 } from 'lucide-react'
 import { Button, Card, GlassCard, Badge, SectionHeading, Reveal, ArenaSky } from './ui'
 import { ShowcaseDie } from '@/components/battle/AnimatedDice'
 import JourneyShowcase from './journey/JourneyCarousel'
+import { JourneyWindow } from './journey/JourneyFrame'
+import TradesMapPreview from './trades/TradesMapPreview'
 import { itemImagePath } from '@/lib/itemCatalog'
 import { getChainInfo } from '@/lib/chainConfig'
 import WaitlistForm from './WaitlistForm'
 import { DUNGEONS, DUNGEON_LIST, type DungeonId, type DungeonMonsterDef, type DungeonBossDef } from '@/lib/dungeonAdventures'
-import { GATHER_FIELDS } from '@/lib/gathering'
-import { FIELD_ACCENT } from '@/components/gathering/GatheringPanel'
-import { PROCESSING_GROUP_LABEL, type ProcessingRecipe } from '@/lib/processing'
 
 // ============================================================
 // Gear / raridade — molduras e tiles de equipamento reais
@@ -373,17 +372,23 @@ function MonsterCard({ monster, accent, boss = false }: { monster: DungeonMonste
       ) : (
         <div className="absolute inset-0 grid place-items-center bg-black/50 text-5xl">{monster.emoji}</div>
       )}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/60 via-40% to-transparent" />
       {boss && (
         <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full border border-amber-400/70 bg-black/60 px-2 py-0.5 text-[10px] font-bold text-amber-300 backdrop-blur-sm">
           👑 Chefe
         </span>
       )}
       <div className="absolute inset-x-0 bottom-0 p-3 text-center">
-        <h3 className={`text-sm font-bold leading-tight drop-shadow ${boss ? 'text-amber-300' : 'text-white'}`}>
+        <h3
+          className={`text-sm font-bold leading-tight drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)] ${boss ? 'text-amber-300' : 'text-white'}`}
+        >
           {monster.name}
         </h3>
-        {title && <span className="mt-0.5 block font-combat text-[11px] text-white/70">{title}</span>}
+        {title && (
+          <span className="mt-0.5 block font-combat text-[11px] text-white/90 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
+            {title}
+          </span>
+        )}
       </div>
     </motion.div>
   )
@@ -450,18 +455,23 @@ function MonsterGallerySection() {
             </button>
           ))}
         </div>
-        <motion.div
-          key={active}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45, ease: 'easeOut' }}
-          className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5"
-        >
-          {dungeon.monsters.map((m) => (
-            <MonsterCard key={m.name} monster={m} accent={dungeon.accent} />
-          ))}
-          <MonsterCard monster={dungeon.boss} accent={dungeon.accent} boss />
-        </motion.div>
+        <div className="relative">
+          <AnimatePresence mode="popLayout" initial={false}>
+            <motion.div
+              key={active}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.35, ease: 'easeInOut' }}
+              className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5"
+            >
+              {dungeon.monsters.map((m) => (
+                <MonsterCard key={m.name} monster={m} accent={dungeon.accent} />
+              ))}
+              <MonsterCard monster={dungeon.boss} accent={dungeon.accent} boss />
+            </motion.div>
+          </AnimatePresence>
+        </div>
       </div>
     </section>
   )
@@ -537,83 +547,28 @@ function RelicsSection() {
 }
 
 // ============================================================
-// Ofícios — Coleta, Processamento e Craft (sem assets de imagem
-// dedicados; usa o mesmo painel chumbo+ouro do Aprimoramento/Reparo).
+// Ofícios — o mesmo Mapa do Reino de /gathering, num teaser: a Coleta
+// funciona como um stake — manda o personagem pro campo, ele gasta
+// stamina sozinho enquanto você tá offline, e você volta pra colher.
 // ============================================================
 
-const PROCESSING_GROUP_EMOJI: Record<ProcessingRecipe['group'], string> = {
-  smelt: '🔥', wood: '🪚', textile: '🧵', mill: '🌾', still: '⚗️', refine: '🪨',
-}
-
 function TradesSection() {
-  const fields = Object.values(GATHER_FIELDS)
-  const groups = Object.keys(PROCESSING_GROUP_LABEL) as ProcessingRecipe['group'][]
   return (
-    <section id="oficios" className="relative py-24">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 flex flex-col gap-12">
+    <section id="oficios" className="relative py-24 bg-secondary/40">
+      <div className="mx-auto max-w-5xl px-4 sm:px-6 flex flex-col gap-10">
         <SectionHeading
           eyebrow="Ofícios"
-          title="Colete, processe, forje"
-          sub="A cadeia de produção do jogo: colete recursos brutos pelo reino, processe-os em materiais refinados e leve tudo para o ferreiro, alquimista ou fazenda transformar em equipamento e consumíveis."
+          title="Coleta funciona como um stake"
+          sub="Manda um personagem pro Mapa do Reino e ele passa a render sozinho: gasta stamina, coleta recursos e acumula em tempo real enquanto você tá offline. Você só volta pra colher o resultado."
         />
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Coleta */}
-          <div className="flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-gradient-to-b from-gray-900 to-gray-950 p-6 shadow-2xl shadow-amber-900/30">
-            <h3 className="text-lg font-bold text-amber-400">⛏️ Coleta</h3>
-            <p className="text-xs text-textsec">Cada personagem da conta pode render recursos pelo Mapa do Reino, gastando stamina em tempo real.</p>
-            <div className="mt-1 flex flex-col gap-2">
-              {fields.map((f) => (
-                <div
-                  key={f.id}
-                  className="flex items-center gap-3 rounded-lg border border-white/10 bg-black/40 p-2.5"
-                  style={{ borderColor: `${FIELD_ACCENT[f.id]}44` }}
-                >
-                  <span className="text-2xl">{f.emoji}</span>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-semibold text-white">{f.name}</span>
-                    <span className="text-[11px] text-textsec">{f.tagline}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Processamento */}
-          <div className="flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-gradient-to-b from-gray-900 to-gray-950 p-6 shadow-2xl shadow-amber-900/30">
-            <h3 className="text-lg font-bold text-amber-400">⚙️ Processamento</h3>
-            <p className="text-xs text-textsec">Transforme o bruto da Coleta em material refinado — sem falha, só tempo e insumo.</p>
-            <div className="mt-1 grid grid-cols-2 gap-2">
-              {groups.map((g) => (
-                <div key={g} className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/40 p-2.5">
-                  <span className="text-xl">{PROCESSING_GROUP_EMOJI[g]}</span>
-                  <span className="text-xs font-semibold text-white">{PROCESSING_GROUP_LABEL[g]}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Craft */}
-          <div className="flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-gradient-to-b from-gray-900 to-gray-950 p-6 shadow-2xl shadow-amber-900/30">
-            <h3 className="text-lg font-bold text-amber-400">🔨 Craft</h3>
-            <p className="text-xs text-textsec">O material refinado vira equipamento na Forja, poção na Alquimia ou receita na Culinária.</p>
-            <div className="mt-1 flex flex-col gap-2 text-sm text-white/80">
-              <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/40 p-2.5">
-                <span className="text-xl">⛏️</span><span>Bruto</span>
-                <ArrowRight size={14} className="text-amber-400" />
-                <span className="text-xl">⚙️</span><span>Refinado</span>
-                <ArrowRight size={14} className="text-amber-400" />
-                <span className="text-xl">⚔️</span><span>Equipamento</span>
-              </div>
-              <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/40 p-2.5">
-                <span className="text-xl">🌿</span><span>Ingrediente</span>
-                <ArrowRight size={14} className="text-amber-400" />
-                <span className="text-xl">🧪</span><span>Poção</span>
-              </div>
-            </div>
-            <div className="mt-auto flex flex-col gap-2 pt-2">
-              <Button as="a" href="/gathering" variant="outline" className="justify-center">Ir para a Coleta</Button>
-            </div>
-          </div>
+        <JourneyWindow stepLabel="⛏️ Coleta">
+          <TradesMapPreview />
+        </JourneyWindow>
+        <div className="flex flex-col items-center gap-3 text-center">
+          <p className="max-w-xl text-xs text-textsec">
+            Cada personagem da conta pode ficar coletando ao mesmo tempo — o material bruto alimenta a Forja, a Alquimia e a Culinária depois.
+          </p>
+          <Button as="a" href="/gathering" variant="outline">Ir para a Coleta</Button>
         </div>
       </div>
     </section>

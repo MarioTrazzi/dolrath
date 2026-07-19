@@ -200,10 +200,12 @@ function JourneyCarouselInner() {
     return () => cancel(id)
   }, [index])
 
-  // Mantém o chip ativo visível na faixa rolável (mobile)
+  // Mantém o chip ativo visível na faixa rolável (mobile) — só após navegação real
+  // do usuário, senão dispara no mount (index=0) e rola a página pra fora do Hero
   useEffect(() => {
+    if (!hasNavigated) return
     chipRefs.current[index]?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
-  }, [index])
+  }, [index, hasNavigated])
 
   const Active = SLIDES[index]
   const meta = JOURNEY_STEPS[index]

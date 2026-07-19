@@ -787,10 +787,13 @@ export interface KingdomMapViewProps {
   onStopNow: () => void
   onStopAfter: () => void
   onCancelStop: () => void
+  /** Altura mínima do wrapper — default preserva o full-screen mobile do /gathering.
+   *  Passe algo tipo '600px' pra embutir num card de tamanho fixo (ex.: teaser da landing). */
+  minHeight?: string
 }
 
 export function KingdomMapView(props: KingdomMapViewProps) {
-  const { characters, openSessions, now, selectedKey, notice, levelUpBanner, onSelectNode } = props
+  const { characters, openSessions, now, selectedKey, notice, levelUpBanner, onSelectNode, minHeight } = props
 
   const activeKeys = useMemo(
     () => openSessions.map((s) => MAP_NODES.find((n) => n.fieldId === s.fieldId)?.key).filter(Boolean) as string[],
@@ -807,7 +810,7 @@ export function KingdomMapView(props: KingdomMapViewProps) {
 
   return (
     <div className="relative flex flex-col font-primary text-white overflow-hidden"
-      style={{ minHeight: 'calc(100dvh - 6rem)', background: 'radial-gradient(120% 80% at 50% 0%, #14142e, #0b0b18 70%)' }}>
+      style={{ minHeight: minHeight ?? 'calc(100dvh - 6rem)', background: 'radial-gradient(120% 80% at 50% 0%, #14142e, #0b0b18 70%)' }}>
       <Hud livres={livres} emCampo={emCampo} prontos={prontos} />
 
       <div className="pointer-events-none fixed left-1/2 -translate-x-1/2 top-28 z-40 w-full max-w-md px-4 flex flex-col items-center gap-2">

@@ -5,6 +5,7 @@ import { ConsumableSubtype } from '@prisma/client'
 import { getConsumableByName, isIngredientItem, isMaterialItem, isProcessedItem } from '@/lib/itemCatalog'
 import { POTION_RECIPES, getRecipeById } from '@/lib/alchemy'
 import { addHistoryEntry } from '@/lib/characterHistory'
+import { advanceQuestProgress } from '@/lib/questServer'
 import { assertInventoryRoom } from '@/lib/inventoryMutations'
 import { getCraftChance, getCraftMinLevel, rollCraftBatch } from '@/lib/craftingProfession'
 import { getUserAlchemyXp } from '@/lib/craftingServer'
@@ -230,6 +231,11 @@ export async function POST(
       })
     } catch (historyError) {
       console.error('Erro ao registrar histórico de craft:', historyError)
+    }
+
+    // 🗺️ Missões: pós-commit e fire-and-forget (só unidades que passaram na rolagem).
+    if (roll.succeeded > 0) {
+      advanceQuestProgress(character.id, { type: 'craft_potion', amount: roll.succeeded }).catch(() => {})
     }
 
     // levelInfo pós-crédito (a UI anima a barra de XP com isto).

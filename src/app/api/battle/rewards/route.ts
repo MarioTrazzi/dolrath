@@ -16,6 +16,7 @@ import { calculatePvpStaminaRewards, PVP_MIN_ENTRY_STAMINA, PVP_RANK_LOSS_POINTS
 import { dailyGoldRemainingTx, applyGearWearTx } from '@/lib/dungeonRunServer'
 import { wearForPvpFight } from '@/lib/durability'
 import { ensureActivePvpSeason, applyPvpMatchRating } from '@/lib/pvpRanking'
+import { advanceQuestProgress } from '@/lib/questServer'
 import { ActivityType } from '@prisma/client'
 
 interface BattleResult {
@@ -252,6 +253,16 @@ export async function POST(request: NextRequest) {
       addExperienceToCharacter(battleResult.winnerId, winnerXp),
       addExperienceToCharacter(battleResult.loserId, loserXp),
     ])
+
+    // 🗺️ Missões: pós-commit e fire-and-forget (pvp_win também conta pvp_fight via alias).
+    advanceQuestProgress(battleResult.winnerId, { type: 'pvp_win', amount: 1 }).catch(() => {})
+    advanceQuestProgress(battleResult.loserId, { type: 'pvp_fight', amount: 1 }).catch(() => {})
+    if (winnerXpResult.leveledUp) {
+      advanceQuestProgress(battleResult.winnerId, { type: 'level_reach', value: winnerXpResult.newLevelInfo.level }).catch(() => {})
+    }
+    if (loserXpResult.leveledUp) {
+      advanceQuestProgress(battleResult.loserId, { type: 'level_reach', value: loserXpResult.newLevelInfo.level }).catch(() => {})
+    }
 
     // ⚔️ Desgaste da luta (2026-07-15): a arena era a ÚNICA atividade sem custo
     // operacional, e ao virar a fonte de ouro do jogo isso a tornava dominante.

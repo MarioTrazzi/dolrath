@@ -16,6 +16,7 @@ import { useBattleScript } from '../useBattleScript'
 import { ItemThumb } from './LootTiles'
 import { useI18n } from '@/lib/i18n/I18nProvider'
 import { pickName } from '@/lib/i18n/names'
+import { localizeItemName, localizeItemDesc } from '@/lib/i18n/catalog'
 import {
   buildBossScript,
   BOSS_HERO_MAX_HP,
@@ -137,9 +138,9 @@ export default function Slide8BossFight({ active, onNext }: JourneySlideProps) {
               <div className="text-[10px] font-black uppercase tracking-[0.3em] text-fuchsia-300 mb-1">
                 {t('Epic item obtained')}
               </div>
-              <div className="text-lg font-black text-white">{LOOT_ITEM}</div>
+              <div className="text-lg font-black text-white">{localizeItemName(LOOT_ITEM, locale)}</div>
               <div className="text-[11px] text-textsec mt-1">
-                🛡️ {lootMeta?.description ?? t("The Warden's colossal shield.")}
+                🛡️ {lootMeta?.description ? localizeItemDesc(LOOT_ITEM, lootMeta.description, locale) : t("The Warden's colossal shield.")}
               </div>
               <div className="text-[11px] font-bold text-fuchsia-300 mt-1">
                 {lootMeta?.stats?.def ? `+${lootMeta.stats.def} DEF` : ''}{lootMeta?.stats?.hp ? ` · +${lootMeta.stats.hp} HP` : ''} · {t('EPIC')}

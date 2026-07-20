@@ -11,4 +11,7 @@ export const COMMON_PT: Record<string, string> = {
   'Documentation': 'Documentação',
   'Last updated:': 'Última atualização:',
   'No fail': 'Sem falha',
+  'Broken — no bonus until repaired': 'Quebrado — sem bônus até reparar',
+  'Critical durability ({pct}%) — repair before it breaks': 'Durabilidade crítica ({pct}%) — repare antes que quebre',
+  '{slot} (occupied by gauntlet)': '{slot} (ocupado pela manopla)',
 }

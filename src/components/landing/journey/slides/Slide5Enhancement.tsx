@@ -23,7 +23,8 @@ import { itemStatEntries, formatStatValue } from '@/lib/itemStats'
 import { ItemThumb } from './LootTiles'
 import { useJourney } from '../JourneyContext'
 import { useSlideScript } from '../useSlideScript'
-import { useT } from '@/lib/i18n/I18nProvider'
+import { useI18n } from '@/lib/i18n/I18nProvider'
+import { localizeItemName } from '@/lib/i18n/catalog'
 import {
   CLASS_GEAR,
   JOURNEY_ENHANCED_GEAR_LEVEL,
@@ -38,11 +39,12 @@ const TIMES = [0, 1100, 2600, 4400, 5300, 6600]
 const STONE = 'Pedra Negra Mágica Concentrada (Arma)'
 
 export default function Slide5Enhancement({ active, onNext }: JourneySlideProps) {
-  const t = useT()
+  const { locale, t } = useI18n()
   const { classId, heroName } = useJourney()
   const { step, cycle, advance } = useSlideScript(active, TIMES, { loopDelayMs: 4800 })
 
   const weapon = CLASS_GEAR[classId].weapon
+  const weaponDisplay = localizeItemName(weapon, locale)
   const charging = step === 2
   const success = step >= 3
   const chance = success ? 1.0 : 24.0
@@ -142,13 +144,13 @@ export default function Slide5Enhancement({ active, onNext }: JourneySlideProps)
               verdictKey={cycle}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={itemImagePath(weapon)} alt={weapon} className="h-full w-full object-cover" loading="lazy" />
+              <img src={itemImagePath(weapon)} alt={weaponDisplay} className="h-full w-full object-cover" loading="lazy" />
             </DiamondSlot>
           </div>
 
           {/* Nome + progressão */}
           <div className="text-center mb-2.5">
-            <div className="text-sm font-semibold text-cyan-300">{weapon}</div>
+            <div className="text-sm font-semibold text-cyan-300">{weaponDisplay}</div>
             <div className="flex items-center justify-center gap-3 text-xl font-bold">
               <span className={success ? 'text-gray-500' : 'text-gray-300'}>III</span>
               <span style={{ color: GOLD }}>→</span>
@@ -232,7 +234,7 @@ export default function Slide5Enhancement({ active, onNext }: JourneySlideProps)
                     animate={{ opacity: 1, y: 0 }}
                     className="text-xs font-bold text-green-300 mt-0.5"
                   >
-                    {weapon} {t('is now')} <span className="text-amber-300">IV (TET)</span> — {t('damage on another level.')}
+                    {weaponDisplay} {t('is now')} <span className="text-amber-300">IV (TET)</span> — {t('damage on another level.')}
                   </motion.div>
                 )}
               </motion.div>

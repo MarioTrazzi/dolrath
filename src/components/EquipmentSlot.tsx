@@ -10,6 +10,8 @@ import { useRef, useState } from 'react';
 import { resolveImageUrl } from '@/lib/imageUrl';
 import { itemImagePath } from '@/lib/itemCatalog';
 import { getLevelLabel } from '@/lib/enhancementSystem';
+import { useI18n } from '@/lib/i18n/I18nProvider';
+import { localizeItemName } from '@/lib/i18n/catalog';
 
 interface EquipmentSlotProps {
   type: EquipmentSlotType;
@@ -80,11 +82,13 @@ function canEquipInSlot(itemType: string, slotType: EquipmentSlotType): boolean 
 }
 
 export function EquipmentSlot({ type, item, enhancementLevel = 0, durability, maxDurability, onEquip, onUnequip, compact, accent, ghost }: EquipmentSlotProps) {
+  const { locale, t } = useI18n();
   // Imagem: banco (item.image) → asset estático por nome (/items/<slug>.webp) →
   // ícone genérico só se a arte 404. Espelha DraggableItem/ItemTooltip e cobre
   // itens criados sem `image` no banco (ex.: acessórios novos), que antes caíam
   // direto no ícone SVG ao serem equipados.
   const [imgError, setImgError] = useState(false);
+  const itemDisplayName = item ? localizeItemName(item.name, locale) : '';
   const itemImage = item && !imgError
     ? (resolveImageUrl(item.image) ?? (item.name ? itemImagePath(item.name) : null))
     : null;
@@ -102,11 +106,11 @@ export function EquipmentSlot({ type, item, enhancementLevel = 0, durability, ma
   ) : null;
   // Quebrado (sem bônus) ou durabilidade crítica (<10%): avisa no próprio slot.
   const brokenBadge = broken ? (
-    <span className="absolute top-0.5 left-0.5 text-[11px] z-10 select-none" title="Quebrado — sem bônus até reparar" style={{ filter: 'drop-shadow(0 1px 2px #000)' }}>
+    <span className="absolute top-0.5 left-0.5 text-[11px] z-10 select-none" title={t('Broken — no bonus until repaired')} style={{ filter: 'drop-shadow(0 1px 2px #000)' }}>
       💔
     </span>
   ) : hasDurability && durabilityPct < 10 ? (
-    <span className="absolute top-0.5 left-0.5 text-[11px] z-10 select-none" title={`Durabilidade crítica (${durabilityPct}%) — repare antes que quebre`} style={{ filter: 'drop-shadow(0 1px 2px #000)' }}>
+    <span className="absolute top-0.5 left-0.5 text-[11px] z-10 select-none" title={t('Critical durability ({pct}%) — repair before it breaks', { pct: durabilityPct })} style={{ filter: 'drop-shadow(0 1px 2px #000)' }}>
       ⚠️
     </span>
   ) : null;
@@ -145,7 +149,7 @@ export function EquipmentSlot({ type, item, enhancementLevel = 0, durability, ma
     return (
       <div
         ref={ref}
-        title={ghost ? `${slotLabel} (ocupado pela manopla)` : slotLabel}
+        title={ghost ? t('{slot} (occupied by gauntlet)', { slot: slotLabel }) : slotLabel}
         className="w-[52px] h-[52px] sm:w-[54px] sm:h-[54px] flex items-center justify-center relative rounded-[3px] transition-all"
         style={{
           // Borda o mais fina possível (1px) p/ a arte do item dominar o slot.
@@ -162,7 +166,7 @@ export function EquipmentSlot({ type, item, enhancementLevel = 0, durability, ma
               {itemImage ? (
                 <img
                   src={itemImage}
-                  alt={item.name}
+                  alt={itemDisplayName}
                   onError={() => setImgError(true)}
                   className={`w-full h-full object-cover art-bright group-hover:scale-110 transition-transform ${broken ? 'grayscale opacity-60' : ''}`}
                   referrerPolicy="no-referrer"
@@ -218,7 +222,7 @@ export function EquipmentSlot({ type, item, enhancementLevel = 0, durability, ma
             {itemImage ? (
               <img
                 src={itemImage}
-                alt={item.name}
+                alt={itemDisplayName}
                 onError={() => setImgError(true)}
                 className={`w-full h-full object-cover art-bright group-hover:scale-110 transition-transform ${broken ? 'grayscale opacity-60' : ''}`}
                 referrerPolicy="no-referrer"

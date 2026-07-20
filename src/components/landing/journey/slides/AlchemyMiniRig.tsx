@@ -9,6 +9,8 @@ import { motion } from 'framer-motion'
 import { GOLD, GOLD_BRIGHT, type CraftPhase } from '@/components/crafting/bdoTheme'
 import type { RigMaterial } from '@/components/crafting/professionFx'
 import { ItemThumb } from './LootTiles'
+import { useI18n } from '@/lib/i18n/I18nProvider'
+import { localizeItemName } from '@/lib/i18n/catalog'
 
 const BOX_W = 320
 const BOX_H = 240
@@ -21,6 +23,7 @@ const POS = {
 const SLOT_KEYS = ['top', 'left', 'right'] as const
 
 function SlotFrame({ m, charging }: { m: RigMaterial; charging: boolean }) {
+  const { locale } = useI18n()
   return (
     <div className="flex flex-col items-center gap-0.5">
       <motion.div
@@ -36,7 +39,7 @@ function SlotFrame({ m, charging }: { m: RigMaterial; charging: boolean }) {
         <ItemThumb name={m.name} emoji={m.emoji} className="text-xl" />
       </motion.div>
       <span className="text-[9px] font-bold text-[#a8a8ae] whitespace-nowrap">
-        {m.name} <span style={{ color: GOLD }}>{m.have}/{m.need}</span>
+        {localizeItemName(m.name, locale)} <span style={{ color: GOLD }}>{m.have}/{m.need}</span>
       </span>
     </div>
   )

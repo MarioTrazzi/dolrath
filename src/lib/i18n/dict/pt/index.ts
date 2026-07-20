@@ -10,6 +10,7 @@ import { DASHBOARD_PT } from './dashboard'
 import { CHARACTER_PT } from './character'
 import { SKILLTREE_PT } from './skilltree'
 import { ITEMTOOLTIP_PT } from './itemtooltip'
+import { INVENTORY_PT } from './inventory'
 
 export const PT_DICT: Record<string, string> = {
   ...COMMON_PT,
@@ -22,4 +23,5 @@ export const PT_DICT: Record<string, string> = {
   ...CHARACTER_PT,
   ...SKILLTREE_PT,
   ...ITEMTOOLTIP_PT,
+  ...INVENTORY_PT,
 }

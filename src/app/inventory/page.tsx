@@ -20,6 +20,8 @@ import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvid
 import { getWalletTxErrorMessage } from '@/lib/walletErrors';
 import { getPolygonFeeOverrides } from '@/lib/gasFees';
 import { getSlotTypeFromItemType } from '@/lib/equipmentSlot';
+import { useI18n } from '@/lib/i18n/I18nProvider';
+import { localizeItemName } from '@/lib/i18n/catalog';
 
 // Baú Geral começa com 50 espaços (User.globalInventorySlots), expansível como o do personagem.
 const GLOBAL_SLOTS_DEFAULT = 50;
@@ -54,6 +56,7 @@ interface CharacterInventoryItem {
 }
 
 export default function InventoryPage() {
+  const { locale, t } = useI18n();
   const { data: session } = useSession();
   // Personagem ATIVO global: o inventário sempre mostra o herói selecionado na
   // navbar — sem seletor próprio nesta página.
@@ -171,19 +174,19 @@ export default function InventoryPage() {
         fetchCharacterInventory(selectedCharacter);
         toast.success(
           quantity > 1
-            ? `📦 ${quantity}x transferidos para o personagem!`
-            : '📦 Item transferido para o personagem!',
+            ? t('📦 {n}x transferred to the character!', { n: quantity })
+            : t('📦 Item transferred to the character!'),
           { duration: 3000 }
         );
       } else {
         const error = await response.json();
-        toast.error(`❌ Erro na transferência: ${error.error}`, {
+        toast.error(t('❌ Transfer error: {error}', { error: error.error }), {
           duration: 4000,
         });
       }
     } catch (error) {
       console.error('Error transferring item:', error);
-      toast.error('💥 Erro inesperado na transferência', {
+      toast.error(t('💥 Unexpected transfer error'), {
         duration: 4000,
       });
     }
@@ -192,7 +195,7 @@ export default function InventoryPage() {
 
   const handleTransferToGlobal = async (itemId: string, quantity: number = 1) => {
     if (!selectedCharacter) {
-      toast.error('⚠️ Selecione um personagem primeiro', {
+      toast.error(t('⚠️ Select a character first'), {
         duration: 3000,
       });
       return;
@@ -214,20 +217,20 @@ export default function InventoryPage() {
         fetchCharacterInventory(selectedCharacter);
         toast.success(
           quantity > 1
-            ? `🌐 ${quantity}x transferidos para o inventário global!`
-            : '🌐 Item transferido para o inventário global!',
+            ? t('🌐 {n}x transferred to the global inventory!', { n: quantity })
+            : t('🌐 Item transferred to the global inventory!'),
           {
           duration: 3000,
         });
       } else {
         const error = await response.json();
-        toast.error(`❌ Erro na transferência: ${error.error}`, {
+        toast.error(t('❌ Transfer error: {error}', { error: error.error }), {
           duration: 4000,
         });
       }
     } catch (error) {
       console.error('Error transferring item to global:', error);
-      toast.error('💥 Erro inesperado na transferência', {
+      toast.error(t('💥 Unexpected transfer error'), {
         duration: 4000,
       });
     }
@@ -240,16 +243,16 @@ export default function InventoryPage() {
   // quantidade escolhida no SellQuantityDialog quando a pilha tem mais de 1 item.
   const handleSellFromCharacter = async (inventoryId: string, quantity: number = 1) => {
     if (!selectedCharacter) {
-      toast.error('⚠️ Selecione um personagem primeiro', { duration: 3000 });
+      toast.error(t('⚠️ Select a character first'), { duration: 3000 });
       return;
     }
     const row = characterInventory.find((i) => i.id === inventoryId);
-    const name = row?.item?.name ?? 'item';
+    const name = row?.item?.name ? localizeItemName(row.item.name, locale) : t('item');
     // sellPricing (fonte única): peça desgastada vende por menos.
     const unitPrice = row?.item ? sellPrice(row.item, row.durability, row.maxDurability) : 0;
     const total = unitPrice * quantity;
     const label = quantity > 1 ? `${quantity}x ${name}` : name;
-    if (!window.confirm(`Vender ${label} ao ferreiro por ${total} gold?\nO item será destruído (não dá pra desfazer).`)) return;
+    if (!window.confirm(t('Sell {label} to the blacksmith for {total} gold?\nThe item will be destroyed (cannot be undone).', { label, total }))) return;
 
     setLoading(true);
     try {
@@ -262,14 +265,14 @@ export default function InventoryPage() {
         const data = await res.json();
         fetchCharacterInventory(selectedCharacter);
         refreshActiveCharacter();
-        toast.success(data?.message ?? `💰 Vendido por ${total} gold!`, { duration: 3000 });
+        toast.success(data?.message ?? t('💰 Sold for {total} gold!', { total }), { duration: 3000 });
       } else {
         const error = await res.json();
-        toast.error(`❌ ${error?.error ?? 'Falha ao vender'}`, { duration: 4000 });
+        toast.error(`❌ ${error?.error ?? t('Failed to sell')}`, { duration: 4000 });
       }
     } catch (error) {
       console.error('Error selling item:', error);
-      toast.error('💥 Erro inesperado ao vender', { duration: 4000 });
+      toast.error(t('💥 Unexpected error selling'), { duration: 4000 });
     }
     setLoading(false);
   };
@@ -278,11 +281,11 @@ export default function InventoryPage() {
   // preço; o gold vai pro BANCO da conta (User.goldBalance), exibido no rodapé do baú.
   const handleSellFromGlobal = async (inventoryId: string, quantity: number = 1) => {
     const row = userInventory.find((i) => i.id === inventoryId);
-    const name = row?.item?.name ?? 'item';
+    const name = row?.item?.name ? localizeItemName(row.item.name, locale) : t('item');
     const unitPrice = row?.item ? sellPrice(row.item) : 0; // sellPricing (fonte única)
     const total = unitPrice * quantity;
     const label = quantity > 1 ? `${quantity}x ${name}` : name;
-    if (!window.confirm(`Vender ${label} ao ferreiro por ${total} gold?\nO gold vai pro banco. O item será destruído (não dá pra desfazer).`)) return;
+    if (!window.confirm(t('Sell {label} to the blacksmith for {total} gold?\nThe gold goes to the bank. The item will be destroyed (cannot be undone).', { label, total }))) return;
 
     setLoading(true);
     try {
@@ -295,14 +298,14 @@ export default function InventoryPage() {
         const data = await res.json();
         fetchUserInventory();
         fetchBankGold();
-        toast.success(data?.message ?? `💰 Vendido por ${total} gold!`, { duration: 3000 });
+        toast.success(data?.message ?? t('💰 Sold for {total} gold!', { total }), { duration: 3000 });
       } else {
         const error = await res.json();
-        toast.error(`❌ ${error?.error ?? 'Falha ao vender'}`, { duration: 4000 });
+        toast.error(`❌ ${error?.error ?? t('Failed to sell')}`, { duration: 4000 });
       }
     } catch (error) {
       console.error('Error selling global item:', error);
-      toast.error('💥 Erro inesperado ao vender', { duration: 4000 });
+      toast.error(t('💥 Unexpected error selling'), { duration: 4000 });
     }
     setLoading(false);
   };
@@ -312,7 +315,7 @@ export default function InventoryPage() {
   // itens únicos (equipamento) transferem direto.
   const handleDropToCharacter = (item: any, availableQuantity: number) => {
     if (!selectedCharacter) {
-      toast.error('⚠️ Selecione um personagem primeiro', { duration: 3000 });
+      toast.error(t('⚠️ Select a character first'), { duration: 3000 });
       return;
     }
     if (availableQuantity > 1) {
@@ -346,14 +349,14 @@ export default function InventoryPage() {
   const payGoldOnChain = async (totalCostGold: number): Promise<string | null> => {
     const eth = (window as any)?.ethereum;
     if (!eth) {
-      toast.error('MetaMask não encontrada');
+      toast.error(t('MetaMask not found'));
       return null;
     }
 
     const cfgRes = await fetch('/api/gold/spend-config', { cache: 'no-store' });
     const cfgJson = await cfgRes.json();
     if (!cfgRes.ok) {
-      throw new Error(cfgJson?.error || 'Falha ao carregar config do GOLD');
+      throw new Error(cfgJson?.error || t('Failed to load GOLD config'));
     }
 
     const { contractAddress, chainId, treasuryAddress } = cfgJson as {
@@ -367,7 +370,7 @@ export default function InventoryPage() {
 
     const network = await provider.getNetwork();
     if (Number(network.chainId) !== Number(chainId)) {
-      toast.error(`Troque a rede para chainId ${chainId} na MetaMask`);
+      toast.error(t('Switch to chainId {chainId} in MetaMask', { chainId }));
       return null;
     }
 
@@ -386,15 +389,15 @@ export default function InventoryPage() {
     const balanceWei = (await gold.balanceOf(from)) as bigint;
 
     if (balanceWei < costWei) {
-      toast.error(`💰 GOLD insuficiente on-chain! Você precisa de ${totalCostGold} GOLD.`);
+      toast.error(t('💰 Insufficient GOLD on-chain! You need {n} GOLD.', { n: totalCostGold }));
       return null;
     }
 
     const payTx = await gold.transfer(treasuryAddress, costWei, await getPolygonFeeOverrides(provider));
-    toast.success('Pagamento enviado! Aguardando confirmação…');
+    toast.success(t('Payment sent! Awaiting confirmation…'));
     const payReceipt = await payTx.wait();
     if (!payReceipt || payReceipt.status !== 1) {
-      throw new Error('Pagamento falhou');
+      throw new Error(t('Payment failed'));
     }
     return payTx.hash as string;
   };
@@ -422,7 +425,7 @@ export default function InventoryPage() {
 
   const handleExpandCharacterInventory = async () => {
     if (!selectedCharacter) {
-      toast.error('⚠️ Selecione um personagem primeiro');
+      toast.error(t('⚠️ Select a character first'));
       return;
     }
     setExpandingChar(true);
@@ -441,7 +444,7 @@ export default function InventoryPage() {
       if (response.status === 402) {
         const info = await response.json().catch(() => null);
         if (info?.requiresPayment) {
-          toast('💰 Sem GOLD na mão — pagando on-chain pela carteira…');
+          toast(t('💰 No GOLD on hand — paying on-chain via wallet…'));
           const txHash = await payGoldOnChain(EXPAND_COST_GOLD);
           if (!txHash) return;
           response = await confirmExpansion(
@@ -452,15 +455,15 @@ export default function InventoryPage() {
       }
 
       if (response?.ok) {
-        toast.success(`📦 +${EXPAND_SLOTS} slots no personagem! (${EXPAND_COST_GOLD} GOLD)`);
+        toast.success(t('📦 +{n} slots on the character! ({cost} GOLD)', { n: EXPAND_SLOTS, cost: EXPAND_COST_GOLD }));
         refreshActiveCharacter();
       } else {
         const error = await response?.json().catch(() => null);
-        toast.error(`❌ ${error?.error || 'Falha ao confirmar expansão'}`);
+        toast.error(`❌ ${error?.error || t('Failed to confirm expansion')}`);
       }
     } catch (error) {
       console.error('Error expanding character inventory:', error);
-      toast.error(getWalletTxErrorMessage(error, '💥 Erro inesperado ao expandir inventário'));
+      toast.error(getWalletTxErrorMessage(error, t('💥 Unexpected error expanding inventory')));
     } finally {
       setExpandingChar(false);
     }
@@ -480,7 +483,7 @@ export default function InventoryPage() {
       if (response.status === 402) {
         const info = await response.json().catch(() => null);
         if (info?.requiresPayment) {
-          toast('💰 Sem GOLD no banco — pagando on-chain pela carteira…');
+          toast(t('💰 No GOLD in the bank — paying on-chain via wallet…'));
           const txHash = await payGoldOnChain(EXPAND_COST_GOLD);
           if (!txHash) return;
           response = await confirmExpansion('/api/user/expand-global-inventory', txHash);
@@ -494,14 +497,14 @@ export default function InventoryPage() {
         }
         // Re-sincroniza o saldo do banco (mudou se pagou off-chain).
         fetchBankGold();
-        toast.success(`🌐 +${EXPAND_SLOTS} slots no Baú Geral! (${EXPAND_COST_GOLD} GOLD)`);
+        toast.success(t('🌐 +{n} slots in the Global Chest! ({cost} GOLD)', { n: EXPAND_SLOTS, cost: EXPAND_COST_GOLD }));
       } else {
         const error = await response?.json().catch(() => null);
-        toast.error(`❌ ${error?.error || 'Falha ao confirmar expansão'}`);
+        toast.error(`❌ ${error?.error || t('Failed to confirm expansion')}`);
       }
     } catch (error) {
       console.error('Error expanding global inventory:', error);
-      toast.error(getWalletTxErrorMessage(error, '💥 Erro inesperado ao expandir Baú Geral'));
+      toast.error(getWalletTxErrorMessage(error, t('💥 Unexpected error expanding the Global Chest')));
     } finally {
       setExpandingGlobal(false);
     }
@@ -509,7 +512,7 @@ export default function InventoryPage() {
 
   const handleEquipItem = async (itemId: string) => {
     if (!selectedCharacter) {
-      toast.error('⚠️ Selecione um personagem primeiro', {
+      toast.error(t('⚠️ Select a character first'), {
         duration: 3000,
       });
       return;
@@ -518,7 +521,7 @@ export default function InventoryPage() {
     // Determinar o tipo de slot baseado no tipo do item
     const item = characterInventory.find(inv => inv.item.id === itemId)?.item;
     if (!item) {
-      toast.error('❌ Item não encontrado', {
+      toast.error(t('❌ Item not found'), {
         duration: 3000,
       });
       return;
@@ -642,8 +645,8 @@ export default function InventoryPage() {
     return (
       <div className="min-h-[100dvh] bg-background flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-text-primary mb-4">Acesso Restrito</h1>
-          <p className="text-text-secondary">Por favor, faça login para ver seu inventário</p>
+          <h1 className="text-2xl font-bold text-text-primary mb-4">{t('Restricted Access')}</h1>
+          <p className="text-text-secondary">{t('Please sign in to see your inventory')}</p>
         </div>
       </div>
     );
@@ -660,22 +663,22 @@ export default function InventoryPage() {
       <div className="relative z-10 container mx-auto p-4 pt-20" style={{ fontFamily: "'Barlow', sans-serif" }}>
         <div className="mb-8">
           <h1 className="text-4xl font-black text-[#ece7da] mb-2" style={{ letterSpacing: '0.5px' }}>
-            📦 Inventário
+            📦 {t('Inventory')}
           </h1>
-          <p className="text-[#8a8a90]">Gerencie seus itens e equipamentos</p>
+          <p className="text-[#8a8a90]">{t('Manage your items and equipment')}</p>
         </div>
 
         {/* ⛓️ Claim de GOLD: bolso do herói → token on-chain na carteira */}
         <BankPanel characterId={activeCharacterId} onChanged={() => { fetchBankGold(); fetchOnchainGold(); }} />
 
         {!selectedCharacter && (
-          <p className="mb-3 text-xs text-amber-300/80">Selecione um personagem na navbar para equipar e transferir itens.</p>
+          <p className="mb-3 text-xs text-amber-300/80">{t('Select a character in the navbar to equip and transfer items.')}</p>
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
           {/* ⚔️ Inventário do herói ativo — mesma UI da ficha do personagem */}
           <InventoryPanel
-            title={activeCharacter ? `Inventário — ${activeCharacter.name}` : 'Inventário'}
+            title={activeCharacter ? t('Inventory — {name}', { name: activeCharacter.name }) : t('Inventory')}
             items={characterInventory as any}
             totalSlots={Number(activeCharacter?.inventorySlots) || 20}
             accent="#d9a441"
@@ -689,20 +692,20 @@ export default function InventoryPage() {
             onSell={(inventoryId, quantity) => handleSellFromCharacter(inventoryId, quantity)}
             onExpand={selectedCharacter ? handleExpandCharacterInventory : undefined}
             expanding={expandingChar}
-            expandTitle={`Expandir +${EXPAND_SLOTS} slots (custo: ${EXPAND_COST_GOLD} GOLD)`}
-            goldText={typeof activeCharacter?.gold === 'number' ? activeCharacter.gold.toLocaleString('pt-BR') : '0'}
+            expandTitle={t('Expand +{n} slots (cost: {cost} GOLD)', { n: EXPAND_SLOTS, cost: EXPAND_COST_GOLD })}
+            goldText={typeof activeCharacter?.gold === 'number' ? activeCharacter.gold.toLocaleString(locale === 'pt' ? 'pt-BR' : 'en-US') : '0'}
             dragSource="character"
             onItemDropped={handleDropToCharacter}
           />
 
           {/* 🌐 Baú Geral — mesma UI, exibindo o inventário global da conta */}
           <InventoryPanel
-            title="Baú Geral"
+            title={t('Global Chest')}
             items={userInventory as any}
             totalSlots={globalSlots}
             accent="#3b82f6"
             characterId={selectedCharacter}
-            slotLabel="Slots do Baú"
+            slotLabel={t('Chest Slots')}
             onTransfer={(itemId, quantity = 1) => {
               // Pilha > 1: abre o diálogo de quantidade (mesmo do drag & drop) em
               // vez de mandar sempre 1 — permite escolher um valor ou enviar tudo.
@@ -735,8 +738,8 @@ export default function InventoryPage() {
             maxQuantity={transferTarget.maxQuantity}
             destinationLabel={
               transferTarget.destination === 'character'
-                ? (activeCharacter?.name || 'personagem')
-                : 'Baú Geral'
+                ? (activeCharacter?.name || t('character'))
+                : t('Global Chest')
             }
             destinationAccent={transferTarget.destination === 'character' ? '#d9a441' : '#3b82f6'}
             onConfirm={handleConfirmTransfer}

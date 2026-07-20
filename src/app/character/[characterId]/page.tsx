@@ -31,6 +31,9 @@ import { getWalletTxErrorMessage } from '@/lib/walletErrors';
 import { getPolygonFeeOverrides } from '@/lib/gasFees';
 import { resolveImageUrl } from '@/lib/imageUrl';
 import { getSlotTypeFromItemType } from '@/lib/equipmentSlot';
+import { useI18n } from '@/lib/i18n/I18nProvider';
+import { localizeItemName } from '@/lib/i18n/catalog';
+import { localizeRaceName, localizeClassName } from '@/lib/i18n/gameNames';
 
 import { Item } from '@/types/item';
 
@@ -53,6 +56,7 @@ interface InventoryItem {
 }
 
 export default function CharacterDetailsPage() {
+  const { locale, t } = useI18n();
   const params = useParams();
   const router = useRouter();
   const [character, setCharacter] = useState<Character | null>(null);
@@ -409,7 +413,7 @@ export default function CharacterDetailsPage() {
       }
     } catch (error) {
       console.error('Error consuming item:', error);
-      toast.error('❌ Erro ao consumir item');
+      toast.error(t('❌ Error consuming item'));
     }
   };
 
@@ -420,12 +424,12 @@ export default function CharacterDetailsPage() {
   const handleSell = async (inventoryId: string, quantity: number = 1) => {
     if (!effectiveCharacterId) return;
     const row = inventory.find((i: any) => i.id === inventoryId);
-    const name = row?.item?.name ?? 'item';
+    const name = row?.item?.name ? localizeItemName(row.item.name, locale) : t('item');
     // sellPricing (fonte única): peça desgastada vende por menos.
     const unitPrice = row?.item ? sellPrice(row.item, row.durability, row.maxDurability) : 0;
     const total = unitPrice * quantity;
     const label = quantity > 1 ? `${quantity}x ${name}` : name;
-    if (!window.confirm(`Vender ${label} ao ferreiro por ${total} gold?\nO item será destruído (não dá pra desfazer).`)) return;
+    if (!window.confirm(t('Sell {label} to the blacksmith for {total} gold?\nThe item will be destroyed (cannot be undone).', { label, total }))) return;
 
     try {
       const response = await fetch(`/api/character/${effectiveCharacterId}/sell-item`, {
@@ -444,14 +448,14 @@ export default function CharacterDetailsPage() {
           const inventoryData = await inventoryResponse.json();
           setInventory(Array.isArray(inventoryData) ? inventoryData : (inventoryData.items || []));
         }
-        toast.success(data?.message ?? `💰 Vendido por ${total} gold!`);
+        toast.success(data?.message ?? t('💰 Sold for {total} gold!', { total }));
       } else {
         const error = await response.json().catch(() => ({}));
-        toast.error(`❌ ${error.error || 'Falha ao vender item'}`);
+        toast.error(`❌ ${error.error || t('Failed to sell item')}`);
       }
     } catch (error) {
       console.error('Error selling item:', error);
-      toast.error('💥 Erro inesperado ao vender item');
+      toast.error(t('💥 Unexpected error selling item'));
     }
   };
 
@@ -477,15 +481,15 @@ export default function CharacterDetailsPage() {
         if (lastError?.requiresPayment) {
           const eth = (window as any)?.ethereum;
           if (!eth) {
-            toast.error('💰 Sem GOLD na mão e MetaMask não encontrada');
+            toast.error(t('💰 No GOLD on hand and MetaMask not found'));
             return;
           }
-          toast('💰 Sem GOLD na mão — pagando on-chain pela carteira…');
+          toast(t('💰 No GOLD on hand — paying on-chain via wallet…'));
 
           const cfgRes = await fetch('/api/gold/spend-config', { cache: 'no-store' });
           const cfgJson = await cfgRes.json();
           if (!cfgRes.ok) {
-            throw new Error(cfgJson?.error || 'Falha ao carregar config do GOLD');
+            throw new Error(cfgJson?.error || t('Failed to load GOLD config'));
           }
 
           const { contractAddress, chainId, treasuryAddress } = cfgJson as {
@@ -499,7 +503,7 @@ export default function CharacterDetailsPage() {
 
           const network = await provider.getNetwork();
           if (Number(network.chainId) !== Number(chainId)) {
-            toast.error(`Troque a rede para chainId ${chainId} na MetaMask`);
+            toast.error(t('Switch to chainId {chainId} in MetaMask', { chainId }));
             return;
           }
 
@@ -518,15 +522,15 @@ export default function CharacterDetailsPage() {
           const balanceWei = (await gold.balanceOf(from)) as bigint;
 
           if (balanceWei < costWei) {
-            toast.error(`💰 GOLD insuficiente on-chain! Você precisa de ${totalCostGold} GOLD.`);
+            toast.error(t('💰 Insufficient GOLD on-chain! You need {n} GOLD.', { n: totalCostGold }));
             return;
           }
 
           const payTx = await gold.transfer(treasuryAddress, costWei, await getPolygonFeeOverrides(provider));
-          toast.success('Pagamento enviado! Aguardando confirmação…');
+          toast.success(t('Payment sent! Awaiting confirmation…'));
           const payReceipt = await payTx.wait();
           if (!payReceipt || payReceipt.status !== 1) {
-            throw new Error('Pagamento falhou');
+            throw new Error(t('Payment failed'));
           }
 
           // RPCs can lag (especially on testnet). Try confirming the purchase a few times.
@@ -558,20 +562,20 @@ export default function CharacterDetailsPage() {
       }
 
       if (!response) {
-        throw new Error('Falha ao confirmar expansão (sem resposta do servidor)')
+        throw new Error(t('Failed to confirm expansion (no response from server)'))
       }
 
       if (response.ok) {
         const data = await response.json();
         setCharacter(data.character);
-        toast.success(`📦 +${slotsToAdd} slots adicionados! (${totalCostGold} GOLD gastos)`);
+        toast.success(t('📦 +{n} slots added! ({cost} GOLD spent)', { n: slotsToAdd, cost: totalCostGold }));
       } else {
         const error = lastError || (await response.json().catch(() => null));
-        toast.error(`❌ ${error?.error || 'Falha ao confirmar expansão'}`);
+        toast.error(`❌ ${error?.error || t('Failed to confirm expansion')}`);
       }
     } catch (error) {
       console.error('Error expanding inventory:', error);
-      toast.error(getWalletTxErrorMessage(error, '💥 Erro inesperado ao expandir inventário'));
+      toast.error(getWalletTxErrorMessage(error, t('💥 Unexpected error expanding inventory')));
     } finally {
       // Always re-sync character data so UI reflects server state.
       try {
@@ -615,10 +619,10 @@ export default function CharacterDetailsPage() {
             {/* Barra de título em bisel */}
             <div className="flex items-center justify-between px-4 py-2.5" style={{ background: TITLEBAR_BG, borderBottom: '1px solid rgba(0,0,0,0.7)' }}>
               <span className="flex items-center gap-2 text-[15px] font-semibold tracking-wide text-[#dcdce0]">
-                <span style={{ color: GOLD }}>✦</span> Ficha do Personagem
+                <span style={{ color: GOLD }}>✦</span> {t('Character Sheet')}
               </span>
               <span className="text-[11px] uppercase tracking-[0.14em] text-[#77777d]">
-                Nível {character.level}
+                {t('Level')} {character.level}
               </span>
             </div>
 
@@ -665,20 +669,20 @@ export default function CharacterDetailsPage() {
                     className="rounded-[3px] border px-3 py-1 text-sm font-semibold text-[#dcdce0]"
                     style={{ borderColor: `${visual.raceVisual.accent}66`, background: `linear-gradient(180deg, ${visual.raceVisual.accent}2e, ${visual.raceVisual.accent}12)` }}
                   >
-                    {visual.raceVisual.emoji} {raceObj?.name}
+                    {visual.raceVisual.emoji} {raceObj?.id ? localizeRaceName(raceObj.id, raceObj.name, locale) : raceObj?.name}
                   </span>
                   <span
                     className="rounded-[3px] border px-3 py-1 text-sm font-semibold text-[#dcdce0]"
                     style={{ borderColor: `${visual.classVisual.accent}66`, background: `linear-gradient(180deg, ${visual.classVisual.accent}2e, ${visual.classVisual.accent}12)` }}
                   >
-                    {visual.classVisual.emoji} {classObj?.name}
+                    {visual.classVisual.emoji} {classObj?.id ? localizeClassName(classObj.id, classObj.name, locale) : classObj?.name}
                   </span>
                   {(character.availablePoints ?? 0) > 0 && (
                     <span
                       className="rounded-[3px] border px-3 py-1 text-sm font-bold"
                       style={{ borderColor: FRAME, background: 'linear-gradient(180deg, #3a3325, #241f16)', color: GOLD_BRIGHT }}
                     >
-                      ✦ {character.availablePoints} pontos disponíveis
+                      ✦ {t('{n} points available', { n: character.availablePoints ?? 0 })}
                     </span>
                   )}
                 </div>
@@ -686,7 +690,7 @@ export default function CharacterDetailsPage() {
                 {/* Barra de experiência */}
                 <div className="mt-3">
                   <div className="mb-1 flex items-center justify-between text-[11px] uppercase tracking-[0.14em] text-[#77777d]">
-                    <span>Experiência</span>
+                    <span>{t('Experience')}</span>
                     <span className="normal-case tracking-normal tabular-nums text-[#8a8a90]">
                       {character.experience} / {character.nextLevelExperience || '?'}
                     </span>
@@ -709,10 +713,10 @@ export default function CharacterDetailsPage() {
                 <div className="mt-2">
                   <div className="mb-1 flex items-center justify-between text-[11px] uppercase tracking-[0.14em] text-[#77777d]">
                     <span className="flex items-center gap-1.5">
-                      ⚡ Stamina
+                      ⚡ {t('Stamina')}
                       {(character as any).gathering?.status === 'active' && (
                         <span className="rounded-[2px] border border-emerald-400/40 bg-emerald-500/15 px-1.5 normal-case tracking-normal text-emerald-200">
-                          ⛏️ coletando
+                          ⛏️ {t('gathering')}
                         </span>
                       )}
                     </span>
@@ -741,13 +745,13 @@ export default function CharacterDetailsPage() {
                   onClick={() => handleAddXp(100)}
                   className="rounded-[3px] border border-[#46464c] bg-gradient-to-b from-[#2b2b2f] to-[#1c1c1f] px-3 py-1 text-xs font-semibold text-[#c9c9ce] transition-colors hover:border-[#8a6d3b] hover:text-white"
                 >
-                  +100 XP (Teste)
+                  {t('+100 XP (Test)')}
                 </button>
                 <button
                   onClick={() => handleAddXp(1000)}
                   className="rounded-[3px] border border-[#46464c] bg-gradient-to-b from-[#2b2b2f] to-[#1c1c1f] px-3 py-1 text-xs font-semibold text-[#c9c9ce] transition-colors hover:border-[#8a6d3b] hover:text-white"
                 >
-                  +1000 XP (Level Up)
+                  {t('+1000 XP (Level Up)')}
                 </button>
               </div>
             </div>
@@ -766,7 +770,7 @@ export default function CharacterDetailsPage() {
               }}
             >
               <Sword className="w-5 h-5" />
-              Entrar em Combate
+              {t('Enter Combat')}
             </button>
             <button
               onClick={() => router.push('/dungeons')}
@@ -779,7 +783,7 @@ export default function CharacterDetailsPage() {
               }}
             >
               <Shield className="w-5 h-5" />
-              Explorar Dungeon
+              {t('Explore Dungeon')}
             </button>
             <button
               onClick={() => router.push(`/character/${effectiveCharacterId}/skill-tree`)}
@@ -792,7 +796,7 @@ export default function CharacterDetailsPage() {
               }}
             >
               <Star className="w-5 h-5" />
-              Árvore de Habilidades
+              {t('Skill Tree')}
               {(character.availablePoints ?? 0) > 0 && (
                 <span
                   className="ml-1 rounded-[3px] border px-1.5 py-0.5 text-[11px] font-bold tabular-nums"
@@ -820,15 +824,17 @@ export default function CharacterDetailsPage() {
                 <span className="text-2xl" aria-hidden>🌳</span>
                 <div>
                   <div className="text-[15px] font-bold" style={{ color: GOLD_BRIGHT }}>
-                    Você subiu de nível!
+                    {t('You leveled up!')}
                   </div>
                   <div className="text-[13px]" style={{ color: '#d8c8a0' }}>
-                    {character.availablePoints} ponto{character.availablePoints === 1 ? '' : 's'} para distribuir na Árvore de Habilidades
+                    {character.availablePoints === 1
+                      ? t('1 point to distribute in the Skill Tree')
+                      : t('{n} points to distribute in the Skill Tree', { n: character.availablePoints ?? 0 })}
                   </div>
                 </div>
               </div>
               <span className="shrink-0 rounded-[3px] border px-3 py-1.5 text-sm font-bold" style={{ borderColor: GOLD, color: GOLD_BRIGHT, background: 'rgba(0,0,0,0.3)' }}>
-                Distribuir →
+                {t('Distribute →')}
               </span>
             </div>
           </button>
@@ -872,11 +878,11 @@ export default function CharacterDetailsPage() {
             {/* Barra de título */}
             <div className="flex items-center gap-2" style={{ height: 38, padding: '0 12px 0 76px', background: TITLEBAR_BG, borderBottom: '1px solid rgba(0,0,0,0.7)' }}>
               <Sword size={17} style={{ color: GOLD }} />
-              <span style={{ fontSize: 15, fontWeight: 600, color: '#dcdce0', letterSpacing: '0.4px' }}>Equipamento</span>
+              <span style={{ fontSize: 15, fontWeight: 600, color: '#dcdce0', letterSpacing: '0.4px' }}>{t('Equipment')}</span>
               <div className="flex-1" />
               <Link
                 href="/doc#items"
-                title="Ver documentação de itens"
+                title={t('View item documentation')}
                 className="transition-colors hover:text-white"
                 style={{ color: '#7e8893' }}
               >
@@ -886,7 +892,7 @@ export default function CharacterDetailsPage() {
 
             {/* Corpo: figura central + anel de slots */}
             <div className="relative flex-1" style={{ padding: '14px 18px 0' }}>
-              <div className="absolute text-center" style={{ top: 8, left: 0, right: 0, fontSize: '11px', color: '#77777d', letterSpacing: '0.14em', textTransform: 'uppercase' }}>Aparência</div>
+              <div className="absolute text-center" style={{ top: 8, left: 0, right: 0, fontSize: '11px', color: '#77777d', letterSpacing: '0.14em', textTransform: 'uppercase' }}>{t('Appearance')}</div>
 
               <div className="equip-figure-wrap">
               <div className="relative equip-figure" style={{ height: 392, width: 512, margin: '4px 0 0' }}>
@@ -895,7 +901,7 @@ export default function CharacterDetailsPage() {
                 <div
                   className="absolute flex items-center justify-center"
                   onClick={() => { if (canFlip) setAppearanceIndex((i) => (i + 1) % appearances.length); }}
-                  title={canFlip ? 'Clique para alternar entre as formas' : undefined}
+                  title={canFlip ? t('Click to switch between forms') : undefined}
                   style={{ top: 24, left: '50%', transform: 'translateX(-50%)', width: 150, height: 272, background: `radial-gradient(70% 50% at 50% 20%, ${currentAppearance.glow}1f, transparent 60%)`, zIndex: 1, cursor: canFlip ? 'pointer' : 'default', perspective: 900 }}
                 >
                   <AnimatePresence mode="wait" initial={false}>
@@ -1003,11 +1009,11 @@ export default function CharacterDetailsPage() {
                 bônus plano (+N) ao lado do valor, em vez de porcentagem. */}
             <div className="flex justify-center" style={{ gap: 18, padding: '10px 14px 12px', marginTop: 4, background: '#19191c', borderTop: '1px solid rgba(0,0,0,0.6)' }}>
               {[
-                { icon: <Sword size={18} style={{ color: '#e8d08a' }} />, base: stats.total.str, label: 'FOR', mult: activeFormMods?.strength },
-                { icon: <Shield size={18} style={{ color: '#6aa9d6' }} />, base: stats.total.def, label: 'DEF', mult: activeFormMods?.defense },
-                { icon: <Zap size={18} style={{ color: '#8fd6e0' }} />, base: stats.base.agi, label: 'AGI', mult: activeFormMods?.agility },
-                { icon: <Brain size={18} style={{ color: '#c3a6ec' }} />, base: stats.base.int, label: 'INT', mult: activeFormMods?.intelligence },
-                { icon: <Star size={18} style={{ color: '#f0c873' }} />, base: stats.base.agi * 0.2, label: 'CRÍT', mult: activeFormMods?.critical, isPercent: true },
+                { icon: <Sword size={18} style={{ color: '#e8d08a' }} />, base: stats.total.str, label: t('STR'), mult: activeFormMods?.strength },
+                { icon: <Shield size={18} style={{ color: '#6aa9d6' }} />, base: stats.total.def, label: t('DEF'), mult: activeFormMods?.defense },
+                { icon: <Zap size={18} style={{ color: '#8fd6e0' }} />, base: stats.base.agi, label: t('AGI'), mult: activeFormMods?.agility },
+                { icon: <Brain size={18} style={{ color: '#c3a6ec' }} />, base: stats.base.int, label: t('INT'), mult: activeFormMods?.intelligence },
+                { icon: <Star size={18} style={{ color: '#f0c873' }} />, base: stats.base.agi * 0.2, label: t('CRIT'), mult: activeFormMods?.critical, isPercent: true },
               ].map((a) => {
                 const rawDelta = activeFormMods && a.mult ? a.base * a.mult - a.base : 0;
                 const delta = a.isPercent ? rawDelta : Math.round(rawDelta);
@@ -1037,9 +1043,9 @@ export default function CharacterDetailsPage() {
                 e o +N verde é o bônus somado pelos equipamentos. */}
             <div style={{ padding: '4px 22px 10px', borderTop: '1px solid rgba(0,0,0,0.6)' }}>
               {[
-                { icon: <Sword size={18} style={{ color: '#c98a6a' }} />, label: 'Ataque (AD)', base: stats.base.str, equip: stats.equipment.str + (stats.total.bonusDamage || 0), mult: activeFormMods?.attack },
-                { icon: <Zap size={18} style={{ color: '#b06ae0' }} />, label: 'Poder Mágico (AP)', base: stats.base.int, equip: 0, mult: activeFormMods?.attack },
-                { icon: <Shield size={18} style={{ color: '#6aa9d6' }} />, label: 'Defesa (DP)', base: stats.base.def, equip: stats.equipment.def, mult: activeFormMods?.defense },
+                { icon: <Sword size={18} style={{ color: '#c98a6a' }} />, label: t('Attack (AD)'), base: stats.base.str, equip: stats.equipment.str + (stats.total.bonusDamage || 0), mult: activeFormMods?.attack },
+                { icon: <Zap size={18} style={{ color: '#b06ae0' }} />, label: t('Magic Power (AP)'), base: stats.base.int, equip: 0, mult: activeFormMods?.attack },
+                { icon: <Shield size={18} style={{ color: '#6aa9d6' }} />, label: t('Defense (DP)'), base: stats.base.def, equip: stats.equipment.def, mult: activeFormMods?.defense },
               ].map((row, i, arr) => {
                 const transformedBase = activeFormMods && row.mult ? Math.round(row.base * row.mult) : row.base;
                 const transformDelta = transformedBase - row.base;
@@ -1083,7 +1089,7 @@ export default function CharacterDetailsPage() {
               onSell={(inventoryId, quantity) => handleSell(inventoryId, quantity)}
               onExpand={handleExpandInventory}
               expanding={expandingSlots}
-              expandTitle="Expandir +5 slots (custo: 1000 GOLD)"
+              expandTitle={t('Expand +5 slots (cost: 1000 GOLD)')}
               goldText={goldOnchainText}
               getCompareTo={(item) => {
                 if (item.type === 'CONSUMABLE') return null;
@@ -1099,7 +1105,7 @@ export default function CharacterDetailsPage() {
         </div>
         </div>
 
-        {/* Painel de Histórico do Personagem */}
+        {/* Character History panel */}
         <div className="max-w-3xl mx-auto mt-6">
           <CharacterHistory characterId={effectiveCharacterId || ''} />
         </div>

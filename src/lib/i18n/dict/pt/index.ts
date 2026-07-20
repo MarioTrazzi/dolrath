@@ -6,6 +6,8 @@ import { LANDING_PT } from './landing'
 import { JOURNEY_PT } from './journey'
 import { LEGAL_PT } from './legal'
 import { GATHERING_PT } from './gathering'
+import { DASHBOARD_PT } from './dashboard'
+import { CHARACTER_PT } from './character'
 
 export const PT_DICT: Record<string, string> = {
   ...COMMON_PT,
@@ -14,4 +16,6 @@ export const PT_DICT: Record<string, string> = {
   ...JOURNEY_PT,
   ...LEGAL_PT,
   ...GATHERING_PT,
+  ...DASHBOARD_PT,
+  ...CHARACTER_PT,
 }

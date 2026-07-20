@@ -18,6 +18,7 @@ import { ensureTargetNetwork } from '@/lib/chainConfig';
 import { CreationStepIndicator } from './components/CreationStepIndicator';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useT } from '@/lib/i18n/I18nProvider';
 
 const STEP_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   'race-selection': Swords,
@@ -28,6 +29,7 @@ const STEP_ICONS: Record<string, React.ComponentType<{ className?: string }>> = 
 };
 
 export default function CharacterCreationPage() {
+  const t = useT();
   const { data: session, status, update } = useSession();
   const { currentStep, creationSteps, nextStep, prevStep, goToStep, creationPaymentTxHash, setCreationPaymentTxHash } = useCharacterCreationStore();
   const [isLinkingWallet, setIsLinkingWallet] = useState(false);
@@ -192,7 +194,7 @@ export default function CharacterCreationPage() {
     try {
       const eth = (window as any)?.ethereum;
       if (!eth) {
-        throw new Error('MetaMask não encontrada. Instale/ative a extensão para continuar.');
+        throw new Error(t('MetaMask not found. Install/enable the extension to continue.'));
       }
 
       const provider = new ethers.BrowserProvider(eth);
@@ -202,12 +204,12 @@ export default function CharacterCreationPage() {
       const nonceRes = await fetch('/api/wallet/nonce', { method: 'POST' });
       const nonceJson = await nonceRes.json();
       if (!nonceRes.ok) {
-        throw new Error(nonceJson?.error || 'Falha ao obter nonce');
+        throw new Error(nonceJson?.error || t('Failed to fetch nonce'));
       }
 
       const message = nonceJson?.message;
       if (!message || typeof message !== 'string') {
-        throw new Error('Resposta inválida ao obter nonce');
+        throw new Error(t('Invalid response while fetching nonce'));
       }
 
       const signature = await signer.signMessage(message);
@@ -219,12 +221,12 @@ export default function CharacterCreationPage() {
       });
       const linkJson = await linkRes.json();
       if (!linkRes.ok) {
-        throw new Error(linkJson?.error || 'Falha ao vincular carteira');
+        throw new Error(linkJson?.error || t('Failed to link wallet'));
       }
 
       await update?.();
     } catch (e) {
-      setWalletError(e instanceof Error ? e.message : 'Erro ao vincular carteira');
+      setWalletError(e instanceof Error ? e.message : t('Failed to link wallet'));
     } finally {
       setIsLinkingWallet(false);
     }
@@ -237,7 +239,7 @@ export default function CharacterCreationPage() {
       const txHash = await payDolToTreasury(creationCostDol);
       setCreationPaymentTxHash(txHash);
     } catch (e) {
-      setPaymentError(e instanceof Error ? e.message : getWalletTxErrorMessage(e, 'Erro ao pagar taxa de criação'));
+      setPaymentError(e instanceof Error ? e.message : getWalletTxErrorMessage(e, t('Failed to pay creation fee')));
     } finally {
       setIsPaying(false);
     }
@@ -247,12 +249,12 @@ export default function CharacterCreationPage() {
     const burnAddress = process.env.NEXT_PUBLIC_CHARACTER_NFT_BURN_ADDRESS || '0x000000000000000000000000000000000000dEaD';
     const contractAddress = ownedNftContext?.contractAddress;
     if (!contractAddress) {
-      throw new Error('Contract address da NFT não disponível. Atualize a lista e tente novamente.');
+      throw new Error(t('NFT contract address not available. Refresh the list and try again.'));
     }
 
     const eth = (window as any)?.ethereum;
     if (!eth) {
-      throw new Error('MetaMask não encontrada. Instale/ative a extensão para continuar.');
+      throw new Error(t('MetaMask not found. Install/enable the extension to continue.'));
     }
 
     const provider = new ethers.BrowserProvider(eth);
@@ -277,7 +279,7 @@ export default function CharacterCreationPage() {
   if (status === 'loading') {
     return (
       <div className="min-h-screen text-white p-8">
-        <div className="max-w-3xl mx-auto py-12">Carregando...</div>
+        <div className="max-w-3xl mx-auto py-12">{t('Loading...')}</div>
       </div>
     );
   }
@@ -287,13 +289,13 @@ export default function CharacterCreationPage() {
       <div className="min-h-screen text-white p-8">
         <div className="max-w-3xl mx-auto py-12">
           <div className="rounded-[4px] border border-[#46464c] bg-[#1e1e21]/95 p-8 shadow-2xl shadow-black/60">
-            <h1 className="text-2xl font-bold mb-2">Faça login para criar seu personagem</h1>
-            <p className="text-text-secondary mb-6">Você pode entrar com Google ou credenciais.</p>
+            <h1 className="text-2xl font-bold mb-2">{t('Sign in to create your character')}</h1>
+            <p className="text-text-secondary mb-6">{t('You can sign in with Google or credentials.')}</p>
             <button
               onClick={() => signIn()}
               className="rounded-[3px] border border-[#8a6d3b] bg-gradient-to-b from-[#3a3325] to-[#241f16] px-6 py-3 font-semibold tracking-wide text-[#e7c682] shadow-[inset_0_1px_0_rgba(231,198,130,0.25),0_0_14px_rgba(201,162,95,0.2)] transition-all hover:border-[#c9a25f] hover:brightness-125"
             >
-              Entrar
+              {t('Sign In')}
             </button>
           </div>
         </div>
@@ -311,13 +313,13 @@ export default function CharacterCreationPage() {
             transition={{ duration: 0.5 }}
             className="text-4xl font-black text-center mb-12 text-[#ece7da]"
           >
-            Criação de Personagem
+            {t('Character Creation')}
           </motion.h1>
 
           <div className="rounded-[4px] border border-[#46464c] bg-[#1e1e21]/95 p-8 shadow-2xl shadow-black/60">
-            <h2 className="text-2xl font-bold text-text-primary mb-2">Vincule sua carteira</h2>
+            <h2 className="text-2xl font-bold text-text-primary mb-2">{t('Link your wallet')}</h2>
             <p className="text-text-secondary mb-6">
-              Para criar um personagem, precisamos vincular uma carteira EVM (ex: MetaMask) à sua conta.
+              {t('To create a character, we need to link an EVM wallet (e.g. MetaMask) to your account.')}
             </p>
 
             {walletError && (
@@ -330,7 +332,7 @@ export default function CharacterCreationPage() {
               className="w-full flex items-center justify-center gap-2 rounded-[3px] border border-[#8a6d3b] bg-gradient-to-b from-[#3a3325] to-[#241f16] px-6 py-3 font-semibold tracking-wide text-[#e7c682] shadow-[inset_0_1px_0_rgba(231,198,130,0.25),0_0_14px_rgba(201,162,95,0.2)] transition-all hover:border-[#c9a25f] hover:brightness-125 disabled:opacity-50"
             >
               <Wallet className="w-5 h-5" />
-              {isLinkingWallet ? 'Vinculando...' : 'Conectar e assinar'}
+              {isLinkingWallet ? t('Linking...') : t('Connect and sign')}
             </button>
           </div>
         </div>
@@ -349,13 +351,13 @@ export default function CharacterCreationPage() {
             transition={{ duration: 0.5 }}
             className="text-4xl font-black text-center mb-12 text-[#ece7da]"
           >
-            Criação de Personagem
+            {t('Character Creation')}
           </motion.h1>
 
           <div className="rounded-[4px] border border-[#46464c] bg-[#1e1e21]/95 p-8 shadow-2xl shadow-black/60">
-            <h2 className="text-2xl font-bold text-text-primary mb-2">Taxa de criação</h2>
+            <h2 className="text-2xl font-bold text-text-primary mb-2">{t('Creation fee')}</h2>
             <p className="text-text-secondary mb-6">
-              Para criar um personagem nesta testnet, é necessário pagar {creationCostDol} DOL.
+              {t('To create a character on this testnet, you need to pay {n} DOL.', { n: creationCostDol })}
             </p>
 
             {paymentError && <p className="text-error mb-4">{paymentError}</p>}
@@ -365,25 +367,25 @@ export default function CharacterCreationPage() {
               disabled={isPaying}
               className="w-full flex items-center justify-center gap-2 rounded-[3px] border border-[#8a6d3b] bg-gradient-to-b from-[#3a3325] to-[#241f16] px-6 py-3 font-semibold tracking-wide text-[#e7c682] shadow-[inset_0_1px_0_rgba(231,198,130,0.25),0_0_14px_rgba(201,162,95,0.2)] transition-all hover:border-[#c9a25f] hover:brightness-125 disabled:opacity-50"
             >
-              {isPaying ? 'Processando pagamento...' : `Pagar ${creationCostDol} DOL`}
+              {isPaying ? t('Processing payment...') : t('Pay {n} DOL', { n: creationCostDol })}
             </button>
 
             <p className="text-xs text-text-secondary mt-4">
-              Você vai assinar uma transação on-chain e pagar gas.
+              {t('You will sign an on-chain transaction and pay gas.')}
             </p>
           </div>
 
           {/* Owned NFTs (on-chain) - shown ONLY before paying */}
           <div className="mt-8 rounded-[4px] border border-[#46464c] bg-[#1e1e21]/95 p-6 shadow-2xl shadow-black/60">
             <div className="flex items-center justify-between gap-4 mb-4">
-              <h2 className="text-xl font-bold text-text-primary">Suas NFTs</h2>
+              <h2 className="text-xl font-bold text-text-primary">{t('Your NFTs')}</h2>
               <button
                 type="button"
                 onClick={refreshOwnedNfts}
                 disabled={ownedNftsLoading}
                 className="rounded-[3px] border border-[#46464c] bg-gradient-to-b from-[#2b2b2f] to-[#1c1c1f] px-3 py-2 font-semibold text-[#c9c9ce] transition-colors hover:border-[#8a6d3b] hover:text-white disabled:opacity-50"
               >
-                {ownedNftsLoading ? 'Atualizando...' : 'Atualizar'}
+                {ownedNftsLoading ? t('Refreshing...') : t('Refresh')}
               </button>
             </div>
 
@@ -392,9 +394,9 @@ export default function CharacterCreationPage() {
               ) : null}
 
             {ownedNftsLoading && displayNfts.length === 0 ? (
-              <div className="text-text-secondary">Carregando...</div>
+              <div className="text-text-secondary">{t('Loading...')}</div>
             ) : displayNfts.length === 0 ? (
-              <div className="text-text-secondary">Nenhuma NFT encontrada na sua carteira.</div>
+              <div className="text-text-secondary">{t('No NFTs found in your wallet.')}</div>
             ) : (
               <div className="divide-y divide-white/10">
                 {displayNfts.map((it) => {
@@ -433,16 +435,16 @@ export default function CharacterCreationPage() {
                           {displayRace}
                           {displayRace && displayClass ? ' • ' : ''}
                           {displayClass}
-                          {displayLevel ? ` • Lv ${displayLevel}` : ''}
+                          {displayLevel ? ` • ${t('Lv')} ${displayLevel}` : ''}
                         </div>
-                        <div className="text-[11px] text-text-secondary truncate">Token ID: {tokenId}</div>
+                        <div className="text-[11px] text-text-secondary truncate">{t('Token ID:')} {tokenId}</div>
                       </div>
 
                       <Link
                         href={`/character/${characterId || tokenId}`}
                         className="rounded-[3px] border border-[#46464c] bg-gradient-to-b from-[#2b2b2f] to-[#1c1c1f] px-3 py-2 font-semibold text-[#c9c9ce] transition-colors hover:border-[#8a6d3b] hover:text-white"
                       >
-                        Abrir
+                        {t('Open')}
                       </Link>
 
                       <button
@@ -452,12 +454,12 @@ export default function CharacterCreationPage() {
                             await burnNftToDeadWallet(tokenId);
                             await refreshOwnedNfts();
                           } catch (e) {
-                            alert(e instanceof Error ? e.message : 'Erro ao excluir NFT');
+                            alert(e instanceof Error ? e.message : t('Failed to delete NFT'));
                           }
                         }}
                         className="rounded-[3px] border border-[#46464c] bg-gradient-to-b from-[#2b2b2f] to-[#1c1c1f] px-3 py-2 font-semibold text-[#c9c9ce] transition-colors hover:border-[#8a6d3b] hover:text-white"
                       >
-                        Excluir
+                        {t('Delete')}
                       </button>
                     </div>
                   );
@@ -479,7 +481,7 @@ export default function CharacterCreationPage() {
           transition={{ duration: 0.5 }}
           className="text-4xl font-black text-center mb-12 text-[#ece7da]"
         >
-          Criação de Personagem
+          {t('Character Creation')}
         </motion.h1>
 
         {/* Progress Bar */}
@@ -510,7 +512,7 @@ export default function CharacterCreationPage() {
             className="flex items-center gap-2 rounded-[3px] border border-[#46464c] bg-gradient-to-b from-[#2b2b2f] to-[#1c1c1f] px-6 py-3 font-semibold text-[#c9c9ce] transition-colors hover:border-[#8a6d3b] hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <ArrowLeft className="w-5 h-5" />
-            Anterior
+            {t('Previous')}
           </button>
 
           <button
@@ -518,7 +520,7 @@ export default function CharacterCreationPage() {
             disabled={isNextButtonDisabled || currentStep === creationSteps.length - 1}
             className="flex items-center gap-2 rounded-[3px] border border-[#8a6d3b] bg-gradient-to-b from-[#3a3325] to-[#241f16] px-6 py-3 font-semibold tracking-wide text-[#e7c682] shadow-[inset_0_1px_0_rgba(231,198,130,0.25),0_0_14px_rgba(201,162,95,0.2)] transition-all hover:border-[#c9a25f] hover:brightness-125 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Próximo
+            {t('Next')}
             <ArrowRight className="w-5 h-5" />
           </button>
         </div>

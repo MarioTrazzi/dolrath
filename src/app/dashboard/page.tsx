@@ -26,6 +26,9 @@ import Image from 'next/image';
 import { getWalletTxErrorMessage } from '@/lib/walletErrors';
 import { getPolygonFeeOverrides } from '@/lib/gasFees';
 import { ensureTargetNetwork } from '@/lib/chainConfig';
+import { useI18n } from '@/lib/i18n/I18nProvider';
+import { localizeItemName } from '@/lib/i18n/catalog';
+import { localizeRaceName, localizeClassName } from '@/lib/i18n/gameNames';
 // ...existing code...
 // ...existing code...
 
@@ -41,6 +44,7 @@ const BEVEL_BTN =
   'rounded-[3px] border border-[#46464c] bg-gradient-to-b from-[#2b2b2f] to-[#1c1c1f] font-semibold text-[#c9c9ce] transition-colors hover:border-[#8a6d3b] hover:text-white';
 
 export default function DashboardPage() {
+  const { locale, t } = useI18n();
   const { data: session, status, update } = useSession();
   const router = useRouter();
   const [characters, setCharacters] = useState<Character[]>([]);
@@ -75,7 +79,7 @@ export default function DashboardPage() {
     try {
       const eth = (window as any)?.ethereum;
       if (!eth) {
-        throw new Error('MetaMask não encontrada. Instale/ative a extensão para continuar.');
+        throw new Error(t('MetaMask not found. Install/enable the extension to continue.'));
       }
 
       const provider = new ethers.BrowserProvider(eth);
@@ -85,12 +89,12 @@ export default function DashboardPage() {
       const nonceRes = await fetch('/api/wallet/nonce', { method: 'POST' });
       const nonceJson = await nonceRes.json();
       if (!nonceRes.ok) {
-        throw new Error(nonceJson?.error || 'Falha ao obter nonce');
+        throw new Error(nonceJson?.error || t('Failed to fetch nonce'));
       }
 
       const message = nonceJson?.message;
       if (!message || typeof message !== 'string') {
-        throw new Error('Resposta inválida ao obter nonce');
+        throw new Error(t('Invalid response while fetching nonce'));
       }
 
       const signature = await signer.signMessage(message);
@@ -102,7 +106,7 @@ export default function DashboardPage() {
       });
       const linkJson = await linkRes.json();
       if (!linkRes.ok) {
-        throw new Error(linkJson?.error || 'Falha ao vincular carteira');
+        throw new Error(linkJson?.error || t('Failed to link wallet'));
       }
 
       await update?.();
@@ -131,10 +135,10 @@ export default function DashboardPage() {
         // Recarregar personagens
         await fetchCharacters();
       } else {
-        alert('Erro ao adicionar XP.');
+        alert(t('Failed to add XP.'));
       }
     } catch (err) {
-      alert('Erro ao adicionar XP.');
+      alert(t('Failed to add XP.'));
     }
   };
 
@@ -147,15 +151,15 @@ export default function DashboardPage() {
 
       if (response.ok) {
         const result = await response.json();
-        alert(`${result.message}. ${result.updatedCount} personagens atualizados.`);
-        
+        alert(`${result.message}. ${t('{n} characters updated.', { n: result.updatedCount })}`);
+
         // Recarregar personagens
         await fetchCharacters();
       } else {
-        alert('Erro ao sincronizar níveis.');
+        alert(t('Failed to sync levels.'));
       }
     } catch (err) {
-      alert('Erro ao sincronizar níveis.');
+      alert(t('Failed to sync levels.'));
     }
   };
 
@@ -185,7 +189,7 @@ export default function DashboardPage() {
         if (res.ok) {
           const data = await res.json().catch(() => null);
           if (data?.transformationImage && !data?.alreadyExisted) {
-            toast.success('Forma de transformação gerada! ✨');
+            toast.success(t('Transformation form generated! ✨'));
           }
         }
       } catch {
@@ -205,7 +209,7 @@ export default function DashboardPage() {
         } catch {
           // ignore
         }
-        setOwnedNftsError(msg || 'Falha ao carregar NFTs.');
+        setOwnedNftsError(msg || t('Failed to load NFTs.'));
         setOwnedNfts([]);
         setOwnedNftContext(null);
         setNftMetaByTokenId({});
@@ -316,10 +320,10 @@ export default function DashboardPage() {
     try {
       const burnAddress = process.env.NEXT_PUBLIC_CHARACTER_NFT_BURN_ADDRESS || '0x000000000000000000000000000000000000dEaD';
       const contractAddress = ownedNftContext?.contractAddress;
-      if (!contractAddress) throw new Error('Contract address da NFT não disponível.');
+      if (!contractAddress) throw new Error(t('NFT contract address not available.'));
 
       const eth = (window as any)?.ethereum;
-      if (!eth) throw new Error('MetaMask não encontrada.');
+      if (!eth) throw new Error(t('MetaMask not found.'));
 
       const provider = new ethers.BrowserProvider(eth);
       await provider.send('eth_requestAccounts', []);
@@ -369,7 +373,7 @@ export default function DashboardPage() {
           .then(async (res) => {
             const json = await res.json();
             if (!res.ok) {
-              throw new Error(json?.error || 'Falha ao buscar saldo on-chain');
+              throw new Error(json?.error || t('Failed to fetch on-chain balance'));
             }
             if (json?.walletLinked && typeof json?.formatted === 'string') {
               setDolBalance(json.formatted);
@@ -380,7 +384,7 @@ export default function DashboardPage() {
             }
           })
           .catch((e) => {
-            setDolError(e instanceof Error ? e.message : 'Erro ao buscar saldo on-chain');
+            setDolError(e instanceof Error ? e.message : t('Failed to fetch on-chain balance'));
           })
           .finally(() => setDolLoading(false));
 
@@ -389,7 +393,7 @@ export default function DashboardPage() {
           .then((res) => (res.ok ? res.json() : null))
           .then((json) => {
             const n = Number(json?.formatted);
-            setGoldOnchain(json?.walletLinked && Number.isFinite(n) ? n.toLocaleString('pt-BR') : null);
+            setGoldOnchain(json?.walletLinked && Number.isFinite(n) ? n.toLocaleString(locale === 'pt' ? 'pt-BR' : 'en-US') : null);
           })
           .catch(() => setGoldOnchain(null));
       } else {
@@ -430,25 +434,25 @@ export default function DashboardPage() {
         >
           <div className="flex items-center gap-2 px-4 py-2.5" style={{ background: TITLEBAR_BG, borderBottom: '1px solid rgba(0,0,0,0.7)' }}>
             <Wallet size={16} style={{ color: GOLD }} />
-            <span className="text-[15px] font-semibold tracking-wide text-[#dcdce0]">Carteira</span>
+            <span className="text-[15px] font-semibold tracking-wide text-[#dcdce0]">{t('Wallet')}</span>
           </div>
 
           <div className="flex items-start justify-between gap-4 p-4">
             <div className="min-w-0 flex-1">
-              <div className="text-[11px] uppercase tracking-[0.14em] text-[#77777d]">Carteira vinculada</div>
+              <div className="text-[11px] uppercase tracking-[0.14em] text-[#77777d]">{t('Linked wallet')}</div>
               <div className="flex items-center gap-3 min-w-0">
                 <div className="truncate font-medium tabular-nums text-[#ece7da]">
-                  {session?.user?.walletAddress ? session.user.walletAddress : 'Não vinculada'}
+                  {session?.user?.walletAddress ? session.user.walletAddress : t('Not linked')}
                 </div>
                 {status === 'authenticated' && (
                   <button
                     type="button"
                     onClick={() => signOut({ callbackUrl: '/' })}
                     className={`${BEVEL_BTN} shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs hover:border-red-700/60 hover:text-red-300`}
-                    title="Sair da conta"
+                    title={t('Sign out')}
                   >
                     <LogOut className="w-3.5 h-3.5" />
-                    Sair
+                    {t('Sign out')}
                   </button>
                 )}
               </div>
@@ -460,7 +464,7 @@ export default function DashboardPage() {
                     className={`${BEVEL_BTN} inline-flex items-center gap-2 px-3 py-1.5 text-xs disabled:opacity-50`}
                   >
                     <Wallet className="w-4 h-4" />
-                    {isLinkingWallet ? 'Conectando...' : 'Conectar e assinar'}
+                    {isLinkingWallet ? t('Connecting...') : t('Connect and sign')}
                   </button>
                   {walletLinkError && (
                     <div className="mt-2 text-xs text-red-400">{walletLinkError}</div>
@@ -469,11 +473,11 @@ export default function DashboardPage() {
               )}
             </div>
             <div className="shrink-0 text-right">
-              <div className="text-[11px] uppercase tracking-[0.14em] text-[#77777d]">Saldo on-chain</div>
+              <div className="text-[11px] uppercase tracking-[0.14em] text-[#77777d]">{t('On-chain balance')}</div>
               <div className="font-bold tabular-nums text-[#ece7da]">
                 {session?.user?.walletAddress ? (
                   dolLoading ? (
-                    'Carregando...'
+                    t('Loading...')
                   ) : dolError ? (
                     dolError
                   ) : dolBalance ? (
@@ -501,10 +505,10 @@ export default function DashboardPage() {
         >
           <div className="flex items-center gap-2 px-4 py-2.5" style={{ background: TITLEBAR_BG, borderBottom: '1px solid rgba(0,0,0,0.7)' }}>
             <User size={16} style={{ color: GOLD }} />
-            <span className="text-[15px] font-semibold tracking-wide text-[#dcdce0]">Personagens (on-chain)</span>
+            <span className="text-[15px] font-semibold tracking-wide text-[#dcdce0]">{t('Characters (on-chain)')}</span>
             <div className="flex-1" />
             <button onClick={fetchCharacters} className={`${BEVEL_BTN} px-3 py-1 text-xs`}>
-              Atualizar
+              {t('Refresh')}
             </button>
           </div>
 
@@ -514,7 +518,7 @@ export default function DashboardPage() {
           ) : null}
 
           {ownedNfts.length === 0 ? (
-            <div className="text-sm text-[#8a8a90]">Nenhuma NFT encontrada na sua carteira.</div>
+            <div className="text-sm text-[#8a8a90]">{t('No NFTs found in your wallet.')}</div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {ownedNfts.map((it: any) => {
@@ -613,43 +617,44 @@ export default function DashboardPage() {
                               className="px-2 py-0.5 text-[11px] font-bold rounded-[3px] border"
                               style={{ borderColor: FRAME, background: 'linear-gradient(180deg, #3a3325, #241f16)', color: GOLD_BRIGHT }}
                             >
-                              Lv {displayLevel}
+                              {t('Lv')} {displayLevel}
                             </span>
                           )}
                           {gatherInfo && (() => {
                             const field = getGatherField(gatherInfo.fieldId);
-                            const fieldLabel = field ? `${field.emoji} ${field.name}` : '⛏️ Coletando';
+                            const fieldName = field ? localizeItemName(field.name, locale) : t('field');
+                            const fieldLabel = field ? `${field.emoji} ${fieldName}` : t('⛏️ Gathering');
                             return (
                               <span
                                 className="px-2 py-0.5 text-[11px] font-semibold rounded-[3px] text-emerald-200 bg-emerald-500/15 border border-emerald-400/40"
                                 title={invFull
-                                  ? `Inventário cheio — coleta pausada em ${field?.name ?? 'campo'} sem gastar stamina`
+                                  ? t('Inventory full — gathering paused at {field} without spending stamina', { field: fieldName })
                                   : gatherInfo.status === 'exhausted'
-                                    ? `Sessão esgotada em ${field?.name ?? 'campo'} — espólio aguardando coleta`
-                                    : `Este herói está coletando em ${field?.name ?? 'campo'}`}
+                                    ? t('Session exhausted at {field} — haul awaiting collection', { field: fieldName })
+                                    : t('This hero is gathering at {field}', { field: fieldName })}
                               >
-                                {invFull ? '🎒 Coleta pausada' : gatherInfo.status === 'exhausted' ? '💤 Espólio pronto' : fieldLabel}
+                                {invFull ? t('🎒 Gathering paused') : gatherInfo.status === 'exhausted' ? t('💤 Haul ready') : fieldLabel}
                               </span>
                             );
                           })()}
                           {charRow?.gatherXp > 0 && (
                             <span className="px-2 py-0.5 text-[11px] font-semibold rounded-[3px] text-lime-200 bg-lime-500/10 border border-lime-400/30">
-                              ⛏️ Nv.{gatherLevel}
+                              ⛏️ {t('Lv.')}{gatherLevel}
                             </span>
                           )}
                           {charRow?.farmXp > 0 && (
                             <span className="px-2 py-0.5 text-[11px] font-semibold rounded-[3px] text-yellow-200 bg-yellow-500/10 border border-yellow-400/30">
-                              🌾 Nv.{farmLevel}
+                              🌾 {t('Lv.')}{farmLevel}
                             </span>
                           )}
                           {charRow && (
                             <span className="px-2 py-0.5 text-[11px] font-semibold rounded-[3px] text-sky-200 bg-sky-500/10 border border-sky-400/30">
-                              🎒 Inventário: {Number(charRow?._count?.inventory ?? 0)}/{Number(charRow?.inventorySlots ?? 20)}
+                              🎒 {t('Inventory')}: {Number(charRow?._count?.inventory ?? 0)}/{Number(charRow?.inventorySlots ?? 20)}
                             </span>
                           )}
                           {charRow && (
                             <span className="px-2 py-0.5 text-[11px] font-semibold rounded-[3px] text-amber-200 bg-amber-500/10 border border-amber-400/30">
-                              💰 Bolso: {Number(charRow?.gold ?? 0).toLocaleString('pt-BR')}g
+                              💰 {t('Pocket')}: {Number(charRow?.gold ?? 0).toLocaleString(locale === 'pt' ? 'pt-BR' : 'en-US')}g
                             </span>
                           )}
                         </div>
@@ -665,7 +670,7 @@ export default function DashboardPage() {
                             />
                           </div>
                         )}
-                        <div className="text-[11px] text-white/50 truncate mt-1">Token ID: {tokenId}</div>
+                        <div className="text-[11px] text-white/50 truncate mt-1">{t('Token ID:')} {tokenId}</div>
                       </div>
 
                       <div className="flex flex-col gap-2 flex-shrink-0">
@@ -682,7 +687,7 @@ export default function DashboardPage() {
                             boxShadow: 'inset 0 1px 0 rgba(231,198,130,0.25)',
                           }}
                         >
-                          Abrir
+                          {t('Open')}
                         </button>
                         {gatherInfo && characterId && (
                           <button
@@ -695,7 +700,7 @@ export default function DashboardPage() {
                             className="px-4 py-2 rounded-[3px] border text-xs font-semibold text-emerald-200 transition-all hover:brightness-125"
                             style={{ borderColor: '#2f6b3a', background: 'linear-gradient(180deg, #25351f, #161f12)' }}
                           >
-                            ⛏️ Encerrar coleta
+                            {t('⛏️ Stop gathering')}
                           </button>
                         )}
                         <button
@@ -706,7 +711,7 @@ export default function DashboardPage() {
                           className="px-4 py-2 rounded-[3px] border text-xs font-semibold text-red-300 transition-all hover:brightness-125"
                           style={{ borderColor: '#8a3b3b', background: 'linear-gradient(180deg, #3a2525, #241616)' }}
                         >
-                          Excluir
+                          {t('Delete')}
                         </button>
                       </div>
                     </div>
@@ -726,13 +731,13 @@ export default function DashboardPage() {
             const getTrait = (traitType: string) =>
               attrs.find((a: any) => String(a?.trait_type) === traitType)?.value;
 
-            const raceName = String(getTrait('Race') || raceObj?.name || '');
-            const className = String(getTrait('Class') || classObj?.name || '');
+            const raceName = String(getTrait('Race') || (raceObj?.id ? localizeRaceName(raceObj.id, raceObj.name, locale) : '') || '');
+            const className = String(getTrait('Class') || (classObj?.id ? localizeClassName(classObj.id, classObj.name, locale) : '') || '');
             const visual = getBlendedVisual(raceObj?.id || raceName, classObj?.id || className);
 
             const orderedTraits = [
-              { label: 'Race', value: getTrait('Race') || raceObj?.name },
-              { label: 'Class', value: getTrait('Class') || classObj?.name },
+              { label: 'Race', value: getTrait('Race') || raceName },
+              { label: 'Class', value: getTrait('Class') || className },
               { label: 'Level', value: getTrait('Level') || character.level },
               { label: 'STR', value: getTrait('STR') },
               { label: 'AGI', value: getTrait('AGI') },
@@ -752,11 +757,11 @@ export default function DashboardPage() {
                 {/* Barra de título em bisel */}
                 <div className="relative z-10 flex items-center gap-2 px-4 py-2.5" style={{ background: TITLEBAR_BG, borderBottom: '1px solid rgba(0,0,0,0.7)' }}>
                   <span style={{ color: GOLD }}>✦</span>
-                  <span className="text-[15px] font-semibold tracking-wide text-[#dcdce0]">Herói Selecionado</span>
+                  <span className="text-[15px] font-semibold tracking-wide text-[#dcdce0]">{t('Selected Hero')}</span>
                   <div className="flex-1" />
                   <button
                     className="text-red-400 hover:text-red-300 transition-colors"
-                    title="Excluir personagem"
+                    title={t('Delete character')}
                     onClick={() => openDeleteDialog({ tokenId: String((character as any)?.nftTokenId || ''), character })}
                   >
                     <Trash2 className="w-5 h-5" />
@@ -832,7 +837,7 @@ export default function DashboardPage() {
                           className="text-sm font-bold rounded-[3px] px-3 py-1 border"
                           style={{ borderColor: FRAME, background: 'linear-gradient(180deg, #3a3325, #241f16)', color: GOLD_BRIGHT }}
                         >
-                          Lv {String(getTrait('Level') || character.level || 1)}
+                          {t('Lv')} {String(getTrait('Level') || character.level || 1)}
                         </span>
                       </div>
 
@@ -867,7 +872,7 @@ export default function DashboardPage() {
                             boxShadow: 'inset 0 1px 0 rgba(231,198,130,0.25), 0 0 14px rgba(201,162,95,0.2)',
                           }}
                         >
-                          Ver Ficha Completa
+                          {t('View Full Sheet')}
                         </button>
                         {/* Botões de teste para XP */}
                         <div className="flex gap-1.5">
@@ -898,14 +903,14 @@ export default function DashboardPage() {
                         >
                           <div className="flex items-center justify-between gap-2 flex-wrap">
                             <span className="font-bold text-sm" style={{ color: GOLD_BRIGHT }}>
-                              ✦ {character.availablePoints} pontos para distribuir
+                              ✦ {t('{n} points to distribute', { n: character.availablePoints })}
                             </span>
                             <button
                               onClick={() => openSheet(String(character.id))}
                               className="px-4 py-2 rounded-[3px] border text-xs font-semibold tracking-wide transition-all hover:brightness-125"
                               style={{ borderColor: FRAME, background: 'linear-gradient(180deg, #3a3325, #241f16)', color: GOLD_BRIGHT }}
                             >
-                              Distribuir Pontos
+                              {t('Distribute Points')}
                             </button>
                           </div>
                         </div>
@@ -931,10 +936,10 @@ export default function DashboardPage() {
             style={{ background: PANEL_BG }}
           >
             <h3 className="text-2xl font-bold text-[#ece7da] mb-4">
-              Nenhum Personagem Encontrado
+              {t('No Character Found')}
             </h3>
             <p className="text-[#8a8a90] mb-6">
-              Parece que você ainda não criou um personagem. Comece sua aventura agora!
+              {t("Looks like you haven't created a character yet. Start your adventure now!")}
             </p>
             <Link
               href="/character/create"
@@ -947,7 +952,7 @@ export default function DashboardPage() {
               }}
             >
               <User className="w-5 h-5" />
-              Criar Novo Personagem
+              {t('Create New Character')}
             </Link>
           </motion.div>
         )}
@@ -965,7 +970,7 @@ export default function DashboardPage() {
               }}
             >
               <Sword className="w-5 h-5" />
-              Entrar em Combate
+              {t('Enter Combat')}
             </Link>
             <Link
               href="/dungeons"
@@ -978,7 +983,7 @@ export default function DashboardPage() {
               }}
             >
               <Shield className="w-5 h-5" />
-              Explorar Dungeon
+              {t('Explore Dungeon')}
             </Link>
             <Link
               href="/character/create"
@@ -991,7 +996,7 @@ export default function DashboardPage() {
               }}
             >
               <User className="w-5 h-5" />
-              Criar Novo Personagem
+              {t('Create New Character')}
             </Link>
           </div>
         )}
@@ -1003,12 +1008,12 @@ export default function DashboardPage() {
               {/* Barra de título */}
               <div className="flex items-center justify-between px-4 py-2.5" style={{ background: TITLEBAR_BG, borderBottom: '1px solid rgba(0,0,0,0.7)' }}>
                 <h2 className="flex items-center gap-2 text-[15px] font-semibold tracking-wide text-[#dcdce0]">
-                  <Trash2 className="w-4 h-4 text-red-400" /> Excluir NFT
+                  <Trash2 className="w-4 h-4 text-red-400" /> {t('Delete NFT')}
                 </h2>
                 <button
                   className="px-2 py-0.5 text-[#8a8a90] transition-colors hover:text-white"
                   onClick={closeDeleteDialog}
-                  aria-label="Fechar"
+                  aria-label={t('Close')}
                 >
                   ✕
                 </button>
@@ -1016,14 +1021,14 @@ export default function DashboardPage() {
 
               <div className="p-5">
                 <p className="mb-2 text-sm text-[#e09a3a]">
-                  Isso vai transferir a NFT para uma carteira BURN (você vai assinar a transação e pagar gas).<br />
-                  Esta ação não pode ser desfeita.
+                  {t('This will transfer the NFT to a BURN wallet (you will sign the transaction and pay gas).')}<br />
+                  {t('This action cannot be undone.')}
                 </p>
 
                 {deleteDialog.item?.character?.name ? (
                   <>
                     <p className="mb-2 text-sm text-[#c9c9ce]">
-                      Para confirmar, digite o nome do personagem <span className="font-bold" style={{ color: GOLD_BRIGHT }}>{deleteDialog.item.character.name}</span> abaixo:
+                      {t('To confirm, type the character name')} <span className="font-bold" style={{ color: GOLD_BRIGHT }}>{deleteDialog.item.character.name}</span> {t('below:')}
                     </p>
                     <input
                       ref={inputRef}
@@ -1032,18 +1037,18 @@ export default function DashboardPage() {
                       onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                         setDeleteDialog((d: any) => ({ ...d, input: e.target.value }))
                       }
-                      placeholder="Digite o nome do personagem"
+                      placeholder={t('Type the character name')}
                       autoFocus
                     />
                   </>
                 ) : (
                   <div className="text-xs text-[#8a8a90] mb-4">
-                    Token ID: {String(deleteDialog.item?.tokenId || '')}
+                    {t('Token ID:')} {String(deleteDialog.item?.tokenId || '')}
                   </div>
                 )}
                 <div className="flex gap-2 justify-end">
                   <button onClick={closeDeleteDialog} className={`${BEVEL_BTN} px-4 py-2 text-sm`}>
-                    Cancelar
+                    {t('Cancel')}
                   </button>
                   <button
                     onClick={handleDeleteCharacter}
@@ -1054,7 +1059,7 @@ export default function DashboardPage() {
                     className="rounded-[3px] border px-4 py-2 text-sm font-semibold text-red-300 transition-all hover:brightness-125 disabled:cursor-not-allowed disabled:opacity-40"
                     style={{ borderColor: '#8a3b3b', background: 'linear-gradient(180deg, #3a2525, #241616)' }}
                   >
-                    Excluir
+                    {t('Delete')}
                   </button>
                 </div>
               </div>

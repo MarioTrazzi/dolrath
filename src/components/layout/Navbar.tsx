@@ -13,8 +13,11 @@ import { getWalletTxErrorMessage } from '@/lib/walletErrors'
 import { resolveImageUrl } from '@/lib/imageUrl'
 import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider'
 import { CharacterSwitcherDialog } from '@/components/character/CharacterSwitcherDialog'
+import { useI18n } from '@/lib/i18n/I18nProvider'
+import LanguageToggle from '@/components/ui/LanguageToggle'
 
 export function Navbar() {
+  const { locale, t } = useI18n()
   const { data: session, update } = useSession()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const router = useRouter()
@@ -65,7 +68,7 @@ export function Navbar() {
     try {
       const eth = (window as any)?.ethereum
       if (!eth) {
-        throw new Error('MetaMask não encontrada. Instale/ative a extensão para continuar.')
+        throw new Error(t('MetaMask not found. Install/enable the extension to continue.'))
       }
 
       const provider = new ethers.BrowserProvider(eth)
@@ -75,12 +78,12 @@ export function Navbar() {
       const nonceRes = await fetch('/api/wallet/nonce', { method: 'POST' })
       const nonceJson = await nonceRes.json()
       if (!nonceRes.ok) {
-        throw new Error(nonceJson?.error || 'Falha ao obter nonce')
+        throw new Error(nonceJson?.error || t('Failed to fetch nonce'))
       }
 
       const message = nonceJson?.message
       if (!message || typeof message !== 'string') {
-        throw new Error('Resposta inválida ao obter nonce')
+        throw new Error(t('Invalid response while fetching nonce'))
       }
 
       const signature = await signer.signMessage(message)
@@ -92,11 +95,11 @@ export function Navbar() {
       })
       const linkJson = await linkRes.json()
       if (!linkRes.ok) {
-        throw new Error(linkJson?.error || 'Falha ao vincular carteira')
+        throw new Error(linkJson?.error || t('Failed to link wallet'))
       }
 
       await update?.()
-      toast.success('Carteira vinculada com sucesso!')
+      toast.success(t('Wallet linked successfully!'))
     } catch (e) {
       toast.error(e instanceof Error ? e.message : getWalletTxErrorMessage(e))
     } finally {
@@ -112,24 +115,24 @@ export function Navbar() {
   const fichaHref = activeCharacterId ? `/character/${activeCharacterId}` : '/character/create'
 
   const navLinks = [
-    { label: 'Personagem', href: fichaHref },
-    { label: 'Missões', href: '/quests' },
-    { label: 'Masmorras', href: '/dungeons' },
-    { label: 'Coleta', href: '/gathering' },
-    { label: 'Fazenda', href: '/farm' },
-    { label: 'Combate', href: '/combat-lobby' },
+    { label: 'Character', href: fichaHref },
+    { label: 'Quests', href: '/quests' },
+    { label: 'Dungeons', href: '/dungeons' },
+    { label: 'Gathering', href: '/gathering' },
+    { label: 'Farm', href: '/farm' },
+    { label: 'Combat', href: '/combat-lobby' },
     { label: 'Ranking', href: '/ranking' },
-    { label: 'Inventário', href: '/inventory' },
-    { label: 'Mercado', href: '/marketplace' },
-    { label: 'Ferreiro', href: '/blacksmith' },
-    { label: 'Alquimista', href: '/alchemist' },
+    { label: 'Inventory', href: '/inventory' },
+    { label: 'Market', href: '/marketplace' },
+    { label: 'Blacksmith', href: '/blacksmith' },
+    { label: 'Alchemist', href: '/alchemist' },
     // "Docs" só aparece deslogado (landing page), para não ocupar espaço na barra logado
     ...(!session ? [{ label: 'Docs', href: '/doc' }] : []),
   ]
 
   return (
     <header className="fixed top-0 inset-x-0 z-50">
-      <nav className="mx-auto max-w-7xl px-4 sm:px-6" aria-label="Navegação principal">
+      <nav className="mx-auto max-w-7xl px-4 sm:px-6" aria-label={t('Main navigation')}>
         <div className="mt-3 flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-secondary/70 backdrop-blur-xl px-4 sm:px-6 py-3 shadow-2xl shadow-black/20">
           {/* Logo + foto-avatar do herói ativo (abre o seletor de personagem) */}
           <div className="flex items-center gap-2 shrink-0">
@@ -137,8 +140,8 @@ export function Navbar() {
               <button
                 type="button"
                 onClick={() => setSwitcherOpen(true)}
-                title={activeCharacter ? `Trocar herói (ativo: ${activeCharacter.name})` : 'Escolher herói'}
-                aria-label="Trocar personagem ativo"
+                title={activeCharacter ? t('Switch hero (active: {name})', { name: activeCharacter.name }) : t('Choose a hero')}
+                aria-label={t('Switch active character')}
                 className="group relative flex items-center"
               >
                 <span className="relative block h-9 w-9 overflow-hidden rounded-full ring-2 ring-primary/60 transition-all group-hover:ring-primary">
@@ -188,9 +191,9 @@ export function Navbar() {
                 className="relative px-3 py-2 rounded-lg text-sm font-medium text-textsec hover:text-white hover:bg-white/5 transition-colors"
                 onClick={(e) => handleProtectedRoute(e, l.href)}
               >
-                {l.label}
+                {t(l.label)}
                 {l.href === '/quests' && questsClaimable && (
-                  <span className="absolute right-1 top-1.5 h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.9)]" aria-label="Missão resgatável" />
+                  <span className="absolute right-1 top-1.5 h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.9)]" aria-label={t('Quest ready to claim')} />
                 )}
               </Link>
             ))}
@@ -198,16 +201,17 @@ export function Navbar() {
 
           {/* Right side - Desktop */}
           <div className="hidden lg:flex items-center gap-2">
+            <LanguageToggle />
             {session ? (
               <>
                 {/* Gold do herói ativo — compacto (ex.: 500g); clique abre a Wallet */}
                 <Link
                   href="/wallet"
                   className="px-2.5 py-2 bg-white/5 rounded-lg border border-yellow-500/30 hover:border-primary transition-all"
-                  title="Abrir Wallet (saldo on-chain e claim)"
+                  title={t('Open Wallet (on-chain balance and claim)')}
                 >
                   <span className="text-yellow-400 font-semibold font-combat text-sm tabular-nums whitespace-nowrap">
-                    {inventoryGold !== null ? `${inventoryGold.toLocaleString('pt-BR')}g` : '—g'}
+                    {inventoryGold !== null ? `${inventoryGold.toLocaleString(locale === 'pt' ? 'pt-BR' : 'en-US')}g` : '—g'}
                   </span>
                 </Link>
 
@@ -218,7 +222,7 @@ export function Navbar() {
                     className="bg-surface/60 backdrop-blur-xl border border-white/10 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:border-white/20 hover:bg-surface/80 active:scale-[0.98] transition-all inline-flex items-center gap-1.5"
                   >
                     <Wallet className="w-4 h-4" />
-                    {isLinkingWallet ? 'Conectando...' : 'Conectar wallet'}
+                    {isLinkingWallet ? t('Connecting...') : t('Link wallet')}
                   </button>
                 )}
                 <Link
@@ -234,7 +238,7 @@ export function Navbar() {
                 className="bg-gradient-to-r from-primary to-primary-dark text-white px-4 py-2 rounded-lg text-sm font-semibold hover:shadow-lg hover:shadow-primary/25 active:scale-[0.98] transition-all inline-flex items-center gap-1.5"
               >
                 <Wallet className="w-4 h-4" />
-                Conectar Carteira
+                {t('Connect Wallet')}
               </Link>
             )}
           </div>
@@ -243,7 +247,7 @@ export function Navbar() {
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             aria-expanded={isMenuOpen}
-            aria-label={isMenuOpen ? 'Fechar menu' : 'Abrir menu'}
+            aria-label={isMenuOpen ? t('Close menu') : t('Open menu')}
             className="lg:hidden p-2 rounded-lg text-white hover:bg-white/5 transition-colors"
           >
             <span className="text-2xl">{isMenuOpen ? '✕' : '☰'}</span>
@@ -270,9 +274,9 @@ export function Navbar() {
                     setIsMenuOpen(false)
                   }}
                 >
-                  {l.label}
+                  {t(l.label)}
                   {l.href === '/quests' && questsClaimable && (
-                    <span className="ml-2 inline-block h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.9)]" aria-label="Missão resgatável" />
+                    <span className="ml-2 inline-block h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.9)]" aria-label={t('Quest ready to claim')} />
                   )}
                 </Link>
               ))}
@@ -284,7 +288,7 @@ export function Navbar() {
                     className="flex items-center justify-between gap-3 px-3 py-2 bg-white/5 rounded-lg border border-yellow-500/30 hover:border-primary transition-all"
                   >
                     <span className="text-yellow-400 font-semibold font-combat text-sm tabular-nums">
-                      {inventoryGold !== null ? `${inventoryGold.toLocaleString('pt-BR')}g` : '—g'}
+                      {inventoryGold !== null ? `${inventoryGold.toLocaleString(locale === 'pt' ? 'pt-BR' : 'en-US')}g` : '—g'}
                     </span>
                     <span className="text-textsec text-xs">Wallet →</span>
                   </Link>
@@ -299,7 +303,7 @@ export function Navbar() {
                       className="w-full bg-surface/60 border border-white/10 text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:border-white/20 hover:bg-surface/80 active:scale-[0.98] transition-all inline-flex items-center justify-center gap-2"
                     >
                       <Wallet className="w-4 h-4" />
-                      {isLinkingWallet ? 'Conectando...' : 'Conectar wallet'}
+                      {isLinkingWallet ? t('Connecting...') : t('Link wallet')}
                     </button>
                   )}
 
@@ -318,9 +322,10 @@ export function Navbar() {
                   className="mt-2 w-full text-center bg-gradient-to-r from-primary to-primary-dark text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:shadow-lg hover:shadow-primary/25 active:scale-[0.98] transition-all inline-flex items-center justify-center gap-2"
                 >
                   <Wallet className="w-4 h-4" />
-                  Conectar Carteira
+                  {t('Connect Wallet')}
                 </Link>
               )}
+              <div className="mt-2 flex justify-center"><LanguageToggle /></div>
             </div>
           </motion.div>
         )}

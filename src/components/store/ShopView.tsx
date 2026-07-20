@@ -16,7 +16,7 @@ import { formatItemStats } from '@/lib/itemStats';
 import { useGold } from '@/components/providers/GoldProvider';
 import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider';
 import { useI18n } from '@/lib/i18n/I18nProvider';
-import { localizeItemName, localizeItemDesc } from '@/lib/i18n/catalog';
+import { localizeItemName, localizeItemDesc, localizeItemTypeLabel } from '@/lib/i18n/catalog';
 import { localizeRaceName, localizeClassName } from '@/lib/i18n/gameNames';
 import { getRaceById, getClassById } from '@/lib/gameData';
 
@@ -785,7 +785,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                     <h3 className="font-black text-lg mb-2 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">{localizeItemName(item.name, locale)}</h3>
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <span className={`text-xs font-semibold px-2 py-1 rounded-[3px] ${visual.chipBg} ${visual.chipText}`}>
-                        {visual.emoji} {getItemTypeLabel(item.type)}
+                        {visual.emoji} {localizeItemTypeLabel(getItemTypeLabel(item.type), locale)}
                       </span>
                       {item.level && (
                         <span className="text-xs font-semibold bg-amber-500/30 text-[#e7c682] px-2 py-1 rounded-[3px]">

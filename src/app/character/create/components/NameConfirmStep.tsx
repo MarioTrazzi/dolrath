@@ -15,8 +15,10 @@ import { ethers } from 'ethers';
 import Image from 'next/image';
 import { decodeContractCustomErrorMessage, getWalletTxErrorMessage } from '@/lib/walletErrors';
 import { ensureTargetNetwork } from '@/lib/chainConfig';
+import { useI18n } from '@/lib/i18n/I18nProvider';
 
 export function NameConfirmStep() {
+  const { t } = useI18n();
   const { data: session } = useSession();
   const { selectedRace, selectedClass, selectedImage, chosenTransformation, transformationImage, transformationImages, characterName, creationPaymentTxHash, setCharacterName, markStepComplete, resetCreation } = useCharacterCreationStore();
   const [isCreating, setIsCreating] = useState(false);
@@ -80,9 +82,9 @@ export function NameConfirmStep() {
   }, [characterName, markStepComplete]);
 
   const validateName = (name: string) => {
-    if (name.length < 2) return 'Nome deve ter pelo menos 2 caracteres';
-    if (name.length > 20) return 'Nome deve ter no máximo 20 caracteres';
-    if (!/^[a-zA-ZÀ-ÿ\s]+$/.test(name)) return 'Nome deve conter apenas letras';
+    if (name.length < 2) return t('Name must be at least 2 characters');
+    if (name.length > 20) return t('Name must be at most 20 characters');
+    if (!/^[a-zA-ZÀ-ÿ\s]+$/.test(name)) return t('Name must contain only letters');
     return '';
   };
   
@@ -99,26 +101,26 @@ export function NameConfirmStep() {
     }
     if (!selectedRace || !selectedClass || !selectedImage) {
       // This should ideally not happen if previous steps are enforced
-      setNameError('Dados do personagem incompletos. Volte e conclua os passos anteriores.');
+      setNameError(t('Incomplete character data. Go back and finish the previous steps.'));
       return;
     }
-    
+
     setIsCreating(true);
     try {
       let mintTxHashForRecovery: string | null = null;
       if (!creationPaymentTxHash) {
-        throw new Error('Pagamento necessário para criar o personagem');
+        throw new Error(t('Payment required to create the character'));
       }
       if (!selectedRace?.id) {
-        throw new Error('Raça não selecionada');
+        throw new Error(t('Race not selected'));
       }
       if (!selectedClass?.id) {
-        throw new Error('Classe não selecionada');
+        throw new Error(t('Class not selected'));
       }
 
       const eth = (window as any)?.ethereum;
       if (!eth) {
-        throw new Error('MetaMask não encontrada. Instale/ative a extensão para continuar.');
+        throw new Error(t('MetaMask not found. Install/enable the extension to continue.'));
       }
 
       const provider = new ethers.BrowserProvider(eth);
@@ -132,7 +134,7 @@ export function NameConfirmStep() {
       const to = await signerAfterSwitch.getAddress();
       const linkedWallet = (session?.user as any)?.walletAddress;
       if (linkedWallet && String(linkedWallet).toLowerCase() !== String(to).toLowerCase()) {
-        throw new Error('A carteira conectada na MetaMask não é a mesma vinculada à sua conta.');
+        throw new Error(t('The wallet connected in MetaMask is not the one linked to your account.'));
       }
 
       // 1) Signed mint intent from server
@@ -162,7 +164,7 @@ export function NameConfirmStep() {
       const chainIdNumber = Number(mintIntentJson.chainId);
 
       if (!contractAddress || !tokenURI || !signature || deadline <= BigInt(0) || !Number.isFinite(chainIdNumber)) {
-        throw new Error('Mint intent inválido (server)');
+        throw new Error(t('Invalid mint intent (server)'));
       }
 
       // 2) Mint NFT (MetaMask prompt + gas)
@@ -251,7 +253,7 @@ export function NameConfirmStep() {
       }
 
       if (mintedTokenId === null) {
-        throw new Error('Não foi possível identificar o tokenId do mint');
+        throw new Error(t('Could not identify the minted tokenId'));
       }
 
       const onchainTokenUri = String(await nftContract.tokenURI(mintedTokenId));
@@ -305,7 +307,7 @@ export function NameConfirmStep() {
       }
 
       if (!character?.id) {
-        throw new Error('Falha ao criar personagem: resposta inválida do servidor');
+        throw new Error(t('Failed to create character: invalid server response'));
       }
 
       const rolled = character.attributes;
@@ -383,24 +385,24 @@ export function NameConfirmStep() {
       <div className="space-y-6">
         <div>
           <h2 className="text-2xl font-bold text-text-primary mb-2">
-            Nome do Personagem
+            {t('Character Name')}
           </h2>
           <p className="text-text-secondary">
-            Escolha um nome épico para seu guerreiro
+            {t('Choose an epic name for your hero')}
           </p>
         </div>
         
         <div className="space-y-4">
           <div>
             <label htmlFor="characterName" className="block text-sm font-medium text-text-primary mb-2">
-              Nome do Personagem
+              {t('Character Name')}
             </label>
             <input
               type="text"
               id="characterName"
               value={characterName}
               onChange={(e) => handleNameChange(e.target.value)}
-              placeholder="Digite o nome do seu personagem"
+              placeholder={t('Enter your character\'s name')}
               className={cn(
                 "w-full h-12 px-4 bg-background border rounded-lg text-text-primary placeholder:text-text-secondary transition-all",
                 nameError 
@@ -429,12 +431,12 @@ export function NameConfirmStep() {
             {isCreating ? (
               <>
                 <RefreshCw className="w-4 h-4 animate-spin" />
-                Criando (mint NFT)...
+                {t('Creating (minting NFT)...')}
               </>
             ) : (
               <>
                 <Save className="w-4 h-4" />
-                Criar Personagem
+                {t('Create Character')}
               </>
             )}
           </button>
@@ -456,8 +458,8 @@ export function NameConfirmStep() {
           <div className="w-full max-w-3xl bg-surface/80 backdrop-blur-lg rounded-xl p-6 shadow-2xl border border-white/10">
             <div className="flex items-start justify-between gap-4 mb-4">
               <div>
-                <h2 className="text-2xl font-bold text-text-primary">NFT criada com sucesso</h2>
-                <p className="text-text-secondary text-sm">As informações abaixo vêm do tokenURI da NFT (on-chain).</p>
+                <h2 className="text-2xl font-bold text-text-primary">{t('NFT created successfully')}</h2>
+                <p className="text-text-secondary text-sm">{t('The information below comes from the NFT tokenURI (on-chain).')}</p>
               </div>
               <button
                 type="button"
@@ -467,18 +469,18 @@ export function NameConfirmStep() {
                 }}
                 className="px-4 py-2 bg-surface border border-white/20 rounded-lg text-text-secondary hover:text-text-primary transition-colors"
               >
-                Fechar
+                {t('Close')}
               </button>
             </div>
 
             {nftDialogLoading ? (
-              <div className="text-text-secondary">Carregando metadata...</div>
+              <div className="text-text-secondary">{t('Loading metadata...')}</div>
             ) : nftData ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-background/40 border border-white/10 rounded-lg p-4">
                   <div className="flex items-center justify-between mb-2">
                     <div className="text-xs text-text-secondary">
-                      {nftFlipped ? 'Transformação' : 'Imagem (NFT)'}
+                      {nftFlipped ? t('Transformation') : t('Image (NFT)')}
                     </div>
                     {previewTransformationImage && (
                       <button
@@ -487,7 +489,7 @@ export function NameConfirmStep() {
                         className="text-xs flex items-center gap-1 text-primary hover:underline"
                       >
                         <RefreshCw className="w-3 h-3" />
-                        {nftFlipped ? 'Ver forma base' : 'Ver transformação'}
+                        {nftFlipped ? t('See base form') : t('See transformation')}
                       </button>
                     )}
                   </div>
@@ -499,7 +501,7 @@ export function NameConfirmStep() {
                         className="relative w-full aspect-square cursor-pointer select-none"
                         style={{ perspective: 1200 }}
                         onClick={() => setNftFlipped((f) => !f)}
-                        title="Clique para ver a transformação"
+                        title={t('Click to see the transformation')}
                       >
                         <motion.div
                           className="relative w-full h-full"
@@ -533,7 +535,7 @@ export function NameConfirmStep() {
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                               src={previewTransformationImage}
-                              alt="Transformação"
+                              alt={t('Transformation')}
                               className="w-full h-full object-cover art-bright rounded-lg border border-primary/40"
                               style={{ boxShadow: '0 0 24px 2px rgba(124,58,237,0.45)' }}
                             />
@@ -551,7 +553,7 @@ export function NameConfirmStep() {
                       />
                     )
                   ) : (
-                    <div className="text-text-secondary">Sem imagem na metadata.</div>
+                    <div className="text-text-secondary">{t('No image in the metadata.')}</div>
                   )}
 
                   {(nftData.metadata?.name || nftData.metadata?.description) && (
@@ -571,7 +573,7 @@ export function NameConfirmStep() {
                 </div>
 
                 <div className="bg-background/40 border border-white/10 rounded-lg p-4">
-                  <div className="text-xs text-text-secondary mb-2">Dados on-chain</div>
+                  <div className="text-xs text-text-secondary mb-2">{t('On-chain data')}</div>
                   <div className="text-sm text-text-secondary space-y-2">
                     <div>
                       <span className="text-text-primary font-semibold">Contract:</span>{' '}
@@ -623,7 +625,7 @@ export function NameConfirmStep() {
                         )
                       : null;
                     const dominantValue = dominantKey && rolledPoints ? rolledPoints[dominantKey] : null;
-                    const luckyLabels = { str: 'FORÇA', agi: 'AGILIDADE', int: 'INTELIGÊNCIA', def: 'DEFESA' } as const;
+                    const luckyLabels = { str: t('STRENGTH'), agi: t('AGILITY'), int: t('INTELLIGENCE'), def: t('DEFENSE') } as const;
                     const isLucky = dominantKey && dominantValue !== null && dominantValue >= 9;
 
                     return (
@@ -631,7 +633,7 @@ export function NameConfirmStep() {
                         {hasFinalStats && (
                           <div className="mt-4 pt-4 border-t border-white/10">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="text-xs text-text-secondary">Atributos revelados</div>
+                              <div className="text-xs text-text-secondary">{t('Attributes revealed')}</div>
                               {isLucky && dominantKey && (
                                 <motion.span
                                   initial={{ opacity: 0, scale: 0.8 }}
@@ -639,7 +641,7 @@ export function NameConfirmStep() {
                                   transition={{ delay: 0.7 }}
                                   className="text-xs font-semibold text-[#e7c682]"
                                 >
-                                  ✨ {luckyLabels[dominantKey]} EXCEPCIONAL!
+                                  {t('✨ EXCEPTIONAL {stat}!', { stat: luckyLabels[dominantKey] })}
                                 </motion.span>
                               )}
                             </div>
@@ -648,7 +650,7 @@ export function NameConfirmStep() {
                         )}
 
                         <div className="mt-4">
-                          <div className="text-xs text-text-secondary mb-2">Stats (da NFT)</div>
+                          <div className="text-xs text-text-secondary mb-2">{t('Stats (from NFT)')}</div>
                           <div className="grid grid-cols-2 gap-2">
                             {order
                               .filter((t) => byTrait[t])
@@ -669,7 +671,7 @@ export function NameConfirmStep() {
                 </div>
               </div>
             ) : (
-              <div className="text-error">Falha ao carregar metadata da NFT.</div>
+              <div className="text-error">{t('Failed to load NFT metadata.')}</div>
             )}
           </div>
         </div>

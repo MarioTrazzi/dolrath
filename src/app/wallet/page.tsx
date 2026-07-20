@@ -8,6 +8,7 @@ import toast from 'react-hot-toast'
 import { getWalletTxErrorMessage } from '@/lib/walletErrors'
 import { claimGoldOnChain } from '@/lib/goldClaimClient'
 import { BdoWindow, GOLD_BRIGHT, BEVEL_BTN_CLASS, BEVEL_COLOR_BTN_CLASS, BEVEL_VARIANTS } from '@/components/crafting/bdoTheme'
+import { useI18n } from '@/lib/i18n/I18nProvider'
 
 type GoldStatus = {
   walletLinked: boolean
@@ -36,6 +37,7 @@ type TokenBalance = {
 }
 
 export default function WalletPage() {
+  const { t } = useI18n()
   const { data: session, status, update } = useSession()
 
   const [goldStatus, setGoldStatus] = useState<GoldStatus | null>(null)
@@ -99,19 +101,19 @@ export default function WalletPage() {
 
   const handleClaim = async () => {
     if (!session?.user?.id) {
-      toast.error('Faça login para continuar')
+      toast.error(t('Log in to continue'))
       return
     }
 
     if (!goldStatus?.walletLinked || !goldStatus.walletAddress) {
-      toast.error('Conecte sua wallet primeiro')
+      toast.error(t('Connect your wallet first'))
       return
     }
 
     setClaiming(true)
     try {
       await claimGoldOnChain((msg) => toast.success(msg))
-      toast.success('GOLD claimado on-chain!')
+      toast.success(t('GOLD claimed on-chain!'))
       await refresh()
     } catch (e) {
       const msg = e instanceof Error ? e.message : getWalletTxErrorMessage(e)
@@ -124,7 +126,7 @@ export default function WalletPage() {
   const handleSaveEmail = async () => {
     const trimmed = email.trim()
     if (!trimmed) {
-      toast.error('Digite um email')
+      toast.error(t('Enter an email'))
       return
     }
 
@@ -137,13 +139,13 @@ export default function WalletPage() {
       })
       const json = await res.json()
       if (!res.ok) {
-        throw new Error(json?.error || 'Falha ao salvar email')
+        throw new Error(json?.error || t('Failed to save email'))
       }
       await update?.()
       setEmail('')
-      toast.success('Email salvo! Você receberá novidades do Dolrath.')
+      toast.success(t("Email saved! You'll receive Dolrath news."))
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Falha ao salvar email')
+      toast.error(e instanceof Error ? e.message : t('Failed to save email'))
     } finally {
       setSavingEmail(false)
     }
@@ -152,7 +154,7 @@ export default function WalletPage() {
   if (status === 'loading') {
     return (
       <div className="max-w-3xl mx-auto px-4 pt-24">
-        <div className="text-[#8a8a90]">Carregando…</div>
+        <div className="text-[#8a8a90]">{t('Loading...')}</div>
       </div>
     )
   }
@@ -161,13 +163,13 @@ export default function WalletPage() {
     return (
       <div className="max-w-3xl mx-auto px-4 pt-24" style={{ fontFamily: "'Barlow', sans-serif" }}>
         <BdoWindow icon={<Wallet size={16} />} title="Wallet" bodyClassName="p-6">
-          <p className="text-[#8a8a90]">Você precisa estar logado.</p>
+          <p className="text-[#8a8a90]">{t('You need to be logged in.')}</p>
           <Link
             href="/auth/login"
             className={`${BEVEL_COLOR_BTN_CLASS} inline-flex mt-4 px-4 py-2`}
             style={BEVEL_VARIANTS.gold}
           >
-            Entrar
+            {t('Log In')}
           </Link>
         </BdoWindow>
       </div>
@@ -180,7 +182,7 @@ export default function WalletPage() {
         <div>
           <h1 className="text-2xl font-black text-[#ece7da]" style={{ letterSpacing: '0.5px' }}>Wallet</h1>
           <p className="text-[#8a8a90] mt-1">
-            Veja seu saldo on-chain e faça claim do GOLD acumulado.
+            {t('See your on-chain balance and claim your accumulated GOLD.')}
           </p>
         </div>
         <button
@@ -188,7 +190,7 @@ export default function WalletPage() {
           disabled={loading}
           className={`${BEVEL_BTN_CLASS} px-4 py-2 disabled:opacity-50`}
         >
-          {loading ? 'Atualizando…' : 'Atualizar'}
+          {loading ? t('Refreshing…') : t('Refresh')}
         </button>
       </div>
 
@@ -204,7 +206,7 @@ export default function WalletPage() {
           {!walletAddress && (
             <div className="text-[#8a8a90] text-sm mt-2 inline-flex items-center gap-2">
               <Wallet className="w-4 h-4" />
-              Conecte sua wallet para ver o saldo.
+              {t('Connect your wallet to see the balance.')}
             </div>
           )}
         </BdoWindow>
@@ -223,14 +225,13 @@ export default function WalletPage() {
             </div>
 
             <div className="rounded-[3px] border border-black/60 bg-[#19191c] p-4">
-              <div className="text-[11px] uppercase tracking-[0.14em] text-[#77777d]">Pode dar claim</div>
+              <div className="text-[11px] uppercase tracking-[0.14em] text-[#77777d]">{t('Claimable')}</div>
               <div className="font-semibold tabular-nums mt-1" style={{ color: GOLD_BRIGHT }}>
                 {goldStatus ? `${goldStatus.claimable} GOLD` : '…'}
               </div>
               {goldStatus?.pending && !goldStatus.pending.expired && (
                 <div className="text-[#8a8a90] text-xs mt-2">
-                  Claim pendente: {goldStatus.pending.amount} GOLD (expira em{' '}
-                  {new Date(goldStatus.pending.deadline).toLocaleString()})
+                  {t('Pending claim: {n} GOLD (expires {date})', { n: goldStatus.pending.amount, date: new Date(goldStatus.pending.deadline).toLocaleString() })}
                 </div>
               )}
             </div>
@@ -243,35 +244,34 @@ export default function WalletPage() {
               className={`${BEVEL_COLOR_BTN_CLASS} px-4 py-2 disabled:cursor-not-allowed disabled:opacity-40`}
               style={BEVEL_VARIANTS.gold}
             >
-              {claiming ? 'Claimando…' : 'Claim GOLD'}
+              {claiming ? t('Claiming…') : t('Claim GOLD')}
             </button>
 
             {!walletAddress && (
               <div className="text-[#8a8a90] text-sm">
-                Conecte sua wallet para claimar.
+                {t('Connect your wallet to claim.')}
               </div>
             )}
           </div>
         </BdoWindow>
 
         {/* Optional: add an email later (newsletter / account recovery) */}
-        <BdoWindow icon={<Mail size={16} />} title="Receber novidades" bodyClassName="p-5">
+        <BdoWindow icon={<Mail size={16} />} title={t('Get updates')} bodyClassName="p-5">
           {currentEmail ? (
             <p className="text-[#8a8a90] text-sm">
-              Email cadastrado: <span className="text-[#ece7da]">{currentEmail}</span>
+              {t('Registered email:')} <span className="text-[#ece7da]">{currentEmail}</span>
             </p>
           ) : (
             <>
               <p className="text-[#8a8a90] text-sm">
-                Opcional. Adicione um email para receber novidades do Dolrath e poder
-                recuperar sua conta.
+                {t('Optional. Add an email to receive Dolrath news and be able to recover your account.')}
               </p>
               <div className="mt-3 flex flex-row gap-3">
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="seu@email.com"
+                  placeholder="your@email.com"
                   className="min-w-0 flex-1 rounded-[3px] border border-[#3c3c41] bg-[#101013] px-3 py-2 text-[#ece7da] placeholder:text-[#57575c] outline-none transition-colors focus:border-[#8a6d3b]"
                 />
                 <button
@@ -280,7 +280,7 @@ export default function WalletPage() {
                   className={`${BEVEL_COLOR_BTN_CLASS} px-4 py-2 disabled:cursor-not-allowed disabled:opacity-40`}
                   style={BEVEL_VARIANTS.gold}
                 >
-                  {savingEmail ? 'Salvando…' : 'Salvar'}
+                  {savingEmail ? t('Saving…') : t('Save')}
                 </button>
               </div>
             </>

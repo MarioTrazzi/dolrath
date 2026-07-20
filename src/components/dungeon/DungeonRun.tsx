@@ -1431,17 +1431,17 @@ export default function DungeonRun({
 
   // Avança os contadores de transformação ao fim de cada turno ofensivo do jogador
   const tickPlayerTurn = useCallback(() => {
-    const t = transformRef.current
-    if (t) {
-      const remaining = t.turns - 1
+    const tf = transformRef.current
+    if (tf) {
+      const remaining = tf.turns - 1
       if (remaining <= 0) {
-        const cfg = TRANSFORMATION_CONFIG[t.type]
+        const cfg = TRANSFORMATION_CONFIG[tf.type]
         setTransform(null)
         setTransformCd(cfg.cooldown)
-        showBanner('↩️', 'A transformação terminou')
-        pushLog('↩️ Sua transformação terminou.')
+        showBanner('↩️', t('Transformation ended'))
+        pushLog(t('↩️ Your transformation ended.'))
       } else {
-        setTransform({ ...t, turns: remaining })
+        setTransform({ ...tf, turns: remaining })
       }
     } else if (transformCdRef.current > 0) {
       setTransformCd(transformCdRef.current - 1)

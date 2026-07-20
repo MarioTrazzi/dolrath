@@ -1,0 +1,27 @@
+// Dialog de Processamento (Triturador) — src/components/crafting/ProcessingDialog.tsx.
+export const PROCESSING_PT: Record<string, string> = {
+  'Failed to process': 'Erro ao processar',
+  'Unexpected error while processing': 'Erro inesperado ao processar',
+  'Processing': 'Processamento',
+  'Preparing the bench…': 'Preparando a bancada…',
+  'Choose the input you want to process from the book.': 'Escolha no livro o insumo que deseja beneficiar.',
+  '📖 Processing Book': '📖 Livro de Processamento',
+  'Proc. lv {n}': 'Proc. nv {n}',
+  'fee {n}': 'taxa {n}',
+  'up to {n}×': 'até {n}×',
+  'Requires Processing level {n} for this recipe.': 'Requer Processamento nível {n} para esta receita.',
+  '⚙ Processing...': '⚙ Processando...',
+  '✨ READY!': '✨ PRONTO!',
+  '+{n} Processing XP': '+{n} XP de Processamento',
+  'Quantity:': 'Quantidade:',
+  'max {n}': 'máx {n}',
+  '⚙ Process ×{n}': '⚙ Processar ×{n}',
+  '⚙ Process': '⚙ Processar',
+  '📖 Processing Book — change recipe': '📖 Livro de Processamento — trocar receita',
+  'Click a recipe to bring it to the bench. Recipes with all inputs available light up. 🔒 = requires a Processing level. Processing never fails.':
+    'Clique numa receita para levá-la à bancada. Receitas com insumos completos ficam acesas. 🔒 = requer nível de Processamento. Beneficiar nunca falha.',
+  '🔒 Proc. lv {n}': '🔒 Proc. nv {n}',
+  '✓ all inputs available': '✓ insumos completos',
+  'missing inputs': 'faltam insumos',
+  'no fail · +{n} XP': 'sem falha · +{n} XP',
+}

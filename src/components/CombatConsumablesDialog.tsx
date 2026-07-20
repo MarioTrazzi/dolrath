@@ -1,6 +1,8 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { useI18n } from '@/lib/i18n/I18nProvider'
+import { localizeItemName, localizeItemDesc } from '@/lib/i18n/catalog'
 
 interface ConsumableItem {
   id: number
@@ -37,6 +39,7 @@ export default function CombatConsumablesDialog({
   currentMp,
   maxMp
 }: CombatConsumablesDialogProps) {
+  const { locale, t } = useI18n()
   const [consumables, setConsumables] = useState<ConsumableItem[]>([])
   const [loading, setLoading] = useState(false)
   const [isClosing, setIsClosing] = useState(false)
@@ -194,23 +197,23 @@ export default function CombatConsumablesDialog({
   const handleUseItem = (item: ConsumableItem) => {
     // Verificar se o item pode ser usado
     if (item.type === 'health' && !item.effect.extraEffect && currentHp >= maxHp) {
-      alert('Sua vida já está cheia!')
+      alert(t('Your HP is already full!'))
       return
     }
-    
+
     if (item.type === 'mana' && currentMp >= maxMp) {
-      alert('Sua mana já está cheia!')
+      alert(t('Your MP is already full!'))
       return
     }
 
     // Para elixires, verificar se pelo menos um está baixo
     if (item.effect.extraEffect?.mp && currentHp >= maxHp && currentMp >= maxMp) {
-      alert('Sua vida e mana já estão cheias!')
+      alert(t('Your HP and MP are already full!'))
       return
     }
 
     if (item.quantity <= 0) {
-      alert('Você não possui este item!')
+      alert(t("You don't have this item!"))
       return
     }
 
@@ -251,7 +254,7 @@ export default function CombatConsumablesDialog({
         {/* Header */}
         <div className="text-center mb-4">
           <h2 className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mb-2">
-            🧪 Consumíveis de Batalha
+            {t('🧪 Battle Consumables')}
           </h2>
           <div className="flex justify-center space-x-4 text-xs">
             <div className="text-red-600">❤️ {currentHp}/{maxHp}</div>
@@ -263,12 +266,12 @@ export default function CombatConsumablesDialog({
         <div className="max-h-80 overflow-y-auto">
           {loading ? (
             <div className="text-center py-8">
-              <div className="text-gray-500">Carregando consumíveis...</div>
+              <div className="text-gray-500">{t('Loading consumables...')}</div>
             </div>
           ) : consumables.length === 0 ? (
             <div className="text-center py-8">
               <div className="text-gray-500 text-sm">
-                Nenhum consumível disponível
+                {t('No consumables available')}
               </div>
             </div>
           ) : (
@@ -285,13 +288,13 @@ export default function CombatConsumablesDialog({
                       <div className="text-2xl">{item.icon}</div>
                       <div>
                         <div className="font-bold text-sm text-gray-800 dark:text-gray-200">
-                          {item.name}
+                          {localizeItemName(item.name, locale)}
                         </div>
                         <div className="text-xs text-gray-600 dark:text-gray-400">
-                          {item.description}
+                          {localizeItemDesc(item.name, item.description, locale)}
                         </div>
                         <div className="text-xs text-emerald-600 dark:text-emerald-400">
-                          Quantidade: {item.quantity}
+                          {t('Quantity: {n}', { n: item.quantity })}
                         </div>
                       </div>
                     </div>
@@ -305,7 +308,7 @@ export default function CombatConsumablesDialog({
                       }
                       className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-400 text-white px-3 py-1 rounded text-xs font-bold transition-colors"
                     >
-                      Usar
+                      {t('Use')}
                     </button>
                   </div>
                 </div>
@@ -321,11 +324,11 @@ export default function CombatConsumablesDialog({
               onClick={handleClose}
               className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors"
             >
-              ❌ Cancelar
+              {t('❌ Cancel')}
             </button>
           </div>
           <div className="text-center mt-2 text-xs text-gray-500 dark:text-gray-400">
-            Usar um consumível consome seu turno de ataque
+            {t('Using a consumable spends your attack turn')}
           </div>
         </div>
       </div>

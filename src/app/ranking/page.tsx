@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Trophy, Swords, Coins } from 'lucide-react'
+import { useI18n } from '@/lib/i18n/I18nProvider'
 
 type Row = {
   rank: number
@@ -39,13 +40,14 @@ type RankingPayload = {
 }
 
 export default function RankingPage() {
+  const { t } = useI18n()
   const [data, setData] = useState<RankingPayload | null>(null)
   const [err, setErr] = useState<string | null>(null)
 
   useEffect(() => {
     fetch('/api/ranking')
       .then(async (r) => {
-        if (!r.ok) throw new Error('Falha ao carregar ranking')
+        if (!r.ok) throw new Error(t('Failed to load ranking'))
         return r.json()
       })
       .then(setData)
@@ -62,13 +64,13 @@ export default function RankingPage() {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(180,140,60,0.12),_transparent_55%)]" />
       <div className="relative mx-auto max-w-4xl">
         <header className="mb-8">
-          <p className="text-xs uppercase tracking-[0.2em] text-amber-200/70 mb-2">Arena</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-amber-200/70 mb-2">{t('Arena')}</p>
           <h1 className="font-display text-4xl sm:text-5xl text-[#f0e6c8] flex items-center gap-3">
             <Trophy className="h-9 w-9 text-amber-400" />
-            Ranking PvP
+            {t('PvP Ranking')}
           </h1>
           <p className="mt-2 text-sm text-white/60 max-w-xl">
-            Pontos por vitória na arena. Top 10 da season divide o pot em DOL — faucet controlado, sem emissão solta.
+            {t('Points per arena win. The season Top 10 splits the pot in DOL — controlled faucet, no loose emission.')}
           </p>
         </header>
 
@@ -77,7 +79,7 @@ export default function RankingPage() {
         )}
 
         {!data && !err && (
-          <p className="text-white/50 text-sm">Carregando season…</p>
+          <p className="text-white/50 text-sm">{t('Loading season…')}</p>
         )}
 
         {data && (
@@ -85,38 +87,38 @@ export default function RankingPage() {
             <section className="mb-6 grid gap-3 sm:grid-cols-3">
               <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
                 <p className="text-[11px] uppercase tracking-wider text-white/40">{data.season.name}</p>
-                <p className="text-lg text-[#f0e6c8] mt-1">{data.season.status === 'active' ? 'Ativa' : data.season.status}</p>
+                <p className="text-lg text-[#f0e6c8] mt-1">{data.season.status === 'active' ? t('Active') : data.season.status}</p>
                 {daysLeft != null && (
-                  <p className="text-xs text-white/50 mt-1">{daysLeft}d restantes</p>
+                  <p className="text-xs text-white/50 mt-1">{t('{n}d left', { n: daysLeft })}</p>
                 )}
               </div>
               <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
                 <p className="text-[11px] uppercase tracking-wider text-white/40 flex items-center gap-1">
-                  <Coins className="h-3 w-3" /> Pot DOL
+                  <Coins className="h-3 w-3" /> {t('DOL Pot')}
                 </p>
                 <p className="text-lg text-amber-300 mt-1">{data.season.potDol.toLocaleString()} DOL</p>
-                <p className="text-xs text-white/50 mt-1">Top 10 no fim da season</p>
+                <p className="text-xs text-white/50 mt-1">{t('Top 10 at season end')}</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
-                <p className="text-[11px] uppercase tracking-wider text-white/40">Sua posição</p>
+                <p className="text-[11px] uppercase tracking-wider text-white/40">{t('Your position')}</p>
                 {data.me ? (
                   <>
-                    <p className="text-lg text-[#f0e6c8] mt-1">#{data.me.rank} · {data.me.points} pts</p>
+                    <p className="text-lg text-[#f0e6c8] mt-1">#{data.me.rank} · {t('{n} pts', { n: data.me.points })}</p>
                     <p className="text-xs text-white/50 mt-1">{data.me.wins}W / {data.me.losses}L · {data.me.name}</p>
                   </>
                 ) : (
-                  <p className="text-sm text-white/50 mt-2">Dispute uma luta ranqueada</p>
+                  <p className="text-sm text-white/50 mt-2">{t('Play a ranked match')}</p>
                 )}
               </div>
             </section>
 
             <div className="mb-4 flex items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-white/70">Leaderboard</h2>
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-white/70">{t('Leaderboard')}</h2>
               <Link
                 href="/combat-lobby"
                 className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-100 hover:bg-amber-500/20"
               >
-                <Swords className="h-3.5 w-3.5" /> Ir à Arena
+                <Swords className="h-3.5 w-3.5" /> {t('Go to Arena')}
               </Link>
             </div>
 
@@ -125,8 +127,8 @@ export default function RankingPage() {
                 <thead>
                   <tr className="border-b border-white/10 text-left text-[11px] uppercase tracking-wider text-white/40">
                     <th className="px-4 py-3 w-14">#</th>
-                    <th className="px-2 py-3">Herói</th>
-                    <th className="px-2 py-3 text-right">Pts</th>
+                    <th className="px-2 py-3">{t('Hero')}</th>
+                    <th className="px-2 py-3 text-right">{t('Pts')}</th>
                     <th className="px-2 py-3 text-right hidden sm:table-cell">W/L</th>
                     <th className="px-4 py-3 text-right hidden md:table-cell">DOL</th>
                   </tr>
@@ -135,7 +137,7 @@ export default function RankingPage() {
                   {data.leaderboard.length === 0 && (
                     <tr>
                       <td colSpan={5} className="px-4 py-8 text-center text-white/40">
-                        Nenhuma luta ranqueada nesta season ainda.
+                        {t('No ranked matches this season yet.')}
                       </td>
                     </tr>
                   )}
@@ -158,7 +160,7 @@ export default function RankingPage() {
                             )}
                             <div>
                               <p className="text-[#f0e6c8] font-medium">{row.name}</p>
-                              <p className="text-[11px] text-white/40">Nv.{row.level} · {row.class}</p>
+                              <p className="text-[11px] text-white/40">{t('Lv.')}{row.level} · {row.class}</p>
                             </div>
                           </div>
                         </td>
@@ -177,8 +179,7 @@ export default function RankingPage() {
             </div>
 
             <p className="mt-4 text-xs text-white/35 leading-relaxed">
-              Split do pot: 30% / 18% / 12% / 9% / 7% / 6% / 5% / 5% / 4% / 4%. Payouts são gerados no fim da season
-              (admin) e enviados à carteira vinculada da conta.
+              {t('Pot split: 30% / 18% / 12% / 9% / 7% / 6% / 5% / 5% / 4% / 4%. Payouts are generated at season end (admin) and sent to the account\'s linked wallet.')}
             </p>
           </>
         )}

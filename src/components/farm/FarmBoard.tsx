@@ -255,7 +255,7 @@ function HarvestDialog({
       const res = await onHarvest()
       setResult(res)
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Erro ao colher')
+      setErrorMsg(err instanceof Error ? err.message : t('Failed to harvest'))
       setPhase('error')
     }
   }

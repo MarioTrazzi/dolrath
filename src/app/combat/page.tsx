@@ -19,6 +19,7 @@ import { getTrainingOpponent, DEFAULT_TRAINING_OPPONENT_KEY } from '@/lib/traini
 import { DUNGEON_BATTLE_BG } from '@/lib/walkSceneAssets'
 import ImageBackdrop from '@/components/dungeon/ImageBackdrop'
 import type { DungeonId } from '@/lib/dungeonAdventures'
+import { useI18n } from '@/lib/i18n/I18nProvider'
 
 const ARENA_BG_POOL = Object.entries(DUNGEON_BATTLE_BG) as [DungeonId, string][]
 
@@ -1712,10 +1713,11 @@ function CombatPageContent() {
 }
 
 export default function CombatPage() {
+  const { t } = useI18n()
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-white text-xl">Carregando combate...</div>
+        <div className="text-white text-xl">{t('Loading combat...')}</div>
       </div>
     }>
       <CombatPageContent />

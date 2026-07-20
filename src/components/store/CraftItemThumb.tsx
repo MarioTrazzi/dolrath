@@ -13,6 +13,9 @@ import {
 import { getItemVisual, getItemTypeLabel } from '@/lib/itemVisuals';
 import { formatItemStats } from '@/lib/itemStats';
 import { whatItemCanProduceSummary } from '@/lib/craftProduces';
+import { useI18n } from '@/lib/i18n/I18nProvider';
+import { localizeItemName, localizeItemDesc, localizeRarityLabel, localizeItemTypeLabel } from '@/lib/i18n/catalog';
+import type { Locale } from '@/lib/i18n/config';
 
 // Cores e rótulo por raridade (espelha o /doc e as bancadas).
 const RARITY_UI: Record<Rarity, { label: string; text: string; ring: string; glow: string }> = {
@@ -33,17 +36,24 @@ interface CraftMeta {
   statType?: string;
 }
 
+const KIND_LABEL_EN: Record<string, string> = {
+  'Ingrediente de Alquimia': 'Alchemy Ingredient',
+  'Material de Forja': 'Forge Material',
+  'Consumível': 'Consumable',
+};
+
 // Resolve a ficha do item pelo nome, consultando todos os catálogos relevantes às
 // bancadas (ingredientes, materiais de forja, consumíveis/poções e equipamentos).
-function resolveMeta(name: string): CraftMeta | null {
+function resolveMeta(name: string, locale: Locale): CraftMeta | null {
+  const kind = (pt: string) => (locale === 'en' ? KIND_LABEL_EN[pt] ?? pt : pt);
   const ing = getIngredientByName(name);
-  if (ing) return { kindLabel: 'Ingrediente de Alquimia', emoji: ing.emoji, rarity: ing.rarity, description: ing.description, value: ing.goldValue };
+  if (ing) return { kindLabel: kind('Ingrediente de Alquimia'), emoji: ing.emoji, rarity: ing.rarity, description: ing.description, value: ing.goldValue };
   const mat = getForgeMaterialByName(name);
-  if (mat) return { kindLabel: 'Material de Forja', emoji: mat.emoji, rarity: mat.rarity, description: mat.description, value: mat.goldValue };
+  if (mat) return { kindLabel: kind('Material de Forja'), emoji: mat.emoji, rarity: mat.rarity, description: mat.description, value: mat.goldValue };
   const con = getConsumableByName(name);
-  if (con) return { kindLabel: 'Consumível', emoji: '🧪', rarity: con.rarity, description: con.description, value: con.goldPrice, stats: con.stats, statType: 'CONSUMABLE' };
+  if (con) return { kindLabel: kind('Consumível'), emoji: '🧪', rarity: con.rarity, description: con.description, value: con.goldPrice, stats: con.stats, statType: 'CONSUMABLE' };
   const cat = getCatalogItemByName(name);
-  if (cat) return { kindLabel: getItemTypeLabel(cat.type), emoji: getItemVisual(cat.type).emoji, rarity: cat.rarity, description: cat.description, value: cat.goldPrice, stats: cat.stats, statType: cat.type };
+  if (cat) return { kindLabel: localizeItemTypeLabel(getItemTypeLabel(cat.type), locale), emoji: getItemVisual(cat.type).emoji, rarity: cat.rarity, description: cat.description, value: cat.goldPrice, stats: cat.stats, statType: cat.type };
   return null;
 }
 
@@ -116,11 +126,14 @@ export function CraftItemThumb({
     setCoords({ top, left });
   }, [show]);
 
-  const meta = resolveMeta(name);
+  const { locale } = useI18n();
+  const displayName = localizeItemName(name, locale);
+  const meta = resolveMeta(name, locale);
   const ui = meta ? RARITY_UI[meta.rarity] : null;
   const cardImg = itemImagePath(name);
   const stats = meta?.stats ? formatItemStats(meta.stats, meta.statType) : [];
   const producesSummary = whatItemCanProduceSummary(name);
+  const displayDesc = meta?.description ? localizeItemDesc(name, meta.description, locale) : meta?.description;
 
   return (
     <span

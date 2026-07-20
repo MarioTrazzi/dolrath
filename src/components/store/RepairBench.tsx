@@ -18,7 +18,7 @@ import { resolveImageUrl } from '@/lib/imageUrl';
 import EnhancementDialog, { EnhanceablePickerItem } from '@/components/EnhancementDialog';
 import { getSlotTypeFromItemType } from '@/lib/equipmentSlot';
 import { useI18n } from '@/lib/i18n/I18nProvider';
-import { localizeItemName } from '@/lib/i18n/catalog';
+import { localizeItemName, localizeItemTypeLabel } from '@/lib/i18n/catalog';
 
 interface Character {
   id: string;
@@ -542,7 +542,7 @@ export default function RepairBench({
                       className="text-xs font-semibold px-2 py-0.5 rounded-[3px] text-white"
                       style={{ background: (visual?.accent ?? '#f59e0b') + '33' }}
                     >
-                      {visual?.emoji} {getItemTypeLabel(selected.item.type)}
+                      {visual?.emoji} {localizeItemTypeLabel(getItemTypeLabel(selected.item.type), locale)}
                     </span>
                     {selected.item.level != null && (
                       <span className="text-xs font-semibold bg-amber-500/30 text-amber-300 px-2 py-0.5 rounded-[3px]">

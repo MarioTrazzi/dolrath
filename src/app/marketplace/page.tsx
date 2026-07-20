@@ -10,6 +10,7 @@ import { getWalletTxErrorMessage } from '@/lib/walletErrors'
 import { resolveImageUrl } from '@/lib/imageUrl'
 import { itemImagePath } from '@/lib/itemCatalog'
 import { getItemVisual, getItemTypeLabel } from '@/lib/itemVisuals'
+import { useI18n } from '@/lib/i18n/I18nProvider'
 
 // Miniatura do item: imagem (Cloudinary/URL), fallback por nome (asset estático), ou emoji/categoria.
 function ItemThumb({ image, name, type, enhancement }: { image?: string | null; name?: string | null; type: string; enhancement?: number }) {
@@ -137,6 +138,7 @@ async function getSigner(expectedChainId: number) {
 }
 
 export default function MarketplacePage() {
+  const { t } = useI18n()
   const { data: session } = useSession()
   const [config, setConfig] = useState<MarketConfig | null>(null)
   const [listings, setListings] = useState<Listing[]>([])
@@ -527,11 +529,11 @@ export default function MarketplacePage() {
 
       {/* COMPRAR */}
       <section>
-        <h2 className="text-lg font-semibold tracking-wide text-[#e7c682] mb-3">À venda</h2>
+        <h2 className="text-lg font-semibold tracking-wide text-[#e7c682] mb-3">{t('For sale')}</h2>
         {loadingList ? (
-          <p className="text-[#8a8a90] text-sm">Carregando listagens…</p>
+          <p className="text-[#8a8a90] text-sm">{t('Loading listings…')}</p>
         ) : listings.length === 0 ? (
-          <p className="text-[#8a8a90] text-sm">Nenhum item à venda no momento.</p>
+          <p className="text-[#8a8a90] text-sm">{t('No items for sale right now.')}</p>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {listings.map((l) => (
@@ -611,11 +613,11 @@ export default function MarketplacePage() {
 
       {/* COMPRAR PERSONAGEM */}
       <section>
-        <h2 className="text-lg font-semibold tracking-wide text-[#c9b3ec] mb-3">À venda</h2>
+        <h2 className="text-lg font-semibold tracking-wide text-[#c9b3ec] mb-3">{t('For sale')}</h2>
         {loadingCharList ? (
-          <p className="text-[#8a8a90] text-sm">Carregando personagens…</p>
+          <p className="text-[#8a8a90] text-sm">{t('Loading characters…')}</p>
         ) : charListings.length === 0 ? (
-          <p className="text-[#8a8a90] text-sm">Nenhum personagem à venda no momento.</p>
+          <p className="text-[#8a8a90] text-sm">{t('No characters for sale right now.')}</p>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {charListings.map((l) => {

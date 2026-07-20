@@ -26,6 +26,8 @@ import {
   placeSkillTree,
   type SkillTreeLayoutKind,
 } from '@/lib/skillTreeLayouts';
+import { useI18n } from '@/lib/i18n/I18nProvider';
+import { localizeSkillNodeName, localizeSkillStatNodeName, localizePathLabel, localizeFormPathLabel } from '@/lib/i18n/combatNames';
 
 const GOLD = '#c9a25f';
 const GOLD_BRIGHT = '#e7c682';
@@ -54,14 +56,36 @@ function starCount(node: SkillNode): number {
   return 0;
 }
 
-const KIND_LABEL: Record<SkillNode['kind'], string> = {
-  stat: 'Atributo',
-  skill: 'Habilidade',
-  upgrade: 'Aprimoramento',
-  passive: 'Passiva',
+const KIND_LABEL_EN: Record<SkillNode['kind'], string> = {
+  stat: 'Attribute',
+  skill: 'Skill',
+  upgrade: 'Upgrade',
+  passive: 'Passive',
 };
 
+/** Nome de exibição do nó: stat nodes usam o padrão "+N Atributo", o resto passa
+ *  pelo mapa reverso PT→EN de combatNames (ver skillTree.ts p/ o porquê da fonte
+ *  continuar PT: gerador compartilhado com o servidor). */
+function displayNodeName(node: SkillNode, locale: 'en' | 'pt'): string {
+  return node.kind === 'stat' ? localizeSkillStatNodeName(node.name, locale) : localizeSkillNodeName(node.name, locale)
+}
+
+/** Rótulo do caminho: "assinatura" usa o mapa de forma (Dragão Interior…), o resto
+ *  o mapa de path label por classe (Fúria de Batalha…). */
+function displayPathLabel(label: string, locale: 'en' | 'pt'): string {
+  const viaForm = localizeFormPathLabel(label, locale)
+  if (viaForm !== label) return viaForm
+  return localizePathLabel(label, locale)
+}
+
 export default function SkillTreePanel({ tree, paths, purchased, availablePoints, onSpend, busy, classId }: SkillTreePanelProps) {
+  const { locale, t } = useI18n();
+  const KIND_LABEL: Record<SkillNode['kind'], string> = {
+    stat: t(KIND_LABEL_EN.stat),
+    skill: t(KIND_LABEL_EN.skill),
+    upgrade: t(KIND_LABEL_EN.upgrade),
+    passive: t(KIND_LABEL_EN.passive),
+  };
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const owned = useMemo(() => new Set(purchased), [purchased]);
   const layout = useMemo<SkillTreeLayoutKind>(() => getLayoutForClass(classId), [classId]);
@@ -98,10 +122,10 @@ export default function SkillTreePanel({ tree, paths, purchased, availablePoints
         <span className="text-2xl leading-none" aria-hidden>{selected.icon}</span>
         <div className="min-w-0">
           <div className="font-bold leading-tight" style={{ color: selectedPlaced?.accent || GOLD_BRIGHT }}>
-            {selected.name}
+            {displayNodeName(selected, locale)}
           </div>
           <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: '#9a9aa2' }}>
-            {KIND_LABEL[selected.kind]} · Tier {selected.tier}
+            {KIND_LABEL[selected.kind]} · {t('Tier {n}', { n: selected.tier })}
           </div>
         </div>
       </div>
@@ -118,7 +142,7 @@ export default function SkillTreePanel({ tree, paths, purchased, availablePoints
         {selectedOwned ? (
           <div className="w-full rounded-lg py-2.5 text-center text-sm font-bold"
             style={{ border: `1px solid ${GOLD}`, color: GOLD_BRIGHT, background: 'rgba(201,162,95,0.08)' }}>
-            ✓ Aprendido
+            {t('✓ Learned')}
           </div>
         ) : (
           <button
@@ -132,7 +156,7 @@ export default function SkillTreePanel({ tree, paths, purchased, availablePoints
               border: `1px solid ${selectedCheck?.ok ? FRAME : GUNMETAL}`,
             }}
           >
-            {busy ? 'Aprendendo…' : `Aprender · ${selected.cost} pt${selected.cost > 1 ? 's' : ''}`}
+            {busy ? t('Learning…') : selected.cost > 1 ? t('Learn · {n} pts', { n: selected.cost }) : t('Learn · {n} pt', { n: selected.cost })}
           </button>
         )}
       </div>
@@ -146,14 +170,14 @@ export default function SkillTreePanel({ tree, paths, purchased, availablePoints
         <div className="flex items-center gap-2">
           <span aria-hidden>🌳</span>
           <span className="font-bold tracking-wide text-sm sm:text-base" style={{ color: GOLD_BRIGHT }}>
-            Árvore de Habilidades
+            {t('Skill Tree')}
           </span>
         </div>
         <div
           className="px-2.5 py-1 rounded-md text-xs sm:text-sm font-bold"
           style={{ border: `1px solid ${availablePoints > 0 ? GOLD : GUNMETAL}`, color: availablePoints > 0 ? GOLD_BRIGHT : '#9a9aa2', background: 'rgba(0,0,0,0.35)' }}
         >
-          ✦ Pontos × {availablePoints}
+          {t('✦ Points × {n}', { n: availablePoints })}
         </div>
       </div>
 
@@ -241,7 +265,7 @@ export default function SkillTreePanel({ tree, paths, purchased, availablePoints
                   {availablePoints}
                 </div>
                 <div style={{ color: '#9a9aa2', fontSize: '2.6cqw', letterSpacing: '0.12em' }} className="uppercase">
-                  pontos
+                  {t('points')}
                 </div>
               </div>
             </div>
@@ -260,7 +284,7 @@ export default function SkillTreePanel({ tree, paths, purchased, availablePoints
                   }}
                 >
                   <span aria-hidden className="mr-0.5">{path.icon}</span>
-                  {path.label}
+                  {displayPathLabel(path.label, locale)}
                 </div>
               );
             })}
@@ -289,8 +313,8 @@ export default function SkillTreePanel({ tree, paths, purchased, availablePoints
                   key={node.id}
                   type="button"
                   onClick={() => setSelectedId(node.id)}
-                  title={node.name}
-                  aria-label={node.name}
+                  title={displayNodeName(node, locale)}
+                  aria-label={displayNodeName(node, locale)}
                   className="absolute -translate-x-1/2 -translate-y-1/2 transition-transform hover:z-20 hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e7c682]"
                   style={{ left: pctX(x), top: pctY(y), width: `${size}cqw`, height: `${size}cqw`, zIndex: isSelected ? 20 : 10, opacity }}
                 >
@@ -359,10 +383,10 @@ export default function SkillTreePanel({ tree, paths, purchased, availablePoints
             <div className="flex h-full min-h-[120px] flex-col items-center justify-center text-center">
               <span className="text-3xl opacity-60" aria-hidden>🌀</span>
               <p className="mt-2 text-xs sm:text-sm" style={{ color: '#9a9aa2' }}>
-                Toque num nó do astrolábio para ver o detalhe.
+                {t('Tap a node on the astrolabe to see its detail.')}
               </p>
               <p className="mt-1 text-[11px]" style={{ color: '#77777d' }}>
-                Os anéis pulsando estão prontos para aprender.
+                {t('Pulsing rings are ready to learn.')}
               </p>
             </div>
           )}
@@ -383,7 +407,7 @@ export default function SkillTreePanel({ tree, paths, purchased, availablePoints
           <button
             type="button"
             onClick={() => setSelectedId(null)}
-            aria-label="Fechar detalhe"
+            aria-label={t('Close detail')}
             className="absolute right-2.5 top-2 grid h-7 w-7 place-items-center rounded-full text-sm"
             style={{ border: `1px solid ${GUNMETAL}`, color: '#9a9aa2', background: 'rgba(0,0,0,0.35)' }}
           >

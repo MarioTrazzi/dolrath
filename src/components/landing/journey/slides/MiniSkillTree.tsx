@@ -8,6 +8,8 @@
 import React, { useMemo } from 'react'
 import { getSkillTree, getSkillPaths } from '@/lib/skillTree'
 import { HUB_R, getLayoutForClass, getLayoutDims, placeSkillTree } from '@/lib/skillTreeLayouts'
+import { useI18n } from '@/lib/i18n/I18nProvider'
+import { localizePathLabel, localizeFormPathLabel } from '@/lib/i18n/combatNames'
 
 const GOLD = '#c9a25f'
 const GOLD_BRIGHT = '#e7c682'
@@ -16,7 +18,14 @@ const FRAME = '#8a6d3b'
 /** Quantos nós de cada caminho aparecem "aprendidos" (dão vida à silhueta). */
 const LIT_PER_PATH = 3
 
+function displayPathLabel(label: string, locale: 'en' | 'pt'): string {
+  const viaForm = localizeFormPathLabel(label, locale)
+  if (viaForm !== label) return viaForm
+  return localizePathLabel(label, locale)
+}
+
 export default function MiniSkillTree({ classId, form }: { classId: string; form: string }) {
+  const { locale } = useI18n()
   const layout = getLayoutForClass(classId)
   const dims = getLayoutDims(layout)
   const placedByPath = useMemo(() => {
@@ -86,7 +95,7 @@ export default function MiniSkillTree({ classId, form }: { classId: string; form
               x={label.x} y={label.y} textAnchor="middle"
               fontSize={19} fontWeight={700} fill={path.accent}
             >
-              {path.icon} {path.label}
+              {path.icon} {displayPathLabel(path.label, locale)}
             </text>
           </g>
         )

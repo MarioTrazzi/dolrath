@@ -1,0 +1,23 @@
+// Tooltip de item (usado em inventário, loja, dungeon — componente global).
+export const ITEMTOOLTIP_PT: Record<string, string> = {
+  'Lv.': 'Nv.',
+  'Vs. equipped': 'Vs. equipado',
+  '💔 BROKEN': '💔 QUEBRADO',
+  'Durability': 'Durabilidade',
+  'No bonus until repaired at the blacksmith.': 'Sem bônus até reparar no ferreiro.',
+  '🌐 Transfer x{n}': '🌐 Transferir x{n}',
+  '🌐 Transfer': '🌐 Transferir',
+  '⚒️ Enhance': '⚒️ Aprimorar',
+  '🌾 Plant': '🌾 Plantar',
+  '⚗️ Alchemy': '⚗️ Alquimia',
+  '⚒️ Forge': '⚒️ Forja',
+  '⚙️ Process': '⚙️ Processar',
+  '🍳 Cook': '🍳 Cozinhar',
+  '🧺 No use at any bench': '🧺 Sem uso na bancada',
+  '🧪 Consume': '🧪 Consumir',
+  '⚔️ Unequip': '⚔️ Desequipar',
+  '🛡️ Equip': '🛡️ Equipar',
+  '🌐 To Global': '🌐 Ao Global',
+  '🌐 All x{n}': '🌐 Tudo x{n}',
+  '🔥 Sell {price}🪙': '🔥 Vender {price}🪙',
+}

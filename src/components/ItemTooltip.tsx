@@ -20,6 +20,8 @@ import { getSlotTypeFromItemType } from '@/lib/equipmentSlot';
 import ItemCardBackdrop from '@/components/store/ItemCardBackdrop';
 import ItemIcon from '@/components/ItemIcon';
 import SellQuantityDialog from '@/components/inventory/SellQuantityDialog';
+import { useI18n } from '@/lib/i18n/I18nProvider';
+import { localizeItemName, localizeItemDesc, localizeSpecialEffect } from '@/lib/i18n/catalog';
 
 interface ItemTooltipProps {
   item: Item;
@@ -62,6 +64,9 @@ interface ItemTooltipProps {
 }
 
 export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability, maxDurability, inventoryId, onEquip, onUnequip, onConsume, onEnhance, onOpenCraft, onTransfer, onSendToGlobal, onSell, quantity = 1, characterId, compareTo, children }: ItemTooltipProps) {
+  const { locale, t } = useI18n();
+  const displayName = localizeItemName(item.name, locale);
+  const displayDesc = localizeItemDesc(item.name, item.description, locale);
   const router = useRouter();
   const [showTooltip, setShowTooltip] = useState(false);
   const [imgError, setImgError] = useState(false);
@@ -353,7 +358,7 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
               {itemImage ? (
                 <img
                   src={itemImage}
-                  alt={item.name}
+                  alt={displayName}
                   onError={() => setImgError(true)}
                   className="w-full h-full object-cover art-bright"
                   referrerPolicy="no-referrer"
@@ -363,7 +368,7 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
               )}
             </div>
 
-            <h3 className="font-black text-lg mb-2 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">{item.name}</h3>
+            <h3 className="font-black text-lg mb-2 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">{displayName}</h3>
 
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               <span className={`text-xs font-semibold px-2 py-1 rounded-full ${visual.chipBg} ${visual.chipText}`}>
@@ -371,7 +376,7 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
               </span>
               {item.level > 0 && (
                 <span className="text-xs font-semibold bg-amber-500/30 text-amber-300 px-2 py-1 rounded-full">
-                  Lv.{item.level}
+                  {t('Lv.')}{item.level}
                 </span>
               )}
               {showEnhancement && (
@@ -381,8 +386,8 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
               )}
             </div>
 
-            {item.description && (
-              <p className="text-sm text-white/60 mb-3 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">{item.description}</p>
+            {displayDesc && (
+              <p className="text-sm text-white/60 mb-3 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">{displayDesc}</p>
             )}
 
             {/* Stats */}
@@ -399,7 +404,7 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
             {/* Comparação vs. peça equipada no mesmo slot */}
             {statDiff.length > 0 && (
               <div className="mb-3">
-                <p className="text-[11px] font-semibold text-white/50 mb-1">Vs. equipado</p>
+                <p className="text-[11px] font-semibold text-white/50 mb-1">{t('Vs. equipped')}</p>
                 <div className="flex flex-wrap gap-1.5">
                   {statDiff.map((d) => (
                     <span
@@ -420,7 +425,7 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
               <div className="mb-3">
                 <div className="flex justify-between text-xs mb-1">
                   <span className={durability <= 0 ? 'text-red-400 font-bold' : 'text-white/60'}>
-                    {durability <= 0 ? '💔 QUEBRADO' : 'Durabilidade'}
+                    {durability <= 0 ? t('💔 BROKEN') : t('Durability')}
                   </span>
                   <span className="text-white/60">{durability}/{maxDurability}</span>
                 </div>
@@ -434,14 +439,14 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
                   />
                 </div>
                 {durability <= 0 && (
-                  <p className="text-xs text-red-300 mt-1">Sem bônus até reparar no ferreiro.</p>
+                  <p className="text-xs text-red-300 mt-1">{t('No bonus until repaired at the blacksmith.')}</p>
                 )}
               </div>
             )}
 
             {/* Special Effect */}
             {item.stats.specialEffect && (
-              <p className="text-sm text-purple-300 mb-3 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">✨ {item.stats.specialEffect}</p>
+              <p className="text-sm text-purple-300 mb-3 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">✨ {localizeSpecialEffect(item.stats.specialEffect, locale)}</p>
             )}
 
             {producesSummary && (
@@ -461,7 +466,7 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
                 // Inventário global: transferir para o personagem (pilha > 1 abre o diálogo).
                 btns.push(
                   <button key="transfer" onClick={handleTransferClick} className={storeButtonClass} style={buttonStyle('#3b82f6', 'rgba(59,130,246,0.35)')}>
-                    {quantity > 1 ? `🌐 Transferir x${quantity}` : '🌐 Transferir'}
+                    {quantity > 1 ? t('🌐 Transfer x{n}', { n: quantity }) : t('🌐 Transfer')}
                   </button>
                 );
               } else {
@@ -479,18 +484,18 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
                   : isEquipped ? buttonStyle('#ef4444', 'rgba(239,68,68,0.35)')
                   : buttonStyle(visual.accent, visual.accentSoft);
                 const actionLabel =
-                  isEnhancementStone ? '⚒️ Aprimorar'
-                  : isSeed ? '🌾 Plantar'
+                  isEnhancementStone ? t('⚒️ Enhance')
+                  : isSeed ? t('🌾 Plant')
                   : isCraftInput ? (
-                      primaryCraft === 'alchemy' ? '⚗️ Alquimia'
-                      : primaryCraft === 'forge' ? '⚒️ Forja'
-                      : primaryCraft === 'process' ? '⚙️ Processar'
-                      : primaryCraft === 'cook' ? '🍳 Cozinhar'
-                      : '🧺 Sem uso na bancada'
+                      primaryCraft === 'alchemy' ? t('⚗️ Alchemy')
+                      : primaryCraft === 'forge' ? t('⚒️ Forge')
+                      : primaryCraft === 'process' ? t('⚙️ Process')
+                      : primaryCraft === 'cook' ? t('🍳 Cook')
+                      : t('🧺 No use at any bench')
                     )
-                  : isConsumable ? '🧪 Consumir'
-                  : isEquipped ? '⚔️ Desequipar'
-                  : '🛡️ Equipar';
+                  : isConsumable ? t('🧪 Consume')
+                  : isEquipped ? t('⚔️ Unequip')
+                  : t('🛡️ Equip');
                 btns.push(
                   <button
                     key="action"
@@ -508,7 +513,7 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
                 if (showProcessButton) {
                   btns.push(
                     <button key="process" onClick={() => handleUseInCraft('process')} className={storeButtonClass} style={buttonStyle('#8b5cf6', 'rgba(139,92,246,0.35)')}>
-                      ⚙️ Processar
+                      {t('⚙️ Process')}
                     </button>
                   );
                 }
@@ -518,7 +523,7 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
                 if (showCookButton) {
                   btns.push(
                     <button key="cook" onClick={() => handleUseInCraft('cook')} className={storeButtonClass} style={buttonStyle('#eab308', 'rgba(234,179,8,0.35)')}>
-                      🍳 Cozinhar
+                      {t('🍳 Cook')}
                     </button>
                   );
                 }
@@ -526,21 +531,21 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
                 if (canEnhance) {
                   btns.push(
                     <button key="enhance" onClick={handleEnhanceClick} className={storeButtonClass} style={buttonStyle('#f59e0b', 'rgba(245,158,11,0.35)')}>
-                      ⚒️ Aprimorar
+                      {t('⚒️ Enhance')}
                     </button>
                   );
                 }
                 if (onSendToGlobal && !isEquipped) {
                   btns.push(
                     <button key="global" onClick={() => { onSendToGlobal(item.id, 1); setShowTooltip(false); }} className={storeButtonClass} style={buttonStyle('#3b82f6', 'rgba(59,130,246,0.35)')}>
-                      🌐 Ao Global
+                      {t('🌐 To Global')}
                     </button>
                   );
                 }
                 if (onSendToGlobal && !isEquipped && quantity > 1) {
                   btns.push(
                     <button key="all" onClick={() => { onSendToGlobal(item.id, quantity); setShowTooltip(false); }} className={storeButtonClass} style={buttonStyle('#3b82f6', 'rgba(59,130,246,0.35)')}>
-                      🌐 Tudo x{quantity}
+                      {t('🌐 All x{n}', { n: quantity })}
                     </button>
                   );
                 }
@@ -550,7 +555,7 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
               if (canSell) {
                 btns.push(
                   <button key="sell" onClick={handleSellClick} className={storeButtonClass} style={buttonStyle('#dc2626', 'rgba(220,38,38,0.35)')}>
-                    🔥 Vender {sellUnitPrice}🪙
+                    {t('🔥 Sell {price}🪙', { price: sellUnitPrice })}
                   </button>
                 );
               }

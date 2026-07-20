@@ -21,6 +21,7 @@ import { getRaceById, getClassById } from '@/lib/gameData';
 import { getBlendedVisual } from '@/lib/creationVisuals';
 import CreationCardBackdrop from '@/components/character/CreationCardBackdrop';
 import { getWalletTxErrorMessage } from '@/lib/walletErrors';
+import { useT } from '@/lib/i18n/I18nProvider';
 
 const GOLD = '#c9a25f';
 const GOLD_BRIGHT = '#e7c682';
@@ -29,6 +30,7 @@ const PANEL_BG = 'linear-gradient(180deg, rgba(32,32,36,0.94), rgba(24,24,27,0.9
 const TITLEBAR_BG = 'linear-gradient(180deg, #2b2b2f, #1a1a1d)';
 
 export default function SkillTreePage() {
+  const t = useT();
   const params = useParams();
   const router = useRouter();
   const [character, setCharacter] = useState<Character | null>(null);
@@ -72,13 +74,13 @@ export default function SkillTreePage() {
       });
       const result = await response.json().catch(() => null);
       if (response.ok && result?.success) {
-        toast.success(`Aprendeu "${result.node?.name || 'habilidade'}"!`);
+        toast.success(t('Learned "{name}"!', { name: result.node?.name || t('skill') }));
         setCharacter(result.character);
       } else {
-        toast.error(String(result?.error || `Erro ao aprender habilidade (HTTP ${response.status})`));
+        toast.error(String(result?.error || t('Failed to learn skill (HTTP {status})', { status: response.status })));
       }
     } catch (error) {
-      toast.error(getWalletTxErrorMessage(error, 'Erro ao aprender habilidade'));
+      toast.error(getWalletTxErrorMessage(error, t('Failed to learn skill')));
     } finally {
       setSpending(false);
     }
@@ -91,10 +93,10 @@ export default function SkillTreePage() {
   };
 
   if (loading) {
-    return <div className="flex justify-center items-center min-h-screen">Loading...</div>;
+    return <div className="flex justify-center items-center min-h-screen">{t('Loading...')}</div>;
   }
   if (!character) {
-    return <div className="flex justify-center items-center min-h-screen">Character not found</div>;
+    return <div className="flex justify-center items-center min-h-screen">{t('Character not found')}</div>;
   }
 
   const raceObj = getRaceById(typeof character.race === 'string' ? character.race : character.race.id);
@@ -122,16 +124,16 @@ export default function SkillTreePage() {
               href={`/character/${effectiveCharacterId || (params as any)?.characterId}`}
               className="flex items-center gap-2 text-[13px] font-semibold text-[#c9c9ce] transition-colors hover:text-white"
             >
-              <ArrowLeft size={16} /> Voltar à Ficha
+              <ArrowLeft size={16} /> {t('Back to Sheet')}
             </Link>
             <span className="text-[11px] uppercase tracking-[0.14em] text-[#77777d]">
-              {character.name} · Nível {character.level}
+              {character.name} · {t('Level')} {character.level}
             </span>
           </div>
 
           <div className="flex items-center justify-between gap-3 px-4 py-3">
             <div className="flex items-center gap-2 text-[15px] font-semibold text-[#dcdce0]">
-              <span style={{ color: GOLD }}>✦</span> Árvore de Habilidades
+              <span style={{ color: GOLD }}>✦</span> {t('Skill Tree')}
             </div>
             <span
               className="rounded-[3px] border px-3 py-1 text-sm font-bold"
@@ -141,7 +143,7 @@ export default function SkillTreePage() {
                 color: availablePoints > 0 ? GOLD_BRIGHT : '#9a9aa2',
               }}
             >
-              ✦ {availablePoints} ponto{availablePoints === 1 ? '' : 's'}
+              ✦ {availablePoints === 1 ? t('1 point') : t('{n} points', { n: availablePoints })}
             </span>
           </div>
         </div>
@@ -190,13 +192,13 @@ export default function SkillTreePage() {
             className="rounded-[4px] border border-[#46464c] p-8 text-center"
             style={{ background: PANEL_BG }}
           >
-            <p className="text-[#c9c9ce]">Nenhum ponto para distribuir no momento.</p>
+            <p className="text-[#c9c9ce]">{t('No points to distribute right now.')}</p>
             <button
               onClick={() => router.push(`/character/${effectiveCharacterId}`)}
               className="mt-4 rounded-[3px] border px-6 py-2 text-sm font-semibold text-[#c9c9ce] transition-colors hover:border-[#8a6d3b] hover:text-white"
               style={{ borderColor: '#46464c' }}
             >
-              Voltar à Ficha
+              {t('Back to Sheet')}
             </button>
           </div>
         )}

@@ -8,6 +8,8 @@ import { LEGAL_PT } from './legal'
 import { GATHERING_PT } from './gathering'
 import { DASHBOARD_PT } from './dashboard'
 import { CHARACTER_PT } from './character'
+import { SKILLTREE_PT } from './skilltree'
+import { ITEMTOOLTIP_PT } from './itemtooltip'
 
 export const PT_DICT: Record<string, string> = {
   ...COMMON_PT,
@@ -18,4 +20,6 @@ export const PT_DICT: Record<string, string> = {
   ...GATHERING_PT,
   ...DASHBOARD_PT,
   ...CHARACTER_PT,
+  ...SKILLTREE_PT,
+  ...ITEMTOOLTIP_PT,
 }

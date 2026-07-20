@@ -17,6 +17,8 @@ import { formatItemStats } from '@/lib/itemStats';
 import { resolveImageUrl } from '@/lib/imageUrl';
 import EnhancementDialog, { EnhanceablePickerItem } from '@/components/EnhancementDialog';
 import { getSlotTypeFromItemType } from '@/lib/equipmentSlot';
+import { useI18n } from '@/lib/i18n/I18nProvider';
+import { localizeItemName } from '@/lib/i18n/catalog';
 
 interface Character {
   id: string;
@@ -61,6 +63,7 @@ export default function RepairBench({
   /** Chamado quando reparo/venda/aprimoramento muda o gold do personagem (atualiza a navbar). */
   onChanged?: () => void;
 }) {
+  const { locale, t } = useI18n();
   const [internalCharacterId, setInternalCharacterId] = useState<string>('');
   // Modo controlado: usa o personagem da loja; senão, o estado interno.
   const controlled = characterId != null;
@@ -209,10 +212,10 @@ export default function RepairBench({
     ? memoryShardsAvailable
     : copiesAvailable;
   const repairMatLabel = isAccessorySelected
-    ? ACCESSORY_REPAIR_DUST_NAME
+    ? localizeItemName(ACCESSORY_REPAIR_DUST_NAME, locale)
     : usesMemoryShard
-    ? 'Estilhaço de Memória'
-    : 'cópia nível 0';
+    ? localizeItemName('Estilhaço de Memória', locale)
+    : t('level-0 copy');
 
   const missing = selected ? selected.maxDurability - selected.durability : 0;
   const repairUnitsNeeded = Math.ceil(missing / REPAIR_PER_DUPLICATE);
@@ -230,12 +233,16 @@ export default function RepairBench({
   const handleRepair = async (mode: 'single' | 'full') => {
     if (!selected || !selectedCharacterId) return;
     if (repairUnitsAvailable < 1) {
+      const itemDisplayName = localizeItemName(selected.item.name, locale);
       toast.error(
         isAccessorySelected
-          ? `Você precisa de ${ACCESSORY_REPAIR_DUST_NAME} (Coleta — Vale dos Minérios) para reparar ${selected.item.name}.`
+          ? t('You need {mat} (Gathering — Ore Valley) to repair {item}.', {
+              mat: localizeItemName(ACCESSORY_REPAIR_DUST_NAME, locale),
+              item: itemDisplayName,
+            })
           : usesMemoryShard
-          ? `Você precisa de um Estilhaço de Memória (de chefe) para reparar ${selected.item.name}.`
-          : `Você precisa de uma cópia de ${selected.item.name} para reparar.`
+          ? t('You need a Memory Shard (from a boss) to repair {item}.', { item: itemDisplayName })
+          : t('You need a copy of {item} to repair.', { item: itemDisplayName })
       );
       return;
     }
@@ -250,14 +257,14 @@ export default function RepairBench({
       });
       const json = await res.json();
       if (!res.ok) {
-        toast.error(json.error || 'Erro ao reparar');
+        toast.error(json.error || t('Failed to repair'));
         return;
       }
-      toast.success(json.message || '🔧 Item reparado!');
+      toast.success(json.message || t('🔧 Item repaired!'));
       await fetchInventory(selectedCharacterId);
       onChanged?.();
     } catch {
-      toast.error('Erro inesperado ao reparar');
+      toast.error(t('Unexpected error repairing'));
     } finally {
       setBusy(false);
     }
@@ -272,9 +279,19 @@ export default function RepairBench({
   const handleSell = async (rowIds: string[]) => {
     if (!selected || !selectedCharacterId || rowIds.length === 0) return;
     const n = rowIds.length;
-    const name = getDisplayName(selected.item.name, selected.enhancementLevel);
+    const name = getDisplayName(localizeItemName(selected.item.name, locale), selected.enhancementLevel);
     const ok = window.confirm(
-      `Vender ${n}x ${name} ao ferreiro por ${sellUnitPrice * n} gold?\nO${n > 1 ? 's itens serão destruídos' : ' item será destruído'} (não dá pra desfazer).`
+      n > 1
+        ? t('Sell {n}x {name} to the blacksmith for {total} gold?\nThe items will be destroyed (cannot be undone).', {
+            n,
+            name,
+            total: sellUnitPrice * n,
+          })
+        : t('Sell {n}x {name} to the blacksmith for {total} gold?\nThe item will be destroyed (cannot be undone).', {
+            n,
+            name,
+            total: sellUnitPrice * n,
+          })
     );
     if (!ok) return;
     setBusy(true);
@@ -288,18 +305,18 @@ export default function RepairBench({
         });
         if (!res.ok) {
           const json = await res.json().catch(() => ({}));
-          toast.error(json.error || 'Erro ao vender');
+          toast.error(json.error || t('Failed to sell'));
           break;
         }
         sold++;
       }
       if (sold > 0) {
-        toast.success(`💰 Vendeu ${sold}x ${name} por ${sellUnitPrice * sold} gold!`);
+        toast.success(t('💰 Sold {n}x {name} for {total} gold!', { n: sold, name, total: sellUnitPrice * sold }));
         onChanged?.();
       }
       await fetchInventory(selectedCharacterId);
     } catch {
-      toast.error('Erro inesperado ao vender');
+      toast.error(t('Unexpected error selling'));
     } finally {
       setBusy(false);
     }
@@ -321,13 +338,17 @@ export default function RepairBench({
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error(json.error || 'Erro ao equipar');
+        toast.error(json.error || t('Failed to equip'));
         return;
       }
-      toast.success(`⚡ ${getDisplayName(selected.item.name, selected.enhancementLevel)} equipado!`);
+      toast.success(
+        t('⚡ {name} equipped!', {
+          name: getDisplayName(localizeItemName(selected.item.name, locale), selected.enhancementLevel),
+        })
+      );
       await fetchInventory(selectedCharacterId);
     } catch {
-      toast.error('Erro inesperado ao equipar');
+      toast.error(t('Unexpected error equipping'));
     } finally {
       setBusy(false);
     }
@@ -358,7 +379,7 @@ export default function RepairBench({
     <div className="relative flex h-full flex-col overflow-hidden rounded-[4px] border border-[#46464c] shadow-2xl shadow-black/60 p-5" style={{ background: 'linear-gradient(180deg, rgba(32,32,36,0.94), rgba(24,24,27,0.96))' }}>
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
         <h2 className="text-2xl font-black text-amber-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
-          🔧 Bancada de Reparo
+          {t('🔧 Repair Bench')}
         </h2>
         {!controlled && characters.length > 1 && (
           <select
@@ -376,24 +397,25 @@ export default function RepairBench({
       </div>
 
       <p className="text-sm text-white/60 mb-4">
-        Clique num item — inclusive nos <span className="text-sky-300 font-semibold">equipados ⚡</span> —
-        para ver os detalhes, repará-lo (arma/armadura queima cópias nível 0; acessório consome{' '}
-        {ACCESSORY_REPAIR_DUST_NAME} + gold; <span className="text-amber-300 font-semibold">+{REPAIR_PER_DUPLICATE}</span> por
-        unidade) ou vendê-lo ao ferreiro por metade do preço. Equipamento desgasta a cada abate na
-        masmorra; em 0 quebra e não dá bônus até reparar.
+        {t('Click an item — including')} <span className="text-sky-300 font-semibold">{t('equipped ⚡')}</span>{' '}
+        {t('— to see the details, repair it (weapon/armor burns level-0 copies; accessory consumes')}{' '}
+        {localizeItemName(ACCESSORY_REPAIR_DUST_NAME, locale)} {t('+ gold;')}{' '}
+        <span className="text-amber-300 font-semibold">+{REPAIR_PER_DUPLICATE}</span>{' '}
+        {t('per unit) or sell it to the blacksmith for half price. Gear wears down on every kill in the')}{' '}
+        {t('dungeon; at 0 it breaks and gives no bonus until repaired.')}
       </p>
 
       {loadingInv && inventory.length === 0 ? (
-        <div className="text-white/50 text-sm py-8 text-center">Carregando inventário…</div>
+        <div className="text-white/50 text-sm py-8 text-center">{t('Loading inventory…')}</div>
       ) : equipment.length === 0 ? (
         <div className="text-white/50 text-sm py-8 text-center">
-          🎒 Este personagem não possui equipamentos.
+          {t('🎒 This character has no equipment.')}
         </div>
       ) : (
         <div className="flex-1 min-h-0 overflow-y-auto pr-1 [&::-webkit-scrollbar]:hidden">
           {/* Inventário do personagem (estilo /inventory) */}
           <label className="block text-xs font-semibold text-amber-200/80 mb-2">
-            Inventário do personagem — clique num item para reparar ou vender
+            {t('Character inventory — click an item to repair or sell')}
           </label>
           <div
             className="grid mb-5"
@@ -411,7 +433,7 @@ export default function RepairBench({
                   key={rep.id}
                   type="button"
                   onClick={() => setSelectedInventoryId(rep.id)}
-                  title={`${getDisplayName(rep.item.name, rep.enhancementLevel)}${count > 1 ? ` (x${count})` : ''} — ${rep.durability}/${rep.maxDurability} (${pct}%)`}
+                  title={`${getDisplayName(localizeItemName(rep.item.name, locale), rep.enhancementLevel)}${count > 1 ? ` (x${count})` : ''} — ${rep.durability}/${rep.maxDurability} (${pct}%)`}
                   className="group relative aspect-square overflow-hidden rounded-lg cursor-pointer hover:scale-105 transition-transform"
                   style={{
                     border: `2px solid ${isSelected ? '#fbbf24' : (itemVisual.accent || '#3f7fd6') + '66'}`,
@@ -426,7 +448,7 @@ export default function RepairBench({
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={image}
-                        alt={rep.item.name}
+                        alt={localizeItemName(rep.item.name, locale)}
                         className={`w-full h-full object-cover art-bright group-hover:scale-110 transition-transform ${pct === 0 ? 'grayscale opacity-60' : ''}`}
                         referrerPolicy="no-referrer"
                       />
@@ -449,7 +471,7 @@ export default function RepairBench({
                   {rep.equipped && (
                     <span
                       className="absolute top-0.5 left-1 text-[11px] leading-none"
-                      title="Equipado"
+                      title={t('Equipped')}
                       style={{ filter: 'drop-shadow(0 1px 2px #000)' }}
                     >
                       {pct === 0 ? '💔' : '⚡'}
@@ -480,7 +502,7 @@ export default function RepairBench({
 
           {!selected ? (
             <div className="text-white/50 text-sm py-4 text-center">
-              👆 Selecione um item acima para ver detalhes, reparar ou vender.
+              {t('👆 Select an item above to see details, repair, or sell.')}
             </div>
           ) : (
             <div className="rounded-[3px] border border-black/60 bg-[#19191c] p-4">
@@ -494,7 +516,7 @@ export default function RepairBench({
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={selectedImage}
-                      alt={selected.item.name}
+                      alt={localizeItemName(selected.item.name, locale)}
                       className="w-full h-full object-cover art-bright"
                       referrerPolicy="no-referrer"
                     />
@@ -513,7 +535,7 @@ export default function RepairBench({
 
                 <div className="flex-1 min-w-0">
                   <h3 className="font-black text-lg text-white truncate">
-                    {getDisplayName(selected.item.name, selected.enhancementLevel)}
+                    {getDisplayName(localizeItemName(selected.item.name, locale), selected.enhancementLevel)}
                   </h3>
                   <div className="flex items-center gap-2 mt-1 mb-2 flex-wrap">
                     <span
@@ -524,22 +546,22 @@ export default function RepairBench({
                     </span>
                     {selected.item.level != null && (
                       <span className="text-xs font-semibold bg-amber-500/30 text-amber-300 px-2 py-0.5 rounded-[3px]">
-                        Lv.{selected.item.level}
+                        {t('Lv.')}{selected.item.level}
                       </span>
                     )}
                     {selectedCount > 1 && (
                       <span className="text-xs font-semibold bg-white/10 text-white/80 px-2 py-0.5 rounded-[3px]">
-                        x{selectedCount} no inventário
+                        {t('x{n} in inventory', { n: selectedCount })}
                       </span>
                     )}
                     {selected.equipped && (
                       <span className="text-xs font-semibold bg-sky-500/30 text-sky-300 px-2 py-0.5 rounded-[3px]">
-                        ⚡ Equipado
+                        {t('⚡ Equipped')}
                       </span>
                     )}
                     {selected.durability <= 0 && (
                       <span className="text-xs font-black bg-red-500/30 text-red-300 px-2 py-0.5 rounded-[3px]">
-                        💔 Quebrado — sem bônus
+                        {t('💔 Broken — no bonus')}
                       </span>
                     )}
                   </div>
@@ -561,7 +583,7 @@ export default function RepairBench({
               {/* Barra de durabilidade */}
               <div className="mb-4">
                 <div className="flex justify-between text-xs text-white/60 mb-1">
-                  <span>Durabilidade</span>
+                  <span>{t('Durability')}</span>
                   <span>
                     {selected.durability}/{selected.maxDurability} ({durabilityPct}%)
                   </span>
@@ -584,14 +606,14 @@ export default function RepairBench({
                     disabled={busy}
                     className="flex-1 rounded-[3px] border border-[#3b5a8a] bg-gradient-to-b from-[#25303a] to-[#161c24] px-4 py-2.5 text-sm font-semibold text-sky-200 transition-all hover:brightness-125 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    ⚡ Equipar
+                    {t('⚡ Equip')}
                   </button>
                   <button
                     onClick={() => setEnhanceOpen(true)}
                     disabled={busy}
                     className="flex-1 rounded-[3px] border border-[#8a6d3b] bg-gradient-to-b from-[#3a3325] to-[#241f16] px-4 py-2.5 text-sm font-semibold tracking-wide text-[#e7c682] shadow-[inset_0_1px_0_rgba(231,198,130,0.25)] transition-all hover:border-[#c9a25f] hover:brightness-125 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    ⚒️ Aprimorar
+                    {t('⚒️ Enhance')}
                   </button>
                 </div>
               )}
@@ -619,7 +641,7 @@ export default function RepairBench({
                           <span className="text-3xl">{visual?.emoji ?? '🗡️'}</span>
                         )}
                       </div>
-                      <span className="text-[10px] text-white/50">item</span>
+                      <span className="text-[10px] text-white/50">{t('item')}</span>
                     </div>
 
                     <span className="text-3xl text-amber-400">＋</span>
@@ -636,7 +658,7 @@ export default function RepairBench({
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={itemImagePath(ACCESSORY_REPAIR_DUST_NAME)}
-                            alt={ACCESSORY_REPAIR_DUST_NAME}
+                            alt={localizeItemName(ACCESSORY_REPAIR_DUST_NAME, locale)}
                             className={`w-full h-full object-cover ${repairUnitsAvailable > 0 ? 'art-bright' : 'grayscale'}`}
                             referrerPolicy="no-referrer"
                           />
@@ -644,7 +666,7 @@ export default function RepairBench({
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={itemImagePath('Estilhaço de Memória')}
-                            alt="Estilhaço de Memória"
+                            alt={localizeItemName('Estilhaço de Memória', locale)}
                             className={`w-full h-full object-cover ${repairUnitsAvailable > 0 ? 'art-bright' : 'grayscale'}`}
                             referrerPolicy="no-referrer"
                           />
@@ -652,7 +674,7 @@ export default function RepairBench({
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={selectedImage}
-                            alt={selected.item.name}
+                            alt={localizeItemName(selected.item.name, locale)}
                             className="w-full h-full object-cover grayscale"
                             referrerPolicy="no-referrer"
                           />
@@ -671,25 +693,33 @@ export default function RepairBench({
 
                   {isAccessorySelected && (
                     <p className="text-[11px] text-amber-200/70 mb-2 text-center">
-                      Acessório — reparado com {ACCESSORY_REPAIR_DUST_NAME} (Coleta) + gold, não com cópias.
+                      {t('Accessory — repaired with {mat} (Gathering) + gold, not with copies.', {
+                        mat: localizeItemName(ACCESSORY_REPAIR_DUST_NAME, locale),
+                      })}
                     </p>
                   )}
                   {usesMemoryShard && (
                     <p className="text-[11px] text-amber-200/70 mb-2 text-center">
-                      Peça {itemRarity === 'RARE' ? 'rara' : itemRarity === 'EPIC' ? 'épica' : 'lendária'} — reparada com Estilhaço de Memória (de chefe), não com cópias.
+                      {itemRarity === 'RARE'
+                        ? t('Rare piece — repaired with a Memory Shard (from a boss), not with copies.')
+                        : itemRarity === 'EPIC'
+                        ? t('Epic piece — repaired with a Memory Shard (from a boss), not with copies.')
+                        : t('Legendary piece — repaired with a Memory Shard (from a boss), not with copies.')}
                     </p>
                   )}
 
                   <p className="text-xs text-white/50 mb-3 text-center">
-                    Faltam <span className="text-amber-300">{missing}</span> — precisa de{' '}
-                    <span className="text-amber-300">{repairUnitsNeeded}</span> {repairMatLabel}
-                    {repairUnitsNeeded > 1 ? 's' : ''}, você tem{' '}
+                    {t('Missing')} <span className="text-amber-300">{missing}</span> —{' '}
+                    {t('needs')}{' '}
+                    <span className="text-amber-300">{repairUnitsNeeded}</span>x {repairMatLabel},{' '}
+                    {t('you have')}{' '}
                     <span className={repairUnitsAvailable >= repairUnitsNeeded ? 'text-emerald-300' : 'text-red-300'}>
                       {repairUnitsAvailable}
                     </span>
                     {isAccessorySelected && (
                       <>
-                        {' '}(+<span className="text-amber-300">{repairGoldCostFull}</span> gold pra reparar 100%)
+                        {' '}
+                        {t('(+{cost} gold to fully repair)', { cost: repairGoldCostFull })}
                       </>
                     )}
                     .
@@ -701,14 +731,21 @@ export default function RepairBench({
                       disabled={busy || repairUnitsAvailable < 1}
                       className="flex-1 rounded-[3px] border border-[#8a6d3b] bg-gradient-to-b from-[#3a3325] to-[#241f16] px-4 py-2.5 text-sm font-semibold text-[#e7c682] transition-all hover:brightness-125 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                      🔧 Reparar +{REPAIR_PER_DUPLICATE} (1 {repairMatLabel}{isAccessorySelected ? ` + ${repairGoldCostSingle}🪙` : ''})
+                      {t('🔧 Repair +{amount} (1 {mat}{extra})', {
+                        amount: REPAIR_PER_DUPLICATE,
+                        mat: repairMatLabel,
+                        extra: isAccessorySelected ? ` + ${repairGoldCostSingle}🪙` : '',
+                      })}
                     </button>
                     <button
                       onClick={() => handleRepair('full')}
                       disabled={busy || repairUnitsAvailable < 1}
                       className="flex-1 rounded-[3px] border border-[#c9a25f] bg-gradient-to-b from-[#4a4030] to-[#2c261a] px-4 py-2.5 text-sm font-semibold tracking-wide text-[#e7c682] shadow-[0_0_14px_rgba(201,162,95,0.3)] transition-all hover:brightness-125 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                      ⚒️ Reparar 100% ({Math.min(repairUnitsNeeded, repairUnitsAvailable)} un.{isAccessorySelected ? ` + ${repairGoldCostFull}🪙` : ''})
+                      {t('⚒️ Repair 100% ({units} un.{extra})', {
+                        units: Math.min(repairUnitsNeeded, repairUnitsAvailable),
+                        extra: isAccessorySelected ? ` + ${repairGoldCostFull}🪙` : '',
+                      })}
                     </button>
                   </div>
                 </div>
@@ -719,10 +756,14 @@ export default function RepairBench({
               {!selected.equipped && (
               <div className="flex flex-col gap-2">
                 <span className="text-[11px] text-white/40">
-                  Vender ao ferreiro destrói o item por metade do preço (½ de {selected.item.goldPrice ?? 0} 🪙)
                   {selected.durability < selected.maxDurability
-                    ? `, reduzido pela durabilidade atual (${durabilityPct}%).`
-                    : '.'}
+                    ? t('Selling to the blacksmith destroys the item for half price (½ of {price} 🪙), reduced by its current durability ({pct}%).', {
+                        price: selected.item.goldPrice ?? 0,
+                        pct: durabilityPct,
+                      })
+                    : t('Selling to the blacksmith destroys the item for half price (½ of {price} 🪙).', {
+                        price: selected.item.goldPrice ?? 0,
+                      })}
                 </span>
                 <div className="flex gap-3">
                   <button
@@ -730,7 +771,7 @@ export default function RepairBench({
                     disabled={busy}
                     className="flex-1 rounded-[3px] border border-[#8a3b3b] bg-gradient-to-b from-[#3a2525] to-[#241616] px-4 py-2.5 text-sm font-semibold text-red-300 transition-all hover:brightness-125 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    💰 Vender 1 por {sellUnitPrice} 🪙
+                    {t('💰 Sell 1 for {price} 🪙', { price: sellUnitPrice })}
                   </button>
                   {selectedGroup && selectedCount > 1 && (
                     <button
@@ -738,7 +779,7 @@ export default function RepairBench({
                       disabled={busy}
                       className="flex-1 rounded-[3px] border border-[#8a3b3b] bg-gradient-to-b from-[#3a2525] to-[#241616] px-4 py-2.5 text-sm font-semibold text-red-300 transition-all hover:brightness-125 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                      💰 Vender {selectedCount} por {sellUnitPrice * selectedCount} 🪙
+                      {t('💰 Sell {n} for {total} 🪙', { n: selectedCount, total: sellUnitPrice * selectedCount })}
                     </button>
                   )}
                 </div>

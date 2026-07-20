@@ -19,6 +19,8 @@ import { itemStatEntries, formatStatValue } from '@/lib/itemStats';
 import ItemIcon from './ItemIcon';
 import { resolveImageUrl } from '@/lib/imageUrl';
 import { itemImagePath } from '@/lib/itemCatalog';
+import { useI18n } from '@/lib/i18n/I18nProvider';
+import { localizeItemName } from '@/lib/i18n/catalog';
 
 /** Item enhanceável exibido no seletor do diálogo (inventário do personagem). */
 export interface EnhanceablePickerItem {
@@ -103,6 +105,7 @@ export default function EnhancementDialog({
   repairOverride,
   onChanged,
 }: EnhancementDialogProps) {
+  const { locale, t } = useI18n();
   const [selectedId, setSelectedId] = useState<string>(inventoryId || '');
   const [info, setInfo] = useState<EnhanceInfo | null>(null);
   const [loading, setLoading] = useState(false);
@@ -135,13 +138,13 @@ export default function EnhancementDialog({
         );
         const data = await res.json();
         if (!res.ok) {
-          setError(data.error || 'Erro ao carregar informações');
+          setError(data.error || t('Failed to load information'));
         } else {
           setInfo(data);
         }
       }
     } catch {
-      setError('Erro ao carregar informações de aprimoramento');
+      setError(t('Failed to load enhancement information'));
     }
     setLoading(false);
   }, [characterId, selectedId, fetchInfoOverride]);
@@ -184,7 +187,7 @@ export default function EnhancementDialog({
         const json = await res.json();
         if (!res.ok) {
           await minDelay;
-          setError(json.error || 'Erro ao aprimorar');
+          setError(json.error || t('Failed to enhance'));
           setPhase('idle');
           setAttempting(false);
           return;
@@ -201,7 +204,7 @@ export default function EnhancementDialog({
         fetchInfo();
       }
     } catch {
-      setError('Erro inesperado ao aprimorar');
+      setError(t('Unexpected error while enhancing'));
       setPhase('idle');
     }
     setAttempting(false);
@@ -221,14 +224,14 @@ export default function EnhancementDialog({
         });
         const json = await res.json();
         if (!res.ok) {
-          setError(json.error || 'Erro ao reparar');
+          setError(json.error || t('Failed to repair'));
           return;
         }
       }
       onChanged?.();
       fetchInfo();
     } catch {
-      setError('Erro inesperado ao reparar');
+      setError(t('Unexpected error while repairing'));
     }
   };
 
@@ -325,7 +328,7 @@ export default function EnhancementDialog({
           {/* Barra de título (faixa em bisel, como na referência) */}
           <div className="flex shrink-0 items-center justify-between border-b border-black/70 bg-gradient-to-b from-[#2b2b2f] to-[#1a1a1d] px-4 py-2.5">
             <h2 className="flex items-center gap-2 text-[15px] font-semibold tracking-wide text-[#dcdce0]">
-              <span style={{ color: GOLD }}>⚒</span> Aprimoramento
+              <span style={{ color: GOLD }}>⚒</span> {t('Enhancement')}
             </h2>
             <button
               onClick={onClose}
@@ -339,14 +342,14 @@ export default function EnhancementDialog({
           <div className="overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {loading && (
               <div className="py-12 text-center text-sm text-[#9a9aa0]">
-                Consultando o Espírito Negro...
+                {t('Consulting the Black Spirit...')}
               </div>
             )}
 
             {!loading && !selectedId && (
               <div className="px-6 py-10 text-center text-sm text-[#b8b8be]">
                 <div className="mb-2 text-3xl">⚒</div>
-                Selecione abaixo o item que deseja aprimorar.
+                {t('Select the item you want to enhance below.')}
               </div>
             )}
 
@@ -377,7 +380,7 @@ export default function EnhancementDialog({
                           {materialImg ? (
                             <img
                               src={materialImg}
-                              alt={info.material.name}
+                              alt={localizeItemName(info.material.name, locale)}
                               className={`h-full w-full rounded-[2px] object-cover art-bright ${
                                 info.materialAvailable ? '' : 'opacity-40 grayscale'
                               }`}
@@ -412,8 +415,8 @@ export default function EnhancementDialog({
                         </div>
                         <span className="w-[74px] text-center text-[10px] leading-tight text-[#9a9aa0]">
                           {info.material.kind === 'DUPLICATE'
-                            ? 'Cópia do item'
-                            : info.material.name}
+                            ? t('Item copy')
+                            : localizeItemName(info.material.name, locale)}
                         </span>
                       </div>
                     ) : (
@@ -442,7 +445,7 @@ export default function EnhancementDialog({
                             </div>
                           )}
                           <div className="absolute inset-x-0 top-1/2 translate-y-[10px] text-center text-[10px] uppercase tracking-[0.14em] text-[#77777d]">
-                            chance
+                            {t('chance')}
                           </div>
                           {/* 💫 Cometa de luz que sai da pedra e percorre o circuito até o item */}
                           {phase === 'charging' && (
@@ -528,7 +531,7 @@ export default function EnhancementDialog({
                         {headerImg ? (
                           <img
                             src={headerImg}
-                            alt={info.itemName || ''}
+                            alt={info.itemName ? localizeItemName(info.itemName, locale) : ''}
                             className="absolute left-1/2 top-1/2 h-[142%] w-[142%] max-w-none -translate-x-1/2 -translate-y-1/2 -rotate-45 object-cover art-bright"
                             style={{
                               transition: 'filter 1.2s ease',
@@ -624,12 +627,12 @@ export default function EnhancementDialog({
                   {/* Nome do item + progressão de nível */}
                   <div className="mt-2 text-center">
                     <div className={`text-[15px] font-semibold leading-tight ${nameColor}`}>
-                      {info.itemName || info.displayName}
+                      {localizeItemName(info.itemName || info.displayName, locale)}
                     </div>
                     {!info.maxLevel ? (
                       <div className="mt-1 text-sm font-bold">
                         <span className="text-[#8a8a90]">
-                          {getLevelLabel(info.currentLevel) || 'Base'}
+                          {getLevelLabel(info.currentLevel) || t('Base')}
                         </span>
                         <span className="mx-2" style={{ color: GOLD }}>
                           ❯❯
@@ -638,7 +641,7 @@ export default function EnhancementDialog({
                       </div>
                     ) : (
                       <div className="mt-1 text-sm font-semibold text-orange-400">
-                        🏆 Nível máximo alcançado (V)
+                        {t('🏆 Maximum level reached (V)')}
                       </div>
                     )}
                   </div>
@@ -650,15 +653,16 @@ export default function EnhancementDialog({
                     <div className="space-y-1 px-5 pb-4 text-[12.5px] leading-snug">
                       <p style={{ color: isAccessory ? '#e05252' : WARN }}>{info.risk}</p>
                       <p className="text-[#77777d]">
-                        Consome 1×{' '}
-                        {info.material?.kind === 'DUPLICATE'
-                          ? `cópia de ${info.material.name}`
-                          : info.material?.name}{' '}
-                        por tentativa.
+                        {t('Consumes 1× {material} per attempt.', {
+                          material:
+                            info.material?.kind === 'DUPLICATE'
+                              ? t('copy of {name}', { name: localizeItemName(info.material.name, locale) })
+                              : localizeItemName(info.material?.name ?? '', locale),
+                        })}
                         {!info.materialAvailable && (
                           <span className="font-semibold text-red-400">
                             {' '}
-                            Você não possui o material.
+                            {t('You do not have the material.')}
                           </span>
                         )}
                       </p>
@@ -701,13 +705,13 @@ export default function EnhancementDialog({
                       )}
 
                       <div className="flex items-center justify-between pt-1 text-[13px]">
-                        <span className="text-[#c9c9ce]">Failstacks</span>
+                        <span className="text-[#c9c9ce]">{t('Failstacks')}</span>
                         <span className="font-bold text-purple-300">🔥 {info.failstacks}</span>
                       </div>
                       {addedChance !== null && addedChance > 0 && (
                         <div className="mt-1.5 flex items-center justify-between border-t border-white/5 pt-1.5 text-[13px]">
                           <span className="font-semibold" style={{ color: GOLD_BRIGHT }}>
-                            Chance adicionada
+                            {t('Added chance')}
                           </span>
                           <span className="flex items-center gap-2 font-bold tabular-nums">
                             <span style={{ color: GOLD }}>❯❯❯</span>
@@ -723,7 +727,7 @@ export default function EnhancementDialog({
                     {!isAccessory && durabilityPct !== null && (
                       <div className="px-5 py-3">
                         <div className="mb-1 flex justify-between text-[11px] uppercase tracking-wide text-[#8a8a90]">
-                          <span>Durabilidade</span>
+                          <span>{t('Durability')}</span>
                           <span className="tabular-nums">
                             {info.durability}/{info.maxDurability}
                           </span>
@@ -743,13 +747,13 @@ export default function EnhancementDialog({
                         {!info.enoughDurability && (
                           <div className="mt-2 flex items-center justify-between gap-2">
                             <span className="text-xs text-red-400">
-                              Durabilidade insuficiente para tentar!
+                              {t('Not enough durability to attempt!')}
                             </span>
                             <button
                               onClick={handleRepair}
                               className="rounded-[3px] border border-[#46464c] bg-gradient-to-b from-[#2b2b2f] to-[#1c1c1f] px-3 py-1 text-xs font-semibold text-[#c9c9ce] transition-colors hover:border-[#8a6d3b] hover:text-white"
                             >
-                              🔧 Reparar (1 cópia)
+                              {t('🔧 Repair (1 copy)')}
                             </button>
                           </div>
                         )}
@@ -768,15 +772,15 @@ export default function EnhancementDialog({
                           transition={{ repeat: Infinity, duration: 0.7 }}
                           style={{ color: GOLD_BRIGHT }}
                         >
-                          ⚒ Forjando...
+                          {t('⚒ Forging...')}
                         </motion.span>
                       )}
                       {phase === 'done' && result?.success && (
-                        <span style={{ color: GOLD_BRIGHT }}>✨ SUCESSO!</span>
+                        <span style={{ color: GOLD_BRIGHT }}>{t('✨ SUCCESS!')}</span>
                       )}
                       {phase === 'done' && !result?.success && (
                         <span className={result?.destroyed ? 'text-red-400' : 'text-orange-400'}>
-                          {result?.destroyed ? '💔 DESTRUÍDO!' : '💥 FALHOU!'}
+                          {result?.destroyed ? t('💔 DESTROYED!') : t('💥 FAILED!')}
                         </span>
                       )}
                     </div>
@@ -797,7 +801,7 @@ export default function EnhancementDialog({
                         {result.message}
                         {!result.success && !result.destroyed && (
                           <div className="mt-0.5 text-xs font-normal text-purple-300">
-                            Failstacks acumulados: 🔥 {result.failstacks}
+                            {t('Failstacks accumulated: 🔥 {n}', { n: result.failstacks })}
                           </div>
                         )}
                       </motion.div>
@@ -830,10 +834,10 @@ export default function EnhancementDialog({
                           animate={{ opacity: [1, 0.4, 1] }}
                           transition={{ repeat: Infinity, duration: 0.8 }}
                         >
-                          ⚒ Aprimorando...
+                          {t('⚒ Enhancing...')}
                         </motion.span>
                       ) : (
-                        '⚒ Aprimoramento'
+                        t('⚒ Enhancement')
                       )}
                     </button>
                   </div>
@@ -845,7 +849,7 @@ export default function EnhancementDialog({
                       onClick={onClose}
                       className="w-full rounded-[3px] border border-[#46464c] bg-gradient-to-b from-[#2b2b2f] to-[#1c1c1f] py-2.5 font-semibold text-[#c9c9ce] transition-colors hover:border-[#8a8a90] hover:text-white"
                     >
-                      Fechar
+                      {t('Close')}
                     </button>
                   </div>
                 )}
@@ -867,9 +871,9 @@ export default function EnhancementDialog({
               if (pickable.length === 0) {
                 return filterCategory ? (
                   <div className="border-t border-black/60 bg-[#19191c] px-4 py-4 text-center text-sm text-[#8a8a90]">
-                    Nenhum
-                    {filterCategory === 'WEAPON' ? 'a arma' : 'a armadura'} no inventário para esta
-                    pedra.
+                    {filterCategory === 'WEAPON'
+                      ? t('No weapons in inventory for this stone.')
+                      : t('No armor pieces in inventory for this stone.')}
                   </div>
                 ) : null;
               }
@@ -877,8 +881,10 @@ export default function EnhancementDialog({
                 <div className="border-t border-black/60 bg-[#19191c] px-4 py-3">
                   <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8a8a90]">
                     {filterCategory
-                      ? `Escolha ${filterCategory === 'WEAPON' ? 'a arma' : 'a peça'} para a pedra`
-                      : 'Itens do inventário'}
+                      ? filterCategory === 'WEAPON'
+                        ? t('Choose the weapon for the stone')
+                        : t('Choose the piece for the stone')
+                      : t('Inventory items')}
                   </div>
                   <div className="grid grid-cols-5 gap-2 sm:grid-cols-6">
                     {pickable.map((it) => {
@@ -889,7 +895,7 @@ export default function EnhancementDialog({
                         <button
                           key={it.id}
                           onClick={() => setSelectedId(it.id)}
-                          title={`${it.name}${it.enhancementLevel > 0 ? ` ${getLevelLabel(it.enhancementLevel)}` : ''}`}
+                          title={`${localizeItemName(it.name, locale)}${it.enhancementLevel > 0 ? ` ${getLevelLabel(it.enhancementLevel)}` : ''}`}
                           className={`relative aspect-square overflow-hidden rounded-[3px] border transition-all ${
                             isSel
                               ? 'border-[#c9a25f] shadow-[0_0_10px_rgba(201,162,95,0.4)]'
@@ -902,7 +908,7 @@ export default function EnhancementDialog({
                           {img ? (
                             <img
                               src={img}
-                              alt={it.name}
+                              alt={localizeItemName(it.name, locale)}
                               className="h-full w-full object-cover art-bright"
                               referrerPolicy="no-referrer"
                             />

@@ -15,6 +15,10 @@ import { getItemVisual, getItemTypeLabel, getItemCategory } from '@/lib/itemVisu
 import { formatItemStats } from '@/lib/itemStats';
 import { useGold } from '@/components/providers/GoldProvider';
 import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider';
+import { useI18n } from '@/lib/i18n/I18nProvider';
+import { localizeItemName, localizeItemDesc } from '@/lib/i18n/catalog';
+import { localizeRaceName, localizeClassName } from '@/lib/i18n/gameNames';
+import { getRaceById, getClassById } from '@/lib/gameData';
 
 // Configuração de cada "loja NPC". O ferreiro vende equipamento (armas/armaduras
 // e acessórios) e tem a bancada de reparo; o alquimista vende consumíveis.
@@ -35,20 +39,20 @@ const SHOP_CONFIG: Record<
   }
 > = {
   blacksmith: {
-    title: '⚒️ Ferreiro de Dolrath',
-    subtitle: 'Compre e repare armas, armaduras e equipamentos!',
+    title: '⚒️ Dolrath Blacksmith',
+    subtitle: 'Buy and repair weapons, armor, and equipment!',
     showItem: (type) => getItemCategory(type) !== 'consumable',
     hasRepairBench: true,
     emptyEmoji: '⚒️',
-    emptyLabel: 'A forja está fria',
+    emptyLabel: 'The forge is cold',
   },
   alchemist: {
-    title: '⚗️ Alquimista de Dolrath',
-    subtitle: 'Poções, elixires e consumíveis para sua jornada!',
+    title: '⚗️ Dolrath Alchemist',
+    subtitle: 'Potions, elixirs, and consumables for your journey!',
     showItem: (type) => getItemCategory(type) === 'consumable',
     hasRepairBench: false,
     emptyEmoji: '⚗️',
-    emptyLabel: 'As prateleiras estão vazias',
+    emptyLabel: 'The shelves are empty',
   },
 };
 
@@ -85,6 +89,7 @@ interface PriceFilter {
 
 export default function ShopView({ kind }: { kind: ShopKind }) {
   const config = SHOP_CONFIG[kind];
+  const { locale, t } = useI18n();
   const { data: session } = useSession();
   const { refreshGoldBalance } = useGold();
   // Carteira do PERSONAGEM selecionado (Character.gold) — é ESTE saldo que a loja
@@ -128,7 +133,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
       const nextQty = Math.min(99, (existing?.quantity ?? 0) + add);
       return { ...prev, [item.id]: { item, quantity: nextQty } };
     });
-    toast.success(`🛒 ${add}× ${item.name} no carrinho`);
+    toast.success(t('🛒 {n}× {name} added to cart', { n: add, name: localizeItemName(item.name, locale) }));
   };
 
   const setCartQty = (itemId: string, value: number) =>
@@ -151,7 +156,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
   // servidor-autoritativo no preço). Continua mesmo se uma linha falhar.
   const handleCheckout = async () => {
     if (!selectedCharacter) {
-      toast.error('Selecione um personagem para receber os itens.');
+      toast.error(t('Select a character to receive the items.'));
       return;
     }
     if (cartEntries.length === 0) return;
@@ -178,14 +183,14 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
         const data = await res.json();
         if (!res.ok) {
           failed++;
-          toast.error(`${entry.item.name}: ${data?.error || 'falha na compra'}`);
+          toast.error(t('{name}: {error}', { name: localizeItemName(entry.item.name, locale), error: data?.error || t('purchase failed') }));
           continue;
         }
         purchased++;
         if (typeof data?.characterGold === 'number') lastGold = data.characterGold;
       } catch {
         failed++;
-        toast.error(`${entry.item.name}: erro de conexão`);
+        toast.error(t('{name}: connection error', { name: localizeItemName(entry.item.name, locale) }));
       }
     }
     if (lastGold !== null) setCharacterGold(lastGold);
@@ -195,7 +200,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
     setInventoryRefreshKey((k) => k + 1);
     fetchUserInventory();
     if (purchased > 0) {
-      toast.success(`✅ ${purchased} ${purchased === 1 ? 'item comprado' : 'itens comprados'}!`);
+      toast.success(purchased === 1 ? t('✅ {n} item purchased!', { n: purchased }) : t('✅ {n} items purchased!', { n: purchased }));
       clearCart();
       if (failed === 0) setCartOpen(false);
     }
@@ -223,6 +228,18 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
   const activeRace = activeCharacter?.race;
   const activeClass = (activeCharacter as any)?.class;
   const activeLevel = activeCharacter?.level;
+  // Display localizado de raça/classe (campos do personagem guardam o id interno,
+  // ex. 'draconiano'/'warrior' — igual ao padrão de dashboard/page.tsx).
+  const activeRaceDisplay = useMemo(() => {
+    if (!activeRace) return activeRace;
+    const raceObj = getRaceById(activeRace);
+    return raceObj ? localizeRaceName(activeRace, raceObj.name, locale) : activeRace;
+  }, [activeRace, locale]);
+  const activeClassDisplay = useMemo(() => {
+    if (!activeClass) return activeClass;
+    const classObj = getClassById(activeClass);
+    return classObj ? localizeClassName(activeClass, classObj.name, locale) : activeClass;
+  }, [activeClass, locale]);
   
   // Estados para busca e filtros
   const [searchQuery, setSearchQuery] = useState('');
@@ -378,7 +395,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
 
   const handleTransferToCharacter = async (itemId: string) => {
     if (!selectedCharacter) {
-      toast.error('⚠️ Selecione um personagem primeiro', {
+      toast.error(t('⚠️ Select a character first'), {
         duration: 3000,
       });
       return;
@@ -397,18 +414,18 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
       if (response.ok) {
         // Refresh user inventory
         fetchUserInventory();
-        toast.success('📦 Item transferido para o personagem!', {
+        toast.success(t('📦 Item transferred to the character!'), {
           duration: 3000,
         });
       } else {
         const error = await response.json();
-        toast.error(`❌ Erro na transferência: ${error.error}`, {
+        toast.error(t('❌ Transfer error: {error}', { error: error.error }), {
           duration: 4000,
         });
       }
     } catch (error) {
       console.error('Error transferring item:', error);
-      toast.error('💥 Erro inesperado na transferência', {
+      toast.error(t('💥 Unexpected transfer error'), {
         duration: 4000,
       });
     }
@@ -417,7 +434,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
 
   const handleQuickEquip = async (itemId: string) => {
     if (!selectedCharacter) {
-      toast.error('⚠️ Selecione um personagem primeiro', {
+      toast.error(t('⚠️ Select a character first'), {
         duration: 3000,
       });
       return;
@@ -427,7 +444,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
     try {
       // First transfer to character inventory
       await handleTransferToCharacter(itemId);
-      
+
       // Then equip the item
       const response = await fetch(`/api/character/${selectedCharacter}/equip`, {
         method: 'POST',
@@ -438,18 +455,18 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
       });
 
       if (response.ok) {
-        toast.success('⚡ Item equipado com sucesso!', {
+        toast.success(t('⚡ Item equipped successfully!'), {
           duration: 3000,
         });
       } else {
         const error = await response.json();
-        toast.error(`❌ Erro ao equipar: ${error.error}`, {
+        toast.error(t('❌ Error equipping: {error}', { error: error.error }), {
           duration: 4000,
         });
       }
     } catch (error) {
       console.error('Error equipping item:', error);
-      toast.error('💥 Erro inesperado ao equipar', {
+      toast.error(t('💥 Unexpected error equipping'), {
         duration: 4000,
       });
     }
@@ -465,8 +482,8 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
     return (
       <div className="min-h-[100dvh] bg-background flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-[#ece7da] mb-4">Acesso Restrito</h1>
-          <p className="text-[#8a8a90]">Você precisa estar logado para acessar a loja.</p>
+          <h1 className="text-2xl font-bold text-[#ece7da] mb-4">{t('Restricted Access')}</h1>
+          <p className="text-[#8a8a90]">{t('You need to be logged in to access the shop.')}</p>
         </div>
       </div>
     );
@@ -482,9 +499,9 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
       <div className="relative z-10 container mx-auto p-4 pt-20" style={{ fontFamily: "'Barlow', sans-serif" }}>
         <div className="mb-8">
           <h1 className="text-4xl font-black text-[#ece7da] mb-2" style={{ letterSpacing: '0.5px' }}>
-            {config.title}
+            {t(config.title)}
           </h1>
-          <p className="text-[#8a8a90]">{config.subtitle}</p>
+          <p className="text-[#8a8a90]">{t(config.subtitle)}</p>
         </div>
 
         {/* Bancada de reparo (só o ferreiro) — o craft saiu dos NPCs e virou
@@ -506,7 +523,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[#8a8a90] w-5 h-5" />
             <input
               type="text"
-              placeholder="Buscar itens..."
+              placeholder={t('Search items...')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-3 rounded-[3px] border border-[#3c3c41] bg-[#101013] text-[#ece7da] placeholder:text-[#57575c] outline-none transition-colors focus:border-[#8a6d3b]"
@@ -520,7 +537,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
           {(searchQuery || selectedType !== 'ALL' || priceFilter.min > 0 || priceFilter.max < maxPrice || levelFilter.min > 1 || levelFilter.max < maxLevel) && (
             <div className="mb-4 p-3 rounded-[3px] border border-[#8a6d3b]/60 bg-[#241f16]/80">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-[#e7c682]">🔍 Filtros ativos:</span>
+                <span className="text-sm font-medium text-[#e7c682]">{t('🔍 Active filters:')}</span>
                 <button
                   onClick={() => {
                     setSearchQuery('');
@@ -530,28 +547,28 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                   }}
                   className="text-xs text-[#e7c682] underline hover:text-white"
                 >
-                  Remover todos
+                  {t('Remove all')}
                 </button>
               </div>
               <div className="flex flex-wrap gap-2 mt-2">
                 {searchQuery && (
                   <span className="text-xs rounded-[3px] border border-[#8a6d3b]/50 bg-[#3a3325]/60 px-2 py-1 text-[#e7c682]">
-                    Busca: &quot;{searchQuery}&quot;
+                    {t('Search: "{query}"', { query: searchQuery })}
                   </span>
                 )}
                 {selectedType !== 'ALL' && (
                   <span className="text-xs rounded-[3px] border border-[#8a6d3b]/50 bg-[#3a3325]/60 px-2 py-1 text-[#e7c682]">
-                    Tipo: {selectedType}
+                    {t('Type: {type}', { type: selectedType })}
                   </span>
                 )}
                 {(priceFilter.min > 0 || priceFilter.max < maxPrice) && (
                   <span className="text-xs rounded-[3px] border border-[#8a6d3b]/50 bg-[#3a3325]/60 px-2 py-1 text-[#e7c682]">
-                    Preço: {priceFilter.min}-{priceFilter.max}🪙
+                    {t('Price: {min}-{max}🪙', { min: priceFilter.min, max: priceFilter.max })}
                   </span>
                 )}
                 {(levelFilter.min > 1 || levelFilter.max < maxLevel) && (
                   <span className="text-xs rounded-[3px] border border-[#8a6d3b]/50 bg-[#3a3325]/60 px-2 py-1 text-[#e7c682]">
-                    Level: {levelFilter.min}-{levelFilter.max}
+                    {t('Level: {min}-{max}', { min: levelFilter.min, max: levelFilter.max })}
                   </span>
                 )}
               </div>
@@ -564,22 +581,22 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
               className="flex items-center gap-2 rounded-[3px] border border-[#46464c] bg-gradient-to-b from-[#2b2b2f] to-[#1c1c1f] px-4 py-2 font-semibold text-[#c9c9ce] transition-colors hover:border-[#8a6d3b] hover:text-white"
             >
               <Filter className="w-4 h-4" />
-              Filtros
+              {t('Filters')}
               {showFilters && <X className="w-4 h-4" />}
             </button>
-            
+
             <div className="flex gap-4 items-center">
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
                 className="rounded-[3px] border border-[#3c3c41] bg-[#101013] px-3 py-2 text-[#ece7da] outline-none transition-colors focus:border-[#8a6d3b]"
               >
-                <option value="name">Nome</option>
-                <option value="price">Preço</option>
-                <option value="level">Level</option>
-                <option value="type">Tipo</option>
+                <option value="name">{t('Name')}</option>
+                <option value="price">{t('Price')}</option>
+                <option value="level">{t('Level')}</option>
+                <option value="type">{t('Type')}</option>
               </select>
-              
+
               <button
                 onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
                 className="rounded-[3px] border border-[#46464c] bg-gradient-to-b from-[#2b2b2f] to-[#1c1c1f] px-3 py-2 text-[#c9c9ce] transition-colors hover:border-[#8a6d3b] hover:text-white"
@@ -587,9 +604,9 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                 {sortOrder === 'asc' ? '↑' : '↓'}
               </button>
             </div>
-            
+
             <div className="text-[#8a8a90]">
-              {itemsLoading ? 'Carregando...' : `${filteredItems.length} de ${items.length} itens`}
+              {itemsLoading ? t('Loading...') : t('{shown} of {total} items', { shown: filteredItems.length, total: items.length })}
             </div>
           </div>
 
@@ -599,13 +616,13 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Filtro de Tipo */}
                 <div>
-                  <label className="block text-sm font-medium mb-2 text-[#8a8a90]">Tipo</label>
+                  <label className="block text-sm font-medium mb-2 text-[#8a8a90]">{t('Type')}</label>
                   <select
                     value={selectedType}
                     onChange={(e) => setSelectedType(e.target.value)}
                     className="w-full rounded-[3px] border border-[#3c3c41] bg-[#101013] px-3 py-2 text-[#ece7da] outline-none transition-colors focus:border-[#8a6d3b]"
                   >
-                    <option value="ALL">Todos os tipos</option>
+                    <option value="ALL">{t('All types')}</option>
                     {itemTypes.map(type => (
                       <option key={type} value={type}>{type}</option>
                     ))}
@@ -615,7 +632,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                 {/* Filtro de Preço */}
                 <div>
                   <label className="block text-sm font-medium mb-2 text-[#8a8a90]">
-                    Preço: {priceFilter.min} - {priceFilter.max} 🪙
+                    {t('Price: {min} - {max} 🪙', { min: priceFilter.min, max: priceFilter.max })}
                   </label>
                   <div className="space-y-2">
                     <input
@@ -640,7 +657,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                 {/* Filtro de Level */}
                 <div>
                   <label className="block text-sm font-medium mb-2 text-[#8a8a90]">
-                    Level: {levelFilter.min} - {levelFilter.max}
+                    {t('Level: {min} - {max}', { min: levelFilter.min, max: levelFilter.max })}
                   </label>
                   <div className="space-y-2">
                     <input
@@ -673,7 +690,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                     }}
                     className="w-full rounded-[3px] border border-[#8a3b3b] bg-gradient-to-b from-[#3a2525] to-[#241616] px-4 py-2 font-semibold text-red-300 transition-all hover:brightness-125"
                   >
-                    Limpar Filtros
+                    {t('Clear Filters')}
                   </button>
                 </div>
               </div>
@@ -687,11 +704,11 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
             <div className="flex flex-wrap items-center gap-4">
               <span className="text-sm font-semibold text-[#ece7da] rounded-[3px] border border-[#46464c] bg-[#19191c] px-3 py-2">
                 ⚔️ {activeCharacter.name}
-                <span className="ml-1 text-[#8a8a90] capitalize">({activeClass})</span>
+                <span className="ml-1 text-[#8a8a90] capitalize">({activeClassDisplay})</span>
               </span>
 
               <span className="text-sm font-semibold rounded-[3px] border border-[#8a6d3b] px-3 py-2 text-[#e7c682] tabular-nums" style={{ background: 'linear-gradient(180deg, #3a3325, #241f16)' }}>
-                Carteira: {characterGold === null ? '…' : characterGold} 🪙
+                {t('Wallet: {gold} 🪙', { gold: characterGold === null ? '…' : characterGold })}
               </span>
 
               {/* Toggle de filtro por raça e level */}
@@ -702,18 +719,16 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                   onChange={(e) => setShowAll(e.target.checked)}
                   className="accent-[#c9a25f] w-4 h-4"
                 />
-                Mostrar todos (ignorar raça e level)
+                {t('Show all (ignore race and level)')}
               </label>
             </div>
 
             {/* Indicador do filtro por raça e level ativo */}
             {activeRace && !showAll && (
               <div className="mt-2 inline-flex items-center gap-2 text-xs rounded-[3px] border border-[#8a6d3b]/60 bg-[#241f16]/80 px-3 py-1.5 text-[#e7c682]">
-                🛡️ Mostrando só o que <span className="font-semibold capitalize">{activeRace}</span>
-                {activeLevel != null && (
-                  <> de até <span className="font-semibold">level {activeLevel}</span></>
-                )}{' '}
-                pode comprar
+                {activeLevel != null
+                  ? t('🛡️ Showing only what a {race} up to level {level} can buy', { race: activeRaceDisplay ?? activeRace, level: activeLevel })
+                  : t('🛡️ Showing only what a {race} can buy', { race: activeRaceDisplay ?? activeRace })}
               </div>
             )}
           </div>
@@ -759,7 +774,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                       <div className="w-full aspect-square relative mb-3 rounded-[3px] overflow-hidden bg-black/40 ring-1 ring-black/60">
                         <Image
                           src={resolvedImageUrl}
-                          alt={item.name}
+                          alt={localizeItemName(item.name, locale)}
                           fill
                           className="object-cover art-bright group-hover:scale-105 transition-transform duration-300"
                           unoptimized={Boolean(resolvedImageUrl && !/^https?:\/\//i.test(resolvedImageUrl))}
@@ -767,20 +782,20 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                       </div>
                     )}
 
-                    <h3 className="font-black text-lg mb-2 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">{item.name}</h3>
+                    <h3 className="font-black text-lg mb-2 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">{localizeItemName(item.name, locale)}</h3>
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <span className={`text-xs font-semibold px-2 py-1 rounded-[3px] ${visual.chipBg} ${visual.chipText}`}>
                         {visual.emoji} {getItemTypeLabel(item.type)}
                       </span>
                       {item.level && (
                         <span className="text-xs font-semibold bg-amber-500/30 text-[#e7c682] px-2 py-1 rounded-[3px]">
-                          Lv.{item.level}
+                          {t('Lv.')}{item.level}
                         </span>
                       )}
                     </div>
 
                     {item.description && (
-                      <p className="text-sm text-white/60 mb-3 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">{item.description}</p>
+                      <p className="text-sm text-white/60 mb-3 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">{localizeItemDesc(item.name, item.description, locale)}</p>
                     )}
 
                     {/* Stats do item */}
@@ -801,13 +816,13 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
 
                       {ownedQuantity > 0 && (
                         <div className="text-sm text-[#e7c682]">
-                          ✓ Você possui: {ownedQuantity}
+                          {t('✓ You own: {n}', { n: ownedQuantity })}
                         </div>
                       )}
 
                       {/* Seletor de quantidade */}
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-white/60">Qtd:</span>
+                        <span className="text-xs text-white/60">{t('Qty:')}</span>
                         <div className="flex items-center rounded-[3px] overflow-hidden border border-[#3c3c41]">
                           <button
                             type="button"
@@ -844,7 +859,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                       <button
                         onClick={() => addToCart(item, getQty(item.id))}
                         disabled={loading}
-                        title="Adiciona ao carrinho — feche tudo no checkout"
+                        title={t('Add to cart — finish everything at checkout')}
                         className="w-full px-4 py-2.5 rounded-[3px] border font-semibold tracking-wide text-sm text-[#ece7da] transition-all hover:brightness-125 disabled:opacity-50 disabled:cursor-not-allowed"
                         style={{
                           borderColor: `${visual.accent}aa`,
@@ -852,11 +867,13 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                           boxShadow: `inset 0 1px 0 ${visual.accent}44, 0 0 14px ${visual.accentSoft}`,
                         }}
                       >
-                        🛒 Adicionar{getQty(item.id) > 1 ? ` ${getQty(item.id)}×` : ''} ({item.goldPrice * getQty(item.id)} 🪙)
+                        {getQty(item.id) > 1
+                          ? t('🛒 Add {qty}× ({price}🪙)', { qty: getQty(item.id), price: item.goldPrice * getQty(item.id) })
+                          : t('🛒 Add ({price}🪙)', { price: item.goldPrice * getQty(item.id) })}
                       </button>
                       {cart[item.id] && (
                         <div className="text-xs text-center text-[#e7c682]/90">
-                          No carrinho: {cart[item.id].quantity}
+                          {t('In cart: {n}', { n: cart[item.id].quantity })}
                         </div>
                       )}
 
@@ -871,7 +888,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                             boxShadow: `inset 0 1px 0 ${visual.accent}33, 0 0 10px ${visual.accentSoft}`,
                           }}
                         >
-                          ⚡ Equipar Rápido
+                          {t('⚡ Quick Equip')}
                         </button>
                       )}
                     </div>
@@ -885,8 +902,8 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
         {!itemsLoading && filteredItems.length === 0 && items.length > 0 && (
           <div className="text-center py-12">
             <div className="text-6xl mb-4">🔍</div>
-            <h3 className="text-xl font-semibold text-[#ece7da] mb-2">Nenhum item encontrado</h3>
-            <p className="text-[#8a8a90] mb-4">Tente ajustar seus filtros de busca</p>
+            <h3 className="text-xl font-semibold text-[#ece7da] mb-2">{t('No items found')}</h3>
+            <p className="text-[#8a8a90] mb-4">{t('Try adjusting your search filters')}</p>
             <button
               onClick={() => {
                 setSearchQuery('');
@@ -896,7 +913,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
               }}
               className="rounded-[3px] border border-[#8a6d3b] bg-gradient-to-b from-[#3a3325] to-[#241f16] px-4 py-2 font-semibold text-[#e7c682] transition-all hover:brightness-125"
             >
-              Limpar Filtros
+              {t('Clear Filters')}
             </button>
           </div>
         )}
@@ -904,8 +921,8 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
         {!itemsLoading && items.length === 0 && (
           <div className="text-center py-12">
             <div className="text-6xl mb-4">{config.emptyEmoji}</div>
-            <h3 className="text-xl font-semibold text-[#ece7da] mb-2">{config.emptyLabel}</h3>
-            <p className="text-[#8a8a90]">Não há itens disponíveis no momento</p>
+            <h3 className="text-xl font-semibold text-[#ece7da] mb-2">{t(config.emptyLabel)}</h3>
+            <p className="text-[#8a8a90]">{t('No items available right now')}</p>
           </div>
         )}
       </div>
@@ -952,13 +969,13 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
               <div className="flex items-center justify-between px-4 py-2.5 border-b border-black/70 bg-gradient-to-b from-[#2b2b2f] to-[#1a1a1d]">
                 <h2 className="flex items-center gap-2 text-[15px] font-semibold tracking-wide text-[#dcdce0]">
                   <ShoppingCart className="w-5 h-5 text-[#e7c682]" />
-                  Carrinho
+                  {t('Cart')}
                   <span className="text-sm font-semibold text-[#8a8a90]">({cartCount})</span>
                 </h2>
                 <button
                   onClick={() => !checkingOut && setCartOpen(false)}
                   className="text-[#8a8a90] hover:text-white transition-colors"
-                  aria-label="Fechar"
+                  aria-label={t('Close')}
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -967,7 +984,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
               {/* Lista de itens */}
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
                 {cartEntries.length === 0 ? (
-                  <div className="text-center py-10 text-[#8a8a90]">Seu carrinho está vazio.</div>
+                  <div className="text-center py-10 text-[#8a8a90]">{t('Your cart is empty.')}</div>
                 ) : (
                   cartEntries.map(({ item, quantity }) => {
                     const visual = getItemVisual(item.type);
@@ -980,7 +997,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                           {item.image ? (
                             <Image
                               src={item.image}
-                              alt={item.name}
+                              alt={localizeItemName(item.name, locale)}
                               fill
                               className="object-cover art-bright"
                               unoptimized={Boolean(item.image && !/^https?:\/\//i.test(item.image))}
@@ -991,8 +1008,8 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                         </div>
 
                         <div className="flex-1 min-w-0">
-                          <div className="font-bold text-sm text-white truncate">{item.name}</div>
-                          <div className="text-xs text-[#e7c682]">{item.goldPrice} 🪙 / un.</div>
+                          <div className="font-bold text-sm text-white truncate">{localizeItemName(item.name, locale)}</div>
+                          <div className="text-xs text-[#e7c682]">{t('{price} 🪙 / unit', { price: item.goldPrice })}</div>
                         </div>
 
                         {/* Quantidade */}
@@ -1032,7 +1049,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                           onClick={() => removeFromCart(item.id)}
                           disabled={checkingOut}
                           className="text-[#8a8a90] hover:text-red-400 transition-colors disabled:opacity-40"
-                          aria-label="Remover"
+                          aria-label={t('Remove')}
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -1045,18 +1062,18 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
               {/* Rodapé com total e ações */}
               <div className="px-5 py-4 border-t border-black/60 bg-[#19191c] space-y-3">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-[#8a8a90]">Carteira do personagem</span>
+                  <span className="text-[#8a8a90]">{t('Character wallet')}</span>
                   <span className="font-semibold text-[#e7c682]">
                     {characterGold === null ? '…' : characterGold} 🪙
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="font-black text-[#ece7da]">Total</span>
+                  <span className="font-black text-[#ece7da]">{t('Total')}</span>
                   <span className="text-xl font-black text-[#e7c682]">{cartTotal} 🪙</span>
                 </div>
                 {characterGold !== null && cartTotal > characterGold && (
                   <div className="text-xs text-[#e7c682]/90">
-                    Sem GOLD na mão? Finalize e recarregue on-chain pela carteira.
+                    {t('No GOLD on hand? Finish and top up on-chain via your wallet.')}
                   </div>
                 )}
                 <div className="flex gap-2 pt-1">
@@ -1065,7 +1082,7 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                     disabled={checkingOut || cartEntries.length === 0}
                     className="rounded-[3px] border border-[#8a3b3b] bg-gradient-to-b from-[#3a2525] to-[#241616] px-4 py-2.5 text-sm font-semibold text-red-300 transition-all hover:brightness-125 disabled:opacity-40"
                   >
-                    Limpar
+                    {t('Clear')}
                   </button>
                   <button
                     onClick={handleCheckout}
@@ -1077,10 +1094,10 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
                     className="flex-1 rounded-[3px] border border-[#8a6d3b] bg-gradient-to-b from-[#3a3325] to-[#241f16] px-4 py-2.5 text-sm font-semibold tracking-wide text-[#e7c682] shadow-[inset_0_1px_0_rgba(231,198,130,0.25)] transition-all hover:border-[#c9a25f] hover:brightness-125 disabled:opacity-50"
                   >
                     {checkingOut
-                      ? 'Finalizando…'
+                      ? t('Finishing…')
                       : (characterGold ?? 0) < cartTotal
-                        ? `Comprar GOLD e finalizar (${cartTotal} 🪙)`
-                        : `Finalizar compra (${cartTotal} 🪙)`}
+                        ? t('Buy GOLD and finish ({total}🪙)', { total: cartTotal })
+                        : t('Complete purchase ({total}🪙)', { total: cartTotal })}
                   </button>
                 </div>
               </div>

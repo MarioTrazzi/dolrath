@@ -39,4 +39,11 @@ export const INVENTORY_PT: Record<string, string> = {
   'Global Chest': 'Baú Geral',
   'Chest Slots': 'Slots do Baú',
   'character': 'personagem',
+  'Inventory Slots': 'Slots do Inventário',
+  'Expand +5 slots': 'Expandir +5 slots',
+  'View item documentation': 'Ver documentação de itens',
+  '⬇️ Drop here to transfer': '⬇️ Soltar aqui para transferir',
+  'Search inventory': 'Buscar no inventário',
+  '⚠️ You have more items than slots. Expand your inventory.':
+    '⚠️ Você tem mais itens do que slots. Expanda o inventário.',
 }

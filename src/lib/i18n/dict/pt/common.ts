@@ -10,4 +10,5 @@ export const COMMON_PT: Record<string, string> = {
   'Skip to content': 'Pular para o conteúdo',
   'Documentation': 'Documentação',
   'Last updated:': 'Última atualização:',
+  'No fail': 'Sem falha',
 }

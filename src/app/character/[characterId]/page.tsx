@@ -34,6 +34,7 @@ import { getSlotTypeFromItemType } from '@/lib/equipmentSlot';
 import { useI18n } from '@/lib/i18n/I18nProvider';
 import { localizeItemName } from '@/lib/i18n/catalog';
 import { localizeRaceName, localizeClassName } from '@/lib/i18n/gameNames';
+import { localizeTransformationName } from '@/lib/i18n/combatNames';
 
 import { Item } from '@/types/item';
 
@@ -229,7 +230,7 @@ export default function CharacterDetailsPage() {
   const transformationImagesMap = ((character as any).transformationImages || {}) as Record<string, string>;
   const raceForms = getRaceTransformations(raceObj?.id);
   const appearances: Array<{ key: string; label: string; img: string | null; glow: string }> = [
-    { key: 'base', label: 'Forma Original', img: resolveImageUrl(character.avatar), glow: visual.borderColor },
+    { key: 'base', label: t('Original Form'), img: resolveImageUrl(character.avatar), glow: visual.borderColor },
   ];
   for (const form of raceForms) {
     const rawImg =
@@ -239,7 +240,7 @@ export default function CharacterDetailsPage() {
     if (img) {
       appearances.push({
         key: form,
-        label: TRANSFORMATION_CONFIG[form]?.name || form,
+        label: TRANSFORMATION_CONFIG[form]?.name ? localizeTransformationName(TRANSFORMATION_CONFIG[form]!.name, locale) : form,
         img,
         glow: getTransformationGlow(form).hex,
       });

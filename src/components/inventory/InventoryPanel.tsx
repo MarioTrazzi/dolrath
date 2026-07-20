@@ -7,6 +7,7 @@ import { Box, LayoutGrid, Search, Plus, HelpCircle } from 'lucide-react';
 import { EquipmentSlotType } from '@prisma/client';
 import { Item } from '@/types/item';
 import { CharacterItemGrid, InventoryRow } from '@/components/inventory/CharacterItemGrid';
+import { useT } from '@/lib/i18n/I18nProvider';
 
 // Paleta chumbo + ouro envelhecido — a mesma da EnhancementDialog, para que as
 // janelas de inventário e a dialog de aprimoramento leiam como um só conjunto.
@@ -68,7 +69,7 @@ interface InventoryPanelProps {
  * para que ambos exibam exatamente a mesma UI.
  */
 export default function InventoryPanel({
-  title = 'Inventário',
+  title,
   items,
   totalSlots,
   accent,
@@ -81,10 +82,10 @@ export default function InventoryPanel({
   onSendToGlobal,
   onTransfer,
   onSell,
-  slotLabel = 'Slots do Inventário',
+  slotLabel,
   onExpand,
   expanding = false,
-  expandTitle = 'Expandir +5 slots',
+  expandTitle,
   goldText,
   // auto-fill com piso de 56px: ~5-6 colunas no celular (alvo de toque decente)
   // e 8+ no desktop — antes eram 8 colunas fixas (~38px de slot no mobile).
@@ -93,6 +94,10 @@ export default function InventoryPanel({
   onItemDropped,
   getCompareTo,
 }: InventoryPanelProps) {
+  const t = useT();
+  const resolvedTitle = title ?? t('Inventory');
+  const resolvedSlotLabel = slotLabel ?? t('Inventory Slots');
+  const resolvedExpandTitle = expandTitle ?? t('Expand +5 slots');
   const [search, setSearch] = useState('');
   const overCapacity = items.length > totalSlots;
 
@@ -129,7 +134,7 @@ export default function InventoryPanel({
       {dropActive && (
         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center" style={{ background: 'rgba(34,197,94,0.10)' }}>
           <span className="px-3 py-1.5 rounded-lg text-sm font-bold text-white" style={{ background: 'rgba(22,101,52,0.85)', border: '1px solid #22c55e' }}>
-            ⬇️ Soltar aqui para transferir
+            {t('⬇️ Drop here to transfer')}
           </span>
         </div>
       )}
@@ -137,11 +142,11 @@ export default function InventoryPanel({
       {/* Barra de título */}
       <div className="flex items-center gap-2" style={{ height: 38, padding: '0 12px', background: TITLEBAR_BG, borderBottom: '1px solid rgba(0,0,0,0.7)' }}>
         <Box size={17} style={{ color: GOLD }} />
-        <span style={{ fontSize: 15, fontWeight: 600, color: '#dcdce0', letterSpacing: '0.4px' }}>{title}</span>
+        <span style={{ fontSize: 15, fontWeight: 600, color: '#dcdce0', letterSpacing: '0.4px' }}>{resolvedTitle}</span>
         <div className="flex-1" />
         <Link
           href="/doc#items"
-          title="Ver documentação de itens"
+          title={t('View item documentation')}
           className="transition-colors hover:text-white"
           style={{ color: '#7e8893' }}
         >
@@ -152,7 +157,7 @@ export default function InventoryPanel({
       {/* Abas */}
       <div className="flex items-end" style={{ gap: 26, padding: '8px 16px 0', borderBottom: '1px solid rgba(0,0,0,0.6)' }}>
         <div className="relative" style={{ paddingBottom: 9, fontSize: 14, fontWeight: 600, color: GOLD_BRIGHT }}>
-          {title}
+          {resolvedTitle}
           <div className="absolute" style={{ left: 0, right: 0, bottom: -1, height: 2, background: GOLD }} />
         </div>
       </div>
@@ -163,7 +168,7 @@ export default function InventoryPanel({
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar no inventário"
+            placeholder={t('Search inventory')}
             style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: '#c9c9ce', fontSize: '12.5px' }}
           />
           <Search size={14} style={{ color: '#8a8a90' }} />
@@ -202,14 +207,14 @@ export default function InventoryPanel({
       <div style={{ padding: '4px 16px 0', borderTop: '1px solid rgba(0,0,0,0.6)', background: '#19191c' }}>
         <div className="flex items-center gap-2" style={{ padding: '9px 0' }}>
           <LayoutGrid size={16} style={{ color: '#8a8a90' }} />
-          <span style={{ fontSize: 13, color: '#c9c9ce' }}>{slotLabel}</span>
+          <span style={{ fontSize: 13, color: '#c9c9ce' }}>{resolvedSlotLabel}</span>
           <div className="flex-1" />
           <span className="tabular-nums" style={{ fontSize: '13.5px', color: '#c9c9ce' }}>{items.length} / {totalSlots}</span>
           {onExpand && (
             <button
               onClick={onExpand}
               disabled={expanding}
-              title={expandTitle}
+              title={resolvedExpandTitle}
               className="flex items-center justify-center rounded-[3px] transition-colors hover:border-[#c9a25f] disabled:opacity-50"
               style={{ width: 22, height: 22, background: 'linear-gradient(180deg, #2b2b2f, #1c1c1f)', border: `1px solid ${FRAME}`, cursor: 'pointer' }}
             >
@@ -221,7 +226,7 @@ export default function InventoryPanel({
 
       {overCapacity && (
         <div className="rounded-[3px]" style={{ margin: '8px 16px', padding: 10, background: 'rgba(120,15,15,0.25)', border: '1px solid rgba(153,27,27,0.7)' }}>
-          <p style={{ color: '#fca5a5', fontSize: 12 }}>⚠️ Você tem mais itens do que slots. Expanda o inventário.</p>
+          <p style={{ color: '#fca5a5', fontSize: 12 }}>{t('⚠️ You have more items than slots. Expand your inventory.')}</p>
         </div>
       )}
 

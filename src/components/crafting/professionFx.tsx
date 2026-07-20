@@ -13,6 +13,7 @@
 import { ReactNode, useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { CraftItemThumb as ItemThumb } from '@/components/store/CraftItemThumb';
+import { useT } from '@/lib/i18n/I18nProvider';
 import { GOLD_BRIGHT, type CraftPhase, type SlotVerdict } from './bdoTheme';
 
 // Paletas de accent (sobre o chumbo; o ouro segue nos botões/títulos)
@@ -915,6 +916,7 @@ function GearSvg({
 
 /** Selo industrial do refino garantido (canto de status do triturador). */
 export function NoFailSeal() {
+  const t = useT();
   return (
     <div className="grid place-items-center pt-1">
       <div
@@ -926,7 +928,7 @@ export function NoFailSeal() {
           background: 'rgba(139,151,168,0.08)',
         }}
       >
-        Sem falha
+        {t('No fail')}
       </div>
     </div>
   );

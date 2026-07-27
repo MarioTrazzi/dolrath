@@ -9,14 +9,17 @@ import { DUNGEONS, scaleMonster, scaleMonsterGroup, pickMonster, earlyPoolOf, ro
 
 const DUNGEON = DUNGEONS.floresta
 
+// elfo/rogue é a única combinação com boneco em heroSprites.ts — assim a mock também
+// exercita o sprite da WalkScene. Troque pra uma combinação sem arte (ex.: draconiano/monk)
+// para conferir o fallback do card antigo.
 const CHAR: DungeonCharacter = {
   id: 'dev-char',
-  name: 'Drakmon',
+  name: 'Lyra',
   level: 3,
   experience: 603,
   nextLevelExperience: 1128,
-  race: 'draconiano',
-  class: 'monk',
+  race: 'elfo',
+  class: 'rogue',
   avatar: null,
   hp: 182,
   maxHp: 182,

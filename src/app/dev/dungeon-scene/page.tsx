@@ -14,6 +14,10 @@ import { FLAVOR_LABEL } from '@/lib/dungeonScene/icons'
 import type { MapSpot } from '@/lib/dungeonScene/types'
 import { DUNGEONS, type DungeonId } from '@/lib/dungeonAdventures'
 import { DUNGEON_BATTLE_BG } from '@/lib/walkSceneAssets'
+import { HERO_SPRITES } from '@/lib/heroSprites'
+
+/** Combinações com boneco de caminhada + a opção "sem arte" (cai no procedural). */
+const SPRITE_SLUGS = ['', ...Object.keys(HERO_SPRITES)]
 
 const KIND_LABEL: Record<string, string> = {
   minor: 'Nó menor',
@@ -27,6 +31,8 @@ const DUNGEON_IDS: DungeonId[] = ['floresta', 'caverna', 'pantano', 'ruinas']
 
 export default function DungeonScenePage() {
   const [dungeonId, setDungeonId] = useState<DungeonId>('floresta')
+  const [heroSlug, setHeroSlug] = useState(SPRITE_SLUGS[1] || '')
+  const [heroRace, heroClass] = heroSlug ? heroSlug.split('-') : ['', '']
   const [seed, setSeed] = useState('run-0001')
   const [targetNode, setTargetNode] = useState(1)
   const [visited, setVisited] = useState<number[]>([])
@@ -95,6 +101,8 @@ export default function DungeonScenePage() {
       <DungeonScene
         key={`${dungeonId}:${seed}`}
         map={map}
+        race={heroRace}
+        heroClass={heroClass}
         contents={contents}
         targetNode={targetNode}
         visitedNodes={visited}
@@ -151,6 +159,19 @@ export default function DungeonScenePage() {
             🎲 Novo mapa
           </button>
         </div>
+        {/* Boneco raça×classe — calibrar escala/ciclo aqui antes de congelar
+            em heroSprites.ts. "sem sprite" mostra o fallback procedural. */}
+        <select
+          value={heroSlug}
+          onChange={e => setHeroSlug(e.target.value)}
+          className="px-2 py-1 rounded-lg text-[11px] font-bold bg-black/70 border border-white/20"
+        >
+          {SPRITE_SLUGS.map(slug => (
+            <option key={slug || 'none'} value={slug}>
+              {slug || 'sem sprite'}
+            </option>
+          ))}
+        </select>
         <div className="text-[10px] text-white/40 text-right leading-tight max-w-[150px]">
           Run automática: o herói explora sozinho.
         </div>

@@ -5,10 +5,11 @@
 // então o pipeline é: flood fill de fundo -> mata-halo -> bandas -> frames -> célula fixa.
 //
 // Uso:
+//   npx tsx scripts/slice-hero-sprite-sheet.ts --all            # a pasta inteira
+//   npx tsx scripts/slice-hero-sprite-sheet.ts --all --force
 //   npx tsx scripts/slice-hero-sprite-sheet.ts --race elfo --class rogue --row 2
 //   npx tsx scripts/slice-hero-sprite-sheet.ts --race elfo --class rogue --row 2 --dry-run
-//   npx tsx scripts/slice-hero-sprite-sheet.ts --race elfo --class rogue --row 2 --force
-//   npx tsx scripts/slice-hero-sprite-sheet.ts --in ~/Downloads/folha.png --race elfo --class rogue --row 2
+//   npx tsx scripts/slice-hero-sprite-sheet.ts --in ~/Downloads/folha.png --race elfo --class rogue
 //   npx tsx scripts/slice-hero-sprite-sheet.ts --race elfo --class rogue --row 4 --out-name attack
 //
 // Entrada: sprite-sources/<race>-<class>.png (gitignored — folha crua do Gemini, ~5MB)
@@ -16,9 +17,9 @@
 //          public/sprites/<race>-<class>/meta.json
 //          public/sprites/<race>-<class>/_contact.png      (gitignored — conferência a olho)
 
-import { existsSync, mkdirSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'fs'
 import { homedir } from 'os'
-import { join, resolve } from 'path'
+import { basename, join, resolve } from 'path'
 
 import sharp from 'sharp'
 
@@ -31,6 +32,7 @@ const valOf = (f: string) => {
 
 const DRY = has('--dry-run')
 const FORCE = has('--force')
+const ALL = has('--all')
 const RACE = (valOf('--race') || '').trim().toLowerCase()
 const CLASS = (valOf('--class') || '').trim().toLowerCase()
 const ROW = Number(valOf('--row') || 2)
@@ -49,8 +51,8 @@ const MIN_FRAME_W = 10
 /** Fração da altura da célula que a silhueta ocupa (respiro em cima). */
 const FIT = 0.94
 
-if (!RACE || !CLASS) {
-  console.error('❌ faltou --race e/ou --class (ex.: --race elfo --class rogue)')
+if (!ALL && (!RACE || !CLASS)) {
+  console.error('❌ faltou --race e/ou --class (ex.: --race elfo --class rogue), ou use --all')
   process.exit(1)
 }
 if (!Number.isFinite(ROW) || ROW < 1) {
@@ -62,13 +64,18 @@ if (!Number.isFinite(CELL_W) || !Number.isFinite(CELL_H)) {
   process.exit(1)
 }
 
-const SLUG = `${RACE}-${CLASS}`
 const expandHome = (p: string) => (p.startsWith('~/') ? join(homedir(), p.slice(2)) : p)
-const IN_PATH = resolve(expandHome(valOf('--in') || join('sprite-sources', `${SLUG}.png`)))
-const OUT_DIR = resolve(join('public', 'sprites', SLUG))
-const OUT_STRIP = join(OUT_DIR, `${OUT_NAME}.webp`)
-const OUT_META = join(OUT_DIR, 'meta.json')
-const OUT_CONTACT = join(OUT_DIR, '_contact.png')
+const SOURCE_DIR = resolve('sprite-sources')
+
+/** Ids canônicos (gameData.ts): raças em PT, classes em EN. */
+const RACES = ['humano', 'elfo', 'draconiano', 'metamorfo'] as const
+const CLASSES = ['warrior', 'rogue', 'mage', 'monk'] as const
+
+interface Job {
+  race: string
+  cls: string
+  inPath: string
+}
 
 // ============================================================
 // Buffer RGBA
@@ -305,17 +312,24 @@ function centroidX(raw: Raw, box: Box): number {
 // Main
 // ============================================================
 
-async function main() {
-  console.log(`🧝 slice-hero-sprite-sheet — ${SLUG} linha=${ROW} célula=${CELL_W}x${CELL_H} tol=${TOL} dryRun=${DRY} force=${FORCE}`)
+/** Recorta UMA folha. Devolve a linha do manifesto, ou null se pulou/falhou. */
+async function sliceOne(job: Job): Promise<string | null> {
+  const { race, cls, inPath: IN_PATH } = job
+  const SLUG = `${race}-${cls}`
+  const OUT_DIR = resolve(join('public', 'sprites', SLUG))
+  const OUT_STRIP = join(OUT_DIR, `${OUT_NAME}.webp`)
+  const OUT_META = join(OUT_DIR, 'meta.json')
+  const OUT_CONTACT = join(OUT_DIR, '_contact.png')
+
+  console.log(`\n🧝 ${SLUG} — linha=${ROW} célula=${CELL_W}x${CELL_H} tol=${TOL}`)
 
   if (!existsSync(IN_PATH)) {
-    console.error(`❌ folha não encontrada: ${IN_PATH}`)
-    console.error('   Coloque o PNG do Gemini em sprite-sources/<race>-<class>.png ou passe --in <path>')
-    process.exit(1)
+    console.error(`   ❌ folha não encontrada: ${IN_PATH}`)
+    return null
   }
   if (!FORCE && !DRY && existsSync(OUT_STRIP)) {
-    console.log(`⏭️  ${OUT_STRIP} já existe (use --force pra regerar)`)
-    return
+    console.log(`   ⏭️  já existe (use --force pra regerar)`)
+    return null
   }
 
   const src = sharp(IN_PATH).ensureAlpha()
@@ -333,8 +347,8 @@ async function main() {
   console.log(`   ${bands.length} bandas: ${bands.map(([a, b], i) => `#${i + 1} y=${a}..${b} (h=${b - a})`).join(', ')}`)
 
   if (ROW > bands.length) {
-    console.error(`❌ --row ${ROW} não existe (folha tem ${bands.length} bandas)`)
-    process.exit(1)
+    console.error(`   ❌ --row ${ROW} não existe (folha tem ${bands.length} bandas) — pulando`)
+    return null
   }
 
   const [bandY0, bandY1] = bands[ROW - 1]
@@ -348,8 +362,8 @@ async function main() {
   })
 
   if (!frames.length) {
-    console.error(`❌ nenhum frame encontrado na linha ${ROW}`)
-    process.exit(1)
+    console.error(`   ❌ nenhum frame encontrado na linha ${ROW} — pulando`)
+    return null
   }
   console.log(
     `   linha ${ROW}: ${frames.length} frames -> ` +
@@ -364,8 +378,8 @@ async function main() {
   console.log(`   escala ${scale.toFixed(4)} (maior frame ${maxW}x${maxH})`)
 
   if (DRY) {
-    console.log('🌵 dry-run — nada escrito')
-    return
+    console.log('   🌵 dry-run — nada escrito')
+    return null
   }
 
   // Recorta cada frame do buffer já com fundo transparente, redimensiona
@@ -422,12 +436,12 @@ async function main() {
   }).composite(cells.map((input, i) => ({ input, left: i * CELL_W, top: 0 })))
 
   await strip.clone().webp({ quality: 92, alphaQuality: 100 }).toFile(OUT_STRIP)
-  console.log(`✓ ${OUT_STRIP} (${stripW}x${CELL_H}, ${cells.length} frames)`)
+  console.log(`   ✓ ${OUT_NAME}.webp (${stripW}x${CELL_H}, ${cells.length} frames)`)
 
   const meta = {
     slug: SLUG,
-    race: RACE,
-    class: CLASS,
+    race,
+    class: cls,
     name: OUT_NAME,
     src: `/sprites/${SLUG}/${OUT_NAME}.webp`,
     frameW: CELL_W,
@@ -438,7 +452,6 @@ async function main() {
     generatedAt: new Date().toISOString(),
   }
   writeFileSync(OUT_META, JSON.stringify(meta, null, 2) + '\n')
-  console.log(`✓ ${OUT_META}`)
 
   // Folha de contato: xadrez claro + numeração, pra achar o índice do frame de costas.
   const CONTACT_LABEL_H = 18
@@ -464,14 +477,110 @@ async function main() {
     ])
     .png()
     .toFile(OUT_CONTACT)
-  console.log(`✓ ${OUT_CONTACT} (conferência a olho — gitignored)`)
+  console.log(`   ✓ _contact.png (conferência a olho — gitignored)`)
 
-  console.log(`\n📋 cole em src/lib/heroSprites.ts:`)
-  console.log(
-    `  '${SLUG}': { src: '${meta.src}', frameW: ${CELL_W}, frameH: ${CELL_H}, ` +
-      `walk: [${cells.map((_, i) => i).join(', ')}], fps: 8 },`
+  // Palpite do ciclo: o frame mais ESTREITO da linha costuma ser a pose de
+  // pernas juntas (passagem), e alterná-la com as passadas já lê como caminhada.
+  // A ordem final sai da bancada — isto é só um ponto de partida decente.
+  const widths = frames.map(b => b.x1 - b.x0)
+  const narrowest = widths.indexOf(Math.min(...widths))
+  const strides = cells.map((_, i) => i).filter(i => i !== narrowest)
+  const guess = strides.flatMap(i => [i, narrowest])
+
+  return (
+    `  '${SLUG}': {\n` +
+    `    src: '${meta.src}',\n` +
+    `    frameW: ${CELL_W},\n` +
+    `    frameH: ${CELL_H},\n` +
+    `    frames: ${cells.length},\n` +
+    `    facing: 'right',\n` +
+    `    walk: [${guess.join(', ')}],\n` +
+    `    idle: ${narrowest},\n` +
+    `    fps: 8,\n` +
+    `  },`
   )
-  console.log(`   (ajuste walk/back/fps na bancada /dev/sprite-lab)`)
+}
+
+// ============================================================
+// Main
+// ============================================================
+
+/** Descobre as folhas em sprite-sources/ cujo nome é `<race>-<class>.png`. */
+function discoverJobs(): Job[] {
+  if (!existsSync(SOURCE_DIR)) {
+    console.error(`❌ pasta não encontrada: ${SOURCE_DIR}`)
+    console.error('   Crie-a e jogue as folhas do Gemini como <race>-<class>.png')
+    return []
+  }
+  const jobs: Job[] = []
+  const ignored: string[] = []
+  for (const file of readdirSync(SOURCE_DIR).sort()) {
+    if (!/\.(png|webp|jpg|jpeg)$/i.test(file)) continue
+    const slug = basename(file).replace(/\.[^.]+$/, '').toLowerCase()
+    const [race, cls] = slug.split('-')
+    if (!RACES.includes(race as never) || !CLASSES.includes(cls as never)) {
+      ignored.push(file)
+      continue
+    }
+    jobs.push({ race, cls, inPath: join(SOURCE_DIR, file) })
+  }
+  if (ignored.length) {
+    console.log(`⚠️  ignorados (nome fora do padrão <race>-<class>): ${ignored.join(', ')}`)
+    console.log(`   raças: ${RACES.join(' | ')}   classes: ${CLASSES.join(' | ')}`)
+  }
+  return jobs
+}
+
+async function main() {
+  const jobs: Job[] = ALL
+    ? discoverJobs()
+    : [
+        {
+          race: RACE,
+          cls: CLASS,
+          inPath: resolve(
+            expandHome(valOf('--in') || join('sprite-sources', `${RACE}-${CLASS}.png`))
+          ),
+        },
+      ]
+
+  if (!jobs.length) {
+    console.log('nada a fazer.')
+    return
+  }
+  console.log(`🎬 ${jobs.length} folha(s) — linha ${ROW}, célula ${CELL_W}x${CELL_H}, force=${FORCE}`)
+
+  const snippets: string[] = []
+  let failed = 0
+  for (const job of jobs) {
+    try {
+      const snippet = await sliceOne(job)
+      if (snippet) snippets.push(snippet)
+      else failed++
+    } catch (err) {
+      console.error(`   ❌ ${job.race}-${job.cls} falhou:`, err instanceof Error ? err.message : err)
+      failed++
+    }
+  }
+
+  // Checklist das 16 — o que já tem tira e o que ainda falta.
+  console.log(`\n📊 cobertura das 16 combinações:`)
+  const missing: string[] = []
+  for (const race of RACES) {
+    const cells = CLASSES.map(cls => {
+      const ok = existsSync(resolve(join('public', 'sprites', `${race}-${cls}`, `${OUT_NAME}.webp`)))
+      if (!ok) missing.push(`${race}-${cls}`)
+      return `${ok ? '✅' : '⬜'} ${cls.padEnd(7)}`
+    })
+    console.log(`   ${race.padEnd(11)} ${cells.join(' ')}`)
+  }
+  console.log(`   ${16 - missing.length}/16 prontas${missing.length ? ` — faltam: ${missing.join(', ')}` : ' 🎉'}`)
+
+  if (snippets.length) {
+    console.log(`\n📋 cole em src/lib/heroSprites.ts (ajuste walk/back/fps em /dev/sprite-lab):\n`)
+    console.log(snippets.join('\n'))
+  }
+  if (failed) console.log(`\n⚠️  ${failed} folha(s) puladas ou com erro.`)
 }
 
 main().catch((err) => {

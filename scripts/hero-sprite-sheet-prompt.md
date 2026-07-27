@@ -14,6 +14,8 @@ Raças (ids em PT) × classes (ids em EN), como em `src/lib/gameData.ts`:
 | **draconiano** | | | | |
 | **metamorfo** | | | | |
 
+(`--all` imprime este checklist atualizado a cada rodada.)
+
 Os pares canônicos da Jornada (`journeyData.ts`) são elfo⇄rogue, humano⇄mage,
 draconiano⇄warrior, metamorfo⇄monk — comece por eles, que são os que aparecem na landing.
 
@@ -74,16 +76,19 @@ Se ainda assim vierem frames espelhados, tudo bem: o `heroSprites.ts` guarda `fa
 ## Pipeline
 
 ```bash
-# 1. salve a folha (não vai pro repo — sprite-sources/ é gitignored)
+# 1. salve as folhas como <race>-<class>.png (ver sprite-sources/README.md)
 cp ~/Downloads/Gemini_Generated_Image_xxx.png sprite-sources/humano-mage.png
 
-# 2. recorte
-npx tsx scripts/slice-hero-sprite-sheet.ts --race humano --class mage --row 2
+# 2. recorte a pasta inteira de uma vez
+npx tsx scripts/slice-hero-sprite-sheet.ts --all
 
-# 3. confira public/sprites/humano-mage/_contact.png (qual índice é o de costas?)
+# 3. confira public/sprites/<slug>/_contact.png (qual índice é o de costas?)
 
 # 4. calibre em /dev/sprite-lab e cole o resultado em src/lib/heroSprites.ts
 ```
+
+O `--all` pula o que já foi recortado, não para se uma folha falhar e no fim
+imprime o checklist das 16 combinações + as entradas prontas do manifesto.
 
 Combinação sem entrada em `HERO_SPRITES` continua com o card antigo da `WalkScene` — dá pra
 subir uma de cada vez sem quebrar nada.

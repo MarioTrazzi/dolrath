@@ -71,6 +71,24 @@ export const HERO_SPRITES: Record<string, HeroSpriteDef> = {
     back: [7, 8, 11],
     fps: 4,
   },
+
+  // A linha de caminhada desta folha já traz perfil E costas, então basta a
+  // linha 2 (as transformações urso/lobo/águia estão na 4ª, guardadas pra
+  // depois). [2] é espelho de [3]; [3] e [4] são o mesmo lado em fases
+  // diferentes e viram o ciclo — e olham pra ESQUERDA, ao contrário das outras
+  // duas folhas. [1] e [5] são duas costas distintas (nem iguais nem
+  // espelhadas), então dá ciclo de costas de verdade.
+  'metamorfo-monk': {
+    src: '/sprites/metamorfo-monk/walk.webp',
+    frameW: 128,
+    frameH: 192,
+    frames: 6,
+    facing: 'left',
+    walk: [3, 4],
+    idle: 0,
+    back: [1, 5],
+    fps: 4,
+  },
 }
 
 /** Altura do boneco na tela (px) na cena de caminhada. */

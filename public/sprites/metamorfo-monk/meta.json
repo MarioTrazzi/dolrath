@@ -1,0 +1,15 @@
+{
+  "slug": "metamorfo-monk",
+  "race": "metamorfo",
+  "class": "monk",
+  "name": "walk",
+  "src": "/sprites/metamorfo-monk/walk.webp",
+  "frameW": 128,
+  "frameH": 192,
+  "frames": 6,
+  "rows": [
+    2
+  ],
+  "source": "~/Documents/dolrath/.claude/worktrees/elf-rogue-sprite-variants-cfc0db/sprite-sources/metamorfo-monk.png",
+  "generatedAt": "2026-07-27T22:40:22.443Z"
+}

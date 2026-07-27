@@ -23,10 +23,11 @@ export interface HeroSpriteDef {
   /** Frame parado (sem passo). Default: walk[0]. */
   idle?: number
   /**
-   * Frame de costas (subindo a trilha, andando para o fundo).
-   * Como é um só, a animação alterna o espelho para dar o 2º tempo do passo.
+   * Costas — o herói subindo a trilha, andando para o fundo.
+   * Lista = ciclo de verdade. Um número só = a folha só tinha uma pose de
+   * costas, e aí a animação alterna o espelho pra dar o 2º tempo do passo.
    */
-  back?: number
+  back?: number | number[]
   /** Passos por segundo do ciclo. */
   fps: number
 }
@@ -54,19 +55,20 @@ export const HERO_SPRITES: Record<string, HeroSpriteDef> = {
     fps: 8,
   },
 
-  // Folha do Gemini com rótulos de linha; a de caminhada é a 2ª (o script
-  // descarta o texto). [5] e [4] são espelhos de [1] e [2], e [0]/[3] são o
-  // mesmo frontal espelhado — sobraram 2 passadas + 1 frontal.
-  // Sem frame de COSTAS nesta folha: subindo reto o mago segue de perfil.
-  // fps menor porque o ciclo tem 2 frames (o do ladino tem 4).
+  // Recortado de DUAS linhas da folha (--rows 2,4): perfil na 2, costas na 4.
+  //   [0..5]  linha 2 — [0]/[3] frontal, [1]/[2] passada, [4]/[5] espelhos
+  //   [6..11] linha 4 — costas; [7],[8],[11] são passadas (dois pés separados,
+  //           vão de ~62px) e [6],[9],[10] estão parados (bloco único)
+  // Primeira folha com ciclo de costas de verdade, em vez do espelho alternado.
   'humano-mage': {
     src: '/sprites/humano-mage/walk.webp',
-    frameW: 161,
+    frameW: 156,
     frameH: 192,
-    frames: 6,
+    frames: 12,
     facing: 'right',
     walk: [1, 2],
     idle: 0,
+    back: [7, 8, 11],
     fps: 4,
   },
 }

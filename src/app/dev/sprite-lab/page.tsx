@@ -91,14 +91,21 @@ export default function SpriteLabPage() {
       if (img && d) {
         const cyc = s.cycle.length ? s.cycle : [0]
         const step = Math.floor(tRef.current * s.fps)
-        const frame = s.showBack
-          ? (d.back ?? cyc[0])
+        const backCycle =
+          d.back === undefined ? [] : Array.isArray(d.back) ? d.back : [d.back]
+        const frame = s.showBack && backCycle.length
+          ? backCycle[((step % backCycle.length) + backCycle.length) % backCycle.length]
           : s.playing
             ? cyc[((step % cyc.length) + cyc.length) % cyc.length]
             : (cyc[s.frameIdx % cyc.length] ?? 0)
 
-        // De costas alterna o espelho pra dar o 2º tempo do passo (igual à WalkScene)
-        const mirrored = s.showBack ? (s.playing ? step % 2 !== 0 : false) : s.flip
+        // Espelho alternado só faz sentido quando há UMA pose de costas.
+        const mirrored =
+          s.showBack && backCycle.length === 1
+            ? s.playing && step % 2 !== 0
+            : s.showBack
+              ? false
+              : s.flip
 
         const dh = s.screenH
         const dw = dh * (d.frameW / d.frameH)
@@ -153,7 +160,9 @@ export default function SpriteLabPage() {
       `    facing: '${facing}',\n` +
       `    walk: [${cycle.join(', ')}],\n` +
       (def.idle !== undefined ? `    idle: ${def.idle},\n` : '') +
-      (def.back !== undefined ? `    back: ${def.back},\n` : '') +
+      (def.back !== undefined
+        ? `    back: ${Array.isArray(def.back) ? `[${def.back.join(', ')}]` : def.back},\n`
+        : '') +
       `    fps: ${fps},\n` +
       `  },`
     )
@@ -206,7 +215,7 @@ export default function SpriteLabPage() {
         <div className="flex flex-wrap gap-2">
           {Array.from({ length: def.frames }, (_, i) => {
             const inCycle = cycle.includes(i)
-            const isBack = def.back === i
+            const isBack = Array.isArray(def.back) ? def.back.includes(i) : def.back === i
             const isIdle = def.idle === i
             return (
               <button

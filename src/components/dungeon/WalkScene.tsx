@@ -521,17 +521,31 @@ export default function WalkScene({
         const step = Math.floor(bobRef.current * spriteDef.fps)
         const walking = m !== 'idle'
 
-        // De costas (subindo a trilha) alterna o espelho pra dar o 2º tempo do passo;
-        // de perfil, o ciclo roda e o espelho segue a direção do movimento.
-        const useBack = walking && !movingSideways && spriteDef.back !== undefined
+        // Costas quando sobe reto, perfil quando anda pro lado.
+        const backCycle =
+          spriteDef.back === undefined
+            ? []
+            : Array.isArray(spriteDef.back)
+              ? spriteDef.back
+              : [spriteDef.back]
+        const useBack = walking && !movingSideways && backCycle.length > 0
+        const pick = (list: number[]) => list[((step % list.length) + list.length) % list.length]
+
         const frame = !walking
           ? (spriteDef.idle ?? cycle[0])
           : useBack
-            ? (spriteDef.back as number)
-            : cycle[((step % cycle.length) + cycle.length) % cycle.length]
+            ? pick(backCycle)
+            : pick(cycle)
 
+        // Com uma pose de costas só, o espelho alternado dá o 2º tempo do passo.
+        // Com um ciclo de verdade isso atrapalharia — o boneco ficaria pulando
+        // de lado enquanto anda.
         const flip = useBack
-          ? (step % 2 === 0 ? 1 : -1)
+          ? backCycle.length > 1
+            ? 1
+            : step % 2 === 0
+              ? 1
+              : -1
           : spriteDef.facing === 'right'
             ? facingRef.current
             : -facingRef.current

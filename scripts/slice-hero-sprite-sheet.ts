@@ -35,7 +35,17 @@ const FORCE = has('--force')
 const ALL = has('--all')
 const RACE = (valOf('--race') || '').trim().toLowerCase()
 const CLASS = (valOf('--class') || '').trim().toLowerCase()
-const ROW = Number(valOf('--row') || 2)
+/**
+ * Linhas a juntar numa tira só, em ordem. As folhas variam: às vezes o andar de
+ * costas está na mesma linha do perfil, às vezes numa linha própria lá embaixo.
+ * `--rows 2,4` = perfil da linha 2 + costas da linha 4, com UMA escala comum
+ * (escalas diferentes por linha fariam o boneco mudar de tamanho ao virar).
+ */
+const ROWS = (valOf('--rows') || valOf('--row') || '2')
+  .split(',')
+  .map(s => Number(s.trim()))
+  .filter(n => Number.isFinite(n) && n >= 1)
+const ROW = ROWS[0]
 const OUT_NAME = (valOf('--out-name') || 'walk').trim()
 /** Tolerância euclidiana (RGB) pro flood fill do fundo. */
 const TOL = Number(valOf('--tol') || 26)
@@ -343,7 +353,7 @@ async function sliceOne(job: Job): Promise<string | null> {
   const OUT_META = join(OUT_DIR, 'meta.json')
   const OUT_CONTACT = join(OUT_DIR, '_contact.png')
 
-  console.log(`\n🧝 ${SLUG} — linha=${ROW} célula=${CELL_W}x${CELL_H} tol=${TOL}`)
+  console.log(`\n🧝 ${SLUG} — linhas=${ROWS.join(",")} célula=${CELL_W}x${CELL_H} tol=${TOL}`)
 
   if (!existsSync(IN_PATH)) {
     console.error(`   ❌ folha não encontrada: ${IN_PATH}`)
@@ -375,29 +385,42 @@ async function sliceOne(job: Job): Promise<string | null> {
       bands.map(([a, b], i) => `#${i + 1} h=${b - a}`).join(', ')
   )
 
-  if (ROW > bands.length) {
-    console.error(`   ❌ --row ${ROW} não existe (folha tem ${bands.length} bandas) — pulando`)
+  const missingRow = ROWS.find(r => r > bands.length)
+  if (missingRow !== undefined) {
+    console.error(`   ❌ linha ${missingRow} não existe (folha tem ${bands.length}) — pulando`)
     return null
   }
 
-  const [bandY0, bandY1] = bands[ROW - 1]
-  const allFrames = findFrames(raw, bandY0, bandY1)
-  const frames = allFrames.filter((box) => {
-    if (isFlatBlob(raw, box)) {
-      console.log(`   ⚠️  descartado blob chapado em x=${box.x0}..${box.x1}`)
-      return false
-    }
-    return true
-  })
+  // Junta as linhas pedidas numa lista só, guardando onde cada uma começa —
+  // é esse offset que vira o índice de `back` no manifesto.
+  const frames: Box[] = []
+  const rowStarts: Array<{ row: number; start: number; count: number }> = []
+  for (const row of ROWS) {
+    const [bandY0, bandY1] = bands[row - 1]
+    const rowFrames = findFrames(raw, bandY0, bandY1).filter((box) => {
+      if (isFlatBlob(raw, box)) {
+        console.log(`   ⚠️  descartado blob chapado em x=${box.x0}..${box.x1}`)
+        return false
+      }
+      return true
+    })
+    rowStarts.push({ row, start: frames.length, count: rowFrames.length })
+    frames.push(...rowFrames)
+  }
 
   if (!frames.length) {
-    console.error(`   ❌ nenhum frame encontrado na linha ${ROW} — pulando`)
+    console.error(`   ❌ nenhum frame encontrado em ${ROWS.join(',')} — pulando`)
     return null
   }
-  console.log(
-    `   linha ${ROW}: ${frames.length} frames -> ` +
-      frames.map((b, i) => `[${i}] ${b.x1 - b.x0}x${b.y1 - b.y0}`).join(' ')
-  )
+  for (const r of rowStarts) {
+    console.log(
+      `   linha ${r.row}: ${r.count} frames -> índices [${r.start}..${r.start + r.count - 1}] ` +
+        frames
+          .slice(r.start, r.start + r.count)
+          .map((b, i) => `[${r.start + i}] ${b.x1 - b.x0}x${b.y1 - b.y0}`)
+          .join(' ')
+    )
+  }
 
   // Escala única pra todos os frames: o mais alto da linha define o encaixe.
   // (Escala por frame faria o boneco crescer/encolher durante o ciclo.)
@@ -485,7 +508,7 @@ async function sliceOne(job: Job): Promise<string | null> {
     frameW: cellW,
     frameH: CELL_H,
     frames: cells.length,
-    row: ROW,
+    rows: ROWS,
     source: IN_PATH.replace(homedir(), '~'),
     generatedAt: new Date().toISOString(),
   }
@@ -586,7 +609,7 @@ async function main() {
     console.log('nada a fazer.')
     return
   }
-  console.log(`🎬 ${jobs.length} folha(s) — linha ${ROW}, célula ${CELL_W}x${CELL_H}, force=${FORCE}`)
+  console.log(`🎬 ${jobs.length} folha(s) — linhas ${ROWS.join(",")}, célula ${CELL_W}x${CELL_H}, force=${FORCE}`)
 
   const snippets: string[] = []
   let failed = 0

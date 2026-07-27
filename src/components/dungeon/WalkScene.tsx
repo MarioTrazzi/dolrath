@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef } from 'react'
 import type { DungeonId } from '@/lib/dungeonAdventures'
-import { getHeroSprite, HERO_SPRITE_SCREEN_H, type HeroSpriteDef } from '@/lib/heroSprites'
+import { resolveHeroSprite, HERO_SPRITE_SCREEN_H, type HeroSpriteDef } from '@/lib/heroSprites'
 import { WALK_FULL_STRIP, WALK_HERO_SPRITE, FLORESTA_WALK_FALLBACK } from '@/lib/walkSceneAssets'
 
 // ============================================================
@@ -222,7 +222,7 @@ export default function WalkScene({
       if (!cancelled) heroImgRef.current = hero
 
       // Boneco raça×classe: substitui o card quando a combinação tem arte.
-      const def = getHeroSprite(race, heroClass)
+      const def = resolveHeroSprite(race, heroClass)
       const strip = def ? await loadImage(def.src) : null
       if (!cancelled) {
         spriteDefRef.current = strip ? def : null

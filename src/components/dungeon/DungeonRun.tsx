@@ -33,6 +33,7 @@ import {
   DungeonDef,
   DungeonEventDef,
   DungeonEventKind,
+  type DungeonId,
   NodeScaling,
   NodeLoot,
   LootDrop,
@@ -553,6 +554,51 @@ function defenseVerb(blocked?: boolean): string {
   return Math.random() < 0.3 ? 'defendeu' : 'esquivou'
 }
 
+/**
+ * 📱 Moldura da run — a masmorra é MOBILE-FIRST em qualquer tela.
+ *
+ * No celular a moldura ocupa tudo e nada muda. Na tela grande, em vez de
+ * esticar na largura (o que arruinava o enquadramento da cena, cujo zoom sai
+ * da LARGURA: ppu = clamp(w/26, ...)), ela roda em retrato 9:16 centralizado e
+ * a arte da masmorra — a MESMA imagem do card em /dungeons — preenche a sobra,
+ * desfocada e escurecida de propósito: é ambiente, não conteúdo.
+ *
+ * Conta do tamanho: com aspect-ratio 9/16 + altura definida + max-width 100%,
+ * a largura usada é min(altura × 0.5625, largura do pai). Num 390×844 dá
+ * 475 > 390 → 390×844, tela cheia sem tarja. Num 1440×900 dá 506×900.
+ *
+ * Aqui é `h-full` (não o `100dvh` da bancada /dev): dentro de um `fixed
+ * inset-0` é por definição a mesma caixa, sem o descompasso de 1-3px que o
+ * 100dvh do Safari iOS produz enquanto a barra de endereço anima.
+ */
+function RunFrame({
+  dungeonId,
+  frameRef,
+  children,
+}: {
+  dungeonId: DungeonId
+  frameRef?: React.Ref<HTMLDivElement>
+  children: React.ReactNode
+}) {
+  return (
+    <div className="fixed inset-0 z-50 overflow-hidden overscroll-none touch-pan-y bg-black flex items-center justify-center">
+      <div
+        aria-hidden
+        className="absolute inset-0 bg-cover bg-center scale-110 blur-lg opacity-45"
+        style={{ backgroundImage: `url(${DUNGEON_BATTLE_BG[dungeonId]})` }}
+      />
+      <div aria-hidden className="absolute inset-0 bg-black/55" />
+      <div
+        ref={frameRef}
+        className="relative h-full overflow-hidden bg-black shadow-2xl ring-1 ring-white/10 sm:rounded-2xl"
+        style={{ aspectRatio: '9 / 16', maxWidth: '100%' }}
+      >
+        {children}
+      </div>
+    </div>
+  )
+}
+
 export default function DungeonRun({ 
   dungeon, 
   character, 
@@ -801,6 +847,23 @@ export default function DungeonRun({
   const serverMonsterRef = useRef<ScaledMonster | null>(null)
   const serverPackRef = useRef<ScaledMonster[] | null>(null)
   const startedRef = useRef(false)
+
+  // ---------- Largura da MOLDURA (não da viewport) ----------
+  // Dentro do RunFrame o `sm:` do Tailwind mente: numa tela de 1440px ele está
+  // ativo, mas a moldura tem ~506px. Sem container queries no projeto
+  // (tailwind.config.js: plugins: []), medimos a moldura e decidimos em JS.
+  const frameRef = useRef<HTMLDivElement>(null)
+  const [frameW, setFrameW] = useState(0)
+  useEffect(() => {
+    const el = frameRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => setFrameW(el.clientWidth))
+    ro.observe(el)
+    setFrameW(el.clientWidth)
+    return () => ro.disconnect()
+  }, [blocked])
+  /** Moldura larga o bastante para o HUD de desktop (coluna de barras no header). */
+  const wideFrame = frameW >= 560
 
   // ---------- Transformação (local, por combate) ----------
   const transformForms = useMemo(() => getRaceTransformations(character.race), [character.race])
@@ -2715,6 +2778,50 @@ export default function DungeonRun({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auto, autoConsumables, exitConfirm, phase, moving, walkBusy, exploreRolling, lootCard, eventCard, atBoss, tokenIdx, runReady, stamina, hp, mp, consumables])
 
+  /**
+   * 🚶 Cena explorável: a CAMINHADA é sempre automática.
+   *
+   * É a premissa de design da cena (ver o cabeçalho de DungeonScene): sem
+   * controle manual não dá para contornar nós e correr até o chefe, e o cursor
+   * do servidor nunca sai de sincronia. Só que o passo continuava preso no
+   * botão — o herói ficava perambulando na entrada esperando um clique.
+   *
+   * Efeito SEPARADO do piloto ⚡ de propósito: o ⚡ também luta, bebe poção,
+   * coleta e refaz a run. Este aqui só ANDA — combate, achado e chefe seguem
+   * sendo decisão do jogador. Enquanto o ⚡ estiver ligado este fica calado,
+   * senão os dois disparariam advance() em paralelo.
+   */
+  const autoWalkWarnedRef = useRef(false)
+
+  useEffect(() => {
+    if (!useScene) return
+    if (auto) return // o ⚡ já cobre o passo
+    // `blocked` só vira tela de bloqueio LÁ EMBAIXO, depois de todos os hooks:
+    // sem esta guarda uma run travada em outra aba seguiria pisando o /step.
+    if (blocked || exitConfirm || showItems) return
+    if (phase !== 'explore') return
+    if (walkBusy || exploreRolling) return // walkBusy já inclui `moving`
+    if (eventCard || lootCard) return // card aberto = vez do jogador
+    if (atBoss) return // o chefe é decisão do jogador
+    if (!runReady || !runIdRef.current) return
+
+    if (stamina < stepCost(tokenIdx + 1)) {
+      // Parada segura, e o aviso sai UMA vez (o efeito re-roda a cada dep).
+      if (!autoWalkWarnedRef.current) {
+        autoWalkWarnedRef.current = true
+        showBanner('😮‍💨', 'Stamina insuficiente para o próximo passo — ela volta +2 a cada 15 min ocioso.', 4000)
+      }
+      return
+    }
+    autoWalkWarnedRef.current = false
+
+    // Primeiro passo mais lento: dá tempo de ler a narração de entrada.
+    const t = setTimeout(() => { advance() }, tokenIdx === 0 ? 1500 : 700)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useScene, auto, blocked, exitConfirm, showItems, phase, walkBusy, exploreRolling,
+      eventCard, lootCard, atBoss, runReady, stamina, tokenIdx])
+
   // ============================================================
   // RENDER
   // ============================================================
@@ -2722,7 +2829,7 @@ export default function DungeonRun({
   const ResourceBar = ({ icon, value, max, gradient }: { icon: string; value: number; max: number; gradient: string }) => (
     <div className="flex items-center gap-1.5">
       <span className="text-xs">{icon}</span>
-      <div className="w-16 sm:w-32 h-2.5 bg-black/60 rounded-full overflow-hidden border border-white/10">
+      <div className="w-16 h-2.5 bg-black/60 rounded-full overflow-hidden border border-white/10">
         <motion.div
           className={`h-full rounded-full bg-gradient-to-r ${gradient}`}
           initial={false}
@@ -2730,42 +2837,44 @@ export default function DungeonRun({
           transition={{ type: 'spring', stiffness: 120, damping: 20 }}
         />
       </div>
-      <span className="text-[10px] text-white/80 font-mono w-11 sm:w-14">{value}/{max}</span>
+      <span className="text-[10px] text-white/80 font-mono w-11">{value}/{max}</span>
     </div>
   )
 
   // 🔒 Herói em uso em outra aba: tela de bloqueio (anti-duplicata de run).
   if (blocked) {
     return (
-      <div className="fixed inset-0 z-50 overflow-hidden bg-black grid place-items-center px-6">
-        <div className="absolute inset-0 opacity-40"><DungeonBackdrop theme={dungeon.id} /></div>
-        <div
-          className="relative w-full max-w-sm rounded-2xl p-6 text-center"
-          style={{
-            background: 'linear-gradient(180deg, rgba(30,30,63,0.96), rgba(15,15,35,0.98))',
-            border: `1px solid ${dungeon.accentSoft}`,
-            boxShadow: `0 24px 60px -12px ${dungeon.accentSoft}`,
-          }}
-        >
-          <div className="text-5xl mb-3">🔒</div>
-          <h3 className="text-xl font-black text-white mb-2">Herói em uso</h3>
-          <p className="text-sm text-textsec leading-snug mb-5">{blocked}</p>
-          <button
-            onClick={() => onExit({ hp: effMaxHp, mp: character.maxMp, stamina })}
-            className="w-full py-3 rounded-lg font-black text-white text-sm transition-transform active:scale-[0.98] hover:scale-[1.02]"
-            style={{ background: `linear-gradient(90deg, ${dungeon.accent}, ${dungeon.accentSoft})` }}
+      <RunFrame dungeonId={dungeon.id} frameRef={frameRef}>
+        <div className="absolute inset-0 grid place-items-center px-6">
+          <div className="absolute inset-0 opacity-40"><DungeonBackdrop theme={dungeon.id} /></div>
+          <div
+            className="relative w-full max-w-sm rounded-2xl p-6 text-center"
+            style={{
+              background: 'linear-gradient(180deg, rgba(30,30,63,0.96), rgba(15,15,35,0.98))',
+              border: `1px solid ${dungeon.accentSoft}`,
+              boxShadow: `0 24px 60px -12px ${dungeon.accentSoft}`,
+            }}
           >
-            Voltar
-          </button>
+            <div className="text-5xl mb-3">🔒</div>
+            <h3 className="text-xl font-black text-white mb-2">Herói em uso</h3>
+            <p className="text-sm text-textsec leading-snug mb-5">{blocked}</p>
+            <button
+              onClick={() => onExit({ hp: effMaxHp, mp: character.maxMp, stamina })}
+              className="w-full py-3 rounded-lg font-black text-white text-sm transition-transform active:scale-[0.98] hover:scale-[1.02]"
+              style={{ background: `linear-gradient(90deg, ${dungeon.accent}, ${dungeon.accentSoft})` }}
+            >
+              Voltar
+            </button>
+          </div>
         </div>
-      </div>
+      </RunFrame>
     )
   }
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden overscroll-none touch-pan-y bg-black">
-      {/* Cenário temático — full-screen. Em combate Floresta: battle BG cinematográfico.
-          Na exploração com WalkScene o mapa é a própria cena. */}
+    <RunFrame dungeonId={dungeon.id} frameRef={frameRef}>
+      {/* Cenário temático — preenche a MOLDURA. Em combate Floresta: battle BG
+          cinematográfico. Na exploração com WalkScene o mapa é a própria cena. */}
       <div className="absolute inset-0">
         <DungeonBackdrop
           theme={dungeon.id}
@@ -2861,9 +2970,10 @@ export default function DungeonRun({
             </div>
           </div>
 
-          {/* Stats do topo: só na trilha. Em combate a arena já mostra o HP dos lutadores. */}
-          {phase !== 'combat' && (
-            <div className="hidden sm:flex flex-col gap-0.5">
+          {/* Stats do topo: só na trilha, e só se a MOLDURA for larga (não a tela —
+              ver wideFrame). Em combate a arena já mostra o HP dos lutadores. */}
+          {phase !== 'combat' && wideFrame && (
+            <div className="flex flex-col gap-0.5">
               <ResourceBar icon="❤️" value={hp} max={effMaxHp} gradient="from-red-600 to-rose-400" />
               <ResourceBar icon="🔮" value={mp} max={character.maxMp} gradient="from-blue-600 to-cyan-400" />
               <ResourceBar icon="⚡" value={stamina} max={character.maxStamina} gradient="from-yellow-600 to-amber-300" />
@@ -2894,9 +3004,9 @@ export default function DungeonRun({
           </div>
         </div>
 
-        {/* Barras de recurso no mobile — só na trilha; em combate a arena mostra o HP. */}
-        {phase !== 'combat' && (
-          <div className="sm:hidden flex-shrink-0 flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 px-3 py-1.5 bg-black/40 border-b border-white/10 relative z-20">
+        {/* Barras de recurso na moldura estreita — só na trilha; em combate a arena mostra o HP. */}
+        {phase !== 'combat' && !wideFrame && (
+          <div className="flex-shrink-0 flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 px-3 py-1.5 bg-black/40 border-b border-white/10 relative z-20">
             <ResourceBar icon="❤️" value={hp} max={character.maxHp} gradient="from-red-600 to-rose-400" />
             <ResourceBar icon="🔮" value={mp} max={character.maxMp} gradient="from-blue-600 to-cyan-400" />
             <ResourceBar icon="⚡" value={stamina} max={character.maxStamina} gradient="from-yellow-600 to-amber-300" />
@@ -2921,6 +3031,8 @@ export default function DungeonRun({
             <DungeonScene
               map={sceneMap}
               heroSprite={character.avatar}
+              race={character.race}
+              heroClass={character.class}
               contents={sceneContents}
               targetNode={sceneTarget}
               visitedNodes={sceneVisited}
@@ -3518,7 +3630,10 @@ export default function DungeonRun({
                           ? () => startCombat(serverPackRef.current ?? serverMonsterRef.current ?? scaleMonster(dungeon.boss, dungeon, charLevel, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass, tier))
                           : advance
                       }
-                      disabled={exploreRolling || walkBusy || !!eventCard || !!lootCard}
+                      disabled={
+                        exploreRolling || walkBusy || !!eventCard || !!lootCard ||
+                        (useScene && !atBoss && stamina < stepCost(tokenIdx + 1))
+                      }
                       className="flex-1 h-11 rounded-xl font-black text-sm sm:text-base text-white inline-flex items-center justify-center gap-2 transition-all active:scale-[0.98] hover:scale-[1.01] disabled:opacity-50 disabled:cursor-wait disabled:hover:scale-100"
                       style={{
                         background: atBoss
@@ -3529,19 +3644,27 @@ export default function DungeonRun({
                         boxShadow: atBoss ? '0 0 26px rgba(233,69,96,0.5)' : nextMainNode ? '0 0 26px rgba(243,156,18,0.45)' : `0 0 26px ${dungeon.accentSoft}`,
                       }}
                     >
+                      {/* Na cena a caminhada é automática: o botão vira "adiantar
+                          o passo" em vez de ser o único jeito de andar. */}
                       {exploreRolling || walkBusy
-                        ? walkMode === 'scroll'
-                          ? '🌲 Vasculhando...'
-                          : walkMode === 'approach'
-                            ? '👀 Aproximando...'
-                            : '...'
+                        ? useScene
+                          ? '🚶 Explorando...'
+                          : walkMode === 'scroll'
+                            ? '🌲 Vasculhando...'
+                            : walkMode === 'approach'
+                              ? '👀 Aproximando...'
+                              : '...'
                         : atBoss
                           ? '⚔️ Enfrentar o Chefe'
-                          : nextIsBoss
-                            ? '👑 Aproximar-se do covil'
-                            : nextMainNode
-                              ? `⚔️ Sala ${trailPoints[tokenIdx + 1]?.tier}`
-                              : '🎲 Seguir a trilha'}
+                          : useScene && stamina < stepCost(tokenIdx + 1)
+                            ? '😮‍💨 Sem stamina'
+                            : nextIsBoss
+                              ? '👑 Aproximar-se do covil'
+                              : nextMainNode
+                                ? `⚔️ Sala ${trailPoints[tokenIdx + 1]?.tier}`
+                                : useScene
+                                  ? '⏩ Avançar agora'
+                                  : '🎲 Seguir a trilha'}
                     </button>
                   </div>
                 </div>
@@ -3931,6 +4054,6 @@ export default function DungeonRun({
         )}
         </div>
       </motion.div>
-    </div>
+    </RunFrame>
   )
 }

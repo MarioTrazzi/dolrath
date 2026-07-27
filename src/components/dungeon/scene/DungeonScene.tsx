@@ -17,6 +17,7 @@ import type { MapSpot, SceneMapDef, SceneProp, Vec2 } from '@/lib/dungeonScene/t
 import { clamp, clampToWalkable, dist, lerp, sceneProps, pathToSpot } from '@/lib/dungeonScene/geometry'
 import type { NodeFlavor, SpotContent } from '@/lib/dungeonScene/nodeContents'
 import { drawNodeIcon, nodeIconColor } from '@/lib/dungeonScene/icons'
+import { resolveHeroSprite, type HeroSpriteDef } from '@/lib/heroSprites'
 import {
   monsterFacing,
   monsterPos,
@@ -26,8 +27,15 @@ import {
 
 export interface DungeonSceneProps {
   map: SceneMapDef
-  /** Retrato do herói (NFT). Sem ele, desenha um boneco procedural. */
+  /**
+   * Retrato do herói (NFT). É o 2º elo da cadeia: quando a combinação
+   * raça×classe tem boneco de caminhada, ele ganha. Sem nenhum dos dois,
+   * desenha um boneco procedural.
+   */
   heroSprite?: string | null
+  /** Raça e classe do herói — escolhem o boneco de caminhada (heroSprites.ts). */
+  race?: string | null
+  heroClass?: string | null
   /** O que há em cada nó (planNodeContents). Sem isto, o nó vira só um "?". */
   contents?: Map<number, SpotContent>
   /** Nó que o herói procura agora. */
@@ -42,6 +50,24 @@ export interface DungeonSceneProps {
 
 const WALK_SPEED = 6.2 // unidades/s
 const ARRIVE_EPS = 0.55
+
+/**
+ * Altura do FRAME do boneco em unidades de MUNDO (não px como na WalkScene, que
+ * não tem zoom). Aqui a unidade lê como ~1 metro: árvore adulta 6.5, arbusto 1.3.
+ */
+const HERO_WORLD_H = 2.1
+/** |dirX| acima disto = passo lateral → frame de perfil. */
+const HERO_SIDE_DX = 0.45
+/** dirY abaixo disto = subindo a trilha (para o fundo) → frame de costas. */
+const HERO_BACK_DY = -0.45
+/** u/s abaixo disto o herói está perambulando no bolsão, não caminhando. */
+const HERO_IDLE_SPEED = 3.0
+/**
+ * |dirX| mínimo para VIRAR o boneco. Tem que ficar acima da amplitude da
+ * perambulação (0.25), senão o herói fica trocando de lado várias vezes por
+ * segundo parado esperando o próximo passo.
+ */
+const TURN_DX = 0.35
 /** Achatamento vertical — dá o ar de 3/4 sem sair do top-down. */
 const Y_SQUASH = 0.82
 const CAM_FOLLOW = 5.5
@@ -129,6 +155,8 @@ function mixHex(a: string, b: string, t: number) {
 export default function DungeonScene({
   map,
   heroSprite = null,
+  race = null,
+  heroClass = null,
   contents,
   targetNode,
   visitedNodes,
@@ -139,6 +167,12 @@ export default function DungeonScene({
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const heroImgRef = useRef<HTMLImageElement | null>(null)
+  const spriteDefRef = useRef<HeroSpriteDef | null>(null)
+  const spriteImgRef = useRef<HTMLImageElement | null>(null)
+  /** Relógio do ciclo de passos — só corre andando (senão o ciclo congela torto). */
+  const spriteClockRef = useRef(0)
+  const moveSpeedRef = useRef(0)
+  const moveDirRef = useRef<Vec2>({ x: 0, y: 0 })
   const spritesRef = useRef(new Map<string, Sprite | null>())
   /** Altura em px da MAIOR variante de cada tipo — base da escala relativa. */
   const kindScaleRef = useRef(new Map<string, number>())
@@ -187,6 +221,30 @@ export default function DungeonScene({
       cancelled = true
     }
   }, [heroSprite])
+
+  // Boneco de caminhada raça×classe (tira horizontal recortada por
+  // scripts/slice-hero-sprite-sheet.ts). Combinação sem arte deixa os refs em
+  // null e o herói cai no retrato — sem regressão.
+  // Nada de cleanSprite() aqui: a tira é recorte determinístico, não saída do
+  // gpt-image-1, então não tem franja de halo para varrer.
+  useEffect(() => {
+    let cancelled = false
+    const def = resolveHeroSprite(race, heroClass)
+    if (!def) {
+      spriteDefRef.current = null
+      spriteImgRef.current = null
+      return
+    }
+    ;(async () => {
+      const img = await loadImage(def.src)
+      if (cancelled) return
+      spriteDefRef.current = img ? def : null
+      spriteImgRef.current = img
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [race, heroClass])
 
   // Sprites do bioma (importados por scripts/import-craftpix-scene.ts).
   // Ausentes = null, e a cena cai no desenho procedural sem quebrar.
@@ -270,6 +328,41 @@ export default function DungeonScene({
     let last = performance.now()
     let view = { w: 0, h: 0, ppu: 16 }
 
+    // ---- chuva ----
+    // Gotas PERSISTENTES com velocidade. A versão anterior sorteava 26 posições
+    // novas a cada frame: elas teleportavam em vez de cair (lia como chuvisco
+    // estático) e, com contagem fixa numa tela larga, sumiam.
+    interface Drop {
+      x: number
+      y: number
+      vy: number
+      len: number
+      near: boolean
+    }
+    const drops: Drop[] = []
+    /** Gotas por megapixel CSS — densidade por ÁREA, igual em qualquer tamanho. */
+    const RAIN_DENSITY = 210
+    /** Vento constante: vx = vy × isto. */
+    const RAIN_SLANT = 0.16
+
+    const seedDrop = (d: Drop, y?: number) => {
+      d.x = Math.random() * (view.w + 60) - 30
+      d.y = y ?? Math.random() * view.h
+      d.near = Math.random() < 0.35
+      d.vy = d.near ? 780 + Math.random() * 320 : 460 + Math.random() * 260 // px/s
+      d.len = d.vy * 0.021 // rastro ~10-23px
+    }
+
+    const fitDrops = () => {
+      const want = clamp(Math.round(((view.w * view.h) / 1e6) * RAIN_DENSITY), 40, 320)
+      while (drops.length > want) drops.pop()
+      while (drops.length < want) {
+        const d: Drop = { x: 0, y: 0, vy: 0, len: 0, near: false }
+        seedDrop(d)
+        drops.push(d)
+      }
+    }
+
     const resize = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2)
       const w = wrap.clientWidth
@@ -282,6 +375,7 @@ export default function DungeonScene({
       // Retrato: o enquadramento é ditado pela LARGURA — ~26 unidades de mundo
       // atravessadas na tela, em qualquer altura de aparelho.
       view = { w, h, ppu: clamp(w / 26, 10, 34) }
+      fitDrops()
     }
     resize()
     const ro = new ResizeObserver(resize)
@@ -544,6 +638,53 @@ export default function DungeonScene({
       ctx.ellipse(x, y, u * 0.44, u * 0.16, 0, 0, Math.PI * 2)
       ctx.fill()
 
+      // 1º elo: boneco de caminhada da combinação raça×classe.
+      const def = spriteDefRef.current
+      const strip = spriteImgRef.current
+      if (def && strip) {
+        const d = moveDirRef.current
+        // `paused` congela o stepWorld mas não zera a velocidade — sem este
+        // teste o herói ficaria "andando parado" atrás do modal de combate.
+        const walking = !pausedRef.current && moveSpeedRef.current > HERO_IDLE_SPEED
+        const cycle = def.walk.length ? def.walk : [0]
+        const step = Math.floor(spriteClockRef.current * def.fps)
+
+        // A folha só tem PERFIL e um frame de COSTAS — não existe frente. Subindo
+        // para o fundo (-y no mundo) e sem componente lateral, vai de costas.
+        // Vindo em direção à câmera (+y) roda o perfil mesmo: sem arte de frente,
+        // o perfil lê como caminhada, enquanto as costas leriam como andar de ré.
+        const useBack =
+          walking && def.back !== undefined && d.y < HERO_BACK_DY && Math.abs(d.x) < HERO_SIDE_DX
+
+        const frame = !walking
+          ? def.idle ?? cycle[0]
+          : useBack
+            ? (def.back as number)
+            : cycle[((step % cycle.length) + cycle.length) % cycle.length]
+
+        // De costas há UM frame só: alternar o espelho dá o 2º tempo do passo.
+        const flip = useBack
+          ? step % 2 === 0
+            ? 1
+            : -1
+          : def.facing === 'right'
+            ? facingRef.current
+            : -facingRef.current
+
+        const dh = HERO_WORLD_H * view.ppu
+        const dw = dh * (def.frameW / def.frameH)
+        ctx.save()
+        // Bob reduzido: o ciclo do sprite já tem o balanço do passo desenhado.
+        ctx.translate(x, y + bob * 0.45)
+        ctx.scale(flip, 1)
+        // Ancorado em -dh: o PÉ fica no ponto do mundo, casando com a sombra
+        // acima e com a ordenação por profundidade.
+        ctx.drawImage(strip, frame * def.frameW, 0, def.frameW, def.frameH, -dw / 2, -dh, dw, dh)
+        ctx.restore()
+        return
+      }
+
+      // 2º elo: retrato do NFT.
       const img = heroImgRef.current
       if (img) {
         const h = u * 2.5
@@ -554,7 +695,7 @@ export default function DungeonScene({
         ctx.drawImage(img, -w / 2, -h, w, h)
         ctx.restore()
       } else {
-        // Boneco procedural (placeholder até o sprite de 4 direções da F2).
+        // 3º elo: boneco procedural (nem sprite da combinação, nem retrato).
         ctx.save()
         ctx.translate(x, y + bob)
         ctx.fillStyle = '#3b4d7a'
@@ -652,16 +793,37 @@ export default function DungeonScene({
       ctx.fillRect(0, 0, view.w, view.h)
     }
 
-    const drawRain = () => {
-      ctx.strokeStyle = 'rgba(190,215,255,0.10)'
-      ctx.lineWidth = 1
-      const seed = Math.floor(timeRef.current * 45)
-      for (let i = 0; i < 26; i++) {
-        const rx = (i * 137 + seed * 17) % view.w
-        const ry = (i * 89 + seed * 41) % view.h
+    /**
+     * Chuva. Duas passadas = duas camadas de parallax (perto/longe) com UM
+     * `stroke()` cada, para ~140 gotas — mais barato que os 26 pares
+     * beginPath/stroke de antes.
+     *
+     * Cai mesmo com `paused`: pausa serve para congelar o stepWorld (posição do
+     * herói e o gatilho do /step, que sincronizam com o servidor). Ambiência não
+     * é estado de jogo — `timeRef` já corre pausado movendo o bob dos monstros —
+     * e chuva parada atrás do combate leria como canvas travado.
+     */
+    const drawRain = (dt: number) => {
+      const wrapW = view.w + 60
+      for (let pass = 0; pass < 2; pass++) {
+        const near = pass === 1
         ctx.beginPath()
-        ctx.moveTo(rx, ry)
-        ctx.lineTo(rx + 2.5, ry + 13)
+        for (let i = 0; i < drops.length; i++) {
+          const d = drops[i]
+          if (pass === 0) {
+            // Integra uma vez só (a 2ª passada só desenha).
+            d.y += d.vy * dt
+            d.x += d.vy * RAIN_SLANT * dt
+            if (d.y - d.len > view.h) seedDrop(d, -d.len - Math.random() * 60)
+            if (d.x - 30 > view.w) d.x -= wrapW
+            else if (d.x < -30) d.x += wrapW
+          }
+          if (d.near !== near) continue
+          ctx.moveTo(d.x, d.y) // cabeça
+          ctx.lineTo(d.x - d.len * RAIN_SLANT, d.y - d.len) // rastro ATRÁS
+        }
+        ctx.strokeStyle = near ? 'rgba(198,222,255,0.30)' : 'rgba(186,210,246,0.15)'
+        ctx.lineWidth = near ? 1.5 : 1
         ctx.stroke()
       }
     }
@@ -699,8 +861,14 @@ export default function DungeonScene({
         const want = { x: hero.x + dir.x * WALK_SPEED * dt, y: hero.y + dir.y * WALK_SPEED * dt }
         const next = clampToWalkable(m, want)
         heroRef.current = next
-        if (Math.abs(dir.x) > 0.05) facingRef.current = dir.x > 0 ? 1 : -1
+        if (Math.abs(dir.x) > TURN_DX) facingRef.current = dir.x > 0 ? 1 : -1
         walkPhaseRef.current += dt * (6 + speed)
+        // Estado que o boneco lê para escolher o frame (perfil/costas/parado).
+        moveDirRef.current = dir
+        moveSpeedRef.current = speed
+        spriteClockRef.current += dt
+      } else {
+        moveSpeedRef.current = 0
       }
 
       // Nó de combate abre ao ENCOSTAR no vulto, não ao pisar no centro do
@@ -807,7 +975,7 @@ export default function DungeonScene({
       }
 
       drawFog()
-      drawRain()
+      drawRain(dt)
 
       animRef.current = requestAnimationFrame(frame)
     }

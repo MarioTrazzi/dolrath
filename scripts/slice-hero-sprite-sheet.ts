@@ -540,13 +540,12 @@ async function sliceOne(job: Job): Promise<string | null> {
     .toFile(OUT_CONTACT)
   console.log(`   ✓ _contact.png (conferência a olho — gitignored)`)
 
-  // Palpite do ciclo: o frame mais ESTREITO da linha costuma ser a pose de
-  // pernas juntas (passagem), e alterná-la com as passadas já lê como caminhada.
-  // A ordem final sai da bancada — isto é só um ponto de partida decente.
-  const widths = frames.map(b => b.x1 - b.x0)
-  const narrowest = widths.indexOf(Math.min(...widths))
-  const strides = cells.map((_, i) => i).filter(i => i !== narrowest)
-  const guess = strides.flatMap(i => [i, narrowest])
+  // Palpite do ciclo: todos os frames, na ordem. A escolha real (quais são de
+  // perfil, quais são de costas, quais são espelhos) sai da folha de contato +
+  // bancada — chutar aqui já deu errado uma vez: o frame mais estreito costuma
+  // ser o FRONTAL, e frontal não serve pra nada na masmorra (o herói nunca vem
+  // na direção da câmera). Por isso também não chuto mais `idle`.
+  const guess = cells.map((_, i) => i)
 
   return (
     `  '${SLUG}': {\n` +
@@ -556,7 +555,6 @@ async function sliceOne(job: Job): Promise<string | null> {
     `    frames: ${cells.length},\n` +
     `    facing: 'right',\n` +
     `    walk: [${guess.join(', ')}],\n` +
-    `    idle: ${narrowest},\n` +
     `    fps: 8,\n` +
     `  },`
   )

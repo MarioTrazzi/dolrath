@@ -58,7 +58,21 @@ Então **peça explicitamente poses distintas e uma direção só**:
 > último que é de **costas**. Os 5 de perfil devem ser fases diferentes do mesmo ciclo de
 > caminhada: (1) contato com a perna direita à frente, (2) peso no pé de apoio com as pernas
 > juntas, (3) impulso com o calcanhar erguido, (4) contato com a perna esquerda à frente,
-> (5) pernas juntas de novo. Não repita a mesma pose e não espelhe nenhum frame.
+> (5) pernas juntas de novo. Não repita a mesma pose, não espelhe nenhum frame e
+> **não desenhe nenhuma pose de frente**.
+
+### Nada de pose FRONTAL na linha de caminhada
+
+Na masmorra o herói só anda de lado ou sobe de costas — ele **nunca vem na
+direção da câmera**. Frame frontal é espaço desperdiçado na folha e, pior, se
+acabar virando a pose parada, o boneco encara o jogador quando a run pausa.
+
+As folhas do mago, do monge e do draconiano vieram com frontal no primeiro frame
+e eu cheguei a usá-lo como `idle` — errado, corrigido depois. O elfo é o modelo:
+perfil com as **pernas juntas** para o parado, nenhum frontal.
+
+Se a folha não tiver perfil de pernas juntas, deixe `idle` fora do manifesto: o
+default cai no primeiro frame do ciclo, que já é de perfil.
 
 Se ainda assim vierem frames espelhados, tudo bem: o `heroSprites.ts` guarda `facing` e a
 `WalkScene` espelha em runtime — basta descartar os índices redundantes no ciclo.

@@ -20,7 +20,16 @@ export interface HeroSpriteDef {
   facing: SpriteFacing
   /** Ciclo de perfil, na ordem de exibição. */
   walk: number[]
-  /** Frame parado (sem passo). Default: walk[0]. */
+  /**
+   * Frame parado (sem passo). Default: walk[0].
+   *
+   * ⚠️ NUNCA aponte para um frame FRONTAL. Na masmorra o herói só anda de lado
+   * ou subindo de costas — ele nunca vem na direção da câmera, então uma pose
+   * de frente destoa na hora que a run pausa. Só use `idle` quando a folha
+   * tiver uma pose de PERFIL com as pernas juntas (é o caso do elfo/ladino);
+   * senão deixe de fora e o default cai no primeiro frame do ciclo, que já é
+   * de perfil.
+   */
   idle?: number
   /**
    * Costas — o herói subindo a trilha, andando para o fundo.
@@ -67,7 +76,6 @@ export const HERO_SPRITES: Record<string, HeroSpriteDef> = {
     frames: 12,
     facing: 'right',
     walk: [1, 2],
-    idle: 0,
     back: [7, 8, 11],
     fps: 4,
   },
@@ -85,7 +93,6 @@ export const HERO_SPRITES: Record<string, HeroSpriteDef> = {
     frames: 6,
     facing: 'left',
     walk: [3, 4],
-    idle: 0,
     back: [1, 5],
     fps: 4,
   },
@@ -103,7 +110,6 @@ export const HERO_SPRITES: Record<string, HeroSpriteDef> = {
     frames: 6,
     facing: 'left',
     walk: [4, 5],
-    idle: 0,
     back: [2, 3],
     fps: 4,
   },

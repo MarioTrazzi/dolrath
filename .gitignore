@@ -46,6 +46,10 @@ test-*.js
 scripts/bot-fleet-registry.json
 scripts/bot-fleet-events.jsonl
 
+# Folhas de sprite cruas do Gemini (~5MB cada) — só a tira recortada vai pro repo
+/sprite-sources/
+public/sprites/**/_contact.png
+
 # Vercel
 .vercel
 

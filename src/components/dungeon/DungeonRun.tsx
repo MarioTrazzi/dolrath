@@ -2942,6 +2942,8 @@ export default function DungeonRun({
               nodeIndex={tokenIdx}
               pathPoints={trailPoints}
               avatar={character.avatar}
+              race={character.race}
+              heroClass={character.class}
               trailMarks={walkTrailMarks}
               nextIsBoss={nextIsBoss}
               onApproachComplete={handleWalkApproachComplete}

@@ -17,6 +17,12 @@ import {
   RevealedNode,
 } from '@/components/dungeon/DungeonMap'
 import WalkScene, { WALK_SCROLL_MS, type WalkMode, type WalkTrailMark } from '@/components/dungeon/WalkScene'
+import DungeonScene from '@/components/dungeon/scene/DungeonScene'
+import { useT } from '@/lib/i18n/I18nProvider'
+import { generateSceneMap } from '@/lib/dungeonScene/generateMap'
+import { dungeonSceneEnabled } from '@/lib/dungeonScene/enabled'
+import type { NodeFlavor, SpotContent } from '@/lib/dungeonScene/nodeContents'
+import type { MapSpot } from '@/lib/dungeonScene/types'
 import {
   buildWalkPathPoints,
   walkSceneEnabled,
@@ -557,6 +563,9 @@ export default function DungeonRun({
   backgroundImageUrl,
   backgroundImageOverlay = 0.3,
 }: DungeonRunProps) {
+  // i18n: `t` era usado em tickPlayerTurn sem existir no escopo — quando a
+  // transformação acabava em combate, o ReferenceError derrubava a run inteira.
+  const t = useT()
   // 🌳 Árvore de habilidades: computado ANTES dos pools de recurso (maxHpPct/maxMpPct
   // entram no teto inicial). `skillTree` null (legado) libera tudo nos valores BASE
   // (ver LEGACY_UNLOCKS em lib/skillTree.ts).
@@ -604,12 +613,17 @@ export default function DungeonRun({
   // ---------- Mapa de exploração (trilha de nós) ----------
   // entrada → (nós menores + sala principal) × salas → covil do boss.
   // WalkScene: pan sobre mapa único; fallback SVG: zigzag clássico.
-  const useWalkScene = walkSceneEnabled(dungeon.id)
+  // Cena explorável (mata sólida + bolsões) onde já existe tileset; as outras
+  // masmorras seguem na esteira WalkScene.
+  const useScene = dungeonSceneEnabled(dungeon.id)
+  const useWalkScene = !useScene && walkSceneEnabled(dungeon.id)
   // Seed do layout: sorteado 1x por mount (lazy) — estável a run inteira
   // (combate/re-render não re-embaralham o mapa), novo a cada run.
   const [layoutSeed] = useState(
     () => `${dungeon.id}:${Date.now().toString(36)}:${Math.floor(Math.random() * 0xffffffff).toString(36)}`
   )
+  // A trilha SVG/treadmill continua existindo mesmo na cena: ela é a fonte de
+  // `kind`/`tier` por nó (usada no header, no custo de stamina e no boss).
   const trailPoints = useMemo(
     () =>
       useWalkScene
@@ -625,6 +639,29 @@ export default function DungeonRun({
   const [walkTrailMarks, setWalkTrailMarks] = useState<WalkTrailMark[]>([])
   const walkBusy = walkMode === 'scroll' || walkMode === 'approach' || moving
   const walkStepLockRef = useRef(false)
+
+  // ---------- Cena explorável ----------
+  // O mapa nasce da seed da run (mesma run ⇒ mesmo mapa mesmo se remontar).
+  const sceneMap = useMemo(
+    () => (useScene ? generateSceneMap(dungeon.id, layoutSeed) : null),
+    [useScene, dungeon.id, layoutSeed]
+  )
+  /**
+   * Nó que o herói está procurando. Fica igual a `tokenIdx` enquanto ele espera
+   * no bolsão; `advance()` empurra pro próximo e a cena caminha até lá sozinha.
+   */
+  const [sceneTarget, setSceneTarget] = useState(0)
+  /**
+   * Sabor de cada nó JÁ resolvido — vem do que o servidor devolveu no /step,
+   * não de sorteio local: o servidor segue dono de monstro-vs-achado.
+   * (planNodeContents, com orçamento fixo, exige mudança de backend e fica
+   * para depois — hoje o nó é só um "?" até o herói chegar.)
+   */
+  const [sceneContents, setSceneContents] = useState<Map<number, SpotContent>>(() => new Map())
+  const sceneVisited = useMemo(
+    () => Array.from({ length: tokenIdx + 1 }, (_, i) => i),
+    [tokenIdx]
+  )
   const [narration, setNarration] = useState(dungeon.enterText)
   // 📜 O Mestre narra virou dialog sob demanda (não mais uma faixa fixa sob o
   // mapa): abre nos "beats" da história e junto de cada rolagem do d20, fecha
@@ -1225,6 +1262,25 @@ export default function DungeonRun({
     setMoving(false)
     walkStepLockRef.current = false
 
+    // Cena: registra o que o SERVIDOR disse que havia no nó. Antes da chegada o
+    // bolsão fica só com o "?" — quem decide monstro-vs-achado é o /step, e
+    // adiantar isso no cliente seria mentir para o jogador.
+    // (O orçamento fixo de planNodeContents só passa a valer quando o servidor
+    // também usar a mesma função — aí dá para pintar o mapa inteiro de cara.)
+    if (useScene) {
+      const flavor: NodeFlavor =
+        data.type === 'boss' ? 'boss' : data.type === 'monster' ? 'monster' : 'chest'
+      setSceneContents(prev => {
+        const next = new Map(prev)
+        next.set(dest, {
+          nodeIndex: dest,
+          category: flavor === 'chest' ? 'find' : 'combat',
+          flavor,
+        })
+        return next
+      })
+    }
+
     if (data.type === 'boss') {
       setExploreRolling(false)
       if (data.monster) serverMonsterRef.current = data.monster
@@ -1258,10 +1314,30 @@ export default function DungeonRun({
     finishWalkStep(dest)
   }, [walkMode, tokenIdx, finishWalkStep])
 
+  /**
+   * Cena: o herói chegou ao bolsão do nó. Mesmo gatilho do approach da esteira —
+   * quem resolve o nó continua sendo o /step no servidor.
+   */
+  const handleSceneReachSpot = useCallback(
+    (spot: MapSpot) => {
+      if (spot.nodeIndex <= tokenIdx) return // já resolvido (chegada repetida)
+      finishWalkStep(spot.nodeIndex)
+    },
+    [tokenIdx, finishWalkStep]
+  )
+
   const advance = async () => {
     if (phase !== 'explore' || exploreRolling || walkBusy || eventCard || lootCard || atBoss) return
     if (!runReady || !runIdRef.current) return
     const dest = tokenIdx + 1
+
+    // --- Cena: o herói caminha sozinho até o bolsão e avisa em onReachSpot ---
+    if (useScene) {
+      setMoving(true)
+      setSceneTarget(dest)
+      showNarration()
+      return
+    }
 
     // --- Walk: vasculhar lento → avistar ? → approach → /step ---
     if (useWalkScene) {
@@ -2832,6 +2908,31 @@ export default function DungeonRun({
         {/* ============================================================ */}
         {/* WALK SCENE (Anterra treadmill) — só na exploração; combate usa battle BG */}
         {/* ============================================================ */}
+        {/* A cena fica MONTADA a run inteira e só some de vista no combate: a
+            posição do herói mora num ref dentro dela, então desmontar jogaria
+            o herói de volta pra entrada a cada luta (e recarregaria o tileset). */}
+        {useScene && sceneMap && (
+          <div
+            className={`absolute inset-0 z-0 pointer-events-none transition-opacity duration-300 ${
+              phase === 'explore' ? 'opacity-100' : 'opacity-0'
+            }`}
+            aria-hidden={phase !== 'explore'}
+          >
+            <DungeonScene
+              map={sceneMap}
+              heroSprite={character.avatar}
+              contents={sceneContents}
+              targetNode={sceneTarget}
+              visitedNodes={sceneVisited}
+              /* Congela fora da exploração e no que toma a tela. A narração do
+                 Mestre fecha sozinha e não deve travar o passo a cada nó. */
+              paused={phase !== 'explore' || Boolean(eventCard || lootCard || exploreRolling)}
+              onReachSpot={handleSceneReachSpot}
+              className="w-full h-full"
+            />
+          </div>
+        )}
+
         {useWalkScene && phase === 'explore' && (
           <div className="absolute inset-0 z-0 pointer-events-none">
             <WalkScene
@@ -3047,9 +3148,9 @@ export default function DungeonRun({
         {/* ============================================================ */}
         {phase === 'explore' && (
           <div className="flex-1 flex flex-col min-h-0 relative z-10">
-            {/* ---------- MAPA: WalkScene (fundo) ou trilha SVG clássica ---------- */}
+            {/* ---------- MAPA: cena, WalkScene (ambas ao fundo) ou trilha SVG ---------- */}
             <main className="relative flex-1 min-h-0">
-              {!useWalkScene && (
+              {!useWalkScene && !useScene && (
                 <>
                   <MapAmbient backgroundImageUrl={DUNGEON_RUN_MAP_BG[dungeon.id]} />
                   <div className="absolute inset-0 mx-auto max-w-md pointer-events-none">

@@ -7,8 +7,8 @@ import { Item } from '@/types/item';
 import { EquipmentSlotType } from '@prisma/client';
 import { sellUnitPrice as sellPrice } from '@/lib/sellPricing';
 import { getItemVisual, getItemTypeLabel, getItemCategory } from '@/lib/itemVisuals';
-import { resolveImageUrl } from '@/lib/imageUrl';
-import { itemImagePath, isIngredientItem, isMaterialItem, isSeedItem, isProcessedItem } from '@/lib/itemCatalog';
+import { isIngredientItem, isMaterialItem, isSeedItem, isProcessedItem } from '@/lib/itemCatalog';
+import { useResolvedItemImage } from '@/hooks/useResolvedItemImage';
 import { recipesUsingIngredient } from '@/lib/alchemy';
 import { forgeRecipesUsingMaterial } from '@/lib/forge';
 import { processingRecipesUsingInput } from '@/lib/processing';
@@ -69,7 +69,7 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
   const displayDesc = localizeItemDesc(item.name, item.description, locale);
   const router = useRouter();
   const [showTooltip, setShowTooltip] = useState(false);
-  const [imgError, setImgError] = useState(false);
+  const { src: itemImage, onError: onItemImageError } = useResolvedItemImage(item.image, item.name);
   const [coords, setCoords] = useState<{ top: number; left: number; placement: 'top' | 'bottom' }>({ top: 0, left: 0, placement: 'top' });
   const [mounted, setMounted] = useState(false);
   const [sellDialogOpen, setSellDialogOpen] = useState(false);
@@ -187,10 +187,6 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
 
   // Identidade visual idêntica à da loja (cor de destaque, chips, cenário).
   const visual = getItemVisual(item.type);
-  // Imagem do card: banco (item.image) → asset estático por nome (/items/<slug>.webp)
-  // → ícone genérico se a arte 404. Cobre ingredientes/materiais/cintos antigos que
-  // não têm `image` no banco mas têm webp gerado (mesma cadeia do DraggableItem).
-  const itemImage = imgError ? null : (resolveImageUrl(item.image) ?? (item.name ? itemImagePath(item.name) : null));
   const showEnhancement = enhancementLevel > 0;
   const isConsumable = item.type === 'CONSUMABLE';
   // Pedra Negra: consumível de aprimoramento. "Consumir" abre o seletor de aprimoramento.
@@ -359,7 +355,7 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
                 <img
                   src={itemImage}
                   alt={displayName}
-                  onError={() => setImgError(true)}
+                  onError={onItemImageError}
                   className="w-full h-full object-cover art-bright"
                   referrerPolicy="no-referrer"
                 />

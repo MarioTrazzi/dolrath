@@ -1,682 +1,682 @@
 {
   "Espada de Recruta": {
-    "file": "/items/espada-de-recruta.webp"
+    "file": "/item-art/espada-de-recruta.webp"
   },
   "Adaga Ligeira": {
-    "file": "/items/adaga-ligeira.webp"
+    "file": "/item-art/adaga-ligeira.webp"
   },
   "Cajado de Aprendiz": {
-    "file": "/items/cajado-de-aprendiz.webp"
+    "file": "/item-art/cajado-de-aprendiz.webp"
   },
   "Machado do Guarda": {
-    "file": "/items/machado-do-guarda.webp"
+    "file": "/item-art/machado-do-guarda.webp"
   },
   "Espada do Veterano": {
-    "file": "/items/espada-do-veterano.webp"
+    "file": "/item-art/espada-do-veterano.webp"
   },
   "Arco do Batedor": {
-    "file": "/items/arco-do-batedor.webp"
+    "file": "/item-art/arco-do-batedor.webp"
   },
   "Cajado Rúnico": {
-    "file": "/items/cajado-runico.webp"
+    "file": "/item-art/cajado-runico.webp"
   },
   "Machado de Guerra": {
-    "file": "/items/machado-de-guerra.webp"
+    "file": "/item-art/machado-de-guerra.webp"
   },
   "Gibão de Couro": {
-    "file": "/items/gibao-de-couro.webp"
+    "file": "/item-art/gibao-de-couro.webp"
   },
   "Túnica de Linho Arcano": {
-    "file": "/items/tunica-de-linho-arcano.webp"
+    "file": "/item-art/tunica-de-linho-arcano.webp"
   },
   "Cota Acolchoada": {
-    "file": "/items/cota-acolchoada.webp"
+    "file": "/item-art/cota-acolchoada.webp"
   },
   "Peitoral de Ferro": {
-    "file": "/items/peitoral-de-ferro.webp"
+    "file": "/item-art/peitoral-de-ferro.webp"
   },
   "Armadura de Couro Batido": {
-    "file": "/items/armadura-de-couro-batido.webp"
+    "file": "/item-art/armadura-de-couro-batido.webp"
   },
   "Vestes do Conjurador": {
-    "file": "/items/vestes-do-conjurador.webp"
+    "file": "/item-art/vestes-do-conjurador.webp"
   },
   "Brigantina Reforçada": {
-    "file": "/items/brigantina-reforcada.webp"
+    "file": "/item-art/brigantina-reforcada.webp"
   },
   "Couraça de Aço": {
-    "file": "/items/couraca-de-aco.webp"
+    "file": "/item-art/couraca-de-aco.webp"
   },
   "Capuz de Couro": {
-    "file": "/items/capuz-de-couro.webp"
+    "file": "/item-art/capuz-de-couro.webp"
   },
   "Elmo de Ferro": {
-    "file": "/items/elmo-de-ferro.webp"
+    "file": "/item-art/elmo-de-ferro.webp"
   },
   "Luvas de Couro": {
-    "file": "/items/luvas-de-couro.webp"
+    "file": "/item-art/luvas-de-couro.webp"
   },
   "Manoplas de Ferro": {
-    "file": "/items/manoplas-de-ferro.webp"
+    "file": "/item-art/manoplas-de-ferro.webp"
   },
   "Botas de Viajante": {
-    "file": "/items/botas-de-viajante.webp"
+    "file": "/item-art/botas-de-viajante.webp"
   },
   "Botas de Placa": {
-    "file": "/items/botas-de-placa.webp"
+    "file": "/item-art/botas-de-placa.webp"
   },
   "Escudo de Madeira": {
-    "file": "/items/escudo-de-madeira.webp"
+    "file": "/item-art/escudo-de-madeira.webp"
   },
   "Coif de Malha": {
-    "file": "/items/coif-de-malha.webp"
+    "file": "/item-art/coif-de-malha.webp"
   },
   "Elmo do Sentinela": {
-    "file": "/items/elmo-do-sentinela.webp"
+    "file": "/item-art/elmo-do-sentinela.webp"
   },
   "Luvas de Malha": {
-    "file": "/items/luvas-de-malha.webp"
+    "file": "/item-art/luvas-de-malha.webp"
   },
   "Manoplas do Sentinela": {
-    "file": "/items/manoplas-do-sentinela.webp"
+    "file": "/item-art/manoplas-do-sentinela.webp"
   },
   "Botas de Malha": {
-    "file": "/items/botas-de-malha.webp"
+    "file": "/item-art/botas-de-malha.webp"
   },
   "Grevas de Aço": {
-    "file": "/items/grevas-de-aco.webp"
+    "file": "/item-art/grevas-de-aco.webp"
   },
   "Escudo de Ferro": {
-    "file": "/items/escudo-de-ferro.webp"
+    "file": "/item-art/escudo-de-ferro.webp"
   },
   "Lâmina das Brasas": {
-    "file": "/items/lamina-das-brasas.webp"
+    "file": "/item-art/lamina-das-brasas.webp"
   },
   "Couraça de Escamas Ígneas": {
-    "file": "/items/couraca-de-escamas-igneas.webp"
+    "file": "/item-art/couraca-de-escamas-igneas.webp"
   },
   "Égide do Dragão Ancião": {
-    "file": "/items/egide-do-dragao-anciao.webp"
+    "file": "/item-art/egide-do-dragao-anciao.webp"
   },
   "Presas do Cataclismo": {
-    "file": "/items/presas-do-cataclismo.webp"
+    "file": "/item-art/presas-do-cataclismo.webp"
   },
   "Arco do Luar Élfico": {
-    "file": "/items/arco-do-luar-elfico.webp"
+    "file": "/item-art/arco-do-luar-elfico.webp"
   },
   "Vestes do Bosque Celeste": {
-    "file": "/items/vestes-do-bosque-celeste.webp"
+    "file": "/item-art/vestes-do-bosque-celeste.webp"
   },
   "Cajado da Aurora Arcana": {
-    "file": "/items/cajado-da-aurora-arcana.webp"
+    "file": "/item-art/cajado-da-aurora-arcana.webp"
   },
   "Manto da Forma Celestial": {
-    "file": "/items/manto-da-forma-celestial.webp"
+    "file": "/item-art/manto-da-forma-celestial.webp"
   },
   "Garras do Predador": {
-    "file": "/items/garras-do-predador.webp"
+    "file": "/item-art/garras-do-predador.webp"
   },
   "Pelagem Mutável": {
-    "file": "/items/pelagem-mutavel.webp"
+    "file": "/item-art/pelagem-mutavel.webp"
   },
   "Manto da Fera Primal": {
-    "file": "/items/manto-da-fera-primal.webp"
+    "file": "/item-art/manto-da-fera-primal.webp"
   },
   "Garras do Caçador Lunar": {
-    "file": "/items/garras-do-cacador-lunar.webp"
+    "file": "/item-art/garras-do-cacador-lunar.webp"
   },
   "Espada do Andarilho": {
-    "file": "/items/espada-do-andarilho.webp"
+    "file": "/item-art/espada-do-andarilho.webp"
   },
   "Brigantina do Mercenário": {
-    "file": "/items/brigantina-do-mercenario.webp"
+    "file": "/item-art/brigantina-do-mercenario.webp"
   },
   "Égide do Herói": {
-    "file": "/items/egide-do-heroi.webp"
+    "file": "/item-art/egide-do-heroi.webp"
   },
   "Lâmina do Sétimo Sentido": {
-    "file": "/items/lamina-do-setimo-sentido.webp"
+    "file": "/item-art/lamina-do-setimo-sentido.webp"
   },
   "Anel da Seiva Ancestral": {
-    "file": "/items/anel-da-seiva-ancestral.webp"
+    "file": "/item-art/anel-da-seiva-ancestral.webp"
   },
   "Anel de Cristal Pulsante": {
-    "file": "/items/anel-de-cristal-pulsante.webp"
+    "file": "/item-art/anel-de-cristal-pulsante.webp"
   },
   "Anel da Névoa Tóxica": {
-    "file": "/items/anel-da-nevoa-toxica.webp"
+    "file": "/item-art/anel-da-nevoa-toxica.webp"
   },
   "Anel do Selo Imperial": {
-    "file": "/items/anel-do-selo-imperial.webp"
+    "file": "/item-art/anel-do-selo-imperial.webp"
   },
   "Amuleto da Coruja": {
-    "file": "/items/amuleto-da-coruja.webp"
+    "file": "/item-art/amuleto-da-coruja.webp"
   },
   "Colar do Veio Dourado": {
-    "file": "/items/colar-do-veio-dourado.webp"
+    "file": "/item-art/colar-do-veio-dourado.webp"
   },
   "Talismã do Fogo-Fátuo": {
-    "file": "/items/talisma-do-fogo-fatuo.webp"
+    "file": "/item-art/talisma-do-fogo-fatuo.webp"
   },
   "Relicário do Lich": {
-    "file": "/items/relicario-do-lich.webp"
+    "file": "/item-art/relicario-do-lich.webp"
   },
   "Lâmina de Krax-thar": {
-    "file": "/items/lamina-de-krax-thar.webp"
+    "file": "/item-art/lamina-de-krax-thar.webp"
   },
   "Coração de Krax-thar": {
-    "file": "/items/coracao-de-krax-thar.webp"
+    "file": "/item-art/coracao-de-krax-thar.webp"
   },
   "Presas de Vol'theris": {
-    "file": "/items/presas-de-voltheris.webp"
+    "file": "/item-art/presas-de-voltheris.webp"
   },
   "Manto de Vol'theris": {
-    "file": "/items/manto-de-voltheris.webp"
+    "file": "/item-art/manto-de-voltheris.webp"
   },
   "Esmagador de Gorthak": {
-    "file": "/items/esmagador-de-gorthak.webp"
+    "file": "/item-art/esmagador-de-gorthak.webp"
   },
   "Égide de Gorthak": {
-    "file": "/items/egide-de-gorthak.webp"
+    "file": "/item-art/egide-de-gorthak.webp"
   },
   "Arco de Sylariel": {
-    "file": "/items/arco-de-sylariel.webp"
+    "file": "/item-art/arco-de-sylariel.webp"
   },
   "Cajado de Sylariel": {
-    "file": "/items/cajado-de-sylariel.webp"
+    "file": "/item-art/cajado-de-sylariel.webp"
   },
   "Lágrima de Sylariel": {
-    "file": "/items/lagrima-de-sylariel.webp"
+    "file": "/item-art/lagrima-de-sylariel.webp"
   },
   "Poção de Vida Pequena": {
-    "file": "/items/pocao-de-vida-pequena.webp"
+    "file": "/item-art/pocao-de-vida-pequena.webp"
   },
   "Poção de Vida": {
-    "file": "/items/pocao-de-vida.webp"
+    "file": "/item-art/pocao-de-vida.webp"
   },
   "Poção de Mana": {
-    "file": "/items/pocao-de-mana.webp"
+    "file": "/item-art/pocao-de-mana.webp"
   },
   "Poção de Stamina": {
-    "file": "/items/pocao-de-stamina.webp"
+    "file": "/item-art/pocao-de-stamina.webp"
   },
   "Elixir Menor": {
-    "file": "/items/elixir-menor.webp"
+    "file": "/item-art/elixir-menor.webp"
   },
   "Poção de Força": {
-    "file": "/items/pocao-de-forca.webp"
+    "file": "/item-art/pocao-de-forca.webp"
   },
   "Poção de Defesa": {
-    "file": "/items/pocao-de-defesa.webp"
+    "file": "/item-art/pocao-de-defesa.webp"
   },
   "Poção de Agilidade": {
-    "file": "/items/pocao-de-agilidade.webp"
+    "file": "/item-art/pocao-de-agilidade.webp"
   },
   "Antídoto": {
-    "file": "/items/antidoto.webp"
+    "file": "/item-art/antidoto.webp"
   },
   "Poção de Vida Grande": {
-    "file": "/items/pocao-de-vida-grande.webp"
+    "file": "/item-art/pocao-de-vida-grande.webp"
   },
   "Poção de Cura Suprema": {
-    "file": "/items/pocao-de-cura-suprema.webp"
+    "file": "/item-art/pocao-de-cura-suprema.webp"
   },
   "Elixir Supremo": {
-    "file": "/items/elixir-supremo.webp"
+    "file": "/item-art/elixir-supremo.webp"
   },
   "Tônico do Berserker": {
-    "file": "/items/tonico-do-berserker.webp"
+    "file": "/item-art/tonico-do-berserker.webp"
   },
   "Pó de Fênix": {
-    "file": "/items/po-de-fenix.webp"
+    "file": "/item-art/po-de-fenix.webp"
   },
   "Sangue de Dragão": {
-    "file": "/items/sangue-de-dragao.webp"
+    "file": "/item-art/sangue-de-dragao.webp"
   },
   "Essência do Vazio": {
-    "file": "/items/essencia-do-vazio.webp"
+    "file": "/item-art/essencia-do-vazio.webp"
   },
   "Núcleo de Adamantite": {
-    "file": "/items/nucleo-de-adamantite.webp"
+    "file": "/item-art/nucleo-de-adamantite.webp"
   },
   "Lágrima Celeste": {
-    "file": "/items/lagrima-celeste.webp"
+    "file": "/item-art/lagrima-celeste.webp"
   },
   "Poção de Mana Grande": {
-    "file": "/items/pocao-de-mana-grande.webp"
+    "file": "/item-art/pocao-de-mana-grande.webp"
   },
   "Elixir de Energia": {
-    "file": "/items/elixir-de-energia.webp"
+    "file": "/item-art/elixir-de-energia.webp"
   },
   "Elixir Maior": {
-    "file": "/items/elixir-maior.webp"
+    "file": "/item-art/elixir-maior.webp"
   },
   "Poção de Reviver": {
-    "file": "/items/pocao-de-reviver.webp"
+    "file": "/item-art/pocao-de-reviver.webp"
   },
   "Pedra Negra (Arma)": {
-    "file": "/items/pedra-negra-arma.webp"
+    "file": "/item-art/pedra-negra-arma.webp"
   },
   "Pedra Negra (Armadura)": {
-    "file": "/items/pedra-negra-armadura.webp"
+    "file": "/item-art/pedra-negra-armadura.webp"
   },
   "Pedra Negra Mágica Concentrada (Arma)": {
-    "file": "/items/pedra-negra-magica-concentrada-arma.webp"
+    "file": "/item-art/pedra-negra-magica-concentrada-arma.webp"
   },
   "Pedra Negra Mágica Concentrada (Armadura)": {
-    "file": "/items/pedra-negra-magica-concentrada-armadura.webp"
+    "file": "/item-art/pedra-negra-magica-concentrada-armadura.webp"
   },
   "Água Pura": {
-    "file": "/items/agua-pura.webp"
+    "file": "/item-art/agua-pura.webp"
   },
   "Erva Medicinal": {
-    "file": "/items/erva-medicinal.webp"
+    "file": "/item-art/erva-medicinal.webp"
   },
   "Flor de Mana": {
-    "file": "/items/flor-de-mana.webp"
+    "file": "/item-art/flor-de-mana.webp"
   },
   "Raiz Vigorosa": {
-    "file": "/items/raiz-vigorosa.webp"
+    "file": "/item-art/raiz-vigorosa.webp"
   },
   "Cogumelo Lunar": {
-    "file": "/items/cogumelo-lunar.webp"
+    "file": "/item-art/cogumelo-lunar.webp"
   },
   "Seiva Ancestral": {
-    "file": "/items/seiva-ancestral.webp"
+    "file": "/item-art/seiva-ancestral.webp"
   },
   "Pó de Osso": {
-    "file": "/items/po-de-osso.webp"
+    "file": "/item-art/po-de-osso.webp"
   },
   "Cristal de Mana": {
-    "file": "/items/cristal-de-mana.webp"
+    "file": "/item-art/cristal-de-mana.webp"
   },
   "Glândula de Veneno": {
-    "file": "/items/glandula-de-veneno.webp"
+    "file": "/item-art/glandula-de-veneno.webp"
   },
   "Sangue de Monstro": {
-    "file": "/items/sangue-de-monstro.webp"
+    "file": "/item-art/sangue-de-monstro.webp"
   },
   "Lótus Negra": {
-    "file": "/items/lotus-negra.webp"
+    "file": "/item-art/lotus-negra.webp"
   },
   "Pena de Fênix": {
-    "file": "/items/pena-de-fenix.webp"
+    "file": "/item-art/pena-de-fenix.webp"
   },
   "Essência Cristalina": {
-    "file": "/items/essencia-cristalina.webp"
+    "file": "/item-art/essencia-cristalina.webp"
   },
   "Couro": {
-    "file": "/items/couro.webp"
+    "file": "/item-art/couro.webp"
   },
   "Ferro": {
-    "file": "/items/ferro.webp"
+    "file": "/item-art/ferro.webp"
   },
   "Estilhaço de Pedra Negra (Arma)": {
-    "file": "/items/estilhaco-de-pedra-negra-arma.webp"
+    "file": "/item-art/estilhaco-de-pedra-negra-arma.webp"
   },
   "Estilhaço de Pedra Negra (Armadura)": {
-    "file": "/items/estilhaco-de-pedra-negra-armadura.webp"
+    "file": "/item-art/estilhaco-de-pedra-negra-armadura.webp"
   },
   "Ferro Pesado": {
-    "file": "/items/ferro-pesado.webp"
+    "file": "/item-art/ferro-pesado.webp"
   },
   "Metal Leve": {
-    "file": "/items/metal-leve.webp"
+    "file": "/item-art/metal-leve.webp"
   },
   "Madeira Flexível": {
-    "file": "/items/madeira-flexivel.webp"
+    "file": "/item-art/madeira-flexivel.webp"
   },
   "Seiva de Ent": {
-    "file": "/items/seiva-de-ent.webp"
+    "file": "/item-art/seiva-de-ent.webp"
   },
   "Cristal Bruto": {
-    "file": "/items/cristal-bruto.webp"
+    "file": "/item-art/cristal-bruto.webp"
   },
   "Fragmentos de Joias": {
-    "file": "/items/fragmentos-de-joias.webp"
+    "file": "/item-art/fragmentos-de-joias.webp"
   },
   "Estilhaço de Memória": {
-    "file": "/items/estilhaco-de-memoria.webp"
+    "file": "/item-art/estilhaco-de-memoria.webp"
   },
   "Arco Curto": {
-    "file": "/items/arco-curto.webp"
+    "file": "/item-art/arco-curto.webp"
   },
   "Punhal do Caçador": {
-    "file": "/items/punhal-do-cacador.webp"
+    "file": "/item-art/punhal-do-cacador.webp"
   },
   "Manoplas do Discípulo": {
-    "file": "/items/manoplas-do-discipulo.webp"
+    "file": "/item-art/manoplas-do-discipulo.webp"
   },
   "Punhos de Aço": {
-    "file": "/items/punhos-de-aco.webp"
+    "file": "/item-art/punhos-de-aco.webp"
   },
   "Orbe de Cristal": {
-    "file": "/items/orbe-de-cristal.webp"
+    "file": "/item-art/orbe-de-cristal.webp"
   },
   "Orbe Rúnico": {
-    "file": "/items/orbe-runico.webp"
+    "file": "/item-art/orbe-runico.webp"
   },
   "Cinturão de Couro": {
-    "file": "/items/cinturao-de-couro.webp"
+    "file": "/item-art/cinturao-de-couro.webp"
   },
   "Faixa Ágil": {
-    "file": "/items/faixa-agil.webp"
+    "file": "/item-art/faixa-agil.webp"
   },
   "Cinta de Mana": {
-    "file": "/items/cinta-de-mana.webp"
+    "file": "/item-art/cinta-de-mana.webp"
   },
   "Cinturão de Força": {
-    "file": "/items/cinturao-de-forca.webp"
+    "file": "/item-art/cinturao-de-forca.webp"
   },
   "Cinturão Reforçado": {
-    "file": "/items/cinturao-reforcado.webp"
+    "file": "/item-art/cinturao-reforcado.webp"
   },
   "Faixa do Conjurador": {
-    "file": "/items/faixa-do-conjurador.webp"
+    "file": "/item-art/faixa-do-conjurador.webp"
   },
   "Anel de Cobre": {
-    "file": "/items/anel-de-cobre.webp"
+    "file": "/item-art/anel-de-cobre.webp"
   },
   "Anel do Batedor": {
-    "file": "/items/anel-do-batedor.webp"
+    "file": "/item-art/anel-do-batedor.webp"
   },
   "Anel de Quartzo": {
-    "file": "/items/anel-de-quartzo.webp"
+    "file": "/item-art/anel-de-quartzo.webp"
   },
   "Anel do Sentinela": {
-    "file": "/items/anel-do-sentinela.webp"
+    "file": "/item-art/anel-do-sentinela.webp"
   },
   "Anel do Duelista": {
-    "file": "/items/anel-do-duelista.webp"
+    "file": "/item-art/anel-do-duelista.webp"
   },
   "Anel do Brutamontes": {
-    "file": "/items/anel-do-brutamontes.webp"
+    "file": "/item-art/anel-do-brutamontes.webp"
   },
   "Colar de Osso": {
-    "file": "/items/colar-de-osso.webp"
+    "file": "/item-art/colar-de-osso.webp"
   },
   "Colar do Viajante": {
-    "file": "/items/colar-do-viajante.webp"
+    "file": "/item-art/colar-do-viajante.webp"
   },
   "Pingente de Cristal": {
-    "file": "/items/pingente-de-cristal.webp"
+    "file": "/item-art/pingente-de-cristal.webp"
   },
   "Amuleto de Ferro": {
-    "file": "/items/amuleto-de-ferro.webp"
+    "file": "/item-art/amuleto-de-ferro.webp"
   },
   "Gargantilha de Aço": {
-    "file": "/items/gargantilha-de-aco.webp"
+    "file": "/item-art/gargantilha-de-aco.webp"
   },
   "Colar do Conjurador": {
-    "file": "/items/colar-do-conjurador.webp"
+    "file": "/item-art/colar-do-conjurador.webp"
   },
   "Manoplas da Fera": {
-    "file": "/items/manoplas-da-fera.webp"
+    "file": "/item-art/manoplas-da-fera.webp"
   },
   "Punhos do Mestre Marcial": {
-    "file": "/items/punhos-do-mestre-marcial.webp"
+    "file": "/item-art/punhos-do-mestre-marcial.webp"
   },
   "Punhos do Dragão Interior": {
-    "file": "/items/punhos-do-dragao-interior.webp"
+    "file": "/item-art/punhos-do-dragao-interior.webp"
   },
   "Orbe da Mata Espectral": {
-    "file": "/items/orbe-da-mata-espectral.webp"
+    "file": "/item-art/orbe-da-mata-espectral.webp"
   },
   "Orbe da Tempestade Arcana": {
-    "file": "/items/orbe-da-tempestade-arcana.webp"
+    "file": "/item-art/orbe-da-tempestade-arcana.webp"
   },
   "Coração de Mana Eterno": {
-    "file": "/items/coracao-de-mana-eterno.webp"
+    "file": "/item-art/coracao-de-mana-eterno.webp"
   },
   "Cinto da Mata Viva": {
-    "file": "/items/cinto-da-mata-viva.webp"
+    "file": "/item-art/cinto-da-mata-viva.webp"
   },
   "Cinta de Cristal Pulsante": {
-    "file": "/items/cinta-de-cristal-pulsante.webp"
+    "file": "/item-art/cinta-de-cristal-pulsante.webp"
   },
   "Cinturão do Colosso": {
-    "file": "/items/cinturao-do-colosso.webp"
+    "file": "/item-art/cinturao-do-colosso.webp"
   },
   "Faixa do Destino": {
-    "file": "/items/faixa-do-destino.webp"
+    "file": "/item-art/faixa-do-destino.webp"
   },
   "Escudo do Guardião": {
-    "file": "/items/escudo-do-guardiao.webp"
+    "file": "/item-art/escudo-do-guardiao.webp"
   },
   "Égide do Baluarte": {
-    "file": "/items/egide-do-baluarte.webp"
+    "file": "/item-art/egide-do-baluarte.webp"
   },
   "Muralha Viva": {
-    "file": "/items/muralha-viva.webp"
+    "file": "/item-art/muralha-viva.webp"
   },
   "Cajado do Bosque Antigo": {
-    "file": "/items/cajado-do-bosque-antigo.webp"
+    "file": "/item-art/cajado-do-bosque-antigo.webp"
   },
   "Lâmina do Carrasco": {
-    "file": "/items/lamina-do-carrasco.webp"
+    "file": "/item-art/lamina-do-carrasco.webp"
   },
   "Presas Gêmeas": {
-    "file": "/items/presas-gemeas.webp"
+    "file": "/item-art/presas-gemeas.webp"
   },
   "Arco da Tormenta": {
-    "file": "/items/arco-da-tormenta.webp"
+    "file": "/item-art/arco-da-tormenta.webp"
   },
   "Adaga de Parada": {
-    "file": "/items/adaga-de-parada.webp"
+    "file": "/item-art/adaga-de-parada.webp"
   },
   "Mão-Esquerda do Duelista": {
-    "file": "/items/mao-esquerda-do-duelista.webp"
+    "file": "/item-art/mao-esquerda-do-duelista.webp"
   },
   "Talismã do Discípulo": {
-    "file": "/items/talisma-do-discipulo.webp"
+    "file": "/item-art/talisma-do-discipulo.webp"
   },
   "Rosário de Jade": {
-    "file": "/items/rosario-de-jade.webp"
+    "file": "/item-art/rosario-de-jade.webp"
   },
   "Aparo da Mata Espectral": {
-    "file": "/items/aparo-da-mata-espectral.webp"
+    "file": "/item-art/aparo-da-mata-espectral.webp"
   },
   "Presa de Aço Gêmea": {
-    "file": "/items/presa-de-aco-gemea.webp"
+    "file": "/item-art/presa-de-aco-gemea.webp"
   },
   "Fio do Crepúsculo": {
-    "file": "/items/fio-do-crepusculo.webp"
+    "file": "/item-art/fio-do-crepusculo.webp"
   },
   "Talismã da Fera Interior": {
-    "file": "/items/talisma-da-fera-interior.webp"
+    "file": "/item-art/talisma-da-fera-interior.webp"
   },
   "Selo do Punho Sereno": {
-    "file": "/items/selo-do-punho-sereno.webp"
+    "file": "/item-art/selo-do-punho-sereno.webp"
   },
   "Mandala do Cosmo": {
-    "file": "/items/mandala-do-cosmo.webp"
+    "file": "/item-art/mandala-do-cosmo.webp"
   },
   "Bandagem de Linho": {
-    "file": "/items/bandagem-de-linho.webp",
+    "file": "/item-art/bandagem-de-linho.webp",
     "publicId": "dolrath/characters/avatar/bandagem-de-linho"
   },
   "Ração": {
-    "file": "/items/racao.webp",
+    "file": "/item-art/racao.webp",
     "publicId": "dolrath/characters/avatar/racao"
   },
   "Água": {
-    "file": "/items/agua.webp",
+    "file": "/item-art/agua.webp",
     "publicId": "dolrath/characters/avatar/agua"
   },
   "Trigo": {
-    "file": "/items/trigo.webp",
+    "file": "/item-art/trigo.webp",
     "publicId": "dolrath/characters/avatar/trigo"
   },
   "Peixe Prateado": {
-    "file": "/items/peixe-prateado.webp",
+    "file": "/item-art/peixe-prateado.webp",
     "publicId": "dolrath/characters/avatar/peixe-prateado"
   },
   "Frutos do Mar": {
-    "file": "/items/frutos-do-mar.webp",
+    "file": "/item-art/frutos-do-mar.webp",
     "publicId": "dolrath/characters/avatar/frutos-do-mar"
   },
   "Pérola Bruta": {
-    "file": "/items/perola-bruta.webp",
+    "file": "/item-art/perola-bruta.webp",
     "publicId": "dolrath/characters/avatar/perola-bruta"
   },
   "Carne de Caça": {
-    "file": "/items/carne-de-caca.webp",
+    "file": "/item-art/carne-de-caca.webp",
     "publicId": "dolrath/characters/avatar/carne-de-caca"
   },
   "Carne Nobre": {
-    "file": "/items/carne-nobre.webp",
+    "file": "/item-art/carne-nobre.webp",
     "publicId": "dolrath/characters/avatar/carne-nobre"
   },
   "Pó de Joia": {
-    "file": "/items/po-de-joia.webp",
+    "file": "/item-art/po-de-joia.webp",
     "publicId": "dolrath/characters/avatar/po-de-joia"
   },
   "Fibra de Linho": {
-    "file": "/items/fibra-de-linho.webp",
+    "file": "/item-art/fibra-de-linho.webp",
     "publicId": "dolrath/characters/avatar/fibra-de-linho"
   },
   "Barra de Ferro": {
-    "file": "/items/barra-de-ferro.webp",
+    "file": "/item-art/barra-de-ferro.webp",
     "publicId": "dolrath/characters/avatar/barra-de-ferro"
   },
   "Barra de Aço": {
-    "file": "/items/barra-de-aco.webp",
+    "file": "/item-art/barra-de-aco.webp",
     "publicId": "dolrath/characters/avatar/barra-de-aco"
   },
   "Lâmina Polida": {
-    "file": "/items/lamina-polida.webp",
+    "file": "/item-art/lamina-polida.webp",
     "publicId": "dolrath/characters/avatar/lamina-polida"
   },
   "Cristal Lapidado": {
-    "file": "/items/cristal-lapidado.webp",
+    "file": "/item-art/cristal-lapidado.webp",
     "publicId": "dolrath/characters/avatar/cristal-lapidado"
   },
   "Joia Lapidada": {
-    "file": "/items/joia-lapidada.webp",
+    "file": "/item-art/joia-lapidada.webp",
     "publicId": "dolrath/characters/avatar/joia-lapidada"
   },
   "Tábua Aparelhada": {
-    "file": "/items/tabua-aparelhada.webp",
+    "file": "/item-art/tabua-aparelhada.webp",
     "publicId": "dolrath/characters/avatar/tabua-aparelhada"
   },
   "Verniz de Ent": {
-    "file": "/items/verniz-de-ent.webp",
+    "file": "/item-art/verniz-de-ent.webp",
     "publicId": "dolrath/characters/avatar/verniz-de-ent"
   },
   "Couro Curtido": {
-    "file": "/items/couro-curtido.webp",
+    "file": "/item-art/couro-curtido.webp",
     "publicId": "dolrath/characters/avatar/couro-curtido"
   },
   "Tecido de Linho": {
-    "file": "/items/tecido-de-linho.webp",
+    "file": "/item-art/tecido-de-linho.webp",
     "publicId": "dolrath/characters/avatar/tecido-de-linho"
   },
   "Farinha": {
-    "file": "/items/farinha.webp",
+    "file": "/item-art/farinha.webp",
     "publicId": "dolrath/characters/avatar/farinha"
   },
   "Extrato Herbal": {
-    "file": "/items/extrato-herbal.webp",
+    "file": "/item-art/extrato-herbal.webp",
     "publicId": "dolrath/characters/avatar/extrato-herbal"
   },
   "Essência de Mana": {
-    "file": "/items/essencia-de-mana.webp",
+    "file": "/item-art/essencia-de-mana.webp",
     "publicId": "dolrath/characters/avatar/essencia-de-mana"
   },
   "Extrato de Raiz": {
-    "file": "/items/extrato-de-raiz.webp",
+    "file": "/item-art/extrato-de-raiz.webp",
     "publicId": "dolrath/characters/avatar/extrato-de-raiz"
   },
   "Pão": {
-    "file": "/items/pao.webp",
+    "file": "/item-art/pao.webp",
     "publicId": "dolrath/characters/avatar/pao"
   },
   "Assado da Fazenda": {
-    "file": "/items/assado-da-fazenda.webp",
+    "file": "/item-art/assado-da-fazenda.webp",
     "publicId": "dolrath/characters/avatar/assado-da-fazenda"
   },
   "Salada de Ervas": {
-    "file": "/items/salada-de-ervas.webp",
+    "file": "/item-art/salada-de-ervas.webp",
     "publicId": "dolrath/characters/avatar/salada-de-ervas"
   },
   "Torta de Cogumelo": {
-    "file": "/items/torta-de-cogumelo.webp",
+    "file": "/item-art/torta-de-cogumelo.webp",
     "publicId": "dolrath/characters/avatar/torta-de-cogumelo"
   },
   "Ensopado Rústico": {
-    "file": "/items/ensopado-rustico.webp",
+    "file": "/item-art/ensopado-rustico.webp",
     "publicId": "dolrath/characters/avatar/ensopado-rustico"
   },
   "Banquete do Aventureiro": {
-    "file": "/items/banquete-do-aventureiro.webp",
+    "file": "/item-art/banquete-do-aventureiro.webp",
     "publicId": "dolrath/characters/avatar/banquete-do-aventureiro"
   },
   "Festim do Caçador": {
-    "file": "/items/festim-do-cacador.webp",
+    "file": "/item-art/festim-do-cacador.webp",
     "publicId": "dolrath/characters/avatar/festim-do-cacador"
   },
   "Salteado do Pescador": {
-    "file": "/items/salteado-do-pescador.webp",
+    "file": "/item-art/salteado-do-pescador.webp",
     "publicId": "dolrath/characters/avatar/salteado-do-pescador"
   },
   "Caldeirada Arcana": {
-    "file": "/items/caldeirada-arcana.webp",
+    "file": "/item-art/caldeirada-arcana.webp",
     "publicId": "dolrath/characters/avatar/caldeirada-arcana"
   },
   "Cozido do Baluarte": {
-    "file": "/items/cozido-do-baluarte.webp",
+    "file": "/item-art/cozido-do-baluarte.webp",
     "publicId": "dolrath/characters/avatar/cozido-do-baluarte"
   },
   "Semente de Trigo": {
-    "file": "/items/semente-de-trigo.webp",
+    "file": "/item-art/semente-de-trigo.webp",
     "publicId": "dolrath/characters/avatar/semente-de-trigo"
   },
   "Semente de Erva Medicinal": {
-    "file": "/items/semente-de-erva-medicinal.webp",
+    "file": "/item-art/semente-de-erva-medicinal.webp",
     "publicId": "dolrath/characters/avatar/semente-de-erva-medicinal"
   },
   "Semente de Linho": {
-    "file": "/items/semente-de-linho.webp",
+    "file": "/item-art/semente-de-linho.webp",
     "publicId": "dolrath/characters/avatar/semente-de-linho"
   },
   "Picareta do Minerador": {
-    "file": "/items/picareta-do-minerador.webp",
+    "file": "/item-art/picareta-do-minerador.webp",
     "publicId": "dolrath/characters/avatar/picareta-do-minerador"
   },
   "Foice da Herborista": {
-    "file": "/items/foice-da-herborista.webp",
+    "file": "/item-art/foice-da-herborista.webp",
     "publicId": "dolrath/characters/avatar/foice-da-herborista"
   },
   "Machado do Lenhador": {
-    "file": "/items/machado-do-lenhador.webp",
+    "file": "/item-art/machado-do-lenhador.webp",
     "publicId": "dolrath/characters/avatar/machado-do-lenhador"
   },
   "Vara de Pesca": {
-    "file": "/items/vara-de-pesca.webp",
+    "file": "/item-art/vara-de-pesca.webp",
     "publicId": "dolrath/characters/avatar/vara-de-pesca"
   },
   "Faca de Caça": {
-    "file": "/items/faca-de-caca.webp",
+    "file": "/item-art/faca-de-caca.webp",
     "publicId": "dolrath/characters/avatar/faca-de-caca"
   },
   "Traje do Minerador": {
-    "file": "/items/traje-do-minerador.webp",
+    "file": "/item-art/traje-do-minerador.webp",
     "publicId": "dolrath/characters/avatar/traje-do-minerador"
   },
   "Traje da Herborista": {
-    "file": "/items/traje-da-herborista.webp",
+    "file": "/item-art/traje-da-herborista.webp",
     "publicId": "dolrath/characters/avatar/traje-da-herborista"
   },
   "Traje do Lenhador": {
-    "file": "/items/traje-do-lenhador.webp",
+    "file": "/item-art/traje-do-lenhador.webp",
     "publicId": "dolrath/characters/avatar/traje-do-lenhador"
   },
   "Traje do Pescador": {
-    "file": "/items/traje-do-pescador.webp",
+    "file": "/item-art/traje-do-pescador.webp",
     "publicId": "dolrath/characters/avatar/traje-do-pescador"
   },
   "Traje do Caçador": {
-    "file": "/items/traje-do-cacador.webp",
+    "file": "/item-art/traje-do-cacador.webp",
     "publicId": "dolrath/characters/avatar/traje-do-cacador"
   }
 }

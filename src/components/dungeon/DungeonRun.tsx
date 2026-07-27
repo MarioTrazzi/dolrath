@@ -349,7 +349,7 @@ const LOOT_RARITY_RING: Record<string, { ring: string; glow: string; text: strin
   LEGENDARY: { ring: 'border-amber-400/70',   glow: 'rgba(251,191,36,0.6)',   text: 'text-amber-300' },
 }
 
-// Miniatura do item: usa a arte /items/<slug>.webp e cai no emoji se a imagem falhar
+// Miniatura do item: usa a arte /item-art/<slug>.webp e cai no emoji se a imagem falhar
 // (mesmo padrão da forja/alquimia). Substitui os emojis-placeholder (📦/🧪/⚒️/...) dos drops.
 function ItemThumb({ name, emoji, className = 'text-base' }: { name: string; emoji: string; className?: string }) {
   const [failed, setFailed] = useState(false)

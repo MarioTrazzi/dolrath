@@ -1255,9 +1255,13 @@ export function itemImageSlug(name: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-/** Caminho do asset de imagem do item (webp gerado por scripts/generate-item-images.ts). */
+/**
+ * Caminho do asset de imagem do item (webp em public/item-art/).
+ * NÃO usar `/items/…` — conflita com a rota App Router `app/items/[id]`,
+ * que no `next dev` engole `/items/*.webp` e devolve HTML (img cai no ícone).
+ */
 export function itemImagePath(name: string): string {
-  return `/items/${itemImageSlug(name)}.webp`;
+  return `/item-art/${itemImageSlug(name)}.webp`;
 }
 
 // Inclui as ferramentas/trajes de coleta (TOOL_CATALOG): eles ficam FORA do

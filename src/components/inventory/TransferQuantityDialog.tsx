@@ -56,6 +56,7 @@ export default function TransferQuantityDialog({
   if (!open || !mounted) return null;
 
   const clamp = (n: number) => Math.max(1, Math.min(maxQuantity, Math.floor(n) || 1));
+  // Paths legados /items/*.webp são reescritos em resolveImageUrl → /item-art/.
   const itemImage = resolveImageUrl(item.image) ?? (item.name ? itemImagePath(item.name) : null);
 
   const confirm = (n: number) => {

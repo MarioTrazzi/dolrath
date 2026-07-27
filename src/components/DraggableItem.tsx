@@ -1,14 +1,12 @@
 'use client';
 
-import { useState } from 'react';
 import { useDrag } from 'react-dnd';
 import ItemIcon from './ItemIcon';
 import { Item } from '@/types/item';
 import { ItemTooltip } from './ItemTooltip';
 import { EquipmentSlotType } from '@prisma/client';
-import { resolveImageUrl } from '@/lib/imageUrl';
-import { itemImagePath } from '@/lib/itemCatalog';
 import { getLevelLabel } from '@/lib/enhancementSystem';
+import { useResolvedItemImage } from '@/hooks/useResolvedItemImage';
 
 interface DraggableItemProps {
   item: Item;
@@ -43,11 +41,8 @@ interface DraggableItemProps {
 }
 
 export function DraggableItem({ item, isEquipped, enhancementLevel = 0, durability, maxDurability, quantity = 1, inventoryId, onEquip, onUnequip, onConsume, onEnhance, onOpenCraft, onTransfer, onSendToGlobal, onSell, characterId, compact, accent, dragSource, compareTo }: DraggableItemProps) {
-  // Imagem do item: banco (item.image) → asset estático por nome (/items/<slug>.webp)
-  // → ícone genérico só se a arte 404 (ex.: item sem webp). Cobre registros antigos
-  // (ingredientes/materiais) criados antes de gravarmos image no banco.
-  const [imgError, setImgError] = useState(false);
-  const itemImage = imgError ? null : (resolveImageUrl(item.image) ?? (item.name ? itemImagePath(item.name) : null));
+  // Imagem: banco → /item-art/<slug>.webp → ícone (cascata em useResolvedItemImage).
+  const { src: itemImage, onError: onItemImageError } = useResolvedItemImage(item.image, item.name);
   const showEnhancement = enhancementLevel > 0;
   const showQuantity = quantity > 1;
 
@@ -127,7 +122,7 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, durabili
               <img
                 src={itemImage}
                 alt={item.name}
-                onError={() => setImgError(true)}
+                onError={onItemImageError}
                 className={`w-full h-full object-cover art-bright group-hover:scale-110 transition-transform ${broken ? 'grayscale opacity-60' : ''}`}
                 referrerPolicy="no-referrer"
                 loading="lazy"
@@ -201,7 +196,7 @@ export function DraggableItem({ item, isEquipped, enhancementLevel = 0, durabili
             <img
               src={itemImage}
               alt={item.name}
-              onError={() => setImgError(true)}
+              onError={onItemImageError}
               className={`w-full h-full object-cover art-bright group-hover:scale-110 transition-transform ${broken ? 'grayscale opacity-60' : ''}`}
               referrerPolicy="no-referrer"
               loading="lazy"

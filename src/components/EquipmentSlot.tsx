@@ -6,10 +6,9 @@ import ItemIcon from './ItemIcon';
 import { ItemTooltip } from './ItemTooltip';
 import { Item } from '@/types/item';
 import { EquipmentSlotType } from '@prisma/client';
-import { useRef, useState } from 'react';
-import { resolveImageUrl } from '@/lib/imageUrl';
-import { itemImagePath } from '@/lib/itemCatalog';
+import { useRef } from 'react';
 import { getLevelLabel } from '@/lib/enhancementSystem';
+import { useResolvedItemImage } from '@/hooks/useResolvedItemImage';
 import { useI18n } from '@/lib/i18n/I18nProvider';
 import { localizeItemName } from '@/lib/i18n/catalog';
 
@@ -83,15 +82,11 @@ function canEquipInSlot(itemType: string, slotType: EquipmentSlotType): boolean 
 
 export function EquipmentSlot({ type, item, enhancementLevel = 0, durability, maxDurability, onEquip, onUnequip, compact, accent, ghost }: EquipmentSlotProps) {
   const { locale, t } = useI18n();
-  // Imagem: banco (item.image) → asset estático por nome (/items/<slug>.webp) →
-  // ícone genérico só se a arte 404. Espelha DraggableItem/ItemTooltip e cobre
-  // itens criados sem `image` no banco (ex.: acessórios novos), que antes caíam
-  // direto no ícone SVG ao serem equipados.
-  const [imgError, setImgError] = useState(false);
   const itemDisplayName = item ? localizeItemName(item.name, locale) : '';
-  const itemImage = item && !imgError
-    ? (resolveImageUrl(item.image) ?? (item.name ? itemImagePath(item.name) : null))
-    : null;
+  const { src: itemImage, onError: onItemImageError } = useResolvedItemImage(
+    item?.image,
+    item?.name,
+  );
   const showEnhancement = enhancementLevel > 0;
 
   // Barra de durabilidade da peça equipada (só quando a instância informa o valor).
@@ -167,7 +162,7 @@ export function EquipmentSlot({ type, item, enhancementLevel = 0, durability, ma
                 <img
                   src={itemImage}
                   alt={itemDisplayName}
-                  onError={() => setImgError(true)}
+                  onError={onItemImageError}
                   className={`w-full h-full object-cover art-bright group-hover:scale-110 transition-transform ${broken ? 'grayscale opacity-60' : ''}`}
                   referrerPolicy="no-referrer"
                   loading="lazy"
@@ -223,7 +218,7 @@ export function EquipmentSlot({ type, item, enhancementLevel = 0, durability, ma
               <img
                 src={itemImage}
                 alt={itemDisplayName}
-                onError={() => setImgError(true)}
+                onError={onItemImageError}
                 className={`w-full h-full object-cover art-bright group-hover:scale-110 transition-transform ${broken ? 'grayscale opacity-60' : ''}`}
                 referrerPolicy="no-referrer"
                 loading="lazy"

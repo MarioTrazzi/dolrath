@@ -53,6 +53,22 @@ export const HERO_SPRITES: Record<string, HeroSpriteDef> = {
     back: 3,
     fps: 8,
   },
+
+  // Folha do Gemini com rótulos de linha; a de caminhada é a 2ª (o script
+  // descarta o texto). [5] e [4] são espelhos de [1] e [2], e [0]/[3] são o
+  // mesmo frontal espelhado — sobraram 2 passadas + 1 frontal.
+  // Sem frame de COSTAS nesta folha: subindo reto o mago segue de perfil.
+  // fps menor porque o ciclo tem 2 frames (o do ladino tem 4).
+  'humano-mage': {
+    src: '/sprites/humano-mage/walk.webp',
+    frameW: 161,
+    frameH: 192,
+    frames: 6,
+    facing: 'right',
+    walk: [1, 2],
+    idle: 0,
+    fps: 4,
+  },
 }
 
 /** Altura do boneco na tela (px) na cena de caminhada. */

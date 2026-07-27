@@ -1,0 +1,13 @@
+{
+  "slug": "humano-mage",
+  "race": "humano",
+  "class": "mage",
+  "name": "walk",
+  "src": "/sprites/humano-mage/walk.webp",
+  "frameW": 161,
+  "frameH": 192,
+  "frames": 6,
+  "row": 2,
+  "source": "~/Documents/dolrath/.claude/worktrees/elf-rogue-sprite-variants-cfc0db/sprite-sources/humano-mage.png",
+  "generatedAt": "2026-07-27T20:15:49.692Z"
+}

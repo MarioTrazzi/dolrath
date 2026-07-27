@@ -46,6 +46,13 @@ const CELL_H = CELL[1]
 
 /** Altura mínima (px) pra uma banda contar como linha de frames. */
 const MIN_BAND_H = 20
+/**
+ * Algumas folhas vêm com o nome da linha escrito em cima ("IDLE", "WALK", ...).
+ * O texto é escuro, então sobrevive ao flood fill e vira uma banda própria —
+ * o que empurraria a numeração das linhas. Banda muito mais baixa que a mediana
+ * é rótulo, não personagem (na prática ~33px contra ~290px).
+ */
+const LABEL_BAND_RATIO = 0.4
 /** Largura mínima (px) pra um run de colunas contar como frame. */
 const MIN_FRAME_W = 10
 /** Fração da altura da célula que a silhueta ocupa (respiro em cima). */
@@ -294,18 +301,33 @@ function isFlatBlob(raw: Raw, box: Box): boolean {
   return true
 }
 
-/** Centro de massa horizontal dos pixels opacos — âncora estável pro ciclo não tremer. */
+/**
+ * Âncora horizontal do frame: centro de massa dos PÉS (faixa de baixo), não do
+ * corpo inteiro. Adereço grande — o cajado do mago na horizontal, um arco, uma
+ * capa esvoaçante — puxaria o centro de massa pro lado e o boneco andaria
+ * descentralizado, tremendo ao alternar poses com o adereço em posições
+ * diferentes. Os pés ficam sempre embaixo do corpo.
+ */
+const FOOT_BAND = 0.22
+
 function centroidX(raw: Raw, box: Box): number {
-  let sum = 0
-  let count = 0
-  for (let y = box.y0; y < box.y1; y++) {
-    for (let x = box.x0; x < box.x1; x++) {
-      if (alphaAt(raw, x, y) === 0) continue
-      sum += x
-      count++
+  const footY0 = Math.max(box.y0, box.y1 - Math.round((box.y1 - box.y0) * FOOT_BAND))
+  const scan = (y0: number) => {
+    let sum = 0
+    let count = 0
+    for (let y = y0; y < box.y1; y++) {
+      for (let x = box.x0; x < box.x1; x++) {
+        if (alphaAt(raw, x, y) === 0) continue
+        sum += x
+        count++
+      }
     }
+    return { sum, count }
   }
-  return count ? sum / count : (box.x0 + box.x1) / 2
+  const feet = scan(footY0)
+  if (feet.count) return feet.sum / feet.count
+  const all = scan(box.y0) // frame deitado (morte) não tem "pé" — usa tudo
+  return all.count ? all.sum / all.count : (box.x0 + box.x1) / 2
 }
 
 // ============================================================
@@ -343,8 +365,15 @@ async function sliceOne(job: Job): Promise<string | null> {
   removeBackground(raw, bg, TOL)
   killHalo(raw, bg, TOL * 1.6, 2)
 
-  const bands = findBands(raw)
-  console.log(`   ${bands.length} bandas: ${bands.map(([a, b], i) => `#${i + 1} y=${a}..${b} (h=${b - a})`).join(', ')}`)
+  const rawBands = findBands(raw)
+  const heights = rawBands.map(([a, b]) => b - a).sort((x, y) => x - y)
+  const medianH = heights[Math.floor(heights.length / 2)] || 0
+  const bands = rawBands.filter(([a, b]) => b - a >= medianH * LABEL_BAND_RATIO)
+  const droppedLabels = rawBands.length - bands.length
+  console.log(
+    `   ${bands.length} linhas${droppedLabels ? ` (${droppedLabels} rótulo(s) de texto descartado(s))` : ''}: ` +
+      bands.map(([a, b], i) => `#${i + 1} h=${b - a}`).join(', ')
+  )
 
   if (ROW > bands.length) {
     console.error(`   ❌ --row ${ROW} não existe (folha tem ${bands.length} bandas) — pulando`)
@@ -372,9 +401,18 @@ async function sliceOne(job: Job): Promise<string | null> {
 
   // Escala única pra todos os frames: o mais alto da linha define o encaixe.
   // (Escala por frame faria o boneco crescer/encolher durante o ciclo.)
+  //
+  // A escala vem SÓ da altura, de propósito. Se entrasse a largura, um cajado
+  // na horizontal encolheria o mago inteiro e ele ficaria menor que o ladino na
+  // tela — mesmo com os dois tendo a mesma altura na folha. A célula é que se
+  // alarga pra caber o que sobra pros lados.
   const maxH = Math.max(...frames.map((b) => b.y1 - b.y0))
   const maxW = Math.max(...frames.map((b) => b.x1 - b.x0))
-  const scale = Math.min((CELL_H * FIT) / maxH, (CELL_W * FIT) / maxW)
+  const scale = (CELL_H * FIT) / maxH
+  const cellW = Math.max(CELL_W, Math.ceil(maxW * scale) + 4)
+  if (cellW > CELL_W) {
+    console.log(`   célula alargada ${CELL_W}→${cellW}px (frame mais largo: ${maxW}px)`)
+  }
   console.log(`   escala ${scale.toFixed(4)} (maior frame ${maxW}x${maxH})`)
 
   if (DRY) {
@@ -405,12 +443,12 @@ async function sliceOne(job: Job): Promise<string | null> {
     const outH = Math.max(1, Math.round(bh * scale))
     // centroide relativo ao bbox, já na escala final
     const cx = (centroidX(raw, box) - box.x0) * scale
-    const left = Math.round(CELL_W / 2 - cx)
+    const left = Math.round(cellW / 2 - cx)
     const top = CELL_H - outH // pé colado no chão da célula
 
     const cell = await sharp({
       create: {
-        width: CELL_W,
+        width: cellW,
         height: CELL_H,
         channels: 4,
         background: { r: 0, g: 0, b: 0, alpha: 0 },
@@ -419,7 +457,7 @@ async function sliceOne(job: Job): Promise<string | null> {
       .composite([
         {
           input: cropped,
-          left: Math.max(Math.min(left, CELL_W - outW), Math.min(0, CELL_W - outW)),
+          left: Math.max(Math.min(left, cellW - outW), Math.min(0, cellW - outW)),
           top: Math.max(0, top),
         },
       ])
@@ -430,10 +468,10 @@ async function sliceOne(job: Job): Promise<string | null> {
 
   mkdirSync(OUT_DIR, { recursive: true })
 
-  const stripW = CELL_W * cells.length
+  const stripW = cellW * cells.length
   const strip = sharp({
     create: { width: stripW, height: CELL_H, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
-  }).composite(cells.map((input, i) => ({ input, left: i * CELL_W, top: 0 })))
+  }).composite(cells.map((input, i) => ({ input, left: i * cellW, top: 0 })))
 
   await strip.clone().webp({ quality: 92, alphaQuality: 100 }).toFile(OUT_STRIP)
   console.log(`   ✓ ${OUT_NAME}.webp (${stripW}x${CELL_H}, ${cells.length} frames)`)
@@ -444,7 +482,7 @@ async function sliceOne(job: Job): Promise<string | null> {
     class: cls,
     name: OUT_NAME,
     src: `/sprites/${SLUG}/${OUT_NAME}.webp`,
-    frameW: CELL_W,
+    frameW: cellW,
     frameH: CELL_H,
     frames: cells.length,
     row: ROW,
@@ -457,9 +495,9 @@ async function sliceOne(job: Job): Promise<string | null> {
   const CONTACT_LABEL_H = 18
   const labels = cells.map((_, i) =>
     Buffer.from(
-      `<svg width="${CELL_W}" height="${CONTACT_LABEL_H}" xmlns="http://www.w3.org/2000/svg">` +
+      `<svg width="${cellW}" height="${CONTACT_LABEL_H}" xmlns="http://www.w3.org/2000/svg">` +
         `<rect width="100%" height="100%" fill="#1a1410"/>` +
-        `<text x="${CELL_W / 2}" y="13" font-family="monospace" font-size="12" fill="#e8c37a" text-anchor="middle">[${i}]</text>` +
+        `<text x="${cellW / 2}" y="13" font-family="monospace" font-size="12" fill="#e8c37a" text-anchor="middle">[${i}]</text>` +
         `</svg>`
     )
   )
@@ -472,8 +510,8 @@ async function sliceOne(job: Job): Promise<string | null> {
     },
   })
     .composite([
-      ...cells.map((input, i) => ({ input, left: i * CELL_W, top: 0 })),
-      ...labels.map((input, i) => ({ input, left: i * CELL_W, top: CELL_H })),
+      ...cells.map((input, i) => ({ input, left: i * cellW, top: 0 })),
+      ...labels.map((input, i) => ({ input, left: i * cellW, top: CELL_H })),
     ])
     .png()
     .toFile(OUT_CONTACT)
@@ -490,7 +528,7 @@ async function sliceOne(job: Job): Promise<string | null> {
   return (
     `  '${SLUG}': {\n` +
     `    src: '${meta.src}',\n` +
-    `    frameW: ${CELL_W},\n` +
+    `    frameW: ${cellW},\n` +
     `    frameH: ${CELL_H},\n` +
     `    frames: ${cells.length},\n` +
     `    facing: 'right',\n` +

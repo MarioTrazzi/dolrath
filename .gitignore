@@ -53,3 +53,6 @@ scripts/bot-fleet-events.jsonl
 *.tsbuildinfo
 next-env.d.ts
 server/node_modules/
+
+# Originais 1024px dos sprites de cena (derivados; o prompt é a fonte)
+art-src/

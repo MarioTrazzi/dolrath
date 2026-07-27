@@ -17,6 +17,7 @@ import type { MapSpot, SceneMapDef, SceneProp, Vec2 } from '@/lib/dungeonScene/t
 import { clamp, clampToWalkable, dist, lerp, sceneProps, pathToSpot } from '@/lib/dungeonScene/geometry'
 import type { NodeFlavor, SpotContent } from '@/lib/dungeonScene/nodeContents'
 import { drawNodeIcon, nodeIconColor } from '@/lib/dungeonScene/icons'
+import { getHeroSprite, type HeroSpriteDef } from '@/lib/heroSprites'
 import {
   monsterFacing,
   monsterPos,
@@ -26,8 +27,12 @@ import {
 
 export interface DungeonSceneProps {
   map: SceneMapDef
-  /** Retrato do herói (NFT). Sem ele, desenha um boneco procedural. */
+  /** Retrato do herói (NFT). Só entra se a raça×classe não tiver boneco. */
   heroSprite?: string | null
+  /** Raça do personagem — escolhe o boneco de caminhada (heroSprites.ts). */
+  race?: string | null
+  /** Classe do personagem — escolhe o boneco de caminhada (heroSprites.ts). */
+  heroClass?: string | null
   /** O que há em cada nó (planNodeContents). Sem isto, o nó vira só um "?". */
   contents?: Map<number, SpotContent>
   /** Nó que o herói procura agora. */
@@ -129,6 +134,8 @@ function mixHex(a: string, b: string, t: number) {
 export default function DungeonScene({
   map,
   heroSprite = null,
+  race = null,
+  heroClass = null,
   contents,
   targetNode,
   visitedNodes,
@@ -139,6 +146,10 @@ export default function DungeonScene({
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const heroImgRef = useRef<HTMLImageElement | null>(null)
+  // Boneco raça×classe. Quando existe, substitui o retrato NFT no mapa.
+  const heroStripRef = useRef<HTMLImageElement | null>(null)
+  const heroDefRef = useRef<HeroSpriteDef | null>(null)
+  const moveDirRef = useRef({ x: 0, y: 0, mag: 0 })
   const spritesRef = useRef(new Map<string, Sprite | null>())
   /** Altura em px da MAIOR variante de cada tipo — base da escala relativa. */
   const kindScaleRef = useRef(new Map<string, number>())
@@ -187,6 +198,26 @@ export default function DungeonScene({
       cancelled = true
     }
   }, [heroSprite])
+
+  // Boneco da combinação raça×classe (tem prioridade sobre o retrato NFT).
+  useEffect(() => {
+    let cancelled = false
+    const def = getHeroSprite(race, heroClass)
+    if (!def) {
+      heroDefRef.current = null
+      heroStripRef.current = null
+      return
+    }
+    ;(async () => {
+      const img = await loadImage(def.src)
+      if (cancelled) return
+      heroDefRef.current = img ? def : null
+      heroStripRef.current = img
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [race, heroClass])
 
   // Sprites do bioma (importados por scripts/import-craftpix-scene.ts).
   // Ausentes = null, e a cena cai no desenho procedural sem quebrar.
@@ -544,8 +575,43 @@ export default function DungeonScene({
       ctx.ellipse(x, y, u * 0.44, u * 0.16, 0, 0, Math.PI * 2)
       ctx.fill()
 
+      const def = heroDefRef.current
+      const strip = heroStripRef.current
       const img = heroImgRef.current
-      if (img) {
+
+      if (def && strip) {
+        // Boneco raça×classe: perfil andando de lado, costas subindo a trilha.
+        const mv = moveDirRef.current
+        const walking = mv.mag > 0.5
+        const sideways = Math.abs(mv.x) >= Math.abs(mv.y)
+        const backCycle =
+          def.back === undefined ? [] : Array.isArray(def.back) ? def.back : [def.back]
+        const useBack = walking && !sideways && backCycle.length > 0
+        const cycle = def.walk.length ? def.walk : [0]
+        const step = Math.floor(timeRef.current * def.fps)
+        const pick = (l: number[]) => l[((step % l.length) + l.length) % l.length]
+
+        const frame = !walking ? (def.idle ?? cycle[0]) : useBack ? pick(backCycle) : pick(cycle)
+        // De costas com uma pose só, alterna o espelho pra dar o 2º tempo.
+        const flip = useBack
+          ? backCycle.length > 1
+            ? 1
+            : step % 2 === 0
+              ? 1
+              : -1
+          : def.facing === 'right'
+            ? facingRef.current
+            : -facingRef.current
+
+        const h = u * 2.5
+        const w = h * (def.frameW / def.frameH)
+        ctx.save()
+        ctx.translate(x, y + bob)
+        ctx.scale(flip, 1)
+        ctx.imageSmoothingEnabled = true
+        ctx.drawImage(strip, frame * def.frameW, 0, def.frameW, def.frameH, -w / 2, -h, w, h)
+        ctx.restore()
+      } else if (img) {
         const h = u * 2.5
         const w = h * ((img.naturalWidth || 1) / (img.naturalHeight || 1))
         ctx.save()
@@ -695,12 +761,18 @@ export default function DungeonScene({
       }
 
       if (dir) {
-        const speed = WALK_SPEED * Math.hypot(dir.x, dir.y)
+        const mag = Math.hypot(dir.x, dir.y)
+        const speed = WALK_SPEED * mag
         const want = { x: hero.x + dir.x * WALK_SPEED * dt, y: hero.y + dir.y * WALK_SPEED * dt }
         const next = clampToWalkable(m, want)
         heroRef.current = next
         if (Math.abs(dir.x) > 0.05) facingRef.current = dir.x > 0 ? 1 : -1
         walkPhaseRef.current += dt * (6 + speed)
+        // Perambular parado tem magnitude ~0.25; seguir rota tem 1. O boneco só
+        // conta como "andando" (e escolhe perfil vs costas) no segundo caso.
+        moveDirRef.current = { x: dir.x, y: dir.y, mag }
+      } else {
+        moveDirRef.current = { x: 0, y: 0, mag: 0 }
       }
 
       // Nó de combate abre ao ENCOSTAR no vulto, não ao pisar no centro do

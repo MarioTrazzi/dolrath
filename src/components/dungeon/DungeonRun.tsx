@@ -2921,6 +2921,8 @@ export default function DungeonRun({
             <DungeonScene
               map={sceneMap}
               heroSprite={character.avatar}
+              race={character.race}
+              heroClass={character.class}
               contents={sceneContents}
               targetNode={sceneTarget}
               visitedNodes={sceneVisited}

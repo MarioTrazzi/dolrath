@@ -9,9 +9,11 @@ import { DUNGEONS, scaleMonster, scaleMonsterGroup, pickMonster, earlyPoolOf, ro
 
 const DUNGEON = DUNGEONS.floresta
 
-// elfo/rogue é a única combinação com boneco em heroSprites.ts — assim a mock também
-// exercita o sprite da WalkScene. Troque pra uma combinação sem arte (ex.: draconiano/monk)
-// para conferir o fallback do card antigo.
+// Combinação padrão; troque pela URL pra conferir os outros bonecos na cena:
+//   /dev/dungeon-mock?race=humano&class=mage
+//   /dev/dungeon-mock?race=metamorfo&class=monk
+//   /dev/dungeon-mock?race=draconiano&class=warrior
+// Uma combinação sem boneco (ex.: elfo/mage) cai no retrato/procedural.
 const CHAR: DungeonCharacter = {
   id: 'dev-char',
   name: 'Lyra',
@@ -130,15 +132,23 @@ function installFetchStub() {
 
 export default function DungeonMockPage() {
   const [ready, setReady] = useState(false)
+  const [hero, setHero] = useState<DungeonCharacter>(CHAR)
   useEffect(() => {
     installFetchStub()
+    // Raça/classe pela query — o boneco da cena vem de heroSprites.ts.
+    const q = new URLSearchParams(window.location.search)
+    const race = q.get('race')
+    const cls = q.get('class')
+    if (race || cls) {
+      setHero({ ...CHAR, race: race || CHAR.race, class: cls || CHAR.class })
+    }
     setReady(true)
   }, [])
   if (!ready) return null
   return (
     <DungeonRun
       dungeon={DUNGEON}
-      character={CHAR}
+      character={hero}
       onExit={() => window.location.reload()}
     />
   )

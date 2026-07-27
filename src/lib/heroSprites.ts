@@ -89,6 +89,24 @@ export const HERO_SPRITES: Record<string, HeroSpriteDef> = {
     back: [1, 5],
     fps: 4,
   },
+
+  // Perfil e costas na mesma linha 2. [4] e [5] olham pra ESQUERDA em fases
+  // diferentes (97.8 normal contra 128.6 espelhado — não são espelhos).
+  // Costas: [2] e [3] são espelhos um do outro, o que alterna as pernas de
+  // graça. Efeito colateral: a espada nas costas troca de ombro a cada frame.
+  // A 4 fps quase não se nota; se incomodar, back: [2] sozinho dá o mesmo
+  // resultado (a WalkScene espelha um frame único).
+  'draconiano-warrior': {
+    src: '/sprites/draconiano-warrior/walk.webp',
+    frameW: 148,
+    frameH: 192,
+    frames: 6,
+    facing: 'left',
+    walk: [4, 5],
+    idle: 0,
+    back: [2, 3],
+    fps: 4,
+  },
 }
 
 /** Altura do boneco na tela (px) na cena de caminhada. */

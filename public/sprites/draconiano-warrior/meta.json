@@ -1,0 +1,15 @@
+{
+  "slug": "draconiano-warrior",
+  "race": "draconiano",
+  "class": "warrior",
+  "name": "walk",
+  "src": "/sprites/draconiano-warrior/walk.webp",
+  "frameW": 148,
+  "frameH": 192,
+  "frames": 6,
+  "rows": [
+    2
+  ],
+  "source": "~/Documents/dolrath/.claude/worktrees/elf-rogue-sprite-variants-cfc0db/sprite-sources/draconiano-warrior.png",
+  "generatedAt": "2026-07-27T22:52:55.776Z"
+}

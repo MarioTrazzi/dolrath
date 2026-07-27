@@ -1,0 +1,82 @@
+{
+  "cmrg5j93p0002vbp3ugmj9xac": {
+    "characterId": "cmrg5j93p0002vbp3ugmj9xac",
+    "name": "Arkantos",
+    "race": "elfo",
+    "class": "rogue",
+    "avatar": "/character-seeds/arkantos-elfo-rogue.webp",
+    "transformations": {
+      "celestial": "/character-seeds/arkantos-elfo-rogue-celestial.webp"
+    }
+  },
+  "cmrg5j9bo0003vbp3cknp9vh5": {
+    "characterId": "cmrg5j9bo0003vbp3cknp9vh5",
+    "name": "Drakmon",
+    "race": "draconiano",
+    "class": "warrior",
+    "avatar": "/character-seeds/drakmon-draconiano-warrior.webp",
+    "transformations": {
+      "dragon": "/character-seeds/drakmon-draconiano-warrior-dragon.webp"
+    }
+  },
+  "cmrg5j9uh0006vbp3hegz8gf4": {
+    "characterId": "cmrg5j9uh0006vbp3hegz8gf4",
+    "name": "Amir",
+    "race": "humano",
+    "class": "mage",
+    "avatar": "/character-seeds/amir-humano-mage.webp",
+    "transformations": {
+      "seventh_sense": "/character-seeds/amir-humano-mage-seventh_sense.webp"
+    }
+  },
+  "cmrg5j8l40000vbp31l4xdfan": {
+    "characterId": "cmrg5j8l40000vbp31l4xdfan",
+    "name": "Tosrakan",
+    "race": "humano",
+    "class": "mage",
+    "avatar": "/character-seeds/tosrakan-humano-mage.webp",
+    "transformations": {
+      "seventh_sense": "/character-seeds/tosrakan-humano-mage-seventh_sense.webp"
+    }
+  },
+  "cmrg5j9hg0004vbp3jmaqgksn": {
+    "characterId": "cmrg5j9hg0004vbp3jmaqgksn",
+    "name": "Noatasrk",
+    "race": "draconiano",
+    "class": "mage",
+    "avatar": "/character-seeds/noatasrk-draconiano-mage.webp",
+    "transformations": {
+      "dragon": "/character-seeds/noatasrk-draconiano-mage-dragon.webp"
+    }
+  },
+  "cmrg5j9oz0005vbp30setn2h9": {
+    "characterId": "cmrg5j9oz0005vbp30setn2h9",
+    "name": "Drakark",
+    "race": "draconiano",
+    "class": "monk",
+    "avatar": "/character-seeds/drakark-draconiano-monk.webp",
+    "transformations": {
+      "dragon": "/character-seeds/drakark-draconiano-monk-dragon.webp"
+    }
+  },
+  "cmrg5j8wr0001vbp3v3mbi6t3": {
+    "characterId": "cmrg5j8wr0001vbp3v3mbi6t3",
+    "name": "Sotarkan",
+    "race": "metamorfo",
+    "class": "monk",
+    "avatar": "/character-seeds/sotarkan-metamorfo-monk.webp",
+    "transformations": {
+      "default": "/character-seeds/sotarkan-metamorfo-monk-default.webp"
+    }
+  },
+  "cmridp3uy0000jx04hiaspioy": {
+    "characterId": "cmridp3uy0000jx04hiaspioy",
+    "name": "DemonD",
+    "race": "draconiano",
+    "class": "rogue",
+    "avatar": "/character-seeds/demond-draconiano-rogue.webp",
+    "transformations": {
+      "dragon": "/character-seeds/demond-draconiano-rogue-dragon.webp"
+    }
+  }
+}

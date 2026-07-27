@@ -6,6 +6,8 @@
 //   npx tsx scripts/slice-hero-sprite-sheet.ts --race elfo --class rogue --row 2
 // Calibre os índices/fps na bancada /dev/sprite-lab antes de congelar aqui.
 
+import { normalizeCombatClass } from '@/lib/combatModel'
+
 /** Lado para o qual a folha original olha. Espelhamos em runtime para o outro lado. */
 export type SpriteFacing = 'left' | 'right'
 
@@ -126,4 +128,21 @@ export function heroSpriteKey(race?: string | null, cls?: string | null): string
 export function getHeroSprite(race?: string | null, cls?: string | null): HeroSpriteDef | null {
   if (!race || !cls) return null
   return HERO_SPRITES[heroSpriteKey(race, cls)] || null
+}
+
+/**
+ * Igual ao getHeroSprite, mas TOLERANTE ao que vem do banco: a raça pode chegar
+ * com maiúscula/acento ("Elfo") e a classe em português ("Ladino"). Sem isto o
+ * lookup cru falha em silêncio e o herói cai no retrato, que foi exatamente o
+ * bug de produção. Use esta função nas cenas; a de cima fica por compatibilidade.
+ */
+export function resolveHeroSprite(race?: string | null, cls?: string | null): HeroSpriteDef | null {
+  const r = (race || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+  const c = normalizeCombatClass(cls)
+  if (!r || !c) return null
+  return HERO_SPRITES[`${r}-${c}`] || null
 }

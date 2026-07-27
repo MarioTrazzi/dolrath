@@ -1,0 +1,80 @@
+{
+  "humano-warrior": {
+    "race": "humano",
+    "class": "warrior",
+    "avatar": "/character-seeds/humano-warrior.webp",
+    "transformations": {
+      "seventh_sense": "/character-seeds/humano-warrior-seventh_sense.webp"
+    }
+  },
+  "humano-rogue": {
+    "race": "humano",
+    "class": "rogue",
+    "avatar": "/character-seeds/humano-rogue.webp",
+    "transformations": {
+      "seventh_sense": "/character-seeds/humano-rogue-seventh_sense.webp"
+    }
+  },
+  "humano-monk": {
+    "race": "humano",
+    "class": "monk",
+    "avatar": "/character-seeds/humano-monk.webp",
+    "transformations": {
+      "seventh_sense": "/character-seeds/humano-monk-seventh_sense.webp"
+    }
+  },
+  "metamorfo-warrior": {
+    "race": "metamorfo",
+    "class": "warrior",
+    "avatar": "/character-seeds/metamorfo-warrior.webp",
+    "transformations": {
+      "wolf": "/character-seeds/metamorfo-warrior-wolf.webp",
+      "bear": "/character-seeds/metamorfo-warrior-bear.webp",
+      "eagle": "/character-seeds/metamorfo-warrior-eagle.webp"
+    }
+  },
+  "metamorfo-rogue": {
+    "race": "metamorfo",
+    "class": "rogue",
+    "avatar": "/character-seeds/metamorfo-rogue.webp",
+    "transformations": {
+      "wolf": "/character-seeds/metamorfo-rogue-wolf.webp",
+      "bear": "/character-seeds/metamorfo-rogue-bear.webp",
+      "eagle": "/character-seeds/metamorfo-rogue-eagle.webp"
+    }
+  },
+  "metamorfo-mage": {
+    "race": "metamorfo",
+    "class": "mage",
+    "avatar": "/character-seeds/metamorfo-mage.webp",
+    "transformations": {
+      "wolf": "/character-seeds/metamorfo-mage-wolf.webp",
+      "bear": "/character-seeds/metamorfo-mage-bear.webp",
+      "eagle": "/character-seeds/metamorfo-mage-eagle.webp"
+    }
+  },
+  "elfo-warrior": {
+    "race": "elfo",
+    "class": "warrior",
+    "avatar": "/character-seeds/elfo-warrior.webp",
+    "transformations": {
+      "celestial": "/character-seeds/elfo-warrior-celestial.webp"
+    }
+  },
+  "elfo-mage": {
+    "race": "elfo",
+    "class": "mage",
+    "avatar": "/character-seeds/elfo-mage.webp",
+    "transformations": {
+      "celestial": "/character-seeds/elfo-mage-celestial.webp"
+    }
+  },
+  "elfo-monk": {
+    "race": "elfo",
+    "class": "monk",
+    "avatar": "/character-seeds/elfo-monk.webp",
+    "transformations": {
+      "celestial": "/character-seeds/elfo-monk-celestial.webp"
+    }
+  }
+}

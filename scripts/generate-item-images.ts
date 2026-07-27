@@ -9,7 +9,7 @@
 //   npx tsx scripts/generate-item-images.ts --force         # regenera mesmo se já existe
 //
 // Persistência (automática conforme as credenciais disponíveis):
-//   1) Sempre salva o PNG em public/items/<slug>.png (asset estático / commit).
+//   1) Sempre salva o webp em public/item-art/<slug>.webp (asset estático / commit).
 //   2) Se NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME + _UPLOAD_PRESET → sobe pro Cloudinary.
 //   3) Se DATABASE_URL → atualiza Item.image no banco.
 // Sempre escreve scripts/item-image-manifest.json (nome → arquivo/publicId).
@@ -68,7 +68,7 @@ const UPLOAD_PRESET = (process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || '').t
 const HAS_CLOUDINARY = Boolean(CLOUD_NAME && UPLOAD_PRESET)
 const HAS_DB = Boolean((process.env.DATABASE_URL || '').trim())
 
-const OUT_DIR = join('public', 'items')
+const OUT_DIR = join('public', 'item-art')
 const MANIFEST = join('scripts', 'item-image-manifest.json')
 
 // ---------- helpers ----------
@@ -211,7 +211,7 @@ async function main() {
 
     const slug = itemImageSlug(s.name)
     const filePath = join(OUT_DIR, `${slug}.webp`)
-    const publicPath = `/items/${slug}.webp`
+    const publicPath = `/item-art/${slug}.webp`
 
     if (!FORCE && existsSync(filePath)) {
       console.log(`⏭️  ${s.name} (já existe ${publicPath})`)
@@ -259,7 +259,7 @@ async function main() {
 
   if (prisma) await prisma.$disconnect()
   console.log(`\n✅ Concluído. ${made} gerado(s), ${done} processado(s). Manifesto: ${MANIFEST}`)
-  if (!HAS_CLOUDINARY) console.log('ℹ️  Cloudinary não configurado: imagens salvas em public/items/ (referência /items/<slug>.png).')
+  if (!HAS_CLOUDINARY) console.log('ℹ️  Cloudinary não configurado: imagens salvas em public/item-art/ (referência /item-art/<slug>.webp).')
   if (!HAS_DB) console.log('ℹ️  DATABASE_URL ausente: o banco não foi atualizado (rode em um ambiente com DB, ou reseed).')
 }
 

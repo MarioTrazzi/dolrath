@@ -11,7 +11,7 @@
 //   npx tsx scripts/edit-item-images.ts --only "Espada do Veterano"
 //   npx tsx scripts/edit-item-images.ts --dry-run       # só imprime os prompts
 //
-// Persistência: sobrescreve public/items/<slug>.webp. Se DATABASE_URL/Cloudinary
+// Persistência: sobrescreve public/item-art/<slug>.webp. Se DATABASE_URL/Cloudinary
 // estiverem configurados, atualiza igual ao generate (a referência por nome não
 // muda, então em geral basta o asset estático + commit/redeploy).
 
@@ -49,7 +49,7 @@ const ONLY = valOf('--only')
 const OPENAI_API_KEY = (process.env.OPENAI_API_KEY || '').trim()
 const MODEL = (process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1').trim()
 const SIZE = (process.env.OPENAI_IMAGE_SIZE || '1024x1024').trim()
-const OUT_DIR = join('public', 'items')
+const OUT_DIR = join('public', 'item-art')
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
@@ -181,7 +181,7 @@ async function main() {
     try {
       const img = await editOne(filePath, job.prompt)
       writeFileSync(filePath, img)
-      console.log(`✅ /items/${slug}.webp`)
+      console.log(`✅ /item-art/${slug}.webp`)
       await sleep(1200)
     } catch (err) {
       console.log(`❌ ${(err as Error).message}`)

@@ -1,4 +1,4 @@
-// 🔍 Auditoria: quais itens já têm imagem (public/items/<slug>.webp) e quais faltam.
+// 🔍 Auditoria: quais itens já têm imagem (public/item-art/<slug>.webp) e quais faltam.
 // Varre TODOS os catálogos (equipamento, consumível, ingrediente de alquimia,
 // material de forja, pedras) e cruza com os arquivos .webp + o manifest.
 //   npx tsx scripts/audit-item-images.ts
@@ -34,7 +34,7 @@ const groups: Row[] = [
   ...TOOL_CATALOG.map((t) => ({ name: t.name, group: 'FERRAMENTA/TRAJE (coleta)' })),
 ]
 
-const has = (name: string) => existsSync(join('public', 'items', `${itemImageSlug(name)}.webp`))
+const has = (name: string) => existsSync(join('public', 'item-art', `${itemImageSlug(name)}.webp`))
 
 const byGroup = new Map<string, { ok: string[]; miss: string[] }>()
 for (const r of groups) {

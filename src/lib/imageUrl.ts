@@ -65,8 +65,15 @@ export function resolveImageUrl(input?: string | null): string | null {
   const raw = typeof input === 'string' ? input.trim() : ''
   if (!raw) return null
 
-  // Caminho same-origin (ex.: /items/<slug>.webp) — já é uma URL válida.
-  if (raw.startsWith('/')) return raw
+  // Caminho same-origin (ex.: /item-art/<slug>.webp) — já é uma URL válida.
+  // Legado: Item.image no banco ainda pode apontar para /items/*.webp (antes do
+  // rename). Reescreve para /item-art/ — /items/ conflita com app/items/[id].
+  if (raw.startsWith('/')) {
+    if (raw.startsWith('/items/') && /\.webp($|\?)/i.test(raw)) {
+      return `/item-art/${raw.slice('/items/'.length)}`
+    }
+    return raw
+  }
 
   if (isLikelyUrl(raw)) {
     return normalizeUrl(raw)

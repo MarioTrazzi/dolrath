@@ -1,0 +1,13 @@
+{
+  "slug": "elfo-rogue",
+  "race": "elfo",
+  "class": "rogue",
+  "name": "walk",
+  "src": "/sprites/elfo-rogue/walk.webp",
+  "frameW": 128,
+  "frameH": 192,
+  "frames": 6,
+  "row": 2,
+  "source": "~/Documents/dolrath/.claude/worktrees/elf-rogue-sprite-variants-cfc0db/sprite-sources/elfo-rogue.png",
+  "generatedAt": "2026-07-27T13:01:25.791Z"
+}

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef } from 'react'
 import type { DungeonId } from '@/lib/dungeonAdventures'
+import { resolveHeroSprite, HERO_SPRITE_SCREEN_H, type HeroSpriteDef } from '@/lib/heroSprites'
 import { WALK_FULL_STRIP, WALK_HERO_SPRITE, FLORESTA_WALK_FALLBACK } from '@/lib/walkSceneAssets'
 
 // ============================================================
@@ -32,8 +33,12 @@ export interface WalkSceneProps {
   nodeIndex: number
   /** Pontos da trilha em % do mapa (x/y 0–100). */
   pathPoints: WalkPathPoint[]
-  /** Retrato do personagem (NFT) no card da trilha. */
+  /** Retrato do personagem (NFT) no card da trilha (fallback quando não há boneco). */
   avatar?: string | null
+  /** Raça do personagem — escolhe o boneco de caminhada (heroSprites.ts). */
+  race?: string | null
+  /** Classe do personagem — escolhe o boneco de caminhada (heroSprites.ts). */
+  heroClass?: string | null
   /** Marks revelados nos nós já visitados. */
   trailMarks?: WalkTrailMark[]
   /** Próximo evento é boss? (ainda mostra ? até o card). */
@@ -154,6 +159,8 @@ export default function WalkScene({
   nodeIndex,
   pathPoints,
   avatar = null,
+  race = null,
+  heroClass = null,
   trailMarks = [],
   nextIsBoss = false,
   onApproachComplete,
@@ -178,6 +185,12 @@ export default function WalkScene({
   const accentRef = useRef(accent)
   const nodeIndexRef = useRef(nodeIndex)
   const pathRef = useRef(pathPoints)
+  // Boneco de caminhada (raça×classe). Null = combinação sem arte -> card antigo.
+  const spriteImgRef = useRef<HTMLImageElement | null>(null)
+  const spriteDefRef = useRef<HeroSpriteDef | null>(null)
+  // Direção com histerese: a serpentina do vasculhar não pode fazer o boneco piscar de lado.
+  const facingRef = useRef<1 | -1>(1)
+  const prevHeroXRef = useRef<number | null>(null)
 
   modeRef.current = mode
   onCompleteRef.current = onApproachComplete
@@ -207,6 +220,15 @@ export default function WalkScene({
       const heroSrc = avatar || WALK_HERO_SPRITE
       const hero = await loadImage(heroSrc)
       if (!cancelled) heroImgRef.current = hero
+
+      // Boneco raça×classe: substitui o card quando a combinação tem arte.
+      const def = resolveHeroSprite(race, heroClass)
+      const strip = def ? await loadImage(def.src) : null
+      if (!cancelled) {
+        spriteDefRef.current = strip ? def : null
+        spriteImgRef.current = strip
+      }
+
       const mapUrl = WALK_FULL_STRIP[dungeonId]
       if (mapUrl) {
         let map = await loadImage(mapUrl)
@@ -219,7 +241,7 @@ export default function WalkScene({
     return () => {
       cancelled = true
     }
-  }, [dungeonId, avatar])
+  }, [dungeonId, avatar, race, heroClass])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -473,7 +495,7 @@ export default function WalkScene({
         ctx.globalAlpha = 1
       }
 
-      // Card retangular do personagem
+      // Boneco (raça×classe) ou, sem arte pra combinação, o card retangular antigo
       const sneak = m === 'scroll' || m === 'approach'
       // Vasculhar: bob mais alto/lento; approach: bob rápido de avanço
       const bob = m === 'scroll'
@@ -481,40 +503,106 @@ export default function WalkScene({
         : sneak
           ? Math.sin(bobRef.current * 8) * 2.0
           : Math.sin(bobRef.current * 2) * 1.0
-      const hero = heroImgRef.current
-      const cardW = Math.min(34, w * 0.085)
-      const cardH = cardW * 1.28
-      const cardX = heroScreenX - cardW / 2
-      const cardY = heroScreenY + bob - cardH * 0.55
-      const radius = Math.max(4, cardW * 0.12)
 
-      if (hero) {
-        ctx.save()
-        roundRectPath(ctx, cardX, cardY, cardW, cardH, radius)
-        ctx.clip()
-        const iw = hero.naturalWidth || hero.width
-        const ih = hero.naturalHeight || hero.height
-        const scale = Math.max(cardW / iw, cardH / ih)
-        const dw = iw * scale
-        const dh = ih * scale
-        ctx.drawImage(hero, cardX + (cardW - dw) / 2, cardY + (cardH - dh) / 2, dw, dh)
-        ctx.restore()
+      // Direção do passo: dx acumulado com histerese (weave sozinho não vira o boneco)
+      const prevX = prevHeroXRef.current
+      const dx = prevX === null ? 0 : heroWorld.x - prevX
+      prevHeroXRef.current = heroWorld.x
+      const TURN_DX = 0.35 // px/frame — abaixo disso o passo é "pro fundo", não lateral
+      if (dx > TURN_DX) facingRef.current = 1
+      else if (dx < -TURN_DX) facingRef.current = -1
+      const movingSideways = Math.abs(dx) > TURN_DX
 
-        roundRectPath(ctx, cardX, cardY, cardW, cardH, radius)
-        ctx.strokeStyle = accentRef.current
-        ctx.lineWidth = 2
-        ctx.stroke()
+      const spriteDef = spriteDefRef.current
+      const spriteImg = spriteImgRef.current
+
+      if (spriteDef && spriteImg) {
+        const cycle = spriteDef.walk.length ? spriteDef.walk : [0]
+        const step = Math.floor(bobRef.current * spriteDef.fps)
+        const walking = m !== 'idle'
+
+        // De costas (subindo a trilha) alterna o espelho pra dar o 2º tempo do passo;
+        // de perfil, o ciclo roda e o espelho segue a direção do movimento.
+        const useBack = walking && !movingSideways && spriteDef.back !== undefined
+        const frame = !walking
+          ? (spriteDef.idle ?? cycle[0])
+          : useBack
+            ? (spriteDef.back as number)
+            : cycle[((step % cycle.length) + cycle.length) % cycle.length]
+
+        const flip = useBack
+          ? (step % 2 === 0 ? 1 : -1)
+          : spriteDef.facing === 'right'
+            ? facingRef.current
+            : -facingRef.current
+
+        const dh = HERO_SPRITE_SCREEN_H
+        const dw = dh * (spriteDef.frameW / spriteDef.frameH)
+        const footY = heroScreenY + bob
+        const drawX = heroScreenX - dw / 2
+        const drawY = footY - dh
+
+        // Sombra no chão antes do boneco (fica por baixo dos pés)
         ctx.fillStyle = 'rgba(0,0,0,0.35)'
         ctx.beginPath()
-        ctx.ellipse(heroScreenX, cardY + cardH + 3, cardW * 0.38, 3.5, 0, 0, Math.PI * 2)
+        ctx.ellipse(heroScreenX, footY - 1, dw * 0.22, 3, 0, 0, Math.PI * 2)
         ctx.fill()
+
+        ctx.save()
+        ctx.imageSmoothingEnabled = true
+        if (flip < 0) {
+          ctx.translate(heroScreenX, 0)
+          ctx.scale(-1, 1)
+          ctx.translate(-heroScreenX, 0)
+        }
+        ctx.drawImage(
+          spriteImg,
+          frame * spriteDef.frameW,
+          0,
+          spriteDef.frameW,
+          spriteDef.frameH,
+          drawX,
+          drawY,
+          dw,
+          dh
+        )
+        ctx.restore()
       } else {
-        ctx.fillStyle = '#2a1a12'
-        roundRectPath(ctx, cardX, cardY, cardW, cardH, radius)
-        ctx.fill()
-        ctx.strokeStyle = accentRef.current
-        ctx.lineWidth = 2
-        ctx.stroke()
+        const hero = heroImgRef.current
+        const cardW = Math.min(34, w * 0.085)
+        const cardH = cardW * 1.28
+        const cardX = heroScreenX - cardW / 2
+        const cardY = heroScreenY + bob - cardH * 0.55
+        const radius = Math.max(4, cardW * 0.12)
+
+        if (hero) {
+          ctx.save()
+          roundRectPath(ctx, cardX, cardY, cardW, cardH, radius)
+          ctx.clip()
+          const iw = hero.naturalWidth || hero.width
+          const ih = hero.naturalHeight || hero.height
+          const scale = Math.max(cardW / iw, cardH / ih)
+          const dw = iw * scale
+          const dh = ih * scale
+          ctx.drawImage(hero, cardX + (cardW - dw) / 2, cardY + (cardH - dh) / 2, dw, dh)
+          ctx.restore()
+
+          roundRectPath(ctx, cardX, cardY, cardW, cardH, radius)
+          ctx.strokeStyle = accentRef.current
+          ctx.lineWidth = 2
+          ctx.stroke()
+          ctx.fillStyle = 'rgba(0,0,0,0.35)'
+          ctx.beginPath()
+          ctx.ellipse(heroScreenX, cardY + cardH + 3, cardW * 0.38, 3.5, 0, 0, Math.PI * 2)
+          ctx.fill()
+        } else {
+          ctx.fillStyle = '#2a1a12'
+          roundRectPath(ctx, cardX, cardY, cardW, cardH, radius)
+          ctx.fill()
+          ctx.strokeStyle = accentRef.current
+          ctx.lineWidth = 2
+          ctx.stroke()
+        }
       }
 
       // chuva leve

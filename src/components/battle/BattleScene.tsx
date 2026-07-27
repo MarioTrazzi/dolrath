@@ -8,8 +8,7 @@ import { AnimatedDie } from '@/components/battle/AnimatedDice'
 import { getTransformationGlow } from '@/lib/transformationSystem'
 import { applyEnhancementToStats, getLevelLabel } from '@/lib/enhancementSystem'
 import { formatItemStats } from '@/lib/itemStats'
-import { resolveImageUrl } from '@/lib/imageUrl'
-import { itemImagePath } from '@/lib/itemCatalog'
+import { useResolvedItemImage } from '@/hooks/useResolvedItemImage'
 import {
   resolveActionFx, ImpactFX, AuraFX, DodgeFX, CritFX,
   IMPACT_MS, AURA_MS, type ImpactKind, type AuraKind,
@@ -247,14 +246,7 @@ function EquipSlot({ slot, item, size = 'sm' }: { slot: string; item: EquippedIt
   const [hover, setHover] = useState(false)
   const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
 
-  // Imagem: banco (item.image) → asset estático por nome (/items/<slug>.webp) →
-  // ícone genérico só se a arte 404. Mesmo padrão de EquipmentSlot/DraggableItem,
-  // para cobrir itens novos criados sem `image` no banco (ex.: colar/anel), que
-  // antes caíam direto no ItemIcon (SVG) aqui no combate.
-  const [imgError, setImgError] = useState(false)
-  const itemImage = !imgError
-    ? (resolveImageUrl(item.image) ?? (item.name ? itemImagePath(item.name) : null))
-    : null
+  const { src: itemImage, onError: onItemImageError } = useResolvedItemImage(item.image, item.name)
 
   const level = item.enhancementLevel || 0
   const stats = formatItemStats(applyEnhancementToStats(item.stats, level), item.type)
@@ -298,7 +290,7 @@ function EquipSlot({ slot, item, size = 'sm' }: { slot: string; item: EquippedIt
         <img
           src={itemImage}
           alt={item.name}
-          onError={() => setImgError(true)}
+          onError={onItemImageError}
           referrerPolicy="no-referrer"
           className="w-full h-full object-cover"
         />

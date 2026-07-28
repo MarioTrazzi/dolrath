@@ -15,7 +15,7 @@ export async function POST() {
   return NextResponse.json(
     {
       error:
-        'Endpoint desativado. As recompensas de masmorra são creditadas pelo servidor em /api/dungeon/run/step e /api/dungeon/run/combat.',
+        'Endpoint desativado. As recompensas de masmorra são roladas pelo servidor em /api/dungeon/run/step e creditadas em /api/dungeon/run/finish.',
       deprecated: true,
     },
     { status: 410 }

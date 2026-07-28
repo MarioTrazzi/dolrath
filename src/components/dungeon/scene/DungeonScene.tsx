@@ -44,6 +44,18 @@ export interface DungeonSceneProps {
   visitedNodes: number[]
   /** Congela o mundo (combate aberto por cima). */
   paused?: boolean
+  /**
+   * 🎥 Zoom cinematográfico de aproximação (1 = enquadramento normal). O valor é
+   * um ALVO: o loop interpola até ele, então trocar de 1 para 2.4 vira uma
+   * investida suave, nunca um corte. Usado na entrada em combate.
+   */
+  cinematicZoom?: number
+  /**
+   * Nó cujo monstro a câmera deve enquadrar junto do herói (null = segue só o
+   * herói). Com ele a câmera mira o meio do caminho entre os dois, para o vulto
+   * não ficar fora de quadro justo quando o zoom fecha.
+   */
+  focusNode?: number | null
   onReachSpot?: (spot: MapSpot) => void
   className?: string
 }
@@ -71,6 +83,8 @@ const TURN_DX = 0.35
 /** Achatamento vertical — dá o ar de 3/4 sem sair do top-down. */
 const Y_SQUASH = 0.82
 const CAM_FOLLOW = 5.5
+/** Velocidade da interpolação do zoom cinematográfico (maior = mais seco). */
+const CAM_ZOOM_SPEED = 3.2
 
 /**
  * Altura no MUNDO (unidades) da MAIOR variante de cada tipo — é o que dá a
@@ -161,6 +175,8 @@ export default function DungeonScene({
   targetNode,
   visitedNodes,
   paused = false,
+  cinematicZoom = 1,
+  focusNode = null,
   onReachSpot,
   className = '',
 }: DungeonSceneProps) {
@@ -192,11 +208,16 @@ export default function DungeonScene({
   const queuedNodeRef = useRef(-1)
   const reachedRef = useRef(new Set<number>())
 
+  /** Zoom VIVO (interpolado); `zoomTargetRef` é para onde ele está indo. */
+  const zoomRef = useRef(1)
+
   // ---- props espelhadas ----
   const contentsRef = useRef(contents)
   const targetRef = useRef(targetNode)
   const visitedRef = useRef(visitedNodes)
   const pausedRef = useRef(paused)
+  const zoomTargetRef = useRef(cinematicZoom)
+  const focusRef = useRef(focusNode)
   const onReachRef = useRef(onReachSpot)
   const mapRef = useRef(map)
 
@@ -204,6 +225,8 @@ export default function DungeonScene({
   targetRef.current = targetNode
   visitedRef.current = visitedNodes
   pausedRef.current = paused
+  zoomTargetRef.current = cinematicZoom
+  focusRef.current = focusNode
   onReachRef.current = onReachSpot
   mapRef.current = map
 
@@ -326,7 +349,11 @@ export default function DungeonScene({
     const props = sceneProps(mapRef.current)
     let running = true
     let last = performance.now()
-    let view = { w: 0, h: 0, ppu: 16 }
+    // `ppu` é o zoom EFETIVO (o que todo o desenho lê); `basePpu` é o
+    // enquadramento normal, que só o resize recalcula. O frame reescreve
+    // ppu = basePpu × zoom antes de desenhar — assim a aproximação
+    // cinematográfica passa por todas as projeções sem tocá-las uma a uma.
+    let view = { w: 0, h: 0, ppu: 16, basePpu: 16 }
 
     // ---- chuva ----
     // Gotas PERSISTENTES com velocidade. A versão anterior sorteava 26 posições
@@ -374,7 +401,8 @@ export default function DungeonScene({
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       // Retrato: o enquadramento é ditado pela LARGURA — ~26 unidades de mundo
       // atravessadas na tela, em qualquer altura de aparelho.
-      view = { w, h, ppu: clamp(w / 26, 10, 34) }
+      const basePpu = clamp(w / 26, 10, 34)
+      view = { w, h, basePpu, ppu: basePpu * zoomRef.current }
       fitDrops()
     }
     resize()
@@ -919,8 +947,24 @@ export default function DungeonScene({
 
       if (!pausedRef.current) stepWorld(dt)
 
-      // câmera
-      const target = heroRef.current
+      // 🎥 Zoom: sempre interpolado (mesmo pausado — a investida acontece com o
+      // mundo congelado). Reescreve o ppu efetivo antes de qualquer projeção.
+      const zk = 1 - Math.exp(-CAM_ZOOM_SPEED * dt)
+      zoomRef.current = lerp(zoomRef.current, zoomTargetRef.current, zk)
+      view.ppu = view.basePpu * zoomRef.current
+
+      // câmera — normalmente segue o herói; com `focusNode` mira o meio do
+      // caminho entre ele e o vulto daquele nó, para os dois caberem no quadro
+      // fechado da aproximação.
+      let target = heroRef.current
+      const focus = focusRef.current
+      if (focus != null) {
+        const mo = monstersRef.current.find(m => m.nodeIndex === focus)
+        if (mo) {
+          const mp = monsterPos(mo, timeRef.current)
+          target = { x: (target.x + mp.x) / 2, y: (target.y + mp.y) / 2 }
+        }
+      }
       if (!camReadyRef.current) {
         camRef.current = { ...target }
         camReadyRef.current = true

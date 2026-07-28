@@ -17,6 +17,7 @@ import {
   type CharacterForRun,
   type RunPending,
 } from '@/lib/dungeonRunServer'
+import { planDungeonRun } from '@/lib/dungeonRunPlan'
 import { regenAndPersist } from '@/lib/staminaServer'
 import type { DungeonDef, LootDrop } from '@/lib/dungeonAdventures'
 
@@ -169,8 +170,14 @@ export async function POST(req: Request) {
       })
     }
 
-    // Nó de exploração: rola o d20 no servidor.
-    const resolved = resolveExploreNode(dungeon, charForRun, node, nextIdx, run.tier)
+    // Nó de exploração: o QUE há no nó vem da planta da run (semeada pelo runId,
+    // a mesma que o cliente roda para pintar o mapa); o servidor rola o d20 do
+    // espólio e é dono dos stats.
+    const planned = planDungeonRun(dungeon, run.id).get(nextIdx)
+    if (!planned) {
+      return NextResponse.json({ error: 'Nó fora da planta da run' }, { status: 500 })
+    }
+    const resolved = resolveExploreNode(dungeon, charForRun, node, nextIdx, run.tier, planned)
 
     if (resolved.type === 'monster') {
       const pending = withLoot(resolved.pending)

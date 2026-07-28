@@ -1,0 +1,15 @@
+{
+  "slug": "aranha-gigante",
+  "kind": "monster",
+  "name": "walk",
+  "src": "/sprites/monsters/aranha-gigante/walk.webp",
+  "frameW": 319,
+  "frameH": 288,
+  "frames": 12,
+  "rows": [
+    1,
+    2
+  ],
+  "source": "~/Documents/dolrath/.claude/worktrees/zen-engelbart-e78c22/sprite-sources/monsters/floresta-sombria/aranha-gigante.png",
+  "generatedAt": "2026-07-28T18:27:49.039Z"
+}

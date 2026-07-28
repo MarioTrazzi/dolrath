@@ -21,7 +21,7 @@ import DungeonScene from '@/components/dungeon/scene/DungeonScene'
 import { useT } from '@/lib/i18n/I18nProvider'
 import { generateSceneMap } from '@/lib/dungeonScene/generateMap'
 import { dungeonSceneEnabled } from '@/lib/dungeonScene/enabled'
-import type { NodeFlavor, SpotContent } from '@/lib/dungeonScene/nodeContents'
+import { planNodeContents, type SpotContent } from '@/lib/dungeonScene/nodeContents'
 import type { MapSpot } from '@/lib/dungeonScene/types'
 import {
   buildWalkPathPoints,
@@ -700,6 +700,12 @@ export default function DungeonRun({
   const [layoutSeed] = useState(
     () => `${dungeon.id}:${Date.now().toString(36)}:${Math.floor(Math.random() * 0xffffffff).toString(36)}`
   )
+  /**
+   * Id da run — a seed COMPARTILHADA com o servidor. Chega no /start e é o que
+   * permite ao cliente montar a planta dos nós (quem é monstro, qual bicho e
+   * quantos) sem perguntar nada à rede.
+   */
+  const [runId, setRunId] = useState<string | null>(null)
   // A trilha SVG/treadmill continua existindo mesmo na cena: ela é a fonte de
   // `kind`/`tier` por nó (usada no header, no custo de stamina e no boss).
   const trailPoints = useMemo(
@@ -734,12 +740,24 @@ export default function DungeonRun({
    */
   const [sceneTarget, setSceneTarget] = useState(0)
   /**
-   * Sabor de cada nó JÁ resolvido — vem do que o servidor devolveu no /step,
-   * não de sorteio local: o servidor segue dono de monstro-vs-achado.
-   * (planNodeContents, com orçamento fixo, exige mudança de backend e fica
-   * para depois — hoje o nó é só um "?" até o herói chegar.)
+   * O que há em CADA nó, sabido desde a entrada na masmorra.
+   *
+   * Isto era preenchido nó a nó com o que o /step devolvia — antes o servidor
+   * sorteava monstro-vs-achado na hora, então o mapa não tinha como mostrar
+   * nada além de um "?" até o herói chegar lá. Agora o arranjo inteiro sai de
+   * `planDungeonRun`, semeado pelo `runId`: o SERVIDOR roda a mesma função, e é
+   * isso que garante que o bicho pintado no mapa é o bicho da luta.
+   *
+   * A seed é o runId, não o `layoutSeed` — este é local e só desenha a
+   * geometria do mapa, aquele é o que os dois lados compartilham.
    */
-  const [sceneContents, setSceneContents] = useState<Map<number, SpotContent>>(() => new Map())
+  const sceneContents = useMemo(
+    () =>
+      useScene && sceneMap && runId
+        ? planNodeContents(sceneMap, runId)
+        : new Map<number, SpotContent>(),
+    [useScene, sceneMap, runId]
+  )
   const sceneVisited = useMemo(
     () => Array.from({ length: tokenIdx + 1 }, (_, i) => i),
     [tokenIdx]
@@ -1050,6 +1068,7 @@ export default function DungeonRun({
           return
         }
         runIdRef.current = data.runId
+        setRunId(data.runId)
         if (typeof data.stamina === 'number') setStamina(data.stamina)
         // Ponto de partida da previsão de mochila cheia (a escrita real só acontece
         // no /finish, então o cliente precisa saber quantos slots sobravam).
@@ -1432,30 +1451,15 @@ export default function DungeonRun({
     setMoving(false)
     walkStepLockRef.current = false
 
-    // Cena: registra o que o SERVIDOR disse que havia no nó. Antes da chegada o
-    // bolsão fica só com o "?" — quem decide monstro-vs-achado é o /step, e
-    // adiantar isso no cliente seria mentir para o jogador.
-    // (O orçamento fixo de planNodeContents só passa a valer quando o servidor
-    // também usar a mesma função — aí dá para pintar o mapa inteiro de cara.)
-    if (useScene) {
-      const flavor: NodeFlavor =
-        data.type === 'boss' ? 'boss' : data.type === 'monster' ? 'monster' : 'chest'
-      setSceneContents(prev => {
-        const next = new Map(prev)
-        next.set(dest, {
-          nodeIndex: dest,
-          category: flavor === 'chest' ? 'find' : 'combat',
-          flavor,
-        })
-        return next
-      })
-      // 🎥 REVELAÇÃO: deu monstro — a câmera já começa a se aproximar do vulto
-      // enquanto o d20 pousa e o card do encontro é lido. O fechamento final
-      // (investida) vem em beginEncounter, quando o jogador aceita a luta.
-      if (flavor !== 'chest' && !reducedMotionRef.current) {
-        setFocusNode(dest)
-        setEncounterZoom(ZOOM_REVEAL)
-      }
+    // Cena: não há mais nada a REVELAR — a planta da run já disse o que havia
+    // aqui desde a entrada na masmorra, e o bicho já estava rondando o bolsão
+    // enquanto o herói se aproximava. Sobrou a câmera.
+    if (useScene && data.type !== 'find' && !reducedMotionRef.current) {
+      // 🎥 APROXIMAÇÃO: a câmera fecha no bicho enquanto o d20 do espólio pousa
+      // e o card do encontro é lido. O fechamento final (investida) vem em
+      // beginEncounter, quando o jogador aceita a luta.
+      setFocusNode(dest)
+      setEncounterZoom(ZOOM_REVEAL)
     }
 
     if (data.type === 'boss') {

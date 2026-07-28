@@ -12,15 +12,23 @@
 //
 //   ANDANDO →   os frames de `walk` já espelhados para a direita
 //   ANDANDO ←   os mesmos frames virados para a esquerda
-//   DE COSTAS   o ciclo de `back` (o herói subindo a trilha)
+//   DE FRENTE   o ciclo de `front` — só MONSTRO tem (o herói nunca vem pra câmera)
+//   DE COSTAS   o ciclo de `back` (o herói subindo a trilha / o bicho indo pro fundo)
 //   PARADO      o frame `idle` (ou walk[0])
+//
+// Vale para os dois manifestos: heroSprites.ts e monsterSprites.ts. O monstro é
+// renderizado na escala VERDADEIRA em relação ao herói (worldH / HERO_WORLD_H),
+// senão a folha não responde a pergunta que importa — "o chefe está grande?".
 //
 // Uso:
 //   npx tsx scripts/review-hero-sprites.ts                 # todas as combinações do manifesto
 //   npx tsx scripts/review-hero-sprites.ts --slug draconiano-warrior
 //   npx tsx scripts/review-hero-sprites.ts --zoom 4        # 4x o tamanho de tela
+//   npx tsx scripts/review-hero-sprites.ts --monster       # todos os monstros
+//   npx tsx scripts/review-hero-sprites.ts --monster ancia-da-mata
 //
 // Saída: public/sprites/<slug>/_review.png (gitignored, como a _contact.png)
+//        public/sprites/monsters/<slug>/_review.png no modo --monster
 //
 // O que procurar em cada folha:
 //   1. Todo frame da linha ANDANDO → é PERFIL? (costas ou frente no meio do ciclo
@@ -30,21 +38,68 @@
 //   4. Os pés ficam na mesma altura? (frame flutuando afunda na cena)
 
 import { existsSync, mkdirSync } from 'fs'
-import { join, resolve } from 'path'
+import { dirname, join, resolve } from 'path'
 
 import sharp, { type OverlayOptions } from 'sharp'
 
-import { HERO_SPRITES, HERO_SPRITE_SCREEN_H, type HeroSpriteDef } from '../src/lib/heroSprites'
+import {
+  HERO_SPRITES,
+  HERO_SPRITE_SCREEN_H,
+  HERO_WORLD_H,
+  type HeroSpriteDef,
+} from '../src/lib/heroSprites'
+import { MONSTER_SPRITES, type MonsterSpriteDef } from '../src/lib/monsterSprites'
 
 const argv = process.argv.slice(2)
+const has = (f: string) => argv.includes(f)
 const valOf = (f: string) => {
   const i = argv.indexOf(f)
   return i >= 0 ? argv[i + 1] : undefined
 }
 
-const ONLY = (valOf('--slug') || '').trim().toLowerCase()
+const MONSTER_MODE = has('--monster')
+/** `--monster` sozinho = todos; `--monster <slug>` = só aquele. */
+const MONSTER_SLUG = (() => {
+  const v = valOf('--monster')
+  return !v || v.startsWith('--') ? '' : v
+})()
+const ONLY = (valOf('--slug') || MONSTER_SLUG).trim().toLowerCase()
 /** Ampliação sobre o tamanho real de tela — 56px é pequeno demais pra conferir a olho. */
 const ZOOM = Number(valOf('--zoom') || 3)
+
+/**
+ * Forma única que o resto do script enxerga. Normaliza aqui as duas diferenças
+ * dos manifestos: o `back: number | number[]` do herói vira sempre lista, e a
+ * altura de tela do monstro sai da régua `worldH / HERO_WORLD_H`.
+ */
+interface ReviewDef {
+  src: string
+  frameW: number
+  frameH: number
+  frames: number
+  facing: 'left' | 'right'
+  walk: number[]
+  front: number[]
+  back: number[]
+  idle?: number
+  fps: number
+  /** Altura na tela, na escala real relativa ao herói. */
+  screenH: number
+}
+
+const fromHero = (d: HeroSpriteDef): ReviewDef => ({
+  ...d,
+  front: [],
+  back: d.back === undefined ? [] : Array.isArray(d.back) ? d.back : [d.back],
+  screenH: HERO_SPRITE_SCREEN_H,
+})
+
+const fromMonster = (d: MonsterSpriteDef): ReviewDef => ({
+  ...d,
+  front: d.front ?? [],
+  back: d.back ?? [],
+  screenH: HERO_SPRITE_SCREEN_H * (d.worldH / HERO_WORLD_H),
+})
 
 const PAD = 10
 /** Faixa do nome da linha (em cima) + faixa dos índices (embaixo do boneco). */
@@ -60,21 +115,22 @@ interface Row {
 }
 
 /** As mesmas contas de flip da WalkScene/DungeonScene, para a folha bater com o jogo. */
-function rowsOf(def: HeroSpriteDef): Row[] {
+function rowsOf(def: ReviewDef): Row[] {
   const cycle = def.walk.length ? def.walk : [0]
-  const backCycle =
-    def.back === undefined ? [] : Array.isArray(def.back) ? def.back : [def.back]
   // facing='right' já olha pra direita; facing='left' precisa espelhar pra ir pra direita.
   const flipToRight = def.facing === 'left'
   const rows: Row[] = [
     { label: 'ANDANDO P/ DIREITA', frames: cycle, flip: flipToRight },
     { label: 'ANDANDO P/ ESQUERDA', frames: cycle, flip: !flipToRight },
   ]
-  if (backCycle.length) {
+  if (def.front.length) {
+    rows.push({ label: 'DE FRENTE', frames: def.front, flip: false })
+  }
+  if (def.back.length) {
     // Uma pose de costas só: a cena alterna o espelho pra dar o 2º tempo do passo.
-    rows.push({ label: 'DE COSTAS', frames: backCycle, flip: false })
-    if (backCycle.length === 1) {
-      rows.push({ label: 'COSTAS (espelho)', frames: backCycle, flip: true })
+    rows.push({ label: 'DE COSTAS', frames: def.back, flip: false })
+    if (def.back.length === 1) {
+      rows.push({ label: 'COSTAS (espelho)', frames: def.back, flip: true })
     }
   }
   rows.push({ label: 'PARADO', frames: [def.idle ?? cycle[0]], flip: flipToRight })
@@ -91,7 +147,7 @@ function rowsOf(def: HeroSpriteDef): Row[] {
  * com a arte "do mesmo tamanho". É o tipo de coisa que só aparece comparando
  * duas combinações lado a lado no jogo.
  */
-async function bodyHeights(stripPath: string, def: HeroSpriteDef): Promise<number[]> {
+async function bodyHeights(stripPath: string, def: ReviewDef): Promise<number[]> {
   const { data, info } = await sharp(stripPath).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
   const { width: W, channels: C } = info
   const out: number[] = []
@@ -109,14 +165,14 @@ async function bodyHeights(stripPath: string, def: HeroSpriteDef): Promise<numbe
   return out
 }
 
-async function reviewOne(slug: string, def: HeroSpriteDef): Promise<boolean> {
+async function reviewOne(slug: string, def: ReviewDef): Promise<boolean> {
   const stripPath = resolve(join('public', def.src.replace(/^\//, '')))
   if (!existsSync(stripPath)) {
     console.error(`   ❌ tira não encontrada: ${stripPath}`)
     return false
   }
 
-  const h = Math.round(HERO_SPRITE_SCREEN_H * ZOOM)
+  const h = Math.round(def.screenH * ZOOM)
   const w = Math.round(h * (def.frameW / def.frameH))
   const rows = rowsOf(def)
   const cols = Math.max(...rows.map(r => r.frames.length))
@@ -160,7 +216,9 @@ async function reviewOne(slug: string, def: HeroSpriteDef): Promise<boolean> {
     top: 0,
   })
 
-  const outDir = resolve(join('public', 'sprites', slug))
+  // A pasta sai do próprio `src` do manifesto — assim monstro cai em
+  // public/sprites/monsters/<slug> sem o script precisar saber disso.
+  const outDir = resolve(join('public', dirname(def.src.replace(/^\//, ''))))
   mkdirSync(outDir, { recursive: true })
   const out = join(outDir, '_review.png')
   await sharp({ create: { width: totalW, height: totalH, channels: 4, background: BG } })
@@ -168,10 +226,12 @@ async function reviewOne(slug: string, def: HeroSpriteDef): Promise<boolean> {
     .png()
     .toFile(out)
 
-  const backCount = def.back === undefined ? 0 : Array.isArray(def.back) ? def.back.length : 1
   console.log(
-    `   ✓ _review.png — ciclo ${def.walk.length} frame(s), costas ${backCount}, ` +
-      `${def.fps} fps, folha olhando pra ${def.facing === 'right' ? 'direita' : 'esquerda'}`
+    `   ✓ _review.png — ciclo ${def.walk.length} frame(s), ` +
+      (def.front.length ? `frente ${def.front.length}, ` : '') +
+      `costas ${def.back.length}, ${def.fps} fps, ` +
+      `folha olhando pra ${def.facing === 'right' ? 'direita' : 'esquerda'}, ` +
+      `${Math.round(def.screenH)}px na tela`
   )
   if (def.walk.length < 2) {
     console.log(`   ⚠️  ciclo de UM frame só: o boneco anda sem mexer as pernas`)
@@ -180,13 +240,28 @@ async function reviewOne(slug: string, def: HeroSpriteDef): Promise<boolean> {
   // Altura só dos frames que a cena realmente usa — frame morto na tira não
   // conta pro tamanho aparente.
   const heights = await bodyHeights(stripPath, def)
-  const used = [...def.walk, ...(def.back === undefined ? [] : Array.isArray(def.back) ? def.back : [def.back])]
-  const usedH = used.map(i => heights[i])
-  const lo = Math.min(...usedH)
-  const hi = Math.max(...usedH)
-  if ((hi - lo) / hi > 0.08) {
-    console.log(`   ⚠️  o boneco muda de tamanho dentro da própria folha (${lo}–${hi}px de ${def.frameH})`)
+
+  // A comparação é DENTRO de cada direção, nunca entre elas. Um quadrúpede de
+  // perfil ocupa bem menos altura de quadro que o mesmo bicho vindo para a
+  // câmera — isso é perspectiva, não folha torta. O que é defeito de verdade é
+  // o bicho crescer no meio de um ciclo, aí ele pulsa enquanto anda.
+  for (const [label, cycle] of [
+    ['perfil', def.walk],
+    ['frente', def.front],
+    ['costas', def.back],
+  ] as const) {
+    if (cycle.length < 2) continue
+    const hs = cycle.map(i => heights[i])
+    const lo = Math.min(...hs)
+    const hi = Math.max(...hs)
+    if ((hi - lo) / hi > 0.08) {
+      console.log(
+        `   ⚠️  o boneco muda de tamanho dentro do ciclo de ${label} (${lo}–${hi}px de ${def.frameH})`
+      )
+    }
   }
+  const used = [...def.walk, ...def.front, ...def.back]
+  const usedH = used.map(i => heights[i])
   bodySizes.set(slug, Math.round(usedH.reduce((a, b) => a + b, 0) / usedH.length))
   return true
 }
@@ -195,23 +270,35 @@ async function reviewOne(slug: string, def: HeroSpriteDef): Promise<boolean> {
 const bodySizes = new Map<string, number>()
 
 async function main() {
-  const entries = Object.entries(HERO_SPRITES).filter(([slug]) => !ONLY || slug === ONLY)
+  const source = MONSTER_MODE ? 'MONSTER_SPRITES' : 'HERO_SPRITES'
+  const all: Array<[string, ReviewDef]> = MONSTER_MODE
+    ? Object.entries(MONSTER_SPRITES).map(([s, d]) => [s, fromMonster(d)])
+    : Object.entries(HERO_SPRITES).map(([s, d]) => [s, fromHero(d)])
+  const entries = all.filter(([slug]) => !ONLY || slug === ONLY)
   if (!entries.length) {
-    console.error(ONLY ? `❌ '${ONLY}' não está em HERO_SPRITES` : '❌ HERO_SPRITES vazio')
+    console.error(ONLY ? `❌ '${ONLY}' não está em ${source}` : `❌ ${source} vazio`)
     process.exit(1)
   }
 
-  console.log(`🔍 ${entries.length} combinação(ões) — zoom ${ZOOM}x (tela real: ${HERO_SPRITE_SCREEN_H}px)`)
+  console.log(`🔍 ${entries.length} folha(s) de ${source} — zoom ${ZOOM}x (herói na tela: ${HERO_SPRITE_SCREEN_H}px)`)
   let failed = 0
   for (const [slug, def] of entries) {
-    console.log(`\n🧝 ${slug}`)
+    console.log(`\n${MONSTER_MODE ? '👹' : '🧝'} ${slug}`)
     if (!(await reviewOne(slug, def))) failed++
   }
 
-  // A cena desenha toda célula com HERO_SPRITE_SCREEN_H, então quem preenche
-  // menos a célula aparece menor que os outros — e isso só se nota comparando
-  // duas combinações. Aqui a comparação é explícita.
-  if (bodySizes.size > 1) {
+  // A cena desenha toda célula com a mesma altura, então quem preenche menos a
+  // célula aparece menor que os outros — e isso só se nota comparando duas
+  // folhas. Aqui a comparação é explícita.
+  //
+  // A rodada é de UMA fonte por vez (ou heróis, ou monstros), e é isso que
+  // mantém a comparação honesta: um chefe é legitimamente maior que um herói,
+  // e misturar os dois no mesmo balde só produziria alarme falso.
+  //
+  // Vale só para HERÓI. Entre monstros o preenchimento da célula não diz nada:
+  // um lobo enche menos quadro que um ent e isso é a anatomia dele. Quem manda
+  // no tamanho aparente do bicho é o `worldH` do manifesto, calibrado na bancada.
+  if (!MONSTER_MODE && bodySizes.size > 1) {
     const entries = Array.from(bodySizes)
     const vals = entries.map(([, v]) => v).sort((a, b) => a - b)
     const median = vals[Math.floor(vals.length / 2)]
@@ -228,9 +315,14 @@ async function main() {
     }
   }
 
-  console.log(`\n📁 abra public/sprites/<slug>/_review.png`)
+  console.log(`\n📁 abra ${MONSTER_MODE ? 'public/sprites/monsters/<slug>' : 'public/sprites/<slug>'}/_review.png`)
   console.log(`   Todo frame de "ANDANDO" tem que ser PERFIL. Costas ou frente no meio`)
   console.log(`   do ciclo = folha pra refazer (scripts/hero-sprite-sheet-prompt.md).`)
+  if (MONSTER_MODE) {
+    console.log(`   Todo frame de "DE FRENTE" tem que olhar pra CÂMERA e todo frame de`)
+    console.log(`   "DE COSTAS" tem que mostrar a nuca — perfil no meio de um desses dois`)
+    console.log(`   é índice trocado no manifesto, não folha ruim.`)
+  }
   if (failed) {
     console.log(`\n⚠️  ${failed} combinação(ões) com erro.`)
     process.exit(1)

@@ -17,11 +17,15 @@ import type { MapSpot, SceneMapDef, SceneProp, Vec2 } from '@/lib/dungeonScene/t
 import { clamp, clampToWalkable, dist, lerp, sceneProps, pathToSpot } from '@/lib/dungeonScene/geometry'
 import type { NodeFlavor, SpotContent } from '@/lib/dungeonScene/nodeContents'
 import { drawNodeIcon, nodeIconColor } from '@/lib/dungeonScene/icons'
-import { resolveHeroSprite, type HeroSpriteDef } from '@/lib/heroSprites'
+import { HERO_WORLD_H, resolveHeroSprite, type HeroSpriteDef } from '@/lib/heroSprites'
+import { getMonsterSpriteBySlug } from '@/lib/monsterSprites'
 import {
   monsterFacing,
   monsterPos,
+  monsterPose,
+  monsterVel,
   planMonsters,
+  type MonsterPose,
   type SceneMonster,
 } from '@/lib/dungeonScene/monsters'
 
@@ -63,11 +67,6 @@ export interface DungeonSceneProps {
 const WALK_SPEED = 6.2 // unidades/s
 const ARRIVE_EPS = 0.55
 
-/**
- * Altura do FRAME do boneco em unidades de MUNDO (não px como na WalkScene, que
- * não tem zoom). Aqui a unidade lê como ~1 metro: árvore adulta 6.5, arbusto 1.3.
- */
-const HERO_WORLD_H = 2.1
 /** |dirX| acima disto = passo lateral → frame de perfil. */
 const HERO_SIDE_DX = 0.45
 /** dirY abaixo disto = subindo a trilha (para o fundo) → frame de costas. */
@@ -195,6 +194,10 @@ export default function DungeonScene({
   const groundRef = useRef<HTMLImageElement | null>(null)
   const nodeObjsRef = useRef<NodeObject[]>([])
   const monstersRef = useRef<SceneMonster[]>([])
+  /** Tiras de monstro por espécie — quem não tem entrada aqui vira vulto. */
+  const monsterStripsRef = useRef(new Map<string, HTMLImageElement>())
+  /** Pose anterior de cada monstro (índice em monstersRef) = o `prev` da histerese. */
+  const monsterPoseRef = useRef(new Map<number, MonsterPose>())
   const animRef = useRef(0)
 
   // ---- estado do mundo (tudo em ref: o loop não reinicia) ----
@@ -204,6 +207,16 @@ export default function DungeonScene({
   const facingRef = useRef(1)
   const walkPhaseRef = useRef(0)
   const timeRef = useRef(0)
+  /**
+   * Relógio da RONDA dos monstros — congela junto com o mundo.
+   *
+   * O `timeRef` corre sempre (o zoom cinematográfico é interpolado mesmo
+   * pausado). Com silhueta ninguém notava o vulto andando atrás do modal; com a
+   * arte pintada o chefe sairia do enquadramento da aproximação enquanto o
+   * jogador lê o card. Usado nos TRÊS pontos que consultam a posição do monstro
+   * (desenho, colisão e câmera) — separar faria ele teleportar entre eles.
+   */
+  const monsterClockRef = useRef(0)
   const queueRef = useRef<Vec2[]>([])
   const queuedNodeRef = useRef(-1)
   const reachedRef = useRef(new Set<number>())
@@ -317,6 +330,7 @@ export default function DungeonScene({
   // Objetos de achado (baú, entulho, erva, fonte) existem NO MUNDO, ordenados
   // por profundidade junto com a vegetação — não são crachá flutuante.
   useEffect(() => {
+    let cancelled = false
     const list: NodeObject[] = []
     if (contents) {
       for (const spot of map.spots) {
@@ -328,7 +342,27 @@ export default function DungeonScene({
     }
     list.sort((a, b) => a.pos.y - b.pos.y)
     nodeObjsRef.current = list
-    monstersRef.current = contents ? planMonsters(map, contents, map.seed) : []
+    const mobs = contents ? planMonsters(map, contents, map.seed) : []
+    monstersRef.current = mobs
+    // Os índices mudaram: a pose anterior de cada um não vale mais nada.
+    monsterPoseRef.current.clear()
+
+    // Tira de quem tem folha (hoje só o chefe). Sem cleanSprite(), igual ao
+    // herói: é recorte determinístico do sharp, não saída do gpt-image-1.
+    const slugs = Array.from(
+      new Set(mobs.map(m => m.speciesSlug).filter((s): s is string => !!getMonsterSpriteBySlug(s))),
+    )
+    for (const slug of slugs) {
+      if (monsterStripsRef.current.has(slug)) continue
+      const def = getMonsterSpriteBySlug(slug)
+      if (!def) continue
+      loadImage(def.src).then(img => {
+        if (!cancelled && img) monsterStripsRef.current.set(slug, img)
+      })
+    }
+    return () => {
+      cancelled = true
+    }
   }, [contents, map])
 
   // Trocar de alvo cancela a rota antiga (o pai mandou procurar outro nó).
@@ -527,24 +561,33 @@ export default function DungeonScene({
       ctx.globalAlpha = 1
 
       // Achado tem OBJETO no mundo (desenhado no passe de profundidade); aqui só
-      // o anel. Combate mostra o ícone flutuando sobre o ponto.
+      // o anel.
       if (content?.category === 'find') return
 
       const iconY = y - r * 0.85 - view.ppu * 0.75
       const float = isTarget && !done ? Math.sin(timeRef.current * 2.4) * view.ppu * 0.12 : 0
-      if (content) {
-        const size = view.ppu * (content.flavor === 'boss' ? 2.4 : 1.7)
-        drawNodeIcon(ctx, content.flavor, x, iconY + float, size, {
-          color: done ? 'rgba(150,150,150,0.55)' : undefined,
-          alpha: done ? 0.5 : isTarget ? 1 : 0.8,
-        })
-      } else {
-        ctx.font = `bold ${Math.round(view.ppu * 1.15)}px sans-serif`
-        ctx.textAlign = 'center'
-        ctx.textBaseline = 'middle'
+
+      // Sem conteúdo = bancada sem planta. Na run isso não acontece mais: a
+      // planta chega junto com o runId, então todo nó já nasce sabido — foi o
+      // fim do "?" que ficava pairando sobre o ponto.
+      if (!content) {
+        ctx.beginPath()
+        ctx.arc(x, iconY, view.ppu * 0.16, 0, Math.PI * 2)
         ctx.fillStyle = done ? 'rgba(160,160,160,0.5)' : color
-        ctx.fillText(done ? '·' : '?', x, iconY)
+        ctx.fill()
+        return
       }
+
+      // Nó de combate com bicho VIVO não precisa de crachá: o próprio monstro
+      // rondando o bolsão é o aviso. O ícone volta só depois de limpo, como
+      // marca de "já passei por aqui".
+      if (!done) return
+
+      const size = view.ppu * (content.flavor === 'boss' ? 2.4 : 1.7)
+      drawNodeIcon(ctx, content.flavor, x, iconY + float, size, {
+        color: 'rgba(150,150,150,0.55)',
+        alpha: 0.5,
+      })
     }
 
     const spriteOf = (kind: string, variant: number) =>
@@ -762,11 +805,12 @@ export default function DungeonScene({
      * centro da tela, e de leve — a mata já é escura por conta própria.
      */
     /**
-     * Vulto de monstro: silhueta escura com olhos acesos. Nada de arte pintada
-     * aqui — ver o porquê em lib/dungeonScene/monsters.ts.
+     * Monstro: BONECO de 4 direções para quem tem folha (hoje o chefe), vulto
+     * procedural com olhos acesos para o resto — ver o porquê de cada um em
+     * lib/dungeonScene/monsters.ts.
      */
-    const drawMonster = (mo: SceneMonster) => {
-      const t = timeRef.current
+    const drawMonster = (mo: SceneMonster, index: number) => {
+      const t = monsterClockRef.current
       const wp = monsterPos(mo, t)
       const x = sx(wp.x)
       const y = sy(wp.y)
@@ -776,6 +820,63 @@ export default function DungeonScene({
       const face = monsterFacing(mo, t)
       const bob = Math.sin(t * mo.speed * 3.2 + mo.phase) * u * 0.04
 
+      // ---- boneco recortado (perfil / frente / costas) ----
+      const def = getMonsterSpriteBySlug(mo.speciesSlug)
+      const strip = mo.speciesSlug ? monsterStripsRef.current.get(mo.speciesSlug) : undefined
+      if (def && strip) {
+        const v = monsterVel(mo, t)
+        const pose = monsterPose(v, monsterPoseRef.current.get(index))
+        monsterPoseRef.current.set(index, pose)
+
+        const cycle =
+          pose === 'front'
+            ? def.front?.length
+              ? def.front
+              : def.walk
+            : pose === 'back'
+              ? def.back?.length
+                ? def.back
+                : def.walk
+              : def.walk
+        const list = cycle.length ? cycle : [0]
+        const step = Math.floor(t * def.fps)
+        const frame = list[((step % list.length) + list.length) % list.length]
+
+        // Perfil espelha conforme o lado desenhado na folha. Frente e costas não
+        // espelham — a não ser que o ciclo tenha UM frame só, e aí alternar o
+        // espelho dá o 2º tempo do passo (mesma regra do drawHero).
+        const flip =
+          pose === 'side'
+            ? def.facing === 'right'
+              ? v.x >= 0
+                ? 1
+                : -1
+              : v.x >= 0
+                ? -1
+                : 1
+            : list.length > 1
+              ? 1
+              : step % 2 === 0
+                ? 1
+                : -1
+
+        const dh = def.worldH * view.ppu
+        const dw = dh * (def.frameW / def.frameH)
+        // Sombra pela largura da ARTE, não pelo `size` do vulto (que descreve
+        // outro desenho). Estreita porque a célula inclui a chama, que não pisa.
+        groundShadow(x, y, dw * 0.22, 0.4)
+        ctx.save()
+        // Bob reduzido: o ciclo do boneco já tem o balanço do passo desenhado.
+        ctx.translate(x, y + bob * 0.45)
+        ctx.scale(flip, 1)
+        // Ancorado em -dh: o PÉ fica no ponto do mundo, casando com a sombra
+        // acima e com a ordenação por profundidade.
+        ctx.drawImage(strip, frame * def.frameW, 0, def.frameW, def.frameH, -dw / 2, -dh, dw, dh)
+        ctx.restore()
+        return
+      }
+
+      // ---- vulto procedural ----
       groundShadow(x, y, u * 0.42, 0.4)
 
       ctx.save()
@@ -920,7 +1021,7 @@ export default function DungeonScene({
         monstersRef.current.some(
           mo =>
             mo.nodeIndex === targetSpot.nodeIndex &&
-            dist(heroRef.current, monsterPos(mo, timeRef.current)) < 1.5,
+            dist(heroRef.current, monsterPos(mo, monsterClockRef.current)) < 1.5,
         )
       if (
         targetSpot &&
@@ -945,7 +1046,10 @@ export default function DungeonScene({
         return
       }
 
-      if (!pausedRef.current) stepWorld(dt)
+      if (!pausedRef.current) {
+        stepWorld(dt)
+        monsterClockRef.current += dt
+      }
 
       // 🎥 Zoom: sempre interpolado (mesmo pausado — a investida acontece com o
       // mundo congelado). Reescreve o ppu efetivo antes de qualquer projeção.
@@ -961,7 +1065,7 @@ export default function DungeonScene({
       if (focus != null) {
         const mo = monstersRef.current.find(m => m.nodeIndex === focus)
         if (mo) {
-          const mp = monsterPos(mo, timeRef.current)
+          const mp = monsterPos(mo, monsterClockRef.current)
           target = { x: (target.x + mp.x) / 2, y: (target.y + mp.y) / 2 }
         }
       }
@@ -999,8 +1103,26 @@ export default function DungeonScene({
       // Quem tem Y menor está mais longe da câmera e é desenhado primeiro.
       const heroY = heroRef.current.y
       const objs = nodeObjsRef.current
+
+      // Monstro COM boneco entra na profundidade: um chefe de 3.6 unidades
+      // pintado por cima da árvore que está na frente dele lê como erro. Vulto
+      // continua desenhado por cima de tudo (é silhueta escura, ninguém nota, e
+      // mexer nisso seria mudar o que já está bom).
+      const mobs: Array<{ y: number; mo: SceneMonster; index: number }> = []
+      const lateMobs: Array<{ mo: SceneMonster; index: number }> = []
+      monstersRef.current.forEach((mo, idx) => {
+        if (visitedRef.current.includes(mo.nodeIndex)) return // já foi abatido
+        if (getMonsterSpriteBySlug(mo.speciesSlug)) {
+          mobs.push({ y: monsterPos(mo, monsterClockRef.current).y, mo, index: idx })
+        } else {
+          lateMobs.push({ mo, index: idx })
+        }
+      })
+      mobs.sort((a, b) => a.y - b.y)
+
       let i = 0
       let j = 0
+      let k = 0
       let heroDrawn = false
       while (i < props.length && props[i].pos.y < yMin) i++
       while (j < objs.length && objs[j].pos.y < yMin) j++
@@ -1008,13 +1130,17 @@ export default function DungeonScene({
       for (;;) {
         const py = i < props.length ? props[i].pos.y : Infinity
         const oy = j < objs.length ? objs[j].pos.y : Infinity
+        const my = k < mobs.length ? mobs[k].y : Infinity
         const hy = heroDrawn ? Infinity : heroY
-        const next = Math.min(py, oy, hy)
+        const next = Math.min(py, oy, my, hy)
         if (next === Infinity || next > yMax) break
 
         if (next === hy) {
           drawHero()
           heroDrawn = true
+        } else if (next === my) {
+          const m = mobs[k++]
+          drawMonster(m.mo, m.index)
         } else if (py <= oy) {
           const p = props[i++]
           // Poça já foi desenhada com o piso — não entra na profundidade.
@@ -1024,11 +1150,14 @@ export default function DungeonScene({
         }
       }
       if (!heroDrawn) drawHero()
-
-      for (const mo of monstersRef.current) {
-        if (visitedRef.current.includes(mo.nodeIndex)) continue // já foi abatido
-        drawMonster(mo)
+      // Sobra do merge (o laço para no yMax): drawMonster corta o que está fora
+      // da tela, então isso é só garantia de não sumir com ninguém.
+      while (k < mobs.length) {
+        const m = mobs[k++]
+        drawMonster(m.mo, m.index)
       }
+
+      for (const m of lateMobs) drawMonster(m.mo, m.index)
 
       drawFog()
       drawRain(dt)

@@ -9,15 +9,16 @@ Raças (ids em PT) × classes (ids em EN), como em `src/lib/gameData.ts`:
 
 |  | warrior | rogue | mage | monk |
 |---|---|---|---|---|
-| **humano** | | | | |
+| **humano** | | | ✅ feito | |
 | **elfo** | | ✅ feito | | |
-| **draconiano** | | | | |
-| **metamorfo** | | | | |
+| **draconiano** | ⚠️ refazer | | | |
+| **metamorfo** | | | | ✅ feito |
 
-(`--all` imprime este checklist atualizado a cada rodada.)
+4 de 16. `--all` imprime este checklist atualizado a cada rodada.
 
 Os pares canônicos da Jornada (`journeyData.ts`) são elfo⇄rogue, humano⇄mage,
-draconiano⇄warrior, metamorfo⇄monk — comece por eles, que são os que aparecem na landing.
+draconiano⇄warrior, metamorfo⇄monk — são os 4 que já foram, porque aparecem na landing.
+As 12 que faltam são as combinações cruzadas.
 
 ## O que o script precisa da folha
 
@@ -37,45 +38,49 @@ O recorte é por projeção de pixels opacos, então a folha só precisa respeit
 
 Só a **linha 2** é usada hoje (`--row 2`). O resto pode vir junto, é ignorado.
 
-- **Linha 1** — parado de frente, 5-6 frames.
-- **Linha 2** — caminhada: **5 frames de perfil + 1 de costas**. É esta que importa.
-- **Linha 3** — caminhada, variação (perfil + 1 de frente).
-- **Linha 4** — ataque.
-- **Linha 5** — dano/morte.
+- **Linha 1** — parado, 5-6 frames.
+- **Linha 2** — caminhada: **4-5 frames de perfil + 1-2 de costas**. É esta que importa.
+- **Linha 3** — ataque.
+- **Linha 4** — dano/morte.
 
-## Sobre a linha 2 (a que conta)
+## A linha 2 é a única que conta — e é onde as folhas falham
 
-O que veio na folha do elfo/ladino, e que dá pra pedir melhor da próxima vez:
+Este é o ponto que já custou duas folhas. Repetindo, porque o Gemini gosta de
+variar o ângulo da câmera quando você pede "caminhada":
 
-- Os frames 1 e 2 saíram praticamente **idênticos**, e os frames 5 e 6 eram só o **espelho**
-  deles. Ou seja, de 6 frames sobraram 2 poses úteis.
-- Salvou o fato de o frame 1 ter as **pernas juntas** — virou a pose de passagem, e o ciclo
-  ficou `[passada, passagem, passada, passagem]`.
+> **A linha de caminhada é de PERFIL.** O herói anda de lado ou sobe de costas —
+> ele nunca vem na direção da câmera e nunca vira o ombro no meio do passo.
 
-Então **peça explicitamente poses distintas e uma direção só**:
+O que já deu errado:
 
-> Linha de caminhada com 6 frames, todos de perfil olhando para a **direita**, exceto o
-> último que é de **costas**. Os 5 de perfil devem ser fases diferentes do mesmo ciclo de
-> caminhada: (1) contato com a perna direita à frente, (2) peso no pé de apoio com as pernas
-> juntas, (3) impulso com o calcanhar erguido, (4) contato com a perna esquerda à frente,
-> (5) pernas juntas de novo. Não repita a mesma pose, não espelhe nenhum frame e
-> **não desenhe nenhuma pose de frente**.
+| folha | linha 2 veio como | resultado |
+|---|---|---|
+| elfo/ladino | 2 poses de perfil úteis + 1 costas + 2 espelhos | ✅ serviu — `[passada, passagem, passada, passagem]` |
+| humano/mago | frontal no 1º frame; costas só na linha 4 | recortado com `--rows 2,4` |
+| metamorfo/monge | frontal no 1º; perfil e costas na mesma linha | serviu, 2 poses |
+| **draconiano/guerreiro** | **1 frontal + 3 costas + 1 perfil + 1 três-quartos de costas** | ❌ **UM perfil só** — o ciclo `[4, 5]` virava as costas a cada 2º frame e, andando pra direita, lia como se o boneco sumisse. Hoje anda com `walk: [4]` (perna parada) até chegar folha nova. |
 
-### Nada de pose FRONTAL na linha de caminhada
+### O pedido, do jeito que funciona
 
-Na masmorra o herói só anda de lado ou sobe de costas — ele **nunca vem na
-direção da câmera**. Frame frontal é espaço desperdiçado na folha e, pior, se
-acabar virando a pose parada, o boneco encara o jogador quando a run pausa.
+> Linha de caminhada com 6 frames, todos de **perfil olhando para a direita**,
+> exceto o último que é de **costas**. Os 5 de perfil são fases diferentes do mesmo
+> ciclo: (1) contato com a perna direita à frente, (2) peso no pé de apoio com as
+> pernas juntas, (3) impulso com o calcanhar erguido, (4) contato com a perna
+> esquerda à frente, (5) pernas juntas de novo. **Não repita a mesma pose, não
+> espelhe nenhum frame, não desenhe nenhuma pose de frente e nenhuma de
+> três-quartos** — perfil puro, o rosto de lado, os dois ombros alinhados.
 
-As folhas do mago, do monge e do draconiano vieram com frontal no primeiro frame
-e eu cheguei a usá-lo como `idle` — errado, corrigido depois. O elfo é o modelo:
-perfil com as **pernas juntas** para o parado, nenhum frontal.
+O mínimo aproveitável são **duas poses de perfil distintas** (uma de passada e uma
+de pernas juntas). Uma só não dá ciclo.
 
-Se a folha não tiver perfil de pernas juntas, deixe `idle` fora do manifesto: o
-default cai no primeiro frame do ciclo, que já é de perfil.
+### Pose parada
 
-Se ainda assim vierem frames espelhados, tudo bem: o `heroSprites.ts` guarda `facing` e a
-`WalkScene` espelha em runtime — basta descartar os índices redundantes no ciclo.
+Sem frame frontal. Se a folha tiver um perfil de **pernas juntas**, é ele o `idle`
+(é o caso do elfo). Senão deixe `idle` fora do manifesto: o default cai no primeiro
+frame do ciclo, que já é de perfil.
+
+Frames espelhados não são problema: o `heroSprites.ts` guarda `facing` e a cena
+espelha em runtime — basta descartar os índices redundantes no ciclo.
 
 ## Estilo (manter igual entre as 16)
 
@@ -96,10 +101,19 @@ cp ~/Downloads/Gemini_Generated_Image_xxx.png sprite-sources/humano-mage.png
 # 2. recorte a pasta inteira de uma vez
 npx tsx scripts/slice-hero-sprite-sheet.ts --all
 
-# 3. confira public/sprites/<slug>/_contact.png (qual índice é o de costas?)
+# 3. confira public/sprites/<slug>/_contact.png — os frames crus, na ordem da folha
+#    (qual índice é o de costas? quantos perfis distintos sobraram?)
 
 # 4. calibre em /dev/sprite-lab e cole o resultado em src/lib/heroSprites.ts
+
+# 5. confira DE NOVO, agora como a cena mostra (espelhado, no tamanho de tela)
+npx tsx scripts/review-hero-sprites.ts --slug humano-mage
 ```
+
+O passo 5 é o que pega o erro do draconiano: a `_contact.png` mostra os frames
+crus e um três-quartos de costas passa por perfil ali; a `_review.png` mostra o
+ciclo já espelhado, e a pose errada salta aos olhos. **Toda folha nova passa pelos
+dois.**
 
 O `--all` pula o que já foi recortado, não para se uma folha falhar e no fim
 imprime o checklist das 16 combinações + as entradas prontas do manifesto.

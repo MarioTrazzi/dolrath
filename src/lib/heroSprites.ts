@@ -99,19 +99,25 @@ export const HERO_SPRITES: Record<string, HeroSpriteDef> = {
     fps: 4,
   },
 
-  // Perfil e costas na mesma linha 2. [4] e [5] olham pra ESQUERDA em fases
-  // diferentes (97.8 normal contra 128.6 espelhado — não são espelhos).
+  // ⚠️ FOLHA FRACA — pedir de novo ao Gemini (ver hero-sprite-sheet-prompt.md).
+  // A linha de caminhada veio [0] frontal, [1][2][3] costas, [4] perfil, [5] 3/4
+  // de costas: UM único frame de perfil em seis. O ciclo antigo era [4, 5], e [5]
+  // é o 3/4 de costas — a cada segundo frame o boneco virava as costas pra
+  // câmera. Andando pra direita isso lia como "o draconiano some", que foi
+  // exatamente o relato. Enquanto não vem folha nova, o ciclo é o frame de
+  // perfil sozinho: parado dentro do passo, mas coerente.
+  //
   // Costas: [2] e [3] são espelhos um do outro, o que alterna as pernas de
   // graça. Efeito colateral: a espada nas costas troca de ombro a cada frame.
   // A 4 fps quase não se nota; se incomodar, back: [2] sozinho dá o mesmo
-  // resultado (a WalkScene espelha um frame único).
+  // resultado (a cena espelha um frame único).
   'draconiano-warrior': {
     src: '/sprites/draconiano-warrior/walk.webp',
     frameW: 148,
     frameH: 192,
     frames: 6,
     facing: 'left',
-    walk: [4, 5],
+    walk: [4],
     back: [2, 3],
     fps: 4,
   },

@@ -649,24 +649,36 @@ export default function DungeonScene({
         const cycle = def.walk.length ? def.walk : [0]
         const step = Math.floor(spriteClockRef.current * def.fps)
 
-        // A folha só tem PERFIL e um frame de COSTAS — não existe frente. Subindo
-        // para o fundo (-y no mundo) e sem componente lateral, vai de costas.
-        // Vindo em direção à câmera (+y) roda o perfil mesmo: sem arte de frente,
-        // o perfil lê como caminhada, enquanto as costas leriam como andar de ré.
+        // A folha só tem PERFIL e COSTAS — não existe frente. Subindo para o
+        // fundo (-y no mundo) e sem componente lateral, vai de costas. Vindo em
+        // direção à câmera (+y) roda o perfil mesmo: sem arte de frente, o
+        // perfil lê como caminhada, enquanto as costas leriam como andar de ré.
+        //
+        // `back` pode ser um número (folha com UMA pose de costas) ou um ciclo.
+        // Tratar o array como número dava `frame * frameW = NaN`, e drawImage com
+        // NaN não desenha nada — era isso que fazia o herói SUMIR ao subir a
+        // trilha em toda combinação com ciclo de costas (todas menos elfo/ladino).
+        const backCycle =
+          def.back === undefined ? [] : Array.isArray(def.back) ? def.back : [def.back]
         const useBack =
-          walking && def.back !== undefined && d.y < HERO_BACK_DY && Math.abs(d.x) < HERO_SIDE_DX
+          walking && backCycle.length > 0 && d.y < HERO_BACK_DY && Math.abs(d.x) < HERO_SIDE_DX
+        const pick = (list: number[]) => list[((step % list.length) + list.length) % list.length]
 
         const frame = !walking
           ? def.idle ?? cycle[0]
           : useBack
-            ? (def.back as number)
-            : cycle[((step % cycle.length) + cycle.length) % cycle.length]
+            ? pick(backCycle)
+            : pick(cycle)
 
-        // De costas há UM frame só: alternar o espelho dá o 2º tempo do passo.
+        // Com UMA pose de costas só, alternar o espelho dá o 2º tempo do passo.
+        // Com um ciclo de verdade isso atrapalharia — o boneco pularia de lado
+        // enquanto anda. (Mesma regra da WalkScene.)
         const flip = useBack
-          ? step % 2 === 0
+          ? backCycle.length > 1
             ? 1
-            : -1
+            : step % 2 === 0
+              ? 1
+              : -1
           : def.facing === 'right'
             ? facingRef.current
             : -facingRef.current

@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server'
 import { requireApiActor } from '@/lib/botFleetAuth'
 import { prisma } from '@/lib/prisma'
+import { flushRunRewards, flushStaleRuns } from '@/lib/dungeonRunServer'
 
 export const dynamic = 'force-dynamic'
 
-// Encerra a run ativa (ao sair da masmorra). Recompensas já foram creditadas
-// por nó/abate; não há nada a "salvar" aqui — só fecha a sessão.
+// Encerra a run ativa (ao sair da masmorra). O crédito da run acontece no
+// /finish, então aqui não basta marcar 'abandoned': o espólio acumulado precisa
+// ser DRENADO antes, senão sair por este caminho jogaria a run fora.
+// (A saída normal do jogador passa por /finish; isto cobre bots e sobras.)
 // Aceita sessão humana ou frota (x-bot-secret) para bots abandonarem e irem ao PvP.
 export async function POST(req: Request) {
   const resolved = await requireApiActor(req)
@@ -18,10 +21,24 @@ export async function POST(req: Request) {
     const characterId = body.characterId as string | undefined
 
     if (runId) {
-      await prisma.dungeonRun.updateMany({
+      const run = await prisma.dungeonRun.findFirst({
         where: { id: runId, userId, status: 'active' },
-        data: { status: 'abandoned' },
+        select: {
+          id: true, userId: true, characterId: true, dungeonId: true,
+          tier: true, cursor: true, pending: true, accrued: true,
+        },
       })
+      if (run) {
+        const granted = await flushRunRewards(run, { reason: 'retreat' })
+        // Flush que não fecha a run (masmorra/personagem sumiu) não pode deixá-la
+        // 'active' — isso seguraria o lock do herói na próxima entrada.
+        if (!granted) {
+          await prisma.dungeonRun.updateMany({
+            where: { id: runId, userId, status: 'active' },
+            data: { status: 'abandoned' },
+          })
+        }
+      }
       return NextResponse.json({ success: true })
     }
 
@@ -32,11 +49,8 @@ export async function POST(req: Request) {
         select: { id: true },
       })
       if (!owned) return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
-      const res = await prisma.dungeonRun.updateMany({
-        where: { characterId, userId, status: 'active' },
-        data: { status: 'abandoned' },
-      })
-      return NextResponse.json({ success: true, abandoned: res.count })
+      await flushStaleRuns({ userId, characterId })
+      return NextResponse.json({ success: true })
     }
 
     return NextResponse.json({ error: 'runId ou characterId é obrigatório' }, { status: 400 })

@@ -9,7 +9,10 @@
 // ============================================================
 
 import type { Prisma } from '@prisma/client'
-import { ItemType, ConsumableSubtype } from '@prisma/client'
+import { ItemType, ConsumableSubtype, Prisma as PrismaNs } from '@prisma/client'
+import { prisma } from './prisma'
+import { buildXpUpdate } from './characterLevelSystem'
+import { wearFor } from './durability'
 import {
   DUNGEONS,
   scaleMonster,
@@ -18,6 +21,10 @@ import {
   rollNodeLoot,
   rollKillLoot,
   luckTier,
+  firstBossBonusStones,
+  FIRST_BOSS_BONUS,
+  MAX_DUNGEON_TIER,
+  clampDungeonTier,
   type DungeonId,
   type DungeonDef,
   type ScaledMonster,
@@ -30,6 +37,7 @@ import { normalizeCombatClass, type CombatClass } from './combatModel'
 import { SELL_FRACTION_GEAR, SELL_FRACTION_CRAFT_INPUT, SELL_FRACTION_CONSUMABLE } from './sellPricing'
 import { getCatalogItemByName, getConsumableByName, getIngredientByName, getForgeMaterialByName, getSeedByName, itemImagePath } from './itemCatalog'
 import { freeInventorySlots } from './inventoryMutations'
+import { advanceQuestProgress } from './questServer'
 import { STONE_META } from './enhancementSystem'
 
 // Custo de stamina por TIPO de nó (espelha DungeonRun.tsx: MINOR/MAIN/BOSS_STEP_COST).
@@ -87,6 +95,15 @@ export interface RunPending {
   lootRoll: number   // d20 que define a qualidade do espólio pós-combate
   monsters: ScaledMonster[]
   killedIds?: string[] // ids dos monstros já abatidos (progresso do nó)
+  /**
+   * Espólio JÁ ROLADO no /step, por monstro (id → drops) e do nó (só sai se o
+   * pacote inteiro cair). Rolar aqui — e não no desfecho — é o que permite o
+   * cliente montar o card de espólio com ZERO rede ao fim da luta.
+   * Ausente em `pending` de runs abertas antes desta mudança: nesse caso o
+   * desfecho rola na hora, como antes.
+   */
+  killDrops?: Record<string, LootDrop[]>
+  nodeLoot?: NodeLoot
   /** @deprecated forma antiga (1 monstro) — lida por pendingMonsters() em runs legadas */
   monster?: ScaledMonster
 }
@@ -95,6 +112,129 @@ export interface RunPending {
 export function pendingMonsters(p: RunPending): ScaledMonster[] {
   if (Array.isArray(p.monsters) && p.monsters.length > 0) return p.monsters
   return p.monster ? [p.monster] : []
+}
+
+// ============================================================
+// 💰 ESPÓLIO ACUMULADO (DungeonRun.accrued)
+//
+// O crédito da run deixou de acontecer nó a nó: cada /step soma o que o nó
+// rendeu aqui (uma escrita JSONB barata, dentro da transação que já debita
+// stamina) e o /finish escreve TUDO no personagem numa transação só. Isto tira
+// a rede do fim de cada luta — durante a run o jogador vê informação, não
+// escrita no banco.
+//
+// O servidor segue dono do "quanto": o cliente só reporta QUAIS monstros caíram,
+// e o teto é sempre o `pending` que o próprio servidor rolou.
+// ============================================================
+export interface RunAccrued {
+  /** Ouro BRUTO (antes do teto diário, aplicado uma vez no /finish). */
+  gold: number
+  xp: number
+  drops: LootDrop[]
+  /** Abates totais e quantos foram de chefe — base do desgaste do gear. */
+  kills: number
+  bossKills: number
+}
+
+export function emptyAccrued(): RunAccrued {
+  return { gold: 0, xp: 0, drops: [], kills: 0, bossKills: 0 }
+}
+
+/** Lê o acumulado de uma run tolerando null/formato inesperado. */
+export function readAccrued(raw: unknown): RunAccrued {
+  const a = (raw ?? {}) as Partial<RunAccrued>
+  return {
+    gold: Number(a.gold) || 0,
+    xp: Number(a.xp) || 0,
+    drops: Array.isArray(a.drops) ? a.drops : [],
+    kills: Number(a.kills) || 0,
+    bossKills: Number(a.bossKills) || 0,
+  }
+}
+
+export function mergeAccrued(base: RunAccrued, add: RunAccrued): RunAccrued {
+  return {
+    gold: base.gold + add.gold,
+    xp: base.xp + add.xp,
+    drops: [...base.drops, ...add.drops],
+    kills: base.kills + add.kills,
+    bossKills: base.bossKills + add.bossKills,
+  }
+}
+
+/** Desfecho de um nó reportado pelo cliente. */
+export type NodeOutcome = 'clear' | 'retreat' | 'lose'
+
+/**
+ * Aplica o desfecho de UM nó de combate contra o `pending` que o servidor rolou.
+ *
+ * `clear` credita todos os monstros ainda vivos + o espólio do nó; `retreat`/
+ * `lose` creditam só os abates REPORTADOS (ids desconhecidos ou repetidos são
+ * ignorados — o teto é sempre o que o servidor rolou) e não pagam espólio de nó.
+ */
+export function resolveNodeOutcome(
+  pending: RunPending,
+  outcome: NodeOutcome,
+  reportedIds: unknown,
+  // Só usado quando o `pending` é legado (sem killDrops/nodeLoot pré-rolados).
+  fallback?: { dungeon: DungeonDef; character: CharacterForRun; tier: number },
+): { delta: RunAccrued; newlyKilled: ScaledMonster[]; killed: Set<string>; allDead: boolean } {
+  const monsters = pendingMonsters(pending)
+  const killed = new Set(pending.killedIds ?? [])
+  const alive = monsters.filter(m => !killed.has(m.id))
+
+  let newlyKilled = alive
+  if (outcome !== 'clear') {
+    const reported = new Set(Array.isArray(reportedIds) ? (reportedIds as string[]) : [])
+    newlyKilled = alive.filter(m => reported.has(m.id))
+  }
+  for (const m of newlyKilled) killed.add(m.id)
+  const allDead = monsters.every(m => killed.has(m.id))
+
+  const drops: LootDrop[] = []
+  for (const m of newlyKilled) {
+    const pre = pending.killDrops?.[m.id]
+    drops.push(
+      ...(pre ??
+        (fallback
+          ? rollKillLoot(pending.kind, !!m.isBoss, fallback.dungeon.difficultyStars, fallback.tier, pending.lootRoll, fallback.dungeon)
+          : []))
+    )
+  }
+
+  // O espólio do NÓ só sai quando o pacote inteiro cai (recompensa por limpar).
+  let gold = newlyKilled.reduce((s, m) => s + m.goldReward, 0)
+  if (allDead && outcome === 'clear') {
+    const node =
+      pending.nodeLoot ?? (fallback ? rollCombatLoot(fallback.dungeon, fallback.character, pending, fallback.tier) : null)
+    if (node) {
+      gold += node.gold
+      drops.push(...node.drops)
+    }
+  }
+
+  return {
+    delta: {
+      gold,
+      xp: newlyKilled.reduce((s, m) => s + m.xpReward, 0),
+      drops,
+      kills: newlyKilled.length,
+      bossKills: newlyKilled.filter(m => !!m.isBoss).length,
+    },
+    newlyKilled,
+    killed,
+    allDead,
+  }
+}
+
+/**
+ * Ordem de crédito dos drops: pedra → gear → resto. No nat 20 a pedra é o
+ * jackpot; com a mochila quase cheia, materiais/estilhaços não podem roubar o
+ * último slot e descartá-la. O cliente espelha esta ordem ao prever a mochila cheia.
+ */
+export function orderDropsForCredit(drops: LootDrop[]): LootDrop[] {
+  const rank = (d: LootDrop) => (d.kind === 'stone' ? 0 : d.kind === 'item' ? 1 : 2)
+  return [...drops].sort((a, b) => rank(a) - rank(b))
 }
 
 export interface CharacterForRun {
@@ -280,6 +420,13 @@ function rarityValue(rarity: string): number {
   }
 }
 
+/**
+ * Orçamento de slots compartilhado por um LOTE de drops. Sem ele cada drop
+ * refazia `count` + `findUnique` do personagem (N+1 dentro da transação); com
+ * ele o cálculo acontece uma vez e o contador desce sozinho a cada linha nova.
+ */
+export interface SlotBudget { free: number }
+
 // Resolve/cria o Item do catálogo a partir do nome (mesma lógica de
 // add-exploration-reward) e o adiciona ao inventário do personagem.
 // Exportada: a COLETA (gatheringServer.ts) e a FAZENDA depositam por aqui.
@@ -288,6 +435,7 @@ export async function addDropToInventoryTx(
   tx: Prisma.TransactionClient,
   characterId: string,
   drop: { name: string; rarity?: string; enhancement?: number; qty?: number },
+  slots?: SlotBudget,
 ) {
   const itemName = drop.name
   const qty = Math.max(1, Math.floor(Number(drop.qty) || 1))
@@ -488,14 +636,45 @@ export async function addDropToInventoryTx(
 
   // Precisa de uma linha NOVA — só cria se ainda houver slot livre. Sem isto,
   // o inventário passava do limite (drops de dungeon ignoravam inventorySlots).
-  const { free } = await freeInventorySlots(tx, characterId)
-  if (free <= 0) return false
+  // Com orçamento de lote o contador já veio calculado (uma consulta pro lote todo).
+  if (slots) {
+    if (slots.free <= 0) return false
+    slots.free -= 1
+  } else {
+    const { free } = await freeInventorySlots(tx, characterId)
+    if (free <= 0) return false
+  }
 
   const enhancementLevel = isConsumable ? 0 : Math.max(0, Math.floor(Number(drop.enhancement) || 0))
   await tx.characterInventory.create({
     data: { characterId, itemId: existingItem.id, quantity: isConsumable ? qty : 1, enhancementLevel },
   })
   return true
+}
+
+/**
+ * Credita um LOTE de drops (a run inteira). Calcula os slots livres UMA vez e
+ * respeita a ordem de prioridade (pedra → gear → resto), devolvendo o que não
+ * coube para o cliente avisar em vez de fingir que coletou.
+ */
+export async function creditDropsBatchTx(
+  tx: Prisma.TransactionClient,
+  characterId: string,
+  drops: LootDrop[],
+): Promise<LootDrop[]> {
+  if (drops.length === 0) return []
+  const slots: SlotBudget = { free: (await freeInventorySlots(tx, characterId)).free }
+  const skipped: LootDrop[] = []
+  for (const d of orderDropsForCredit(drops)) {
+    const added = await addDropToInventoryTx(
+      tx,
+      characterId,
+      { name: d.name, rarity: d.rarity, enhancement: d.enhancement },
+      slots,
+    )
+    if (!added) skipped.push(d)
+  }
+  return skipped
 }
 
 // Credita o espólio de um nó: ouro no User.goldBalance (pote off-chain/claimável)
@@ -569,6 +748,236 @@ export async function applyGearWearTx(
 // Serializa o monstro para o cliente animar (mesma forma do ScaledMonster).
 export function publicMonster(m: ScaledMonster): ScaledMonster {
   return m
+}
+
+// ============================================================
+// 🏁 FLUSH — o único ponto pesado do loop da masmorra.
+//
+// Escreve no personagem, de UMA vez, tudo o que a run acumulou: ouro (teto
+// diário aplicado uma vez), XP + level-up, drops em lote e desgaste do gear.
+// Antes isto rodava por NÓ, e cada rodada refazia o teto diário, o catálogo de
+// itens por nome e a contagem de slots — 20-40 round-trips presos numa transação
+// interativa a cada fim de luta.
+//
+// Chamado por /finish (saída normal) e também por /start e /abandon quando
+// encontram uma run velha com espólio pendurado: aba que fecha ou trava não
+// perde nada, só recebe na entrada seguinte.
+// ============================================================
+export type RunEndReason = 'boss' | 'retreat' | 'lose'
+
+/** Sinaliza que outra requisição fechou a run primeiro (rollback + 409). */
+class RunAlreadyClosedError extends Error {}
+
+export interface RunFlushGrant {
+  gold: number
+  xp: number
+  drops: LootDrop[]
+  skippedDrops: LootDrop[]
+  kills: number
+  bossDefeated: boolean
+  leveledUp: boolean
+  newLevel: number
+  equipmentWear: { slot: string; name: string; durability: number; maxDurability: number; justBroke: boolean }[]
+}
+
+interface FlushableRun {
+  id: string
+  userId: string
+  characterId: string
+  dungeonId: string
+  tier: number
+  cursor: number
+  pending: unknown
+  accrued: unknown
+}
+
+export async function flushRunRewards(
+  run: FlushableRun,
+  opts: {
+    reason: RunEndReason
+    resolve?: { nodeIdx?: number; outcome?: NodeOutcome; killedIds?: unknown }
+  },
+): Promise<RunFlushGrant | null> {
+  const dungeon = getDungeon(run.dungeonId)
+  if (!dungeon) return null
+
+  const character = await prisma.character.findUnique({
+    where: { id: run.characterId },
+    // Só o que buildXpUpdate precisa — o row inteiro traz JSONBs grandes
+    // (transformationImages, skillTree) que não têm uso nenhum aqui.
+    select: { id: true, level: true, race: true, class: true, experience: true, availablePoints: true, baseStats: true },
+  })
+  if (!character) return null
+  const charForRun: CharacterForRun = {
+    id: character.id,
+    level: character.level,
+    race: character.race,
+    class: character.class,
+  }
+
+  let accrued = readAccrued(run.accrued)
+
+  // Desfecho do ÚLTIMO nó — o que não teve /step seguinte para levá-lo de carona.
+  let bossDefeated = false
+  if (run.pending) {
+    const pending = run.pending as unknown as RunPending
+    const wanted = opts.resolve
+    const matches = wanted && (wanted.nodeIdx == null || Number(wanted.nodeIdx) === pending.nodeIdx)
+    if (matches) {
+      const outcome: NodeOutcome = wanted.outcome === 'clear' ? 'clear' : opts.reason === 'lose' ? 'lose' : 'retreat'
+      const { delta, allDead } = resolveNodeOutcome(pending, outcome, wanted.killedIds, {
+        dungeon,
+        character: charForRun,
+        tier: run.tier,
+      })
+      accrued = mergeAccrued(accrued, delta)
+      bossDefeated = pending.kind === 'boss' && allDead && outcome === 'clear'
+    }
+  }
+
+  // 🌅 Bônus solo: os primeiros bosses do DIA da CONTA rendem pedras extras.
+  if (bossDefeated) {
+    const startOfDay = new Date()
+    startOfDay.setUTCHours(0, 0, 0, 0)
+    const bossesToday = await prisma.dungeonRun.count({
+      where: { userId: run.userId, status: 'finished', updatedAt: { gte: startOfDay } },
+    })
+    if (bossesToday < FIRST_BOSS_BONUS.bossesPerDay) {
+      accrued = mergeAccrued(accrued, { ...emptyAccrued(), drops: firstBossBonusStones() })
+    }
+  }
+
+  // O status vem do que o SERVIDOR confirmou, não do que o cliente pediu: só
+  // 'finished' (que destrava o tier seguinte) com o chefe comprovadamente morto.
+  const status = bossDefeated ? 'finished' : opts.reason === 'lose' ? 'defeated' : 'abandoned'
+
+  // Desgaste: linear nos abates, chefe dobra. Soma idêntica à do débito por nó.
+  const normalKills = Math.max(0, accrued.kills - accrued.bossKills)
+  const weaponWear = wearFor('WEAPON', normalKills, false) + wearFor('WEAPON', accrued.bossKills, true)
+  const gearWear = wearFor('ARMOR', normalKills, false) + wearFor('ARMOR', accrued.bossKills, true)
+
+  const xp = buildXpUpdate(character, accrued.xp)
+
+  try {
+    const granted = await prisma.$transaction(async (tx) => {
+      // Fecha a run PRIMEIRO e de forma condicional: se outra requisição já
+      // fechou, `count` vem 0 e o throw desfaz tudo (nada é creditado duas vezes).
+      const claimed = await tx.dungeonRun.updateMany({
+        where: { id: run.id, status: 'active' },
+        data: { status, pending: PrismaNs.DbNull, accrued: PrismaNs.DbNull },
+      })
+      if (claimed.count !== 1) throw new RunAlreadyClosedError()
+
+      const remaining = await dailyGoldRemainingTx(tx, run.userId)
+      const gold = Math.min(Math.max(0, Math.floor(accrued.gold)), remaining)
+
+      const skippedDrops = await creditDropsBatchTx(tx, character.id, accrued.drops)
+
+      await tx.character.update({
+        where: { id: character.id },
+        data: { ...xp.updateData, ...(gold > 0 ? { gold: { increment: gold } } : {}) },
+      })
+
+      await tx.dungeonRun.update({
+        where: { id: run.id },
+        data: { goldEarned: { increment: gold }, xpEarned: { increment: accrued.xp } },
+      })
+
+      // 🏆 Desbloqueio de TIER: vencer o boss no tier == maxTier atual sobe o maxTier.
+      if (bossDefeated) {
+        const key = { characterId_dungeonId: { characterId: character.id, dungeonId: dungeon.id } }
+        const prog = await tx.dungeonProgress.upsert({
+          where: key,
+          create: { characterId: character.id, dungeonId: dungeon.id, maxTier: 1 },
+          update: {},
+        })
+        const beat = clampDungeonTier(run.tier)
+        if (beat >= prog.maxTier && prog.maxTier < MAX_DUNGEON_TIER) {
+          await tx.dungeonProgress.update({ where: key, data: { maxTier: prog.maxTier + 1 } })
+        }
+      }
+
+      // O findMany continua: a resposta precisa de nome/valores pro aviso no cliente.
+      const equipmentWear: RunFlushGrant['equipmentWear'] = []
+      if (weaponWear > 0 || gearWear > 0) {
+        const equipped = await tx.characterEquipment.findMany({
+          where: { characterId: character.id },
+          include: { item: { select: { name: true } } },
+        })
+        for (const eq of equipped) {
+          if (eq.durability <= 0) continue // já quebrada: não desgasta além de 0
+          const wear = eq.slot === 'WEAPON' ? weaponWear : gearWear
+          const after = Math.max(0, eq.durability - wear)
+          if (after === eq.durability) continue
+          equipmentWear.push({
+            slot: eq.slot,
+            name: eq.item.name,
+            durability: after,
+            maxDurability: eq.maxDurability,
+            justBroke: after === 0,
+          })
+        }
+        if (equipmentWear.length > 0) await applyGearWearTx(tx, character.id, weaponWear, gearWear)
+      }
+
+      return {
+        gold,
+        xp: accrued.xp,
+        drops: accrued.drops,
+        skippedDrops,
+        kills: accrued.kills,
+        bossDefeated,
+        leveledUp: xp.leveledUp,
+        newLevel: xp.leveledUp ? xp.newLevelInfo.level : character.level,
+        equipmentWear,
+      }
+    })
+
+    // 🗺️ Missões: pós-commit e fire-and-forget (fail-soft, nunca afeta a rota).
+    if (accrued.kills > 0) {
+      advanceQuestProgress(character.id, { type: 'dungeon_monster_kill', amount: accrued.kills }).catch(() => {})
+    }
+    if (bossDefeated) {
+      advanceQuestProgress(character.id, { type: 'dungeon_boss_kill', amount: 1 }).catch(() => {})
+    }
+    if (xp.leveledUp) {
+      advanceQuestProgress(character.id, { type: 'level_reach', value: xp.newLevelInfo.level }).catch(() => {})
+    }
+
+    return granted
+  } catch (err) {
+    if (err instanceof RunAlreadyClosedError) return null
+    throw err
+  }
+}
+
+/**
+ * Drena o espólio de runs que ficaram para trás (aba fechada, crash, lock
+ * expirado) e as marca como abandonadas. Sem isto o `accrued` daquelas runs
+ * nunca chegaria no personagem.
+ */
+export async function flushStaleRuns(where: { userId: string; characterId?: string }): Promise<void> {
+  const stale = await prisma.dungeonRun.findMany({
+    where: { ...where, status: 'active' },
+    select: {
+      id: true, userId: true, characterId: true, dungeonId: true,
+      tier: true, cursor: true, pending: true, accrued: true,
+    },
+  })
+  for (const run of stale) {
+    // Sem `resolve`: o combate que estava aberto não teve desfecho reportado, então
+    // só entra o que já estava acumulado. Falha de uma run não pode travar as outras.
+    await flushRunRewards(run, { reason: 'retreat' }).catch(() => null)
+  }
+  // Rede de segurança: o flush pode devolver null sem fechar a run (masmorra
+  // removida do catálogo, personagem apagado). Nada pode ficar 'active' para
+  // sempre — isso seguraria o lock do herói a cada entrada.
+  if (stale.length > 0) {
+    await prisma.dungeonRun.updateMany({
+      where: { id: { in: stale.map(r => r.id) }, status: 'active' },
+      data: { status: 'abandoned', pending: PrismaNs.DbNull, accrued: PrismaNs.DbNull },
+    })
+  }
 }
 
 export type { ScaledMonster, NodeLoot, DungeonId }

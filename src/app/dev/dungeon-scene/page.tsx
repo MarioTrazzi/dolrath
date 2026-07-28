@@ -37,6 +37,9 @@ export default function DungeonScenePage() {
   const [targetNode, setTargetNode] = useState(1)
   const [visited, setVisited] = useState<number[]>([])
   const [encounter, setEncounter] = useState<MapSpot | null>(null)
+  // 🎥 Bancada da aproximação: ZOOM_REVEAL (1.45) quando o nó revela o monstro,
+  // ZOOM_CHARGE (2.4) na investida — os mesmos valores do DungeonRun.
+  const [cinematicZoom, setCinematicZoom] = useState(1)
   const [log, setLog] = useState<string[]>([])
   const [stamina, setStamina] = useState(153)
 
@@ -60,6 +63,9 @@ export default function DungeonScenePage() {
   const handleReach = useCallback(
     (spot: MapSpot) => {
       setEncounter(spot)
+      const flavorNow = contents.get(spot.nodeIndex)?.flavor
+      // Revelação: nó de combate aproxima a câmera do vulto (achado não).
+      setCinematicZoom(flavorNow && flavorNow !== 'chest' ? 1.45 : 1)
       setStamina(s => Math.max(0, s - (KIND_STAMINA[spot.kind] ?? 4)))
       const flavor = contents.get(spot.nodeIndex)?.flavor
       setLog(prev =>
@@ -77,7 +83,14 @@ export default function DungeonScenePage() {
     setVisited(prev => (prev.includes(encounter.nodeIndex) ? prev : [...prev, encounter.nodeIndex]))
     setTargetNode(n => Math.min(lastNode, n + 1))
     setEncounter(null)
+    setCinematicZoom(1)
   }, [encounter, lastNode])
+
+  /** Investida — fecha o zoom como o corte pro combate faz na run real. */
+  const chargeEncounter = useCallback(() => {
+    setCinematicZoom(2.4)
+    window.setTimeout(() => setCinematicZoom(1.45), 1200)
+  }, [])
 
   return (
     <div className="fixed inset-0 bg-neutral-950 text-white overflow-hidden flex items-center justify-center">
@@ -107,6 +120,8 @@ export default function DungeonScenePage() {
         targetNode={targetNode}
         visitedNodes={visited}
         paused={Boolean(encounter)}
+        cinematicZoom={cinematicZoom}
+        focusNode={cinematicZoom > 1 ? encounter?.nodeIndex ?? null : null}
         onReachSpot={handleReach}
       />
 
@@ -222,9 +237,18 @@ export default function DungeonScenePage() {
                 </>
               )
             })()}
+            {cinematicZoom > 1 && (
+              <button
+                onClick={chargeEncounter}
+                className="mt-4 w-full rounded-xl bg-red-700 py-2.5 font-bold hover:bg-red-600"
+                title="Fecha o zoom como a entrada em combate faz na run real"
+              >
+                🎥 Investir (zoom de combate)
+              </button>
+            )}
             <button
               onClick={resolveEncounter}
-              className="mt-4 w-full rounded-xl bg-emerald-600 py-2.5 font-bold hover:bg-emerald-500"
+              className="mt-2 w-full rounded-xl bg-emerald-600 py-2.5 font-bold hover:bg-emerald-500"
             >
               Resolver e seguir
             </button>

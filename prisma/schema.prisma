@@ -255,6 +255,10 @@ model Item {
   equipment           CharacterEquipment[]
   history             CharacterHistory[]
   nfts                ItemNft[]
+
+  // O catálogo é resolvido POR NOME em todo crédito de drop (dungeon, coleta,
+  // fazenda, craft): sem índice era um seq scan da tabela inteira por item.
+  @@index([name])
 }
 
 model ItemNft {
@@ -386,15 +390,24 @@ model DungeonRun {
   nodeCount   Int                           // total de nós da trilha (inclui o boss)
   goldEarned  Int       @default(0)
   xpEarned    Int       @default(0)
-  // Combate pendente: { nodeIdx, kind, lootRoll, monster } rolado pelo servidor,
-  // aguardando o desfecho (win/lose) reportado pelo cliente.
+  // Combate pendente: { nodeIdx, kind, lootRoll, monsters, killDrops, nodeLoot }
+  // rolado pelo servidor, aguardando o desfecho reportado pelo cliente.
   pending     Json?     @db.JsonB
+  // 💰 Espólio ACUMULADO da run, ainda NÃO escrito no personagem: { gold, xp,
+  // drops[], kills, bossKills }. Cada /step soma aqui (uma escrita JSONB barata);
+  // /finish faz UMA transação com tudo. Isto é o que tira a rede do fim de cada
+  // luta — durante a run o que o jogador vê é informação, não escrita no banco.
+  // Run que morre com `accrued` pendente é drenada no /start ou /abandon seguinte.
+  accrued     Json?     @db.JsonB
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
   @@index([userId])
   @@index([characterId])
   @@index([characterId, status])
+  // Lock de run viva (start/active): sem este índice a busca varria TODAS as runs
+  // históricas do usuário e ainda ordenava por updatedAt.
+  @@index([userId, status])
 }
 
 // 🏆 Progresso de TIER por personagem × masmorra (estilo Diablo 4). maxTier = maior tier

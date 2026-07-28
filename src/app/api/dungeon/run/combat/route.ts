@@ -19,6 +19,11 @@ import { firstBossBonusStones, FIRST_BOSS_BONUS, MAX_DUNGEON_TIER, clampDungeonT
 
 export const dynamic = 'force-dynamic'
 
+// ⚠️ LEGADO — substituída por /step (que leva o desfecho de carona) + /finish
+// (crédito único da run). Mantida por um release só para as abas que já estavam
+// abertas no deploy: elas ainda falam este protocolo, e ele continua correto
+// (credita direto, sem passar pelo `accrued`). Remover no release seguinte.
+//
 // Resolve o combate em PACOTE do nó atual — em UMA chamada por nó. Abates no
 // meio do pacote NÃO tocam a rede (o cliente mostra os valores otimistas que o
 // próprio servidor rolou pro nó); quem credita tudo é a chamada de desfecho:

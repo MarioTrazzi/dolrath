@@ -58,7 +58,8 @@ import {
   applyRankPatch,
 } from '@/lib/skillTree'
 import { applyEnhancementToStats } from '@/lib/enhancementSystem'
-import { isBroken } from '@/lib/durability'
+import { isBroken, wearFor } from '@/lib/durability'
+import { getLevelInfo } from '@/lib/experienceSystem'
 import { itemImagePath } from '@/lib/itemCatalog'
 import { parseActiveFood, foodBuffAttrBonus, foodBuffLabel, foodBuffRemainingMin } from '@/lib/foodBuff'
 import {
@@ -247,18 +248,35 @@ interface StepResponse {
   cursor?: number
   stamina?: number
   pendingCombat?: boolean
+  /** O servidor absorveu o `resolve` enviado? Só então o cliente pode descartá-lo. */
+  resolved?: boolean
   skippedDrops?: LootDrop[]
+  /** Espólio JÁ ROLADO pelo servidor: drops por abate (id do monstro → drops). */
+  killDrops?: Record<string, LootDrop[]>
+  /** Espólio do nó — só é pago se o pacote inteiro cair. */
+  nodeLoot?: NodeLoot | null
   error?: string
 }
-interface CombatGrant {
-  gold: number
-  killGold: number
-  lootGold: number
-  xp: number
-  loot: NodeLoot
+/** Desfecho de um nó de combate, entregue de carona no /step seguinte (ou no /finish). */
+interface NodeResolve {
+  nodeIdx: number
+  outcome: 'clear' | 'retreat' | 'lose'
+  killedIds: string[]
+}
+/** Resposta do /finish — o crédito autoritativo da run inteira. */
+interface FinishResponse {
+  finished?: boolean
+  gold?: number
+  xp?: number
+  drops?: LootDrop[]
   skippedDrops?: LootDrop[]
-  // d20 do nó (autoritativo do servidor) — dono da classe do loot creditado
-  roll?: number
+  kills?: number
+  bossDefeated?: boolean
+  leveledUp?: boolean
+  newLevel?: number
+  equipmentWear?: EquipmentWear[]
+  error?: string
+  status?: string
 }
 interface EquipmentWear {
   slot: string
@@ -266,21 +284,6 @@ interface EquipmentWear {
   durability: number
   maxDurability: number
   justBroke: boolean
-}
-interface CombatResponse {
-  granted?: CombatGrant
-  cleared?: boolean
-  equipmentWear?: EquipmentWear[]
-  finished?: boolean
-  bossDefeated?: boolean
-  retreated?: boolean
-  defeated?: boolean
-  leveledUp?: boolean
-  newLevel?: number
-  error?: string
-  // status da run no corpo do 409 ("finished" = o clear do boss JÁ aterrissou
-  // num request anterior — retry pós-sucesso conta como vitória, não como falha)
-  status?: string
 }
 
 // Efeito de um consumível a partir dos stats do catálogo: restauração (hp/mp),
@@ -554,11 +557,19 @@ function defenseVerb(blocked?: boolean): string {
   return Math.random() < 0.3 ? 'defendeu' : 'esquivou'
 }
 
+/** Largura máxima da arena de combate na tela grande. */
+const COMBAT_MAX_W = 1280
+/** Duração da investida da câmera até o corte para a arena. */
+const COMBAT_INTRO_MS = 420
+/** Zoom da REVELAÇÃO (o /step disse "monstro") e o da INVESTIDA (luta aceita). */
+const ZOOM_REVEAL = 1.45
+const ZOOM_CHARGE = 2.4
+
 /**
- * 📱 Moldura da run — a masmorra é MOBILE-FIRST em qualquer tela.
+ * 📱 Moldura da run — a EXPLORAÇÃO é mobile-first em qualquer tela; o COMBATE não.
  *
- * No celular a moldura ocupa tudo e nada muda. Na tela grande, em vez de
- * esticar na largura (o que arruinava o enquadramento da cena, cujo zoom sai
+ * Na trilha, no celular a moldura ocupa tudo e nada muda. Na tela grande, em vez
+ * de esticar na largura (o que arruinava o enquadramento da cena, cujo zoom sai
  * da LARGURA: ppu = clamp(w/26, ...)), ela roda em retrato 9:16 centralizado e
  * a arte da masmorra — a MESMA imagem do card em /dungeons — preenche a sobra,
  * desfocada e escurecida de propósito: é ambiente, não conteúdo.
@@ -567,16 +578,28 @@ function defenseVerb(blocked?: boolean): string {
  * a largura usada é min(altura × 0.5625, largura do pai). Num 390×844 dá
  * 475 > 390 → 390×844, tela cheia sem tarja. Num 1440×900 dá 506×900.
  *
+ * `wide` (combate) larga o retrato: a arena é uma tela de batalha, não um mapa
+ * — não tem zoom preso à largura pra proteger, e no desktop ela merece o espaço.
+ * De quebra, os `sm:` de CombatShell/BattleScene (que olham a VIEWPORT, não a
+ * moldura) voltam a bater com a largura real. No celular `wide` é idêntico ao
+ * retrato: a viewport já é mais estreita que o teto.
+ *
+ * A troca de geometria acontece debaixo do flash preto da investida (ver
+ * `combatIntro`), então não há transição a animar aqui.
+ *
  * Aqui é `h-full` (não o `100dvh` da bancada /dev): dentro de um `fixed
  * inset-0` é por definição a mesma caixa, sem o descompasso de 1-3px que o
  * 100dvh do Safari iOS produz enquanto a barra de endereço anima.
  */
 function RunFrame({
   dungeonId,
+  wide,
   frameRef,
   children,
 }: {
   dungeonId: DungeonId
+  /** Combate: solta o retrato e ocupa a tela (até COMBAT_MAX_W). */
+  wide?: boolean
   frameRef?: React.Ref<HTMLDivElement>
   children: React.ReactNode
 }) {
@@ -591,7 +614,11 @@ function RunFrame({
       <div
         ref={frameRef}
         className="relative h-full overflow-hidden bg-black shadow-2xl ring-1 ring-white/10 sm:rounded-2xl"
-        style={{ aspectRatio: '9 / 16', maxWidth: '100%' }}
+        style={
+          wide
+            ? { width: '100%', maxWidth: COMBAT_MAX_W }
+            : { aspectRatio: '9 / 16', maxWidth: '100%' }
+        }
       >
         {children}
       </div>
@@ -637,6 +664,11 @@ export default function DungeonRun({
   // para refletir no combate seguinte (levers, card de batalha, escala do monstro).
   const [charLevel, setCharLevel] = useState(character.level)
   useEffect(() => { setCharLevel(character.level) }, [character.id, character.level])
+  // Espelho em ref do nível e do XP ganho na run: a previsão de level up roda
+  // logo depois de um setTotals, e o state ainda não teria andado.
+  const charLevelRef = useRef(character.level)
+  charLevelRef.current = Math.max(charLevelRef.current, charLevel)
+  const runXpRef = useRef(0)
 
   // ⚔️ Equipamento VIVO da run: o servidor debita durabilidade a cada abate e
   // devolve `equipmentWear` — aplicamos aqui para que uma peça que QUEBRE no
@@ -679,6 +711,10 @@ export default function DungeonRun({
   )
   const LAST = trailPoints.length - 1
   const [tokenIdx, setTokenIdx] = useState(0)
+  // Espelho em ref: onMonsterKilled roda dentro de um `later()` e precisa do nó
+  // CORRENTE para carimbar o desfecho (o servidor casa esse índice com o pending).
+  const tokenIdxRef = useRef(0)
+  tokenIdxRef.current = tokenIdx
   const [moving, setMoving] = useState(false)
   /** Walk: idle → scroll (vasculhar) → approach (avistou ?) → resolve. */
   const [walkMode, setWalkMode] = useState<WalkMode>('idle')
@@ -797,10 +833,22 @@ export default function DungeonRun({
   // 💀 Drops exibidos antes do card do nó (hoje o servidor devolve TUDO no clear,
   // então fica vazio; mantido pro merge do card tolerar fluxos antigos).
   const encounterDropsRef = useRef<LootDrop[]>([])
-  // 🎯 Ids dos monstros abatidos no PACOTE atual (protocolo por nó): abates no
-  // meio do pacote não tocam a rede — quem credita tudo é a chamada única de
-  // desfecho ('clear' no último abate, ou 'retreat'/'lose' com esta lista).
+  // 🎯 Ids dos monstros abatidos no PACOTE atual. NENHUM abate toca a rede: o
+  // desfecho do nó viaja de carona no /step seguinte (pendingResolveRef) ou no
+  // /finish, se a run acabar aqui.
   const killedIdsRef = useRef<string[]>([])
+  // 📮 Desfecho do nó ainda não entregue ao servidor. É o que transforma "uma
+  // chamada por luta" em "nenhuma": o próximo passo já leva isto no corpo.
+  const pendingResolveRef = useRef<NodeResolve | null>(null)
+  // 🎁 Espólio que o servidor JÁ rolou para o nó atual (veio no /step): drops por
+  // abate e o espólio do nó (só pago se o pacote limpar). É daqui que sai o card
+  // de vitória, instantâneo e sem rede.
+  const killDropsRef = useRef<Record<string, LootDrop[]>>({})
+  const nodeLootRef = useRef<NodeLoot | null>(null)
+  // 🎒 Slots livres previstos. A mochila só é escrita no /finish, então o cliente
+  // projeta o que não vai caber com a MESMA ordem de prioridade do servidor
+  // (pedra → gear → resto). O /finish devolve o veredito real no resumo.
+  const freeSlotsRef = useRef<number | null>(null)
   // 👑 true enquanto o card de espólio do BOSS está na tela: o dismiss (botão ou
   // auto-pilot) só então dispara finishRun(true) — o jogador vê o brilho do drop
   // raro antes do resumo/re-run automático assumirem a tela.
@@ -839,6 +887,14 @@ export default function DungeonRun({
   // o runId e o monstro que o servidor rolou para o nó atual (para o combate).
   const runIdRef = useRef<string | null>(null)
   const [runReady, setRunReady] = useState(false)
+  /**
+   * ⚡ Start OTIMISTA: o herói começa a caminhar assim que a cena monta, sem
+   * esperar o /start. A primeira caminhada leva ~1.5s — tempo de sobra para a
+   * sessão abrir — e é só na CHEGADA ao nó que o /step precisa do runId. Quem
+   * espera é esta promessa, dentro de finishWalkStep, e não o jogador olhando
+   * uma tela parada.
+   */
+  const runReadyPromiseRef = useRef<Promise<void> | null>(null)
   // Herói já em uso em outra aba (lock vivo): bloqueia a run com um aviso.
   const [blocked, setBlocked] = useState<string | null>(null)
   // Só o BOSS usa estes refs (o encontro comum guarda o monstro no próprio
@@ -849,9 +905,10 @@ export default function DungeonRun({
   const startedRef = useRef(false)
 
   // ---------- Largura da MOLDURA (não da viewport) ----------
-  // Dentro do RunFrame o `sm:` do Tailwind mente: numa tela de 1440px ele está
-  // ativo, mas a moldura tem ~506px. Sem container queries no projeto
-  // (tailwind.config.js: plugins: []), medimos a moldura e decidimos em JS.
+  // Na TRILHA o `sm:` do Tailwind mente dentro do RunFrame: numa tela de 1440px
+  // ele está ativo, mas a moldura retrato tem ~506px. Sem container queries no
+  // projeto (tailwind.config.js: plugins: []), medimos a moldura e decidimos em
+  // JS. (Em combate a moldura acompanha a viewport, então lá o `sm:` já bate.)
   const frameRef = useRef<HTMLDivElement>(null)
   const [frameW, setFrameW] = useState(0)
   useEffect(() => {
@@ -864,6 +921,34 @@ export default function DungeonRun({
   }, [blocked])
   /** Moldura larga o bastante para o HUD de desktop (coluna de barras no header). */
   const wideFrame = frameW >= 560
+
+  // ---------- 🎥 Aproximação da câmera (entrada em combate) ----------
+  // O encontro ganha um beat em dois tempos antes do corte pro combate:
+  //   1. REVELAÇÃO — o /step disse "monstro": a câmera aproxima devagar (1.45×)
+  //      e passa a enquadrar o vulto junto do herói enquanto o d20 pousa.
+  //   2. INVESTIDA — o jogador aceita a luta: zoom fecha (2.4×), um flash preto
+  //      cobre a troca de geometria da moldura e só então `phase` vira 'combat'.
+  // Enquanto a investida roda, a cena segue VISÍVEL (phase ainda é 'explore') e
+  // PAUSADA — sem o pause o herói voltaria a andar por baixo do zoom.
+  const [combatIntro, setCombatIntro] = useState(false)
+  const [encounterZoom, setEncounterZoom] = useState(1)
+  const [focusNode, setFocusNode] = useState<number | null>(null)
+  // Acessibilidade: quem pediu menos movimento fica com o fade seco de antes.
+  // Em ref porque finishWalkStep é um useCallback de deps fixas — como state ele
+  // ficaria congelado no valor da montagem.
+  const reducedMotionRef = useRef(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const sync = () => { reducedMotionRef.current = mq.matches }
+    sync()
+    mq.addEventListener('change', sync)
+    return () => mq.removeEventListener('change', sync)
+  }, [])
+  /** Volta o enquadramento ao normal (a cena está escondida, então não aparece). */
+  const resetEncounterCamera = useCallback(() => {
+    setEncounterZoom(1)
+    setFocusNode(null)
+  }, [])
 
   // ---------- Transformação (local, por combate) ----------
   const transformForms = useMemo(() => getRaceTransformations(character.race), [character.race])
@@ -942,11 +1027,12 @@ export default function DungeonRun({
   }, [])
 
   // Abre a sessão no servidor (uma vez). O servidor valida posse + gating e
-  // passa a ser dono do RNG/recompensas. Sem runId, a exploração fica travada.
+  // passa a ser dono do RNG/recompensas. A caminhada até o 1º nó já começa em
+  // paralelo — quem espera o runId é o /step, na chegada (runReadyPromiseRef).
   useEffect(() => {
     if (startedRef.current) return
     startedRef.current = true
-    ;(async () => {
+    runReadyPromiseRef.current = (async () => {
       try {
         const res = await fetch('/api/dungeon/run/start', {
           method: 'POST',
@@ -965,6 +1051,11 @@ export default function DungeonRun({
         }
         runIdRef.current = data.runId
         if (typeof data.stamina === 'number') setStamina(data.stamina)
+        // Ponto de partida da previsão de mochila cheia (a escrita real só acontece
+        // no /finish, então o cliente precisa saber quantos slots sobravam).
+        if (typeof data.inventoryUsed === 'number' && typeof data.inventorySlots === 'number') {
+          freeSlotsRef.current = Math.max(0, data.inventorySlots - data.inventoryUsed)
+        }
         setRunReady(true)
         // Inventário já cheio ao entrar: avisa que os drops não vão ser coletados.
         // No piloto (re-run automático) isso viraria stamina queimada sem farm — desliga.
@@ -1201,11 +1292,14 @@ export default function DungeonRun({
     return 'locked'
   }
 
-  // Monta o card do nó a partir do que o SERVIDOR resolveu (monstro já rolado,
-  // ou achado já creditado). Nenhum RNG ou crédito acontece aqui no cliente.
+  // Monta o card do nó a partir do que o SERVIDOR resolveu (monstro e espólio já
+  // rolados). Nenhum RNG acontece aqui no cliente; o CRÉDITO acontece no /finish.
   const applyServerEvent = (data: StepResponse, atIdx: number): ResolvedEvent => {
     const sc = scalingAt(atIdx)
     lootRollRef.current = data.roll ?? 12
+    // Espólio pré-rolado do encontro: é daqui que o card de vitória sai sem rede.
+    killDropsRef.current = data.killDrops ?? {}
+    nodeLootRef.current = data.nodeLoot ?? null
 
     if (data.type === 'monster' && (data.monsters?.length || data.monster)) {
       const ev = dungeon.events.find(e => e.kind === 'monster')!
@@ -1232,7 +1326,8 @@ export default function DungeonRun({
       }
     }
 
-    // Achado — o servidor já creditou ouro/itens; aqui só exibimos.
+    // Achado — o servidor rolou o espólio e guardou no acumulado da run; aqui só
+    // exibimos. O crédito na mochila acontece no /finish.
     const loot: NodeLoot = data.loot ?? { gold: 0, drops: [] }
 
     // ⛲ Fonte revitalizadora: restaura HP e MP cheios (sem espólio neste nó).
@@ -1253,7 +1348,7 @@ export default function DungeonRun({
       }
     }
 
-    showLoot(loot, data.skippedDrops, data.roll)
+    showLoot(loot, predictSkipped(loot.drops), data.roll)
 
     const hasGear = loot.drops.some(d => d.kind === 'item' || d.kind === 'stone')
     const anyDrop = loot.drops.length > 0 || loot.gold > 0
@@ -1286,6 +1381,12 @@ export default function DungeonRun({
   const finishWalkStep = useCallback(async (dest: number) => {
     if (walkStepLockRef.current) return
     walkStepLockRef.current = true
+    // Start otimista: a caminhada até este nó começou junto com o /start. Se ele
+    // ainda não aterrissou, é AQUI que se espera — a latência da entrada já foi
+    // gasta andando.
+    if (!runIdRef.current && runReadyPromiseRef.current) {
+      await runReadyPromiseRef.current
+    }
     if (!runIdRef.current) {
       setWalkMode('idle')
       setMoving(false)
@@ -1298,9 +1399,15 @@ export default function DungeonRun({
       const res = await fetch('/api/dungeon/run/step', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ runId: runIdRef.current }),
+        // 📮 O desfecho do nó anterior vai de CARONA: é isto que faz o fim de
+        // luta não ter chamada própria — ele viaja escondido atrás da caminhada.
+        body: JSON.stringify({ runId: runIdRef.current, resolve: pendingResolveRef.current ?? undefined }),
       })
       data = await res.json()
+      // Só descarta o desfecho quando o servidor CONFIRMA que o absorveu. Num
+      // desencontro de nó (aba atrasada) ele volta `resolved: false` e o
+      // desfecho fica guardado para a próxima tentativa em vez de sumir.
+      if (data?.resolved) pendingResolveRef.current = null
       if (!res.ok) {
         setExploreRolling(false)
         setWalkMode('idle')
@@ -1342,12 +1449,24 @@ export default function DungeonRun({
         })
         return next
       })
+      // 🎥 REVELAÇÃO: deu monstro — a câmera já começa a se aproximar do vulto
+      // enquanto o d20 pousa e o card do encontro é lido. O fechamento final
+      // (investida) vem em beginEncounter, quando o jogador aceita a luta.
+      if (flavor !== 'chest' && !reducedMotionRef.current) {
+        setFocusNode(dest)
+        setEncounterZoom(ZOOM_REVEAL)
+      }
     }
 
     if (data.type === 'boss') {
       setExploreRolling(false)
       if (data.monster) serverMonsterRef.current = data.monster
       serverPackRef.current = data.monsters?.length ? data.monsters : data.monster ? [data.monster] : null
+      // O covil não passa por applyServerEvent — guarda aqui o espólio que o
+      // servidor já rolou para o chefe (senão o card da vitória final vem vazio).
+      lootRollRef.current = data.roll ?? 20
+      killDropsRef.current = data.killDrops ?? {}
+      nodeLootRef.current = data.nodeLoot ?? null
       showNarration('A trilha desemboca no covil. O ar treme... algo antigo se ergue.')
       pushLog(`👑 Você chegou ao covil de ${dungeon.boss.name}...`)
       later(() => showBanner('👑', `${dungeon.boss.name} desperta!`, 3000), 200)
@@ -1391,7 +1510,11 @@ export default function DungeonRun({
 
   const advance = async () => {
     if (phase !== 'explore' || exploreRolling || walkBusy || eventCard || lootCard || atBoss) return
-    if (!runReady || !runIdRef.current) return
+    // Na CENA a caminhada pode começar antes do /start aterrissar (start otimista):
+    // quem espera o runId é o finishWalkStep, na chegada ao nó. Nos outros modos
+    // o /step vem logo em seguida, então continua exigindo a sessão aberta.
+    if (!startedRef.current) return
+    if (!useScene && (!runReady || !runIdRef.current)) return
     const dest = tokenIdx + 1
 
     // --- Cena: o herói caminha sozinho até o bolsão e avisa em onReachSpot ---
@@ -1420,9 +1543,15 @@ export default function DungeonRun({
       const res = await fetch('/api/dungeon/run/step', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ runId: runIdRef.current }),
+        // 📮 O desfecho do nó anterior vai de CARONA: é isto que faz o fim de
+        // luta não ter chamada própria — ele viaja escondido atrás da caminhada.
+        body: JSON.stringify({ runId: runIdRef.current, resolve: pendingResolveRef.current ?? undefined }),
       })
       data = await res.json()
+      // Só descarta o desfecho quando o servidor CONFIRMA que o absorveu. Num
+      // desencontro de nó (aba atrasada) ele volta `resolved: false` e o
+      // desfecho fica guardado para a próxima tentativa em vez de sumir.
+      if (data?.resolved) pendingResolveRef.current = null
       if (!res.ok) {
         setExploreRolling(false)
         if (res.status === 400) showBanner('😮‍💨', `${data?.error || 'Stamina insuficiente'} — ela volta +2 a cada 15 min ocioso`)
@@ -1441,6 +1570,11 @@ export default function DungeonRun({
       setExploreRolling(false)
       if (data.monster) serverMonsterRef.current = data.monster
       serverPackRef.current = data.monsters?.length ? data.monsters : data.monster ? [data.monster] : null
+      // O covil não passa por applyServerEvent — guarda aqui o espólio que o
+      // servidor já rolou para o chefe (senão o card da vitória final vem vazio).
+      lootRollRef.current = data.roll ?? 20
+      killDropsRef.current = data.killDrops ?? {}
+      nodeLootRef.current = data.nodeLoot ?? null
       setMoving(true)
       setTokenIdx(dest)
       showNarration('A trilha desemboca no covil. O ar treme... algo antigo se ergue.')
@@ -1488,9 +1622,13 @@ export default function DungeonRun({
 
   // Inicia o combate contra um PACOTE (1..3). O alvo ativo começa no mais fraco
   // (também o foco do automático). Aceita um único monstro por conveniência (boss).
+  //
+  // NÃO chamar direto a partir da UI: o caminho normal é `beginEncounter`, que
+  // roda a investida da câmera antes e chama isto no corte.
   const startCombat = (group: ScaledMonster[] | ScaledMonster) => {
     const list = (Array.isArray(group) ? group : [group]).filter(m => m.hp > 0)
     if (list.length === 0) return
+    setCombatIntro(false)
     const active = weakestOf(list) ?? list[0]
     setPack(list)
     packRef.current = list
@@ -1532,6 +1670,27 @@ export default function DungeonRun({
         ? `⚔️ Combate contra ${list.length} inimigos começou! (foco: ${active.emoji} ${active.name})`
         : `⚔️ Combate contra ${active.emoji} ${active.name} começou!`
     )
+  }
+
+  /**
+   * 🎥 INVESTIDA — o beat entre aceitar a luta e a arena aparecer.
+   *
+   * A câmera fecha em cima do vulto (o zoom da revelação já vinha em 1.45×),
+   * a vinheta escurece até o preto e só então `startCombat` troca a fase. É
+   * debaixo desse preto que a moldura larga o retrato e vira arena larga, então
+   * o corte de geometria não aparece.
+   *
+   * Quem pediu menos movimento (prefers-reduced-motion) pula direto pro combate
+   * com o fade de 300ms de sempre.
+   */
+  const beginEncounter = (group: ScaledMonster[] | ScaledMonster) => {
+    const list = (Array.isArray(group) ? group : [group]).filter(m => m.hp > 0)
+    if (list.length === 0) return
+    if (reducedMotionRef.current) { startCombat(list); return }
+    setEventCard(null)
+    setCombatIntro(true)
+    setEncounterZoom(ZOOM_CHARGE)
+    later(() => startCombat(list), COMBAT_INTRO_MS)
   }
 
   // Troca o alvo ativo (clique no roster / piloto). Só durante o turno do jogador.
@@ -2192,10 +2351,94 @@ export default function DungeonRun({
     later(() => nextEnemyAttack(), 2100)
   }
 
+  // ============================================================
+  // PREVISÕES LOCAIS — o que antes vinha na resposta de cada luta
+  //
+  // O crédito da run acontece de uma vez só no /finish, então estes três efeitos
+  // (desgaste, level up e mochila cheia) precisam aparecer na hora sem rede. Os
+  // três são DETERMINÍSTICOS e usam as MESMAS funções puras do servidor, então a
+  // previsão bate com o crédito final; o /finish continua sendo a autoridade e
+  // reconcilia qualquer diferença na tela de resumo.
+  // ============================================================
+
+  /** O pacote atual tem chefe? (chefe dobra o desgaste, igual ao servidor.) */
+  const packHadBoss = (last: ScaledMonster) =>
+    !!last.isBoss || packRef.current.some(x => x.isBoss)
+
+  /** Desgaste dos abates de UM nó — espelha wearFor() do /finish. */
+  const applyLocalWear = (kills: number, boss: boolean) => {
+    if (kills <= 0) return
+    const weaponWear = wearFor('WEAPON', kills, boss)
+    const gearWear = wearFor('ARMOR', kills, boss)
+    setEquipList(prev => prev.map((eq: any) => {
+      const before = Number(eq.durability)
+      if (!Number.isFinite(before) || before <= 0) return eq
+      const after = Math.max(0, before - (eq.slot === 'WEAPON' ? weaponWear : gearWear))
+      if (after === before) return eq
+      if (after === 0) {
+        pushLog(`💔 ${eq.item?.name ?? 'Equipamento'} QUEBROU! Sem bônus até reparar no ferreiro.`)
+        showBanner('💔', `${eq.item?.name ?? 'Equipamento'} quebrou!`, 2600)
+      } else if (after <= 15 && !wearWarnedRef.current.has(eq.slot)) {
+        wearWarnedRef.current.add(eq.slot)
+        pushLog(`⚠️ ${eq.item?.name ?? 'Equipamento'} está quase quebrando (${after}/${eq.maxDurability}).`)
+      }
+      return { ...eq, durability: after }
+    }))
+  }
+
+  /** Subiu de nível com o XP acumulado até agora? (curva de experienceSystem) */
+  const checkLocalLevelUp = () => {
+    const reachedLevel = getLevelInfo((character.experience ?? 0) + runXpRef.current).level
+    if (reachedLevel <= charLevelRef.current) return
+    charLevelRef.current = reachedLevel
+    setLeveledUpThisRun(true)
+    // Nível VIVO já (não só no `later`): o próximo combate desta run precisa ver
+    // o nível novo nos levers/card, mesmo antes do flash.
+    setCharLevel(reachedLevel)
+    later(() => {
+      setHp(effMaxHp)
+      setMp(character.maxMp)
+      setLevelUpFlash(reachedLevel)
+      showBanner('⭐', `Nível ${reachedLevel}! HP e MP restaurados`, 3200)
+      pushLog('🎉 Você SUBIU DE NÍVEL! HP e MP restaurados por completo.')
+      later(() => setLevelUpFlash(null), 2600)
+    }, 1500)
+  }
+
+  /**
+   * Quais drops NÃO vão caber na mochila. Espelha a ordem de prioridade do
+   * servidor (pedra → gear → resto): com a mochila quase cheia, material não
+   * pode roubar o slot da pedra.
+   *
+   * Contabilidade de slot igual à do servidor: EQUIPAMENTO nunca empilha (1 slot
+   * por peça), consumível empilha numa linha só — então o 2º exemplar do mesmo
+   * nome na run não gasta slot novo. O que o cliente NÃO sabe é se o nome já
+   * tinha linha na mochila antes da run; nesse caso a conta erra para MENOS
+   * espaço, o que só torna o aviso conservador. O /finish dá o veredito real.
+   */
+  const chargedNamesRef = useRef<Set<string>>(new Set())
+  const predictSkipped = (drops: LootDrop[]): LootDrop[] => {
+    if (drops.length === 0 || freeSlotsRef.current == null) return []
+    const rank = (d: LootDrop) => (d.kind === 'stone' ? 0 : d.kind === 'item' ? 1 : 2)
+    const ordered = [...drops].sort((a, b) => rank(a) - rank(b))
+    const skipped: LootDrop[] = []
+    for (const d of ordered) {
+      const stacks = d.kind !== 'item' // só equipamento ocupa uma linha por peça
+      if (stacks && chargedNamesRef.current.has(d.name)) continue // empilha: sem custo
+      if (freeSlotsRef.current! > 0) {
+        freeSlotsRef.current! -= 1
+        if (stacks) chargedNamesRef.current.add(d.name)
+      } else {
+        skipped.push(d)
+      }
+    }
+    return skipped
+  }
+
   // ---------- Abate de um monstro do pacote ----------
-  // Cada abate é reportado ao SERVIDOR (outcome 'kill'): ele credita gold+XP daquele
-  // bicho e, quando o pacote inteiro cai (cleared), rola o espólio do nó e avança o
-  // cursor. Se ainda há inimigos vivos, troca pro mais fraco e o duelo continua.
+  // NENHUM abate toca a rede: o espólio já veio rolado no /step e o desfecho do
+  // nó viaja de carona no passo seguinte. Se ainda há inimigos vivos, troca pro
+  // mais fraco e o duelo continua.
   const onMonsterKilled = async (m: ScaledMonster) => {
     // Remove o abatido do pacote (estado + ref) antes de escolher o próximo alvo.
     const remaining = packRef.current.filter(x => x.id !== m.id && x.hp > 0)
@@ -2212,15 +2455,20 @@ export default function DungeonRun({
     if (willClear) { setCombatEnded(true); setWinnerId(character.id) }
     killedIdsRef.current.push(m.id)
 
-    // Abate no MEIO do pacote: ZERO rede — o crédito real vem na chamada única de
-    // desfecho do nó (clear/retreat/lose com killedIds). A UI segue otimista com
-    // os valores que o próprio servidor rolou pro nó (m.goldReward/m.xpReward);
-    // drops por abate agora aparecem juntos no card do clear.
+    // 💀 Drop por ABATE (já rolado pelo servidor no /step): entra no card do nó
+    // junto com o espólio de limpar.
+    encounterDropsRef.current.push(...(killDropsRef.current[m.id] ?? []))
+    runXpRef.current += m.xpReward
+
+    // Abate no MEIO do pacote: ZERO rede. A UI usa os valores que o próprio
+    // servidor rolou pro nó (m.goldReward/m.xpReward); o crédito real acontece
+    // no /finish, com o desfecho que este cliente vai reportar.
     if (!willClear) {
       encounterXpRef.current += m.xpReward
       encounterKillGoldRef.current += m.goldReward
       setTotals(prev => ({ ...prev, gold: prev.gold + m.goldReward, xp: prev.xp + m.xpReward, kills: prev.kills + 1 }))
       pushLog(`🏆 Você derrotou ${m.emoji} ${m.name}! +${m.goldReward} 💰 +${m.xpReward} XP`)
+      checkLocalLevelUp()
       const next = weakestOf(remaining)
       showBanner('🗡️', `${m.name} caiu! Restam ${remaining.length}.`, 1800)
       if (next) { setMonster(next); monsterRef.current = next }
@@ -2234,105 +2482,43 @@ export default function DungeonRun({
       return
     }
 
-    // ÚLTIMO abate: UMA chamada resolve o nó inteiro no servidor (gold+XP de todos
-    // os abates, drops por abate, espólio do nó, desgaste, level-up).
-    // Retentativas — crítico no abate do BOSS: se essa chamada falhar (rede
-    // instável) e o cliente seguir como se tivesse dado certo, a run fica
-    // 'active'/pendente no banco e o auto-restart seguinte trava com "personagem
-    // já em uso" (o /start vê o lock antigo vivo).
-    const postKill = async (attempts: number): Promise<{ res: Response; data: CombatResponse } | null> => {
-      for (let i = 0; i < attempts; i++) {
-        try {
-          const res = await fetch('/api/dungeon/run/combat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ runId: runIdRef.current, outcome: 'clear', killedIds: killedIdsRef.current }),
-          })
-          const data: CombatResponse = await res.json().catch(() => ({} as CombatResponse))
-          if (res.ok) return { res, data }
-          if (res.status === 409) return { res, data } // já resolvido noutro request — não insiste
-        } catch { /* rede instável: tenta de novo */ }
-        if (i < attempts - 1) await new Promise((r) => setTimeout(r, 500))
-      }
-      return null
+    // ÚLTIMO abate: NÓ LIMPO, e ainda assim ZERO rede.
+    //
+    // Tudo que o nó rende já veio rolado pelo servidor no /step (killDrops +
+    // nodeLoot), então o card de vitória sai instantâneo. O desfecho fica
+    // guardado em `pendingResolveRef` e viaja de carona no próximo /step — ou no
+    // /finish, se a run acabar aqui (boss, recuo, derrota, saída).
+    pendingResolveRef.current = {
+      nodeIdx: tokenIdxRef.current,
+      outcome: 'clear',
+      killedIds: [...killedIdsRef.current],
     }
 
-    let grant: CombatGrant | null = null
-    const outcome = await postKill(m.isBoss ? 4 : 3)
-    // 409 com status 'finished' = um retry chegou DEPOIS do clear ter aterrissado:
-    // o crédito já aconteceu — trata como vitória (sem grant, valores otimistas),
-    // em vez de cair no branch de abandono/aviso.
-    const alreadyLanded = !!outcome && !outcome.res.ok && outcome.res.status === 409 && outcome.data.status === 'finished'
-    if (outcome?.res.ok) {
-      const data = outcome.data
-      grant = data.granted ?? null
-      // ⚔️ Desgaste debitado pelo servidor neste abate: atualiza o gear vivo da
-      // run (peça que quebra para de contribuir já no próximo golpe) e avisa.
-      if (data.equipmentWear?.length) {
-        const wearBySlot = new Map(data.equipmentWear.map((w) => [w.slot, w]))
-        setEquipList((prev) => prev.map((eq: any) => {
-          const w = wearBySlot.get(eq.slot)
-          return w ? { ...eq, durability: w.durability, maxDurability: w.maxDurability } : eq
-        }))
-        for (const w of data.equipmentWear) {
-          if (w.justBroke) {
-            pushLog(`💔 ${w.name} QUEBROU! Sem bônus até reparar no ferreiro.`)
-            showBanner('💔', `${w.name} quebrou!`, 2600)
-          } else if (w.durability <= 15 && !wearWarnedRef.current.has(w.slot)) {
-            wearWarnedRef.current.add(w.slot)
-            pushLog(`⚠️ ${w.name} está quase quebrando (${w.durability}/${w.maxDurability}).`)
-          }
-        }
-      }
-      if (data.leveledUp) {
-        setLeveledUpThisRun(true)
-        // Efeito de level up: HP e MP voltam ao cheio + flash brilhante na tela.
-        // (o servidor já restaurou os recursos no banco ao subir de nível.)
-        const reachedLevel = data.newLevel ?? null
-        // Atualiza o nível VIVO já (não só no `later`) — o próximo combate desta
-        // run precisa ver o nível novo nos levers/card, mesmo antes do flash.
-        if (reachedLevel != null) setCharLevel(reachedLevel)
-        later(() => {
-          setHp(effMaxHp)
-          setMp(character.maxMp)
-          setLevelUpFlash(reachedLevel)
-          showBanner('⭐', reachedLevel ? `Nível ${reachedLevel}! HP e MP restaurados` : 'Subiu de nível! HP e MP restaurados', 3200)
-          pushLog('🎉 Você SUBIU DE NÍVEL! HP e MP restaurados por completo.')
-          later(() => setLevelUpFlash(null), 2600)
-        }, 1500)
-      }
-    } else if (m.isBoss && !alreadyLanded) {
-      // O SERVIDOR nunca confirmou o abate do boss: não finge vitória local aqui.
-      // Encerra a run explicitamente (libera o lock) para o próximo /start não travar,
-      // e avisa o jogador em vez de seguir para o auto-restart sem confirmação.
-      if (runIdRef.current) {
-        fetch('/api/dungeon/run/abandon', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ runId: runIdRef.current }),
-        }).catch(() => {})
-      }
-      pushLog('⚠️ Sem confirmação do servidor para a vitória contra o chefe.')
-      showBanner('⚠️', 'Falha de conexão ao encerrar a masmorra. Recompensas do boss podem não ter sido creditadas — volte a entrar.', 4200, { sticky: true })
-      setAuto(false)
-      setPhase('summary')
-      return
-    }
-
-    // O grant cobre o NÓ INTEIRO; os abates anteriores já entraram otimistas —
-    // aplica só o DELTA do último abate (pode vir menor se o teto diário de gold
-    // clipou; o servidor é a autoridade).
-    const killGold = grant ? grant.killGold - encounterKillGoldRef.current : m.goldReward
-    const xp = grant ? grant.xp - encounterXpRef.current : m.xpReward
-    const loot: NodeLoot = grant?.loot ?? { gold: 0, drops: [] }
+    const killGold = m.goldReward
+    const xp = m.xpReward
+    const nodeLoot: NodeLoot = nodeLootRef.current ?? { gold: 0, drops: [] }
     encounterXpRef.current += xp
     encounterKillGoldRef.current += killGold
 
     setTotals(prev => ({ ...prev, gold: prev.gold + killGold, xp: prev.xp + xp, kills: prev.kills + 1 }))
-    pushLog(`🏆 Você derrotou ${m.emoji} ${m.name}! +${Math.max(0, killGold)} 💰 +${Math.max(0, xp)} XP`)
+    pushLog(`🏆 Você derrotou ${m.emoji} ${m.name}! +${killGold} 💰 +${xp} XP`)
 
-    // Nó LIMPO: espólio do nó + avanço (boss → fim da run).
-    showLoot(loot, grant?.skippedDrops, grant?.roll ?? lootRollRef.current)
+    // ⚔️ Desgaste do gear: fórmula determinística (wearFor), a MESMA que o
+    // servidor aplica no /finish — dá pra prever sem perguntar. Importa prever:
+    // uma peça que quebra no meio da run precisa parar de somar bônus na hora.
+    applyLocalWear(killedIdsRef.current.length, packHadBoss(m))
+
+    // ⭐ Level up: previsto pela curva de XP compartilhada (experienceSystem). O
+    // servidor recalcula do zero no /finish a partir do XP total, então isto é só
+    // o brilho na tela — o valor final nunca depende do cliente.
+    checkLocalLevelUp()
+
+    // Espólio do nó = drops por abate (de todo o pacote) + o de limpar. O que
+    // não couber na mochila é previsto com a mesma ordem do /finish.
+    const nodeDrops = [...encounterDropsRef.current, ...nodeLoot.drops]
+    encounterDropsRef.current = []
+    const loot: NodeLoot = { ...nodeLoot, drops: nodeDrops }
+    showLoot(loot, predictSkipped(nodeDrops), lootRollRef.current)
     later(() => {
       setMonster(null)
       setPack([])
@@ -2341,6 +2527,9 @@ export default function DungeonRun({
       // Sempre volta pra fase 'explore' — é ela que hospeda o overlay do lootCard
       // (inclusive pro boss agora, ver abaixo); dismissLootCard decide o que vem
       // a seguir (avançar a trilha ou finishRun, se era o boss).
+      // A câmera volta ao enquadramento normal AGORA, com a cena ainda escondida
+      // atrás do card de espólio — o jogador nunca vê o zoom desfazer.
+      resetEncounterCamera()
       setPhase('explore')
       if (!m.isBoss) {
         showNarration(nextIsBoss
@@ -2358,11 +2547,12 @@ export default function DungeonRun({
       const effects: EffectChip[] = []
       if (nodeXp > 0) effects.push({ kind: 'stat', text: `+${nodeXp} ⭐ XP` })
       if (totalGold > 0) effects.push({ kind: 'stat', text: `+${totalGold} 💰` })
-      // Drops do nó + o que caiu dos abates intermediários do pacote. Pedra de
-      // aprimoramento e RARE+ ganham destaque (moldura dourada + brilho) no card.
+      // `loot.drops` já traz os drops por abate + o espólio de limpar (montado
+      // acima). Pedra de aprimoramento e RARE+ ganham destaque (moldura dourada
+      // + brilho) no card.
       const isHighlight = (d: LootDrop) =>
         d.kind === 'stone' || ['RARE', 'EPIC', 'LEGENDARY'].includes(String(d.rarity ?? '').toUpperCase())
-      const allDrops = [...encounterDropsRef.current, ...loot.drops]
+      const allDrops = loot.drops
       const hasRare = allDrops.some(isHighlight)
       for (const d of allDrops) effects.push({
         kind: 'item',
@@ -2372,7 +2562,6 @@ export default function DungeonRun({
         rarity: d.rarity,
         highlight: isHighlight(d),
       })
-      encounterDropsRef.current = []
 
       const def: DungeonEventDef = {
         kind: hasGear ? 'item' : 'gold',
@@ -2388,7 +2577,7 @@ export default function DungeonRun({
       // dispara finishRun(true) — garante que o jogador VÊ o brilho do drop raro
       // antes de seguir para o resumo/re-run automático.
       if (m.isBoss) bossVictoryPendingRef.current = true
-      setLootCard({ def, text: def.description, effects, luckRoll: grant?.roll ?? lootRollRef.current })
+      setLootCard({ def, text: def.description, effects, luckRoll: lootRollRef.current })
     }, 2800)
   }
 
@@ -2404,102 +2593,107 @@ export default function DungeonRun({
     onRestart({ hp: effMaxHp, mp: character.maxMp, stamina, level: charLevel, leveledUp: leveledUpThisRun, auto })
   }
 
-  // Aplica a resposta do DESFECHO da run (retreat/lose): o servidor acabou de
-  // creditar os abates reportados — mostra os drops, corrige gold/XP pro valor
-  // autoritativo (teto diário pode ter clipado) e registra quebra/level-up.
-  const applyEndGrant = (data: CombatResponse) => {
-    const grant = data.granted
-    if (!grant) return
-    const goldDelta = grant.killGold - encounterKillGoldRef.current
-    const xpDelta = grant.xp - encounterXpRef.current
-    encounterKillGoldRef.current = grant.killGold
-    encounterXpRef.current = grant.xp
-    if (goldDelta !== 0 || xpDelta !== 0) {
-      setTotals(prev => ({ ...prev, gold: prev.gold + goldDelta, xp: prev.xp + xpDelta }))
+  /**
+   * Reconcilia a run com o crédito AUTORITATIVO do /finish.
+   *
+   * Durante a run tudo foi otimista (valores que o servidor rolou, mas ainda não
+   * escreveu). Aqui aparecem as duas divergências possíveis — teto diário de ouro
+   * e mochila cheia — na tela de resumo, que é onde elas fazem sentido, em vez de
+   * no meio de uma luta.
+   */
+  const applyFinishGrant = (data: FinishResponse) => {
+    const gold = data.gold ?? 0
+    const optimisticGold = totalsRef.current.gold
+    if (gold < optimisticGold) {
+      pushLog(`💰 Teto diário de ouro atingido: a run rendeu ${gold} 💰 (de ${optimisticGold}).`)
+      setTotals(prev => ({ ...prev, gold }))
     }
-    if (grant.loot.drops.length > 0) showLoot(grant.loot, grant.skippedDrops, grant.roll ?? lootRollRef.current)
-    for (const w of data.equipmentWear ?? []) {
-      if (w.justBroke) pushLog(`💔 ${w.name} QUEBROU! Sem bônus até reparar no ferreiro.`)
+    const skipped = data.skippedDrops ?? []
+    if (skipped.length > 0) {
+      const names = new Set(skipped.map(d => d.name))
+      setTotals(prev => ({ ...prev, items: prev.items.filter(i => !names.has(i.name)) }))
+      for (const d of skipped) pushLog(`🚫 Inventário cheio — ${d.name} foi perdido!`)
+      showBanner('🎒', `${skipped.length} item(ns) perdido(s): inventário cheio.`, 3600, { sticky: true })
     }
-    if (data.leveledUp) {
+    if (data.leveledUp && data.newLevel != null) {
       setLeveledUpThisRun(true)
-      if (data.newLevel != null) setCharLevel(data.newLevel)
-      pushLog('🎉 Você SUBIU DE NÍVEL!')
+      setCharLevel(data.newLevel)
     }
   }
 
-  // RECUAR: sai do combate em SEGURANÇA. Os abates do pacote atual ainda NÃO
-  // foram creditados (protocolo por nó) — vão em `killedIds` pro servidor creditar
-  // ao encerrar. É a saída do early-game: matou o que dava conta e volta com XP.
+  /**
+   * 🏁 Encerra a run no servidor — a ÚNICA chamada que escreve no personagem.
+   *
+   * Leva o desfecho do último nó (o que não teve /step seguinte para levá-lo de
+   * carona) e devolve a promessa em `endRunPromiseRef`, que o re-run aguarda
+   * antes de remontar: sem isso o /start seguinte veria o lock antigo vivo (409).
+   */
+  const finishSentRef = useRef(false)
+  const closeRunOnServer = (reason: 'boss' | 'retreat' | 'lose') => {
+    if (!runIdRef.current) return
+    // UMA vez por run: os caminhos de saída se sobrepõem (finishRun → exitRun, por
+    // exemplo). O servidor já é idempotente (409), mas a segunda chamada não teria
+    // o desfecho e ainda poderia disparar o aviso de falha de rede à toa.
+    if (finishSentRef.current) return
+    finishSentRef.current = true
+    // Combate em andamento com abates não reportados: vira o desfecho final.
+    if (!pendingResolveRef.current && killedIdsRef.current.length > 0 && phase === 'combat' && !combatEnded) {
+      pendingResolveRef.current = {
+        nodeIdx: tokenIdxRef.current,
+        outcome: reason === 'lose' ? 'lose' : 'retreat',
+        killedIds: [...killedIdsRef.current],
+      }
+    }
+    const resolve = pendingResolveRef.current ?? undefined
+    pendingResolveRef.current = null
+    endRunPromiseRef.current = fetch('/api/dungeon/run/finish', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ runId: runIdRef.current, reason, resolve }),
+    })
+      .then(async (res) => {
+        // 409 = a run já foi encerrada (retry ou outra aba): o crédito aconteceu,
+        // não há o que reconciliar.
+        if (!res.ok) return
+        applyFinishGrant((await res.json().catch(() => ({}))) as FinishResponse)
+      })
+      .catch(() => {
+        showBanner('⚠️', 'Sem conexão ao encerrar — o espólio será creditado na próxima entrada.', 4200, { sticky: true })
+      })
+  }
+
+  // RECUAR: sai do combate em SEGURANÇA, levando os abates já feitos. É a saída
+  // do early-game: matou o que dava conta e volta com XP.
   const handleRetreat = () => {
     if (combatEnded) return
     setCombatEnded(true)
     setAuto(false)
-    if (runIdRef.current) {
-      endRunPromiseRef.current = fetch('/api/dungeon/run/combat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ runId: runIdRef.current, outcome: 'retreat', killedIds: killedIdsRef.current }),
-      }).then(async (res) => {
-        if (!res.ok) return
-        applyEndGrant(await res.json().catch(() => ({} as CombatResponse)))
-      }).catch(() => {})
-    }
+    closeRunOnServer('retreat')
     pushLog('🏃 Você recua em segurança, levando o que conquistou.')
     showBanner('🏃', 'Recuo seguro — XP e espólio dos abates preservados.', 2600)
     later(() => {
       setMonster(null)
       setPack([])
       packRef.current = []
+      resetEncounterCamera()
       setPhase('summary')
     }, 1300)
   }
 
-  // DERROTA: avisa o servidor, que credita os abates reportados e encerra a run.
+  // DERROTA: encerra a run creditando os abates feitos até cair.
   // A tela oferece Sair e Re-run; no piloto automático o Re-run é escolhido sozinho
   // (enquanto houver stamina) — sem stamina, volta ao mapa como antes.
   const handleDefeat = () => {
     setPhase('defeat')
-    if (runIdRef.current) {
-      endRunPromiseRef.current = fetch('/api/dungeon/run/combat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ runId: runIdRef.current, outcome: 'lose', killedIds: killedIdsRef.current }),
-      }).then(async (res) => {
-        if (!res.ok) return
-        applyEndGrant(await res.json().catch(() => ({} as CombatResponse)))
-      }).catch(() => {})
-    }
+    closeRunOnServer('lose')
     if (auto) {
       later(() => { if (onRestart && stamina >= MINOR_STEP_COST) restartRun(); else exitRun() }, 3200)
     }
   }
 
-  // Encerra a run no servidor ao sair no meio. Saindo DURANTE um combate com
-  // abates ainda não creditados, sai via 'retreat' com os killedIds — o servidor
-  // credita antes de fechar; fora de combate, abandono simples como antes.
-  const closeRunOnServer = () => {
-    if (!runIdRef.current) return
-    const uncredited = phase === 'combat' && !combatEnded && killedIdsRef.current.length > 0
-    endRunPromiseRef.current = (uncredited
-      ? fetch('/api/dungeon/run/combat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ runId: runIdRef.current, outcome: 'retreat', killedIds: killedIdsRef.current }),
-        })
-      : fetch('/api/dungeon/run/abandon', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ runId: runIdRef.current }),
-        })
-    ).catch(() => {})
-  }
-
   const finishRun = async (bossDefeated: boolean) => {
     setPhase('summary')
-    // Sair no meio (sem boss): encerra a sessão no servidor (creditando abates
-    // pendentes, se saiu do meio de um combate).
-    if (!bossDefeated) closeRunOnServer()
+    closeRunOnServer(bossDefeated ? 'boss' : 'retreat')
     if (bossDefeated) {
       pushLog(`👑 ${dungeon.name} conquistada!`)
       // Piloto automático: boss vencido também reinicia a run (farm contínuo até a stamina acabar).
@@ -2523,7 +2717,7 @@ export default function DungeonRun({
   const exitRun = () => {
     // Garante o encerramento da sessão no servidor ao sair (creditando abates
     // pendentes, se saiu do meio de um combate).
-    closeRunOnServer()
+    closeRunOnServer('retreat')
     // HP e MP voltam ao cheio entre runs — só a stamina (orçamento diário) é consumida.
     onExit({ hp: effMaxHp, mp: character.maxMp, stamina, leveledUp: leveledUpThisRun })
   }
@@ -2748,7 +2942,7 @@ export default function DungeonRun({
       const potion = group ? refillPotion() : null
       if (potion) return fire(() => useConsumable(potion), 450)
       return fire(() => {
-        if (group) startCombat(group)
+        if (group) beginEncounter(group)
         else dismissEvent()
       }, 1000)
     }
@@ -2756,13 +2950,16 @@ export default function DungeonRun({
     if (atBoss) {
       const potion = refillPotion()
       if (potion) return fire(() => useConsumable(potion), 450)
-      return fire(() => startCombat(
+      return fire(() => beginEncounter(
         serverPackRef.current ??
         serverMonsterRef.current ??
         scaleMonster(dungeon.boss, dungeon, charLevel, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass, tier)
       ), 1100)
     }
-    if (!runReady) return
+    // Na cena o primeiro passo é otimista (anda enquanto o /start viaja); nos
+    // outros modos o /step vem logo atrás, então espera a sessão abrir.
+    if (!startedRef.current) return
+    if (!useScene && !runReady) return
 
     // 4) Reabastece antes de avançar na trilha.
     const potion = refillPotion()
@@ -2803,7 +3000,9 @@ export default function DungeonRun({
     if (walkBusy || exploreRolling) return // walkBusy já inclui `moving`
     if (eventCard || lootCard) return // card aberto = vez do jogador
     if (atBoss) return // o chefe é decisão do jogador
-    if (!runReady || !runIdRef.current) return
+    // Start otimista: basta a sessão estar EM ABERTURA — o primeiro passo anda
+    // enquanto o /start viaja (ver runReadyPromiseRef).
+    if (!startedRef.current) return
 
     if (stamina < stepCost(tokenIdx + 1)) {
       // Parada segura, e o aviso sai UMA vez (o efeito re-roda a cada dep).
@@ -2872,7 +3071,7 @@ export default function DungeonRun({
   }
 
   return (
-    <RunFrame dungeonId={dungeon.id} frameRef={frameRef}>
+    <RunFrame dungeonId={dungeon.id} wide={phase === 'combat'} frameRef={frameRef}>
       {/* Cenário temático — preenche a MOLDURA. Em combate Floresta: battle BG
           cinematográfico. Na exploração com WalkScene o mapa é a própria cena. */}
       <div className="absolute inset-0">
@@ -2882,6 +3081,26 @@ export default function DungeonRun({
           imageOverlayOpacity={backgroundImageOverlay}
         />
       </div>
+
+      {/* 🎥 Investida — vinheta fechando até o preto. Cobre a tela INTEIRA (não só
+          a moldura) porque é debaixo dela que a moldura troca de retrato para
+          arena larga; se cobrisse só a moldura, o corte apareceria nas tarjas. */}
+      <AnimatePresence>
+        {combatIntro && (
+          <motion.div
+            key="combat-intro"
+            className="fixed inset-0 z-[70] pointer-events-none"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.22, ease: 'easeIn' }}
+            style={{
+              background:
+                'radial-gradient(circle at center, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.9) 45%, #000 75%)',
+            }}
+          />
+        )}
+      </AnimatePresence>
 
       {/* ✨ Flash de SUBIU DE NÍVEL — explosão dourada sobre toda a tela */}
       <AnimatePresence>
@@ -3020,46 +3239,64 @@ export default function DungeonRun({
         {/* ============================================================ */}
         {/* A cena fica MONTADA a run inteira e só some de vista no combate: a
             posição do herói mora num ref dentro dela, então desmontar jogaria
-            o herói de volta pra entrada a cada luta (e recarregaria o tileset). */}
+            o herói de volta pra entrada a cada luta (e recarregaria o tileset).
+
+            A caixa RETRATO abaixo é o que permite o combate alargar a moldura sem
+            mexer na cena: o zoom dela sai da LARGURA do canvas (ppu = w/26), então
+            se o canvas acompanhasse a moldura o mapa re-enquadrava a cada ida e
+            volta do combate. Com aspect-ratio próprio, o canvas tem exatamente o
+            mesmo tamanho a run inteira. */}
         {useScene && sceneMap && (
           <div
-            className={`absolute inset-0 z-0 pointer-events-none transition-opacity duration-300 ${
+            className={`absolute inset-0 z-0 flex justify-center pointer-events-none transition-opacity duration-300 ${
               phase === 'explore' ? 'opacity-100' : 'opacity-0'
             }`}
             aria-hidden={phase !== 'explore'}
           >
-            <DungeonScene
-              map={sceneMap}
-              heroSprite={character.avatar}
-              race={character.race}
-              heroClass={character.class}
-              contents={sceneContents}
-              targetNode={sceneTarget}
-              visitedNodes={sceneVisited}
-              /* Congela fora da exploração e no que toma a tela. A narração do
-                 Mestre fecha sozinha e não deve travar o passo a cada nó. */
-              paused={phase !== 'explore' || Boolean(eventCard || lootCard || exploreRolling)}
-              onReachSpot={handleSceneReachSpot}
-              className="w-full h-full"
-            />
+            <div className="relative h-full" style={{ aspectRatio: '9 / 16', maxWidth: '100%' }}>
+              <DungeonScene
+                map={sceneMap}
+                heroSprite={character.avatar}
+                race={character.race}
+                heroClass={character.class}
+                contents={sceneContents}
+                targetNode={sceneTarget}
+                visitedNodes={sceneVisited}
+                /* Congela fora da exploração e no que toma a tela. A narração do
+                   Mestre fecha sozinha e não deve travar o passo a cada nó.
+                   `combatIntro` é a investida: a cena está visível e o herói NÃO
+                   pode continuar andando por baixo do zoom. */
+                paused={
+                  phase !== 'explore' ||
+                  combatIntro ||
+                  Boolean(eventCard || lootCard || exploreRolling)
+                }
+                cinematicZoom={encounterZoom}
+                focusNode={focusNode}
+                onReachSpot={handleSceneReachSpot}
+                className="w-full h-full"
+              />
+            </div>
           </div>
         )}
 
         {useWalkScene && phase === 'explore' && (
-          <div className="absolute inset-0 z-0 pointer-events-none">
-            <WalkScene
-              dungeonId={dungeon.id}
-              accent={dungeon.accent}
-              mode={walkMode}
-              nodeIndex={tokenIdx}
-              pathPoints={trailPoints}
-              avatar={character.avatar}
-              race={character.race}
-              heroClass={character.class}
-              trailMarks={walkTrailMarks}
-              nextIsBoss={nextIsBoss}
-              onApproachComplete={handleWalkApproachComplete}
-            />
+          <div className="absolute inset-0 z-0 flex justify-center pointer-events-none">
+            <div className="relative h-full" style={{ aspectRatio: '9 / 16', maxWidth: '100%' }}>
+              <WalkScene
+                dungeonId={dungeon.id}
+                accent={dungeon.accent}
+                mode={walkMode}
+                nodeIndex={tokenIdx}
+                pathPoints={trailPoints}
+                avatar={character.avatar}
+                race={character.race}
+                heroClass={character.class}
+                trailMarks={walkTrailMarks}
+                nextIsBoss={nextIsBoss}
+                onApproachComplete={handleWalkApproachComplete}
+              />
+            </div>
           </div>
         )}
 
@@ -3457,14 +3694,14 @@ export default function DungeonRun({
                       {eventCard.monster ? (
                         <div className="flex gap-2">
                           <button
-                            onClick={() => startCombat(eventCard.monsters ?? eventCard.monster!)}
+                            onClick={() => beginEncounter(eventCard.monsters ?? eventCard.monster!)}
                             className="flex-1 py-3.5 rounded-lg font-black text-white text-lg transition-transform active:scale-[0.98] hover:scale-[1.02] inline-flex items-center justify-center gap-2"
                             style={{ background: 'linear-gradient(90deg, #e74c3c, #b91c1c)', boxShadow: '0 0 24px rgba(231,76,60,0.45)' }}
                           >
                             ⚔️ Lutar!
                           </button>
                           <button
-                            onClick={() => { setAuto(true); startCombat(eventCard.monsters ?? eventCard.monster!) }}
+                            onClick={() => { setAuto(true); beginEncounter(eventCard.monsters ?? eventCard.monster!) }}
                             title="Resolver a luta no automático (o piloto joga os turnos por você)"
                             className="shrink-0 px-4 py-3.5 rounded-lg font-black text-white text-sm transition-transform active:scale-[0.98] hover:scale-[1.02] inline-flex items-center justify-center gap-1.5"
                             style={{ background: 'linear-gradient(90deg, #3b82f6, #1d4ed8)', boxShadow: '0 0 24px rgba(59,130,246,0.4)' }}
@@ -3531,7 +3768,7 @@ export default function DungeonRun({
                         <h2 className="text-3xl font-black text-white leading-none">{dungeon.boss.name}</h2>
                         <p className="text-sm text-error/90 font-bold uppercase tracking-wider mt-1 mb-5">{dungeon.boss.title}</p>
                         <button
-                          onClick={() => startCombat(serverPackRef.current ?? serverMonsterRef.current ?? scaleMonster(dungeon.boss, dungeon, charLevel, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass, tier))}
+                          onClick={() => beginEncounter(serverPackRef.current ?? serverMonsterRef.current ?? scaleMonster(dungeon.boss, dungeon, charLevel, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass, tier))}
                           className="w-full py-4 rounded-lg font-black text-white text-lg inline-flex items-center justify-center gap-2 transition-transform active:scale-[0.98] hover:scale-[1.02]"
                           style={{ background: 'linear-gradient(90deg, #e94560, #b91c1c)', boxShadow: '0 0 28px rgba(233,69,96,0.5)' }}
                         >
@@ -3627,7 +3864,7 @@ export default function DungeonRun({
                     <button
                       onClick={
                         atBoss
-                          ? () => startCombat(serverPackRef.current ?? serverMonsterRef.current ?? scaleMonster(dungeon.boss, dungeon, charLevel, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass, tier))
+                          ? () => beginEncounter(serverPackRef.current ?? serverMonsterRef.current ?? scaleMonster(dungeon.boss, dungeon, charLevel, { tier: dungeon.rooms, isMain: true, isBoss: true }, combatClass, tier))
                           : advance
                       }
                       disabled={

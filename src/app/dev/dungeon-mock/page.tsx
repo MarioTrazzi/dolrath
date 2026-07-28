@@ -54,75 +54,85 @@ function installFetchStub() {
   const real = window.fetch.bind(window)
   let stamina = 156
   let steps = 0      // nº do nó atual (1º = pacote travado)
-  let lastRoll = 14  // d20 do nó corrente (classe dos drops por abate)
-  let remaining = 0  // monstros vivos do nó (cleared quando zera)
-  // Desgaste simulado no "servidor" do stub (arma −2/abate, resto −1) — espelha
-  // a rota real /api/dungeon/run/combat.
-  const dur: Record<string, { name: string; durability: number; maxDurability: number }> = {
-    WEAPON: { name: 'Espada de Recruta', durability: 6, maxDurability: 100 },
-    ARMOR: { name: 'Peitoral de Couro', durability: 3, maxDurability: 100 },
-  }
+  // Espólio ACUMULADO da run, como no DungeonRun.accrued do servidor: o stub só
+  // credita no /finish, igual à rota real.
+  const accrued = { gold: 0, xp: 0, kills: 0, drops: [] as any[] }
+  let pending: { monsters: any[]; killDrops: Record<string, any[]>; nodeLoot: any; roll: number } | null = null
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
     const json = (body: unknown) =>
       new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
 
-    if (url.includes('/api/dungeon/run/start')) return json({ runId: 'dev-run', stamina })
+    if (url.includes('/api/dungeon/run/start')) {
+      // Slots quase no fim: dá pra ver a previsão de "inventário cheio" agir.
+      return json({ runId: 'dev-run', stamina, inventoryUsed: 16, inventorySlots: 20 })
+    }
     if (url.includes('/api/dungeon/run/heartbeat')) return json({ active: true })
     if (url.includes('/api/dungeon/run/step')) {
+      const body = init?.body ? JSON.parse(String(init.body)) : {}
+      // Desfecho do nó anterior de CARONA (protocolo real): absorve no acumulado.
+      if (body.resolve && pending) {
+        const killed: string[] = Array.isArray(body.resolve.killedIds) ? body.resolve.killedIds : []
+        const dead = pending.monsters.filter(m => killed.includes(m.id))
+        accrued.kills += dead.length
+        accrued.gold += dead.reduce((s, m) => s + m.goldReward, 0)
+        accrued.xp += dead.reduce((s, m) => s + m.xpReward, 0)
+        for (const m of dead) accrued.drops.push(...(pending.killDrops[m.id] ?? []))
+        if (dead.length === pending.monsters.length && pending.nodeLoot) {
+          accrued.gold += pending.nodeLoot.gold
+          accrued.drops.push(...pending.nodeLoot.drops)
+        }
+        pending = null
+      }
       stamina -= 4
       steps += 1
       // 1º nó: espelha a TRAVA do servidor — pacote de 3 do earlyPool com sorte 20
       // (valida o layout do pacote + drops "classe 20" + pedra destacada no card).
-      if (steps === 1) {
-        const monsters = scaleMonsterGroup(
-          DUNGEON, CHAR.level, { tier: 1, isMain: false, isBoss: false }, 'monk', 1,
-          { forcedSize: 3, pool: earlyPoolOf(DUNGEON) },
-        )
-        lastRoll = 20
-        remaining = monsters.length
-        return json({ type: 'monster', roll: 20, monsters, stamina })
+      const roll = steps === 1 ? 20 : 14
+      const monsters = steps === 1
+        ? scaleMonsterGroup(
+            DUNGEON, CHAR.level, { tier: 1, isMain: false, isBoss: false }, 'monk', 1,
+            { forcedSize: 3, pool: earlyPoolOf(DUNGEON) },
+          )
+        : [scaleMonster(pickMonster(DUNGEON), DUNGEON, CHAR.level, { tier: 1, isMain: false })]
+      // O espólio é rolado JÁ no passo (como na rota real) — é o que permite o
+      // card de vitória sair sem rede.
+      const killDrops: Record<string, any[]> = {}
+      for (const m of monsters) {
+        killDrops[m.id] = rollKillLoot('minor', false, DUNGEON.difficultyStars, 1, roll, DUNGEON)
       }
-      // Demais nós: 1 inimigo, sorte 14 (layout clássico).
-      const monster = scaleMonster(pickMonster(DUNGEON), DUNGEON, CHAR.level, { tier: 1, isMain: false })
-      lastRoll = 14
-      remaining = 1
-      return json({ type: 'monster', roll: 14, monster, stamina })
+      const nodeLoot = rollNodeLoot(DUNGEON, roll, 'minor', CHAR.level, CHAR.race, CHAR.class, 1)
+      pending = { monsters, killDrops, nodeLoot, roll }
+      return json({ type: 'monster', roll, monster: monsters[0], monsters, killDrops, nodeLoot, stamina })
     }
-    if (url.includes('/api/dungeon/run/combat')) {
+    if (url.includes('/api/dungeon/run/finish')) {
       const body = init?.body ? JSON.parse(String(init.body)) : {}
-      // Protocolo por NÓ (espelha a rota real): 'clear' credita todos os vivos;
-      // 'retreat'/'lose' credita só os killedIds reportados; desgaste em lote
-      // (arma −2/abate, resto −1) e drops nos MESMOS geradores do servidor.
-      const isClear = body.outcome === 'clear' || body.outcome === 'win'
-      const isRunEnd = body.outcome === 'retreat' || body.outcome === 'lose'
-      if (isClear || isRunEnd) {
-        const kills = isClear
-          ? remaining
-          : Math.min(remaining, Array.isArray(body.killedIds) ? body.killedIds.length : 0)
-        remaining = isClear ? 0 : Math.max(0, remaining - kills)
-        const equipmentWear = kills === 0 ? [] : Object.entries(dur)
-          .filter(([, d]) => d.durability > 0)
-          .map(([slot, d]) => {
-            d.durability = Math.max(0, d.durability - (slot === 'WEAPON' ? 2 : 1) * kills)
-            return { slot, name: d.name, durability: d.durability, maxDurability: d.maxDurability, justBroke: d.durability === 0 }
-          })
-        const killDrops = Array.from({ length: kills }).flatMap(() =>
-          rollKillLoot('minor', false, DUNGEON.difficultyStars, 1, lastRoll, DUNGEON))
-        const nodeLoot = isClear
-          ? rollNodeLoot(DUNGEON, lastRoll, 'minor', CHAR.level, CHAR.race, CHAR.class, 1)
-          : null
-        const loot = { gold: nodeLoot?.gold ?? 0, drops: [...killDrops, ...(nodeLoot?.drops ?? [])] }
-        return json({
-          granted: { gold: 12 * kills + loot.gold, killGold: 12 * kills, lootGold: loot.gold, xp: 20 * kills, loot, roll: lastRoll },
-          cleared: isClear,
-          equipmentWear,
-          finished: isRunEnd,
-          retreated: body.outcome === 'retreat',
-          defeated: body.outcome === 'lose',
-        })
+      if (body.resolve && pending) {
+        const killed: string[] = Array.isArray(body.resolve.killedIds) ? body.resolve.killedIds : []
+        const dead = pending.monsters.filter(m => killed.includes(m.id))
+        accrued.kills += dead.length
+        accrued.gold += dead.reduce((s, m) => s + m.goldReward, 0)
+        accrued.xp += dead.reduce((s, m) => s + m.xpReward, 0)
+        for (const m of dead) accrued.drops.push(...(pending.killDrops[m.id] ?? []))
+        if (dead.length === pending.monsters.length && body.resolve.outcome === 'clear') {
+          accrued.gold += pending.nodeLoot.gold
+          accrued.drops.push(...pending.nodeLoot.drops)
+        }
+        pending = null
       }
-      return json({ finished: true })
+      // Desgaste em lote (arma −2/abate, resto −1), como o flush do servidor.
+      const equipmentWear = [
+        { slot: 'WEAPON', name: 'Espada de Recruta', durability: Math.max(0, 6 - 2 * accrued.kills), maxDurability: 100, justBroke: 6 - 2 * accrued.kills <= 0 },
+        { slot: 'ARMOR', name: 'Peitoral de Couro', durability: Math.max(0, 3 - accrued.kills), maxDurability: 100, justBroke: 3 - accrued.kills <= 0 },
+      ]
+      // Mochila com 4 slots livres: o excedente volta como perdido (o resumo
+      // precisa mostrar a reconciliação, não fingir que coletou).
+      const skippedDrops = accrued.drops.slice(4)
+      return json({
+        finished: true, gold: accrued.gold, xp: accrued.xp, kills: accrued.kills,
+        drops: accrued.drops, skippedDrops, equipmentWear,
+        bossDefeated: body.reason === 'boss', leveledUp: false,
+      })
     }
     if (url.includes('/api/dungeon/run/')) return json({ ok: true, active: false })
     if (url.includes('/api/character/')) return json({ ok: true })

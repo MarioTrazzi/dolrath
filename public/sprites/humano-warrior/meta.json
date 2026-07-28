@@ -1,0 +1,15 @@
+{
+  "slug": "humano-warrior",
+  "race": "humano",
+  "class": "warrior",
+  "name": "walk",
+  "src": "/sprites/humano-warrior/walk.webp",
+  "frameW": 130,
+  "frameH": 192,
+  "frames": 6,
+  "rows": [
+    2
+  ],
+  "source": "~/Documents/dolrath/.claude/worktrees/character-sprites-review-0fcfef/sprite-sources/humano-warrior.png",
+  "generatedAt": "2026-07-28T02:03:47.801Z"
+}

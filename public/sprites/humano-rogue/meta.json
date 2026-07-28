@@ -1,0 +1,15 @@
+{
+  "slug": "humano-rogue",
+  "race": "humano",
+  "class": "rogue",
+  "name": "walk",
+  "src": "/sprites/humano-rogue/walk.webp",
+  "frameW": 134,
+  "frameH": 192,
+  "frames": 6,
+  "rows": [
+    2
+  ],
+  "source": "~/Documents/dolrath/.claude/worktrees/character-sprites-review-0fcfef/sprite-sources/humano-rogue.png",
+  "generatedAt": "2026-07-28T02:03:47.573Z"
+}

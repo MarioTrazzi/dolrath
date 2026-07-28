@@ -17,10 +17,8 @@ import {
   DUNGEONS,
   scaleMonster,
   scaleMonsterGroup,
-  earlyPoolOf,
   rollNodeLoot,
   rollKillLoot,
-  luckTier,
   firstBossBonusStones,
   FIRST_BOSS_BONUS,
   MAX_DUNGEON_TIER,
@@ -31,9 +29,10 @@ import {
   type NodeLoot,
   type LootDrop,
   type LootNodeKind,
-  type LuckTier,
+  type DungeonMonsterDef,
 } from './dungeonAdventures'
 import { normalizeCombatClass, type CombatClass } from './combatModel'
+import type { PlannedNode } from './dungeonRunPlan'
 import { SELL_FRACTION_GEAR, SELL_FRACTION_CRAFT_INPUT, SELL_FRACTION_CONSUMABLE } from './sellPricing'
 import { getCatalogItemByName, getConsumableByName, getIngredientByName, getForgeMaterialByName, getSeedByName, itemImagePath } from './itemCatalog'
 import { freeInventorySlots } from './inventoryMutations'
@@ -52,19 +51,9 @@ export const RUN_LIVE_WINDOW_MS = 60_000
 export function isRunLive(run: { status: string; updatedAt: Date }): boolean {
   return run.status === 'active' && Date.now() - new Date(run.updatedAt).getTime() < RUN_LIVE_WINDOW_MS
 }
-// Chance de encontrar monstro num nó MENOR, INVERSAMENTE proporcional ao d20: rolagem
-// baixa = perigo (quase sempre monstro), rolagem alta = sorte (raramente monstro, mas se
-// a luta acontece o espólio é excelente — a qualidade do loot usa o MESMO roll, então
-// tier 'high' = drops 'high'). Salas principais são sempre monstro (guardiãs).
-const MINOR_MONSTER_CHANCE_BY_TIER: Record<LuckTier, number> = {
-  low: 0.9,  // d20 1–5  → quase certo
-  mid: 0.5,  // d20 6–13 → meio a meio
-  high: 0.1, // d20 14–20 → raro, mas a recompensa é ótima
-}
-
-// ⛲ Chance de uma fonte revitalizadora (HP/MP cheios) substituir o achado num nó
-// MENOR de sorte ALTA (d20 14+). Exclui o espólio daquele nó.
-const FOUNTAIN_CHANCE = 0.2
+// A chance de encontro por faixa do d20 e a chance de fonte moram agora em
+// lib/dungeonRunPlan.ts: elas decidem o ARRANJO da run, e o arranjo passou a ser
+// decidido na criação (semeado pelo runId) para o cliente poder pintar o mapa.
 
 export type NodeKind = 'start' | 'minor' | 'main' | 'boss'
 export interface TrailNode { kind: NodeKind; tier: number }
@@ -245,12 +234,25 @@ export interface CharacterForRun {
 }
 
 // Resolve o PRÓXIMO nó (não-boss): rola o d20 no SERVIDOR e decide monstro vs. achado.
+/**
+ * O que há no nó — LÊ A PLANTA, não sorteia.
+ *
+ * Até 2026-07-28 esta função rolava `Math.random()` aqui: o d20 decidia
+ * monstro-vs-achado (faixa de sorte) e outro sorteio escolhia espécie e tamanho
+ * do bando. Isso tornava impossível o cliente saber o que havia num nó antes de
+ * pisar nele — e por isso o mapa desenhava "?". Agora tudo isso vem de
+ * `planDungeonRun(dungeon, runId)`, uma função pura semeada pelo runId que o
+ * cliente também roda; o servidor continua sendo o dono dos STATS e do espólio.
+ *
+ * O d20 sobreviveu com o papel que o design dá a ele: qualidade do espólio.
+ */
 export function resolveExploreNode(
   dungeon: DungeonDef,
   character: CharacterForRun,
   node: TrailNode,
   nodeIdx: number,
   tier: number = 1,
+  planned: PlannedNode,
 ):
   | { type: 'monster'; roll: number; pending: RunPending }
   | { type: 'find'; roll: number; loot: NodeLoot } {
@@ -259,27 +261,27 @@ export function resolveExploreNode(
   const isMain = node.kind === 'main'
   const scaling = { tier: node.tier, isMain, isBoss: false }
 
-  // 🔰 1º nó menor da run (nodeIdx 1) é TRAVADO: encontro garantido com um pacote
-  // fixo de 3 dos arquétipos mais fracos (earlyPool) — a "luta de calibração" que
-  // assegura XP cedo e elimina o tanque solo na porta pro nível 1. O d20 é rolado
-  // normalmente e segue sendo o lootRoll (qualidade do espólio, não o encontro).
-  const isFirstMinor = nodeIdx === 1 && node.kind === 'minor'
-  const monsterEncounter = isMain || isFirstMinor || Math.random() < MINOR_MONSTER_CHANCE_BY_TIER[luckTier(roll)]
-  if (monsterEncounter) {
-    // Sala principal = guardião SOLO; nó menor pode trazer um pacote de 1..3 (mais
-    // fracos). Nós menores da 1ª sala sorteiam com viés pró-fracos (earlyBias).
-    const monsters = isFirstMinor
-      ? scaleMonsterGroup(dungeon, character.level, scaling, klass, tier, { forcedSize: 3, pool: earlyPoolOf(dungeon) })
-      : scaleMonsterGroup(dungeon, character.level, scaling, klass, tier, { earlyBias: !isMain && node.tier === 1 })
-    return { type: 'monster', roll, pending: { nodeIdx, kind: isMain ? 'main' : 'minor', lootRoll: roll, monsters, killedIds: [] } }
+  if (planned.category === 'combat') {
+    // Espécies da planta → defs do catálogo. Nome que não casa (catálogo mudou
+    // no meio de uma run aberta) cai no sorteio de sempre, para não derrubar a run.
+    const species = planned.monsters
+      .map(name => dungeon.monsters.find(m => m.name === name))
+      .filter((m): m is DungeonMonsterDef => !!m)
+    const monsters = species.length
+      ? scaleMonsterGroup(dungeon, character.level, scaling, klass, tier, { species })
+      : scaleMonsterGroup(dungeon, character.level, scaling, klass, tier, {
+          earlyBias: !isMain && node.tier === 1,
+        })
+    return {
+      type: 'monster',
+      roll,
+      pending: { nodeIdx, kind: isMain ? 'main' : 'minor', lootRoll: roll, monsters, killedIds: [] },
+    }
   }
 
-  // ⛲ Fonte revitalizadora: só em nó MENOR, a partir da 2ª sala em diante (tier > 1)
-  // — nos nós menores da 1ª sala o HP/MP ainda está cheio, então a fonte não faz
-  // sentido ali. Faixa de SORTE ALTA (d20 14+), com 20% de chance. Se a fonte aparece,
-  // NÃO há espólio — ela restaura HP/MP cheios no cliente (recurso da run; o servidor
-  // só sinaliza o evento). [[dolrath-dungeon-design-vision]]
-  if (!isMain && node.tier > 1 && luckTier(roll) === 'high' && Math.random() < FOUNTAIN_CHANCE) {
+  // ⛲ Fonte revitalizadora: HP/MP cheios em vez de espólio. Quem escolhe é a
+  // planta (só nó menor a partir da 2ª sala); aqui só se emite o evento.
+  if (planned.flavor === 'fountain') {
     return { type: 'find', roll, loot: { gold: 0, drops: [], fountain: true } }
   }
 

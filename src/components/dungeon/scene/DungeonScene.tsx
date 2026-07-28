@@ -561,24 +561,33 @@ export default function DungeonScene({
       ctx.globalAlpha = 1
 
       // Achado tem OBJETO no mundo (desenhado no passe de profundidade); aqui só
-      // o anel. Combate mostra o ícone flutuando sobre o ponto.
+      // o anel.
       if (content?.category === 'find') return
 
       const iconY = y - r * 0.85 - view.ppu * 0.75
       const float = isTarget && !done ? Math.sin(timeRef.current * 2.4) * view.ppu * 0.12 : 0
-      if (content) {
-        const size = view.ppu * (content.flavor === 'boss' ? 2.4 : 1.7)
-        drawNodeIcon(ctx, content.flavor, x, iconY + float, size, {
-          color: done ? 'rgba(150,150,150,0.55)' : undefined,
-          alpha: done ? 0.5 : isTarget ? 1 : 0.8,
-        })
-      } else {
-        ctx.font = `bold ${Math.round(view.ppu * 1.15)}px sans-serif`
-        ctx.textAlign = 'center'
-        ctx.textBaseline = 'middle'
+
+      // Sem conteúdo = bancada sem planta. Na run isso não acontece mais: a
+      // planta chega junto com o runId, então todo nó já nasce sabido — foi o
+      // fim do "?" que ficava pairando sobre o ponto.
+      if (!content) {
+        ctx.beginPath()
+        ctx.arc(x, iconY, view.ppu * 0.16, 0, Math.PI * 2)
         ctx.fillStyle = done ? 'rgba(160,160,160,0.5)' : color
-        ctx.fillText(done ? '·' : '?', x, iconY)
+        ctx.fill()
+        return
       }
+
+      // Nó de combate com bicho VIVO não precisa de crachá: o próprio monstro
+      // rondando o bolsão é o aviso. O ícone volta só depois de limpo, como
+      // marca de "já passei por aqui".
+      if (!done) return
+
+      const size = view.ppu * (content.flavor === 'boss' ? 2.4 : 1.7)
+      drawNodeIcon(ctx, content.flavor, x, iconY + float, size, {
+        color: 'rgba(150,150,150,0.55)',
+        alpha: 0.5,
+      })
     }
 
     const spriteOf = (kind: string, variant: number) =>

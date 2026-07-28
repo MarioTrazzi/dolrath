@@ -713,16 +713,30 @@ export function scaleMonsterGroup(
   s: NodeScaling,
   combatClass: CombatClass = 'warrior',
   tier: number = 1,
-  opts?: { forcedSize?: number; pool?: DungeonMonsterDef[]; earlyBias?: boolean },
+  opts?: {
+    forcedSize?: number
+    pool?: DungeonMonsterDef[]
+    earlyBias?: boolean
+    /**
+     * Bando JÁ ESCOLHIDO (lib/dungeonRunPlan.ts). Quando vem, manda em tudo:
+     * tamanho e espécie de cada membro saem daqui, e nenhum Math.random() é
+     * consumido. É o que permite o mapa mostrar o bando certo antes da luta —
+     * o sorteio agora acontece na criação da run, não no /step.
+     */
+    species?: DungeonMonsterDef[]
+  },
 ): ScaledMonster[] {
-  const size = opts?.forcedSize ?? (s.isMain || s.isBoss ? 1 : rollPackSize())
+  const planned = opts?.species?.length ? opts.species : null
+  const size = planned ? planned.length : (opts?.forcedSize ?? (s.isMain || s.isBoss ? 1 : rollPackSize()))
   const hpShare = PACK_SHARE[size] ?? 1
   const atkShare = PACK_ATK_SHARE[size] ?? 1
   const out: ScaledMonster[] = []
   for (let i = 0; i < size; i++) {
-    const def = opts?.pool?.length
-      ? opts.pool[Math.floor(Math.random() * opts.pool.length)]
-      : pickMonster(dungeon, { earlyBias: opts?.earlyBias })
+    const def = planned
+      ? planned[i]
+      : opts?.pool?.length
+        ? opts.pool[Math.floor(Math.random() * opts.pool.length)]
+        : pickMonster(dungeon, { earlyBias: opts?.earlyBias })
     const m = scaleMonster(def, dungeon, characterLevel, s, combatClass, tier)
     if (size > 1) {
       m.hp = Math.max(1, Math.floor(m.hp * hpShare))

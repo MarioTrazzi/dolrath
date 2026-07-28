@@ -1,0 +1,15 @@
+{
+  "slug": "elfo-mage",
+  "race": "elfo",
+  "class": "mage",
+  "name": "walk",
+  "src": "/sprites/elfo-mage/walk.webp",
+  "frameW": 128,
+  "frameH": 192,
+  "frames": 6,
+  "rows": [
+    1
+  ],
+  "source": "~/Documents/dolrath/.claude/worktrees/character-sprites-review-0fcfef/sprite-sources/elfo-mage.png",
+  "generatedAt": "2026-07-28T02:09:38.434Z"
+}

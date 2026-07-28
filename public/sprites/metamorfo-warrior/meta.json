@@ -1,0 +1,15 @@
+{
+  "slug": "metamorfo-warrior",
+  "race": "metamorfo",
+  "class": "warrior",
+  "name": "walk",
+  "src": "/sprites/metamorfo-warrior/walk.webp",
+  "frameW": 138,
+  "frameH": 192,
+  "frames": 6,
+  "rows": [
+    2
+  ],
+  "source": "~/Documents/dolrath/.claude/worktrees/character-sprites-review-0fcfef/sprite-sources/metamorfo-warrior.png",
+  "generatedAt": "2026-07-28T02:03:48.529Z"
+}

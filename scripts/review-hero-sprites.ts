@@ -81,6 +81,34 @@ function rowsOf(def: HeroSpriteDef): Row[] {
   return rows
 }
 
+/**
+ * Altura do CORPO dentro da célula, em px — o que determina o tamanho aparente
+ * do boneco, já que a cena desenha toda célula com a mesma altura de tela.
+ *
+ * Mede só o terço central pra ignorar adereço fino que sobe pro lado: a lança
+ * do elfo/guerreiro estica a bbox nos frames frontais, o recorte escala a linha
+ * inteira por ela, e o boneco acaba ~10% menor que os das outras folhas mesmo
+ * com a arte "do mesmo tamanho". É o tipo de coisa que só aparece comparando
+ * duas combinações lado a lado no jogo.
+ */
+async function bodyHeights(stripPath: string, def: HeroSpriteDef): Promise<number[]> {
+  const { data, info } = await sharp(stripPath).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
+  const { width: W, channels: C } = info
+  const out: number[] = []
+  for (let f = 0; f < def.frames; f++) {
+    const x0 = f * def.frameW + Math.round(def.frameW * 0.34)
+    const x1 = f * def.frameW + Math.round(def.frameW * 0.66)
+    let topY = def.frameH
+    for (let y = 0; y < def.frameH; y++) {
+      let n = 0
+      for (let x = x0; x < x1; x++) if (data[(y * W + x) * C + 3] > 16) n++
+      if (n >= 6) { topY = y; break } // ≥6px de largura = corpo, não haste
+    }
+    out.push(def.frameH - topY)
+  }
+  return out
+}
+
 async function reviewOne(slug: string, def: HeroSpriteDef): Promise<boolean> {
   const stripPath = resolve(join('public', def.src.replace(/^\//, '')))
   if (!existsSync(stripPath)) {
@@ -148,8 +176,23 @@ async function reviewOne(slug: string, def: HeroSpriteDef): Promise<boolean> {
   if (def.walk.length < 2) {
     console.log(`   ⚠️  ciclo de UM frame só: o boneco anda sem mexer as pernas`)
   }
+
+  // Altura só dos frames que a cena realmente usa — frame morto na tira não
+  // conta pro tamanho aparente.
+  const heights = await bodyHeights(stripPath, def)
+  const used = [...def.walk, ...(def.back === undefined ? [] : Array.isArray(def.back) ? def.back : [def.back])]
+  const usedH = used.map(i => heights[i])
+  const lo = Math.min(...usedH)
+  const hi = Math.max(...usedH)
+  if ((hi - lo) / hi > 0.08) {
+    console.log(`   ⚠️  o boneco muda de tamanho dentro da própria folha (${lo}–${hi}px de ${def.frameH})`)
+  }
+  bodySizes.set(slug, Math.round(usedH.reduce((a, b) => a + b, 0) / usedH.length))
   return true
 }
+
+/** Altura média do corpo por combinação — comparada entre todas no fim. */
+const bodySizes = new Map<string, number>()
 
 async function main() {
   const entries = Object.entries(HERO_SPRITES).filter(([slug]) => !ONLY || slug === ONLY)
@@ -163,6 +206,26 @@ async function main() {
   for (const [slug, def] of entries) {
     console.log(`\n🧝 ${slug}`)
     if (!(await reviewOne(slug, def))) failed++
+  }
+
+  // A cena desenha toda célula com HERO_SPRITE_SCREEN_H, então quem preenche
+  // menos a célula aparece menor que os outros — e isso só se nota comparando
+  // duas combinações. Aqui a comparação é explícita.
+  if (bodySizes.size > 1) {
+    const entries = Array.from(bodySizes)
+    const vals = entries.map(([, v]) => v).sort((a, b) => a - b)
+    const median = vals[Math.floor(vals.length / 2)]
+    const off = entries
+      .filter(([, v]) => Math.abs(v - median) / median > 0.06)
+      .sort((a, b) => a[1] - b[1])
+    if (off.length) {
+      console.log(`\n📏 tamanho aparente fora do conjunto (mediana ${median}px):`)
+      for (const [slug, v] of off) {
+        const pct = Math.round(((v - median) / median) * 100)
+        console.log(`   ${slug.padEnd(20)} ${v}px  ${pct > 0 ? '+' : ''}${pct}% — ` +
+          `adereço alto (cajado/lança) esticou a bbox e encolheu o boneco no recorte`)
+      }
+    }
   }
 
   console.log(`\n📁 abra public/sprites/<slug>/_review.png`)

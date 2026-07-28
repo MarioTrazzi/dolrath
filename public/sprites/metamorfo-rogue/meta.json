@@ -1,0 +1,15 @@
+{
+  "slug": "metamorfo-rogue",
+  "race": "metamorfo",
+  "class": "rogue",
+  "name": "walk",
+  "src": "/sprites/metamorfo-rogue/walk.webp",
+  "frameW": 128,
+  "frameH": 192,
+  "frames": 6,
+  "rows": [
+    2
+  ],
+  "source": "~/Documents/dolrath/.claude/worktrees/character-sprites-review-0fcfef/sprite-sources/metamorfo-rogue.png",
+  "generatedAt": "2026-07-28T02:03:48.280Z"
+}

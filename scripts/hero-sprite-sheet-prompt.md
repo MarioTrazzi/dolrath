@@ -9,16 +9,23 @@ Raças (ids em PT) × classes (ids em EN), como em `src/lib/gameData.ts`:
 
 |  | warrior | rogue | mage | monk |
 |---|---|---|---|---|
-| **humano** | | | ✅ feito | |
-| **elfo** | | ✅ feito | | |
-| **draconiano** | ⚠️ refazer | | | |
-| **metamorfo** | | | | ✅ feito |
+| **humano** | ✅ | ✅ | ✅ | ✅ |
+| **elfo** | ✅ ⚠️ tamanho | ✅ | ✅ | ✅ |
+| **draconiano** | ⚠️ refazer | ✅ | ✅ | ⬜ **falta a folha** |
+| **metamorfo** | ✅ | ✅ | ✅ | ✅ |
 
-4 de 16. `--all` imprime este checklist atualizado a cada rodada.
+15 de 16. `--all` imprime este checklist atualizado a cada rodada.
+
+Pendências conhecidas:
+
+- **draconiano/monk** — nunca veio folha. É a única combinação sem arte.
+- **draconiano/warrior** — folha fraca, um perfil só (ver a tabela adiante).
+- **elfo/warrior** — sai ~12% menor que os outros na tela: a lança na vertical
+  esticou a bbox da linha e o recorte escalou a linha inteira por ela. Some
+  sozinho se a folha for refeita sem pose frontal.
 
 Os pares canônicos da Jornada (`journeyData.ts`) são elfo⇄rogue, humano⇄mage,
-draconiano⇄warrior, metamorfo⇄monk — são os 4 que já foram, porque aparecem na landing.
-As 12 que faltam são as combinações cruzadas.
+draconiano⇄warrior, metamorfo⇄monk — foram os 4 primeiros, porque aparecem na landing.
 
 ## O que o script precisa da folha
 
@@ -59,6 +66,16 @@ O que já deu errado:
 | humano/mago | frontal no 1º frame; costas só na linha 4 | recortado com `--rows 2,4` |
 | metamorfo/monge | frontal no 1º; perfil e costas na mesma linha | serviu, 2 poses |
 | **draconiano/guerreiro** | **1 frontal + 3 costas + 1 perfil + 1 três-quartos de costas** | ❌ **UM perfil só** — o ciclo `[4, 5]` virava as costas a cada 2º frame e, andando pra direita, lia como se o boneco sumisse. Hoje anda com `walk: [4]` (perna parada) até chegar folha nova. |
+| **elfo/mago** | linha 2 era o PARADO com cajado; a caminhada estava na **linha 1** | recortado com `--row 1`. Não confie na numeração: se a linha 2 vier só com pose de frente, procure a caminhada nas outras. |
+| lote de 11 (2ª rodada) | 2 costas + 2 perfis distintos + 1 espelho + 1 três-quartos, na maioria | ✅ o pedido reforçado funcionou — todas viraram ciclo de 2 poses |
+| draconiano/ladino | rotulada pelo Gemini como "WALK (BACK & SIDES ONLY)" | ✅ melhor do lote: 4 perfis + 2 costas, zero pose frontal |
+
+Padrão que se repetiu no lote de 11 e que vale conhecer: `[0]`/`[1]` costas,
+`[2]` perfil, `[3]` espelho do `[2]`, `[4]` perfil noutra fase, `[5]` três-quartos
+de costas. Daí sair `walk: [2, 4]` e `back: [0, 1]` em tanta entrada do manifesto.
+
+Outro tique do Gemini: a **arma some nos frames de perfil** (a lança do elfo
+guerreiro, o cajado dos magos). O boneco anda desarmado. Não é o recorte.
 
 ### O pedido, do jeito que funciona
 

@@ -1,0 +1,15 @@
+{
+  "slug": "elfo-warrior",
+  "race": "elfo",
+  "class": "warrior",
+  "name": "walk",
+  "src": "/sprites/elfo-warrior/walk.webp",
+  "frameW": 128,
+  "frameH": 192,
+  "frames": 6,
+  "rows": [
+    2
+  ],
+  "source": "~/Documents/dolrath/.claude/worktrees/character-sprites-review-0fcfef/sprite-sources/elfo-warrior.png",
+  "generatedAt": "2026-07-28T02:03:47.126Z"
+}

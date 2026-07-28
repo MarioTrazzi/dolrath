@@ -11,11 +11,18 @@
 //   npx tsx scripts/slice-hero-sprite-sheet.ts --race elfo --class rogue --row 2 --dry-run
 //   npx tsx scripts/slice-hero-sprite-sheet.ts --in ~/Downloads/folha.png --race elfo --class rogue
 //   npx tsx scripts/slice-hero-sprite-sheet.ts --race elfo --class rogue --row 4 --out-name attack
+//   npx tsx scripts/slice-hero-sprite-sheet.ts --monster ancia-da-mata --in ~/Downloads/folha.png --rows 1,2
 //
 // Entrada: sprite-sources/<race>-<class>.png (gitignored — folha crua do Gemini, ~5MB)
+//          sprite-sources/monsters/<slug>.png   no modo --monster
 // Saída:   public/sprites/<race>-<class>/<out-name>.webp   (tira: N * cellW  x  cellH)
 //          public/sprites/<race>-<class>/meta.json
 //          public/sprites/<race>-<class>/_contact.png      (gitignored — conferência a olho)
+//          public/sprites/monsters/<slug>/...              no modo --monster
+//
+// Monstro usa o MESMO recorte do herói — só muda de onde lê e onde escreve. A
+// diferença de verdade está na folha: a do monstro tem PERFIL, FRENTE e COSTAS
+// (o bicho ronda em 360°), enquanto a do herói só precisa de perfil e costas.
 
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'fs'
 import { homedir } from 'os'
@@ -35,6 +42,12 @@ const FORCE = has('--force')
 const ALL = has('--all')
 const RACE = (valOf('--race') || '').trim().toLowerCase()
 const CLASS = (valOf('--class') || '').trim().toLowerCase()
+/**
+ * Modo MONSTRO: a folha é de UMA criatura, e o slug é o mesmo da arte pintada
+ * (`monsterImageSlug` de dungeonAdventures.ts — ex.: 'ancia-da-mata'). Muda só
+ * a entrada e a saída; o recorte em si é o mesmo do herói.
+ */
+const MONSTER = (valOf('--monster') || '').trim().toLowerCase()
 /**
  * Linhas a juntar numa tira só, em ordem. As folhas variam: às vezes o andar de
  * costas está na mesma linha do perfil, às vezes numa linha própria lá embaixo.
@@ -68,8 +81,12 @@ const MIN_FRAME_W = 10
 /** Fração da altura da célula que a silhueta ocupa (respiro em cima). */
 const FIT = 0.94
 
-if (!ALL && (!RACE || !CLASS)) {
-  console.error('❌ faltou --race e/ou --class (ex.: --race elfo --class rogue), ou use --all')
+if (!ALL && !MONSTER && (!RACE || !CLASS)) {
+  console.error('❌ faltou --race e/ou --class (ex.: --race elfo --class rogue), ou --monster <slug>, ou --all')
+  process.exit(1)
+}
+if (MONSTER && (RACE || CLASS)) {
+  console.error('❌ --monster não combina com --race/--class — é uma folha OU de herói OU de monstro')
   process.exit(1)
 }
 if (!Number.isFinite(ROW) || ROW < 1) {
@@ -89,10 +106,31 @@ const RACES = ['humano', 'elfo', 'draconiano', 'metamorfo'] as const
 const CLASSES = ['warrior', 'rogue', 'mage', 'monk'] as const
 
 interface Job {
-  race: string
-  cls: string
+  kind: 'hero' | 'monster'
+  /** 'elfo-rogue' (herói) | 'ancia-da-mata' (monstro). */
+  slug: string
+  /** Pasta de saída, já resolvida — é a única coisa que difere no recorte. */
+  outDir: string
+  race?: string
+  cls?: string
   inPath: string
 }
+
+const heroJob = (race: string, cls: string, inPath: string): Job => ({
+  kind: 'hero',
+  slug: `${race}-${cls}`,
+  outDir: resolve(join('public', 'sprites', `${race}-${cls}`)),
+  race,
+  cls,
+  inPath,
+})
+
+const monsterJob = (slug: string, inPath: string): Job => ({
+  kind: 'monster',
+  slug,
+  outDir: resolve(join('public', 'sprites', 'monsters', slug)),
+  inPath,
+})
 
 // ============================================================
 // Buffer RGBA
@@ -346,14 +384,14 @@ function centroidX(raw: Raw, box: Box): number {
 
 /** Recorta UMA folha. Devolve a linha do manifesto, ou null se pulou/falhou. */
 async function sliceOne(job: Job): Promise<string | null> {
-  const { race, cls, inPath: IN_PATH } = job
-  const SLUG = `${race}-${cls}`
-  const OUT_DIR = resolve(join('public', 'sprites', SLUG))
+  const { race, cls, slug: SLUG, outDir: OUT_DIR, inPath: IN_PATH } = job
   const OUT_STRIP = join(OUT_DIR, `${OUT_NAME}.webp`)
   const OUT_META = join(OUT_DIR, 'meta.json')
   const OUT_CONTACT = join(OUT_DIR, '_contact.png')
 
-  console.log(`\n🧝 ${SLUG} — linhas=${ROWS.join(",")} célula=${CELL_W}x${CELL_H} tol=${TOL}`)
+  console.log(
+    `\n${job.kind === 'monster' ? '👹' : '🧝'} ${SLUG} — linhas=${ROWS.join(',')} célula=${CELL_W}x${CELL_H} tol=${TOL}`
+  )
 
   if (!existsSync(IN_PATH)) {
     console.error(`   ❌ folha não encontrada: ${IN_PATH}`)
@@ -499,12 +537,17 @@ async function sliceOne(job: Job): Promise<string | null> {
   await strip.clone().webp({ quality: 92, alphaQuality: 100 }).toFile(OUT_STRIP)
   console.log(`   ✓ ${OUT_NAME}.webp (${stripW}x${CELL_H}, ${cells.length} frames)`)
 
+  // URL pública = a pasta de saída sem o prefixo `public/` (monstro mora um
+  // nível mais fundo, em sprites/monsters/<slug>).
+  const publicSrc = `/${OUT_DIR.slice(resolve('public').length + 1)}/${OUT_NAME}.webp`
+
   const meta = {
     slug: SLUG,
+    kind: job.kind,
     race,
     class: cls,
     name: OUT_NAME,
-    src: `/sprites/${SLUG}/${OUT_NAME}.webp`,
+    src: publicSrc,
     frameW: cellW,
     frameH: CELL_H,
     frames: cells.length,
@@ -547,6 +590,33 @@ async function sliceOne(job: Job): Promise<string | null> {
   // na direção da câmera). Por isso também não chuto mais `idle`.
   const guess = cells.map((_, i) => i)
 
+  if (job.kind === 'monster') {
+    // Folha de monstro tem 3 direções: a 1ª linha é o PERFIL e a 2ª costuma vir
+    // metade de frente, metade de costas (é o caso da Anciã da Mata). Chuto essa
+    // divisão só pra dar um ponto de partida colável — quem decide de verdade é
+    // a folha de contato + a bancada, porque a ordem varia de folha pra folha.
+    const first = rowStarts[0]
+    const second = rowStarts[1]
+    const sideGuess = first ? guess.slice(first.start, first.start + first.count) : guess
+    const half = second ? Math.floor(second.count / 2) : 0
+    const frontGuess = second ? guess.slice(second.start, second.start + half) : []
+    const backGuess = second ? guess.slice(second.start + half, second.start + second.count) : []
+    return (
+      `  '${SLUG}': {\n` +
+      `    src: '${meta.src}',\n` +
+      `    frameW: ${cellW},\n` +
+      `    frameH: ${CELL_H},\n` +
+      `    frames: ${cells.length},\n` +
+      `    facing: 'right',\n` +
+      `    walk: [${sideGuess.join(', ')}],\n` +
+      (frontGuess.length ? `    front: [${frontGuess.join(', ')}],\n` : '') +
+      (backGuess.length ? `    back: [${backGuess.join(', ')}],\n` : '') +
+      `    fps: 6,\n` +
+      `    worldH: 3.6,\n` +
+      `  },`
+    )
+  }
+
   return (
     `  '${SLUG}': {\n` +
     `    src: '${meta.src}',\n` +
@@ -581,7 +651,7 @@ function discoverJobs(): Job[] {
       ignored.push(file)
       continue
     }
-    jobs.push({ race, cls, inPath: join(SOURCE_DIR, file) })
+    jobs.push(heroJob(race, cls, join(SOURCE_DIR, file)))
   }
   if (ignored.length) {
     console.log(`⚠️  ignorados (nome fora do padrão <race>-<class>): ${ignored.join(', ')}`)
@@ -591,17 +661,25 @@ function discoverJobs(): Job[] {
 }
 
 async function main() {
+  // `--all` é hero-only por enquanto. Quando as 4 folhas dos mobs da floresta
+  // chegarem, o gancho é um discoverMonsterJobs() varrendo
+  // sprite-sources/monsters/<slug>.png e devolvendo monsterJob(slug, path).
   const jobs: Job[] = ALL
     ? discoverJobs()
-    : [
-        {
-          race: RACE,
-          cls: CLASS,
-          inPath: resolve(
-            expandHome(valOf('--in') || join('sprite-sources', `${RACE}-${CLASS}.png`))
+    : MONSTER
+      ? [
+          monsterJob(
+            MONSTER,
+            resolve(expandHome(valOf('--in') || join('sprite-sources', 'monsters', `${MONSTER}.png`)))
           ),
-        },
-      ]
+        ]
+      : [
+          heroJob(
+            RACE,
+            CLASS,
+            resolve(expandHome(valOf('--in') || join('sprite-sources', `${RACE}-${CLASS}.png`)))
+          ),
+        ]
 
   if (!jobs.length) {
     console.log('nada a fazer.')
@@ -617,26 +695,31 @@ async function main() {
       if (snippet) snippets.push(snippet)
       else failed++
     } catch (err) {
-      console.error(`   ❌ ${job.race}-${job.cls} falhou:`, err instanceof Error ? err.message : err)
+      console.error(`   ❌ ${job.slug} falhou:`, err instanceof Error ? err.message : err)
       failed++
     }
   }
 
-  // Checklist das 16 — o que já tem tira e o que ainda falta.
-  console.log(`\n📊 cobertura das 16 combinações:`)
-  const missing: string[] = []
-  for (const race of RACES) {
-    const cells = CLASSES.map(cls => {
-      const ok = existsSync(resolve(join('public', 'sprites', `${race}-${cls}`, `${OUT_NAME}.webp`)))
-      if (!ok) missing.push(`${race}-${cls}`)
-      return `${ok ? '✅' : '⬜'} ${cls.padEnd(7)}`
-    })
-    console.log(`   ${race.padEnd(11)} ${cells.join(' ')}`)
+  // Checklist das 16 — o que já tem tira e o que ainda falta. Só faz sentido no
+  // modo herói: monstro não tem grade raça×classe.
+  if (!MONSTER) {
+    console.log(`\n📊 cobertura das 16 combinações:`)
+    const missing: string[] = []
+    for (const race of RACES) {
+      const cells = CLASSES.map(cls => {
+        const ok = existsSync(resolve(join('public', 'sprites', `${race}-${cls}`, `${OUT_NAME}.webp`)))
+        if (!ok) missing.push(`${race}-${cls}`)
+        return `${ok ? '✅' : '⬜'} ${cls.padEnd(7)}`
+      })
+      console.log(`   ${race.padEnd(11)} ${cells.join(' ')}`)
+    }
+    console.log(`   ${16 - missing.length}/16 prontas${missing.length ? ` — faltam: ${missing.join(', ')}` : ' 🎉'}`)
   }
-  console.log(`   ${16 - missing.length}/16 prontas${missing.length ? ` — faltam: ${missing.join(', ')}` : ' 🎉'}`)
 
   if (snippets.length) {
-    console.log(`\n📋 cole em src/lib/heroSprites.ts (ajuste walk/back/fps em /dev/sprite-lab):\n`)
+    const target = MONSTER ? 'src/lib/monsterSprites.ts' : 'src/lib/heroSprites.ts'
+    const knobs = MONSTER ? 'walk/front/back/fps/worldH' : 'walk/back/fps'
+    console.log(`\n📋 cole em ${target} (ajuste ${knobs} em /dev/sprite-lab):\n`)
     console.log(snippets.join('\n'))
   }
   if (failed) console.log(`\n⚠️  ${failed} folha(s) puladas ou com erro.`)

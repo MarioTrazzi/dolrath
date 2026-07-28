@@ -293,6 +293,17 @@ export const HERO_SPRITES: Record<string, HeroSpriteDef> = {
 /** Altura do boneco na tela (px) na cena de caminhada. */
 export const HERO_SPRITE_SCREEN_H = 56
 
+/**
+ * Altura do FRAME do herói em unidades de MUNDO na masmorra explorável (a
+ * WalkScene não tem zoom e mede em px, por isso a constante acima). A unidade
+ * lê como ~1 metro: árvore adulta 6.5, arbusto 1.3.
+ *
+ * Mora aqui, e não na DungeonScene, porque é a RÉGUA que o monstro usa para
+ * dizer "sou 1.7x o herói" (monsterSprites.worldH) — e os scripts de QA em Node
+ * precisam dela sem poder importar um componente `'use client'`.
+ */
+export const HERO_WORLD_H = 2.1
+
 export function heroSpriteKey(race?: string | null, cls?: string | null): string {
   return `${(race || '').trim().toLowerCase()}-${(cls || '').trim().toLowerCase()}`
 }

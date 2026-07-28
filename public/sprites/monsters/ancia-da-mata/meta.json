@@ -1,0 +1,15 @@
+{
+  "slug": "ancia-da-mata",
+  "kind": "monster",
+  "name": "walk",
+  "src": "/sprites/monsters/ancia-da-mata/walk.webp",
+  "frameW": 232,
+  "frameH": 288,
+  "frames": 12,
+  "rows": [
+    1,
+    2
+  ],
+  "source": "~/Downloads/Gemini_Generated_Image_pa105apa105apa10.png",
+  "generatedAt": "2026-07-28T17:41:51.398Z"
+}

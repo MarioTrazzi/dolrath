@@ -40,6 +40,7 @@ import {
   ScaledMonster,
   scaleMonster,
   monsterImagePath,
+  monsterImageSlug,
 } from '@/lib/dungeonAdventures'
 import {
   TRANSFORMATION_CONFIG,
@@ -1440,12 +1441,21 @@ export default function DungeonRun({
     if (useScene) {
       const flavor: NodeFlavor =
         data.type === 'boss' ? 'boss' : data.type === 'monster' ? 'monster' : 'chest'
+      // Espécies do bando que o SERVIDOR acabou de sortear — é o que faz a cena
+      // desenhar o bicho certo, e na quantidade certa, em vez de um vulto
+      // genérico. Bando sem arte cai no vulto sozinho (ver monsterSprites.ts).
+      const packNames = data.monsters?.length
+        ? data.monsters.map(m => m.name)
+        : data.monster
+          ? [data.monster.name]
+          : []
       setSceneContents(prev => {
         const next = new Map(prev)
         next.set(dest, {
           nodeIndex: dest,
           category: flavor === 'chest' ? 'find' : 'combat',
           flavor,
+          speciesSlugs: packNames.length ? packNames.map(monsterImageSlug) : undefined,
         })
         return next
       })

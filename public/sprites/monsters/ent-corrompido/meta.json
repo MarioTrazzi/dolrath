@@ -1,0 +1,15 @@
+{
+  "slug": "ent-corrompido",
+  "kind": "monster",
+  "name": "walk",
+  "src": "/sprites/monsters/ent-corrompido/walk.webp",
+  "frameW": 229,
+  "frameH": 288,
+  "frames": 12,
+  "rows": [
+    1,
+    2
+  ],
+  "source": "~/Documents/dolrath/.claude/worktrees/zen-engelbart-e78c22/sprite-sources/monsters/floresta-sombria/ent-corrompido.png",
+  "generatedAt": "2026-07-28T18:27:49.461Z"
+}

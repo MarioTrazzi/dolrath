@@ -24,11 +24,13 @@
 // diferença de verdade está na folha: a do monstro tem PERFIL, FRENTE e COSTAS
 // (o bicho ronda em 360°), enquanto a do herói só precisa de perfil e costas.
 
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'fs'
 import { homedir } from 'os'
 import { basename, join, resolve } from 'path'
 
 import sharp from 'sharp'
+
+import { DUNGEONS, monsterImageSlug } from '../src/lib/dungeonAdventures'
 
 const argv = process.argv.slice(2)
 const has = (f: string) => argv.includes(f)
@@ -40,6 +42,8 @@ const valOf = (f: string) => {
 const DRY = has('--dry-run')
 const FORCE = has('--force')
 const ALL = has('--all')
+/** Lote de MONSTRO: varre sprite-sources/monsters (com ou sem subpasta de bioma). */
+const ALL_MONSTERS = has('--all-monsters')
 const RACE = (valOf('--race') || '').trim().toLowerCase()
 const CLASS = (valOf('--class') || '').trim().toLowerCase()
 /**
@@ -48,6 +52,8 @@ const CLASS = (valOf('--class') || '').trim().toLowerCase()
  * a entrada e a saída; o recorte em si é o mesmo do herói.
  */
 const MONSTER = (valOf('--monster') || '').trim().toLowerCase()
+/** Estamos recortando bicho (uma folha ou o lote inteiro)? */
+const MONSTER_MODE = !!MONSTER || ALL_MONSTERS
 /**
  * Linhas a juntar numa tira só, em ordem. As folhas variam: às vezes o andar de
  * costas está na mesma linha do perfil, às vezes numa linha própria lá embaixo.
@@ -60,6 +66,26 @@ const ROWS = (valOf('--rows') || valOf('--row') || '2')
   .filter(n => Number.isFinite(n) && n >= 1)
 const ROW = ROWS[0]
 const OUT_NAME = (valOf('--out-name') || 'walk').trim()
+/**
+ * Grade FORÇADA `COLUNASxLINHAS`, em vez de descobrir as bandas por projeção.
+ *
+ * A projeção só separa o que tem uma faixa vazia entre um frame e outro, e nem
+ * toda folha tem: a aranha tem perna de cima encostando na de baixo (as duas
+ * linhas viram UMA banda de 1035px), e o lobo vem com sombra de chão pintada
+ * que faz ponte entre dois bichos vizinhos (um "frame" de 1067px = dois lobos).
+ * Nesses casos a grade é a informação que falta, e ela é trivial de ler a olho
+ * na folha. Dentro de cada célula o recorte continua sendo o bbox real.
+ */
+const GRID = (() => {
+  const v = valOf('--grid')
+  if (!v) return null
+  const [cols, rows] = v.split('x').map(Number)
+  if (!Number.isFinite(cols) || !Number.isFinite(rows) || cols < 1 || rows < 1) {
+    console.error('❌ --grid precisa ser COLUNASxLINHAS (ex.: --grid 3x4)')
+    process.exit(1)
+  }
+  return { cols, rows }
+})()
 /** Tolerância euclidiana (RGB) pro flood fill do fundo. */
 const TOL = Number(valOf('--tol') || 26)
 /** Célula final. ~2x o tamanho de exibição (a arte não é pixel art, então suaviza bem). */
@@ -81,7 +107,7 @@ const MIN_FRAME_W = 10
 /** Fração da altura da célula que a silhueta ocupa (respiro em cima). */
 const FIT = 0.94
 
-if (!ALL && !MONSTER && (!RACE || !CLASS)) {
+if (!ALL && !ALL_MONSTERS && !MONSTER && (!RACE || !CLASS)) {
   console.error('❌ faltou --race e/ou --class (ex.: --race elfo --class rogue), ou --monster <slug>, ou --all')
   process.exit(1)
 }
@@ -96,6 +122,13 @@ if (!Number.isFinite(ROW) || ROW < 1) {
 if (!Number.isFinite(CELL_W) || !Number.isFinite(CELL_H)) {
   console.error('❌ --cell precisa ser LARGURAxALTURA (ex.: 128x192)')
   process.exit(1)
+}
+
+/** O que o usuário pediu na mão — tem prioridade sobre a receita da folha. */
+const EXPLICIT = {
+  rows: !!(valOf('--rows') || valOf('--row')),
+  grid: !!valOf('--grid'),
+  cell: !!valOf('--cell'),
 }
 
 const expandHome = (p: string) => (p.startsWith('~/') ? join(homedir(), p.slice(2)) : p)
@@ -131,6 +164,54 @@ const monsterJob = (slug: string, inPath: string): Job => ({
   outDir: resolve(join('public', 'sprites', 'monsters', slug)),
   inPath,
 })
+
+/**
+ * Como ler CADA folha de monstro. Isto é DADO da folha, não gosto: cada bicho
+ * veio do Gemini com uma diagramação, e sem registrar aqui o `--all-monsters`
+ * só funcionaria para o subconjunto que casa com o default.
+ *
+ * `grid` só entra quando a projeção não separa sozinha (frames encostados).
+ * Ausente = descoberta automática, que é o caso mais limpo.
+ */
+interface SheetRecipe {
+  rows: number[]
+  grid?: { cols: number; rows: number }
+  cell?: [number, number]
+  /** Folha com sombra/chão pintado que prende fundo dentro da silhueta. */
+  killTrappedBg?: boolean
+  /** Por que essa receita — para não virar número mágico. */
+  note: string
+}
+
+/** Poça menor que isto é pelagem da cor do fundo, não fundo preso. */
+const TRAPPED_MIN_AREA = 400
+
+/**
+ * Célula do bicho: mesma proporção 2:3 da do herói (128x192), 1.5x maior porque
+ * monstro desenha mais alto em unidades de mundo — mantém a densidade de texel.
+ * A largura é MÍNIMO: alarga sozinha pro que o bicho tiver de largo.
+ */
+const MONSTER_CELL: [number, number] = [192, 288]
+
+const DEFAULT_RECIPE: SheetRecipe = { rows: [1, 2], note: '2 linhas: perfil / frente+costas' }
+
+const SHEET_RECIPES: Record<string, SheetRecipe> = {
+  'ancia-da-mata': { rows: [1, 2], note: '6 de perfil (3 + 3 espelhados), 3 de frente, 3 de costas' },
+  'ent-corrompido': { rows: [1, 2], note: 'mesma diagramação da Anciã' },
+  'javali-furioso': { rows: [1, 2], note: 'mesma diagramação da Anciã, bicho mais largo' },
+  // Perna de cima encosta na de baixo: a projeção funde as duas linhas numa
+  // banda de 1035px. A grade é o que falta.
+  'aranha-gigante': { rows: [1, 2], grid: { cols: 6, rows: 2 }, note: 'pernas encostam entre as linhas' },
+  // 4 linhas de 3, e a sombra de chão PINTADA faz ponte entre bichos vizinhos
+  // (a projeção devolve um "frame" de 1067px = dois lobos). Linha 2 é a 1
+  // espelhada — não entra, o espelho sai de graça em runtime.
+  'lobo-faminto': {
+    rows: [1, 3, 4],
+    grid: { cols: 3, rows: 4 },
+    killTrappedBg: true,
+    note: 'grade 3x4; linha 2 = espelho da 1; risco de terra prende fundo entre as patas',
+  },
+}
 
 // ============================================================
 // Buffer RGBA
@@ -223,6 +304,62 @@ function removeBackground(raw: Raw, bg: [number, number, number], tol: number): 
  * Mata-halo: pixel opaco encostado em transparente e ainda parecido com o fundo
  * (tolerância mais larga) também some. Anti-aliasing do Gemini deixa 1-2px de borda cinza.
  */
+/**
+ * Fundo PRESO: poça da cor do fundo que o flood fill da borda não alcança
+ * porque a arte fecha um anel em volta dela.
+ *
+ * O lobo é o caso: ele vem pintado em cima de um risco de terra, e o vão entre
+ * as patas fica cercado por corpo em cima, pernas dos lados e o risco embaixo.
+ * O recorte saía com uma mancha clara chapada no meio do bicho.
+ *
+ * Só remove COMPONENTE GRANDE (>= minArea). Pixel solto da cor do fundo dentro
+ * da arte é pelagem legítima, e furar isso seria pior que a poça. Por isso
+ * também é opt-in por folha (`killTrappedBg` na receita): o herói não precisa,
+ * e o capuz cinza-marrom dele é exatamente o tipo de coisa que não quero mexer.
+ */
+function killTrappedBackground(
+  raw: Raw,
+  bg: [number, number, number],
+  tol: number,
+  minArea: number,
+): number {
+  const { data, width, height } = raw
+  const [br, bg_, bb] = bg
+  const tol2 = tol * tol
+  const seen = new Uint8Array(width * height)
+  let removed = 0
+
+  const isBgColored = (p: number) => data[p * 4 + 3] !== 0 && dist2(data, p * 4, br, bg_, bb) <= tol2
+
+  for (let start = 0; start < width * height; start++) {
+    if (seen[start] || !isBgColored(start)) continue
+    // Componente 4-conectado de pixels da cor do fundo que sobreviveram.
+    const comp: number[] = []
+    const stack = [start]
+    seen[start] = 1
+    while (stack.length) {
+      const p = stack.pop() as number
+      comp.push(p)
+      const x = p % width
+      const y = (p - x) / width
+      const push = (nx: number, ny: number) => {
+        const q = ny * width + nx
+        if (seen[q] || !isBgColored(q)) return
+        seen[q] = 1
+        stack.push(q)
+      }
+      if (x > 0) push(x - 1, y)
+      if (x < width - 1) push(x + 1, y)
+      if (y > 0) push(x, y - 1)
+      if (y < height - 1) push(x, y + 1)
+    }
+    if (comp.length < minArea) continue
+    for (const p of comp) data[p * 4 + 3] = 0
+    removed += comp.length
+  }
+  return removed
+}
+
 function killHalo(raw: Raw, bg: [number, number, number], tol: number, passes: number): void {
   const { data, width, height } = raw
   const [br, bg_, bb] = bg
@@ -334,6 +471,22 @@ function findFrames(raw: Raw, bandY0: number, bandY1: number): Box[] {
  * Descarta blobs chapados (a outra versão da folha veio com um quadrado preto sólido).
  * Personagem tem centenas de cores; um quadrado sólido tem 1.
  */
+/**
+ * Frames de uma linha da GRADE forçada: divide a largura em `cols` fatias iguais
+ * e pega o bbox real dentro de cada uma. Célula vazia é pulada (folha com a
+ * última posição em branco não quebra a numeração das anteriores).
+ */
+function gridFrames(raw: Raw, y0: number, y1: number, cols: number): Box[] {
+  const out: Box[] = []
+  for (let c = 0; c < cols; c++) {
+    const x0 = Math.round((c * raw.width) / cols)
+    const x1 = Math.round(((c + 1) * raw.width) / cols)
+    const box = tightBox(raw, x0, y0, x1, y1)
+    if (box) out.push(box)
+  }
+  return out
+}
+
 function isFlatBlob(raw: Raw, box: Box): boolean {
   const seen = new Set<number>()
   const stepX = Math.max(1, Math.floor((box.x1 - box.x0) / 40))
@@ -389,8 +542,19 @@ async function sliceOne(job: Job): Promise<string | null> {
   const OUT_META = join(OUT_DIR, 'meta.json')
   const OUT_CONTACT = join(OUT_DIR, '_contact.png')
 
+  // Receita da folha quando é bicho; a flag na linha de comando SEMPRE ganha,
+  // pra dar pra experimentar sem editar o script.
+  const recipe = job.kind === 'monster' ? (SHEET_RECIPES[SLUG] ?? DEFAULT_RECIPE) : null
+  const rows = !recipe || EXPLICIT.rows ? ROWS : recipe.rows
+  const grid = !recipe || EXPLICIT.grid ? GRID : (recipe.grid ?? null)
+  const [cellWMin, cellH] =
+    !recipe || EXPLICIT.cell ? [CELL_W, CELL_H] : (recipe.cell ?? MONSTER_CELL)
+  const killTrapped = has('--kill-trapped-bg') || !!recipe?.killTrappedBg
+
   console.log(
-    `\n${job.kind === 'monster' ? '👹' : '🧝'} ${SLUG} — linhas=${ROWS.join(',')} célula=${CELL_W}x${CELL_H} tol=${TOL}`
+    `\n${job.kind === 'monster' ? '👹' : '🧝'} ${SLUG} — linhas=${rows.join(',')} célula=${cellWMin}x${cellH} tol=${TOL}` +
+      (grid ? ` grade=${grid.cols}x${grid.rows}` : '') +
+      (recipe && !EXPLICIT.rows ? `\n   receita: ${recipe.note}` : '')
   )
 
   if (!existsSync(IN_PATH)) {
@@ -411,19 +575,34 @@ async function sliceOne(job: Job): Promise<string | null> {
   console.log(`   fundo detectado rgb(${bg.join(',')})`)
 
   removeBackground(raw, bg, TOL)
+  if (killTrapped) {
+    // Tolerância maior que a do flood fill: o risco de terra do lobo desbota o
+    // fundo preso em volta dele, e no tol de contorno a poça ficava pela metade.
+    const n = killTrappedBackground(raw, bg, TOL * 1.6, TRAPPED_MIN_AREA)
+    console.log(`   fundo preso removido: ${n}px${n === 0 ? ' (nenhuma poça)' : ''}`)
+  }
   killHalo(raw, bg, TOL * 1.6, 2)
 
-  const rawBands = findBands(raw)
-  const heights = rawBands.map(([a, b]) => b - a).sort((x, y) => x - y)
-  const medianH = heights[Math.floor(heights.length / 2)] || 0
-  const bands = rawBands.filter(([a, b]) => b - a >= medianH * LABEL_BAND_RATIO)
-  const droppedLabels = rawBands.length - bands.length
-  console.log(
-    `   ${bands.length} linhas${droppedLabels ? ` (${droppedLabels} rótulo(s) de texto descartado(s))` : ''}: ` +
-      bands.map(([a, b], i) => `#${i + 1} h=${b - a}`).join(', ')
-  )
+  let bands: Array<[number, number]>
+  if (grid) {
+    bands = Array.from({ length: grid.rows }, (_, r): [number, number] => [
+      Math.round((r * raw.height) / grid.rows),
+      Math.round(((r + 1) * raw.height) / grid.rows),
+    ])
+    console.log(`   grade forçada ${grid.cols}x${grid.rows} (linhas de ${bands[0][1] - bands[0][0]}px)`)
+  } else {
+    const rawBands = findBands(raw)
+    const heights = rawBands.map(([a, b]) => b - a).sort((x, y) => x - y)
+    const medianH = heights[Math.floor(heights.length / 2)] || 0
+    bands = rawBands.filter(([a, b]) => b - a >= medianH * LABEL_BAND_RATIO)
+    const droppedLabels = rawBands.length - bands.length
+    console.log(
+      `   ${bands.length} linhas${droppedLabels ? ` (${droppedLabels} rótulo(s) de texto descartado(s))` : ''}: ` +
+        bands.map(([a, b], i) => `#${i + 1} h=${b - a}`).join(', ')
+    )
+  }
 
-  const missingRow = ROWS.find(r => r > bands.length)
+  const missingRow = rows.find(r => r > bands.length)
   if (missingRow !== undefined) {
     console.error(`   ❌ linha ${missingRow} não existe (folha tem ${bands.length}) — pulando`)
     return null
@@ -433,9 +612,12 @@ async function sliceOne(job: Job): Promise<string | null> {
   // é esse offset que vira o índice de `back` no manifesto.
   const frames: Box[] = []
   const rowStarts: Array<{ row: number; start: number; count: number }> = []
-  for (const row of ROWS) {
+  for (const row of rows) {
     const [bandY0, bandY1] = bands[row - 1]
-    const rowFrames = findFrames(raw, bandY0, bandY1).filter((box) => {
+    const found = grid
+      ? gridFrames(raw, bandY0, bandY1, grid.cols)
+      : findFrames(raw, bandY0, bandY1)
+    const rowFrames = found.filter((box) => {
       if (isFlatBlob(raw, box)) {
         console.log(`   ⚠️  descartado blob chapado em x=${box.x0}..${box.x1}`)
         return false
@@ -447,7 +629,7 @@ async function sliceOne(job: Job): Promise<string | null> {
   }
 
   if (!frames.length) {
-    console.error(`   ❌ nenhum frame encontrado em ${ROWS.join(',')} — pulando`)
+    console.error(`   ❌ nenhum frame encontrado em ${rows.join(',')} — pulando`)
     return null
   }
   for (const r of rowStarts) {
@@ -469,10 +651,10 @@ async function sliceOne(job: Job): Promise<string | null> {
   // alarga pra caber o que sobra pros lados.
   const maxH = Math.max(...frames.map((b) => b.y1 - b.y0))
   const maxW = Math.max(...frames.map((b) => b.x1 - b.x0))
-  const scale = (CELL_H * FIT) / maxH
-  const cellW = Math.max(CELL_W, Math.ceil(maxW * scale) + 4)
-  if (cellW > CELL_W) {
-    console.log(`   célula alargada ${CELL_W}→${cellW}px (frame mais largo: ${maxW}px)`)
+  const scale = (cellH * FIT) / maxH
+  const cellW = Math.max(cellWMin, Math.ceil(maxW * scale) + 4)
+  if (cellW > cellWMin) {
+    console.log(`   célula alargada ${cellWMin}→${cellW}px (frame mais largo: ${maxW}px)`)
   }
   console.log(`   escala ${scale.toFixed(4)} (maior frame ${maxW}x${maxH})`)
 
@@ -505,12 +687,12 @@ async function sliceOne(job: Job): Promise<string | null> {
     // centroide relativo ao bbox, já na escala final
     const cx = (centroidX(raw, box) - box.x0) * scale
     const left = Math.round(cellW / 2 - cx)
-    const top = CELL_H - outH // pé colado no chão da célula
+    const top = cellH - outH // pé colado no chão da célula
 
     const cell = await sharp({
       create: {
         width: cellW,
-        height: CELL_H,
+        height: cellH,
         channels: 4,
         background: { r: 0, g: 0, b: 0, alpha: 0 },
       },
@@ -531,11 +713,11 @@ async function sliceOne(job: Job): Promise<string | null> {
 
   const stripW = cellW * cells.length
   const strip = sharp({
-    create: { width: stripW, height: CELL_H, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+    create: { width: stripW, height: cellH, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
   }).composite(cells.map((input, i) => ({ input, left: i * cellW, top: 0 })))
 
   await strip.clone().webp({ quality: 92, alphaQuality: 100 }).toFile(OUT_STRIP)
-  console.log(`   ✓ ${OUT_NAME}.webp (${stripW}x${CELL_H}, ${cells.length} frames)`)
+  console.log(`   ✓ ${OUT_NAME}.webp (${stripW}x${cellH}, ${cells.length} frames)`)
 
   // URL pública = a pasta de saída sem o prefixo `public/` (monstro mora um
   // nível mais fundo, em sprites/monsters/<slug>).
@@ -549,9 +731,9 @@ async function sliceOne(job: Job): Promise<string | null> {
     name: OUT_NAME,
     src: publicSrc,
     frameW: cellW,
-    frameH: CELL_H,
+    frameH: cellH,
     frames: cells.length,
-    rows: ROWS,
+    rows,
     source: IN_PATH.replace(homedir(), '~'),
     generatedAt: new Date().toISOString(),
   }
@@ -570,14 +752,14 @@ async function sliceOne(job: Job): Promise<string | null> {
   await sharp({
     create: {
       width: stripW,
-      height: CELL_H + CONTACT_LABEL_H,
+      height: cellH + CONTACT_LABEL_H,
       channels: 4,
       background: { r: 60, g: 60, b: 64, alpha: 255 },
     },
   })
     .composite([
       ...cells.map((input, i) => ({ input, left: i * cellW, top: 0 })),
-      ...labels.map((input, i) => ({ input, left: i * cellW, top: CELL_H })),
+      ...labels.map((input, i) => ({ input, left: i * cellW, top: cellH })),
     ])
     .png()
     .toFile(OUT_CONTACT)
@@ -605,7 +787,7 @@ async function sliceOne(job: Job): Promise<string | null> {
       `  '${SLUG}': {\n` +
       `    src: '${meta.src}',\n` +
       `    frameW: ${cellW},\n` +
-      `    frameH: ${CELL_H},\n` +
+      `    frameH: ${cellH},\n` +
       `    frames: ${cells.length},\n` +
       `    facing: 'right',\n` +
       `    walk: [${sideGuess.join(', ')}],\n` +
@@ -621,7 +803,7 @@ async function sliceOne(job: Job): Promise<string | null> {
     `  '${SLUG}': {\n` +
     `    src: '${meta.src}',\n` +
     `    frameW: ${cellW},\n` +
-    `    frameH: ${CELL_H},\n` +
+    `    frameH: ${cellH},\n` +
     `    frames: ${cells.length},\n` +
     `    facing: 'right',\n` +
     `    walk: [${guess.join(', ')}],\n` +
@@ -660,20 +842,83 @@ function discoverJobs(): Job[] {
   return jobs
 }
 
+/** Todo slug de bicho do catálogo — mob e chefe de todas as masmorras. */
+function catalogSlugs(): Map<string, string> {
+  const out = new Map<string, string>()
+  for (const d of Object.values(DUNGEONS)) {
+    for (const m of [...d.monsters, d.boss]) out.set(monsterImageSlug(m.name), m.name)
+  }
+  return out
+}
+
+/**
+ * Varre `sprite-sources/monsters`, com ou sem subpasta de bioma
+ * (`monsters/floresta-sombria/lobo-faminto.png` funciona igual a
+ * `monsters/lobo-faminto.png` — a subpasta é organização sua, o slug é o nome
+ * do arquivo).
+ *
+ * O nome é conferido contra o catálogo: um typo aqui produziria um slug que
+ * nenhuma entrada de MONSTER_SPRITES casa, e o bicho apareceria como vulto sem
+ * ninguém entender por quê. Melhor reclamar na hora do recorte.
+ */
+function discoverMonsterJobs(quiet = false): Job[] {
+  const root = join(SOURCE_DIR, 'monsters')
+  if (!existsSync(root)) {
+    if (!quiet) {
+      console.error(`❌ pasta não encontrada: ${root}`)
+      console.error('   Crie-a e jogue as folhas como <slug>.png (ex.: lobo-faminto.png)')
+    }
+    return []
+  }
+  const known = catalogSlugs()
+  const jobs: Job[] = []
+  const unknown: string[] = []
+
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir).sort()) {
+      const full = join(dir, entry)
+      if (statSync(full).isDirectory()) {
+        walk(full)
+        continue
+      }
+      if (!/\.(png|webp|jpg|jpeg)$/i.test(entry)) continue
+      const slug = basename(entry).replace(/\.[^.]+$/, '').toLowerCase()
+      if (!known.has(slug)) {
+        unknown.push(entry)
+        continue
+      }
+      jobs.push(monsterJob(slug, full))
+    }
+  }
+  walk(root)
+
+  if (unknown.length && !quiet) {
+    console.log(`⚠️  ignorados (slug fora do catálogo): ${unknown.join(', ')}`)
+    console.log(`   renomeie para um destes: ${Array.from(known.keys()).sort().join(', ')}`)
+  }
+  return jobs
+}
+
+/**
+ * Folha de UM bicho. Sem `--in`, procura o slug em qualquer subpasta de
+ * `sprite-sources/monsters` — organizar por bioma não pode custar um caminho
+ * mais comprido na linha de comando.
+ */
+function monsterJobFor(slug: string): Job {
+  const explicit = valOf('--in')
+  if (explicit) return monsterJob(slug, resolve(expandHome(explicit)))
+  const found = discoverMonsterJobs(true).find(j => j.slug === slug)
+  return found ?? monsterJob(slug, resolve(join('sprite-sources', 'monsters', `${slug}.png`)))
+}
+
 async function main() {
-  // `--all` é hero-only por enquanto. Quando as 4 folhas dos mobs da floresta
-  // chegarem, o gancho é um discoverMonsterJobs() varrendo
-  // sprite-sources/monsters/<slug>.png e devolvendo monsterJob(slug, path).
   const jobs: Job[] = ALL
     ? discoverJobs()
-    : MONSTER
-      ? [
-          monsterJob(
-            MONSTER,
-            resolve(expandHome(valOf('--in') || join('sprite-sources', 'monsters', `${MONSTER}.png`)))
-          ),
-        ]
-      : [
+    : ALL_MONSTERS
+      ? discoverMonsterJobs()
+      : MONSTER
+        ? [monsterJobFor(MONSTER)]
+        : [
           heroJob(
             RACE,
             CLASS,
@@ -702,7 +947,7 @@ async function main() {
 
   // Checklist das 16 — o que já tem tira e o que ainda falta. Só faz sentido no
   // modo herói: monstro não tem grade raça×classe.
-  if (!MONSTER) {
+  if (!MONSTER_MODE) {
     console.log(`\n📊 cobertura das 16 combinações:`)
     const missing: string[] = []
     for (const race of RACES) {
@@ -717,8 +962,8 @@ async function main() {
   }
 
   if (snippets.length) {
-    const target = MONSTER ? 'src/lib/monsterSprites.ts' : 'src/lib/heroSprites.ts'
-    const knobs = MONSTER ? 'walk/front/back/fps/worldH' : 'walk/back/fps'
+    const target = MONSTER_MODE ? 'src/lib/monsterSprites.ts' : 'src/lib/heroSprites.ts'
+    const knobs = MONSTER_MODE ? 'walk/front/back/fps/worldH' : 'walk/back/fps'
     console.log(`\n📋 cole em ${target} (ajuste ${knobs} em /dev/sprite-lab):\n`)
     console.log(snippets.join('\n'))
   }

@@ -80,6 +80,73 @@ export const MONSTER_SPRITES: Record<string, MonsterSpriteDef> = {
     fps: 5,
     worldH: 3.6,
   },
+
+  // Mesma diagramação da Anciã, e as mesmas duas exclusões: [1] é o frame de
+  // perfil sem a chama, [11] veio com o losango branco da geração.
+  // Árvore-gente: mais alto que o herói (2.1) e menor que a chefe (3.6).
+  'ent-corrompido': {
+    src: '/sprites/monsters/ent-corrompido/walk.webp',
+    frameW: 229,
+    frameH: 288,
+    frames: 12,
+    facing: 'right',
+    walk: [0, 2],
+    front: [6, 7, 8],
+    back: [9, 10],
+    fps: 5,
+    worldH: 3.0,
+  },
+
+  // [0][1][2] perfil pra direita (3 fases de verdade — quadrúpede tem passada
+  // que lê bem), [3][4][5] os mesmos espelhados, [6..8] de frente, [9..11] de
+  // costas com o losango branco no [11].
+  'javali-furioso': {
+    src: '/sprites/monsters/javali-furioso/walk.webp',
+    frameW: 308,
+    frameH: 288,
+    frames: 12,
+    facing: 'right',
+    walk: [0, 1, 2],
+    front: [6, 7, 8],
+    back: [9, 10],
+    fps: 7,
+    worldH: 1.7,
+  },
+
+  // Folha em grade 3x4; a linha 2 (espelho da 1) ficou de fora do recorte, então
+  // são 9 frames: [0..2] perfil, [3..5] de frente, [6..8] de costas ([8] tem o
+  // losango). fps mais alto: lobo é o bicho rápido do bestiário.
+  'lobo-faminto': {
+    src: '/sprites/monsters/lobo-faminto/walk.webp',
+    frameW: 274,
+    frameH: 288,
+    frames: 9,
+    facing: 'right',
+    walk: [0, 1, 2],
+    front: [3, 4, 5],
+    back: [6, 7],
+    fps: 8,
+    worldH: 1.8,
+  },
+
+  // A folha da aranha é OUTRA ideia: 6 poses × 2 tomadas quase iguais, não
+  // perfil/frente/costas. [0]/[6] são a mesma pose de lado em duas variações —
+  // vira um ciclo de 2 que lê como o bicho se ajeitando nas patas; [2]/[8] são
+  // de frente. Aranha não tem "costas": vista de trás é igual à de lado, então
+  // `back` fica de fora e a cena cai no perfil sozinha.
+  // [5]/[11] são a pose parada na teia (e a teia prende fundo dentro dela) —
+  // não entram em ciclo nenhum.
+  'aranha-gigante': {
+    src: '/sprites/monsters/aranha-gigante/walk.webp',
+    frameW: 319,
+    frameH: 288,
+    frames: 12,
+    facing: 'right',
+    walk: [0, 6],
+    front: [2, 8],
+    fps: 6,
+    worldH: 1.6,
+  },
 }
 
 /** Busca direta pelo slug. `null` = ainda não tem folha ⇒ vulto procedural. */

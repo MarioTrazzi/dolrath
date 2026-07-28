@@ -15,7 +15,7 @@
 // ============================================================
 
 import { seedRng } from '@/lib/walkSceneAssets'
-import type { DungeonId } from '@/lib/dungeonAdventures'
+import { DUNGEONS, monsterImageSlug, type DungeonId } from '@/lib/dungeonAdventures'
 import type { SceneMapDef } from './types'
 
 export type NodeCategory = 'combat' | 'find'
@@ -25,6 +25,16 @@ export interface SpotContent {
   nodeIndex: number
   category: NodeCategory
   flavor: NodeFlavor
+  /**
+   * Espécies do bando, na ordem — é o que faz a cena desenhar LOBO onde vai
+   * aparecer lobo, em vez de um vulto genérico (ver lib/monsterSprites.ts).
+   *
+   * Na run de verdade quem preenche é o servidor, na chegada ao nó: só ele
+   * decide o bando, e adiantar isso no cliente seria mentir para o jogador.
+   * Aqui o palpite é determinístico e serve para a bancada /dev, onde não há
+   * servidor. Ausente = a cena cai no vulto, sem regressão.
+   */
+  speciesSlugs?: string[]
 }
 
 /** Fatia dos nós MENORES que vira achado em vez de luta. Nós principais e o
@@ -77,6 +87,7 @@ function pickWeighted(
 export function planNodeContents(map: SceneMapDef, seed: string): Map<number, SpotContent> {
   const rng = seedRng(`${map.id}:${seed}:nodes`)
   const out = new Map<number, SpotContent>()
+  const dungeon = DUNGEONS[map.id]
 
   const minors = map.spots.filter(s => s.kind === 'minor').map(s => s.nodeIndex)
   const findCount = Math.round(minors.length * FIND_FRACTION)
@@ -90,12 +101,26 @@ export function planNodeContents(map: SceneMapDef, seed: string): Map<number, Sp
     if (spot.kind === 'start') continue
 
     if (spot.kind === 'boss') {
-      out.set(spot.nodeIndex, { nodeIndex: spot.nodeIndex, category: 'combat', flavor: 'boss' })
+      out.set(spot.nodeIndex, {
+        nodeIndex: spot.nodeIndex,
+        category: 'combat',
+        flavor: 'boss',
+        speciesSlugs: [monsterImageSlug(dungeon.boss.name)],
+      })
       continue
     }
 
     if (spot.kind === 'main' || !findSet.has(spot.nodeIndex)) {
-      out.set(spot.nodeIndex, { nodeIndex: spot.nodeIndex, category: 'combat', flavor: 'monster' })
+      // Bando de 1-3 do bestiário da masmorra, todos da mesma espécie: bicho de
+      // mata anda em alcateia, e um lobo com uma aranha junto lê como bug.
+      const species = dungeon.monsters[Math.floor(rng() * dungeon.monsters.length)]
+      const size = spot.kind === 'main' ? 2 + Math.floor(rng() * 2) : 1 + Math.floor(rng() * 2)
+      out.set(spot.nodeIndex, {
+        nodeIndex: spot.nodeIndex,
+        category: 'combat',
+        flavor: 'monster',
+        speciesSlugs: Array.from({ length: size }, () => monsterImageSlug(species.name)),
+      })
       continue
     }
 

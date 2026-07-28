@@ -240,13 +240,28 @@ async function reviewOne(slug: string, def: ReviewDef): Promise<boolean> {
   // Altura só dos frames que a cena realmente usa — frame morto na tira não
   // conta pro tamanho aparente.
   const heights = await bodyHeights(stripPath, def)
+
+  // A comparação é DENTRO de cada direção, nunca entre elas. Um quadrúpede de
+  // perfil ocupa bem menos altura de quadro que o mesmo bicho vindo para a
+  // câmera — isso é perspectiva, não folha torta. O que é defeito de verdade é
+  // o bicho crescer no meio de um ciclo, aí ele pulsa enquanto anda.
+  for (const [label, cycle] of [
+    ['perfil', def.walk],
+    ['frente', def.front],
+    ['costas', def.back],
+  ] as const) {
+    if (cycle.length < 2) continue
+    const hs = cycle.map(i => heights[i])
+    const lo = Math.min(...hs)
+    const hi = Math.max(...hs)
+    if ((hi - lo) / hi > 0.08) {
+      console.log(
+        `   ⚠️  o boneco muda de tamanho dentro do ciclo de ${label} (${lo}–${hi}px de ${def.frameH})`
+      )
+    }
+  }
   const used = [...def.walk, ...def.front, ...def.back]
   const usedH = used.map(i => heights[i])
-  const lo = Math.min(...usedH)
-  const hi = Math.max(...usedH)
-  if ((hi - lo) / hi > 0.08) {
-    console.log(`   ⚠️  o boneco muda de tamanho dentro da própria folha (${lo}–${hi}px de ${def.frameH})`)
-  }
   bodySizes.set(slug, Math.round(usedH.reduce((a, b) => a + b, 0) / usedH.length))
   return true
 }
@@ -279,7 +294,11 @@ async function main() {
   // A rodada é de UMA fonte por vez (ou heróis, ou monstros), e é isso que
   // mantém a comparação honesta: um chefe é legitimamente maior que um herói,
   // e misturar os dois no mesmo balde só produziria alarme falso.
-  if (bodySizes.size > 1) {
+  //
+  // Vale só para HERÓI. Entre monstros o preenchimento da célula não diz nada:
+  // um lobo enche menos quadro que um ent e isso é a anatomia dele. Quem manda
+  // no tamanho aparente do bicho é o `worldH` do manifesto, calibrado na bancada.
+  if (!MONSTER_MODE && bodySizes.size > 1) {
     const entries = Array.from(bodySizes)
     const vals = entries.map(([, v]) => v).sort((a, b) => a - b)
     const median = vals[Math.floor(vals.length / 2)]

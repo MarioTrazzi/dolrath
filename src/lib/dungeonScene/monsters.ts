@@ -167,7 +167,10 @@ export function planMonsters(
     const c = contents.get(spot.nodeIndex)
     if (!c || c.category !== 'combat') continue
     const isBoss = c.flavor === 'boss'
-    const speciesSlug = isBoss ? bossSlug : undefined
+    // Espécies do bando: o servidor manda na chegada ao nó (a bancada /dev usa
+    // o palpite determinístico de planNodeContents). O chefe é dedutível da
+    // masmorra, então ele nunca depende disso.
+    const pack = c.speciesSlugs?.length ? c.speciesSlugs : isBoss ? [bossSlug] : []
 
     // Bolsão do nó — o raio limita o quanto o bando pode se espalhar.
     const pocket = map.areas.find(
@@ -175,12 +178,22 @@ export function planMonsters(
     )
     const r = pocket && pocket.kind === 'disc' ? pocket.r : 5
 
-    // Orbita quem tem folha de 4 direções. Regra data-driven: quando um mob
-    // ganhar folha, ele passa a orbitar sozinho, sem tocar nesta função.
-    const hasSheet = !!getMonsterSpriteBySlug(speciesSlug)
+    // Quantos: o tamanho do bando quando ele é conhecido — aí o mapa mostra
+    // exatamente quantos bichos o jogador vai enfrentar. Sem espécie, cai no
+    // sorteio de antes (1-3, a mesma faixa que o servidor usa).
+    const count = pack.length
+      ? pack.length
+      : isBoss
+        ? 1
+        : spot.kind === 'main'
+          ? 2 + Math.floor(rng() * 2)
+          : 1 + Math.floor(rng() * 2)
 
-    const count = isBoss ? 1 : spot.kind === 'main' ? 2 + Math.floor(rng() * 2) : 1 + Math.floor(rng() * 2)
     for (let i = 0; i < count; i++) {
+      const speciesSlug = pack[i] ?? pack[0]
+      // Orbita quem tem folha de 4 direções. Regra data-driven: bicho que ganha
+      // folha passa a orbitar sozinho, sem tocar nesta função.
+      const hasSheet = !!getMonsterSpriteBySlug(speciesSlug)
       const ang = rng() * Math.PI * 2
       const dist = isBoss ? 0 : r * (0.15 + rng() * 0.4)
       /**

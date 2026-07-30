@@ -820,6 +820,12 @@ export default function DungeonRun({
   // ---------- Exploração ----------
   const [exploreRolling, setExploreRolling] = useState(false)
   const [exploreResult, setExploreResult] = useState<DiceResult | null>(null)
+  // 🎬 Cena pronta: o DungeonScene avisa (onReady) quando chão + sprites do bioma
+  // + herói terminam de carregar. Até lá, o d20 gira como LOADING na 1ª entrada e
+  // o passo fica segurado — mata o quadro meio-desenhado (pop-in de sprite) que
+  // dava a sensação de "não renderizou direito". Os nós seguintes já usam o zoom
+  // cinematográfico da chegada; este loading é só para a entrada.
+  const [sceneReady, setSceneReady] = useState(false)
   const [eventCard, setEventCard] = useState<ResolvedEvent | null>(null)
   const [trapShake, setTrapShake] = useState(false)
 
@@ -1519,6 +1525,7 @@ export default function DungeonRun({
     // o /step vem logo em seguida, então continua exigindo a sessão aberta.
     if (!startedRef.current) return
     if (!useScene && (!runReady || !runIdRef.current)) return
+    if (useScene && !sceneReady) return // 1ª entrada: espera os assets da cena carregarem
     const dest = tokenIdx + 1
 
     // --- Cena: o herói caminha sozinho até o bolsão e avisa em onReachSpot ---
@@ -2977,7 +2984,7 @@ export default function DungeonRun({
     }
     return fire(advance, 800)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auto, autoConsumables, exitConfirm, phase, moving, walkBusy, exploreRolling, lootCard, eventCard, atBoss, tokenIdx, runReady, stamina, hp, mp, consumables])
+  }, [auto, autoConsumables, exitConfirm, phase, moving, walkBusy, exploreRolling, lootCard, eventCard, atBoss, tokenIdx, runReady, stamina, hp, mp, consumables, sceneReady])
 
   /**
    * 🚶 Cena explorável: a CAMINHADA é sempre automática.
@@ -3023,7 +3030,7 @@ export default function DungeonRun({
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [useScene, auto, blocked, exitConfirm, showItems, phase, walkBusy, exploreRolling,
-      eventCard, lootCard, atBoss, runReady, stamina, tokenIdx])
+      eventCard, lootCard, atBoss, runReady, stamina, tokenIdx, sceneReady])
 
   // ============================================================
   // RENDER
@@ -3278,6 +3285,7 @@ export default function DungeonRun({
                 cinematicZoom={encounterZoom}
                 focusNode={focusNode}
                 onReachSpot={handleSceneReachSpot}
+                onReady={() => setSceneReady(true)}
                 className="w-full h-full"
               />
             </div>
@@ -3554,7 +3562,9 @@ export default function DungeonRun({
               </div>
 
               {/* overlay: dado rolando */}
-              <DiceOverlay rolling={exploreRolling} result={exploreResult} />
+              {/* Inclui o boot da cena: o d20 gira como loading até os assets
+                  carregarem (useScene && !sceneReady) — sem result, só girando. */}
+              <DiceOverlay rolling={exploreRolling || (useScene && !sceneReady)} result={exploreResult} />
 
               {/* dialog: o Mestre narra — abre junto da rolagem / dos beats da história */}
               <NarrationDialog text={narration} open={narrationOpen} onClose={() => setNarrationOpen(false)} />

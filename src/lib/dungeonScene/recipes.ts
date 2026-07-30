@@ -43,7 +43,10 @@ export const BIOME_RECIPES: Record<DungeonId, BiomeRecipe> = {
   floresta: {
     variants: { tree: 4, bush: 5, rock: 5, stump: 1, puddle: 1, house: 1 },
     // 'rubble' não é vegetação espalhada: é objeto de nó (ver nodeContents).
-    propStep: 3.0,
+    // Grade mais rala (era 3.0): com a câmera mais perto (WORLD_UNITS_ACROSS) a
+    // tela mostra menos área, então ~27% menos props ainda enche o olho e
+    // renderiza mais leve. A mata funda continua sólida pela propDensity.
+    propStep: 3.5,
     propDensity: [0.62, 0.98],
     groundTexture: '/scene/floresta/ground.webp',
     spacing: 17,

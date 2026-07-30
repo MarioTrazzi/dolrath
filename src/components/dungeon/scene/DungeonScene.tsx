@@ -61,6 +61,12 @@ export interface DungeonSceneProps {
    */
   focusNode?: number | null
   onReachSpot?: (spot: MapSpot) => void
+  /**
+   * Dispara UMA vez quando os assets críticos (chão + sprites do bioma + boneco/
+   * retrato do herói) terminam de carregar. O pai usa para segurar um loading
+   * (o d20) e não exibir o quadro meio-desenhado da primeira entrada.
+   */
+  onReady?: () => void
   className?: string
 }
 
@@ -84,6 +90,14 @@ const Y_SQUASH = 0.82
 const CAM_FOLLOW = 5.5
 /** Velocidade da interpolação do zoom cinematográfico (maior = mais seco). */
 const CAM_ZOOM_SPEED = 3.2
+/**
+ * Unidades de mundo atravessadas na LARGURA da tela — é o dial de zoom BASE
+ * (antes do multiplicador cinematográfico). Menor = câmera mais perto = sprite
+ * maior (valoriza o boneco raça×classe). Com menos mundo à vista, a câmera passa
+ * a seguir o herói em vez de travar centralizada no bolsão. 15 = mais perto,
+ * 18 = mais afastado.
+ */
+const WORLD_UNITS_ACROSS = 16
 
 /**
  * Altura no MUNDO (unidades) da MAIOR variante de cada tipo — é o que dá a
@@ -177,6 +191,7 @@ export default function DungeonScene({
   cinematicZoom = 1,
   focusNode = null,
   onReachSpot,
+  onReady,
   className = '',
 }: DungeonSceneProps) {
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -327,6 +342,31 @@ export default function DungeonScene({
     }
   }, [map.id, map.variants, map.groundTexture])
 
+  // Sinaliza "cena pronta" quando os assets críticos terminam de carregar. Passe
+  // SEPARADO da carga que popula os refs acima (as URLs são as mesmas — o cache
+  // HTTP do navegador deduplica), só para ter UM ponto claro de "acabou". Como
+  // loadImage resolve null no erro (nunca rejeita), este Promise.all sempre
+  // assenta. O pai segura o d20-loading até este onReady disparar.
+  const onReadyRef = useRef(onReady)
+  onReadyRef.current = onReady
+  useEffect(() => {
+    let cancelled = false
+    const urls: string[] = []
+    if (map.groundTexture) urls.push(map.groundTexture)
+    for (const [kind, count] of Object.entries(map.variants)) {
+      for (let v = 1; v <= (count || 0); v++) urls.push(`/scene/${map.id}/${kind}-${v}.webp`)
+    }
+    const def = resolveHeroSprite(race, heroClass)
+    if (def) urls.push(def.src)
+    else if (heroSprite) urls.push(heroSprite)
+    Promise.all(urls.map(loadImage)).then(() => {
+      if (!cancelled) onReadyRef.current?.()
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [map.id, map.variants, map.groundTexture, race, heroClass, heroSprite])
+
   // Objetos de achado (baú, entulho, erva, fonte) existem NO MUNDO, ordenados
   // por profundidade junto com a vegetação — não são crachá flutuante.
   useEffect(() => {
@@ -435,7 +475,9 @@ export default function DungeonScene({
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       // Retrato: o enquadramento é ditado pela LARGURA — ~26 unidades de mundo
       // atravessadas na tela, em qualquer altura de aparelho.
-      const basePpu = clamp(w / 26, 10, 34)
+      // basePpu = zoom de repouso (enquadramento por WORLD_UNITS_ACROSS); ppu
+      // aplica por cima o multiplicador cinematográfico da entrada em combate.
+      const basePpu = clamp(w / WORLD_UNITS_ACROSS, 10, 34)
       view = { w, h, basePpu, ppu: basePpu * zoomRef.current }
       fitDrops()
     }
@@ -540,29 +582,15 @@ export default function DungeonScene({
       const content = contentsRef.current?.get(spot.nodeIndex)
       const color = content ? nodeIconColor(content.flavor) : spot.kind === 'boss' ? '#f3a712' : pal.accent
       const pulse = 0.85 + Math.sin(timeRef.current * 3) * 0.15
+      // Raio só para POSICIONAR o ícone flutuante — o anel de chão foi removido.
+      // Aquele círculo (vermelho no monstro, âmbar no chefe) desenhava por cima do
+      // sprite e roubava a atenção do bicho; quem marca o nó agora é o próprio
+      // vulto/sprite (combate) ou o objeto no mundo (achado).
       const r = (spot.kind === 'boss' ? 2.6 : 1.8) * view.ppu * (isTarget ? pulse : 1)
 
-      // anel no chão
-      ctx.save()
-      ctx.translate(x, y)
-      ctx.scale(1, Y_SQUASH)
-      ctx.beginPath()
-      ctx.arc(0, 0, r, 0, Math.PI * 2)
-      ctx.strokeStyle = done ? 'rgba(120,120,120,0.35)' : color
-      ctx.globalAlpha = done ? 0.5 : isTarget ? 0.95 : 0.6
-      ctx.lineWidth = 2
-      ctx.stroke()
-      if (isTarget && !done) {
-        ctx.globalAlpha = 0.12
-        ctx.fillStyle = color
-        ctx.fill()
-      }
-      ctx.restore()
-      ctx.globalAlpha = 1
-
-      // Achado tem OBJETO no mundo (desenhado no passe de profundidade); aqui só
-      // o anel.
-      if (content?.category === 'find') return
+      // Achado tem OBJETO no mundo (passe de profundidade) e combate tem o
+      // sprite/vulto — em ambos o marcador é o próprio sprite, sem crachá por cima.
+      if (content?.category === 'find' || content?.category === 'combat') return
 
       const iconY = y - r * 0.85 - view.ppu * 0.75
       const float = isTarget && !done ? Math.sin(timeRef.current * 2.4) * view.ppu * 0.12 : 0

@@ -2,9 +2,8 @@
 // Servidor continua dono da trail (kinds/tiers); aqui só mapeamos apresentação.
 //
 // Ordem de preferência por masmorra:
-//   1) segmentos em /public/backgrounds/walk/<id>/*.webp (seed escolhe sequência)
-//   2) strip único (ex.: Floresta → forest-dark-map.jpg)
-//   3) pintura procedural no canvas (fallback — outras masmorras até gerar arte)
+//   1) strip único (WALK_FULL_STRIP) — é o que a WalkScene usa hoje
+//   2) pintura procedural no canvas (fallback — masmorras até gerar arte)
 
 import type { DungeonId } from '@/lib/dungeonAdventures'
 import type { MapPoint, NodeKind } from '@/components/dungeon/DungeonMap'
@@ -28,7 +27,13 @@ export interface WalkSegmentDef {
   label: string
 }
 
-/** Catálogo de segmentos por masmorra — path entra embaixo e sai em cima (mesmo X). */
+/**
+ * Catálogo de segmentos por masmorra — path entra embaixo e sai em cima (mesmo X).
+ *
+ * Nada em `src/` lê isto: a WalkScene passou a usar o strip único. Sobrevive como
+ * a LISTA DE PEDIDOS de `scripts/generate-walk-segments.ts`, que é quem gera a
+ * arte — apagar aqui apagaria o catálogo do gerador.
+ */
 export const WALK_SEGMENTS: Record<DungeonId, WalkSegmentDef[]> = {
   floresta: [
     { kind: 'clearing', src: '/backgrounds/walk/floresta/clearing.webp', label: 'Clareira' },
@@ -72,9 +77,6 @@ export const WALK_FULL_STRIP: Partial<Record<DungeonId, string>> = {
   ruinas: '/backgrounds/ruinas-run-map.webp',
 }
 
-/** Battle BG cinematográfico (combate Floresta). */
-export const FLORESTA_BATTLE_BG = '/backgrounds/floresta-battle.webp'
-
 /** Battle BG cinematográfico por masmorra (biome-swap a partir da arte da Floresta). */
 export const DUNGEON_BATTLE_BG: Record<DungeonId, string> = {
   floresta: '/backgrounds/floresta-battle.webp',
@@ -83,25 +85,11 @@ export const DUNGEON_BATTLE_BG: Record<DungeonId, string> = {
   ruinas: '/backgrounds/ruinas-battle.webp',
 }
 
-/** Mapa da run (top-down, mapa grande de RPG) por masmorra — fundo da fase de exploração. */
-export const DUNGEON_RUN_MAP_BG: Record<DungeonId, string> = {
-  floresta: '/backgrounds/floresta-run-map.webp',
-  caverna: '/backgrounds/caverna-run-map.webp',
-  pantano: '/backgrounds/pantano-run-map.webp',
-  ruinas: '/backgrounds/ruinas-run-map.webp',
-}
-
 /** Fallback se a arte nova ainda não existir. */
-export const FLORESTA_BATTLE_BG_FALLBACK = '/hero-masmorra-floresta.webp'
 export const FLORESTA_WALK_FALLBACK = '/backgrounds/forest-dark-map.jpg'
 
 /** Sprite genérico de caminhada (NFT continua no retrato/combate). */
 export const WALK_HERO_SPRITE = '/hero-masmorra-floresta.webp'
-
-export function walkSceneEnabled(_dungeonId: DungeonId): boolean {
-  // WalkScene em todas as masmorras: strip real, segmentos ou procedural.
-  return Boolean(_dungeonId)
-}
 
 /** PRNG determinístico (mulberry32) a partir de string seed. */
 export function seedRng(seed: string): () => number {
@@ -116,34 +104,6 @@ export function seedRng(seed: string): () => number {
     h ^= h >>> 16
     return (h >>> 0) / 4294967296
   }
-}
-
-/**
- * Escolhe N segmentos para a run. Prefere assets com `src`; se nenhum asset
- * existir ainda, devolve defs mesmo assim (WalkScene pinta procedural pelo kind).
- */
-export function pickWalkSegments(
-  dungeonId: DungeonId,
-  seed: string,
-  count: number,
-): WalkSegmentDef[] {
-  const pool = WALK_SEGMENTS[dungeonId]
-  if (!pool.length) return []
-  const rand = seedRng(`${dungeonId}:${seed}:walk`)
-  const out: WalkSegmentDef[] = []
-  let last = -1
-  for (let i = 0; i < count; i++) {
-    let idx = Math.floor(rand() * pool.length)
-    if (pool.length > 1 && idx === last) idx = (idx + 1) % pool.length
-    last = idx
-    out.push(pool[idx])
-  }
-  return out
-}
-
-/** Quantos segmentos empilhar para cobrir a trilha (mín. 3, ~1 por 2–3 nós). */
-export function segmentCountForTrail(nodeCount: number): number {
-  return Math.max(3, Math.ceil(nodeCount / 2))
 }
 
 /**
@@ -229,9 +189,4 @@ export function buildWalkPathPoints(rooms: number, minorNodes: number, seed?: st
     }
     return { x, y, kind: n.kind, tier: n.tier }
   })
-}
-
-export function walkProgress(tokenIdx: number, lastIdx: number): number {
-  if (lastIdx <= 0) return 0
-  return Math.min(1, Math.max(0, tokenIdx / lastIdx))
 }

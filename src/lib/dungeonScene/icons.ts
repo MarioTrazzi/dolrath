@@ -19,7 +19,7 @@ interface IconDef {
   color: string
 }
 
-export const NODE_ICONS: Record<NodeFlavor, IconDef> = {
+const NODE_ICONS: Record<NodeFlavor, IconDef> = {
   monster: {
     body: 'M12 21c-4.6 0-8.3-3.3-8.3-7.4 0-2 .9-3.9 2.4-5.3L4.6 3.4l4.6 3A9.6 9.6 0 0 1 12 6c1 0 2 .1 2.8.4l4.6-3-1.5 4.9c1.5 1.4 2.4 3.3 2.4 5.3 0 4.1-3.7 7.4-8.3 7.4z',
     detail:

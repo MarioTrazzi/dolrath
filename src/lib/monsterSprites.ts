@@ -155,12 +155,6 @@ export function getMonsterSpriteBySlug(slug?: string | null): MonsterSpriteDef |
   return MONSTER_SPRITES[slug] || null
 }
 
-/** Busca pelo nome cru do catálogo ("Anciã da Mata") — ninguém escreve slug à mão. */
-export function resolveMonsterSprite(name?: string | null): MonsterSpriteDef | null {
-  if (!name) return null
-  return getMonsterSpriteBySlug(monsterImageSlug(name))
-}
-
 /**
  * Espécie do chefe de uma masmorra. O chefe é DETERMINÍSTICO a partir do id da
  * masmorra, então a cena descobre quem ele é sem precisar esperar o servidor —

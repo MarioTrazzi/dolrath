@@ -304,21 +304,11 @@ export const HERO_SPRITE_SCREEN_H = 56
  */
 export const HERO_WORLD_H = 2.1
 
-export function heroSpriteKey(race?: string | null, cls?: string | null): string {
-  return `${(race || '').trim().toLowerCase()}-${(cls || '').trim().toLowerCase()}`
-}
-
-/** Devolve o boneco da combinação, ou null quando ainda não há arte. */
-export function getHeroSprite(race?: string | null, cls?: string | null): HeroSpriteDef | null {
-  if (!race || !cls) return null
-  return HERO_SPRITES[heroSpriteKey(race, cls)] || null
-}
-
 /**
- * Igual ao getHeroSprite, mas TOLERANTE ao que vem do banco: a raça pode chegar
- * com maiúscula/acento ("Elfo") e a classe em português ("Ladino"). Sem isto o
- * lookup cru falha em silêncio e o herói cai no retrato, que foi exatamente o
- * bug de produção. Use esta função nas cenas; a de cima fica por compatibilidade.
+ * Boneco da combinação raça×classe, TOLERANTE ao que vem do banco: a raça pode
+ * chegar com maiúscula/acento ("Elfo") e a classe em português ("Ladino"). O
+ * lookup cru (chave montada na mão) falhava em silêncio e o herói caía no
+ * retrato — foi exatamente o bug de produção, e por isso esta é a única porta.
  */
 export function resolveHeroSprite(race?: string | null, cls?: string | null): HeroSpriteDef | null {
   const r = (race || '')

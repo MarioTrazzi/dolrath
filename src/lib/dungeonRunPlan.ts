@@ -237,11 +237,6 @@ export function planDungeonRun(dungeon: DungeonDef, runId: string): Map<number, 
   return out
 }
 
-/** Atalho para quem tem só o id da masmorra. */
-export function planDungeonRunById(dungeonId: DungeonId, runId: string): Map<number, PlannedNode> {
-  return planDungeonRun(DUNGEONS[dungeonId], runId)
-}
-
 /** Resumo para log/bancada. */
 export function planSummary(plan: Map<number, PlannedNode>) {
   let combat = 0

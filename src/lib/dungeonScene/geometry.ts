@@ -19,7 +19,7 @@ export function dist(a: Vec2, b: Vec2) {
 }
 
 /** Ponto mais próximo dentro do segmento a→b. */
-export function closestOnSegment(a: Vec2, b: Vec2, p: Vec2): Vec2 {
+function closestOnSegment(a: Vec2, b: Vec2, p: Vec2): Vec2 {
   const dx = b.x - a.x
   const dy = b.y - a.y
   const len2 = dx * dx + dy * dy
@@ -36,17 +36,13 @@ export function signedDistToArea(area: WalkArea, p: Vec2): number {
 }
 
 /** Distância assinada até a área caminhável (união das formas). */
-export function signedDistToWalkable(map: SceneMapDef, p: Vec2): number {
+function signedDistToWalkable(map: SceneMapDef, p: Vec2): number {
   let best = Infinity
   for (const area of map.areas) {
     const d = signedDistToArea(area, p)
     if (d < best) best = d
   }
   return best
-}
-
-export function isWalkable(map: SceneMapDef, p: Vec2): boolean {
-  return signedDistToWalkable(map, p) < 0
 }
 
 /**

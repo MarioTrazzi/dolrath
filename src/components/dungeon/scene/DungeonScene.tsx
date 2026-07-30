@@ -18,7 +18,7 @@ import { clamp, clampToWalkable, dist, lerp, sceneProps, pathToSpot } from '@/li
 import type { NodeFlavor, SpotContent } from '@/lib/dungeonScene/nodeContents'
 import { drawNodeIcon, nodeIconColor } from '@/lib/dungeonScene/icons'
 import { HERO_WORLD_H, resolveHeroSprite, type HeroSpriteDef } from '@/lib/heroSprites'
-import { getMonsterSpriteBySlug } from '@/lib/monsterSprites'
+import { bossSpriteSlug, getMonsterSpriteBySlug } from '@/lib/monsterSprites'
 import {
   monsterFacing,
   monsterPos,
@@ -62,9 +62,13 @@ export interface DungeonSceneProps {
   focusNode?: number | null
   onReachSpot?: (spot: MapSpot) => void
   /**
-   * Dispara UMA vez quando os assets críticos (chão + sprites do bioma + boneco/
-   * retrato do herói) terminam de carregar. O pai usa para segurar um loading
-   * (o d20) e não exibir o quadro meio-desenhado da primeira entrada.
+   * Dispara UMA vez quando o MAPA INTEIRO terminou de carregar: chão, sprites do
+   * bioma (que incluem os objetos de achado), boneco/retrato do herói e as
+   * FOLHAS DOS MONSTROS da run. O pai usa para segurar um loading (o d20) e não
+   * exibir o quadro meio-desenhado da primeira entrada.
+   *
+   * Com `contents` vazio ele espera: sem a planta da run não há monstro para
+   * carregar, e abrir ali entregaria um mapa sem bicho nenhum.
    */
   onReady?: () => void
   className?: string
@@ -98,6 +102,12 @@ const CAM_ZOOM_SPEED = 3.2
  * 18 = mais afastado.
  */
 const WORLD_UNITS_ACROSS = 16
+/**
+ * Teto do gate de carga. Nenhuma rede é garantida: se uma folha nunca assenta, é
+ * melhor entrar na masmorra com o mapa incompleto do que deixar o d20 girando
+ * para sempre. Generoso de propósito — em conexão normal o gate abre MUITO antes.
+ */
+const READY_TIMEOUT_MS = 8000
 
 /**
  * Altura no MUNDO (unidades) da MAIOR variante de cada tipo — é o que dá a
@@ -133,7 +143,14 @@ function loadImage(src: string): Promise<HTMLImageElement | null> {
     const img = new Image()
     img.decoding = 'async'
     img.onload = () => resolve(img)
-    img.onerror = () => resolve(null)
+    img.onerror = () => {
+      // Resolve null (nunca rejeita) para o Promise.all do gate sempre assentar —
+      // mas em dev grita, senão uma folha 404 vira "o bicho não aparece" mudo.
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[DungeonScene] falhou ao carregar', src)
+      }
+      resolve(null)
+    }
     img.src = src
   })
 }
@@ -347,10 +364,44 @@ export default function DungeonScene({
   // HTTP do navegador deduplica), só para ter UM ponto claro de "acabou". Como
   // loadImage resolve null no erro (nunca rejeita), este Promise.all sempre
   // assenta. O pai segura o d20-loading até este onReady disparar.
+  //
+  // O que entra na lista é o MAPA INTEIRO, e não só o cenário: chão, vegetação,
+  // objetos de achado (que saem de `map.variants`, então já vêm juntos), boneco
+  // do herói E as folhas dos monstros da run. Sem as folhas o gate abria cedo e
+  // cada bicho nascia como vulto antes de virar sprite — o "monstro antigo"
+  // piscando no mapa.
   const onReadyRef = useRef(onReady)
   onReadyRef.current = onReady
+  /** O gate abre UMA vez por montagem: nó seguinte não traz o d20 de volta. */
+  const readyFiredRef = useRef(false)
   useEffect(() => {
+    if (readyFiredRef.current) return
+
     let cancelled = false
+    const fire = () => {
+      if (cancelled || readyFiredRef.current) return
+      readyFiredRef.current = true
+      onReadyRef.current?.()
+    }
+
+    // Escotilha, armada ANTES de qualquer espera: nada aqui pode deixar o d20
+    // girando para sempre. Cobre os dois jeitos de travar — um /start que nunca
+    // responde (contents fica vazio) e uma imagem que nunca assenta.
+    const escape = setTimeout(fire, READY_TIMEOUT_MS)
+    const bail = () => {
+      cancelled = true
+      clearTimeout(escape)
+    }
+
+    // `contents` vazio = a planta da run ainda não chegou (o runId está viajando
+    // no /start). Abrir agora entregaria um mapa SEM monstro nenhum, que é
+    // metade do bug — então espera, mas com a escotilha correndo. `undefined` é
+    // outro caso: a bancada /dev não passa contents e não deve ficar esperando.
+    //
+    // Não chama bail(): o timeout tem que sobreviver a este `return`. Quem o
+    // limpa é o cleanup do efeito, que roda quando o runId chega e re-planeja.
+    if (contents && contents.size === 0) return bail
+
     const urls: string[] = []
     if (map.groundTexture) urls.push(map.groundTexture)
     for (const [kind, count] of Object.entries(map.variants)) {
@@ -359,13 +410,19 @@ export default function DungeonScene({
     const def = resolveHeroSprite(race, heroClass)
     if (def) urls.push(def.src)
     else if (heroSprite) urls.push(heroSprite)
-    Promise.all(urls.map(loadImage)).then(() => {
-      if (!cancelled) onReadyRef.current?.()
-    })
-    return () => {
-      cancelled = true
+
+    // Folhas dos monstros: as espécies da planta + o chefe (que é dedutível da
+    // masmorra e por isso não depende do servidor).
+    const slugs = new Set<string>([bossSpriteSlug(map.id)])
+    contents?.forEach(c => c.speciesSlugs?.forEach(s => slugs.add(s)))
+    for (const slug of Array.from(slugs)) {
+      const sheet = getMonsterSpriteBySlug(slug)
+      if (sheet) urls.push(sheet.src)
     }
-  }, [map.id, map.variants, map.groundTexture, race, heroClass, heroSprite])
+
+    Promise.all(urls.map(loadImage)).then(fire)
+    return bail
+  }, [map.id, map.variants, map.groundTexture, race, heroClass, heroSprite, contents])
 
   // Objetos de achado (baú, entulho, erva, fonte) existem NO MUNDO, ordenados
   // por profundidade junto com a vegetação — não são crachá flutuante.
@@ -833,24 +890,36 @@ export default function DungeonScene({
      * centro da tela, e de leve — a mata já é escura por conta própria.
      */
     /**
-     * Monstro: BONECO de 4 direções para quem tem folha (hoje o chefe), vulto
-     * procedural com olhos acesos para o resto — ver o porquê de cada um em
-     * lib/dungeonScene/monsters.ts.
+     * Monstro: BONECO de 4 direções para quem tem folha, vulto procedural com
+     * olhos acesos para quem não tem (Caverna, Pântano, Ruínas) — ver o porquê de
+     * cada um em lib/dungeonScene/monsters.ts.
      */
     const drawMonster = (mo: SceneMonster, index: number) => {
       const t = monsterClockRef.current
       const wp = monsterPos(mo, t)
       const x = sx(wp.x)
       const y = sy(wp.y)
-      if (x < -60 || x > view.w + 60 || y < -60 || y > view.h + 60) return
+
+      // ---- boneco recortado (perfil / frente / costas) ----
+      const def = getMonsterSpriteBySlug(mo.speciesSlug)
+      const strip = mo.speciesSlug ? monsterStripsRef.current.get(mo.speciesSlug) : undefined
+
+      // Corte de tela pela ALTURA DA ARTE, não por uma margem fixa: `y` ancora no
+      // PÉ, e a chefe tem 3.6 unidades de mundo acima dele — com os 60px de antes
+      // ela sumia com o corpo ainda dentro do quadro.
+      const margin = Math.max(60, (def?.worldH ?? mo.size) * view.ppu)
+      if (x < -margin || x > view.w + margin || y < -margin || y > view.h + margin) return
 
       const u = mo.size * view.ppu
       const face = monsterFacing(mo, t)
       const bob = Math.sin(t * mo.speed * 3.2 + mo.phase) * u * 0.04
 
-      // ---- boneco recortado (perfil / frente / costas) ----
-      const def = getMonsterSpriteBySlug(mo.speciesSlug)
-      const strip = mo.speciesSlug ? monsterStripsRef.current.get(mo.speciesSlug) : undefined
+      // Espécie COM folha que ainda não carregou não vira vulto: o vulto é outro
+      // bicho, e vê-lo trocar de forma no meio do mapa é o "monstro antigo" que
+      // aparecia. Some por um frame (na prática nenhum — o gate do onReady já
+      // esperou esta folha) em vez de desenhar a criatura errada.
+      if (def && !strip) return
+
       if (def && strip) {
         const v = monsterVel(mo, t)
         const pose = monsterPose(v, monsterPoseRef.current.get(index))
@@ -1087,11 +1156,14 @@ export default function DungeonScene({
 
       // câmera — normalmente segue o herói; com `focusNode` mira o meio do
       // caminho entre ele e o vulto daquele nó, para os dois caberem no quadro
-      // fechado da aproximação.
+      // fechado da aproximação. O `visited` aqui casa com o filtro do desenho:
+      // sem ele a câmera fecharia num bicho que já não está na tela.
       let target = heroRef.current
       const focus = focusRef.current
       if (focus != null) {
-        const mo = monstersRef.current.find(m => m.nodeIndex === focus)
+        const mo = monstersRef.current.find(
+          m => m.nodeIndex === focus && !visitedRef.current.includes(m.nodeIndex),
+        )
         if (mo) {
           const mp = monsterPos(mo, monsterClockRef.current)
           target = { x: (target.x + mp.x) / 2, y: (target.y + mp.y) / 2 }

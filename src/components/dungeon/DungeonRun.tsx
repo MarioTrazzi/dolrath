@@ -5,17 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import BattleScene, { BattleEvent, DiceResult, EquipmentMap, FighterView } from '@/components/battle/BattleScene'
 import CombatShell, { type CombatAttackOption } from '@/components/battle/CombatShell'
 import DungeonBackdrop from '@/components/dungeon/DungeonBackdrop'
-import {
-  buildTrailPoints,
-  MapTrail,
-  MapNode,
-  PlayerToken,
-  MapAmbient,
-  NarrationDialog,
-  DiceOverlay,
-  NodeVisualState,
-  RevealedNode,
-} from '@/components/dungeon/DungeonMap'
+import { buildTrailPoints, NarrationDialog, DiceOverlay } from '@/components/dungeon/DungeonMap'
 import WalkScene, { WALK_SCROLL_MS, type WalkMode, type WalkTrailMark } from '@/components/dungeon/WalkScene'
 import DungeonScene from '@/components/dungeon/scene/DungeonScene'
 import { useT } from '@/lib/i18n/I18nProvider'
@@ -23,12 +13,7 @@ import { generateSceneMap } from '@/lib/dungeonScene/generateMap'
 import { dungeonSceneEnabled } from '@/lib/dungeonScene/enabled'
 import { planNodeContents, type SpotContent } from '@/lib/dungeonScene/nodeContents'
 import type { MapSpot } from '@/lib/dungeonScene/types'
-import {
-  buildWalkPathPoints,
-  walkSceneEnabled,
-  DUNGEON_BATTLE_BG,
-  DUNGEON_RUN_MAP_BG,
-} from '@/lib/walkSceneAssets'
+import { buildWalkPathPoints, DUNGEON_BATTLE_BG } from '@/lib/walkSceneAssets'
 import {
   DungeonDef,
   DungeonEventDef,
@@ -690,11 +675,14 @@ export default function DungeonRun({
 
   // ---------- Mapa de exploração (trilha de nós) ----------
   // entrada → (nós menores + sala principal) × salas → covil do boss.
-  // WalkScene: pan sobre mapa único; fallback SVG: zigzag clássico.
-  // Cena explorável (mata sólida + bolsões) onde já existe tileset; as outras
-  // masmorras seguem na esteira WalkScene.
+  //
+  // Duas apresentações, e só duas: a CENA explorável (mata sólida + bolsões) onde
+  // já existe tileset, e a esteira WalkScene no resto. O zigzag SVG que já foi o
+  // terceiro caminho morreu — `walkSceneEnabled` era `Boolean(id)`, ou seja
+  // sempre verdadeiro, então o `!useWalkScene && !useScene` que o desenhava era
+  // uma contradição e nunca renderizou.
   const useScene = dungeonSceneEnabled(dungeon.id)
-  const useWalkScene = !useScene && walkSceneEnabled(dungeon.id)
+  const useWalkScene = !useScene
   // Seed do layout: sorteado 1x por mount (lazy) — estável a run inteira
   // (combate/re-render não re-embaralham o mapa), novo a cada run.
   const [layoutSeed] = useState(
@@ -758,9 +746,26 @@ export default function DungeonRun({
         : new Map<number, SpotContent>(),
     [useScene, sceneMap, runId]
   )
+  /**
+   * Nós JÁ LIMPOS — não "nós em que já pisei".
+   *
+   * A cena usa isto para parar de desenhar o bando (e para apagar o marcador do
+   * nó). Enquanto era `tokenIdx + 1`, o nó em que o herói acabava de chegar já
+   * entrava na lista: `setTokenIdx(dest)` roda em `finishWalkStep` ANTES do
+   * `setFocusNode(dest)`, então o bicho sumia do mapa exatamente no frame em que
+   * a câmera fechava nele — a câmera enquadrava chão vazio e o jogador entrava
+   * na luta sem nunca ver quem ia enfrentar.
+   *
+   * Agora o nó de combate só é limpo quando a luta acaba; o de achado, na hora em
+   * que o servidor resolve.
+   */
+  const [clearedNodes, setClearedNodes] = useState<number[]>([])
+  const markNodeCleared = useCallback((idx: number) => {
+    setClearedNodes(prev => (prev.includes(idx) ? prev : [...prev, idx]))
+  }, [])
   const sceneVisited = useMemo(
-    () => Array.from({ length: tokenIdx + 1 }, (_, i) => i),
-    [tokenIdx]
+    () => Array.from(new Set([...Array.from({ length: tokenIdx }, (_, i) => i), ...clearedNodes])),
+    [tokenIdx, clearedNodes]
   )
   const [narration, setNarration] = useState(dungeon.enterText)
   // 📜 O Mestre narra virou dialog sob demanda (não mais uma faixa fixa sob o
@@ -793,7 +798,6 @@ export default function DungeonRun({
     }
   })
   const [tipVisible, setTipVisible] = useState(true)
-  const [nodeEvents, setNodeEvents] = useState<Record<number, RevealedNode>>({})
   const [floats, setFloats] = useState<{ id: number; label: string; color: string }[]>([])
   // Consumíveis do inventário do personagem (usáveis no mapa e no combate)
   const [consumables, setConsumables] = useState<DungeonConsumable[]>([])
@@ -1309,14 +1313,6 @@ export default function DungeonRun({
   // EXPLORAÇÃO — mapa de trilha de nós
   // ============================================================
 
-  // Estado visual de cada nó do mapa
-  const nodeState = (idx: number): NodeVisualState => {
-    if (idx === tokenIdx) return 'current'
-    if (idx < tokenIdx) return 'done'
-    if (idx === tokenIdx + 1) return 'next'
-    return 'locked'
-  }
-
   // Monta o card do nó a partir do que o SERVIDOR resolveu (monstro e espólio já
   // rolados). Nenhum RNG acontece aqui no cliente; o CRÉDITO acontece no /finish.
   const applyServerEvent = (data: StepResponse, atIdx: number): ResolvedEvent => {
@@ -1330,7 +1326,6 @@ export default function DungeonRun({
       const ev = dungeon.events.find(e => e.kind === 'monster')!
       const group = data.monsters?.length ? data.monsters : [data.monster!]
       const scaled = group[0]
-      setNodeEvents(prev => ({ ...prev, [atIdx]: { kind: 'monster', emoji: scaled.emoji } }))
       const many = group.length > 1
       pushLog(
         many
@@ -1351,6 +1346,11 @@ export default function DungeonRun({
       }
     }
 
+    // Daqui para baixo o nó NÃO é combate (a única saída antecipada acima é a do
+    // monstro): resolveu, limpou. Nó de combate só é marcado quando a luta acaba
+    // — ver o `later()` da vitória.
+    markNodeCleared(atIdx)
+
     // Achado — o servidor rolou o espólio e guardou no acumulado da run; aqui só
     // exibimos. O crédito na mochila acontece no /finish.
     const loot: NodeLoot = data.loot ?? { gold: 0, drops: [] }
@@ -1359,7 +1359,6 @@ export default function DungeonRun({
     if (loot.fountain) {
       setHp(effMaxHp)
       setMp(character.maxMp)
-      setNodeEvents(prev => ({ ...prev, [atIdx]: { kind: 'blessing', emoji: '⛲' } }))
       pushFloat('HP/MP cheios! ⛲', '#34d399')
       pushLog('⛲ Você encontra uma fonte revitalizadora — HP e MP restaurados!')
       const def: DungeonEventDef = {
@@ -1389,7 +1388,6 @@ export default function DungeonRun({
           ? 'Entre folhas e pedras, você recolhe o que dá.'
           : 'Pouca coisa — mas nada se perde.'
     const revealKind: DungeonEventKind = hasGear ? 'item' : anyDrop ? 'gold' : 'nothing'
-    setNodeEvents(prev => ({ ...prev, [atIdx]: { kind: revealKind, emoji: icon } }))
 
     const effects: EffectChip[] = []
     if (loot.gold > 0) effects.push({ kind: 'stat', text: `+${loot.gold} 💰` })
@@ -2541,6 +2539,10 @@ export default function DungeonRun({
       // A câmera volta ao enquadramento normal AGORA, com a cena ainda escondida
       // atrás do card de espólio — o jogador nunca vê o zoom desfazer.
       resetEncounterCamera()
+      // Bando abatido: só AQUI o nó de combate deixa de desenhar o bicho. Até
+      // este ponto ele ficou rondando o bolsão embaixo do card do encontro e do
+      // zoom de aproximação, que é o que o jogador precisa ver.
+      markNodeCleared(tokenIdxRef.current)
       setPhase('explore')
       if (!m.isBoss) {
         showNarration(nextIsBoss
@@ -3511,30 +3513,8 @@ export default function DungeonRun({
         {/* ============================================================ */}
         {phase === 'explore' && (
           <div className="flex-1 flex flex-col min-h-0 relative z-10">
-            {/* ---------- MAPA: cena, WalkScene (ambas ao fundo) ou trilha SVG ---------- */}
+            {/* ---------- MAPA: cena ou WalkScene, ambas montadas ao fundo ---------- */}
             <main className="relative flex-1 min-h-0">
-              {!useWalkScene && !useScene && (
-                <>
-                  <MapAmbient backgroundImageUrl={DUNGEON_RUN_MAP_BG[dungeon.id]} />
-                  <div className="absolute inset-0 mx-auto max-w-md pointer-events-none">
-                    <div className="relative h-full pointer-events-auto">
-                      <MapTrail points={trailPoints} progress={tokenIdx / LAST} />
-                      {trailPoints.map((pt, idx) => (
-                        <MapNode
-                          key={idx}
-                          pt={pt}
-                          state={nodeState(idx)}
-                          revealed={nodeEvents[idx]}
-                          accent={dungeon.accent}
-                          bossName={dungeon.boss.name}
-                        />
-                      ))}
-                      <PlayerToken point={trailPoints[tokenIdx]} moving={moving} avatar={character.avatar} />
-                    </div>
-                  </div>
-                </>
-              )}
-
               <div className="absolute inset-0 mx-auto max-w-md pointer-events-none">
                 <div className="relative h-full pointer-events-auto">
                 {/* números flutuantes (ganhos/perdas) */}

@@ -136,6 +136,11 @@ interface BattleSceneProps {
   /** Id do inimigo em DESTAQUE na cascata (frente + iluminado): o alvo do jogador na
    *  vez dele, ou o atacante atual na vez dos inimigos. Default = right.id. */
   focusEnemyId?: string | null
+  /**
+   * Mini-dado parado em cima do card do lutador (ex.: iniciativa PvE — só o
+   * jogador rola no centro; o monstro mostra o resultado estático aqui).
+   */
+  fighterDice?: Record<string, DiceResult | undefined>
   /** Clareia via CSS as imagens do lado inimigo (artes de monstro escuras). */
   brightenEnemyImage?: boolean
   /** Escala visual do card do lado direito (ex.: boss maior). Default 1 = atual. */
@@ -620,6 +625,7 @@ export default function BattleScene({
   brightenEnemyImage = false,
   enemyCardScale = 1,
   diceSize = 88,
+  fighterDice,
 }: BattleSceneProps) {
   const [floatingTexts, setFloatingTexts] = useState<FloatingText[]>([])
   // Animações são por-ID (não por-lado): num pacote, só o monstro alvo sacode/avança,
@@ -856,6 +862,29 @@ export default function BattleScene({
           hideHpValue={opts.hideHpValue}
         />
 
+        {/* Mini-dado parado (iniciativa PvE / revelação do adversário) */}
+        <AnimatePresence>
+          {fighterDice?.[fighter.id] && (
+            <motion.div
+              key={`die-${fighter.id}-${fighterDice[fighter.id]!.total}`}
+              initial={{ scale: 0, y: 8, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.6, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 18 }}
+              className="absolute -top-3 left-1/2 -translate-x-1/2 z-40 pointer-events-none"
+            >
+              <AnimatedDie
+                sides={fighterDice[fighter.id]!.sides || 20}
+                size={36}
+                mode="rolling"
+                result={fighterDice[fighter.id]!}
+                minSpinMs={180}
+                disabled
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Textos flutuantes (dano, cura, esquiva) */}
         <div className="absolute inset-x-0 top-10 flex flex-col items-center pointer-events-none z-30">
           <AnimatePresence>
@@ -959,6 +988,17 @@ export default function BattleScene({
                       onClick={dicePanel.onRoll}
                     />
                   </div>
+                  <AnimatePresence>
+                    {dicePanel.resultBanner && dicePanel.hasRolled && dicePanel.myResult && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.8, y: -4 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        className="mt-1.5 text-yellow-300 text-xs font-black"
+                      >
+                        🏆 {dicePanel.resultBanner}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                   {dicePanel.hasRolled && dicePanel.myResult && dicePanel.waitingForOpponent && (
                     <motion.div
                       initial={{ opacity: 0 }}

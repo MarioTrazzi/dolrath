@@ -135,12 +135,15 @@ export function BdoDialogShell({
   icon,
   title,
   children,
+  maxWidthClass = 'max-w-md',
 }: {
   open: boolean;
   onClose: () => void;
   icon: string;
   title: string;
   children: ReactNode;
+  /** Largura máxima do card (dialogs mais largas passam `max-w-2xl` etc.). */
+  maxWidthClass?: string;
 }) {
   // Só monta após a hidratação: dialogs que nascem abertas (mocks/deep-link)
   // renderizariam o portal já no 1º render do client e divergiriam do SSR.
@@ -162,7 +165,7 @@ export function BdoDialogShell({
           initial={{ scale: 0.95, y: 16 }}
           animate={{ scale: 1, y: 0 }}
           exit={{ scale: 0.95, y: 16 }}
-          className="flex max-h-[90dvh] w-full max-w-md flex-col overflow-hidden rounded-[4px] border border-[#46464c] bg-[#1e1e21] shadow-2xl shadow-black/80"
+          className={`flex max-h-[90dvh] w-full ${maxWidthClass} flex-col overflow-hidden rounded-[4px] border border-[#46464c] bg-[#1e1e21] shadow-2xl shadow-black/80`}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Barra de título (faixa em bisel, como na referência) */}

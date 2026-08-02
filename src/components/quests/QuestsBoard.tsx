@@ -2,7 +2,7 @@
 
 // 🗺️ Missões — recompensa de login diário (conta), cadeia tutorial "A Jornada do
 // Herói" (um passo por vez) e missões diárias (reset à meia-noite UTC).
-// Painel reutilizável: mora no /dashboard (superfície principal) e na rota
+// Painel reutilizável: abre na dialog do /dashboard (QuestsButton) e na rota
 // /quests, que ficou de pé para não quebrar links antigos.
 import { useCallback, useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
@@ -19,7 +19,7 @@ interface QuestsResponse {
   claimableCount: number
 }
 
-export default function QuestsBoard() {
+export default function QuestsBoard({ onSummary }: { onSummary?: (claimableCount: number) => void } = {}) {
   const { data: session } = useSession()
   const { activeCharacterId, refresh: refreshActiveCharacter, loading: characterLoading } = useActiveCharacter()
 
@@ -32,14 +32,16 @@ export default function QuestsBoard() {
     try {
       const res = await fetch(`/api/quests?characterId=${activeCharacterId}`)
       if (!res.ok) throw new Error('Erro ao carregar missões')
-      setData(await res.json())
+      const body: QuestsResponse = await res.json()
+      setData(body)
+      onSummary?.(Number(body?.claimableCount) || 0)
     } catch (e) {
       console.error(e)
       toast.error('Erro ao carregar missões')
     } finally {
       setIsLoading(false)
     }
-  }, [activeCharacterId])
+  }, [activeCharacterId, onSummary])
 
   useEffect(() => {
     if (session && activeCharacterId) fetchQuests()

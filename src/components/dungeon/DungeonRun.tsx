@@ -116,7 +116,7 @@ interface DungeonRunProps {
   tier?: number
   onExit: (updates: { hp: number; mp: number; stamina: number; leveledUp?: boolean }) => void
   /** Re-run: o pai remonta a run do zero (mesma masmorra). */
-  onRestart?: (updates: { hp: number; mp: number; stamina: number; level?: number; leveledUp?: boolean; auto: boolean }) => void
+  onRestart?: (updates: { hp: number; mp: number; stamina: number; level?: number; experience?: number; leveledUp?: boolean; auto: boolean }) => void
   /** @deprecated A run é sempre automática; mantido só por compatibilidade com o pai. */
   initialAuto?: boolean
   /** Optional custom background image for battles (path relative to /public/) */
@@ -674,6 +674,12 @@ export default function DungeonRun({
   const charLevelRef = useRef(character.level)
   charLevelRef.current = Math.max(charLevelRef.current, charLevel)
   const runXpRef = useRef(0)
+  // XP total VIVO da run: começa na prop (congelada no mount) e soma o que o
+  // /finish confirmar. Sem isto, um re-run (farm automático) remonta com
+  // `character.experience` desatualizado — só `level` era propagado — e a
+  // PREVISÃO local de level up (checkLocalLevelUp) do run seguinte parte de uma
+  // base de XP errada.
+  const charExperienceRef = useRef(character.experience ?? 0)
 
   // ⚔️ Equipamento VIVO da run: o servidor debita durabilidade a cada abate e
   // devolve `equipmentWear` — aplicamos aqui para que uma peça que QUEBRE no
@@ -2412,7 +2418,7 @@ export default function DungeonRun({
 
   /** Subiu de nível com o XP acumulado até agora? (curva de experienceSystem) */
   const checkLocalLevelUp = () => {
-    const reachedLevel = getLevelInfo((character.experience ?? 0) + runXpRef.current).level
+    const reachedLevel = getLevelInfo(charExperienceRef.current + runXpRef.current).level
     if (reachedLevel <= charLevelRef.current) return
     charLevelRef.current = reachedLevel
     setLeveledUpThisRun(true)
@@ -2618,7 +2624,7 @@ export default function DungeonRun({
   const restartRun = async () => {
     if (!onRestart) { exitRun(); return }
     try { await endRunPromiseRef.current } catch { /* segue mesmo assim */ }
-    onRestart({ hp: effMaxHp, mp: character.maxMp, stamina, level: charLevel, leveledUp: leveledUpThisRun, auto })
+    onRestart({ hp: effMaxHp, mp: character.maxMp, stamina, level: charLevel, experience: charExperienceRef.current, leveledUp: leveledUpThisRun, auto })
   }
 
   /**
@@ -2643,10 +2649,18 @@ export default function DungeonRun({
       for (const d of skipped) pushLog(`🚫 Inventário cheio — ${d.name} foi perdido!`)
       showBanner('🎒', `${skipped.length} item(ns) perdido(s): inventário cheio.`, 3600, { sticky: true })
     }
-    if (data.leveledUp && data.newLevel != null) {
-      setLeveledUpThisRun(true)
+    // Nível: o /finish é quem decide de verdade. Reconcilia nos DOIS sentidos —
+    // sem isto, uma previsão local otimista (checkLocalLevelUp, calculada sobre um
+    // `character.experience` que pode estar desatualizado num re-run) podia deixar
+    // "Você subiu de nível!" plantado na tela mesmo quando o servidor não confirmou,
+    // e o jogador saía vendo a comemoração enquanto a ficha continuava no nível velho.
+    if (data.newLevel != null) {
       setCharLevel(data.newLevel)
     }
+    setLeveledUpThisRun(!!data.leveledUp)
+    // O servidor somou `data.xp` ao XP que já existia — espelha aqui pro re-run
+    // seguinte (restartRun) partir da base certa.
+    charExperienceRef.current += data.xp ?? 0
   }
 
   /**

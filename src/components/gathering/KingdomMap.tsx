@@ -336,11 +336,20 @@ function RegionNode({ node, sessions, now, maxGatherLevel, onTap }: {
   )
 }
 
-function HomeMark() {
+// 🏰 A Vila é a porta da Fazenda: os canteiros ficam dentro dos muros, então
+// tocar nela troca o mapa pela fazenda (mesma página, outra vista).
+function HomeMark({ onOpenFarm }: { onOpenFarm?: () => void }) {
   const t = useT()
   return (
-    <div className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center" style={{ left: `${HOME.x}%`, top: `${HOME.y}%`, zIndex: 5 }}>
-      <span className="grid place-items-center rounded-full" style={{
+    <button
+      type="button"
+      onClick={onOpenFarm}
+      disabled={!onOpenFarm}
+      title={onOpenFarm ? t('Open the Farm') : undefined}
+      className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center disabled:cursor-default"
+      style={{ left: `${HOME.x}%`, top: `${HOME.y}%`, zIndex: 5 }}
+    >
+      <span className="grid place-items-center rounded-full transition-transform hover:scale-105" style={{
         width: 46, height: 46,
         background: 'radial-gradient(circle at 40% 30%, #f3e6c2, #d8bf8b 82%)',
         border: '2.5px solid #7a2f26',
@@ -348,8 +357,11 @@ function HomeMark() {
       }}>
         <span className="text-[22px]">🏰</span>
       </span>
-      <span className="mt-1 font-mapd text-[11px] ink tracking-wide" style={{ textShadow: '0 1px 0 rgba(255,247,224,0.6)' }}>{t('Dolrath Village')}</span>
-    </div>
+      <span className="mt-1 font-mapd text-[11px] ink tracking-wide whitespace-nowrap" style={{ textShadow: '0 1px 0 rgba(255,247,224,0.6)' }}>
+        {t('Dolrath Village')}
+        {onOpenFarm && <span className="block font-map font-bold text-[9.5px]" style={{ color: '#4a6b2f' }}>🌾 {t('Farm')}</span>}
+      </span>
+    </button>
   )
 }
 
@@ -751,7 +763,7 @@ function RegionPanel(props: {
   )
 }
 
-function Hud({ livres, emCampo, prontos }: { livres: number; emCampo: number; prontos: number }) {
+function Hud({ livres, emCampo, prontos, onOpenFarm }: { livres: number; emCampo: number; prontos: number; onOpenFarm?: () => void }) {
   const t = useT()
   return (
     <header className="shrink-0 px-4 py-2.5 border-b border-white/10 bg-black/50 backdrop-blur-xl flex items-center justify-between gap-3">
@@ -770,6 +782,15 @@ function Hud({ livres, emCampo, prontos }: { livres: number; emCampo: number; pr
           <span className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-emerald-400/30 bg-emerald-500/10 text-[11px]">
             <span>🎒</span><b className="text-emerald-200 font-combat">{prontos}</b>
           </span>
+        )}
+        {onOpenFarm && (
+          <button
+            type="button"
+            onClick={onOpenFarm}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-lime-400/30 bg-lime-500/10 text-[11px] text-lime-100 hover:bg-lime-500/20 transition-colors"
+          >
+            🌾 {t('Farm')}
+          </button>
         )}
       </div>
     </header>
@@ -800,6 +821,8 @@ export interface KingdomMapViewProps {
   onStopNow: () => void
   onStopAfter: () => void
   onCancelStop: () => void
+  /** Abre a Fazenda (a outra face da Coleta). Sem ela, a Vila fica decorativa. */
+  onOpenFarm?: () => void
   /** Altura mínima do wrapper — default preserva o full-screen mobile do /gathering.
    *  Passe algo tipo '600px' pra embutir num card de tamanho fixo (ex.: teaser da landing). */
   minHeight?: string
@@ -807,7 +830,7 @@ export interface KingdomMapViewProps {
 
 export function KingdomMapView(props: KingdomMapViewProps) {
   const t = useT()
-  const { characters, openSessions, now, selectedKey, notice, levelUpBanner, onSelectNode, minHeight } = props
+  const { characters, openSessions, now, selectedKey, notice, levelUpBanner, onSelectNode, onOpenFarm, minHeight } = props
 
   const activeKeys = useMemo(
     () => openSessions.map((s) => MAP_NODES.find((n) => n.fieldId === s.fieldId)?.key).filter(Boolean) as string[],
@@ -825,7 +848,7 @@ export function KingdomMapView(props: KingdomMapViewProps) {
   return (
     <div className="relative flex flex-col font-primary text-white overflow-hidden"
       style={{ minHeight: minHeight ?? 'calc(100dvh - 6rem)', background: 'radial-gradient(120% 80% at 50% 0%, #14142e, #0b0b18 70%)' }}>
-      <Hud livres={livres} emCampo={emCampo} prontos={prontos} />
+      <Hud livres={livres} emCampo={emCampo} prontos={prontos} onOpenFarm={onOpenFarm} />
 
       <div className="pointer-events-none fixed left-1/2 -translate-x-1/2 top-28 z-40 w-full max-w-md px-4 flex flex-col items-center gap-2">
         <AnimatePresence>
@@ -857,14 +880,19 @@ export function KingdomMapView(props: KingdomMapViewProps) {
           <div className="absolute bottom-2 right-2 pointer-events-none z-[4]"><Compass size={54} /></div>
 
           <Roads activeKeys={activeKeys} />
-          <HomeMark />
+          <HomeMark onOpenFarm={onOpenFarm} />
           {MAP_NODES.map((n) => (
             <RegionNode key={n.key} node={n} sessions={openSessions} now={now} maxGatherLevel={maxGatherLevel} onTap={(node) => onSelectNode(node.key)} />
           ))}
         </div>
 
         <p className="text-center text-white/30 text-[11px] mt-3 max-w-md mx-auto">
-          {t('🫘 Seeds only drop in the Herb Fields — plant them at the')} <a href="/farm" className="underline">{t('Farm')}</a>.
+          {t('🫘 Seeds only drop in the Herb Fields — plant them at the')}{' '}
+          {onOpenFarm ? (
+            <button type="button" onClick={onOpenFarm} className="underline">{t('Farm')}</button>
+          ) : (
+            <span className="underline">{t('Farm')}</span>
+          )}.
           {' '}{t('Rare boss resources remain exclusive to dungeons.')}
         </p>
       </main>

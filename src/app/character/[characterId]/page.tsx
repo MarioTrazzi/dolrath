@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, Sword, Zap, Brain, Star, HelpCircle, RefreshCw } from 'lucide-react';
@@ -15,6 +15,9 @@ import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { EquipmentSlot } from '@/components/EquipmentSlot';
 import InventoryPanel from '@/components/inventory/InventoryPanel';
+import GlobalChestSection from '@/components/inventory/GlobalChestSection';
+import { useGlobalChest, EXPAND_SLOTS, EXPAND_COST_GOLD } from '@/components/inventory/useGlobalChest';
+import { payGoldOnChain, confirmExpansion } from '@/lib/goldSpendClient';
 import EnhancementDialog from '@/components/EnhancementDialog';
 import ForgeDialog from '@/components/crafting/ForgeDialog';
 import AlchemyDialog from '@/components/crafting/AlchemyDialog';
@@ -26,9 +29,7 @@ import PersonSilhouette from '@/components/character/PersonSilhouette';
 import { getBlendedVisual } from '@/lib/creationVisuals';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
-import { ethers } from 'ethers';
 import { getWalletTxErrorMessage } from '@/lib/walletErrors';
-import { getPolygonFeeOverrides } from '@/lib/gasFees';
 import { resolveImageUrl } from '@/lib/imageUrl';
 import { getSlotTypeFromItemType } from '@/lib/equipmentSlot';
 import { useI18n } from '@/lib/i18n/I18nProvider';
@@ -136,6 +137,29 @@ export default function CharacterDetailsPage() {
       fetchData();
     }
   }, [params?.characterId]);
+
+  // Refetch só do inventário do herói. O Baú Geral chama isto depois de cada
+  // transferência, para as duas metades ficarem em sincronia sem recarregar a
+  // ficha inteira.
+  const refreshCharacterInventory = useCallback(async () => {
+    if (!effectiveCharacterId) return;
+    try {
+      const res = await fetch(`/api/store/inventory?characterId=${effectiveCharacterId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setInventory(Array.isArray(data) ? data : (data.items || []));
+      }
+    } catch (error) {
+      console.error('Error refreshing character inventory:', error);
+    }
+  }, [effectiveCharacterId]);
+
+  // 🌐 Baú Geral da conta — mora aqui embaixo do inventário do herói para que a
+  // transferência (clique ou arrastar) aconteça sem trocar de página.
+  const chest = useGlobalChest({
+    characterId: effectiveCharacterId,
+    onCharacterInventoryChanged: refreshCharacterInventory,
+  });
 
   if (loading) {
     return <div className="flex justify-center items-center min-h-screen">Loading...</div>;
@@ -463,102 +487,31 @@ export default function CharacterDetailsPage() {
   const handleExpandInventory = async () => {
     if (!character || !effectiveCharacterId) return;
 
-    const slotsToAdd = 5;
-    const totalCostGold = 1000;
+    const url = `/api/character/${effectiveCharacterId}/expand-inventory`;
 
     setExpandingSlots(true);
     try {
       // 1) Tenta pagar OFF-CHAIN com o GOLD "na mão" do personagem (sem txHash).
-      let response: Response | null = await fetch(`/api/character/${effectiveCharacterId}/expand-inventory`, {
+      let response: Response | null = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slots: slotsToAdd }),
+        body: JSON.stringify({ slots: EXPAND_SLOTS }),
       });
-      let lastError: any = null;
 
       // 2) Sem GOLD na mão → compra ON-CHAIN pela carteira (abre a MetaMask).
       if (response.status === 402) {
-        lastError = await response.json().catch(() => null);
-        if (lastError?.requiresPayment) {
-          const eth = (window as any)?.ethereum;
-          if (!eth) {
-            toast.error(t('💰 No GOLD on hand and MetaMask not found'));
-            return;
-          }
+        const info = await response.json().catch(() => null);
+        if (info?.requiresPayment) {
           toast(t('💰 No GOLD on hand — paying on-chain via wallet…'));
-
-          const cfgRes = await fetch('/api/gold/spend-config', { cache: 'no-store' });
-          const cfgJson = await cfgRes.json();
-          if (!cfgRes.ok) {
-            throw new Error(cfgJson?.error || t('Failed to load GOLD config'));
-          }
-
-          const { contractAddress, chainId, treasuryAddress } = cfgJson as {
-            contractAddress: string;
-            chainId: number;
-            treasuryAddress: string;
-          };
-
-          const provider = new ethers.BrowserProvider(eth);
-          await provider.send('eth_requestAccounts', []);
-
-          const network = await provider.getNetwork();
-          if (Number(network.chainId) !== Number(chainId)) {
-            toast.error(t('Switch to chainId {chainId} in MetaMask', { chainId }));
+          const payment = await payGoldOnChain(EXPAND_COST_GOLD);
+          if (!payment.ok) {
+            if (payment.reason === 'no-wallet') toast.error(t('💰 No GOLD on hand and MetaMask not found'));
+            else if (payment.reason === 'wrong-chain') toast.error(t('Switch to chainId {chainId} in MetaMask', { chainId: payment.chainId }));
+            else toast.error(t('💰 Insufficient GOLD on-chain! You need {n} GOLD.', { n: payment.needed }));
             return;
           }
-
-          const signer = await provider.getSigner();
-          const from = await signer.getAddress();
-
-          const erc20Abi = [
-            'function decimals() view returns (uint8)',
-            'function balanceOf(address) view returns (uint256)',
-            'function transfer(address to, uint256 value) returns (bool)',
-          ] as const;
-
-          const gold = new ethers.Contract(contractAddress, erc20Abi, signer);
-          const decimals = Number(await gold.decimals());
-          const costWei = ethers.parseUnits(String(totalCostGold), decimals);
-          const balanceWei = (await gold.balanceOf(from)) as bigint;
-
-          if (balanceWei < costWei) {
-            toast.error(t('💰 Insufficient GOLD on-chain! You need {n} GOLD.', { n: totalCostGold }));
-            return;
-          }
-
-          const payTx = await gold.transfer(treasuryAddress, costWei, await getPolygonFeeOverrides(provider));
           toast.success(t('Payment sent! Awaiting confirmation…'));
-          const payReceipt = await payTx.wait();
-          if (!payReceipt || payReceipt.status !== 1) {
-            throw new Error(t('Payment failed'));
-          }
-
-          // RPCs can lag (especially on testnet). Try confirming the purchase a few times.
-          response = null;
-          for (let attempt = 0; attempt < 4; attempt++) {
-            response = await fetch(`/api/character/${effectiveCharacterId}/expand-inventory`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ slots: slotsToAdd, txHash: payTx.hash }),
-            });
-
-            if (response.ok) break;
-
-            try {
-              lastError = await response.json();
-            } catch {
-              lastError = null;
-            }
-
-            const msg = String(lastError?.error || '').toLowerCase();
-            const looksLikePropagation = msg.includes('ainda não encontrada') || msg.includes('not found');
-            if (!looksLikePropagation) break;
-
-            await new Promise((r) => setTimeout(r, 1200));
-          }
+          response = await confirmExpansion(url, EXPAND_SLOTS, payment.txHash);
         }
       }
 
@@ -567,11 +520,9 @@ export default function CharacterDetailsPage() {
       }
 
       if (response.ok) {
-        const data = await response.json();
-        setCharacter(data.character);
-        toast.success(t('📦 +{n} slots added! ({cost} GOLD spent)', { n: slotsToAdd, cost: totalCostGold }));
+        toast.success(t('📦 +{n} slots added! ({cost} GOLD spent)', { n: EXPAND_SLOTS, cost: EXPAND_COST_GOLD }));
       } else {
-        const error = lastError || (await response.json().catch(() => null));
+        const error = await response.json().catch(() => null);
         toast.error(`❌ ${error?.error || t('Failed to confirm expansion')}`);
       }
     } catch (error) {
@@ -1088,10 +1039,13 @@ export default function CharacterDetailsPage() {
               onEnhance={(invId, name, category) => setEnhanceTarget({ inventoryId: invId, itemName: name, category })}
               onOpenCraft={(craft, itemName) => setCraftTarget({ craft, itemName })}
               onSell={(inventoryId, quantity) => handleSell(inventoryId, quantity)}
+              onSendToGlobal={(itemId, quantity) => chest.transferToGlobal(itemId, quantity)}
               onExpand={handleExpandInventory}
               expanding={expandingSlots}
-              expandTitle={t('Expand +5 slots (cost: 1000 GOLD)')}
+              expandTitle={t('Expand +{n} slots (cost: {cost} GOLD)', { n: EXPAND_SLOTS, cost: EXPAND_COST_GOLD })}
               goldText={goldOnchainText}
+              dragSource="character"
+              onItemDropped={chest.dropToCharacter as any}
               getCompareTo={(item) => {
                 if (item.type === 'CONSUMABLE') return null;
                 // Anel pode ir em RING_1 ou RING_2 — compara com qualquer um
@@ -1104,6 +1058,19 @@ export default function CharacterDetailsPage() {
             />
           </div>
         </div>
+        </div>
+
+        {/* ============ BAÚ GERAL (conta) ============
+            Fica embaixo da dupla ficha+inventário em vez de virar uma terceira
+            coluna: o bloco de cima tem largura fixa (1026px em xl) e o baú
+            precisa de espaço próprio pro claim de GOLD. */}
+        <div className="mt-6 w-full max-w-[548px] xl:max-w-[1026px] mx-auto">
+          <GlobalChestSection
+            chest={chest}
+            characterId={effectiveCharacterId || ''}
+            characterName={character.name}
+            characterAccent={visual.borderColor}
+          />
         </div>
 
         {/* Character History panel */}

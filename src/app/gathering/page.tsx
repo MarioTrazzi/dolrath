@@ -5,6 +5,10 @@
 // aqui ficam o estado, os efeitos e as chamadas às rotas /api/gather/*. Toda a
 // mecânica real é preservada: o servidor é o relógio (/api/gather/status
 // computa os tiques lazy) e cada personagem pode ter sua sessão em paralelo.
+//
+// A página tem DUAS vistas: o mapa (coletar nos campos) e a Fazenda (colher os
+// canteiros da conta), alcançada pela Vila de Dolrath. `?view=farm` abre direto
+// na fazenda — é assim que /farm e as missões chegam aqui.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
@@ -17,6 +21,7 @@ import {
 } from '@/components/gathering/KingdomMap'
 import { type GatherFieldId } from '@/lib/gathering'
 import { MAP_NODES } from '@/components/gathering/KingdomMap'
+import FarmSection from '@/components/farm/FarmSection'
 import { useI18n } from '@/lib/i18n/I18nProvider'
 import { localizeItemName } from '@/lib/i18n/catalog'
 import type { TFunction } from '@/lib/i18n/t'
@@ -33,6 +38,13 @@ export default function GatheringPage() {
   const { data: session } = useSession()
   const { locale, t } = useI18n()
   const router = useRouter()
+
+  // Vista atual: mapa (campos) ou fazenda. Lida de window.location para não
+  // puxar useSearchParams (exigiria Suspense no build), igual ao ?focus= abaixo.
+  const [view, setView] = useState<'map' | 'farm'>('map')
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('view') === 'farm') setView('farm')
+  }, [])
 
   const [characters, setCharacters] = useState<GatherCharacter[]>([])
   const [openSessions, setOpenSessions] = useState<OpenSession[]>([])
@@ -190,6 +202,10 @@ export default function GatheringPage() {
     if (here.length === 1 && !expandedId) setExpandedId(here[0].characterId)
   }, [selectedKey, openSessionsByField, expandedId])
 
+  if (view === 'farm') {
+    return <FarmSection onBack={() => setView('map')} />
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
@@ -215,6 +231,7 @@ export default function GatheringPage() {
       notice={notice}
       levelUpBanner={levelUpBanner}
       onSelectNode={selectNode}
+      onOpenFarm={() => setView('farm')}
       onExpand={(id) => setExpandedId(id || null)}
       onSelectSend={setSendHeroId}
       onDispatch={dispatchHero}

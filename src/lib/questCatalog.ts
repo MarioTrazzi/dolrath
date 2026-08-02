@@ -72,7 +72,7 @@ export const QUEST_CATALOG: QuestDef[] = [
     description: 'Plante e colha 3 vezes na fazenda.',
     objective: { event: 'farm_harvest', count: 3 },
     rewards: { gold: 200, xp: 80 },
-    href: '/farm',
+    href: '/gathering?view=farm',
   },
   {
     id: 'tut_craft',
@@ -148,7 +148,7 @@ export const QUEST_CATALOG: QuestDef[] = [
     description: 'Faça 5 colheitas na fazenda hoje.',
     objective: { event: 'farm_harvest', count: 5 },
     rewards: { gold: 200, xp: 80 },
-    href: '/farm',
+    href: '/gathering?view=farm',
   },
   {
     id: 'daily_hunt',

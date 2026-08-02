@@ -18,6 +18,7 @@ export const NAV_PT: Record<string, string> = {
   'Risk Notice': 'Aviso de Risco',
   'Main navigation': 'Navegação principal',
   'Character': 'Personagem',
+  'Sheet': 'Ficha',
   'Quests': 'Missões',
   'Combat': 'Combate',
   'Inventory': 'Inventário',

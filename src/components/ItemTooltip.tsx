@@ -283,7 +283,7 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
     // vem ANTES do braço de consumível: processados/ingredientes são
     // CONSUMABLE no banco, mas "consumir" não faz nada com eles.
     if (isSeed) {
-      router.push('/farm');
+      router.push('/gathering?view=farm');
       setShowTooltip(false);
       return;
     }

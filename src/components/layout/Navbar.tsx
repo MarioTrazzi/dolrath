@@ -32,8 +32,8 @@ export function Navbar() {
 
   const walletAddress = session?.user?.walletAddress
 
-  // 🗺️ Ponto dourado no link "Missões" quando há algo resgatável. Um fetch leve
-  // por troca de herói/sessão — o número exato fica na própria página /quests.
+  // 🗺️ Ponto dourado no botão do Dashboard quando há missão resgatável. Um fetch
+  // leve por troca de herói/sessão — o painel de missões mora lá dentro.
   const [questsClaimable, setQuestsClaimable] = useState(false)
   useEffect(() => {
     if (!session || !activeCharacterId) {
@@ -114,15 +114,14 @@ export function Navbar() {
   // "Personagem" leva à ficha do personagem ativo; sem personagem, à criação.
   const fichaHref = activeCharacterId ? `/character/${activeCharacterId}` : '/character/create'
 
+  // Menu enxuto: o inventário (herói + Baú Geral) mora na Ficha, as missões no
+  // Dashboard e a Fazenda virou a segunda vista da Coleta.
   const navLinks = [
-    { label: 'Character', href: fichaHref },
-    { label: 'Quests', href: '/quests' },
+    { label: 'Sheet', href: fichaHref },
     { label: 'Dungeons', href: '/dungeons' },
     { label: 'Gathering', href: '/gathering' },
-    { label: 'Farm', href: '/farm' },
     { label: 'Combat', href: '/combat-lobby' },
     { label: 'Ranking', href: '/ranking' },
-    { label: 'Inventory', href: '/inventory' },
     { label: 'Market', href: '/marketplace' },
     { label: 'Blacksmith', href: '/blacksmith' },
     { label: 'Alchemist', href: '/alchemist' },
@@ -192,9 +191,6 @@ export function Navbar() {
                 onClick={(e) => handleProtectedRoute(e, l.href)}
               >
                 {t(l.label)}
-                {l.href === '/quests' && questsClaimable && (
-                  <span className="absolute right-1 top-1.5 h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.9)]" aria-label={t('Quest ready to claim')} />
-                )}
               </Link>
             ))}
           </div>
@@ -225,11 +221,15 @@ export function Navbar() {
                     {isLinkingWallet ? t('Connecting...') : t('Link wallet')}
                   </button>
                 )}
+                {/* As missões vivem no Dashboard: o ponto dourado avisa que há algo resgatável. */}
                 <Link
                   href="/dashboard"
-                  className="bg-gradient-to-r from-primary to-primary-dark text-white px-4 py-2 rounded-lg text-sm font-semibold hover:shadow-lg hover:shadow-primary/25 active:scale-[0.98] transition-all"
+                  className="relative bg-gradient-to-r from-primary to-primary-dark text-white px-4 py-2 rounded-lg text-sm font-semibold hover:shadow-lg hover:shadow-primary/25 active:scale-[0.98] transition-all"
                 >
                   Dashboard
+                  {questsClaimable && (
+                    <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.9)]" aria-label={t('Quest ready to claim')} />
+                  )}
                 </Link>
               </>
             ) : (
@@ -275,9 +275,6 @@ export function Navbar() {
                   }}
                 >
                   {t(l.label)}
-                  {l.href === '/quests' && questsClaimable && (
-                    <span className="ml-2 inline-block h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.9)]" aria-label={t('Quest ready to claim')} />
-                  )}
                 </Link>
               ))}
               {session ? (
@@ -313,6 +310,9 @@ export function Navbar() {
                     className="w-full text-center bg-gradient-to-r from-primary to-primary-dark text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:shadow-lg hover:shadow-primary/25 active:scale-[0.98] transition-all"
                   >
                     Dashboard
+                    {questsClaimable && (
+                      <span className="ml-2 inline-block h-2 w-2 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.9)]" aria-label={t('Quest ready to claim')} />
+                    )}
                   </Link>
                 </div>
               ) : (

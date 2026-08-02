@@ -10,6 +10,7 @@ import Link from 'next/link';
 import XPProgressBar from '@/components/XPProgressBar';
 import CharacterStats from '@/components/CharacterStats';
 import KeepBackdrop from '@/components/dashboard/KeepBackdrop';
+import QuestsBoard from '@/components/quests/QuestsBoard';
 import CreationCardBackdrop from '@/components/character/CreationCardBackdrop';
 import { CharacterStatChips, computePower } from '@/components/character/CharacterStatChips';
 import { getBlendedVisual } from '@/lib/creationVisuals';
@@ -426,6 +427,12 @@ export default function DashboardPage() {
         className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 pb-12"
         style={{ fontFamily: "'Barlow', sans-serif" }}
       >
+        {/* 🗺️ Missões — o conteúdo acionável da tela vem primeiro (login diário,
+            Jornada do Herói e diárias). Deixou de ter item próprio na navbar. */}
+        <div className="mb-4">
+          <QuestsBoard />
+        </div>
+
         {/* Carteira + saldos on-chain — janela chumbo; layout fixo em 2 colunas
             (esquerda carteira / direita saldos), sem trocas por breakpoint. */}
         <div

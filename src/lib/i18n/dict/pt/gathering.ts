@@ -5,6 +5,7 @@ export const GATHERING_PT: Record<string, string> = {
   'Gathering Regions': 'Regiões de Coleta',
   'Dolrath Village': 'Vila de Dolrath',
   'Farm': 'Fazenda',
+  'Open the Farm': 'Abrir a Fazenda',
   'free': 'livre',
   'free (plural)': 'livres',
   '{n} in the field': '{n} em campo',

@@ -2739,10 +2739,15 @@ export default function DungeonRun({
     }
   }
 
-  const exitRun = () => {
+  const exitRun = async () => {
     // Garante o encerramento da sessão no servidor ao sair (creditando abates
     // pendentes, se saiu do meio de um combate).
     closeRunOnServer('retreat')
+    // Espera o /finish aterrissar antes de voltar ao mapa — senão o poll de
+    // "herói em uso" da página de masmorras (mesmo padrão do restartRun acima)
+    // ainda vê esta run como 'active' e mostra o aviso sobre o próprio herói
+    // que acabou de sair (ex.: ao voltar ao mapa logo após a derrota).
+    try { await endRunPromiseRef.current } catch { /* segue mesmo assim */ }
     // HP e MP voltam ao cheio entre runs — só a stamina (orçamento diário) é consumida.
     onExit({ hp: effMaxHp, mp: character.maxMp, stamina, leveledUp: leveledUpThisRun })
   }

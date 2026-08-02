@@ -2672,20 +2672,35 @@ export default function DungeonRun({
     }
     const resolve = pendingResolveRef.current ?? undefined
     pendingResolveRef.current = null
-    endRunPromiseRef.current = fetch('/api/dungeon/run/finish', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ runId: runIdRef.current, reason, resolve }),
-    })
-      .then(async (res) => {
-        // 409 = a run já foi encerrada (retry ou outra aba): o crédito aconteceu,
-        // não há o que reconciliar.
-        if (!res.ok) return
-        applyFinishGrant((await res.json().catch(() => ({}))) as FinishResponse)
-      })
-      .catch(() => {
-        showBanner('⚠️', 'Sem conexão ao encerrar — o espólio será creditado na próxima entrada.', 4200, { sticky: true })
-      })
+    const body = JSON.stringify({ runId: runIdRef.current, reason, resolve })
+    // Tenta 1x, e se falhar (rede caiu bem na hora — comum ao voltar de uma aba
+    // congelada/AFK) tenta mais uma vez antes de desistir. Sem isso, o auto-pilot
+    // (que espera esta promessa antes de reabrir a run) achava que encerrou e já
+    // batia um /start novo — a run antiga, ainda 'active' no servidor, se autobloqueava
+    // ("Herói em uso") sem nenhuma outra aba de fato aberta.
+    const attempt = (retriesLeft: number): Promise<void> =>
+      fetch('/api/dungeon/run/finish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body })
+        .then(async (res) => {
+          // 409 = a run já foi encerrada (retry ou outra aba): o crédito aconteceu,
+          // não há o que reconciliar.
+          if (res.status === 409) return
+          if (!res.ok) {
+            if (retriesLeft > 0) {
+              await new Promise(r => setTimeout(r, 1000))
+              return attempt(retriesLeft - 1)
+            }
+            return
+          }
+          applyFinishGrant((await res.json().catch(() => ({}))) as FinishResponse)
+        })
+        .catch(async () => {
+          if (retriesLeft > 0) {
+            await new Promise(r => setTimeout(r, 1000))
+            return attempt(retriesLeft - 1)
+          }
+          showBanner('⚠️', 'Sem conexão ao encerrar — o espólio será creditado na próxima entrada.', 4200, { sticky: true })
+        })
+    endRunPromiseRef.current = attempt(2)
   }
 
   // RECUAR: sai do combate em SEGURANÇA, levando os abates já feitos. É a saída

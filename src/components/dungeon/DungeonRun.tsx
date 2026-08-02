@@ -19,7 +19,6 @@ import {
   DungeonEventDef,
   DungeonEventKind,
   type DungeonId,
-  NodeScaling,
   NodeLoot,
   LootDrop,
   ScaledMonster,
@@ -205,13 +204,9 @@ const STATUS_FX_DELAY = 1700
 
 interface ResolvedEvent {
   def: DungeonEventDef
-  text: string
-  effects: EffectChip[]
   monster?: ScaledMonster
-  /** Pacote completo do encontro (1..3). monster = o primeiro (avatar do card). */
+  /** Pacote completo do encontro (1..3): quem entra em beginEncounter. */
   monsters?: ScaledMonster[]
-  /** d20 do nó (lootRoll do servidor): badge de sorte no card de vitória. */
-  luckRoll?: number
 }
 
 interface Banner {
@@ -326,14 +321,6 @@ interface RunItem {
   label: string
 }
 
-// Chip de efeito exibido nos cards de evento/espólio: ou um número de stat (ouro/XP),
-// ou um item — que renderiza o ÍCONE de jogo real (não o emoji-placeholder).
-type EffectChip =
-  | { kind: 'stat'; text: string }
-  // highlight: drop de destaque (pedra de aprimoramento ou raridade RARE+) —
-  // ganha moldura dourada + brilho no card de vitória, independente da raridade.
-  | { kind: 'item'; name: string; emoji: string; label: string; rarity?: string; highlight?: boolean }
-
 // Mesma linguagem visual de raridade usada na landing (DolrathLanding.tsx RARITY_FRAME),
 // replicada aqui para os cards de loot da masmorra não terem que importar a landing inteira.
 const LOOT_RARITY_RING: Record<string, { ring: string; glow: string; text: string }> = {
@@ -342,6 +329,13 @@ const LOOT_RARITY_RING: Record<string, { ring: string; glow: string; text: strin
   RARE:      { ring: 'border-sky-400/60',     glow: 'rgba(56,189,248,0.5)',   text: 'text-sky-300' },
   EPIC:      { ring: 'border-fuchsia-400/70', glow: 'rgba(232,121,249,0.55)', text: 'text-fuchsia-300' },
   LEGENDARY: { ring: 'border-amber-400/70',   glow: 'rgba(251,191,36,0.6)',   text: 'text-amber-300' },
+}
+
+// Drop de destaque (pedra de aprimoramento ou raridade RARE+): o único espólio
+// que ainda ganha um aviso na tela — só o ícone, sem card — o resto vai direto
+// pra bag sem interromper a run.
+function isHighlightDrop(d: { kind: string; rarity?: string }): boolean {
+  return d.kind === 'stone' || ['RARE', 'EPIC', 'LEGENDARY'].includes(String(d.rarity ?? '').toUpperCase())
 }
 
 // Miniatura do item: usa a arte /item-art/<slug>.webp e cai no emoji se a imagem falhar
@@ -377,61 +371,6 @@ function MonsterThumb({ name, image, emoji, className = 'text-6xl' }: { name: st
       className="w-full h-full object-contain art-bright"
       referrerPolicy="no-referrer"
     />
-  )
-}
-
-// Lista de chips de efeito: itens ganham tiles grandes com arte real + moldura de
-// raridade (mesma linguagem da landing); ouro/XP continuam como pílulas pequenas.
-function EffectChipList({ effects }: { effects: EffectChip[] }) {
-  if (effects.length === 0) return null
-  const items = effects.filter((fx): fx is Extract<EffectChip, { kind: 'item' }> => fx.kind === 'item')
-  const stats = effects.filter((fx): fx is Extract<EffectChip, { kind: 'stat' }> => fx.kind === 'stat')
-  return (
-    <div className="mb-5">
-      {items.length > 0 && (
-        <div className="grid grid-cols-2 gap-2 mb-2">
-          {items.map((fx, i) => {
-            // Drop de destaque (pedra/RARE+) usa a moldura LENDÁRIA (dourada) com
-            // brilho reforçado — o nat 20 precisa ser um momento.
-            const frame = fx.highlight
-              ? LOOT_RARITY_RING.LEGENDARY
-              : LOOT_RARITY_RING[fx.rarity ?? 'COMMON'] ?? LOOT_RARITY_RING.COMMON
-            return (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 10, scale: 0.8 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ delay: 0.2 + i * 0.12, type: 'spring', stiffness: 300, damping: 18 }}
-                className={`flex items-center gap-2 px-2.5 py-2 rounded-xl border-2 ${fx.highlight ? 'bg-amber-400/10' : 'bg-white/5'} ${frame.ring}`}
-                style={{ boxShadow: fx.highlight ? `0 0 22px ${frame.glow}, 0 0 8px ${frame.glow}` : `0 0 14px ${frame.glow}` }}
-              >
-                <span className="w-11 h-11 inline-flex items-center justify-center shrink-0 rounded-lg bg-black/20 text-2xl">
-                  <ItemThumb name={fx.name} emoji={fx.emoji} className="text-2xl" />
-                </span>
-                <span className={`text-xs font-bold font-combat leading-tight text-left ${frame.text}`}>
-                  {fx.label}
-                </span>
-              </motion.div>
-            )
-          })}
-        </div>
-      )}
-      {stats.length > 0 && (
-        <div className="flex flex-wrap justify-center gap-2">
-          {stats.map((fx, i) => (
-            <motion.span
-              key={i}
-              initial={{ opacity: 0, y: 10, scale: 0.8 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ delay: 0.2 + (items.length + i) * 0.12, type: 'spring', stiffness: 300, damping: 18 }}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-sm font-bold font-combat bg-white/10 border-white/20 text-white"
-            >
-              {fx.text}
-            </motion.span>
-          ))}
-        </div>
-      )}
-    </div>
   )
 }
 
@@ -824,7 +763,9 @@ export default function DungeonRun({
     }
   })
   const [tipVisible, setTipVisible] = useState(true)
-  const [floats, setFloats] = useState<{ id: number; label: string; color: string }[]>([])
+  const [floats, setFloats] = useState<
+    { id: number; label: string; color: string; item?: { name: string; emoji: string; rarity?: string } }[]
+  >([])
   // Consumíveis do inventário do personagem (usáveis no mapa e no combate)
   const [consumables, setConsumables] = useState<DungeonConsumable[]>([])
   const [showItems, setShowItems] = useState(false)
@@ -835,11 +776,6 @@ export default function DungeonRun({
   const curTier = trailPoints[tokenIdx]?.tier || 0
   const atMainNode = trailPoints[tokenIdx]?.kind === 'main'
   const mainsDone = trailPoints.reduce((n, p, i) => n + (p.kind === 'main' && i < tokenIdx ? 1 : 0), 0)
-  // Escalonamento (tier/tipo de nó) a partir de um índice da trilha.
-  const scalingAt = (idx: number): NodeScaling => {
-    const pt = trailPoints[idx]
-    return { tier: pt?.tier || 1, isMain: pt?.kind === 'main', isBoss: pt?.kind === 'boss' }
-  }
   const stepCost = (idx: number): number => {
     const pt = trailPoints[idx]
     if (pt?.kind === 'boss') return BOSS_STEP_COST
@@ -849,14 +785,12 @@ export default function DungeonRun({
 
   // ---------- Exploração ----------
   const [exploreRolling, setExploreRolling] = useState(false)
-  const [exploreResult, setExploreResult] = useState<DiceResult | null>(null)
   // 🎬 Cena pronta: o DungeonScene avisa (onReady) quando chão + sprites do bioma
   // + herói terminam de carregar. Até lá, o d20 gira como LOADING na 1ª entrada e
   // o passo fica segurado — mata o quadro meio-desenhado (pop-in de sprite) que
   // dava a sensação de "não renderizou direito". Os nós seguintes já usam o zoom
   // cinematográfico da chegada; este loading é só para a entrada.
   const [sceneReady, setSceneReady] = useState(false)
-  const [eventCard, setEventCard] = useState<ResolvedEvent | null>(null)
   const [trapShake, setTrapShake] = useState(false)
 
   // ---------- Combate ----------
@@ -903,10 +837,6 @@ export default function DungeonRun({
   // projeta o que não vai caber com a MESMA ordem de prioridade do servidor
   // (pedra → gear → resto). O /finish devolve o veredito real no resumo.
   const freeSlotsRef = useRef<number | null>(null)
-  // 👑 true enquanto o card de espólio do BOSS está na tela: o dismiss (botão ou
-  // auto-pilot) só então dispara finishRun(true) — o jogador vê o brilho do drop
-  // raro antes do resumo/re-run automático assumirem a tela.
-  const bossVictoryPendingRef = useRef(false)
   // Card em destaque na arena (frente + iluminado): o ALVO do jogador na sua vez,
   // ou o ATACANTE atual na vez dos inimigos.
   const [focusEnemyId, setFocusEnemyId] = useState<string | null>(null)
@@ -932,7 +862,6 @@ export default function DungeonRun({
   const [autoConsumables, setAutoConsumables] = useState(true)
   // Diálogo de confirmação ao sair: PAUSA a run (o piloto não age enquanto aberto).
   const [exitConfirm, setExitConfirm] = useState(false)
-  const [lootCard, setLootCard] = useState<ResolvedEvent | null>(null)
   const battleEventCounter = useRef(0)
   // d20 de sorte do nó atual (define a qualidade do loot pós-combate)
   const lootRollRef = useRef(12)
@@ -955,9 +884,10 @@ export default function DungeonRun({
   const runReadyPromiseRef = useRef<Promise<void> | null>(null)
   // Herói já em uso em outra aba (lock vivo): bloqueia a run com um aviso.
   const [blocked, setBlocked] = useState<string | null>(null)
-  // Só o BOSS usa estes refs (o encontro comum guarda o monstro no próprio
-  // eventCard) — nunca escrever aqui fora do branch `data.type === 'boss'` em
-  // advance(), senão o botão de lutar com o chefe pode pegar um monstro errado.
+  // Só o BOSS usa estes refs (o encontro comum extrai o monstro direto do
+  // retorno de applyServerEvent) — nunca escrever aqui fora do branch
+  // `data.type === 'boss'` em advance(), senão o botão de lutar com o chefe
+  // pode pegar um monstro errado.
   const serverMonsterRef = useRef<ScaledMonster | null>(null)
   const serverPackRef = useRef<ScaledMonster[] | null>(null)
   const startedRef = useRef(false)
@@ -1068,6 +998,14 @@ export default function DungeonRun({
     later(() => setFloats(prev => prev.filter(f => f.id !== id)), 1500)
   }, [later])
 
+  // Aviso de drop raro+: só o ícone flutua na tela (sem card, sem descrição) —
+  // o item cai na bag do rodapé de qualquer forma, isto é só o "brilho" do momento.
+  const pushItemFloat = useCallback((name: string, emoji: string, rarity?: string) => {
+    const id = Math.random()
+    setFloats(prev => [...prev, { id, label: '', color: '', item: { name, emoji, rarity } }])
+    later(() => setFloats(prev => prev.filter(f => f.id !== id)), 1700)
+  }, [later])
+
   const showBanner = useCallback((icon: string, text: string, duration = 2400, opts?: { sticky?: boolean }) => {
     bannerKey.current += 1
     const key = bannerKey.current
@@ -1175,11 +1113,13 @@ export default function DungeonRun({
       }
       setTotals(prev => ({ ...prev, items: [...prev.items, { name: d.name, emoji: d.emoji, label }] }))
       pushLog(`${dicePrefix}${d.emoji} ${label}`)
+      // Raro+/pedra: pisca o ícone na tela — o resto cai na bag sem aviso nenhum.
+      if (isHighlightDrop(d)) pushItemFloat(d.name, d.emoji, d.rarity)
     }
     if (skippedDrops && skippedDrops.length > 0) {
       showBanner('🎒', 'Inventário cheio! Alguns itens não foram coletados.', 3600, { sticky: true })
     }
-  }, [pushFloat, pushLog, showBanner])
+  }, [pushFloat, pushItemFloat, pushLog, showBanner])
 
   // Carrega os consumíveis restauradores (HP/MP) do inventário do personagem.
   const loadConsumables = useCallback(async () => {
@@ -1332,7 +1272,6 @@ export default function DungeonRun({
   // Monta o card do nó a partir do que o SERVIDOR resolveu (monstro e espólio já
   // rolados). Nenhum RNG acontece aqui no cliente; o CRÉDITO acontece no /finish.
   const applyServerEvent = (data: StepResponse, atIdx: number): ResolvedEvent => {
-    const sc = scalingAt(atIdx)
     lootRollRef.current = data.roll ?? 12
     // Espólio pré-rolado do encontro: é daqui que o card de vitória sai sem rede.
     killDropsRef.current = data.killDrops ?? {}
@@ -1348,18 +1287,7 @@ export default function DungeonRun({
           ? `${ev.icon} ${ev.title} ${group.length} inimigos aparecem!`
           : `${ev.icon} ${ev.title} ${scaled.emoji} ${scaled.name} apareceu!`
       )
-      const effects: EffectChip[] = many
-        ? group.map(m => ({ kind: 'stat', text: `${m.emoji} ${m.name} • Nv.${m.level}` }))
-        : [{ kind: 'stat', text: `${scaled.emoji} ${scaled.name} • Nv.${scaled.level}` }]
-      return {
-        def: ev,
-        text: many
-          ? `Um grupo de ${group.length} criaturas cerca você — mais fracas, mas em bando.`
-          : sc.isMain ? `Guardião da sala: ${ev.description}` : ev.description,
-        effects,
-        monster: scaled,
-        monsters: group,
-      }
+      return { def: ev, monster: scaled, monsters: group }
     }
 
     // Daqui para baixo o nó NÃO é combate (a única saída antecipada acima é a do
@@ -1371,23 +1299,18 @@ export default function DungeonRun({
     // exibimos. O crédito na mochila acontece no /finish.
     const loot: NodeLoot = data.loot ?? { gold: 0, drops: [] }
 
-    // ⛲ Fonte revitalizadora: restaura HP e MP cheios (sem espólio neste nó).
+    // ⛲ Fonte revitalizadora: restaura HP e MP cheios (sem espólio neste nó), sem
+    // card — só a cura e o log, a jornada segue sozinha (ver narrateArrivalAt).
     if (loot.fountain) {
       setHp(effMaxHp)
       setMp(character.maxMp)
       pushFloat('HP/MP cheios! ⛲', '#34d399')
       pushLog('⛲ Você encontra uma fonte revitalizadora — HP e MP restaurados!')
-      const def: DungeonEventDef = {
-        kind: 'blessing', min: 0, max: 0, icon: '⛲',
-        title: 'Fonte Revitalizadora',
-        description: 'Águas cristalinas brotam entre as pedras. Você bebe e recupera todas as forças — HP e MP restaurados por completo.',
-      }
-      return {
-        def, text: def.description,
-        effects: [{ kind: 'stat', text: '❤️ HP cheio' }, { kind: 'stat', text: '🔮 MP cheio' }],
-      }
+      return { def: { kind: 'blessing', min: 0, max: 0, icon: '⛲', title: '', description: '' } }
     }
 
+    // showLoot já joga ouro/itens na bag + float do raro+; sem gear/ouro, o log
+    // registra a ambientação pra não ficar totalmente mudo (sem card na tela).
     showLoot(loot, predictSkipped(loot.drops), data.roll)
 
     const hasGear = loot.drops.some(d => d.kind === 'item' || d.kind === 'stone')
@@ -1395,25 +1318,17 @@ export default function DungeonRun({
     const roll = data.roll ?? 12
     const tier = roll <= 5 ? 'low' : roll <= 13 ? 'mid' : 'high'
     const icon = hasGear ? '🌟' : anyDrop ? '✨' : '🍃'
-    const title = hasGear ? 'Grande achado!' : anyDrop ? 'Um bom achado' : 'Nada de útil...'
-    const text = !anyDrop
+    const flavor = !anyDrop
       ? dungeon.ambience[Math.floor(Math.random() * dungeon.ambience.length)]
       : tier === 'high'
         ? 'A sorte sorri: você vasculha e encontra algo valioso.'
         : tier === 'mid'
           ? 'Entre folhas e pedras, você recolhe o que dá.'
           : 'Pouca coisa — mas nada se perde.'
+    pushLog(flavor)
     const revealKind: DungeonEventKind = hasGear ? 'item' : anyDrop ? 'gold' : 'nothing'
 
-    const effects: EffectChip[] = []
-    if (loot.gold > 0) effects.push({ kind: 'stat', text: `+${loot.gold} 💰` })
-    for (const d of loot.drops) effects.push({
-      kind: 'item', name: d.name, emoji: d.emoji, label: d.name, rarity: d.rarity,
-      highlight: d.kind === 'stone' || ['RARE', 'EPIC', 'LEGENDARY'].includes(String(d.rarity ?? '').toUpperCase()),
-    })
-
-    const def: DungeonEventDef = { kind: revealKind, min: 0, max: 0, icon, title, description: text }
-    return { def, text, effects, luckRoll: roll }
+    return { def: { kind: revealKind, min: 0, max: 0, icon, title: '', description: '' } }
   }
 
   // Botão principal: treadmill (scroll → approach → /step) ou path clássico.
@@ -1471,7 +1386,6 @@ export default function DungeonRun({
     setMoving(false)
     walkStepLockRef.current = false
     setExploreRolling(false)
-    setExploreResult(null)
 
     // Combate / chefe: sem card de emboscada e sem d20 de exploração — câmera
     // investe e entra direto na arena (a sorte do espólio é o d20 de iniciativa).
@@ -1504,14 +1418,15 @@ export default function DungeonRun({
       return
     }
 
-    // Achado / fonte: sem d20 na tela — card de loot na hora.
+    // Achado / fonte: sem d20 na tela, sem card — o espólio (bag+float) e a cura
+    // da fonte já aconteceram dentro de applyServerEvent; só segue a jornada.
     const resolved = applyServerEvent(data, dest)
     const emoji = resolved.def.icon || '❔'
     setWalkTrailMarks(prev => {
       const aged = prev.map(m => ({ ...m, age: m.age + 1 })).filter(m => m.age < 5)
       return [{ id: dest, age: 0, emoji: typeof emoji === 'string' ? emoji : '❔' }, ...aged]
     })
-    setEventCard(resolved)
+    narrateArrivalAt(dest)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dungeon.boss.name])
 
@@ -1534,7 +1449,7 @@ export default function DungeonRun({
   )
 
   const advance = async () => {
-    if (phase !== 'explore' || exploreRolling || walkBusy || eventCard || lootCard || atBoss || combatIntro) return
+    if (phase !== 'explore' || exploreRolling || walkBusy || atBoss || combatIntro) return
     // Na CENA a caminhada pode começar antes do /start aterrissar (start otimista):
     // quem espera o runId é o finishWalkStep, na chegada ao nó. Nos outros modos
     // o /step vem logo em seguida, então continua exigindo a sessão aberta.
@@ -1592,7 +1507,6 @@ export default function DungeonRun({
 
     if (typeof data.stamina === 'number') setStamina(data.stamina)
     setExploreRolling(false)
-    setExploreResult(null)
     setTokenIdx(dest)
 
     // Combate / chefe: direto pra arena (sem d20 de exploração nem card).
@@ -1616,24 +1530,25 @@ export default function DungeonRun({
       return
     }
 
-    // Achado / fonte: card na hora, sem animação de dado.
+    // Achado / fonte: sem animação de dado, sem card — o espólio (bag+float) e a
+    // cura da fonte já aconteceram dentro de applyServerEvent; só segue a jornada.
     setMoving(true)
-    const resolved = applyServerEvent(data, dest)
+    applyServerEvent(data, dest)
     later(() => setMoving(false), 425)
-    later(() => setEventCard(resolved), 80)
+    later(() => narrateArrivalAt(dest), 80)
   }
 
-  // Fecha o card de evento e o Mestre narra a transição.
-  const dismissEvent = () => {
-    setEventCard(null)
-    setExploreResult(null)
-    setExploreRolling(false)
-    if (nextIsBoss) {
+  // Narração de transição ao chegar num nó (sem card) — usa o índice explícito
+  // em vez do estado `tokenIdx` porque pode rodar antes do re-render aplicar o
+  // `setTokenIdx(dest)` mais recente.
+  const narrateArrivalAt = (idx: number) => {
+    if (idx === LAST - 1) {
       showNarration('A trilha termina adiante. Você sente um olhar antigo cravado em você...')
-    } else if (!atBoss) {
-      showNarration(TRANSITIONS[tokenIdx % TRANSITIONS.length])
+    } else if (idx !== LAST) {
+      showNarration(TRANSITIONS[idx % TRANSITIONS.length])
     }
   }
+
 
   const isBossRoom = atBoss
 
@@ -1668,8 +1583,6 @@ export default function DungeonRun({
     killedIdsRef.current = []
     setFocusEnemyId(active.id)
     setIsPack(list.length > 1)
-    setEventCard(null)
-    setExploreResult(null)
     setExploreRolling(false)
     setMoving(false)
     setWalkMode('idle')
@@ -1681,7 +1594,6 @@ export default function DungeonRun({
     setPendingAttack(null)
     setCurrentTurnId(null)
     setBattleEvent(null)
-    setLootCard(null)
     // Transformação reinicia a cada combate (e libera o uso único da luta)
     setTransform(null)
     setTransformCd(0)
@@ -1713,7 +1625,6 @@ export default function DungeonRun({
     if (list.length === 0) return
     if (phase === 'combat' || combatIntro) return
     if (reducedMotionRef.current) { startCombat(list); return }
-    setEventCard(null)
     setCombatIntro(true)
     setEncounterZoom(ZOOM_CHARGE)
     later(() => startCombat(list), COMBAT_INTRO_MS)
@@ -2548,70 +2459,30 @@ export default function DungeonRun({
     const nodeDrops = [...encounterDropsRef.current, ...nodeLoot.drops]
     encounterDropsRef.current = []
     const loot: NodeLoot = { ...nodeLoot, drops: nodeDrops }
+    // Sem card de vitória: showLoot já jogou os itens na bag (e piscou o ícone
+    // dos raro+ na tela) — o combate não trava esperando clique nenhum.
     showLoot(loot, predictSkipped(nodeDrops), lootRollRef.current)
     later(() => {
       setMonster(null)
       setPack([])
       packRef.current = []
       setCombatEnded(false)
-      // Sempre volta pra fase 'explore' — é ela que hospeda o overlay do lootCard
-      // (inclusive pro boss agora, ver abaixo); dismissLootCard decide o que vem
-      // a seguir (avançar a trilha ou finishRun, se era o boss).
-      // A câmera volta ao enquadramento normal AGORA, com a cena ainda escondida
-      // atrás do card de espólio — o jogador nunca vê o zoom desfazer.
+      // A câmera volta ao enquadramento normal AGORA, escondida atrás da
+      // transição de volta pro 'explore' — o jogador nunca vê o zoom desfazer.
       resetEncounterCamera()
       // Bando abatido: só AQUI o nó de combate deixa de desenhar o bicho. Até
       // este ponto ele ficou rondando o bolsão embaixo do card do encontro e do
       // zoom de aproximação, que é o que o jogador precisa ver.
       markNodeCleared(tokenIdxRef.current)
       setPhase('explore')
-      if (!m.isBoss) {
+      if (m.isBoss) {
+        showBanner('👑', `${dungeon.name} conquistada!`, 2400)
+        finishRun(true)
+      } else {
         showNarration(nextIsBoss
           ? 'A trilha termina adiante. Você sente um olhar antigo cravado em você...'
           : TRANSITIONS[tokenIdx % TRANSITIONS.length])
       }
-
-      // Card de vitória mostra o TOTAL do nó (soma de todos os abates) + espólio do nó —
-      // inclui o BOSS: antes o boss pulava direto pro resumo final sem passar por aqui,
-      // então um drop raro nunca ganhava a moldura/brilho de destaque.
-      const nodeXp = encounterXpRef.current
-      const totalGold = encounterKillGoldRef.current + loot.gold
-      const hasGear = loot.drops.some(d => d.kind === 'item' || d.kind === 'stone')
-
-      const effects: EffectChip[] = []
-      if (nodeXp > 0) effects.push({ kind: 'stat', text: `+${nodeXp} ⭐ XP` })
-      if (totalGold > 0) effects.push({ kind: 'stat', text: `+${totalGold} 💰` })
-      // `loot.drops` já traz os drops por abate + o espólio de limpar (montado
-      // acima). Pedra de aprimoramento e RARE+ ganham destaque (moldura dourada
-      // + brilho) no card.
-      const isHighlight = (d: LootDrop) =>
-        d.kind === 'stone' || ['RARE', 'EPIC', 'LEGENDARY'].includes(String(d.rarity ?? '').toUpperCase())
-      const allDrops = loot.drops
-      const hasRare = allDrops.some(isHighlight)
-      for (const d of allDrops) effects.push({
-        kind: 'item',
-        name: d.name,
-        emoji: d.emoji,
-        label: d.enhancement ? `${d.name} +${d.enhancement}` : d.name,
-        rarity: d.rarity,
-        highlight: isHighlight(d),
-      })
-
-      const def: DungeonEventDef = {
-        kind: hasGear ? 'item' : 'gold',
-        min: 0,
-        max: 0,
-        icon: hasRare ? '💎' : m.isBoss ? '👑' : hasGear ? '🌟' : '🏆',
-        title: hasRare ? 'Espólio Raro!' : m.isBoss ? `${dungeon.name} conquistada!` : 'Espólio da Vitória',
-        description: hasGear
-          ? `${m.emoji} ${m.name} foi derrotado e deixou cair seus pertences.`
-          : `${m.emoji} ${m.name} foi derrotado.`,
-      }
-      // Boss: o card some via dismissLootCard (botão ou auto-pilot), que só então
-      // dispara finishRun(true) — garante que o jogador VÊ o brilho do drop raro
-      // antes de seguir para o resumo/re-run automático.
-      if (m.isBoss) bossVictoryPendingRef.current = true
-      setLootCard({ def, text: def.description, effects, luckRoll: lootRollRef.current })
     }, 2800)
   }
 
@@ -2756,17 +2627,6 @@ export default function DungeonRun({
       if (auto) {
         later(() => { if (onRestart && stamina >= MINOR_STEP_COST) restartRun(); else exitRun() }, 3600)
       }
-    }
-  }
-
-  // Fecha o card de espólio (botão "Continuar a jornada" ou auto-pilot). Se era o
-  // espólio do BOSS, só agora dispara finishRun(true) — o jogador chegou a ver o
-  // destaque/brilho do drop raro antes de seguir pro resumo/re-run automático.
-  const dismissLootCard = () => {
-    setLootCard(null)
-    if (bossVictoryPendingRef.current) {
-      bossVictoryPendingRef.current = false
-      finishRun(true)
     }
   }
 
@@ -2992,13 +2852,7 @@ export default function DungeonRun({
       return null
     }
 
-    // 1) Espólio da vitória → confirmar (tempo pra ler o drop).
-    if (lootCard) return fire(() => dismissLootCard(), 3000)
-    // 2) Card de achado/fonte → seguir (monstros já entram direto no combate).
-    if (eventCard) {
-      return fire(() => dismissEvent(), 1000)
-    }
-    // 3) Fallback: ainda no covil sem combate (ex.: race) → enfrenta.
+    // 1) Fallback: ainda no covil sem combate (ex.: race) → enfrenta.
     if (atBoss) {
       return fire(() => beginEncounter(
         serverPackRef.current ??
@@ -3009,7 +2863,7 @@ export default function DungeonRun({
     if (!startedRef.current) return
     if (!useScene && !runReady) return
 
-    // 4) Poções no caminho entre nós, depois avança.
+    // 2) Poções no caminho entre nós, depois avança.
     const potion = refillPotion()
     if (potion) return fire(() => useConsumable(potion), 450)
 
@@ -3019,7 +2873,7 @@ export default function DungeonRun({
     }
     return fire(advance, 800)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auto, autoConsumables, exitConfirm, phase, moving, walkBusy, exploreRolling, combatIntro, lootCard, eventCard, atBoss, tokenIdx, runReady, stamina, hp, mp, consumables, sceneReady])
+  }, [auto, autoConsumables, exitConfirm, phase, moving, walkBusy, exploreRolling, combatIntro, atBoss, tokenIdx, runReady, stamina, hp, mp, consumables, sceneReady])
 
   /**
    * 🚶 Cena explorável: a CAMINHADA é sempre automática.
@@ -3044,7 +2898,6 @@ export default function DungeonRun({
     if (blocked || exitConfirm || showItems) return
     if (phase !== 'explore') return
     if (walkBusy || exploreRolling || combatIntro) return // walkBusy já inclui `moving`
-    if (eventCard || lootCard) return // card aberto = vez do jogador
     if (atBoss) return
     // Start otimista: basta a sessão estar EM ABERTURA — o primeiro passo anda
     // enquanto o /start viaja (ver runReadyPromiseRef).
@@ -3065,7 +2918,7 @@ export default function DungeonRun({
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [useScene, auto, blocked, exitConfirm, showItems, phase, walkBusy, exploreRolling,
-      combatIntro, eventCard, lootCard, atBoss, runReady, stamina, tokenIdx, sceneReady])
+      combatIntro, atBoss, runReady, stamina, tokenIdx, sceneReady])
 
   // ============================================================
   // RENDER
@@ -3152,7 +3005,7 @@ export default function DungeonRun({
           /step ainda está em voo. Em vez de deixar a tela parada esperando (o
           que lia como travado), pisca branco tipo Pokémon: a espera de rede
           vira TRANSIÇÃO em vez de silêncio. Some assim que a resposta chega —
-          o combatIntro (bicho) ou o eventCard (achado) tomam a cena a seguir. */}
+          o combatIntro (bicho) toma a cena a seguir. */}
       <AnimatePresence>
         {exploreRolling && useScene && (
           <motion.div
@@ -3341,8 +3194,7 @@ export default function DungeonRun({
                    já vivo — sem o corte seco. */
                 paused={
                   phase !== 'explore' ||
-                  combatIntro ||
-                  Boolean(eventCard || lootCard)
+                  combatIntro
                 }
                 cinematicZoom={encounterZoom}
                 focusNode={focusNode}
@@ -3579,7 +3431,17 @@ export default function DungeonRun({
                 <div className="relative h-full pointer-events-auto">
                 {/* números flutuantes (ganhos/perdas) */}
                 <div className="absolute left-1/2 top-3 -translate-x-1/2 flex flex-col items-center gap-1 pointer-events-none z-20">
-                  {floats.map(f => (
+                  {floats.map(f => f.item ? (
+                    <div
+                      key={f.id}
+                      className={`float-num w-14 h-14 rounded-xl bg-black/40 border-2 grid place-items-center ${
+                        (LOOT_RARITY_RING[f.item.rarity ?? 'RARE'] ?? LOOT_RARITY_RING.RARE).ring
+                      }`}
+                      style={{ boxShadow: `0 0 22px ${(LOOT_RARITY_RING[f.item.rarity ?? 'RARE'] ?? LOOT_RARITY_RING.RARE).glow}` }}
+                    >
+                      <ItemThumb name={f.item.name} emoji={f.item.emoji} className="text-3xl" />
+                    </div>
+                  ) : (
                     <span
                       key={f.id}
                       className="float-num font-combat font-black text-lg"
@@ -3610,154 +3472,6 @@ export default function DungeonRun({
               {/* dialog: o Mestre narra — abre junto da rolagem / dos beats da história */}
               <NarrationDialog text={narration} open={narrationOpen} onClose={() => setNarrationOpen(false)} />
 
-              {/* overlays: evento / boss / loot */}
-              <AnimatePresence>
-                {lootCard && (
-                  <motion.div
-                    key="loot-overlay"
-                    className="absolute inset-0 z-30 grid place-items-center px-5"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                  >
-                    <div className="absolute inset-0 bg-black/45 backdrop-blur-[2px]" />
-                    <motion.div
-                      initial={{ scale: 0.4, y: 40, opacity: 0 }}
-                      animate={{ scale: 1, y: 0, opacity: 1 }}
-                      exit={{ scale: 0.6, opacity: 0, y: 20 }}
-                      transition={{ type: 'spring', stiffness: 260, damping: 16 }}
-                      className="relative w-full max-w-sm rounded-2xl p-6 text-center"
-                      style={{
-                        background: 'linear-gradient(180deg, rgba(30,30,63,0.92), rgba(15,15,35,0.96))',
-                        border: `1px solid ${dungeon.accentSoft}`,
-                        boxShadow: `0 24px 60px -12px ${dungeon.accentSoft}, 0 0 40px ${dungeon.accentSoft}`,
-                        backdropFilter: 'blur(20px)',
-                      }}
-                    >
-                      <motion.div
-                        initial={{ scale: 0, rotate: -20 }}
-                        animate={{ scale: 1, rotate: 0 }}
-                        transition={{ type: 'spring', stiffness: 240, damping: 12, delay: 0.08 }}
-                        className="text-6xl mb-2 mt-1 inline-block"
-                        style={{ filter: `drop-shadow(0 0 18px ${dungeon.accentSoft})` }}
-                      >
-                        {lootCard.def.icon}
-                      </motion.div>
-
-                      <h3 className="text-2xl font-black mb-1.5" style={{ color: dungeon.accent }}>{lootCard.def.title}</h3>
-                      {/* Badge da sorte do nó: fecha o loop d20 → qualidade do espólio. */}
-                      {lootCard.luckRoll != null && (
-                        <div
-                          className={`inline-flex items-center gap-1.5 px-3 py-1 mb-2 rounded-full border text-xs font-bold font-combat ${
-                            lootCard.luckRoll >= 20
-                              ? 'border-amber-400/70 text-amber-300 bg-amber-400/10'
-                              : lootCard.luckRoll >= 14
-                              ? 'border-emerald-400/60 text-emerald-300 bg-white/5'
-                              : 'border-white/20 text-textsec bg-white/5'
-                          }`}
-                        >
-                          🎲 Sorte {lootCard.luckRoll}
-                          {lootCard.luckRoll >= 20 ? ' — espólio máximo!' : lootCard.luckRoll >= 14 ? ' — boa fortuna' : ''}
-                        </div>
-                      )}
-                      {lootCard.text && <p className="text-sm text-textsec leading-snug mb-4">{lootCard.text}</p>}
-
-                      <EffectChipList effects={lootCard.effects} />
-
-                      <button
-                        onClick={dismissLootCard}
-                        className="w-full py-3.5 rounded-lg font-bold text-white text-base transition-transform active:scale-[0.98] hover:scale-[1.02]"
-                        style={{ background: `linear-gradient(90deg, ${dungeon.accent}, ${dungeon.accent}aa)`, boxShadow: `0 0 22px ${dungeon.accentSoft}` }}
-                      >
-                        Continuar a jornada →
-                      </button>
-                    </motion.div>
-                  </motion.div>
-                )}
-
-                {eventCard && !lootCard && (
-                  <motion.div
-                    key="event-overlay"
-                    className="absolute inset-0 z-30 grid place-items-center px-5"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                  >
-                    <div className="absolute inset-0 bg-black/45 backdrop-blur-[2px]" />
-                    <motion.div
-                      initial={{ scale: 0.4, y: 40, opacity: 0 }}
-                      animate={{ scale: 1, y: 0, opacity: 1 }}
-                      exit={{ scale: 0.6, opacity: 0, y: 20 }}
-                      transition={{ type: 'spring', stiffness: 260, damping: 16 }}
-                      className="relative w-full max-w-sm rounded-2xl p-6 text-center"
-                      style={{
-                        background: 'linear-gradient(180deg, rgba(30,30,63,0.92), rgba(15,15,35,0.96))',
-                        border: `1px solid ${eventCard.def.kind === 'trap' ? 'rgba(248,113,113,0.4)'
-                          : eventCard.def.kind === 'monster' ? 'rgba(231,76,60,0.4)'
-                          : eventCard.def.kind === 'blessing' ? 'rgba(253,230,138,0.4)'
-                          : dungeon.accentSoft}`,
-                        boxShadow: `0 24px 60px -12px ${dungeon.accentSoft}, 0 0 40px ${dungeon.accentSoft}`,
-                        backdropFilter: 'blur(20px)',
-                      }}
-                    >
-                      {exploreResult && (
-                        <div
-                          className="absolute -top-3 left-1/2 -translate-x-1/2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-background border text-xs font-combat font-bold"
-                          style={{ borderColor: dungeon.accentSoft, color: dungeon.accent }}
-                        >
-                          🎲 d20 → {exploreResult.roll}
-                        </div>
-                      )}
-
-                      <motion.div
-                        initial={{ scale: 0, rotate: -20 }}
-                        animate={{ scale: 1, rotate: 0 }}
-                        transition={{ type: 'spring', stiffness: 240, damping: 12, delay: 0.08 }}
-                        className="mb-2 mt-1 inline-flex items-center justify-center"
-                        style={{ filter: `drop-shadow(0 0 18px ${dungeon.accentSoft})` }}
-                      >
-                        {eventCard.monsters && eventCard.monsters.length > 1 ? (
-                          <span className="flex items-end justify-center gap-2">
-                            {eventCard.monsters.map((mm, i) => (
-                              <span
-                                key={mm.id}
-                                className={i === 1 ? 'block w-24 h-24 sm:w-28 sm:h-28' : 'block w-16 h-16 sm:w-20 sm:h-20 opacity-90'}
-                              >
-                                <MonsterThumb name={mm.name} image={mm.image} emoji={mm.emoji} className="text-4xl" />
-                              </span>
-                            ))}
-                          </span>
-                        ) : eventCard.monster ? (
-                          <span className="block w-28 h-28 sm:w-32 sm:h-32">
-                            <MonsterThumb
-                              name={eventCard.monster.name}
-                              image={eventCard.monster.image}
-                              emoji={eventCard.monster.emoji}
-                              className="text-6xl"
-                            />
-                          </span>
-                        ) : (
-                          <span className="text-6xl">{eventCard.def.icon}</span>
-                        )}
-                      </motion.div>
-
-                      <h3 className="text-2xl font-black mb-1.5" style={{ color: dungeon.accent }}>{eventCard.def.title}</h3>
-                      {eventCard.text && <p className="text-sm text-textsec leading-snug mb-4">{eventCard.text}</p>}
-
-                      <EffectChipList effects={eventCard.effects} />
-
-                      <button
-                        onClick={dismissEvent}
-                        className="w-full py-3.5 rounded-lg font-bold text-white text-base transition-transform active:scale-[0.98] hover:scale-[1.02]"
-                        style={{ background: `linear-gradient(90deg, ${dungeon.accent}, ${dungeon.accent}aa)`, boxShadow: `0 0 22px ${dungeon.accentSoft}` }}
-                      >
-                        Continuar a jornada →
-                      </button>
-                    </motion.div>
-                  </motion.div>
-                )}
-
-              </AnimatePresence>
                 </div>
               </div>
 
@@ -3830,7 +3544,7 @@ export default function DungeonRun({
                     <button
                       onClick={advance}
                       disabled={
-                        exploreRolling || walkBusy || !!eventCard || !!lootCard || atBoss ||
+                        exploreRolling || walkBusy || atBoss ||
                         (useScene && stamina < stepCost(tokenIdx + 1))
                       }
                       className="flex-1 h-11 rounded-xl font-black text-sm sm:text-base text-white inline-flex items-center justify-center gap-2 transition-all active:scale-[0.98] hover:scale-[1.01] disabled:opacity-50 disabled:cursor-wait disabled:hover:scale-100"

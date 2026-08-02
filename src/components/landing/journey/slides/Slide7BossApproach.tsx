@@ -1,68 +1,101 @@
 'use client'
 
-// Slide 7 — De volta à trilha, agora com arma IV e set III: a mesma
-// caminhada real (WalkScene) com o "?" laranja de boss no fim — a câmera
-// fecha na chegada ao covil da Anciã da Mata.
+// Slide 7 — De volta à trilha, agora com arma IV e set III: a chegada ao covil
+// da Anciã da Mata na masmorra EXPLORÁVEL de verdade (mesma DungeonScene do
+// slide 3), com a Anciã já visível rondando o bolsão antes da luta começar.
+//
+// O herói nasce na BOCA do covil, não na entrada da masmorra: a trilha inteira
+// são ~28s de caminhada e os nós anteriores já foram limpos nos slides de
+// antes. `visitedNodes` cheio conta essa parte — os marcadores do caminho já
+// estão apagados.
 
-import React from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { NarrationDialog } from '@/components/dungeon/DungeonMap'
-import type { WalkMode, WalkTrailMark } from '@/components/dungeon/WalkScene'
-import JourneyWalkStage, { FOREST } from './JourneyWalkStage'
+import JourneySceneStage, { FOREST, useForestRun } from './JourneySceneStage'
 import { useJourney } from '../JourneyContext'
-import { useSlideScript } from '../useSlideScript'
 import type { JourneySlideProps } from '../journeyData'
 import { useI18n } from '@/lib/i18n/I18nProvider'
 import { pickName, pickTitle } from '@/lib/i18n/names'
 
-// 0 idle+chips do gear · 1 scroll (5.2s) · 2 approach · 3 chegada no covil · 4 CTA
-const TIMES = [0, 1600, 6800, 7700, 9400]
+/** Seed inicial do slide 3 — lida como a MESMA run, agora na altura do covil. */
+const SEED = 'run-0420'
 
 const GEAR_CHIPS = ['⚔️ Weapon IV', '🛡️ Set III', '🎒 Potions in the bag']
 
-const TRAIL_FULL: WalkTrailMark[] = [
-  { id: 1, age: 1, emoji: '📦' },
-  { id: 2, age: 2, emoji: '🐺' },
-  { id: 3, age: 3, emoji: '💰' },
-  { id: 4, age: 4, emoji: '✨' },
-]
+/** Zoom da investida — o mesmo valor da run real. */
+const ZOOM_CHARGE = 2.4
 
-const MODE_BY_STEP: WalkMode[] = ['idle', 'scroll', 'approach', 'idle', 'idle']
+type Phase = 'intro' | 'walking' | 'arrived' | 'cta'
 
 export default function Slide7BossApproach({ active, onNext }: JourneySlideProps) {
   const { locale, t } = useI18n()
-  const { heroArt, heroName } = useJourney()
-  const { step, advance } = useSlideScript(active, TIMES, { loopDelayMs: 6200 })
+  const { heroName } = useJourney()
+  const [phase, setPhase] = useState<Phase>('intro')
+  const [ready, setReady] = useState(false)
+  /** Sobe ao reiniciar: remonta a cena e o herói volta à boca do covil. */
+  const [runNonce, setRunNonce] = useState(0)
 
-  const mode = MODE_BY_STEP[Math.min(step, MODE_BY_STEP.length - 1)]
-  const nodeIndex = step >= 3 ? 5 : 4
-  const arrived = step >= 3
+  const { map } = useForestRun(SEED)
+  const bossNode = map.spots[map.spots.length - 1].nodeIndex
+  // Tudo antes do covil já foi resolvido nos slides anteriores.
+  const visited = useMemo(
+    () => map.spots.filter(s => s.nodeIndex < bossNode).map(s => s.nodeIndex),
+    [map, bossNode],
+  )
+
+  const timer = useRef<number | null>(null)
+  const clear = useCallback(() => {
+    if (timer.current) window.clearTimeout(timer.current)
+    timer.current = null
+  }, [])
+  useEffect(() => clear, [clear])
+
+  useEffect(() => {
+    if (!active) {
+      clear()
+      setPhase('intro')
+      setReady(false)
+      setRunNonce(n => n + 1)
+    }
+  }, [active, clear])
+
+  // A NarrationDialog só fecha no clique; na vitrine ela sai sozinha.
+  useEffect(() => {
+    if (!active || !ready || phase !== 'intro') return
+    const id = window.setTimeout(() => setPhase('walking'), 2800)
+    return () => window.clearTimeout(id)
+  }, [active, ready, phase])
+
+  const arrived = phase === 'arrived' || phase === 'cta'
+
+  const handleReach = useCallback(() => {
+    setPhase('arrived')
+    clear()
+    timer.current = window.setTimeout(() => setPhase('cta'), 1700)
+  }, [clear])
 
   return (
     <div className="relative h-full w-full overflow-hidden">
-      <motion.div
-        className="absolute inset-0"
-        animate={{ scale: arrived ? 1.18 : 1 }}
-        transition={{ duration: 1.3, ease: 'easeInOut' }}
-        style={{ transformOrigin: '50% 30%' }}
+      <JourneySceneStage
+        seed={SEED}
+        sceneKey={runNonce}
+        spawnAtNode={bossNode}
+        targetNode={bossNode}
+        visitedNodes={visited}
+        paused={!active || phase === 'intro'}
+        // Chegou no covil: a câmera fecha na Anciã como a entrada em combate faz.
+        cinematicZoom={arrived ? ZOOM_CHARGE : 1}
+        focusNode={arrived ? bossNode : null}
+        onReachSpot={handleReach}
+        onReady={() => setReady(true)}
       >
-        <JourneyWalkStage
-          mode={mode}
-          nodeIndex={nodeIndex}
-          trailMarks={TRAIL_FULL}
-          nextIsBoss
-          avatar={heroArt}
-          onApproachComplete={() => {
-            if (step === 2) advance()
-          }}
-        >
-          <NarrationDialog
-            text={t('The trail ends ahead. Something ancient breathes among the roots...')}
-            open={step === 0}
-            onClose={advance}
-          />
-        </JourneyWalkStage>
-      </motion.div>
+        <NarrationDialog
+          text={t('The trail ends ahead. Something ancient breathes among the roots...')}
+          open={active && ready && phase === 'intro'}
+          onClose={() => setPhase('walking')}
+        />
+      </JourneySceneStage>
 
       {/* vinheta que fecha ao chegar */}
       <motion.div
@@ -119,7 +152,7 @@ export default function Slide7BossApproach({ active, onNext }: JourneySlideProps
             ? t('The lair. No more nodes, no more fog — just you and the Warden.')
             : t('{name} returns to the Gloomwood Forest — this time, to the end of the trail.', { name: heroName })}
         </p>
-        {step >= 4 && (
+        {phase === 'cta' && (
           <motion.button
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}

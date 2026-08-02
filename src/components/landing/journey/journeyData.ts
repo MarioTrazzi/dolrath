@@ -28,30 +28,102 @@ export interface JourneySlideProps {
 
 // ---------- Identidade do herói por raça ----------
 
-export const RACE_HERO: Record<
-  JourneyRaceId,
-  { name: string; art: string; artTransformed: string }
-> = {
-  draconiano: { name: 'Gorrak', art: '/dracopvp.png', artTransformed: '/draco_transformed.png' },
-  elfo: { name: 'Lyra', art: '/elfopvp.png', artTransformed: '/elfo_transformed.png' },
-  humano: { name: 'Aldric', art: '/humanopvp.png', artTransformed: '/humano_transformed.png' },
-  metamorfo: { name: 'Kaira', art: '/metamorfo_pvp.png', artTransformed: '/metamorfo_transformed.png' },
+export const RACE_HERO: Record<JourneyRaceId, { name: string }> = {
+  draconiano: { name: 'Gorrak' },
+  elfo: { name: 'Lyra' },
+  humano: { name: 'Aldric' },
+  metamorfo: { name: 'Kaira' },
 }
 
-// Pares canônicos raça↔classe (espelham as artes reais dos NFTs de vitrine —
-// a arte do Draconiano É um guerreiro, a da Elfa É uma ladina etc.; travar o
-// par garante que a imagem nunca minta sobre a classe).
+/**
+ * Arte das 16 combinações raça×classe (`public/character-seeds/`) — é ela que
+ * sustenta a promessa do slide 1: a imagem sai da SUA combinação, não de uma
+ * prateleira de 4 artes prontas.
+ *
+ * ⚠️ Os nomes NÃO seguem um template único, então não monte a string na mão:
+ * 9 combinações nasceram do gerador (`<raça>-<classe>.webp`) e 7 foram
+ * exportadas de personagens reais do banco, com o nome do herói na frente
+ * (`drakmon-draconiano-warrior.webp`). Um template ingênuo dá 404 em 7 das 16.
+ * Fontes: scripts/{missing,existing}-character-image-manifest.json.
+ *
+ * `transformed` é a arte da forma da raça (dragão/celestial/7º sentido/urso).
+ * Metamorfo+Monge é a exceção: a folha exportada veio com sufixo `-default`.
+ */
+export const COMBO_ART: Record<string, { art: string; transformed: string }> = {
+  'draconiano-warrior': {
+    art: '/character-seeds/drakmon-draconiano-warrior.webp',
+    transformed: '/character-seeds/drakmon-draconiano-warrior-dragon.webp',
+  },
+  'draconiano-rogue': {
+    art: '/character-seeds/demond-draconiano-rogue.webp',
+    transformed: '/character-seeds/demond-draconiano-rogue-dragon.webp',
+  },
+  'draconiano-mage': {
+    art: '/character-seeds/noatasrk-draconiano-mage.webp',
+    transformed: '/character-seeds/noatasrk-draconiano-mage-dragon.webp',
+  },
+  'draconiano-monk': {
+    art: '/character-seeds/drakark-draconiano-monk.webp',
+    transformed: '/character-seeds/drakark-draconiano-monk-dragon.webp',
+  },
+  'elfo-warrior': {
+    art: '/character-seeds/elfo-warrior.webp',
+    transformed: '/character-seeds/elfo-warrior-celestial.webp',
+  },
+  'elfo-rogue': {
+    art: '/character-seeds/arkantos-elfo-rogue.webp',
+    transformed: '/character-seeds/arkantos-elfo-rogue-celestial.webp',
+  },
+  'elfo-mage': {
+    art: '/character-seeds/elfo-mage.webp',
+    transformed: '/character-seeds/elfo-mage-celestial.webp',
+  },
+  'elfo-monk': {
+    art: '/character-seeds/elfo-monk.webp',
+    transformed: '/character-seeds/elfo-monk-celestial.webp',
+  },
+  'humano-warrior': {
+    art: '/character-seeds/humano-warrior.webp',
+    transformed: '/character-seeds/humano-warrior-seventh_sense.webp',
+  },
+  'humano-rogue': {
+    art: '/character-seeds/humano-rogue.webp',
+    transformed: '/character-seeds/humano-rogue-seventh_sense.webp',
+  },
+  'humano-mage': {
+    art: '/character-seeds/amir-humano-mage.webp',
+    transformed: '/character-seeds/amir-humano-mage-seventh_sense.webp',
+  },
+  'humano-monk': {
+    art: '/character-seeds/humano-monk.webp',
+    transformed: '/character-seeds/humano-monk-seventh_sense.webp',
+  },
+  'metamorfo-warrior': {
+    art: '/character-seeds/metamorfo-warrior.webp',
+    transformed: '/character-seeds/metamorfo-warrior-bear.webp',
+  },
+  'metamorfo-rogue': {
+    art: '/character-seeds/metamorfo-rogue.webp',
+    transformed: '/character-seeds/metamorfo-rogue-bear.webp',
+  },
+  'metamorfo-mage': {
+    art: '/character-seeds/metamorfo-mage.webp',
+    transformed: '/character-seeds/metamorfo-mage-bear.webp',
+  },
+  'metamorfo-monk': {
+    art: '/character-seeds/sotarkan-metamorfo-monk.webp',
+    transformed: '/character-seeds/sotarkan-metamorfo-monk-default.webp',
+  },
+}
+
+// Classe "clássica" de cada raça. NÃO trava mais o seletor do slide 1 (a arte
+// existe nas 16 combinações) — sobrou como o casamento que monta o oponente de
+// PvP em `buildPvpOpponent`. O mapa inverso (CANON_RACE) morreu junto do trava.
 export const CANON_CLASS: Record<JourneyRaceId, JourneyClassId> = {
   humano: 'mage',
   elfo: 'rogue',
   draconiano: 'warrior',
   metamorfo: 'monk',
-}
-export const CANON_RACE: Record<JourneyClassId, JourneyRaceId> = {
-  mage: 'humano',
-  rogue: 'elfo',
-  warrior: 'draconiano',
-  monk: 'metamorfo',
 }
 
 /** Forma de transformação de cada raça (ids de TRANSFORMATION_ART/transformationSystem).
@@ -142,6 +214,33 @@ export const FORM_PROMPT: Record<JourneyRaceId, string> = {
     'The original face and outfit remain clearly visible beneath the light.',
 }
 
+/** Estilo travado — 1ª frase de DOLRATH_STYLE_BASE (characterImagePrompt.ts:14). */
+export const STYLE_PROMPT =
+  'Fantasy RPG portrait in the dark-fantasy world of Dolrath: cinematic digital ' +
+  'painting, dramatic volumetric light, moody palette, collectible-art quality.'
+
+/**
+ * Prompt EXIBIDO enquanto a arte "é gerada" no slide 1. Espelha o formato real
+ * de `buildCombinationPreprompt` (estilo travado → linha da raça → linha da
+ * classe, characterImagePrompt.ts:95-99); só vem encurtado, porque o texto
+ * inteiro passa de 900 caracteres e levaria ~15s datilografando.
+ *
+ * Traduz ANTES de fatiar: em PT as frases têm outro comprimento.
+ */
+export function buildArtPrompt(raceId: JourneyRaceId, classId: JourneyClassId, t: TFunction): string {
+  const trim = (s: string, max: number) => {
+    if (s.length <= max) return s
+    const cut = s.slice(0, max)
+    const at = cut.lastIndexOf(' ')
+    return `${cut.slice(0, at > 0 ? at : max)}…`
+  }
+  return [
+    trim(t(STYLE_PROMPT), 150),
+    `${t('Race: {name}.', { name: t(RACE_LABEL[raceId]) })} ${trim(t(RACE_PROMPT[raceId]), 130)}`,
+    `${t('Class: {name}.', { name: t(CLASS_LABEL[classId]) })} ${trim(t(CLASS_PROMPT[classId]), 110)}`,
+  ].join('\n')
+}
+
 export const RACE_LIST = races
 export const CLASS_LIST = CLASSES
 
@@ -200,8 +299,54 @@ export function heroName(raceId: JourneyRaceId): string {
   return RACE_HERO[raceId].name
 }
 
-export function heroArt(raceId: JourneyRaceId): string {
-  return RACE_HERO[raceId].art
+/** Chave do COMBO_ART / dos sprites de caminhada. */
+export function comboKey(raceId: JourneyRaceId, classId: JourneyClassId): string {
+  return `${raceId}-${classId}`
+}
+
+export const JOURNEY_RACE_IDS: JourneyRaceId[] = ['draconiano', 'elfo', 'humano', 'metamorfo']
+export const JOURNEY_CLASS_IDS: JourneyClassId[] = ['warrior', 'rogue', 'mage', 'monk']
+
+/**
+ * Combinações que o SORTEIO evita. Fora: draconiano+monge — é a única sem
+ * boneco de caminhada em `heroSprites.ts`, e o sorteio não deveria empurrar
+ * justo ela para a masmorra do slide 3 (escolhida na mão continua valendo; a
+ * cena cai no retrato antigo, sem quebrar). Volta pra cá quando a folha existir.
+ */
+const AUTO_PICK_SKIP = new Set(['draconiano-monk'])
+
+function pickRandom<T>(list: T[]): T {
+  return list[Math.floor(Math.random() * list.length)]
+}
+
+/** Combinação inteira no sorteio (visitante parado sem escolher nada). */
+export function randomCombo(): JourneyChoice {
+  const pool: JourneyChoice[] = []
+  for (const raceId of JOURNEY_RACE_IDS) {
+    for (const classId of JOURNEY_CLASS_IDS) {
+      if (!AUTO_PICK_SKIP.has(comboKey(raceId, classId))) pool.push({ raceId, classId })
+    }
+  }
+  return pickRandom(pool)
+}
+
+/** Completa só a metade que falta, preservando a escolha real do visitante. */
+export function randomClassFor(raceId: JourneyRaceId): JourneyClassId {
+  const pool = JOURNEY_CLASS_IDS.filter(c => !AUTO_PICK_SKIP.has(comboKey(raceId, c)))
+  return pickRandom(pool.length ? pool : JOURNEY_CLASS_IDS)
+}
+
+export function randomRaceFor(classId: JourneyClassId): JourneyRaceId {
+  const pool = JOURNEY_RACE_IDS.filter(r => !AUTO_PICK_SKIP.has(comboKey(r, classId)))
+  return pickRandom(pool.length ? pool : JOURNEY_RACE_IDS)
+}
+
+export function heroArt(raceId: JourneyRaceId, classId: JourneyClassId): string {
+  return COMBO_ART[comboKey(raceId, classId)].art
+}
+
+export function heroArtTransformed(raceId: JourneyRaceId, classId: JourneyClassId): string {
+  return COMBO_ART[comboKey(raceId, classId)].transformed
 }
 
 /** baseStats reais da raça (mesma fonte da tela de criação). */
@@ -250,7 +395,7 @@ export function buildHeroFighter(
     level: enhanced ? 12 : 1,
     race: RACE_LABEL[choice.raceId],
     class: CLASS_LABEL[choice.classId],
-    avatar: heroArt(choice.raceId),
+    avatar: heroArt(choice.raceId, choice.classId),
     hp: opts.hp ?? maxHp,
     maxHp,
     mp: enhanced ? 64 : 40,
@@ -259,7 +404,7 @@ export function buildHeroFighter(
     maxStamina: 60,
     isTransformed: !!opts.transformed,
     transformationType: opts.transformed ? FORM_BY_RACE[choice.raceId] : null,
-    transformationImage: RACE_HERO[choice.raceId].artTransformed,
+    transformationImage: heroArtTransformed(choice.raceId, choice.classId),
     combatStats: enhanced ? { ad: 58, ap: 44, dp: 32 } : { ad: 14, ap: 9, dp: 8 },
     combatStatLabels: { ad: 'ATK', ap: 'DEF', dp: 'STR' },
     equipmentMap: buildEquipment(choice.classId, enhanced),

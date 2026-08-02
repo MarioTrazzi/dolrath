@@ -14,7 +14,6 @@ import PromptPanel from './PromptPanel'
 import MiniSkillTree from './MiniSkillTree'
 import {
   heroBaseStats,
-  RACE_HERO,
   RACE_LIST,
   FORM_BY_RACE,
   FORM_LABEL,
@@ -32,7 +31,7 @@ const TIMES = [0, 700, 1400, 2100, 2900, 4200, 8200, 9800]
 
 export default function Slide2Sheet({ active, onNext }: JourneySlideProps) {
   const t = useT()
-  const { raceId, classId, heroName, heroArt, visual } = useJourney()
+  const { raceId, classId, heroName, heroArt, heroArtTransformed, visual } = useJourney()
   const { step, cycle } = useSlideScript(active, TIMES, { loopDelayMs: 5600 })
   const reduced = useReducedMotion()
   const stats = heroBaseStats(raceId)
@@ -41,7 +40,7 @@ export default function Slide2Sheet({ active, onNext }: JourneySlideProps) {
   const form = FORM_BY_RACE[raceId]
   const formLabel = FORM_LABEL[raceId]
   const flipped = step === 5
-  const img = flipped ? RACE_HERO[raceId].artTransformed : heroArt
+  const img = flipped ? heroArtTransformed : heroArt
 
   // Stats REAIS da forma: multiplicadores de transformationSystem sobre a base
   // — o flip mostra que transformar muda os números, não só a arte.

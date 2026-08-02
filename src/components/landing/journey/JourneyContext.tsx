@@ -1,17 +1,22 @@
 'use client'
 
-// Contexto da Jornada (landing): o MESMO herói atravessa os 8 slides.
-// A escolha de raça/classe do slide 1 repinta ficha, mapa, boss fight,
-// PvP e ranking. Antes do primeiro clique do visitante, um "cursor
-// fantasma" cicla as combinações (userPicked desliga isso p/ sempre).
+// Contexto da Jornada (landing): o MESMO herói atravessa os 10 slides.
+// A escolha de raça/classe do slide 1 repinta ficha, masmorra, boss fight,
+// PvP e ranking.
+//
+// Raça e classe são INDEPENDENTES: a arte existe nas 16 combinações
+// (COMBO_ART), então nada trava o par. Enquanto o visitante não escolheu as
+// duas coisas, o slide 1 não mostra imagem nenhuma — a graça é ver a arte
+// nascer da combinação dele, não escolher numa prateleira. Se ele demorar,
+// `autoPick` sorteia uma e o ciclo roda igual.
 
-import React, { createContext, useContext, useMemo, useState } from 'react'
+import React, { createContext, useCallback, useContext, useMemo, useState } from 'react'
 import { getBlendedVisual, type BlendedVisual } from '@/lib/creationVisuals'
 import {
   heroName,
   heroArt,
-  CANON_CLASS,
-  CANON_RACE,
+  heroArtTransformed,
+  randomCombo,
   type JourneyChoice,
   type JourneyRaceId,
   type JourneyClassId,
@@ -20,15 +25,23 @@ import {
 interface JourneyState extends JourneyChoice {
   heroName: string
   heroArt: string
+  heroArtTransformed: string
   visual: BlendedVisual
-  /** O visitante já escolheu de verdade (desliga o auto-cycle do slide 1). */
-  userPicked: boolean
+  /** O visitante escolheu a raça (clique de verdade, não sorteio). */
+  pickedRace: boolean
+  /** O visitante escolheu a classe. */
+  pickedClass: boolean
+  /** Raça E classe definidas — só aqui a arte pode aparecer. */
+  chosen: boolean
+  /** A combinação atual saiu do sorteio, não do visitante. */
+  autoPicked: boolean
   /** Destino do CTA final (login ou dashboard, decidido pela landing). */
   primaryHref: string
   setChoice: (raceId: JourneyRaceId, classId: JourneyClassId, byUser?: boolean) => void
-  /** Escolha por raça/classe travando o par CANÔNICO (a arte nunca mente). */
-  pickRace: (raceId: JourneyRaceId, byUser?: boolean) => void
-  pickClass: (classId: JourneyClassId, byUser?: boolean) => void
+  pickRace: (raceId: JourneyRaceId) => void
+  pickClass: (classId: JourneyClassId) => void
+  /** Sorteia uma combinação completa (visitante parado no slide 1). */
+  autoPick: () => void
 }
 
 const JourneyCtx = createContext<JourneyState | null>(null)
@@ -40,32 +53,61 @@ export function JourneyProvider({
   children: React.ReactNode
   primaryHref?: string
 }) {
+  // Combinação SEMPRE válida: os slides seguintes (ficha, masmorra, PvP…)
+  // nunca precisam lidar com estado vazio. Quem esconde a arte enquanto falta
+  // escolher é o slide 1, via `chosen`.
   const [choice, setChoiceState] = useState<JourneyChoice>({ raceId: 'draconiano', classId: 'warrior' })
-  const [userPicked, setUserPicked] = useState(false)
+  const [pickedRace, setPickedRace] = useState(false)
+  const [pickedClass, setPickedClass] = useState(false)
+  const [autoPicked, setAutoPicked] = useState(false)
+
+  const setChoice = useCallback((raceId: JourneyRaceId, classId: JourneyClassId, byUser = false) => {
+    setChoiceState({ raceId, classId })
+    if (byUser) {
+      setPickedRace(true)
+      setPickedClass(true)
+      setAutoPicked(false)
+    }
+  }, [])
+
+  const pickRace = useCallback((raceId: JourneyRaceId) => {
+    setChoiceState(prev => ({ ...prev, raceId }))
+    setPickedRace(true)
+    setAutoPicked(false)
+  }, [])
+
+  const pickClass = useCallback((classId: JourneyClassId) => {
+    setChoiceState(prev => ({ ...prev, classId }))
+    setPickedClass(true)
+    setAutoPicked(false)
+  }, [])
+
+  const autoPick = useCallback(() => {
+    setChoiceState(randomCombo())
+    setPickedRace(true)
+    setPickedClass(true)
+    setAutoPicked(true)
+  }, [])
 
   const value = useMemo<JourneyState>(() => {
     const visual = getBlendedVisual(choice.raceId, choice.classId)
     return {
       ...choice,
       heroName: heroName(choice.raceId),
-      heroArt: heroArt(choice.raceId),
+      heroArt: heroArt(choice.raceId, choice.classId),
+      heroArtTransformed: heroArtTransformed(choice.raceId, choice.classId),
       visual,
-      userPicked,
+      pickedRace,
+      pickedClass,
+      chosen: pickedRace && pickedClass,
+      autoPicked,
       primaryHref,
-      setChoice: (raceId, classId, byUser = false) => {
-        setChoiceState({ raceId, classId })
-        if (byUser) setUserPicked(true)
-      },
-      pickRace: (raceId, byUser = false) => {
-        setChoiceState({ raceId, classId: CANON_CLASS[raceId] })
-        if (byUser) setUserPicked(true)
-      },
-      pickClass: (classId, byUser = false) => {
-        setChoiceState({ raceId: CANON_RACE[classId], classId })
-        if (byUser) setUserPicked(true)
-      },
+      setChoice,
+      pickRace,
+      pickClass,
+      autoPick,
     }
-  }, [choice, userPicked, primaryHref])
+  }, [choice, pickedRace, pickedClass, autoPicked, primaryHref, setChoice, pickRace, pickClass, autoPick])
 
   return <JourneyCtx.Provider value={value}>{children}</JourneyCtx.Provider>
 }

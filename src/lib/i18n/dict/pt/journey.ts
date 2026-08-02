@@ -65,6 +65,9 @@ export const JOURNEY_PT: Record<string, string> = {
 
   // Prompts (Slide 1/2)
   'Race: {name}.': 'Raça: {name}.',
+  'Class: {name}.': 'Classe: {name}.',
+  'Fantasy RPG portrait in the dark-fantasy world of Dolrath: cinematic digital painting, dramatic volumetric light, moody palette, collectible-art quality.':
+    'Retrato de RPG de fantasia no mundo sombrio de Dolrath: pintura digital cinematográfica, luz volumétrica dramática, paleta soturna, qualidade de arte colecionável.',
   'Draconic heritage: subtle dragon scales on the arms, jaw and brow, reptilian eyes, an ember glow beneath the skin and an imposing bearing that hints at the sleeping dragon. Palette: deep crimson and molten gold.':
     'Herança draconiana: escamas sutis de dragão nos braços, mandíbula e fronte, olhos reptilianos, um brilho de brasa sob a pele e um porte imponente que insinua o dragão adormecido. Paleta: carmesim profundo e ouro derretido.',
   'Shapeshifter heritage: a fully human adventurer in normal form — no fur, claws or animal traits; only the feral presence and watchful eyes betray the beast they can become. Palette: moss green and bone.':
@@ -92,9 +95,18 @@ export const JOURNEY_PT: Record<string, string> = {
 
   // Slide 1
   '1 · Choose your race': '1 · Escolha sua raça',
-  '2 · Class (canonical pair)': '2 · Classe (dupla canônica)',
-  'Canonical pair of the chosen race': 'Dupla canônica da raça escolhida',
-  '✍️ your art prompt · you help pick the style': '✍️ prompt da sua arte · você ajuda a escolher o estilo',
+  '2 · Choose your class': '2 · Escolha sua classe',
+  '16 race × class combinations — the art is generated for yours.':
+    '16 combinações de raça × classe — a arte é gerada para a sua.',
+  '✍️ your art prompt · pick race and class': '✍️ prompt da sua arte · escolha raça e classe',
+  '✍️ writing your art prompt…': '✍️ escrevendo o prompt da sua arte…',
+  '✍️ the prompt that generated your art': '✍️ o prompt que gerou a sua arte',
+  'Your art has not been painted yet': 'Sua arte ainda não foi pintada',
+  'Pick a race and a class: the prompt above is written and the image is generated for your character.':
+    'Escolha uma raça e uma classe: o prompt acima é escrito e a imagem é gerada para o seu personagem.',
+  'generating your character art…': 'gerando a arte do seu personagem…',
+  '🎲 We drew this one for you — change race or class to generate another.':
+    '🎲 Sorteamos esta para você — troque a raça ou a classe para gerar outra.',
   'See the sheet →': 'Ver a ficha →',
 
   // Slide 2
@@ -118,8 +130,18 @@ export const JOURNEY_PT: Record<string, string> = {
   '🎲 19 — Lucky find!': '🎲 19 — Achado de sorte!',
   "Among the roots, a smugglers' stash: forge materials, alchemy ingredients and a Black Stone.":
     'Entre as raízes, um esconderijo de contrabandistas: materiais de forja, ingredientes de alquimia e uma Pedra Negra.',
-  '🌫️ Real exploration: comb the woods, roll the d20 and find out what the node hides — treasure, ambush or blessing.':
-    '🌫️ A exploração real: vasculhe a mata, role o d20 e descubra o que o nó esconde — tesouro, emboscada ou bênção.',
+  '🌲 Every run draws its own forest: pockets, trails and what sleeps in them. The hero explores on his own — you see the beast before the fight.':
+    '🌲 Cada run sorteia a sua mata: bolsões, trilhas e o que dorme neles. O herói explora sozinho — e você vê a fera antes da luta.',
+  'Procedural map': 'Mapa procedural',
+  'Another map': 'Outro mapa',
+  'The camera closes in — the turn-based fight happens right here.':
+    'A câmera fecha — o combate por turnos acontece aqui mesmo.',
+  // 'Boss' já vem de landing.ts (mesma tradução) — não repetir aqui.
+  'Monsters': 'Monstros',
+  'Chest': 'Baú',
+  'Rubble': 'Entulho',
+  'Herb patch': 'Moita de ervas',
+  'Fountain': 'Fonte',
   'Forge with the spoils →': 'Forjar com o espólio →',
   'Continue ▸': 'Avançar ▸',
 

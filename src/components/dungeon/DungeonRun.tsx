@@ -3091,6 +3091,24 @@ export default function DungeonRun({
         )}
       </AnimatePresence>
 
+      {/* ⚡ Flash de ENCONTRO — herói já parou no bolsão (ver DungeonScene), mas o
+          /step ainda está em voo. Em vez de deixar a tela parada esperando (o
+          que lia como travado), pisca branco tipo Pokémon: a espera de rede
+          vira TRANSIÇÃO em vez de silêncio. Some assim que a resposta chega —
+          o combatIntro (bicho) ou o eventCard (achado) tomam a cena a seguir. */}
+      <AnimatePresence>
+        {exploreRolling && useScene && (
+          <motion.div
+            key="encounter-flash"
+            className="fixed inset-0 z-[65] pointer-events-none bg-white"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: [0, 0.75, 0.05, 0.6, 0.05, 0.5, 0.05] }}
+            exit={{ opacity: 0, transition: { duration: 0.15 } }}
+            transition={{ duration: 0.7, repeat: Infinity, ease: 'linear' }}
+          />
+        )}
+      </AnimatePresence>
+
       {/* ✨ Flash de SUBIU DE NÍVEL — explosão dourada sobre toda a tela */}
       <AnimatePresence>
         {levelUpFlash !== null && (

@@ -2544,9 +2544,9 @@ export default function DungeonRun({
   const finishSentRef = useRef(false)
   const closeRunOnServer = (reason: 'boss' | 'retreat' | 'lose') => {
     if (!runIdRef.current) return
-    // UMA vez por run: os caminhos de saída se sobrepõem (finishRun → exitRun, por
-    // exemplo). O servidor já é idempotente (409), mas a segunda chamada não teria
-    // o desfecho e ainda poderia disparar o aviso de falha de rede à toa.
+    // UMA vez por run enquanto está EM VOO ou já entregue: os caminhos de saída se
+    // sobrepõem (finishRun → exitRun, por exemplo). Se a entrega falhar de vez, a
+    // flag volta a false lá embaixo — clicar "Sair" de novo tem que poder tentar.
     if (finishSentRef.current) return
     finishSentRef.current = true
     // Combate em andamento com abates não reportados: vira o desfecho final.
@@ -2557,38 +2557,74 @@ export default function DungeonRun({
         killedIds: [...killedIdsRef.current],
       }
     }
+    // O desfecho do último nó vive SÓ aqui até o /finish confirmar — não pode ser
+    // descartado antes da resposta, senão uma falha de entrega leva junto o nó
+    // (que, no fim da run, é o boss inteiro).
     const resolve = pendingResolveRef.current ?? undefined
-    pendingResolveRef.current = null
     const body = JSON.stringify({ runId: runIdRef.current, reason, resolve })
-    // Tenta 1x, e se falhar (rede caiu bem na hora — comum ao voltar de uma aba
-    // congelada/AFK) tenta mais uma vez antes de desistir. Sem isso, o auto-pilot
-    // (que espera esta promessa antes de reabrir a run) achava que encerrou e já
-    // batia um /start novo — a run antiga, ainda 'active' no servidor, se autobloqueava
-    // ("Herói em uso") sem nenhuma outra aba de fato aberta.
-    const attempt = (retriesLeft: number): Promise<void> =>
-      fetch('/api/dungeon/run/finish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body })
+    const giveUp = () => {
+      // Nada foi creditado: devolve o desfecho e destrava a flag pra uma próxima
+      // tentativa (o botão de sair, ou o /start seguinte drenando a run órfã).
+      pendingResolveRef.current = resolve ?? null
+      finishSentRef.current = false
+      showBanner('⚠️', 'Não deu para encerrar a run — o espólio será creditado na próxima entrada.', 4200, { sticky: true })
+    }
+    // Tenta até 3x com backoff. Sem isso, o auto-pilot (que espera esta promessa
+    // antes de reabrir a run) achava que encerrou e já batia um /start novo — a run
+    // antiga, ainda 'active' no servidor, se autobloqueava ("Herói em uso") sem
+    // nenhuma outra aba de fato aberta.
+    const attempt = (retriesLeft: number, waitMs: number): Promise<void> =>
+      fetch('/api/dungeon/run/finish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        // Sobrevive ao unload da página: fechar a aba no meio do POST não cancela
+        // mais o crédito da run.
+        keepalive: true,
+      })
         .then(async (res) => {
           // 409 = a run já foi encerrada (retry ou outra aba): o crédito aconteceu,
           // não há o que reconciliar.
-          if (res.status === 409) return
+          if (res.status === 409) { pendingResolveRef.current = null; return }
           if (!res.ok) {
+            // 5xx é o caso REAL de perda (a transação do servidor deu rollback e
+            // nada foi creditado) — tratar como sucesso mudo era o que fazia o
+            // jogador sair da run sem XP, gold nem item e sem nenhum aviso.
             if (retriesLeft > 0) {
-              await new Promise(r => setTimeout(r, 1000))
-              return attempt(retriesLeft - 1)
+              await new Promise(r => setTimeout(r, waitMs))
+              return attempt(retriesLeft - 1, waitMs * 2)
             }
+            giveUp()
             return
           }
+          pendingResolveRef.current = null
           applyFinishGrant((await res.json().catch(() => ({}))) as FinishResponse)
         })
         .catch(async () => {
           if (retriesLeft > 0) {
-            await new Promise(r => setTimeout(r, 1000))
-            return attempt(retriesLeft - 1)
+            await new Promise(r => setTimeout(r, waitMs))
+            return attempt(retriesLeft - 1, waitMs * 2)
           }
-          showBanner('⚠️', 'Sem conexão ao encerrar — o espólio será creditado na próxima entrada.', 4200, { sticky: true })
+          giveUp()
         })
-    endRunPromiseRef.current = attempt(2)
+    endRunPromiseRef.current = attempt(3, 1000)
   }
+
+  // 🔌 Saída "suja": fechar a aba, dar F5 ou navegar pela navbar não passa por
+  // botão nenhum da run. Sem isto o desfecho do nó ATUAL (que no fim da run é o
+  // boss inteiro) morria no browser, e a run só seria drenada — sem ele — na
+  // entrada seguinte. O `keepalive` do fetch é o que faz o POST sobreviver ao
+  // unload. No desmonte, `finishSentRef` já barra quem saiu pelo caminho normal.
+  const closeRunRef = useRef(closeRunOnServer)
+  closeRunRef.current = closeRunOnServer
+  useEffect(() => {
+    const bail = () => closeRunRef.current('retreat')
+    window.addEventListener('pagehide', bail)
+    return () => {
+      window.removeEventListener('pagehide', bail)
+      bail()
+    }
+  }, [])
 
   // RECUAR: sai do combate em SEGURANÇA, levando os abates já feitos. É a saída
   // do early-game: matou o que dava conta e volta com XP.

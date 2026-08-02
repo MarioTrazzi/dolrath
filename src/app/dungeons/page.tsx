@@ -48,8 +48,8 @@ export default function DungeonsPage() {
   // bloqueia o "Entrar" pra qualquer herói — só dá pra farmar um de cada vez.
   const [heroInUse, setHeroInUse] = useState(false)
   const [lockedCharacterName, setLockedCharacterName] = useState<string | null>(null)
-  // Acabamos de sair da NOSSA run: ignora a detecção por uns segundos (o /abandon é
-  // assíncrono, então o lock ainda pode constar "vivo" e piscaria o bloqueio à toa).
+  // Acabamos de sair da NOSSA run: ignora a detecção por uns segundos (o /finish
+  // pode ainda estar em voo, então o lock constaria "vivo" e piscaria o bloqueio à toa).
   const [recentExit, setRecentExit] = useState(false)
   // Subiu de nível na última run: mostra um aviso/botão p/ distribuir os pontos novos.
   const [levelUpAlert, setLevelUpAlert] = useState<{ characterId: string; points: number } | null>(null)
@@ -245,8 +245,8 @@ export default function DungeonsPage() {
       setSelectedCharacter(updated)
       setCharacters(prev => prev.map(c => (c.id === updated.id ? updated : c)))
     }
-    // O gold da run já foi creditado no servidor a cada combate/espólio. Ao voltar
-    // ao mapa a navbar reaparece (a run a cobria com fixed inset-0), então recarrega
+    // O gold da run foi creditado de uma vez pelo /finish (que o exitRun aguarda).
+    // Ao voltar ao mapa a navbar reaparece (a run a cobria com fixed inset-0), então recarrega
     // o personagem ativo para a barra refletir o ouro ganho na hora — sem reload.
     refreshActiveCharacter()
 

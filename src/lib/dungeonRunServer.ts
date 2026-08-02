@@ -429,19 +429,44 @@ function rarityValue(rarity: string): number {
  */
 export interface SlotBudget { free: number }
 
-// Resolve/cria o Item do catálogo a partir do nome (mesma lógica de
-// add-exploration-reward) e o adiciona ao inventário do personagem.
-// Exportada: a COLETA (gatheringServer.ts) e a FAZENDA depositam por aqui.
-// `qty` só vale para consumível (empilha); equipamento é sempre 1 peça/linha.
-export async function addDropToInventoryTx(
+/**
+ * O registro do catálogo precisa de conserto? Predicado PURO (não toca no banco),
+ * usado nos dois caminhos: `ensureCatalogItemTx` decide se roda os `update` de
+ * cura, e o pré-resolvedor em lote (`prepareDropItems`) decide se aquele nome
+ * merece um round-trip próprio ou se já veio pronto do `findMany`.
+ */
+function needsCatalogHeal(item: { name: string; type: ItemType; image: string | null; stats: unknown }): boolean {
+  if (item.type !== 'CONSUMABLE') return false
+  const stats = (item.stats as Record<string, any> | null) ?? {}
+  // Pedra criada pelo fallback genérico: sem `enhancementStone` ela cai no
+  // inventário mas não funciona no aprimoramento.
+  if (STONE_META[item.name] && !stats.enhancementStone) return true
+  // Ingrediente/material legado: sem `stats.kind`/`image` o card fica sem imagem
+  // e sem o botão de "Usar na Alquimia/Forja". [[dolrath-alchemy-crafting]]
+  const ing = getIngredientByName(item.name)
+  const mat = ing ? undefined : getForgeMaterialByName(item.name)
+  if (ing || mat) {
+    if (stats.kind !== (ing ? 'ingredient' : 'material')) return true
+    if (!item.image) return true
+  }
+  return false
+}
+
+/**
+ * Resolve (achando, curando ou criando) o Item do catálogo a partir do NOME.
+ *
+ * Aceita tanto um `tx` quanto o `prisma` cru — o `Item` é global e idempotente
+ * por nome, então esta parte pode (e deve) rodar FORA da transação de crédito:
+ * era ela que enchia a transação do /finish de round-trips até estourar o
+ * timeout de 5s do Prisma (P2028) e derrubar o espólio da run inteira.
+ */
+export async function ensureCatalogItemTx(
   tx: Prisma.TransactionClient,
-  characterId: string,
-  drop: { name: string; rarity?: string; enhancement?: number; qty?: number },
-  slots?: SlotBudget,
+  itemName: string,
+  rarityHint?: string,
 ) {
-  const itemName = drop.name
-  const qty = Math.max(1, Math.floor(Number(drop.qty) || 1))
   let existingItem = await tx.item.findFirst({ where: { name: itemName } })
+  if (existingItem && !needsCatalogHeal(existingItem)) return existingItem
 
   // Cura pedras criadas pelo fallback genérico (sem stats.enhancementStone) —
   // senão caem no inventário mas não funcionam no aprimoramento.
@@ -610,7 +635,7 @@ export async function addDropToInventoryTx(
         },
       })
     } else {
-      const rarity = drop.rarity || 'COMMON'
+      const rarity = rarityHint || 'COMMON'
       existingItem = await tx.item.create({
         data: {
           name: itemName,
@@ -623,6 +648,22 @@ export async function addDropToInventoryTx(
       })
     }
   }
+
+  return existingItem
+}
+
+// Resolve/cria o Item do catálogo a partir do nome (mesma lógica de
+// add-exploration-reward) e o adiciona ao inventário do personagem.
+// Exportada: a COLETA (gatheringServer.ts) e a FAZENDA depositam por aqui.
+// `qty` só vale para consumível (empilha); equipamento é sempre 1 peça/linha.
+export async function addDropToInventoryTx(
+  tx: Prisma.TransactionClient,
+  characterId: string,
+  drop: { name: string; rarity?: string; enhancement?: number; qty?: number },
+  slots?: SlotBudget,
+) {
+  const qty = Math.max(1, Math.floor(Number(drop.qty) || 1))
+  const existingItem = await ensureCatalogItemTx(tx, drop.name, drop.rarity)
 
   // Equipamento NÃO agrupa (cada peça é um slot); consumível empilha em enhancementLevel 0.
   const isConsumable = existingItem.type === 'CONSUMABLE'
@@ -654,27 +695,116 @@ export async function addDropToInventoryTx(
   return true
 }
 
+/** nome do drop → linha do catálogo, pré-resolvida FORA da transação. */
+export type DropCatalog = Map<string, { id: string; isConsumable: boolean }>
+
 /**
- * Credita um LOTE de drops (a run inteira). Calcula os slots livres UMA vez e
- * respeita a ordem de prioridade (pedra → gear → resto), devolvendo o que não
- * coube para o cliente avisar em vez de fingir que coletou.
+ * Pré-resolve o catálogo de um LOTE de drops SEM transação aberta.
+ *
+ * Uma consulta só (`findMany` pelo índice de `Item.name`) cobre o caso normal;
+ * só nome inédito ou registro que precisa de cura paga round-trip próprio. Isto
+ * é o que tira ~3 queries POR DROP de dentro da transação do /finish — com 30-60
+ * drops numa run boa, era isso que estourava o timeout de 5s (P2028) e fazia a
+ * run inteira ser perdida.
+ */
+export async function prepareDropItems(drops: LootDrop[]): Promise<DropCatalog> {
+  const catalog: DropCatalog = new Map()
+  const names = Array.from(new Set(drops.map(d => d.name)))
+  if (names.length === 0) return catalog
+
+  const rows = await prisma.item.findMany({ where: { name: { in: names } } })
+  const byName = new Map<string, (typeof rows)[number]>()
+  for (const r of rows) if (!byName.has(r.name)) byName.set(r.name, r)
+
+  for (const name of names) {
+    const row = byName.get(name)
+    if (row && !needsCatalogHeal(row)) {
+      catalog.set(name, { id: row.id, isConsumable: row.type === 'CONSUMABLE' })
+      continue
+    }
+    // Ausente ou precisando de conserto: aqui sim vale a lógica completa (que
+    // cria/atualiza). `prisma` serve como TransactionClient — sem transação, de
+    // propósito: criar linha de catálogo é global e idempotente por nome.
+    const rarity = drops.find(d => d.name === name)?.rarity
+    const ensured = await ensureCatalogItemTx(prisma, name, rarity)
+    catalog.set(name, { id: ensured.id, isConsumable: ensured.type === 'CONSUMABLE' })
+  }
+  return catalog
+}
+
+/**
+ * Credita um LOTE de drops (a run inteira) em POUCAS escritas.
+ *
+ * Agrupa por item antes de tocar no banco: 5 estilhaços iguais viram UM
+ * `increment: 5`, e todas as linhas novas saem num `createMany`. Respeita a
+ * ordem de prioridade (pedra → gear → resto) ao gastar os slots, devolvendo o
+ * que não coube para o cliente avisar em vez de fingir que coletou.
+ *
+ * O catálogo (`prepareDropItems`) tem que vir pronto — nada de resolver nome
+ * dentro da transação.
  */
 export async function creditDropsBatchTx(
   tx: Prisma.TransactionClient,
   characterId: string,
   drops: LootDrop[],
+  catalog: DropCatalog,
 ): Promise<LootDrop[]> {
   if (drops.length === 0) return []
-  const slots: SlotBudget = { free: (await freeInventorySlots(tx, characterId)).free }
+  const ordered = orderDropsForCredit(drops)
+  const itemIds = Array.from(
+    new Set(ordered.map(d => catalog.get(d.name)?.id).filter((id): id is string => !!id))
+  )
+
+  const { free } = await freeInventorySlots(tx, characterId)
+  const existingRows = itemIds.length
+    ? await tx.characterInventory.findMany({
+        where: { characterId, itemId: { in: itemIds }, enhancementLevel: 0 },
+        select: { id: true, itemId: true },
+      })
+    : []
+  // Só interessa UMA pilha por item (a mesma que o findFirst antigo escolheria).
+  const stackOf = new Map<string, string>()
+  for (const r of existingRows) if (!stackOf.has(r.itemId)) stackOf.set(r.itemId, r.id)
+
+  let slotsFree = free
   const skipped: LootDrop[] = []
-  for (const d of orderDropsForCredit(drops)) {
-    const added = await addDropToInventoryTx(
-      tx,
-      characterId,
-      { name: d.name, rarity: d.rarity, enhancement: d.enhancement },
-      slots,
-    )
-    if (!added) skipped.push(d)
+  const bumps: { id: string; inc: number }[] = [] // linha existente → quanto somar
+  const bumpIdx = new Map<string, number>()
+  const creates: { itemId: string; quantity: number; enhancementLevel: number }[] = []
+  const newStackIdx = new Map<string, number>() // consumível inédito empilha entre si
+
+  for (const d of ordered) {
+    const cat = catalog.get(d.name)
+    if (!cat) { skipped.push(d); continue }
+    if (cat.isConsumable) {
+      const rowId = stackOf.get(cat.id)
+      if (rowId) {
+        const bi = bumpIdx.get(rowId)
+        if (bi != null) bumps[bi].inc += 1
+        else { bumpIdx.set(rowId, bumps.length); bumps.push({ id: rowId, inc: 1 }) }
+        continue
+      }
+      const idx = newStackIdx.get(cat.id)
+      if (idx != null) { creates[idx].quantity += 1; continue }
+      if (slotsFree <= 0) { skipped.push(d); continue }
+      slotsFree -= 1
+      newStackIdx.set(cat.id, creates.length)
+      creates.push({ itemId: cat.id, quantity: 1, enhancementLevel: 0 })
+      continue
+    }
+    // Equipamento NUNCA agrupa: 1 slot por peça. [[dolrath-inventory-stacking-rule]]
+    if (slotsFree <= 0) { skipped.push(d); continue }
+    slotsFree -= 1
+    creates.push({ itemId: cat.id, quantity: 1, enhancementLevel: Math.max(0, Math.floor(Number(d.enhancement) || 0)) })
+  }
+
+  // Sequencial de propósito: queries concorrentes na mesma transação interativa
+  // dividem uma conexão só e o Prisma não garante ordem.
+  for (const b of bumps) {
+    await tx.characterInventory.update({ where: { id: b.id }, data: { quantity: { increment: b.inc } } })
+  }
+  if (creates.length > 0) {
+    await tx.characterInventory.createMany({ data: creates.map(c => ({ characterId, ...c })) })
   }
   return skipped
 }
@@ -860,6 +990,40 @@ export async function flushRunRewards(
 
   const xp = buildXpUpdate(character, accrued.xp)
 
+  // ⏱️ TUDO o que dá para ler/resolver ANTES fica fora da transação. A transação
+  // interativa do Prisma tem timeout (P2028) e um rollback aqui significa perder
+  // a run inteira do jogador — ela precisa conter só as ESCRITAS.
+  const t0 = Date.now()
+  const [catalog, remaining, equipped] = await Promise.all([
+    prepareDropItems(accrued.drops),
+    dailyGoldRemainingTx(prisma, run.userId),
+    weaponWear > 0 || gearWear > 0
+      ? prisma.characterEquipment.findMany({
+          where: { characterId: character.id },
+          include: { item: { select: { name: true } } },
+        })
+      : Promise.resolve([] as { slot: string; durability: number; maxDurability: number; item: { name: string } }[]),
+  ])
+  const gold = Math.min(Math.max(0, Math.floor(accrued.gold)), remaining)
+
+  // Relatório de desgaste (só texto para o cliente); a escrita é o applyGearWearTx.
+  const equipmentWear: RunFlushGrant['equipmentWear'] = []
+  for (const eq of equipped) {
+    if (eq.durability <= 0) continue // já quebrada: não desgasta além de 0
+    const wear = eq.slot === 'WEAPON' ? weaponWear : gearWear
+    const after = Math.max(0, eq.durability - wear)
+    if (after === eq.durability) continue
+    equipmentWear.push({
+      slot: eq.slot,
+      name: eq.item.name,
+      durability: after,
+      maxDurability: eq.maxDurability,
+      justBroke: after === 0,
+    })
+  }
+
+  const tPrep = Date.now() - t0
+
   try {
     const granted = await prisma.$transaction(async (tx) => {
       // Fecha a run PRIMEIRO e de forma condicional: se outra requisição já
@@ -870,10 +1034,7 @@ export async function flushRunRewards(
       })
       if (claimed.count !== 1) throw new RunAlreadyClosedError()
 
-      const remaining = await dailyGoldRemainingTx(tx, run.userId)
-      const gold = Math.min(Math.max(0, Math.floor(accrued.gold)), remaining)
-
-      const skippedDrops = await creditDropsBatchTx(tx, character.id, accrued.drops)
+      const skippedDrops = await creditDropsBatchTx(tx, character.id, accrued.drops, catalog)
 
       await tx.character.update({
         where: { id: character.id },
@@ -899,28 +1060,7 @@ export async function flushRunRewards(
         }
       }
 
-      // O findMany continua: a resposta precisa de nome/valores pro aviso no cliente.
-      const equipmentWear: RunFlushGrant['equipmentWear'] = []
-      if (weaponWear > 0 || gearWear > 0) {
-        const equipped = await tx.characterEquipment.findMany({
-          where: { characterId: character.id },
-          include: { item: { select: { name: true } } },
-        })
-        for (const eq of equipped) {
-          if (eq.durability <= 0) continue // já quebrada: não desgasta além de 0
-          const wear = eq.slot === 'WEAPON' ? weaponWear : gearWear
-          const after = Math.max(0, eq.durability - wear)
-          if (after === eq.durability) continue
-          equipmentWear.push({
-            slot: eq.slot,
-            name: eq.item.name,
-            durability: after,
-            maxDurability: eq.maxDurability,
-            justBroke: after === 0,
-          })
-        }
-        if (equipmentWear.length > 0) await applyGearWearTx(tx, character.id, weaponWear, gearWear)
-      }
+      if (equipmentWear.length > 0) await applyGearWearTx(tx, character.id, weaponWear, gearWear)
 
       return {
         gold,
@@ -933,7 +1073,19 @@ export async function flushRunRewards(
         newLevel: xp.leveledUp ? xp.newLevelInfo.level : character.level,
         equipmentWear,
       }
+    }, {
+      // A transação carrega a run INTEIRA de um jogador: rollback aqui é espólio
+      // perdido, não uma request repetida. O default de 5s do Prisma estourava
+      // (P2028) em runs com muito drop — a função da Vercel tem 300s de folga.
+      timeout: 20_000,
+      maxWait: 10_000,
     })
+
+    // Medição no log: `drops` e `ms` são o sinal que teria pego o P2028 antes do
+    // jogador reclamar. Aparece no `vercel logs -q "[finish]"`.
+    console.log(
+      `[finish] run=${run.id} drops=${accrued.drops.length} gold=${gold} xp=${accrued.xp} prep=${tPrep}ms tx=${Date.now() - t0 - tPrep}ms`
+    )
 
     // 🗺️ Missões: pós-commit e fire-and-forget (fail-soft, nunca afeta a rota).
     if (accrued.kills > 0) {
@@ -966,17 +1118,31 @@ export async function flushStaleRuns(where: { userId: string; characterId?: stri
       tier: true, cursor: true, pending: true, accrued: true,
     },
   })
+  // Runs cujo flush LANÇOU: o espólio continua no banco e não pode ser apagado.
+  const failed = new Set<string>()
   for (const run of stale) {
     // Sem `resolve`: o combate que estava aberto não teve desfecho reportado, então
     // só entra o que já estava acumulado. Falha de uma run não pode travar as outras.
-    await flushRunRewards(run, { reason: 'retreat' }).catch(() => null)
+    try {
+      await flushRunRewards(run, { reason: 'retreat' })
+    } catch (err) {
+      failed.add(run.id)
+      console.error(`[flushStaleRuns] falhou ao drenar run=${run.id} — accrued PRESERVADO`, err)
+    }
   }
-  // Rede de segurança: o flush pode devolver null sem fechar a run (masmorra
+  // Rede de segurança: o flush pode devolver `null` sem fechar a run (masmorra
   // removida do catálogo, personagem apagado). Nada pode ficar 'active' para
   // sempre — isso seguraria o lock do herói a cada entrada.
-  if (stale.length > 0) {
+  //
+  // ⚠️ Só entra aqui quem NÃO lançou. Quando o flush falha (P2028, rede, deadlock),
+  // apagar `accrued` aqui destruía o espólio da run inteira, em silêncio — era isso
+  // que transformava um /finish com erro em perda definitiva. A run fica 'active'
+  // com o espólio intacto e é tentada de novo no /start seguinte; ela não bloqueia
+  // o herói porque o lock (`isRunLive`) é por tempo.
+  const drainable = stale.filter(r => !failed.has(r.id)).map(r => r.id)
+  if (drainable.length > 0) {
     await prisma.dungeonRun.updateMany({
-      where: { id: { in: stale.map(r => r.id) }, status: 'active' },
+      where: { id: { in: drainable }, status: 'active' },
       data: { status: 'abandoned', pending: PrismaNs.DbNull, accrued: PrismaNs.DbNull },
     })
   }

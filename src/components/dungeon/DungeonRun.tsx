@@ -548,25 +548,41 @@ const COMBAT_MAX_W = 1280
 const COMBAT_INTRO_MS = 420
 /** Zoom da INVESTIDA ao entrar no combate (sem card de emboscada). */
 const ZOOM_CHARGE = 2.4
+/** Teto de largura da exploração alargada (`wideExplore`) — bem aquém do teto
+ * do combate: ainda é mapa, não arena, e o mundo gerado (ver generateMap.ts)
+ * é uma trilha estreita — alargar demais só exporia vazio nas pontas. */
+const EXPLORE_WIDE_MAX_W = 720
 
 /**
  * 📱 Moldura da run — a EXPLORAÇÃO é mobile-first em qualquer tela; o COMBATE não.
  *
  * Na trilha, no celular a moldura ocupa tudo e nada muda. Na tela grande, em vez
- * de esticar na largura (o que arruinava o enquadramento da cena, cujo zoom sai
- * da LARGURA: ppu = clamp(w/26, ...)), ela roda em retrato 9:16 centralizado e
- * a arte da masmorra — a MESMA imagem do card em /dungeons — preenche a sobra,
- * desfocada e escurecida de propósito: é ambiente, não conteúdo.
+ * de esticar na largura sem mais (o que arruinava o enquadramento da cena, cujo
+ * zoom saía SÓ da largura), ela roda numa caixa central e a arte da masmorra —
+ * a MESMA imagem do card em /dungeons — preenche a sobra, desfocada e
+ * escurecida de propósito: é ambiente, não conteúdo.
  *
- * Conta do tamanho: com aspect-ratio 9/16 + altura definida + max-width 100%,
- * a largura usada é min(altura × 0.5625, largura do pai). Num 390×844 dá
- * 475 > 390 → 390×844, tela cheia sem tarja. Num 1440×900 dá 506×900.
+ * `wideExplore` (cena nova, `DungeonScene`) afrouxa essa caixa de 9:16 pra 3:4
+ * até `EXPLORE_WIDE_MAX_W` — só funciona porque o `basePpu` da cena agora tira
+ * o zoom do MÍNIMO entre largura e altura (ver WORLD_UNITS_TALL_REF em
+ * DungeonScene.tsx): em retrato normal as duas leituras empatam (zero mudança
+ * no celular), e só na caixa mais larga que 9:16 a largura extra vira MATA
+ * NOVA visível nas laterais em vez de zoom. Sem `wideExplore` (WalkScene, as
+ * outras 3 masmorras) a caixa continua 9:16 — aquele zoom ainda é
+ * width-only, alargar lá SÓ daria zoom.
  *
- * `wide` (combate) larga o retrato: a arena é uma tela de batalha, não um mapa
- * — não tem zoom preso à largura pra proteger, e no desktop ela merece o espaço.
- * De quebra, os `sm:` de CombatShell/BattleScene (que olham a VIEWPORT, não a
- * moldura) voltam a bater com a largura real. No celular `wide` é idêntico ao
- * retrato: a viewport já é mais estreita que o teto.
+ * Conta do tamanho: com aspect-ratio definido + altura fixa + max-width, a
+ * largura usada é min(altura × proporção, teto, largura do pai). Num
+ * 390×844 (retrato/9:16) dá 475 > 390 → 390×844, tela cheia sem tarja —
+ * `wideExplore` não muda nada aqui, seja qual for a proporção, o celular
+ * sempre esbarra no teto de largura do pai primeiro. Num 1440×900 com
+ * `wideExplore`: 900×0.75=675 < 720 (teto) → 675×900.
+ *
+ * `wide` (combate) larga de vez: a arena é uma tela de batalha, não um mapa —
+ * não tem zoom preso à largura pra proteger, e no desktop ela merece o
+ * espaço. De quebra, os `sm:` de CombatShell/BattleScene (que olham a
+ * VIEWPORT, não a moldura) voltam a bater com a largura real. No celular
+ * `wide` é idêntico ao retrato: a viewport já é mais estreita que o teto.
  *
  * A troca de geometria acontece debaixo do flash preto da investida (ver
  * `combatIntro`), então não há transição a animar aqui.
@@ -578,12 +594,15 @@ const ZOOM_CHARGE = 2.4
 function RunFrame({
   dungeonId,
   wide,
+  wideExplore,
   frameRef,
   children,
 }: {
   dungeonId: DungeonId
   /** Combate: solta o retrato e ocupa a tela (até COMBAT_MAX_W). */
   wide?: boolean
+  /** Exploração na cena nova: afrouxa 9:16 → 3:4 até EXPLORE_WIDE_MAX_W. */
+  wideExplore?: boolean
   frameRef?: React.Ref<HTMLDivElement>
   children: React.ReactNode
 }) {
@@ -601,7 +620,9 @@ function RunFrame({
         style={
           wide
             ? { width: '100%', maxWidth: COMBAT_MAX_W }
-            : { aspectRatio: '9 / 16', maxWidth: '100%' }
+            : wideExplore
+              ? { aspectRatio: '3 / 4', maxWidth: EXPLORE_WIDE_MAX_W }
+              : { aspectRatio: '9 / 16', maxWidth: '100%' }
         }
       >
         {children}
@@ -3060,7 +3081,7 @@ export default function DungeonRun({
   }
 
   return (
-    <RunFrame dungeonId={dungeon.id} wide={phase === 'combat'} frameRef={frameRef}>
+    <RunFrame dungeonId={dungeon.id} wide={phase === 'combat'} wideExplore={useScene} frameRef={frameRef}>
       {/* Cenário temático — preenche a MOLDURA. Em combate Floresta: battle BG
           cinematográfico. Na exploração com WalkScene o mapa é a própria cena. */}
       <div className="absolute inset-0">
@@ -3260,7 +3281,10 @@ export default function DungeonRun({
             }`}
             aria-hidden={phase !== 'explore'}
           >
-            <div className="relative h-full" style={{ aspectRatio: '9 / 16', maxWidth: '100%' }}>
+            {/* Mesma proporção/teto do RunFrame (`wideExplore`) — senão sobra
+                vão entre o DungeonBackdrop (que preenche o frame inteiro) e o
+                canvas aqui dentro. */}
+            <div className="relative h-full" style={{ aspectRatio: '3 / 4', maxWidth: EXPLORE_WIDE_MAX_W }}>
               <DungeonScene
                 map={sceneMap}
                 heroSprite={character.avatar}

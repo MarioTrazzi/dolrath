@@ -95,13 +95,23 @@ const CAM_FOLLOW = 5.5
 /** Velocidade da interpolação do zoom cinematográfico (maior = mais seco). */
 const CAM_ZOOM_SPEED = 3.2
 /**
- * Unidades de mundo atravessadas na LARGURA da tela — é o dial de zoom BASE
- * (antes do multiplicador cinematográfico). Menor = câmera mais perto = sprite
- * maior (valoriza o boneco raça×classe). Com menos mundo à vista, a câmera passa
- * a seguir o herói em vez de travar centralizada no bolsão. 15 = mais perto,
- * 18 = mais afastado.
+ * Unidades de mundo atravessadas na LARGURA da tela EM RETRATO 9:16 — é o dial
+ * de zoom BASE (antes do multiplicador cinematográfico). Menor = câmera mais
+ * perto = sprite maior (valoriza o boneco raça×classe). Com menos mundo à
+ * vista, a câmera passa a seguir o herói em vez de travar centralizada no
+ * bolsão. 15 = mais perto, 18 = mais afastado.
  */
 const WORLD_UNITS_ACROSS = 16
+/**
+ * Altura de mundo EQUIVALENTE, pela mesma proporção 9:16 — a NOVA base do
+ * zoom (ver `resize`). Em retrato normal (celular, ou o desktop na caixa
+ * 9:16) dá o MESMO ppu de sempre: LARGURA continua sendo quem decide. Só
+ * quando a moldura fica mais larga que 9:16 (RunFrame `wideExplore` no
+ * desktop) é que ALTURA passa a mandar — aí alargar a caixa MOSTRA MAIS MATA
+ * pros lados em vez de só dar zoom (o mapa é gerado estreito de propósito;
+ * esticar a largura sem isto só aumentava o sprite, sem revelar cenário novo).
+ */
+const WORLD_UNITS_TALL_REF = (WORLD_UNITS_ACROSS * 16) / 9
 /**
  * Teto do gate de carga. Nenhuma rede é garantida: se uma folha nunca assenta, é
  * melhor entrar na masmorra com o mapa incompleto do que deixar o d20 girando
@@ -543,11 +553,18 @@ export default function DungeonScene({
       canvas.style.width = `${w}px`
       canvas.style.height = `${h}px`
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-      // Retrato: o enquadramento é ditado pela LARGURA — ~26 unidades de mundo
-      // atravessadas na tela, em qualquer altura de aparelho.
-      // basePpu = zoom de repouso (enquadramento por WORLD_UNITS_ACROSS); ppu
-      // aplica por cima o multiplicador cinematográfico da entrada em combate.
-      const basePpu = clamp(w / WORLD_UNITS_ACROSS, 10, 34)
+      // basePpu = zoom de repouso; ppu aplica por cima o multiplicador
+      // cinematográfico da entrada em combate.
+      //
+      // MÍNIMO das duas leituras (largura÷ACROSS, altura÷TALL_REF) em vez de
+      // só largura: as duas concordam exatamente em 9:16 (é assim que
+      // TALL_REF foi derivado), então retrato — celular OU a caixa 9:16 do
+      // desktop — continua 100% como antes (largura sempre vence ali, é a
+      // dimensão mais apertada). Só numa moldura MAIS LARGA que 9:16 a altura
+      // passa a vencer, e aí a largura extra deixa de zoomar: ela só aparece
+      // como mais mata visível nas laterais, porque o ppu já está fixado pela
+      // altura.
+      const basePpu = clamp(Math.min(w / WORLD_UNITS_ACROSS, h / WORLD_UNITS_TALL_REF), 10, 34)
       view = { w, h, basePpu, ppu: basePpu * zoomRef.current }
       fitDrops()
     }

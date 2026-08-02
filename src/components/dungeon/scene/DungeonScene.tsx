@@ -412,15 +412,28 @@ export default function DungeonScene({
     else if (heroSprite) urls.push(heroSprite)
 
     // Folhas dos monstros: as espécies da planta + o chefe (que é dedutível da
-    // masmorra e por isso não depende do servidor).
+    // masmorra e por isso não depende do servidor). Carrega DIRETO pro
+    // `monsterStripsRef` (mesmo cache que drawMonster lê) em vez de só medir o
+    // tempo e descartar — o efeito de baixo (que povoa o ref de verdade) é uma
+    // corrida independente contra este `Promise.all`, e não tinha garantia
+    // nenhuma de terminar primeiro. Sem a folha no ref a tempo, `drawMonster`
+    // some com o bicho (linha `if (def && !strip) return`) até a OUTRA corrida
+    // terminar — o "bicho não aparece andando" que isto aqui existe pra evitar.
     const slugs = new Set<string>([bossSpriteSlug(map.id)])
     contents?.forEach(c => c.speciesSlugs?.forEach(s => slugs.add(s)))
+    const spritePromises: Promise<void>[] = []
     for (const slug of Array.from(slugs)) {
       const sheet = getMonsterSpriteBySlug(slug)
-      if (sheet) urls.push(sheet.src)
+      if (!sheet) continue
+      if (monsterStripsRef.current.has(slug)) continue
+      spritePromises.push(
+        loadImage(sheet.src).then(img => {
+          if (!cancelled && img) monsterStripsRef.current.set(slug, img)
+        }),
+      )
     }
 
-    Promise.all(urls.map(loadImage)).then(fire)
+    Promise.all([...urls.map(loadImage), ...spritePromises]).then(fire)
     return bail
   }, [map.id, map.variants, map.groundTexture, race, heroClass, heroSprite, contents])
 

@@ -952,11 +952,9 @@ export default function DungeonRun({
   const wideFrame = frameW >= 560
 
   // ---------- 🎥 Aproximação da câmera (entrada em combate) ----------
-  // O encontro ganha um beat em dois tempos antes do corte pro combate:
-  //   1. REVELAÇÃO — o /step disse "monstro": a câmera aproxima devagar (1.45×)
-  //      e passa a enquadrar o vulto junto do herói enquanto o d20 pousa.
-  //   2. INVESTIDA — o jogador aceita a luta: zoom fecha (2.4×), um flash preto
-  //      cobre a troca de geometria da moldura e só então `phase` vira 'combat'.
+  // Sem card de emboscada nem d20 de exploração: o /step responde "monstro" e a
+  // câmera já investe direto (2.4×, focusNode no vulto) — INVESTIDA única, sem a
+  // pausa de REVELAÇÃO de antes. O corte pra arena vem em COMBAT_INTRO_MS.
   // Enquanto a investida roda, a cena segue VISÍVEL (phase ainda é 'explore') e
   // PAUSADA — sem o pause o herói voltaria a andar por baixo do zoom.
   const [combatIntro, setCombatIntro] = useState(false)
@@ -3256,11 +3254,17 @@ export default function DungeonRun({
                 /* Congela fora da exploração e no que toma a tela. A narração do
                    Mestre fecha sozinha e não deve travar o passo a cada nó.
                    `combatIntro` é a investida: a cena está visível e o herói NÃO
-                   pode continuar andando por baixo do zoom. */
+                   pode continuar andando por baixo do zoom. NÃO inclui
+                   `exploreRolling`: isso era só pro d20 de exploração (removido) —
+                   deixar pausado durante o /step travava a cena (herói e bicho
+                   congelados) no tempo de rede, sem indicador nenhum na tela. Sem
+                   d20 pra mascarar, o herói perambula/o bicho ronda até a resposta
+                   chegar, e a câmera investe (focusNode/combatIntro) de um mundo
+                   já vivo — sem o corte seco. */
                 paused={
                   phase !== 'explore' ||
                   combatIntro ||
-                  Boolean(eventCard || lootCard || exploreRolling)
+                  Boolean(eventCard || lootCard)
                 }
                 cinematicZoom={encounterZoom}
                 focusNode={focusNode}

@@ -52,6 +52,14 @@ const CHAR: DungeonCharacter = {
 
 function installFetchStub() {
   const real = window.fetch.bind(window)
+  // ⏱️ Latência FALSA do /step, em ms — o stub responde instantâneo, o que
+  // esconde justamente o que se quer medir aqui. Com o /step disparado no início
+  // da caminhada (prefetchStep), a régua é:
+  //   ?stepDelay=600   → a resposta chega DURANTE a caminhada: nenhum flash.
+  //   ?stepDelay=4000  → chega depois: 3 piscadas e a espera calma ("Algo se move...").
+  // O que não pode voltar a acontecer é piscar sem parar.
+  const stepDelay = Number(new URLSearchParams(window.location.search).get('stepDelay') || 0)
+  const lag = () => (stepDelay > 0 ? new Promise(r => setTimeout(r, stepDelay)) : Promise.resolve())
   let stamina = 156
   let steps = 0      // nº do nó atual (1º = pacote travado)
   // Espólio ACUMULADO da run, como no DungeonRun.accrued do servidor: o stub só
@@ -69,9 +77,12 @@ function installFetchStub() {
     }
     if (url.includes('/api/dungeon/run/heartbeat')) return json({ active: true })
     if (url.includes('/api/dungeon/run/step')) {
+      await lag()
       const body = init?.body ? JSON.parse(String(init.body)) : {}
       // Desfecho do nó anterior de CARONA (protocolo real): absorve no acumulado.
+      let absorbed = false
       if (body.resolve && pending) {
+        absorbed = true
         const killed: string[] = Array.isArray(body.resolve.killedIds) ? body.resolve.killedIds : []
         const dead = pending.monsters.filter(m => killed.includes(m.id))
         accrued.kills += dead.length
@@ -103,7 +114,10 @@ function installFetchStub() {
       }
       const nodeLoot = rollNodeLoot(DUNGEON, roll, 'minor', CHAR.level, CHAR.race, CHAR.class, 1)
       pending = { monsters, killDrops, nodeLoot, roll }
-      return json({ type: 'monster', roll, monster: monsters[0], monsters, killDrops, nodeLoot, stamina })
+      // `resolved` fecha o protocolo real: é a confirmação que autoriza o cliente
+      // a descartar o desfecho guardado. Sem ele a bancada reenviava o mesmo
+      // resolve em todo passo — e não exercitava esse ramo.
+      return json({ resolved: absorbed, type: 'monster', roll, monster: monsters[0], monsters, killDrops, nodeLoot, stamina })
     }
     if (url.includes('/api/dungeon/run/finish')) {
       const body = init?.body ? JSON.parse(String(init.body)) : {}

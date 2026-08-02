@@ -237,6 +237,25 @@ interface StepResponse {
   nodeLoot?: NodeLoot | null
   error?: string
 }
+/**
+ * Retorno do helper que fala com o /step. NUNCA rejeita — mesmo padrão do
+ * `loadImage` da cena: como a promessa pode ficar em voo sem ninguém esperando
+ * (prefetch durante a caminhada), uma rejeição solta viraria unhandled rejection.
+ * `status: 0` = falha de rede (o fetch nem chegou a responder).
+ */
+type StepOutcome =
+  | { ok: true; data: StepResponse }
+  | { ok: false; status: number; data?: StepResponse }
+/**
+ * O /step em voo para um nó. `settled` existe para o flash de encontro NÃO
+ * aparecer quando não há espera nenhuma: se a resposta já chegou antes do herói
+ * encostar no bicho, a arena abre sem piscar.
+ */
+interface StepPrefetch {
+  dest: number
+  promise: Promise<StepOutcome>
+  settled: boolean
+}
 /** Desfecho de um nó de combate, entregue de carona no /step seguinte (ou no /finish). */
 interface NodeResolve {
   nodeIdx: number
@@ -487,6 +506,13 @@ const COMBAT_MAX_W = 1280
 const COMBAT_INTRO_MS = 420
 /** Zoom da INVESTIDA ao entrar no combate (sem card de emboscada). */
 const ZOOM_CHARGE = 2.4
+/**
+ * Flash de encontro: EXATAMENTE 3 piscadas, uma vez só. Antes isto era um ciclo
+ * de 700ms com `repeat: Infinity` — o número de piscadas virava a latência do
+ * /step (3s de rede = ~12 piscadas), e era isso que atordoava. Agora o flash tem
+ * fim próprio; quem cobre uma espera mais longa é o overlay calmo (`stepSlow`).
+ */
+const FLASH_MS = 560
 /** Teto de largura da exploração alargada (`wideExplore`) — bem aquém do teto
  * do combate: ainda é mapa, não arena, e o mundo gerado (ver generateMap.ts)
  * é uma trilha estreita — alargar demais só exporia vazio nas pontas. */
@@ -712,6 +738,32 @@ export default function DungeonRun({
     [useScene, sceneMap, runId]
   )
   /**
+   * 🖼️ Aquece o RETRATO de combate dos bichos da masmorra.
+   *
+   * A arena usa uma arte diferente da folha de sprite do mapa (`monster.image`,
+   * um `<img>` cru no card) — e ela só era pedida quando `phase` virava
+   * 'combat'. Ou seja: dentro do corte de 420ms da investida, começando do zero.
+   * O card podia abrir vazio, empilhando latência exatamente onde acabamos de
+   * tirar. A masmorra tem 4 espécies + chefe, então dá para aquecer tudo.
+   *
+   * Deliberadamente FORA do gate `sceneReady` (que espera chão/sprites do mapa):
+   * isto é oportunista e não pode segurar a entrada na masmorra.
+   */
+  useEffect(() => {
+    if (!useScene) return
+    const arts = [...dungeon.monsters, dungeon.boss]
+      .map(m => m.image || monsterImagePath(m.name))
+      .filter((src, i, all) => all.indexOf(src) === i)
+    // Guardados em variável só para o GC não recolher a imagem antes do onload.
+    const imgs = arts.map(src => {
+      const img = new Image()
+      img.decoding = 'async'
+      img.src = src
+      return img
+    })
+    return () => { imgs.forEach(img => { img.src = '' }) }
+  }, [useScene, dungeon])
+  /**
    * Nós JÁ LIMPOS — não "nós em que já pisei".
    *
    * A cena usa isto para parar de desenhar o bando (e para apagar o marcador do
@@ -791,6 +843,13 @@ export default function DungeonRun({
   // dava a sensação de "não renderizou direito". Os nós seguintes já usam o zoom
   // cinematográfico da chegada; este loading é só para a entrada.
   const [sceneReady, setSceneReady] = useState(false)
+  /**
+   * A espera pelo /step passou de "longa demais para piscar". O flash de encontro
+   * dá 3 piscadas e ACABA; se depois disso a resposta ainda não chegou (rede
+   * ruim, invocação fria), a tela troca o branco por uma espera CALMA. Estrobo
+   * indefinido era o que atordoava.
+   */
+  const [stepSlow, setStepSlow] = useState(false)
   const [trapShake, setTrapShake] = useState(false)
 
   // ---------- Combate ----------
@@ -882,6 +941,30 @@ export default function DungeonRun({
    * uma tela parada.
    */
   const runReadyPromiseRef = useRef<Promise<void> | null>(null)
+  /**
+   * ⏱️ /step JÁ EM VOO para o nó de destino, disparado quando a CAMINHADA COMEÇA.
+   *
+   * Antes disto o pedido saía na CHEGADA ao bolsão — o pior instante possível: o
+   * herói plantava os pés e a rede inteira (~7 idas ao Postgres) acontecia com o
+   * jogador olhando. Era a "travada". A caminhada dura segundos; a latência cabe
+   * folgada debaixo dela.
+   *
+   * Só é seguro porque o corpo do /step já está completo no primeiro passo: o
+   * desfecho do nó anterior (`pendingResolveRef`) é gravado no último abate, e a
+   * fase só volta para 'explore' depois disso.
+   *
+   * 🚪 Sair no MEIO da caminhada (o /step em voo cruza com o /finish) é benigno,
+   * nas duas ordens — vale registrar, porque parece um bug e não é:
+   *  • /step grava antes → o /finish vê `pending` do nó SEGUINTE, então o
+   *    `resolve` que o cliente manda não casa e é ignorado; mas o nó já entrou no
+   *    `accrued` pelo próprio /step. Creditado uma vez.
+   *  • /finish credita antes → ele mesmo resolve o `pending` a partir do
+   *    `resolve` do corpo. O /step atrasado pode escrever num run já 'abandoned',
+   *    mas não mexe no `status`, e `flushStaleRuns` só drena run 'active' — logo
+   *    aquele `accrued` nunca é recreditado.
+   * O único custo é 1 de stamina cobrada por um nó que o jogador não jogou.
+   */
+  const stepPrefetchRef = useRef<StepPrefetch | null>(null)
   // Herói já em uso em outra aba (lock vivo): bloqueia a run com um aviso.
   const [blocked, setBlocked] = useState<string | null>(null)
   // Só o BOSS usa estes refs (o encontro comum extrai o monstro direto do
@@ -986,6 +1069,18 @@ export default function DungeonRun({
     timeouts.current.push(t)
   }, [])
   useEffect(() => () => { timeouts.current.forEach(clearTimeout) }, [])
+
+  // 3 piscadas duram FLASH_MS; passou disso sem resposta, a espera vira calma.
+  // Timer próprio (não o `later`, que só limpa na desmontagem) para que uma
+  // resposta rápida cancele a troca em vez de deixá-la disparar depois.
+  useEffect(() => {
+    if (!exploreRolling) {
+      setStepSlow(false)
+      return
+    }
+    const t = setTimeout(() => setStepSlow(true), FLASH_MS)
+    return () => clearTimeout(t)
+  }, [exploreRolling])
 
   const pushLog = useCallback((msg: string) => {
     setLog(prev => [...prev.slice(-40), msg])
@@ -1331,24 +1426,19 @@ export default function DungeonRun({
     return { def: { kind: revealKind, min: 0, max: 0, icon, title: '', description: '' } }
   }
 
-  // Botão principal: treadmill (scroll → approach → /step) ou path clássico.
-  const finishWalkStep = useCallback(async (dest: number) => {
-    if (walkStepLockRef.current) return
-    walkStepLockRef.current = true
+  /**
+   * A ida ao /step, isolada para poder sair ANTES da chegada ao nó (ver
+   * `stepPrefetchRef`). Não toca em estado de UI: quem decide o que fazer com o
+   * desfecho é sempre `finishWalkStep`, na chegada. Nunca rejeita.
+   */
+  const runStep = useCallback(async (): Promise<StepOutcome> => {
     // Start otimista: a caminhada até este nó começou junto com o /start. Se ele
     // ainda não aterrissou, é AQUI que se espera — a latência da entrada já foi
     // gasta andando.
     if (!runIdRef.current && runReadyPromiseRef.current) {
       await runReadyPromiseRef.current
     }
-    if (!runIdRef.current) {
-      setWalkMode('idle')
-      setMoving(false)
-      walkStepLockRef.current = false
-      return
-    }
-    setExploreRolling(true)
-    let data: StepResponse
+    if (!runIdRef.current) return { ok: false, status: 0 }
     try {
       const res = await fetch('/api/dungeon/run/step', {
         method: 'POST',
@@ -1357,28 +1447,60 @@ export default function DungeonRun({
         // luta não ter chamada própria — ele viaja escondido atrás da caminhada.
         body: JSON.stringify({ runId: runIdRef.current, resolve: pendingResolveRef.current ?? undefined }),
       })
-      data = await res.json()
-      // Só descarta o desfecho quando o servidor CONFIRMA que o absorveu. Num
-      // desencontro de nó (aba atrasada) ele volta `resolved: false` e o
-      // desfecho fica guardado para a próxima tentativa em vez de sumir.
-      if (data?.resolved) pendingResolveRef.current = null
-      if (!res.ok) {
-        setExploreRolling(false)
-        setWalkMode('idle')
-        setMoving(false)
-        walkStepLockRef.current = false
-        if (res.status === 400) showBanner('😮‍💨', `${data?.error || 'Stamina insuficiente'} — ela volta +2 a cada 15 min ocioso`)
-        else showBanner('⚠️', data?.error || 'Falha ao avançar')
-        return
-      }
+      const data: StepResponse = await res.json()
+      return res.ok ? { ok: true, data } : { ok: false, status: res.status, data }
     } catch {
+      return { ok: false, status: 0 }
+    }
+  }, [])
+
+  /**
+   * Dispara o /step do nó de destino ASSIM QUE A CAMINHADA COMEÇA. Chamado por
+   * `advance()` no modo cena; `finishWalkStep` colhe a promessa na chegada.
+   */
+  const prefetchStep = useCallback((dest: number) => {
+    if (stepPrefetchRef.current?.dest === dest) return
+    const entry: StepPrefetch = { dest, settled: false, promise: Promise.resolve({ ok: false, status: 0 }) }
+    entry.promise = runStep().then(out => {
+      entry.settled = true
+      return out
+    })
+    stepPrefetchRef.current = entry
+  }, [runStep])
+
+  // Botão principal: treadmill (scroll → approach → /step) ou path clássico.
+  const finishWalkStep = useCallback(async (dest: number) => {
+    if (walkStepLockRef.current) return
+    walkStepLockRef.current = true
+
+    // Promessa já em voo desde o primeiro passo (cena). Se ela JÁ assentou não há
+    // espera nenhuma a mascarar — e piscar aí seria um blip branco em todo nó.
+    // Sem prefetch (modo clássico/esteira, ou destino dessincronizado) o pedido
+    // sai agora, como antes, e aí sim o flash cobre a viagem.
+    const inflight = stepPrefetchRef.current?.dest === dest ? stepPrefetchRef.current : null
+    if (!inflight?.settled) setExploreRolling(true)
+    const outcome = inflight ? await inflight.promise : await runStep()
+    stepPrefetchRef.current = null
+
+    // Só descarta o desfecho quando o servidor CONFIRMA que o absorveu. Num
+    // desencontro de nó (aba atrasada) ele volta `resolved: false` e o
+    // desfecho fica guardado para a próxima tentativa em vez de sumir.
+    if (outcome.data?.resolved) pendingResolveRef.current = null
+
+    if (!outcome.ok) {
       setExploreRolling(false)
       setWalkMode('idle')
       setMoving(false)
       walkStepLockRef.current = false
-      showBanner('⚠️', 'Sem conexão com o servidor')
+      // status 0 = falha de rede, ou runId que nunca chegou (nada a avisar aqui:
+      // o /start já reclama por conta própria).
+      if (outcome.status === 0 && !runIdRef.current) return
+      if (outcome.status === 400) showBanner('😮‍💨', `${outcome.data?.error || 'Stamina insuficiente'} — ela volta +2 a cada 15 min ocioso`)
+      else if (outcome.status === 0) showBanner('⚠️', 'Sem conexão com o servidor')
+      else showBanner('⚠️', outcome.data?.error || 'Falha ao avançar')
       return
     }
+    const data = outcome.data
 
     if (typeof data.stamina === 'number') setStamina(data.stamina)
     setTokenIdx(dest)
@@ -1428,7 +1550,7 @@ export default function DungeonRun({
     })
     narrateArrivalAt(dest)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dungeon.boss.name])
+  }, [dungeon.boss.name, runStep])
 
   const handleWalkApproachComplete = useCallback(() => {
     if (walkMode !== 'approach') return
@@ -1462,6 +1584,9 @@ export default function DungeonRun({
     if (useScene) {
       setMoving(true)
       setSceneTarget(dest)
+      // ⏱️ O /step sai JUNTO com o primeiro passo, não na chegada: a latência
+      // inteira passa a caber debaixo da caminhada. É isto que tira a travada.
+      prefetchStep(dest)
       showNarration()
       return
     }
@@ -3037,21 +3162,51 @@ export default function DungeonRun({
         )}
       </AnimatePresence>
 
-      {/* ⚡ Flash de ENCONTRO — herói já parou no bolsão (ver DungeonScene), mas o
-          /step ainda está em voo. Em vez de deixar a tela parada esperando (o
-          que lia como travado), pisca branco tipo Pokémon: a espera de rede
-          vira TRANSIÇÃO em vez de silêncio. Some assim que a resposta chega —
-          o combatIntro (bicho) toma a cena a seguir. */}
+      {/* ⚡ Flash de ENCONTRO — 3 piscadas tipo Pokémon, UMA vez só.
+          Hoje o /step já saiu junto com o primeiro passo (ver prefetchStep), e o
+          flash só aparece quando a resposta ainda não assentou na chegada. Ele
+          tem duração PRÓPRIA (FLASH_MS): antes o ciclo repetia infinitamente e a
+          quantidade de piscadas era a latência da rede — o que atordoava. Se a
+          espera passar disso, `stepSlow` assume logo abaixo. */}
       <AnimatePresence>
-        {exploreRolling && useScene && (
+        {exploreRolling && useScene && !stepSlow && !reducedMotionRef.current && (
           <motion.div
             key="encounter-flash"
             className="fixed inset-0 z-[65] pointer-events-none bg-white"
             initial={{ opacity: 0 }}
-            animate={{ opacity: [0, 0.75, 0.05, 0.6, 0.05, 0.5, 0.05] }}
+            animate={{ opacity: [0, 0.7, 0.04, 0.55, 0.04, 0.4, 0] }}
             exit={{ opacity: 0, transition: { duration: 0.15 } }}
-            transition={{ duration: 0.7, repeat: Infinity, ease: 'linear' }}
+            transition={{ duration: FLASH_MS / 1000, ease: 'linear' }}
           />
+        )}
+      </AnimatePresence>
+
+      {/* 🕯️ Espera CALMA — as 3 piscadas acabaram e o /step ainda não voltou
+          (rede ruim ou invocação fria). Aqui a resposta é escurecer e respirar,
+          nunca continuar piscando: vinheta suave + um pulso lento. */}
+      <AnimatePresence>
+        {exploreRolling && useScene && stepSlow && (
+          <motion.div
+            key="step-slow"
+            className="fixed inset-0 z-[65] pointer-events-none grid place-items-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.35, ease: 'easeOut' }}
+            style={{
+              background:
+                'radial-gradient(circle at center, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.55) 70%)',
+            }}
+          >
+            <motion.span
+              className="text-xs uppercase tracking-[0.3em] font-bold"
+              style={{ color: dungeon.accentSoft }}
+              animate={reducedMotionRef.current ? undefined : { opacity: [0.35, 1, 0.35] }}
+              transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              Algo se move...
+            </motion.span>
+          </motion.div>
         )}
       </AnimatePresence>
 

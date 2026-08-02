@@ -38,7 +38,9 @@ export async function GET() {
 
     // Aplica o regen passivo (e persiste) antes de servir: a stamina mostrada
     // nasce viva e a âncora fica em dia para os próximos cálculos.
-    const characters = await Promise.all(rawCharacters.map(regenAndPersist));
+    // (arrow explícita: `regenAndPersist` tem um 2º parâmetro opcional, e passá-la
+    // direto para o `map` faria o índice do array cair nele.)
+    const characters = await Promise.all(rawCharacters.map(c => regenAndPersist(c)));
 
     // Processar cada personagem para calcular nível correto e usar stats reais do banco
     const processedCharacters = characters.map(character => {

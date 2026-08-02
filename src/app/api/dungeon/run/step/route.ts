@@ -48,7 +48,14 @@ export async function POST(req: Request) {
     const { runId, resolve } = await req.json()
     if (!runId) return NextResponse.json({ error: 'runId é obrigatório' }, { status: 400 })
 
-    const run = await prisma.dungeonRun.findFirst({ where: { id: runId, userId } })
+    // Run + personagem numa leitura só. Eram duas idas sequenciais ao Postgres —
+    // e esta rota está no caminho crítico da chegada ao nó, onde cada round-trip
+    // vira espera na cara do jogador. A posse continua checada pelo `userId` da
+    // run, e o personagem é o dono dela por definição do schema.
+    const run = await prisma.dungeonRun.findFirst({
+      where: { id: runId, userId },
+      include: { character: true },
+    })
     if (!run) return NextResponse.json({ error: 'Run não encontrada' }, { status: 404 })
     if (run.status !== 'active') {
       return NextResponse.json({ error: 'Run não está ativa', status: run.status }, { status: 409 })
@@ -57,7 +64,7 @@ export async function POST(req: Request) {
     const dungeon = getDungeon(run.dungeonId)
     if (!dungeon) return NextResponse.json({ error: 'Masmorra inválida' }, { status: 500 })
 
-    const character = await prisma.character.findFirst({ where: { id: run.characterId, userId } })
+    const character = run.character
     if (!character) return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
     const charForRun: CharacterForRun = {
       id: character.id,
@@ -120,11 +127,15 @@ export async function POST(req: Request) {
     const cost = node.kind === 'main' ? STEP_COST.main : node.kind === 'boss' ? STEP_COST.boss : STEP_COST.minor
     // Stamina viva sincronizada (regen passivo ou tiques de coleta debitados).
     // Avançar zera o cronômetro de 15 min: cada nó grava stamina = liveStamina
-    // - cost e âncora = agora.
-    const { stamina: liveStamina } = await regenAndPersist(character)
+    // - cost e âncora = agora. `deferWrite` porque a escrita do regen seria
+    // sobrescrita pelo `staminaSpend` da transação logo abaixo — um round-trip
+    // a menos sem tirar o cálculo de dentro do relógio único.
+    const { stamina: liveStamina } = await regenAndPersist(character, { deferWrite: true })
     if (liveStamina < cost) {
-      // O desfecho já absorvido não pode se perder porque faltou stamina para o
-      // passo seguinte — grava o acumulado e devolve o erro.
+      // Saída sem gravar o regen (foi `deferWrite`), e tudo bem: o regen é
+      // DERIVADO de `staminaUpdatedAt`, então não persistir não perde nada — a
+      // próxima leitura recalcula o mesmo valor. Só o desfecho já absorvido é
+      // que não pode se perder por falta de stamina; esse sim vai para o banco.
       if (pendingCleared) {
         await prisma.dungeonRun.update({
           where: { id: run.id },
@@ -150,14 +161,16 @@ export async function POST(req: Request) {
     // BOSS: rola o boss, grava pending, cobra stamina (cursor só avança na vitória).
     if (node.kind === 'boss') {
       const pending = withLoot(resolveBossNode(dungeon, charForRun, nextIdx, run.tier))
-      const updated = await prisma.$transaction(async (tx) => {
-        const c = await tx.character.update({ where: { id: character.id }, data: staminaSpend })
-        await tx.dungeonRun.update({
+      // Transação em LOTE (array), não interativa: as duas escritas não leem o
+      // resultado uma da outra, e o array vai num round-trip só em vez de
+      // BEGIN + 2 statements + COMMIT.
+      const [updated] = await prisma.$transaction([
+        prisma.character.update({ where: { id: character.id }, data: staminaSpend }),
+        prisma.dungeonRun.update({
           where: { id: run.id },
           data: { cursor, pending: pending as unknown as object, accrued: accrued as unknown as object },
-        })
-        return c
-      })
+        }),
+      ])
       return NextResponse.json({
         resolved: pendingCleared,
         type: 'boss',
@@ -181,14 +194,13 @@ export async function POST(req: Request) {
 
     if (resolved.type === 'monster') {
       const pending = withLoot(resolved.pending)
-      const updated = await prisma.$transaction(async (tx) => {
-        const c = await tx.character.update({ where: { id: character.id }, data: staminaSpend })
-        await tx.dungeonRun.update({
+      const [updated] = await prisma.$transaction([
+        prisma.character.update({ where: { id: character.id }, data: staminaSpend }),
+        prisma.dungeonRun.update({
           where: { id: run.id },
           data: { cursor, pending: pending as unknown as object, accrued: accrued as unknown as object },
-        })
-        return c
-      })
+        }),
+      ])
       return NextResponse.json({
         resolved: pendingCleared,
         type: 'monster',
@@ -211,14 +223,13 @@ export async function POST(req: Request) {
       kills: 0,
       bossKills: 0,
     })
-    const out = await prisma.$transaction(async (tx) => {
-      const c = await tx.character.update({ where: { id: character.id }, data: staminaSpend })
-      await tx.dungeonRun.update({
+    const [out] = await prisma.$transaction([
+      prisma.character.update({ where: { id: character.id }, data: staminaSpend }),
+      prisma.dungeonRun.update({
         where: { id: run.id },
         data: { cursor: nextIdx, pending: Prisma.DbNull, accrued: found as unknown as object },
-      })
-      return { stamina: c.stamina }
-    })
+      }),
+    ])
 
     return NextResponse.json({
       resolved: pendingCleared,

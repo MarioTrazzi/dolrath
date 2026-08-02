@@ -31,9 +31,21 @@ export interface LiveGatheringInfo {
  *  - sessão ativa  → syncGatheringSession (debita tiques, persiste, anexa
  *    `gathering` para a UI mostrar o decréscimo ao vivo);
  *  - sem sessão    → regen passivo (+2/15min) persistido se houve ganho.
+ *
+ * ⏱️ `deferWrite`: quem já vai GRAVAR stamina logo em seguida (o /step da
+ * masmorra escreve `stamina - custo` + âncora na própria transação) não precisa
+ * da escrita isolada do regen — ela seria um round-trip a mais para um valor que
+ * vai ser sobrescrito no instante seguinte. Com a flag, o caminho SEM coleta só
+ * CALCULA e devolve; persistir fica com o chamador. Sair sem gravar não perde
+ * nada — o regen é DERIVADO de `staminaUpdatedAt`, então a próxima leitura
+ * recalcula o mesmo valor. O relógio continua único: quem computa é sempre esta
+ * função, nunca a rota.
+ * Com sessão de coleta ativa a flag é ignorada — o `syncGatheringSession`
+ * precisa gravar os tiques que debitou.
  */
 export async function regenAndPersist<T extends StaminaFields>(
-  character: T
+  character: T,
+  opts?: { deferWrite?: boolean }
 ): Promise<T & { gathering?: LiveGatheringInfo }> {
   const session = await prisma.gatheringSession.findFirst({
     where: { characterId: character.id, status: 'active' },
@@ -58,9 +70,11 @@ export async function regenAndPersist<T extends StaminaFields>(
 
   const { stamina, staminaUpdatedAt, gained } = computeStaminaRegen(character)
   if (gained <= 0) return character
-  await prisma.character.update({
-    where: { id: character.id },
-    data: { stamina, staminaUpdatedAt },
-  })
+  if (!opts?.deferWrite) {
+    await prisma.character.update({
+      where: { id: character.id },
+      data: { stamina, staminaUpdatedAt },
+    })
+  }
   return { ...character, stamina, staminaUpdatedAt }
 }

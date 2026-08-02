@@ -915,11 +915,13 @@ export default function DungeonRun({
   const [battleEvent, setBattleEvent] = useState<BattleEvent | null>(null)
   const [combatEnded, setCombatEnded] = useState(false)
   const [winnerId, setWinnerId] = useState<string | null>(null)
-  // RUN SEMPRE AUTOMÁTICA: o piloto anda, luta e segue sozinho. O único switch do
-  // jogador é o de poções (autoConsumables) — ligar/desligar uso de HP/MP entre nós.
+  // RUN SEMPRE AUTOMÁTICA na EXPLORAÇÃO: o piloto anda, coleta e confirma sozinho.
   const [auto] = useState(true)
   const autoRef = useRef(true)
   autoRef.current = auto
+  // Piloto do COMBATE: liga por padrão (mesma experiência de antes), mas o jogador
+  // pode desligar (⚡ Auto ON/OFF na barra de combate) para escolher alvo/ataque na mão.
+  const [autoCombat, setAutoCombat] = useState(true)
   // Uso automático de poções de HP/MP entre nós (e emergência em combate).
   const [autoConsumables, setAutoConsumables] = useState(true)
   // Diálogo de confirmação ao sair: PAUSA a run (o piloto não age enquanto aberto).
@@ -1863,7 +1865,7 @@ export default function DungeonRun({
     }
     if (kind === 'weapon' && !unlocks.classAttack) {
       // No automático: nunca trava o turno — cai pro Golpe grátis.
-      if (auto) {
+      if (autoCombat) {
         choosePlayerAttack('basic')
         return
       }
@@ -2876,7 +2878,7 @@ export default function DungeonRun({
   // faria. Cada etapa muda o stage (ou hasRolled), então o efeito reage à próxima sem
   // disparo duplo. Pequenos atrasos mantêm as animações visíveis.
   useEffect(() => {
-    if (!auto || phase !== 'combat' || combatEnded || exitConfirm) return
+    if (!autoCombat || phase !== 'combat' || combatEnded || exitConfirm) return
     let cancelled = false
     const fire = (fn: () => void, ms: number) => {
       const t = setTimeout(() => { if (!cancelled) fn() }, ms)
@@ -2948,7 +2950,7 @@ export default function DungeonRun({
 
     // A fase inimiga resolve sozinha (defesa oculta) — o piloto não precisa reagir a ela.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auto, autoConsumables, exitConfirm, phase, stage, hasRolled, combatEnded, mp, stamina, transform, transformCd, transformedThisFight, pendingAbility, consumables, effMaxHp])
+  }, [autoCombat, autoConsumables, exitConfirm, phase, stage, hasRolled, combatEnded, mp, stamina, transform, transformCd, transformedThisFight, pendingAbility, consumables, effMaxHp])
 
   // Piloto de EXPLORAÇÃO: anda na trilha, confirma loot/eventos e entra nos combates.
   // Para com segurança quando falta stamina (evita laço de avanços negados).
@@ -3986,18 +3988,32 @@ export default function DungeonRun({
               }
               toolbar={
                 !combatEnded ? (
-                  <button
-                    type="button"
-                    onClick={() => setAutoConsumables(v => !v)}
-                    title={autoConsumables ? 'Poções automáticas ON — clique para desligar' : 'Poções automáticas OFF — clique para ligar'}
-                    className={`px-3 py-1.5 rounded-full text-[10px] font-black border transition-colors ${
-                      autoConsumables
-                        ? 'bg-emerald-600/85 border-emerald-300/60 text-white'
-                        : 'bg-white/5 border-white/15 text-white/50 hover:text-white'
-                    }`}
-                  >
-                    💊 {autoConsumables ? 'ON' : 'OFF'}
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setAutoCombat(v => !v)}
+                      title={autoCombat ? 'Desligar o piloto do combate — escolha alvo e ataque na mão' : 'Ligar o piloto do combate — joga os turnos por você'}
+                      className={`px-3 py-1.5 rounded-full text-[10px] font-black border transition-colors ${
+                        autoCombat
+                          ? 'bg-blue-600/90 border-blue-300/60 text-white shadow-lg shadow-blue-900/50'
+                          : 'bg-white/5 border-white/15 text-white/60 hover:text-white hover:border-white/30'
+                      }`}
+                    >
+                      {autoCombat ? '⚡ Auto ON' : '⚡ Auto OFF'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAutoConsumables(v => !v)}
+                      title={autoConsumables ? 'Poções automáticas ON — clique para desligar' : 'Poções automáticas OFF — clique para ligar'}
+                      className={`px-3 py-1.5 rounded-full text-[10px] font-black border transition-colors ${
+                        autoConsumables
+                          ? 'bg-emerald-600/85 border-emerald-300/60 text-white'
+                          : 'bg-white/5 border-white/15 text-white/50 hover:text-white'
+                      }`}
+                    >
+                      💊 {autoConsumables ? 'ON' : 'OFF'}
+                    </button>
+                  </>
                 ) : null
               }
               statusContent={

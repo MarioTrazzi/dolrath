@@ -1084,6 +1084,10 @@ export default function DungeonScene({
       const m = mapRef.current
       const hero = heroRef.current
       let dir: Vec2 | null = null
+      // Nó do alvo atual — computado cedo pra saber se já foi ALCANÇADO (o
+      // /step está em voo). Reusado embaixo pro gatilho de chegada.
+      const targetSpot = m.spots.find(s => s.nodeIndex === targetRef.current)
+      const alreadyReached = !!targetSpot && reachedRef.current.has(targetSpot.nodeIndex)
 
       {
 
@@ -1100,11 +1104,19 @@ export default function DungeonScene({
           } else {
             dir = { x: (next.x - hero.x) / d, y: (next.y - hero.y) / d }
           }
-        } else {
-          // Sem rota: perambula devagar em volta do ponto (dá vida à espera).
+        } else if (!alreadyReached) {
+          // Sem rota E ainda não chegou ao bolsão: perambula devagar em volta
+          // do ponto (dá vida à espera). Já chegado, o herói PLANTA OS PÉS —
+          // ver o porquê logo abaixo, onde `dir` fica null neste caso.
           const t = timeRef.current
           dir = { x: Math.cos(t * 0.6) * 0.25, y: Math.sin(t * 0.43) * 0.25 }
         }
+        // `alreadyReached` sem rota: dir fica null. Antes disto o herói
+        // continuava perambulando (com o ciclo de passada tocando) bem em
+        // cima do bicho/achado enquanto o /step viajava — sem o d20 de
+        // exploração pra "sumir" a caminhada por trás do overlay, isso lia
+        // como andar desordenado. Agora ele só volta a andar quando um novo
+        // `targetNode` chega (a run avança pro próximo nó).
       }
 
       if (dir) {
@@ -1124,8 +1136,8 @@ export default function DungeonScene({
 
       // Nó de combate abre ao ENCOSTAR no vulto, não ao pisar no centro do
       // bolsão: é o monstro que puxa a luta, como em Chrono Trigger. Nó de
-      // achado segue abrindo por proximidade do ponto.
-      const targetSpot = m.spots.find(s => s.nodeIndex === targetRef.current)
+      // achado segue abrindo por proximidade do ponto. (`targetSpot` já saiu
+      // computado lá em cima, junto do `alreadyReached`.)
       const touched =
         targetSpot &&
         monstersRef.current.some(

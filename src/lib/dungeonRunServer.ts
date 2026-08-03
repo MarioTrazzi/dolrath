@@ -928,6 +928,20 @@ export async function flushRunRewards(
   opts: {
     reason: RunEndReason
     resolve?: { nodeIdx?: number; outcome?: NodeOutcome; killedIds?: unknown }
+    /**
+     * ❤️ Fração de HP/MP com que o herói saiu da run (0..1). HP/MP agora
+     * SOBREVIVEM à run — voltar ao cheio é serviço pago da Alquimista.
+     *
+     * Vem como FRAÇÃO, não valor bruto: o teto efetivo da run inclui gear e
+     * passivas da árvore, então o número cru quebraria assim que o jogador
+     * trocasse de equipamento ou subisse de nível.
+     *
+     * `undefined` = quem fechou a run não tem essa informação (drain de run
+     * órfã, /abandon de bot, flushStaleRuns) → não escreve nada, o HP fica
+     * como estava.
+     */
+    hpPct?: number
+    mpPct?: number
   },
 ): Promise<RunFlushGrant | null> {
   const dungeon = getDungeon(run.dungeonId)
@@ -937,7 +951,11 @@ export async function flushRunRewards(
     where: { id: run.characterId },
     // Só o que buildXpUpdate precisa — o row inteiro traz JSONBs grandes
     // (transformationImages, skillTree) que não têm uso nenhum aqui.
-    select: { id: true, level: true, race: true, class: true, experience: true, availablePoints: true, baseStats: true },
+    // maxHp/maxMp entram para converter a fração de saída em valor absoluto.
+    select: {
+      id: true, level: true, race: true, class: true, experience: true,
+      availablePoints: true, baseStats: true, maxHp: true, maxMp: true,
+    },
   })
   if (!character) return null
   const charForRun: CharacterForRun = {
@@ -990,6 +1008,23 @@ export async function flushRunRewards(
 
   const xp = buildXpUpdate(character, accrued.xp)
 
+  // ❤️ HP/MP de saída: converte a fração reportada pelo cliente no valor absoluto
+  // da coluna. Clamp em [0,1] — o cliente é a autoridade do combate (mesmo modelo
+  // do resto da run), mas não pode inventar um pool acima do teto.
+  // HP tem piso 1: cair não "mata" o personagem (isAlive/deathTimestamp seguem
+  // sendo do fluxo antigo de revive), só o deixa precisando da Alquimista.
+  const clamp01 = (v: unknown) =>
+    typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : null
+  const hpPct = clamp01(opts.hpPct)
+  const mpPct = clamp01(opts.mpPct)
+  // Subiu de nível na run? A cura do level up (buildXpUpdate) VENCE: recompensa
+  // clássica de RPG, e os pontos que a destravam são limitados pelo próprio
+  // nível — não dá para farmar cura de graça por aí.
+  const poolUpdate = xp.leveledUp ? {} : {
+    ...(hpPct !== null ? { hp: Math.max(1, Math.round(character.maxHp * hpPct)) } : {}),
+    ...(mpPct !== null ? { mp: Math.max(0, Math.round(character.maxMp * mpPct)) } : {}),
+  }
+
   // ⏱️ TUDO o que dá para ler/resolver ANTES fica fora da transação. A transação
   // interativa do Prisma tem timeout (P2028) e um rollback aqui significa perder
   // a run inteira do jogador — ela precisa conter só as ESCRITAS.
@@ -1038,7 +1073,9 @@ export async function flushRunRewards(
 
       await tx.character.update({
         where: { id: character.id },
-        data: { ...xp.updateData, ...(gold > 0 ? { gold: { increment: gold } } : {}) },
+        // poolUpdate (hp/mp) viaja no MESMO update: o flush tem orçamento de
+        // tempo (P2028 leva a run inteira junto), então nada de query extra.
+        data: { ...xp.updateData, ...poolUpdate, ...(gold > 0 ? { gold: { increment: gold } } : {}) },
       })
 
       await tx.dungeonRun.update({

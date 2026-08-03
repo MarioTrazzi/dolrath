@@ -11,6 +11,7 @@ import { Search, Filter, X, ShoppingCart, Trash2 } from 'lucide-react';
 import BazaarBackdrop from '@/components/store/BazaarBackdrop';
 import ItemCardBackdrop from '@/components/store/ItemCardBackdrop';
 import RepairBench from '@/components/store/RepairBench';
+import RestorationBench from '@/components/store/RestorationBench';
 import { getItemVisual, getItemTypeLabel, getItemCategory } from '@/lib/itemVisuals';
 import { formatItemStats } from '@/lib/itemStats';
 import { useGold } from '@/components/providers/GoldProvider';
@@ -34,6 +35,8 @@ const SHOP_CONFIG: Record<
     /** Mostra apenas itens cuja categoria casa com este predicado. */
     showItem: (type?: string | null) => boolean;
     hasRepairBench: boolean;
+    /** ⚗️ Bancada de restauração de HP/MP (só a alquimista). */
+    hasRestoreBench: boolean;
     emptyEmoji: string;
     emptyLabel: string;
   }
@@ -43,6 +46,7 @@ const SHOP_CONFIG: Record<
     subtitle: 'Buy and repair weapons, armor, and equipment!',
     showItem: (type) => getItemCategory(type) !== 'consumable',
     hasRepairBench: true,
+    hasRestoreBench: false,
     emptyEmoji: '⚒️',
     emptyLabel: 'The forge is cold',
   },
@@ -51,6 +55,7 @@ const SHOP_CONFIG: Record<
     subtitle: 'Potions, elixirs, and consumables for your journey!',
     showItem: (type) => getItemCategory(type) === 'consumable',
     hasRepairBench: false,
+    hasRestoreBench: true,
     emptyEmoji: '⚗️',
     emptyLabel: 'The shelves are empty',
   },
@@ -510,6 +515,18 @@ export default function ShopView({ kind }: { kind: ShopKind }) {
           <div className="mb-8">
             <RepairBench
               characters={characters}
+              characterId={selectedCharacter || undefined}
+              refreshSignal={inventoryRefreshKey}
+              onChanged={handleBenchChanged}
+            />
+          </div>
+        )}
+
+        {/* ⚗️ Restauração de HP/MP: os pools sobrevivem à masmorra, e voltar ao
+            cheio de uma vez é serviço da alquimista (grátis no early game). */}
+        {config.hasRestoreBench && (
+          <div className="mb-8">
+            <RestorationBench
               characterId={selectedCharacter || undefined}
               refreshSignal={inventoryRefreshKey}
               onChanged={handleBenchChanged}

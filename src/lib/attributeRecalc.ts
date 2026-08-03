@@ -108,6 +108,11 @@ export function buildAttributeUpdate(character: CharacterAttrSource, deltas: Att
     finals: { str: finalStr, agi: finalAgi, int: finalInt, def: finalDef },
     distributed: { str: currentStr, agi: currentAgi, int: currentInt, def: currentDef },
     data: {
+      // ❤️ Distribuir pontos REABASTECE hp/mp (não só o teto). Desde que os pools
+      // passaram a sobreviver à masmorra — voltar ao cheio é serviço pago da
+      // Alquimista (lib/restoreCost.ts) — isto é uma cura de graça, mas contida:
+      // os pontos que a destravam vêm do nível, então não dá para farmar cura.
+      // Mesma escolha do level up em characterLevelSystem.ts.
       hp: newHp,
       maxHp: newHp,
       mp: newMp,

@@ -1,0 +1,15 @@
+{
+  "slug": "slime-de-cristal",
+  "kind": "monster",
+  "name": "walk",
+  "src": "/sprites/monsters/slime-de-cristal/walk.webp",
+  "frameW": 251,
+  "frameH": 288,
+  "frames": 14,
+  "rows": [
+    1,
+    2
+  ],
+  "source": "~/Documents/dolrath/sprite-sources/monsters/caverna-de-cristal/slime-de-cristal.png",
+  "generatedAt": "2026-08-03T21:40:50.554Z"
+}

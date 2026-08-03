@@ -1,0 +1,9 @@
+Arte de cenário: CraftPix "Free Tower Defense 2D Vector Tileset" (#305231),
+game_background_2/layers — importada por scripts/import-craftpix-scene.ts.
+
+Licença: https://craftpix.net/file-licenses/ (assets grátis)
+  PERMITE uso comercial, modificação, sem atribuição obrigatória.
+  NÃO restringe blockchain/NFT/Web3.
+  PROÍBE revender/redistribuir os arquivos de arte — logo esta arte
+  NUNCA pode compor a imagem de uma NFT; é cenário do jogo.
+  PROÍBE uso para treinar/testar IA — não alimentar modelo de imagem.

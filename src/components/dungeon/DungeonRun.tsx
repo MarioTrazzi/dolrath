@@ -14,6 +14,7 @@ import { dungeonSceneEnabled } from '@/lib/dungeonScene/enabled'
 import { planNodeContents, type SpotContent } from '@/lib/dungeonScene/nodeContents'
 import type { MapSpot } from '@/lib/dungeonScene/types'
 import { buildWalkPathPoints, DUNGEON_BATTLE_BG } from '@/lib/walkSceneAssets'
+import { FREE_RESTORE_MAX_LEVEL } from '@/lib/restoreCost'
 import {
   DungeonDef,
   DungeonEventDef,
@@ -623,12 +624,29 @@ export default function DungeonRun({
   const effMaxMp = Math.round(character.maxMp * (1 + unlocks.passives.maxMpPct))
 
   // ---------- Recursos locais do personagem (durante a run) ----------
-  // HP e MP começam cheios: a stamina diária é o que limita as tentativas.
-  const [hp, setHp] = useState(() => character.maxHp + equipmentPower(character.equipment).hp)
-  const [mp, setMp] = useState(effMaxMp)
+  // ❤️ HP e MP SOBREVIVEM à run: entramos com a mesma FRAÇÃO que ficou salva no
+  // banco quando o herói saiu da anterior. Voltar ao cheio é serviço da
+  // Alquimista (grátis até o nível 6, pago daí em diante) — ou poção.
+  //
+  // Fração, não valor absoluto: o teto da run (`effMaxHp`) inclui gear e passivas
+  // da árvore, e a coluna do banco guarda só o pool base. Trocar de equipamento
+  // entre runs mudaria o teto e um valor cru entraria torto.
+  const poolPct = (current: number, max: number) =>
+    Number.isFinite(max) && max > 0 ? Math.min(1, Math.max(0, current / max)) : 1
+  const [hp, setHp] = useState(() => {
+    const max = character.maxHp + equipmentPower(character.equipment).hp
+    return Math.max(1, Math.round(max * poolPct(character.hp, character.maxHp)))
+  })
+  const [mp, setMp] = useState(() =>
+    Math.max(0, Math.round(effMaxMp * poolPct(character.mp, character.maxMp)))
+  )
   const [stamina, setStamina] = useState(character.stamina)
   const hpRef = useRef(hp)
   hpRef.current = hp
+  // Espelho do MP: `closeRunOnServer` precisa do valor no INSTANTE do envio
+  // (inclusive no `pagehide`, fora do ciclo de render).
+  const mpRef = useRef(mp)
+  mpRef.current = mp
   // Nível VIVO da run: a prop `character` fica congelada no valor de quando a run
   // montou — um level up mid-run precisa atualizar este estado (não `character.level`)
   // para refletir no combate seguinte (levers, card de batalha, escala do monstro).
@@ -914,6 +932,17 @@ export default function DungeonRun({
   const [auto] = useState(true)
   const autoRef = useRef(true)
   autoRef.current = auto
+  // 🤖 FARM AUTOMÁTICO (idle): refaz a run sozinho ao terminar e, entre uma e
+  // outra, PAGA a restauração da Alquimista. É o caminho da conveniência — quem
+  // prefere administrar poções e recuar na hora certa desliga isto e gasta muito
+  // menos ouro. Ligado por padrão (comportamento de antes), mas agora visível e
+  // desligável: nada que gaste o ouro do jogador sozinho pode ficar escondido.
+  const [autoFarm, setAutoFarm] = useState(true)
+  // O re-run automático é agendado com alguns segundos de atraso (para o jogador
+  // ler o resumo). Nesse intervalo ele ainda pode desligar o farm — por isso o
+  // callback adiado lê o REF, não a variável congelada no render que o agendou.
+  const autoFarmRef = useRef(true)
+  autoFarmRef.current = autoFarm
   // Piloto do COMBATE: liga por padrão (mesma experiência de antes), mas o jogador
   // pode desligar (⚡ Auto ON/OFF na barra de combate) para escolher alvo/ataque na mão.
   const [autoCombat, setAutoCombat] = useState(true)
@@ -2611,6 +2640,43 @@ export default function DungeonRun({
     }, 2800)
   }
 
+  /**
+   * HP/MP atuais na escala do BANCO (sem gear nem passivas), que é a escala em
+   * que o pai guarda o personagem. Mesma conversão que o /finish faz no servidor
+   * — assim o card do mapa e a coluna do banco contam a mesma história.
+   */
+  const exitPools = () => ({
+    hp: Math.max(1, Math.round(character.maxHp * poolPct(hpRef.current, effMaxHp))),
+    mp: Math.max(0, Math.round(character.maxMp * poolPct(mpRef.current, effMaxMp))),
+  })
+
+  /**
+   * ⚗️ Paga a restauração da Alquimista entre duas runs do farm automático.
+   *
+   * O preço é decidido pelo SERVIDOR (lib/restoreCost.ts) — aqui só reportamos o
+   * que foi cobrado. Devolve false quando não deu para restaurar (sem ouro ou
+   * erro de rede): quem chama desliga o farm e volta ao mapa.
+   */
+  const payRestore = async (): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/character/${character.id}/restore`, { method: 'POST' })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        showBanner('⚗️', data?.error || 'A Alquimista não pôde restaurar você — farm encerrado.', 4200, { sticky: true })
+        return false
+      }
+      if (data?.restored && data.cost > 0) {
+        pushLog(`⚗️ A Alquimista restaurou sua vida e mana por ${data.cost} 🪙.`)
+      } else if (data?.restored) {
+        pushLog('⚗️ A Alquimista restaurou sua vida e mana — cortesia até o nível 6.')
+      }
+      return true
+    } catch {
+      showBanner('⚗️', 'Sem conexão com a Alquimista — farm encerrado.', 4200, { sticky: true })
+      return false
+    }
+  }
+
   // 🔁 Re-run: o pai remonta a run do zero (mesma masmorra/herói), preservando o
   // estado do piloto. Precisa de stamina para ao menos o 1º passo (nó menor).
   // Aguarda o POST que encerra a run atual aterrissar antes de remontar — senão o
@@ -2619,8 +2685,34 @@ export default function DungeonRun({
   const canRerun = !!onRestart && stamina >= MINOR_STEP_COST
   const restartRun = async () => {
     if (!onRestart) { exitRun(); return }
+    // A ORDEM importa: o /finish persiste a fração de HP/MP E credita o ouro da
+    // run. Só depois dele a Alquimista vê o estado certo (e o saldo certo).
     try { await endRunPromiseRef.current } catch { /* segue mesmo assim */ }
-    onRestart({ hp: effMaxHp, mp: character.maxMp, stamina, level: charLevel, experience: charExperienceRef.current, leveledUp: leveledUpThisRun, auto })
+
+    // 🤖 Farm automático: paga a restauração antes de recomeçar. Sem ouro, o
+    // farm se desliga e volta ao mapa — nada de re-rodar com o herói caído,
+    // queimando stamina à toa.
+    let pools = exitPools()
+    if (autoFarmRef.current) {
+      const restored = await payRestore()
+      if (!restored) {
+        setAutoFarm(false)
+        exitRun()
+        return
+      }
+      // Restaurado: o pai remonta com os pools cheios (escala do banco) e o
+      // initializer da run volta a expandi-los com gear e passivas.
+      pools = { hp: character.maxHp, mp: character.maxMp }
+    }
+
+    onRestart({
+      ...pools,
+      stamina,
+      level: charLevel,
+      experience: charExperienceRef.current,
+      leveledUp: leveledUpThisRun,
+      auto,
+    })
   }
 
   /**
@@ -2686,7 +2778,15 @@ export default function DungeonRun({
     // descartado antes da resposta, senão uma falha de entrega leva junto o nó
     // (que, no fim da run, é o boss inteiro).
     const resolve = pendingResolveRef.current ?? undefined
-    const body = JSON.stringify({ runId: runIdRef.current, reason, resolve })
+    // ❤️ HP/MP de saída viajam como FRAÇÃO do teto efetivo: o servidor converte
+    // para a coluna (que não conhece gear nem passivas da árvore).
+    const body = JSON.stringify({
+      runId: runIdRef.current,
+      reason,
+      resolve,
+      hpPct: poolPct(hpRef.current, effMaxHp),
+      mpPct: poolPct(mpRef.current, effMaxMp),
+    })
     const giveUp = () => {
       // Nada foi creditado: devolve o desfecho e destrava a flag pra uma próxima
       // tentativa (o botão de sair, ou o /start seguinte drenando a run órfã).
@@ -2774,8 +2874,11 @@ export default function DungeonRun({
   const handleDefeat = () => {
     setPhase('defeat')
     closeRunOnServer('lose')
-    if (auto) {
-      later(() => { if (onRestart && stamina >= MINOR_STEP_COST) restartRun(); else exitRun() }, 3200)
+    if (autoFarm) {
+      later(() => {
+        if (!autoFarmRef.current) return // desligou o farm enquanto lia o resumo
+        if (onRestart && stamina >= MINOR_STEP_COST) restartRun(); else exitRun()
+      }, 3200)
     }
   }
 
@@ -2784,9 +2887,12 @@ export default function DungeonRun({
     closeRunOnServer(bossDefeated ? 'boss' : 'retreat')
     if (bossDefeated) {
       pushLog(`👑 ${dungeon.name} conquistada!`)
-      // Piloto automático: boss vencido também reinicia a run (farm contínuo até a stamina acabar).
-      if (auto) {
-        later(() => { if (onRestart && stamina >= MINOR_STEP_COST) restartRun(); else exitRun() }, 3600)
+      // Farm automático: boss vencido também reinicia a run (farm contínuo até a stamina acabar).
+      if (autoFarm) {
+        later(() => {
+          if (!autoFarmRef.current) return // desligou o farm enquanto lia o resumo
+          if (onRestart && stamina >= MINOR_STEP_COST) restartRun(); else exitRun()
+        }, 3600)
       }
     }
   }
@@ -2800,9 +2906,35 @@ export default function DungeonRun({
     // ainda vê esta run como 'active' e mostra o aviso sobre o próprio herói
     // que acabou de sair (ex.: ao voltar ao mapa logo após a derrota).
     try { await endRunPromiseRef.current } catch { /* segue mesmo assim */ }
-    // HP e MP voltam ao cheio entre runs — só a stamina (orçamento diário) é consumida.
-    onExit({ hp: effMaxHp, mp: character.maxMp, stamina, leveledUp: leveledUpThisRun })
+    // ❤️ HP e MP saem como ESTÃO (o /finish acabou de persistir a mesma fração):
+    // o card do mapa mostra o herói machucado na hora, sem esperar refetch.
+    onExit({ ...exitPools(), stamina, leveledUp: leveledUpThisRun })
   }
+
+  // 🤖 Interruptor do farm automático, mostrado nas telas de resumo e derrota.
+  // Deixa explícito o custo da conveniência: refazer a run sozinho passa pela
+  // Alquimista, e a Alquimista cobra (a partir do nível 7).
+  const farmToggle = (
+    <div className="mb-3 flex flex-col items-center gap-1.5">
+      <button
+        onClick={() => setAutoFarm(v => !v)}
+        className={`px-4 py-1.5 rounded-lg text-[11px] font-black border transition-colors ${
+          autoFarm
+            ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25'
+            : 'border-stone-600/60 bg-stone-800/60 text-stone-300 hover:bg-stone-700/60'
+        }`}
+      >
+        {autoFarm ? '🤖 Farm automático: LIGADO' : '🤖 Farm automático: DESLIGADO'}
+      </button>
+      <div className="text-[10px] leading-tight text-white/45 max-w-[16rem]">
+        {autoFarm
+          ? charLevel > FREE_RESTORE_MAX_LEVEL
+            ? 'Refaz a run sozinho e paga a Alquimista para restaurar vida e mana entre elas.'
+            : `Refaz a run sozinho. A restauração é gratuita até o nível ${FREE_RESTORE_MAX_LEVEL}.`
+          : 'Você refaz a run na mão, com a vida e a mana que sobraram.'}
+      </div>
+    </div>
+  )
 
   // ---------- Painel de dados da arena ----------
   const dicePanel = useMemo(() => {
@@ -3118,7 +3250,7 @@ export default function DungeonRun({
             <h3 className="text-xl font-black text-white mb-2">Herói em uso</h3>
             <p className="text-sm text-textsec leading-snug mb-5">{blocked}</p>
             <button
-              onClick={() => onExit({ hp: effMaxHp, mp: character.maxMp, stamina })}
+              onClick={() => onExit({ ...exitPools(), stamina })}
               className="w-full py-3 rounded-lg font-black text-white text-sm transition-transform active:scale-[0.98] hover:scale-[1.02]"
               style={{ background: `linear-gradient(90deg, ${dungeon.accent}, ${dungeon.accentSoft})` }}
             >
@@ -4088,11 +4220,12 @@ export default function DungeonRun({
                 </motion.div>
               )}
 
-              {auto && canRerun && (
+              {autoFarm && canRerun && (
                 <div className="text-emerald-300/90 text-[11px] font-bold mb-3 animate-pulse">
                   🤖 Farm visual: refazendo a run (mantenha a aba aberta)…
                 </div>
               )}
+              {farmToggle}
               <div className="flex flex-col sm:flex-row gap-2 justify-center">
                 {canRerun && (
                   <button
@@ -4127,16 +4260,21 @@ export default function DungeonRun({
               <div className="text-6xl mb-3">💀</div>
               <h3 className="text-red-400 font-black text-2xl mb-2">Você caiu...</h3>
               <p className="text-white/60 text-xs mb-4">
-                Você não perde nada: todo o XP, ouro e itens ganhos ficam guardados. Volte mais forte — a stamina se restaura sozinha (+2 a cada 15 min, após 15 min sem gastar).
+                Todo o XP, ouro e itens ganhos ficam guardados. Mas você sai daqui ferido:
+                {charLevel > FREE_RESTORE_MAX_LEVEL
+                  ? ' a Alquimista restaura vida e mana por um punhado de ouro — ou use suas poções.'
+                  : ` a Alquimista restaura vida e mana de graça até o nível ${FREE_RESTORE_MAX_LEVEL}.`}
+                {' '}A stamina se restaura sozinha (+2 a cada 15 min, após 15 min sem gastar).
               </p>
               <div className="text-white/70 text-xs mb-5">
                 💰 {totals.gold} ouro • ⭐ {totals.xp} XP • 📦 {totals.items.length} itens — tudo salvo
               </div>
-              {auto && canRerun && (
+              {autoFarm && canRerun && (
                 <div className="text-emerald-300/90 text-[11px] font-bold mb-3 animate-pulse">
                   🤖 Farm visual: refazendo a run (mantenha a aba aberta)…
                 </div>
               )}
+              {farmToggle}
               <div className="flex flex-col sm:flex-row gap-2 justify-center">
                 {canRerun && (
                   <button

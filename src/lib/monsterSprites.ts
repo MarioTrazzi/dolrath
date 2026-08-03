@@ -147,6 +147,97 @@ export const MONSTER_SPRITES: Record<string, MonsterSpriteDef> = {
     fps: 6,
     worldH: 1.6,
   },
+
+  // ---------- Caverna de Cristal ----------
+  //
+  // Folhas em grade 3x4 (goblin, golem, morcego): [0..5] perfil, [6..8] frente,
+  // [9..11] costas. As de paisagem (slime, wyrm) trazem o perfil na linha 1 e
+  // frente+costas na linha 2 — ver SHEET_RECIPES em slice-hero-sprite-sheet.ts.
+  //
+  // O último frame de costas de TODAS elas veio da geração com o mesmo losango
+  // branco chapado que a Anciã tem — por isso `back` sempre para antes do fim.
+
+  // Anda de pé, um pouco menor que o herói (2.1). [2] e [5] são os únicos
+  // quadros com a mochila ACESA em verde: no ciclo com os apagados, a mochila
+  // piscaria a cada passo. Mesmo motivo da chama da Anciã.
+  'goblin-minerador': {
+    src: '/sprites/monsters/goblin-minerador/walk.webp',
+    frameW: 228,
+    frameH: 288,
+    frames: 12,
+    facing: 'right',
+    walk: [0, 1, 3, 4],
+    front: [6, 7, 8],
+    back: [9, 10],
+    fps: 6,
+    worldH: 1.9,
+  },
+
+  // O bruto do bestiário: mais largo e mais alto que o herói, e o fps mais baixo
+  // da caverna porque pedra que anda rápido não pesa.
+  // [2] e [5] pegaram uma BARRA VERTICAL do quadro vizinho — a grade forçada
+  // corta em terços exatos e o braço do vizinho invade a coluna. Ficam de fora.
+  'golem-de-pedra': {
+    src: '/sprites/monsters/golem-de-pedra/walk.webp',
+    frameW: 274,
+    frameH: 288,
+    frames: 12,
+    facing: 'right',
+    walk: [0, 1, 3, 4],
+    front: [6, 7, 8],
+    back: [9, 10],
+    fps: 4,
+    worldH: 2.8,
+  },
+
+  // Voa: fps alto pela asa, e o menor worldH da caverna.
+  // [3] veio deformado da geração (asas colapsadas, silhueta menor que as outras)
+  // — no ciclo ele lê como engasgo. `back` fica em UM quadro só: o [10] é o
+  // morcego de asa FECHADA, metade da silhueta dos vizinhos, então alternar com
+  // o [9] pulsaria; e o [11] tem o losango branco.
+  'morcego-sombrio': {
+    src: '/sprites/monsters/morcego-sombrio/walk.webp',
+    frameW: 285,
+    frameH: 288,
+    frames: 12,
+    facing: 'right',
+    walk: [0, 1, 2, 4, 5],
+    front: [6, 7, 8],
+    back: [9],
+    fps: 8,
+    worldH: 1.6,
+  },
+
+  // Folha de paisagem: a linha 1 traz 8 quadros de perfil, sendo [4..7] o
+  // ESPELHO de [0..3] — não entram, o espelho sai de graça em runtime. [1] é a
+  // pose derretida (sem patas): dentro do ciclo ela vira o pulo gelatinoso.
+  'slime-de-cristal': {
+    src: '/sprites/monsters/slime-de-cristal/walk.webp',
+    frameW: 251,
+    frameH: 288,
+    frames: 14,
+    facing: 'right',
+    walk: [0, 1, 2, 3],
+    front: [8, 9, 10],
+    back: [11, 12],
+    fps: 5,
+    worldH: 1.7,
+  },
+
+  // CHEFE da Caverna. Mesma altura da Anciã da Mata — os dois ocupam o mesmo
+  // lugar na hierarquia, e ver o chefe do tamanho de um lobo mata a entrada.
+  'wyrm-cristalino': {
+    src: '/sprites/monsters/wyrm-cristalino/walk.webp',
+    frameW: 323,
+    frameH: 288,
+    frames: 12,
+    facing: 'right',
+    walk: [0, 1, 2, 3, 4, 5],
+    front: [6, 7],
+    back: [9, 10],
+    fps: 5,
+    worldH: 3.6,
+  },
 }
 
 /** Busca direta pelo slug. `null` = ainda não tem folha ⇒ vulto procedural. */

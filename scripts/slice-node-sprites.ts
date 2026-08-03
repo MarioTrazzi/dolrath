@@ -19,8 +19,8 @@
 //   npm run art:scene:nodes -- --max 320 --tol 30
 //
 // Entrada: sprite-sources/<arquivo>.png   (gitignored — folha crua, vários MB)
-// Saída:   public/scene/<bioma>/<flavor>-1.webp        estado cheio
-//          public/scene/<bioma>/<flavor>-used-1.webp   estado gasto
+// Saída:   public/scene/common/<flavor>-1.webp         estado cheio
+//          public/scene/common/<flavor>-used-1.webp    estado gasto
 //          sprite-sources/_contact-<flavor>.png        conferência a olho
 
 import { existsSync, mkdirSync } from 'fs'
@@ -88,7 +88,6 @@ type FrameRef = number | [number, number]
 interface NodeSheet {
   /** Arquivo em sprite-sources/. */
   file: string
-  biome: string
   /** NodeFlavor da cena (dungeonScene/icons.ts). Vira o nome do arquivo. */
   flavor: string
   /** Estado cheio — o que o jogador vê antes de coletar. */
@@ -106,7 +105,6 @@ interface NodeSheet {
 const NODE_SHEETS: NodeSheet[] = [
   {
     file: 'chest.png',
-    biome: 'floresta',
     flavor: 'chest',
     idle: 1,
     used: 4,
@@ -115,7 +113,6 @@ const NODE_SHEETS: NodeSheet[] = [
   },
   {
     file: 'fonte.png',
-    biome: 'floresta',
     flavor: 'fountain',
     idle: 1,
     used: 6,
@@ -123,7 +120,6 @@ const NODE_SHEETS: NodeSheet[] = [
   },
   {
     file: 'weed.png',
-    biome: 'floresta',
     flavor: 'herb',
     bordered: true,
     idle: [1, 1],
@@ -139,7 +135,7 @@ const NODE_SHEETS: NodeSheet[] = [
   // então a guarda de fundo a reprova — corretamente. Quando ela for refeita com
   // fundo chapado (ver scripts/node-sheet-prompt.md), é só descomentar:
   // {
-  //   file: 'rubble.png', biome: 'floresta', flavor: 'rubble',
+  //   file: 'rubble.png', flavor: 'rubble',
   //   idle: 1, used: <último quadro>, killShadow: true,
   //   note: 'acampamento de monstro: intacto → revirado',
   // },
@@ -461,7 +457,9 @@ const refLabel = (ref: FrameRef) => (Array.isArray(ref) ? ref.join(',') : String
 
 async function processSheet(sheet: NodeSheet): Promise<boolean> {
   const inPath = join(SOURCE_DIR, sheet.file)
-  const outDir = join('public', 'scene', sheet.biome)
+  // `common` e não o bioma: baú/erva/fonte/entulho são os MESMOS em toda
+  // masmorra (ver FIND_OBJECT_FLAVORS em dungeonScene/icons.ts).
+  const outDir = join('public', 'scene', 'common')
   const outIdle = join(outDir, `${sheet.flavor}-1.webp`)
   const outUsed = join(outDir, `${sheet.flavor}-used-1.webp`)
 

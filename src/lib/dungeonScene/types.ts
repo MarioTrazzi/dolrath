@@ -88,6 +88,15 @@ export interface SceneMapDef {
   propDensity: [number, number]
   /** Quantas variantes de sprite existem por tipo neste bioma. */
   variants: Record<PropKind, number>
+  /**
+   * Altura de MUNDO por tipo de prop, quando o bioma discorda do default.
+   *
+   * O default (`SPRITE_H` em DungeonScene) foi escrito para a Floresta, onde
+   * `tree` vale 6.5 unidades porque é uma árvore. Na Caverna o mesmo papel é um
+   * PAREDÃO DE ROCHA — a 6.5 unidades ficaria uma muralha absurda. O papel é o
+   * mesmo (a massa que fecha o corredor); só a escala do que ele desenha muda.
+   */
+  spriteH?: Partial<Record<PropKind, number>>
   /** Marcos de cenário (a casinha perdida na mata). Um punhado por mapa, com
    *  clareira de vegetação em volta para não ficarem soterrados. */
   landmarks: Vec2[]

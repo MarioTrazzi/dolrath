@@ -10,6 +10,9 @@ import { DUNGEON_LIST, DungeonDef, monsterImagePath, MAX_DUNGEON_TIER, CONCENTRA
 import { DUNGEON_BATTLE_BG } from '@/lib/walkSceneAssets'
 import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider'
 import { GOLD, GOLD_BRIGHT, BORDER_GOLD, PANEL_BG } from '@/components/crafting/bdoTheme'
+import { restoreCost, FREE_RESTORE_MAX_LEVEL } from '@/lib/restoreCost'
+import { buyGoldOnChain, isInsufficientGold, parseNeededGold } from '@/lib/buyGold'
+import { confirmBuyGold } from '@/lib/buyGoldPrompt'
 
 // Numerais dos tiers (1..5 → I..V).
 const ROMAN = ['I', 'II', 'III', 'IV', 'V']
@@ -48,6 +51,9 @@ export default function DungeonsPage() {
   // bloqueia o "Entrar" pra qualquer herói — só dá pra farmar um de cada vez.
   const [heroInUse, setHeroInUse] = useState(false)
   const [lockedCharacterName, setLockedCharacterName] = useState<string | null>(null)
+  // ⚗️ Restauração de HP/MP direto do mapa (mesma rota da Alquimista): entrar
+  // ferido é jogada válida, mas quem quiser sarar não precisa dar a volta pela loja.
+  const [restoring, setRestoring] = useState(false)
   // Acabamos de sair da NOSSA run: ignora a detecção por uns segundos (o /finish
   // pode ainda estar em voo, então o lock constaria "vivo" e piscaria o bloqueio à toa).
   const [recentExit, setRecentExit] = useState(false)
@@ -91,8 +97,11 @@ export default function DungeonsPage() {
                 race: details.race || char.race || 'Humano',
                 class: details.class || char.class || 'Guerreiro',
                 avatar: details.avatar || null,
-                mp: details.baseStats?.mp || 50,
-                maxMp: details.baseStats?.maxMp || 50,
+                // ❤️ HP/MP vêm das COLUNAS: são o pool vivo que sobrevive à run.
+                // O baseStats só é reescrito no recálculo de atributos e nunca
+                // refletiria o que a masmorra gastou.
+                mp: details.mp ?? details.baseStats?.mp ?? 50,
+                maxMp: details.maxMp ?? details.baseStats?.maxMp ?? 50,
                 stamina: details.stamina ?? 100,
                 maxStamina: details.maxStamina ?? 100,
                 attack: details.baseStats?.str || 10,
@@ -233,8 +242,44 @@ export default function DungeonsPage() {
     setRunSeq(s => s + 1)
   }
 
+  // ⚗️ Paga a Alquimista sem sair do mapa. O preço mostrado é só espelho: quem
+  // decide (e cobra) é o servidor.
+  const handleRestore = async () => {
+    const hero = selectedCharacter
+    if (!hero || restoring) return
+    setRestoring(true)
+    setError(null)
+    try {
+      const post = async () => {
+        const res = await fetch(`/api/character/${hero.id}/restore`, { method: 'POST' })
+        return { res, data: await res.json().catch(() => null) }
+      }
+      let { res, data } = await post()
+      // Sem ouro na mão → oferece a recarga on-chain do que falta e refaz.
+      if (!res.ok && isInsufficientGold(data?.error)) {
+        const needed = parseNeededGold(data?.error)
+        if (needed && (await confirmBuyGold(needed))) {
+          const credited = await buyGoldOnChain({ characterId: hero.id, amountGold: needed })
+          if (credited) ({ res, data } = await post())
+        }
+      }
+      if (!res.ok) {
+        setError(data?.error || 'Não foi possível restaurar.')
+        return
+      }
+      const patch = { hp: data.hp, mp: data.mp }
+      setSelectedCharacter(prev => (prev && prev.id === hero.id ? { ...prev, ...patch } : prev))
+      setCharacters(prev => prev.map(c => (c.id === hero.id ? { ...c, ...patch } : c)))
+      refreshActiveCharacter() // o ouro gasto aparece na navbar na hora
+    } catch {
+      setError('Não foi possível falar com a Alquimista.')
+    } finally {
+      setRestoring(false)
+    }
+  }
+
   // Ao sair da masmorra, sincroniza os recursos locais do personagem
-  const handleRunExit = (updates: { hp: number; mp: number; stamina: number; leveledUp?: boolean }) => {
+  const handleRunExit =(updates: { hp: number; mp: number; stamina: number; leveledUp?: boolean }) => {
     setActiveDungeon(null)
     setResumeAuto(false)
     setRecentExit(true)
@@ -405,6 +450,46 @@ export default function DungeonsPage() {
             <p className="text-red-400/80 text-xs">Use uma Poção de Reviver antes de entrar em masmorras.</p>
           </div>
         )}
+
+        {/* ⚗️ Herói ferido: HP/MP sobrevivem à run, então entrar assim é escolha
+            (e às vezes a certa — poções custam menos que a taxa). O atalho para
+            sarar fica aqui para não obrigar a volta pela loja. */}
+        {(() => {
+          if (!selectedCharacter) return null
+          const { cost, free, alreadyFull } = restoreCost({
+            hp: selectedCharacter.hp,
+            maxHp: selectedCharacter.maxHp,
+            mp: selectedCharacter.mp,
+            maxMp: selectedCharacter.maxMp,
+            level: selectedCharacter.level,
+          })
+          if (alreadyFull) return null
+          const hurt = selectedCharacter.hp < selectedCharacter.maxHp * 0.3
+          return (
+            <div
+              className="rounded-[3px] border p-4 mb-6 flex flex-col sm:flex-row items-center justify-center gap-3 text-center"
+              style={{ borderColor: hurt ? 'rgba(220,80,80,0.55)' : BORDER_GOLD, background: PANEL_BG }}
+            >
+              <div className="text-xs">
+                <p className="font-bold text-sm" style={{ color: hurt ? '#e07a7a' : GOLD_BRIGHT }}>
+                  {hurt ? '🩸 Você está gravemente ferido' : '⚗️ Vida ou mana incompletas'}
+                </p>
+                <p className="text-[#8a8a90]">
+                  Vida e mana não se recuperam sozinhas entre as runs — use poções ou a Alquimista.
+                  {free && ` Restauração gratuita até o nível ${FREE_RESTORE_MAX_LEVEL}.`}
+                </p>
+              </div>
+              <button
+                onClick={handleRestore}
+                disabled={restoring}
+                className="shrink-0 px-5 py-2.5 rounded-[3px] font-black text-sm text-[#100d06] transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-60"
+                style={{ background: `linear-gradient(180deg, ${GOLD_BRIGHT}, ${GOLD})` }}
+              >
+                {restoring ? 'Restaurando…' : free ? '⚗️ Restaurar (grátis)' : `⚗️ Restaurar (${cost} 🪙)`}
+              </button>
+            </div>
+          )
+        })()}
 
         {heroInUse && (
           <div className="rounded-[3px] border p-4 mb-6 text-center" style={{ borderColor: 'rgba(224,154,58,0.5)', background: 'rgba(58,45,22,0.5)' }}>

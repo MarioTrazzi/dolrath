@@ -1,0 +1,17 @@
+{
+  "slug": "goblin-minerador",
+  "kind": "monster",
+  "name": "walk",
+  "src": "/sprites/monsters/goblin-minerador/walk.webp",
+  "frameW": 228,
+  "frameH": 288,
+  "frames": 12,
+  "rows": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "source": "~/Documents/dolrath/sprite-sources/monsters/caverna-de-cristal/goblin-minerador.png",
+  "generatedAt": "2026-08-03T21:40:49.151Z"
+}

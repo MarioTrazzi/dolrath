@@ -113,6 +113,13 @@ const CELL_H = CELL[1]
 /** Fração da altura da célula que a silhueta ocupa (respiro em cima). */
 const FIT = 0.94
 
+/**
+ * Piso de altura de um frame, como fração da MEDIANA da linha. Abaixo disso é
+ * caco de cenário (poeira, gota), não pose. As folhas reais ficam em 0.9-1.1 da
+ * mediana e os cacos em 0.05-0.10 — 0.4 passa longe dos dois lados.
+ */
+const DEBRIS_H = Number(valOf('--debris-h') || 0.4)
+
 if (!ALL && !ALL_MONSTERS && !MONSTER && (!RACE || !CLASS)) {
   console.error('❌ faltou --race e/ou --class (ex.: --race elfo --class rogue), ou --monster <slug>, ou --all')
   process.exit(1)
@@ -216,6 +223,43 @@ const SHEET_RECIPES: Record<string, SheetRecipe> = {
     grid: { cols: 3, rows: 4 },
     killTrappedBg: true,
     note: 'grade 3x4; linha 2 = espelho da 1; risco de terra prende fundo entre as patas',
+  },
+
+  // ---- Caverna de Cristal ----
+  // Duas diagramações vieram na mesma leva, e a diferença muda o comando:
+  //
+  //   RETRATO 1686x2528 (goblin, golem, morcego): 3 colunas x 4 linhas, certinho.
+  //     A projeção sozinha erra porque a POEIRA sob os pés é um blob solto na
+  //     faixa entre duas poses — vira "frame" de 20x62. A grade resolve.
+  //
+  //   PAISAGEM 3836x1120 (slime, wyrm): 2 linhas com contagem DIFERENTE (8 e 6,
+  //     ou 6 e 6). Grade uniforme não serve; aqui é a projeção que acerta, com o
+  //     filtro de caco tirando as gotas de gosma.
+  //
+  // Em ambas: linhas 1-2 de perfil, 3 de frente, 4 de costas (retrato); na
+  // paisagem, linha 1 de perfil e linha 2 = frente + costas na mesma banda.
+  'goblin-minerador': {
+    rows: [1, 2, 3, 4],
+    grid: { cols: 3, rows: 4 },
+    note: 'grade 3x4: perfil, perfil, frente, costas; poeira dos pés some pelo filtro de caco',
+  },
+  'golem-de-pedra': {
+    rows: [1, 2, 3, 4],
+    grid: { cols: 3, rows: 4 },
+    note: 'grade 3x4, mesma diagramação do goblin',
+  },
+  'morcego-sombrio': {
+    rows: [1, 2, 3, 4],
+    grid: { cols: 3, rows: 4 },
+    note: 'grade 3x4, mesma diagramação do goblin (bicho voando, sem pé no chão)',
+  },
+  'slime-de-cristal': {
+    rows: [1, 2],
+    note: 'paisagem: 8 de perfil na linha 1, 3 de frente + 3 de costas na linha 2; gotas caem no filtro de caco',
+  },
+  'wyrm-cristalino': {
+    rows: [1, 2],
+    note: 'paisagem: 6 de perfil na linha 1, 3 de frente + 3 de costas na linha 2',
   },
 }
 
@@ -333,9 +377,24 @@ async function sliceOne(job: Job): Promise<string | null> {
     const found = grid
       ? gridFrames(raw, bandY0, bandY1, grid.cols)
       : findFrames(raw, bandY0, bandY1)
+    // Cacos de cenário que a projeção conta como frame: a poeira sob os pés do
+    // goblin, as gotas que caem do slime. São blobs soltos na faixa vazia ENTRE
+    // duas poses, então `findFrames` os separa como se fossem quadros — e um
+    // "frame" de 33x23 no meio do ciclo faz o bicho sumir por um instante.
+    // Altura relativa à MEDIANA da linha resolve sem número mágico por folha:
+    // pose é pose, caco é caco, e a distância entre os dois é enorme.
+    const heights = found.map(b => b.y1 - b.y0).sort((a, b) => a - b)
+    const medianH = heights[Math.floor(heights.length / 2)] || 0
     const rowFrames = found.filter((box) => {
       if (isFlatBlob(raw, box)) {
         console.log(`   ⚠️  descartado blob chapado em x=${box.x0}..${box.x1}`)
+        return false
+      }
+      if (medianH > 0 && box.y1 - box.y0 < medianH * DEBRIS_H) {
+        console.log(
+          `   ⚠️  descartado caco ${box.x1 - box.x0}x${box.y1 - box.y0} em x=${box.x0} ` +
+            `(< ${Math.round(medianH * DEBRIS_H)}px)`,
+        )
         return false
       }
       return true

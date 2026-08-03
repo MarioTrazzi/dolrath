@@ -1,0 +1,17 @@
+{
+  "slug": "golem-de-pedra",
+  "kind": "monster",
+  "name": "walk",
+  "src": "/sprites/monsters/golem-de-pedra/walk.webp",
+  "frameW": 274,
+  "frameH": 288,
+  "frames": 12,
+  "rows": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "source": "~/Documents/dolrath/sprite-sources/monsters/caverna-de-cristal/golem-de-pedra.png",
+  "generatedAt": "2026-08-03T21:40:49.702Z"
+}

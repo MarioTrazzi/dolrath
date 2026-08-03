@@ -123,6 +123,11 @@ const READY_TIMEOUT_MS = 8000
  * Altura no MUNDO (unidades) da MAIOR variante de cada tipo — é o que dá a
  * escala do lugar. As variantes menores encolhem na mesma proporção da arte
  * (um broto de 54px não vira árvore adulta), calculado na carga.
+ *
+ * Estes valores descrevem a FLORESTA — foi onde a cena nasceu. Um bioma cuja
+ * arte discorda (a Caverna desenha PAREDÃO onde a Floresta desenha árvore)
+ * sobrescreve o que precisar em `recipe.spriteH`; os achados nunca aparecem lá
+ * porque a arte deles é compartilhada (ver `nodeObjectSprites`).
  */
 const SPRITE_H: Record<string, number> = {
   tree: 6.5,
@@ -171,17 +176,22 @@ function loadImage(src: string, optional = false): Promise<HTMLImageElement | nu
 }
 
 /**
- * Arte dos objetos de achado do bioma: o estado CHEIO e o GASTO de cada flavor.
+ * Arte dos objetos de achado: o estado CHEIO e o GASTO de cada flavor.
+ *
+ * Mora em `/scene/common/` porque baú, entulho, erva e fonte são os MESMOS em
+ * toda masmorra — um baú não muda de forma porque o chão virou pedra. Isso é o
+ * que faz um bioma novo precisar só do cenário: a arte de achado vem de graça,
+ * e um retoque no baú vale para o jogo inteiro.
  *
  * Fica fora de `map.variants` de propósito — aquilo é `PropKind` e alimenta o
  * espalhamento de vegetação (`variantOf` em geometry.ts), então um baú ali
  * viraria mato brotando pela mata. Aqui é uma lista à parte, com a mesma
  * convenção de chave (`<tipo>-<variante>`) para o `spriteOf` do desenho achar.
  */
-function nodeObjectSprites(biome: string) {
+function nodeObjectSprites() {
   return FIND_OBJECT_FLAVORS.flatMap(flavor => [
-    { key: `${flavor}-1`, src: `/scene/${biome}/${flavor}-1.webp`, optional: false },
-    { key: `${flavor}-used-1`, src: `/scene/${biome}/${flavor}-used-1.webp`, optional: true },
+    { key: `${flavor}-1`, src: `/scene/common/${flavor}-1.webp`, optional: false },
+    { key: `${flavor}-used-1`, src: `/scene/common/${flavor}-used-1.webp`, optional: true },
   ])
 }
 
@@ -367,7 +377,7 @@ export default function DungeonScene({
     // Objetos de achado (baú, erva, fonte, entulho). Sem `cleanSprite()`: estes
     // saem do recorte determinístico do sharp, e não do gpt-image-1 — não têm a
     // franja de halo que aquela varredura existe para limpar.
-    for (const { key, src, optional } of nodeObjectSprites(map.id)) {
+    for (const { key, src, optional } of nodeObjectSprites()) {
       pending.push(
         loadImage(src, optional).then(img => {
           if (cancelled || !img) return
@@ -452,7 +462,7 @@ export default function DungeonScene({
     // Os objetos de achado entram no gate junto: sem isso o baú nasce como ícone
     // SVG e PISCA pra sprite quando a imagem assenta — o mesmo defeito que as
     // folhas de monstro logo abaixo existem pra evitar.
-    for (const { src, optional } of nodeObjectSprites(map.id)) urls.push([src, optional])
+    for (const { src, optional } of nodeObjectSprites()) urls.push([src, optional])
     const def = resolveHeroSprite(race, heroClass)
     if (def) urls.push([def.src, false])
     else if (heroSprite) urls.push([heroSprite, false])
@@ -537,6 +547,15 @@ export default function DungeonScene({
     if (!ctx) return
 
     const props = sceneProps(mapRef.current)
+    /**
+     * Altura de mundo de um tipo de sprite: o bioma manda, o default da Floresta
+     * é a rede. Um só ponto de resolução para todo o desenho — poça, objeto de
+     * nó e vegetação —, senão um bioma novo teria de lembrar de três lugares.
+     */
+    const heightOf = (kind: string) =>
+      (mapRef.current.spriteH as Record<string, number> | undefined)?.[kind] ??
+      SPRITE_H[kind] ??
+      1.2
     let running = true
     let last = performance.now()
     // `ppu` é o zoom EFETIVO (o que todo o desenho lê); `basePpu` é o
@@ -681,7 +700,7 @@ export default function DungeonScene({
           if (px < -80 || px > view.w + 80 || py < -80 || py > view.h + 80) continue
           const img = spriteOf('puddle', p.variant)
           if (!img) continue
-          const w = (SPRITE_H.puddle ?? 3.2) * p.scale * view.ppu
+          const w = heightOf('puddle') * p.scale * view.ppu
           const hh = w * (spriteH(img) / spriteW(img)) * Y_SQUASH
           ctx.save()
           ctx.globalAlpha = 0.94
@@ -771,7 +790,7 @@ export default function DungeonScene({
       const used = visitedRef.current.includes(obj.nodeIndex)
       const img = (used ? spriteOf(`${obj.flavor}-used`, 1) : null) ?? spriteOf(obj.flavor, 1)
       if (img) {
-        drawSprite(img, x, y, SPRITE_H[obj.flavor] ?? 1.2)
+        drawSprite(img, x, y, heightOf(obj.flavor))
         return
       }
       // Sem arte ainda: o ícone SVG fica de pé no chão.
@@ -791,7 +810,7 @@ export default function DungeonScene({
         // Altura do tipo × proporção desta variante × jitter do prop.
         const ref = kindScaleRef.current.get(p.kind) || spriteH(img)
         const rel = spriteH(img) / ref
-        drawSprite(img, x, y, (SPRITE_H[p.kind] ?? 1.2) * rel, p.scale)
+        drawSprite(img, x, y, heightOf(p.kind) * rel, p.scale)
         return
       }
 

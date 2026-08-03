@@ -1,0 +1,17 @@
+{
+  "slug": "morcego-sombrio",
+  "kind": "monster",
+  "name": "walk",
+  "src": "/sprites/monsters/morcego-sombrio/walk.webp",
+  "frameW": 285,
+  "frameH": 288,
+  "frames": 12,
+  "rows": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "source": "~/Documents/dolrath/sprite-sources/monsters/caverna-de-cristal/morcego-sombrio.png",
+  "generatedAt": "2026-08-03T21:40:50.141Z"
+}

@@ -3620,8 +3620,13 @@ export default function DungeonRun({
             <main className="relative flex-1 min-h-0">
               <div className="absolute inset-0 mx-auto max-w-md pointer-events-none">
                 <div className="relative h-full pointer-events-auto">
-                {/* números flutuantes (ganhos/perdas) */}
-                <div className="absolute left-1/2 top-3 -translate-x-1/2 flex flex-col items-center gap-1 pointer-events-none z-20">
+                {/* Números e ícones flutuantes (ganhos/perdas, drop de destaque).
+                    NO CENTRO, e acima da narração de propósito: no topo eles
+                    nasciam no mesmo `top-3` da NarrationDialog, que tem z maior —
+                    o loot aparecia bem na hora em que o Mestre narra e ficava
+                    escondido atrás do card. O centro é livre nesta fase (o
+                    DiceOverlay só ocupa durante o boot da cena). */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 pointer-events-none z-[46]">
                   {floats.map(f => f.item ? (
                     <div
                       key={f.id}

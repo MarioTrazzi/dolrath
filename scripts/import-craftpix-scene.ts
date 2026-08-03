@@ -60,12 +60,35 @@ interface Piece {
   /** Nome que o motor procura: `<kind>-<variante>`. */
   to: string
   /**
+   * Puxa esta peça de OUTRO pack do mesmo tileset.
+   *
+   * Existe porque bioma não é pack: a Caverna nasce do `game_background_2` (a
+   * mina), mas a mina não tem uma única peça de rocha EM PÉ — os "paredões"
+   * dela são bordas de despenhadeiro, ribbons chapadas numa projeção que só
+   * fecha vista de cima. A massa de rocha de verdade (o pico, a encosta, o
+   * platô) está no `game_background_1`. Misturar é de graça: é o mesmo tileset,
+   * mesmo traço, e a graduação de cor iguala o tom no fim.
+   */
+  pack?: string
+  /**
    * Peças que NÃO podem ser aparadas nem redimensionadas por lado:
    *  - chão (`ground`): textura em ladrilho.
    *  - trilha (`road`): segmento RETO desenhado repetido ao longo do caminho.
    *    Aparar comeria as bordas onduladas que fazem a emenda entre repetições.
    */
   raw?: boolean
+  /**
+   * Descarta o canal alpha.
+   *
+   * Só para o CHÃO, e não é detalhe: a linha de cima e a coluna da esquerda do
+   * `land` do pack vêm com alpha ≈128 (meio transparentes). Ladrilhado com
+   * `createPattern('repeat')`, isso vira uma GRADE de linhas finas a cada 512px
+   * sobre o piso inteiro. O RGB da borda é idêntico ao do miolo, então jogar o
+   * alpha fora deixa o ladrilho perfeitamente uniforme — e ainda economiza peso.
+   *
+   * Nunca na trilha (`road`): lá a borda ondulada é alpha de verdade.
+   */
+  opaque?: boolean
   /** Sobrepõe a graduação do bioma nesta peça. */
   grade?: Grade
 }
@@ -76,6 +99,13 @@ interface BiomeImport {
   grade: Grade
   pieces: Piece[]
 }
+
+/**
+ * A rocha que faz PAREDE, um passo mais clara que a do chão. No tom do piso ela
+ * some no fundo e a galeria deixa de ter borda — o que fecha o corredor precisa
+ * ser legível como sólido.
+ */
+const WALL_GRADE: Grade = { saturation: 0.12, brightness: 0.82, tint: '#8296ae' }
 
 const BIOME_IMPORT: Record<string, BiomeImport> = {
   // 🌲 Floresta Sombria — o pack já é uma clareira de mata; só fecha o tom.
@@ -105,7 +135,7 @@ const BIOME_IMPORT: Record<string, BiomeImport> = {
       // Poça de água esverdeada espalhada pelas clareiras. Uma peça só: a variação
       // vem do espelhamento e do jitter de escala no motor.
       { from: 'dot', to: 'puddle-1' },
-      { from: 'land', to: 'ground', raw: true },
+      { from: 'land', to: 'ground', raw: true, opaque: true },
       { from: 'road_5', to: 'road', raw: true },
     ],
   },
@@ -119,12 +149,15 @@ const BIOME_IMPORT: Record<string, BiomeImport> = {
     // public/backgrounds/caverna-battle.webp.
     grade: { saturation: 0.12, brightness: 0.72, tint: '#7d93ad' },
     pieces: [
-      // `tree` = a massa que fecha a galeria. São as bordas de despenhadeiro do
-      // mapa original, que de cima lêem como veio/paredão de rocha.
-      { from: 'decor_5', to: 'tree-1' },
-      { from: 'decor_1', to: 'tree-2' },
-      { from: 'decor_8', to: 'tree-3' },
-      { from: 'decor_9', to: 'tree-4' },
+      // `tree` = a massa que fecha a galeria, e ela vem do PACK 1 (ver `pack`).
+      // As bordas de despenhadeiro da mina (decor_1/5/8/9) foram tentadas aqui e
+      // ficaram erradas: são ribbons chapadas com a aresta iluminada em CIMA e a
+      // face escura descendo — de pé, no meio da câmara, lêem como fita flutuando
+      // de ponta-cabeça. Rocha precisa de VOLUME, e volume o pack 1 tem.
+      // Um pouco mais claras que o resto: parede que some no chão não fecha nada.
+      { from: 'stone_6', to: 'tree-1', pack: 'game_background_1', grade: WALL_GRADE },
+      { from: 'decor_7', to: 'tree-2', pack: 'game_background_1', grade: WALL_GRADE },
+      { from: 'decor_3', to: 'tree-3', pack: 'game_background_1', grade: WALL_GRADE },
       // `bush` = aglomerado de cristal. ESCAPA do banho de ardósia: é o único
       // ponto de cor da masmorra, e o par ciano+roxo é o da arte de batalha.
       // O pack só tem ciano e LARANJA — 250° de matiz levam o laranja ao roxo.
@@ -141,7 +174,7 @@ const BIOME_IMPORT: Record<string, BiomeImport> = {
       { from: 'decor_2', to: 'stump-1' },
       // Poça: no pack é terra revirada; em ardósia vira água parada escura.
       { from: 'dot', to: 'puddle-1' },
-      { from: 'land', to: 'ground', raw: true },
+      { from: 'land', to: 'ground', raw: true, opaque: true },
       { from: 'road_5', to: 'road', raw: true },
     ],
   },
@@ -166,16 +199,15 @@ const BASE_GRADE: Grade = {
   ...(valOf('--saturation') ? { saturation: Number(valOf('--saturation')) } : {}),
 }
 
-const SRC =
-  valOf('--src') ||
-  join(
-    homedir(),
-    'Downloads',
-    'craftpix-net-305231-free-tower-defense-2d-vector-tileset',
-    'PNG',
-    RECIPE.pack,
-    'layers',
-  )
+const TILESET =
+  valOf('--tileset') ||
+  join(homedir(), 'Downloads', 'craftpix-net-305231-free-tower-defense-2d-vector-tileset', 'PNG')
+
+/** Pasta `layers` de um pack. `--src` continua apontando só o pack PADRÃO do bioma. */
+const layersOf = (pack: string) =>
+  pack === RECIPE.pack && valOf('--src') ? valOf('--src')! : join(TILESET, pack, 'layers')
+
+const SRC = layersOf(RECIPE.pack)
 
 const OUT = join('public', 'scene', BIOME)
 
@@ -197,6 +229,7 @@ async function convert(srcFile: string, outFile: string, piece: Piece) {
   if (grade.hue !== undefined) mod.hue = grade.hue
   img = img.modulate(mod)
   if (grade.tint) img = img.tint(grade.tint)
+  if (piece.opaque) img = img.removeAlpha()
 
   const buf = await img
     .resize({ width: MAX_SIDE, height: MAX_SIDE, fit: 'inside', withoutEnlargement: true })
@@ -223,10 +256,10 @@ async function main() {
 
   let done = 0
   for (const piece of RECIPE.pieces) {
-    const srcFile = join(SRC, `${piece.from}.png`)
+    const srcFile = join(layersOf(piece.pack ?? RECIPE.pack), `${piece.from}.png`)
     const outFile = join(OUT, `${piece.to}.webp`)
     if (!existsSync(srcFile)) {
-      console.warn(`⚠️  faltando no pack: ${piece.from}.png`)
+      console.warn(`⚠️  faltando no pack: ${piece.pack ?? RECIPE.pack}/${piece.from}.png`)
       continue
     }
     if (existsSync(outFile) && !FORCE) {
@@ -235,8 +268,9 @@ async function main() {
     }
     const r = await convert(srcFile, outFile, piece)
     const mark = piece.grade ? ' 🎨' : ''
+    const from = piece.pack ? `${piece.pack.replace('game_background_', 'bg')}/${piece.from}` : piece.from
     console.log(
-      `✅ ${piece.from}.png → ${piece.to}.webp  ${r.w}×${r.h}  ${(r.bytes / 1024).toFixed(0)} KB${mark}`,
+      `✅ ${from}.png → ${piece.to}.webp  ${r.w}×${r.h}  ${(r.bytes / 1024).toFixed(0)} KB${mark}`,
     )
     done++
   }
@@ -249,7 +283,8 @@ async function main() {
       noteFile,
       [
         'Arte de cenário: CraftPix "Free Tower Defense 2D Vector Tileset" (#305231),',
-        `${RECIPE.pack}/layers — importada por scripts/import-craftpix-scene.ts.`,
+        `packs ${Array.from(new Set([RECIPE.pack, ...RECIPE.pieces.map(p => p.pack ?? RECIPE.pack)])).join(' + ')}`,
+        '— importada por scripts/import-craftpix-scene.ts.',
         '',
         'Licença: https://craftpix.net/file-licenses/ (assets grátis)',
         '  PERMITE uso comercial, modificação, sem atribuição obrigatória.',

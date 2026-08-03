@@ -576,6 +576,8 @@ export default function DungeonScene({
       near: boolean
     }
     const drops: Drop[] = []
+    /** Bioma sem céu não chove — e sem gotas, `fitDrops` nem povoa a lista. */
+    const RAINY = (mapRef.current.weather ?? 'rain') === 'rain'
     /** Gotas por megapixel CSS — densidade por ÁREA, igual em qualquer tamanho. */
     const RAIN_DENSITY = 210
     /** Vento constante: vx = vy × isto. */
@@ -590,7 +592,9 @@ export default function DungeonScene({
     }
 
     const fitDrops = () => {
-      const want = clamp(Math.round(((view.w * view.h) / 1e6) * RAIN_DENSITY), 40, 320)
+      const want = RAINY
+        ? clamp(Math.round(((view.w * view.h) / 1e6) * RAIN_DENSITY), 40, 320)
+        : 0
       while (drops.length > want) drops.pop()
       while (drops.length < want) {
         const d: Drop = { x: 0, y: 0, vy: 0, len: 0, near: false }
@@ -775,7 +779,11 @@ export default function DungeonScene({
     const drawSprite = (img: Sprite, x: number, y: number, worldH: number, scale = 1) => {
       const h = worldH * scale * view.ppu
       const w = h * (spriteW(img) / spriteH(img))
-      groundShadow(x, y, w * 0.3)
+      // A sombra sai da LARGURA, mas com teto na altura: numa peça muito mais
+      // larga que alta, `w * 0.3` desenhava uma elipse maior que a própria arte
+      // — ela escapava por baixo e o objeto lia como se estivesse flutuando.
+      // Objeto largo e baixo (uma laje) projeta sombra curta, não gigante.
+      groundShadow(x, y, Math.min(w * 0.3, h * 0.55))
       ctx.drawImage(img, x - w / 2, y - h, w, h)
     }
 
@@ -1132,6 +1140,7 @@ export default function DungeonScene({
      * e chuva parada atrás do combate leria como canvas travado.
      */
     const drawRain = (dt: number) => {
+      if (!RAINY) return
       const wrapW = view.w + 60
       for (let pass = 0; pass < 2; pass++) {
         const near = pass === 1

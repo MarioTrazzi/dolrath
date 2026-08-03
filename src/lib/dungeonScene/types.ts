@@ -97,6 +97,11 @@ export interface SceneMapDef {
    * mesmo (a massa que fecha o corredor); só a escala do que ele desenha muda.
    */
   spriteH?: Partial<Record<PropKind, number>>
+  /**
+   * Ambiência do céu. `'rain'` era o comportamento fixo da cena, e sob a terra
+   * ele denuncia o truque: chove dentro da Caverna de Cristal.
+   */
+  weather?: 'rain' | 'none'
   /** Marcos de cenário (a casinha perdida na mata). Um punhado por mapa, com
    *  clareira de vegetação em volta para não ficarem soterrados. */
   landmarks: Vec2[]

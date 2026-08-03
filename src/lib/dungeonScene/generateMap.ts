@@ -180,6 +180,7 @@ export function generateSceneMap(dungeonId: DungeonId, seed: string): SceneMapDe
     propDensity: recipe.propDensity,
     variants: recipe.variants,
     spriteH: recipe.spriteH,
+    weather: recipe.weather,
     landmarks,
     groundTexture: recipe.groundTexture,
     entrance: { ...pockets[0].c },

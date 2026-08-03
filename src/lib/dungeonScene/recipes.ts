@@ -19,6 +19,8 @@ export interface BiomeRecipe {
    * O papel é o mesmo; o que ele desenha é que muda de tamanho (árvore × paredão).
    */
   spriteH?: Partial<Record<PropKind, number>>
+  /** Ambiência do céu. Default (ausente) = chuva, como a cena sempre fez. */
+  weather?: 'rain' | 'none'
   /** Passo da grade de espalhamento, em unidades. MAIOR = mata mais rala. */
   propStep: number
   /** Chance de nascer vegetação: [junto da clareira, fundo da mata]. */
@@ -82,9 +84,11 @@ export const BIOME_RECIPES: Record<DungeonId, BiomeRecipe> = {
   //   house = arco de entrada da mina, o marco
   //   stump = vagonete de minério abandonado
   caverna: {
-    variants: { tree: 4, bush: 2, rock: 5, stump: 1, puddle: 1, house: 1 },
+    variants: { tree: 3, bush: 2, rock: 5, stump: 1, puddle: 1, house: 1 },
     // A altura de árvore (6.5) viraria muralha num paredão. Ver SPRITE_H.
     spriteH: { tree: 3.2, bush: 1.7, rock: 1.0, stump: 1.1, house: 4.0, puddle: 3.0 },
+    // Não chove a 300m de profundidade.
+    weather: 'none',
     propStep: 3.4,
     // Sólido de propósito: caverna que deixa vazar o `deep` entre as pedras não
     // lê como túnel, lê como campo aberto à noite. A mata da Floresta chega a

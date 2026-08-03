@@ -65,20 +65,10 @@ export async function POST(
       );
     }
 
-    // Check if item is currently equipped
-    const equippedItem = await prisma.characterEquipment.findFirst({
-      where: {
-        characterId: params.characterId,
-        itemId: itemId,
-      },
-    });
-
-    if (equippedItem) {
-      return NextResponse.json(
-        { error: 'Cannot transfer equipped items. Please unequip the item first.' },
-        { status: 400 }
-      );
-    }
+    // ⚠️ Não existe checagem de "item equipado" aqui de propósito: equipar move a
+    // peça para CharacterEquipment e a REMOVE do inventário. Toda linha em
+    // CharacterInventory está, por definição, desequipada — checar por itemId
+    // bloqueava a CÓPIA guardada quando outra igual estava vestida.
 
     // Start transaction to transfer items back to global inventory
     const result = await prisma.$transaction(async (tx) => {

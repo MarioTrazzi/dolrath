@@ -84,7 +84,7 @@ export const BIOME_RECIPES: Record<DungeonId, BiomeRecipe> = {
   //   house = arco de entrada da mina, o marco
   //   stump = vagonete de minério abandonado
   caverna: {
-    variants: { tree: 3, bush: 2, rock: 5, stump: 1, puddle: 1, house: 1 },
+    variants: { tree: 4, bush: 2, rock: 5, stump: 1, puddle: 1, house: 1 },
     // A altura de árvore (6.5) viraria muralha num paredão. Ver SPRITE_H.
     spriteH: { tree: 3.2, bush: 1.7, rock: 1.0, stump: 1.1, house: 4.0, puddle: 3.0 },
     // Não chove a 300m de profundidade.

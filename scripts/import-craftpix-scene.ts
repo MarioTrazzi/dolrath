@@ -107,6 +107,14 @@ interface BiomeImport {
  */
 const WALL_GRADE: Grade = { saturation: 0.12, brightness: 0.82, tint: '#8296ae' }
 
+/**
+ * O mesmo papel de parede, mas para peças do `game_background_3` — o pack da
+ * NEVE, que começa quase branco. No brilho das outras elas sairiam brilhando no
+ * escuro; a 0.34 entram na mesma família, e o que era capa de neve vira a crista
+ * clara da rocha pegando a luz dos cristais.
+ */
+const SNOW_WALL_GRADE: Grade = { saturation: 0.12, brightness: 0.34, tint: '#8296ae' }
+
 const BIOME_IMPORT: Record<string, BiomeImport> = {
   // 🌲 Floresta Sombria — o pack já é uma clareira de mata; só fecha o tom.
   floresta: {
@@ -155,9 +163,16 @@ const BIOME_IMPORT: Record<string, BiomeImport> = {
       // face escura descendo — de pé, no meio da câmara, lêem como fita flutuando
       // de ponta-cabeça. Rocha precisa de VOLUME, e volume o pack 1 tem.
       // Um pouco mais claras que o resto: parede que some no chão não fecha nada.
+      //
+      // ⚠️ TODA peça aqui precisa de silhueta FECHADA. Vários packs trazem peças
+      // de BORDA — desenhadas cortadas de propósito, porque no mapa original elas
+      // correm para fora da tela (`bg1/decor_7` e `bg3/stone_1` são assim). No
+      // meio da câmara elas aparecem com um talho reto, como rocha serrada.
+      // Antes de acrescentar variante, olhe a peça sozinha e confira as 4 bordas.
       { from: 'stone_6', to: 'tree-1', pack: 'game_background_1', grade: WALL_GRADE },
-      { from: 'decor_7', to: 'tree-2', pack: 'game_background_1', grade: WALL_GRADE },
+      { from: 'stone_2', to: 'tree-2', pack: 'game_background_3', grade: SNOW_WALL_GRADE },
       { from: 'decor_3', to: 'tree-3', pack: 'game_background_1', grade: WALL_GRADE },
+      { from: 'stone_3', to: 'tree-4', pack: 'game_background_3', grade: SNOW_WALL_GRADE },
       // `bush` = aglomerado de cristal. ESCAPA do banho de ardósia: é o único
       // ponto de cor da masmorra, e o par ciano+roxo é o da arte de batalha.
       // O pack só tem ciano e LARANJA — 250° de matiz levam o laranja ao roxo.
@@ -168,8 +183,10 @@ const BIOME_IMPORT: Record<string, BiomeImport> = {
       { from: 'stone_3', to: 'rock-3' },
       { from: 'stone_4', to: 'rock-4' },
       { from: 'stone_5', to: 'rock-5' },
-      // Marco: o arco de entrada da mina, alvenaria em plena galeria.
-      { from: 'decor_7', to: 'house-1' },
+      // Marco: portal de pedra, alvenaria em plena galeria. Vem do pack 3 pelo
+      // mesmo motivo dos paredões — o arco da própria mina (`decor_7` daqui) é
+      // peça de borda: vem grudado num paredão cortado reto em cima e à esquerda.
+      { from: 'decor_5', to: 'house-1', pack: 'game_background_3', grade: SNOW_WALL_GRADE },
       // Solto no meio da câmara: o vagonete de minério abandonado.
       { from: 'decor_2', to: 'stump-1' },
       // Poça: no pack é terra revirada; em ardósia vira água parada escura.
@@ -211,6 +228,42 @@ const SRC = layersOf(RECIPE.pack)
 
 const OUT = join('public', 'scene', BIOME)
 
+/**
+ * Denuncia PEÇA DE BORDA: a que o pack desenhou cortada de propósito, porque no
+ * mapa original ela corre para fora da tela.
+ *
+ * Custou duas rodadas de olho no jogo para achar a primeira (`bg1/decor_7`, que
+ * aparecia no meio da câmara com um talho reto, como rocha serrada) e a guarda
+ * pegou uma segunda de graça (o arco `bg2/decor_7`). É trivial de medir: numa
+ * peça inteira a silhueta não encosta na moldura — só a BASE encosta, porque o
+ * objeto está apoiado no chão.
+ *
+ * Só avisa. Peça de borda pode ser legítima algum dia (uma parede de fundo
+ * encostada no limite do mapa); o que não pode é entrar sem ninguém notar.
+ */
+async function edgeWarning(buf: Buffer): Promise<string | null> {
+  const { data, info } = await sharp(buf).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
+  const { width: w, height: h } = info
+  const alpha = (x: number, y: number) => data[(y * w + x) * 4 + 3]
+  const covered = (vals: number[]) => vals.filter(v => v > 40).length / vals.length
+
+  const top: number[] = []
+  const left: number[] = []
+  const right: number[] = []
+  for (let x = 0; x < w; x++) top.push(alpha(x, 0))
+  for (let y = 0; y < h; y++) {
+    left.push(alpha(0, y))
+    right.push(alpha(w - 1, y))
+  }
+  // A base fica de fora: objeto apoiado no chão encosta ali por definição.
+  const hits = ([['topo', top], ['esq', left], ['dir', right]] as const)
+    .map(([name, vals]) => [name, covered(vals)] as const)
+    .filter(([, frac]) => frac > 0.35)
+    .map(([name, frac]) => `${name} ${Math.round(frac * 100)}%`)
+
+  return hits.length ? hits.join(', ') : null
+}
+
 async function convert(srcFile: string, outFile: string, piece: Piece) {
   let img = sharp(srcFile).ensureAlpha()
 
@@ -238,7 +291,9 @@ async function convert(srcFile: string, outFile: string, piece: Piece) {
 
   if (!DRY) await sharp(buf).toFile(outFile)
   const meta = await sharp(buf).metadata()
-  return { bytes: buf.length, w: meta.width, h: meta.height }
+  // Chão e trilha ladrilham de propósito: encostar na moldura é o trabalho deles.
+  const edge = piece.raw || piece.opaque ? null : await edgeWarning(buf)
+  return { bytes: buf.length, w: meta.width, h: meta.height, edge }
 }
 
 async function main() {
@@ -255,6 +310,7 @@ async function main() {
   )
 
   let done = 0
+  let edges = 0
   for (const piece of RECIPE.pieces) {
     const srcFile = join(layersOf(piece.pack ?? RECIPE.pack), `${piece.from}.png`)
     const outFile = join(OUT, `${piece.to}.webp`)
@@ -272,6 +328,11 @@ async function main() {
     console.log(
       `✅ ${from}.png → ${piece.to}.webp  ${r.w}×${r.h}  ${(r.bytes / 1024).toFixed(0)} KB${mark}`,
     )
+    if (r.edge) {
+      console.log(`   ⚠️  peça de BORDA? a silhueta encosta na moldura: ${r.edge}`)
+      console.log(`      no meio do mapa ela aparece com um talho reto — confira a arte sozinha`)
+      edges++
+    }
     done++
   }
 
@@ -298,6 +359,7 @@ async function main() {
   }
 
   console.log(`\nDone. ${done} arquivo(s).`)
+  if (edges) console.log(`⚠️  ${edges} peça(s) suspeita(s) de serem de BORDA — veja os avisos acima.`)
   if (!DRY) console.log(`Procedência e licença anotadas em ${noteFile}`)
 }
 

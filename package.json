@@ -45,6 +45,7 @@
     "art:scene": "TS_NODE_TRANSPILE_ONLY=1 ts-node --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\",\"esModuleInterop\":true,\"jsx\":\"react-jsx\"}' -r tsconfig-paths/register scripts/generate-scene-sprites.ts",
     "art:scene:import": "TS_NODE_TRANSPILE_ONLY=1 ts-node --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\",\"esModuleInterop\":true,\"jsx\":\"react-jsx\"}' -r tsconfig-paths/register scripts/import-craftpix-scene.ts",
     "art:scene:clean": "TS_NODE_TRANSPILE_ONLY=1 ts-node --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\",\"esModuleInterop\":true,\"jsx\":\"react-jsx\"}' -r tsconfig-paths/register scripts/postprocess-scene-sprites.ts",
+    "art:scene:nodes": "tsx scripts/slice-node-sprites.ts",
     "sim:economy": "TS_NODE_TRANSPILE_ONLY=1 ts-node --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\",\"esModuleInterop\":true,\"jsx\":\"react-jsx\"}' -r tsconfig-paths/register scripts/economy-unified-sim.ts",
     "sim:crafting": "TS_NODE_TRANSPILE_ONLY=1 ts-node --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\",\"esModuleInterop\":true,\"jsx\":\"react-jsx\"}' -r tsconfig-paths/register scripts/crafting-profession-sim.ts",
     "check:i18n": "TS_NODE_TRANSPILE_ONLY=1 ts-node --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\",\"esModuleInterop\":true,\"jsx\":\"react-jsx\"}' -r tsconfig-paths/register scripts/check-i18n-catalog.ts",

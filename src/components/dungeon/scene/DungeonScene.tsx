@@ -16,7 +16,7 @@ import React, { useEffect, useRef } from 'react'
 import type { MapSpot, SceneMapDef, SceneProp, Vec2 } from '@/lib/dungeonScene/types'
 import { clamp, clampToWalkable, dist, lerp, sceneProps, pathToSpot } from '@/lib/dungeonScene/geometry'
 import type { NodeFlavor, SpotContent } from '@/lib/dungeonScene/nodeContents'
-import { drawNodeIcon, nodeIconColor } from '@/lib/dungeonScene/icons'
+import { drawNodeIcon, nodeIconColor, FIND_OBJECT_FLAVORS } from '@/lib/dungeonScene/icons'
 import { HERO_WORLD_H, resolveHeroSprite, type HeroSpriteDef } from '@/lib/heroSprites'
 import { bossSpriteSlug, getMonsterSpriteBySlug } from '@/lib/monsterSprites'
 import {
@@ -148,7 +148,12 @@ type Sprite = HTMLImageElement | HTMLCanvasElement
 const spriteW = (s: Sprite) => ('naturalWidth' in s ? s.naturalWidth : s.width) || 1
 const spriteH = (s: Sprite) => ('naturalHeight' in s ? s.naturalHeight : s.height) || 1
 
-function loadImage(src: string): Promise<HTMLImageElement | null> {
+/**
+ * `optional` cala o aviso de dev para arte cuja AUSÊNCIA é esperada — hoje só o
+ * estado gasto dos objetos de nó, que nem todo flavor tem. O aviso continua para
+ * todo o resto: uma folha 404 em silêncio vira "o bicho não aparece" sem pista.
+ */
+function loadImage(src: string, optional = false): Promise<HTMLImageElement | null> {
   return new Promise(resolve => {
     const img = new Image()
     img.decoding = 'async'
@@ -156,13 +161,28 @@ function loadImage(src: string): Promise<HTMLImageElement | null> {
     img.onerror = () => {
       // Resolve null (nunca rejeita) para o Promise.all do gate sempre assentar —
       // mas em dev grita, senão uma folha 404 vira "o bicho não aparece" mudo.
-      if (process.env.NODE_ENV !== 'production') {
+      if (!optional && process.env.NODE_ENV !== 'production') {
         console.warn('[DungeonScene] falhou ao carregar', src)
       }
       resolve(null)
     }
     img.src = src
   })
+}
+
+/**
+ * Arte dos objetos de achado do bioma: o estado CHEIO e o GASTO de cada flavor.
+ *
+ * Fica fora de `map.variants` de propósito — aquilo é `PropKind` e alimenta o
+ * espalhamento de vegetação (`variantOf` em geometry.ts), então um baú ali
+ * viraria mato brotando pela mata. Aqui é uma lista à parte, com a mesma
+ * convenção de chave (`<tipo>-<variante>`) para o `spriteOf` do desenho achar.
+ */
+function nodeObjectSprites(biome: string) {
+  return FIND_OBJECT_FLAVORS.flatMap(flavor => [
+    { key: `${flavor}-1`, src: `/scene/${biome}/${flavor}-1.webp`, optional: false },
+    { key: `${flavor}-used-1`, src: `/scene/${biome}/${flavor}-used-1.webp`, optional: true },
+  ])
 }
 
 /**
@@ -344,6 +364,18 @@ export default function DungeonScene({
       }
     }
 
+    // Objetos de achado (baú, erva, fonte, entulho). Sem `cleanSprite()`: estes
+    // saem do recorte determinístico do sharp, e não do gpt-image-1 — não têm a
+    // franja de halo que aquela varredura existe para limpar.
+    for (const { key, src, optional } of nodeObjectSprites(map.id)) {
+      pending.push(
+        loadImage(src, optional).then(img => {
+          if (cancelled || !img) return
+          spritesRef.current.set(key, img)
+        }),
+      )
+    }
+
     // Escala relativa DENTRO de cada tipo: a maior variante fica com a altura
     // de SPRITE_H, as outras encolhem na proporção da própria arte.
     Promise.all(pending).then(() => {
@@ -412,14 +444,18 @@ export default function DungeonScene({
     // limpa é o cleanup do efeito, que roda quando o runId chega e re-planeja.
     if (contents && contents.size === 0) return bail
 
-    const urls: string[] = []
-    if (map.groundTexture) urls.push(map.groundTexture)
+    const urls: Array<[string, boolean]> = []
+    if (map.groundTexture) urls.push([map.groundTexture, false])
     for (const [kind, count] of Object.entries(map.variants)) {
-      for (let v = 1; v <= (count || 0); v++) urls.push(`/scene/${map.id}/${kind}-${v}.webp`)
+      for (let v = 1; v <= (count || 0); v++) urls.push([`/scene/${map.id}/${kind}-${v}.webp`, false])
     }
+    // Os objetos de achado entram no gate junto: sem isso o baú nasce como ícone
+    // SVG e PISCA pra sprite quando a imagem assenta — o mesmo defeito que as
+    // folhas de monstro logo abaixo existem pra evitar.
+    for (const { src, optional } of nodeObjectSprites(map.id)) urls.push([src, optional])
     const def = resolveHeroSprite(race, heroClass)
-    if (def) urls.push(def.src)
-    else if (heroSprite) urls.push(heroSprite)
+    if (def) urls.push([def.src, false])
+    else if (heroSprite) urls.push([heroSprite, false])
 
     // Folhas dos monstros: as espécies da planta + o chefe (que é dedutível da
     // masmorra e por isso não depende do servidor). Carrega DIRETO pro
@@ -443,7 +479,7 @@ export default function DungeonScene({
       )
     }
 
-    Promise.all([...urls.map(loadImage), ...spritePromises]).then(fire)
+    Promise.all([...urls.map(([src, optional]) => loadImage(src, optional)), ...spritePromises]).then(fire)
     return bail
   }, [map.id, map.variants, map.groundTexture, race, heroClass, heroSprite, contents])
 
@@ -728,7 +764,12 @@ export default function DungeonScene({
       const x = sx(obj.pos.x)
       const y = sy(obj.pos.y)
       if (x < -80 || x > view.w + 80) return
-      const img = spriteOf(obj.flavor, 1)
+      // Nó já resolvido mostra o estado GASTO — baú aberto, erva colhida, fonte
+      // vazia. Quem não tem a arte do gasto fica no cheio, sem regressão.
+      // Os dois estados saem do slice em ESCALA COMUM, então a troca não muda
+      // o tamanho do objeto na tela.
+      const used = visitedRef.current.includes(obj.nodeIndex)
+      const img = (used ? spriteOf(`${obj.flavor}-used`, 1) : null) ?? spriteOf(obj.flavor, 1)
       if (img) {
         drawSprite(img, x, y, SPRITE_H[obj.flavor] ?? 1.2)
         return

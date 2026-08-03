@@ -71,6 +71,28 @@ sem editar o script.
 
 Saída em `public/sprites/monsters/<slug>/`, manifesto em `src/lib/monsterSprites.ts`.
 
+## Objetos de nó (baú, ervas, fonte, entulho)
+
+Outra família de folha: os objetos que a cena explorável desenha nos nós de
+achado. Vão na RAIZ desta pasta com o nome que a receita espera (`chest.png`,
+`weed.png`, `fonte.png`, `rubble.png`).
+
+```bash
+npm run art:scene:nodes -- --dry-run
+npm run art:scene:nodes
+```
+
+Não são folhas de animação: são **sequências de estado**, e o script guarda dois
+quadros de cada — o cheio e o gasto (baú fechado/aberto, fonte cheia/seca, moita
+intacta/colhida). Saída em `public/scene/<bioma>/<flavor>-1.webp` e
+`<flavor>-used-1.webp`; a receita de cada folha mora em `NODE_SHEETS`, dentro do
+próprio script.
+
+⚠️ **Fundo CHAPADO é obrigatório** — o recorte é flood fill, então folha com cena
+pintada atrás do objeto não é recuperável. O script mede e recusa antes de gastar
+trabalho. Contrato completo em
+[`scripts/node-sheet-prompt.md`](../scripts/node-sheet-prompt.md).
+
 ## Depois
 
 1. Abra `public/sprites/<slug>/_contact.png` — recorte limpo? qual índice é o de costas?

@@ -52,6 +52,20 @@ const NODE_ICONS: Record<NodeFlavor, IconDef> = {
   },
 }
 
+/**
+ * Flavors de achado que existem como OBJETO NO MUNDO, e não só como crachá.
+ *
+ * A arte de cada um sai de `scripts/slice-node-sprites.ts` para
+ * `/scene/<bioma>/<flavor>-1.webp` (cheio) e `<flavor>-used-1.webp` (gasto).
+ * Quem não tiver arte cai no ícone SVG acima — é por isso que o `rubble` segue
+ * na lista mesmo com a folha dele ainda por refazer.
+ *
+ * NÃO dá para derivar isto de `map.variants` (recipes.ts): aquilo é `PropKind`,
+ * e alimenta o espalhamento de vegetação pela mata — baú entraria lá como
+ * arbusto, brotando entre as árvores.
+ */
+export const FIND_OBJECT_FLAVORS = ['chest', 'rubble', 'herb', 'fountain'] as const
+
 /** Rótulo curto (bancada e, depois, o card do encontro). */
 export const FLAVOR_LABEL: Record<NodeFlavor, string> = {
   monster: 'Monstros',

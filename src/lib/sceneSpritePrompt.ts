@@ -76,6 +76,14 @@ export function buildSceneSpritePrompt(job: SpriteJob): string {
 // a caverna tem 'tree' — é a espiral de cristal que ocupa esse papel lá.
 // ------------------------------------------------------------
 
+// ⚠️ NA FLORESTA, este manifesto NÃO é mais a fonte da arte.
+// O cenário (tree/bush/rock/stump, mais ground/road/house/puddle) veio do
+// CraftPix — ver public/scene/floresta/SOURCE.txt — e os objetos de nó
+// (chest/herb/fountain/rubble) saem das folhas do Gemini recortadas por
+// scripts/slice-node-sprites.ts. Rodar `npm run art:scene --only floresta
+// --force` SOBRESCREVERIA tudo isso com imagem gerada. Sem --force o script
+// pula o que já existe, que é o comportamento seguro. Os textos abaixo seguem
+// aqui como referência de estilo e para os outros três biomas.
 const FLORESTA: SpriteJob[] = [
   { biome: 'floresta', kind: 'tree', variant: 1, subject: 'A tall gnarled black pine with dense dark blue-green needles and a crooked trunk, deep forest gloom clinging to its branches.' },
   { biome: 'floresta', kind: 'tree', variant: 2, subject: 'A broad ancient oak with a thick mossy trunk and a heavy dark canopy, pale lichen patches and twisted low branches.' },

@@ -31,6 +31,23 @@ import { basename, join, resolve } from 'path'
 import sharp from 'sharp'
 
 import { DUNGEONS, monsterImageSlug } from '../src/lib/dungeonAdventures'
+// O recorte em si mora na lib desde que os OBJETOS DE NÓ (baú, erva, fonte)
+// passaram a precisar da mesma maquinaria — ver scripts/slice-node-sprites.ts.
+import {
+  alphaAt,
+  detectBackground,
+  dropLabelBands,
+  findBands,
+  findFrames,
+  gridFrames,
+  isFlatBlob,
+  killHalo,
+  killTrappedBackground,
+  removeBackground,
+  tightBox,
+  type Box,
+  type Raw,
+} from './lib/spriteSheet'
 
 const argv = process.argv.slice(2)
 const has = (f: string) => argv.includes(f)
@@ -93,17 +110,6 @@ const CELL = (valOf('--cell') || '128x192').split('x').map(Number)
 const CELL_W = CELL[0]
 const CELL_H = CELL[1]
 
-/** Altura mínima (px) pra uma banda contar como linha de frames. */
-const MIN_BAND_H = 20
-/**
- * Algumas folhas vêm com o nome da linha escrito em cima ("IDLE", "WALK", ...).
- * O texto é escuro, então sobrevive ao flood fill e vira uma banda própria —
- * o que empurraria a numeração das linhas. Banda muito mais baixa que a mediana
- * é rótulo, não personagem (na prática ~33px contra ~290px).
- */
-const LABEL_BAND_RATIO = 0.4
-/** Largura mínima (px) pra um run de colunas contar como frame. */
-const MIN_FRAME_W = 10
 /** Fração da altura da célula que a silhueta ocupa (respiro em cima). */
 const FIT = 0.94
 
@@ -213,294 +219,6 @@ const SHEET_RECIPES: Record<string, SheetRecipe> = {
   },
 }
 
-// ============================================================
-// Buffer RGBA
-// ============================================================
-
-interface Raw {
-  data: Buffer
-  width: number
-  height: number
-}
-
-const at = (raw: Raw, x: number, y: number) => (y * raw.width + x) * 4
-const alphaAt = (raw: Raw, x: number, y: number) => raw.data[at(raw, x, y) + 3]
-
-function dist2(data: Buffer, i: number, r: number, g: number, b: number): number {
-  const dr = data[i] - r
-  const dg = data[i + 1] - g
-  const db = data[i + 2] - b
-  return dr * dr + dg * dg + db * db
-}
-
-/** Cor de fundo = mediana por canal dos pixels da borda. */
-function detectBackground(raw: Raw): [number, number, number] {
-  const rs: number[] = []
-  const gs: number[] = []
-  const bs: number[] = []
-  const push = (x: number, y: number) => {
-    const i = at(raw, x, y)
-    rs.push(raw.data[i])
-    gs.push(raw.data[i + 1])
-    bs.push(raw.data[i + 2])
-  }
-  for (let x = 0; x < raw.width; x++) {
-    push(x, 0)
-    push(x, raw.height - 1)
-  }
-  for (let y = 0; y < raw.height; y++) {
-    push(0, y)
-    push(raw.width - 1, y)
-  }
-  const med = (arr: number[]) => {
-    arr.sort((a, b) => a - b)
-    return arr[Math.floor(arr.length / 2)]
-  }
-  return [med(rs), med(gs), med(bs)]
-}
-
-/**
- * Flood fill a partir das bordas: só o fundo CONECTADO vira transparente.
- * Isso preserva o cinza-marrom do capuz, que é parecido com o fundo.
- * O RGB é preservado (alpha←0 apenas) — zerar pra preto criaria franja escura no downscale.
- */
-function removeBackground(raw: Raw, bg: [number, number, number], tol: number): void {
-  const { data, width, height } = raw
-  const [br, bg_, bb] = bg
-  const tol2 = tol * tol
-  const seen = new Uint8Array(width * height)
-  const stack: number[] = []
-
-  const tryPush = (x: number, y: number) => {
-    const p = y * width + x
-    if (seen[p]) return
-    if (dist2(data, p * 4, br, bg_, bb) > tol2) return
-    seen[p] = 1
-    stack.push(p)
-  }
-
-  for (let x = 0; x < width; x++) {
-    tryPush(x, 0)
-    tryPush(x, height - 1)
-  }
-  for (let y = 0; y < height; y++) {
-    tryPush(0, y)
-    tryPush(width - 1, y)
-  }
-
-  while (stack.length) {
-    const p = stack.pop() as number
-    data[p * 4 + 3] = 0
-    const x = p % width
-    const y = (p - x) / width
-    if (x > 0) tryPush(x - 1, y)
-    if (x < width - 1) tryPush(x + 1, y)
-    if (y > 0) tryPush(x, y - 1)
-    if (y < height - 1) tryPush(x, y + 1)
-  }
-}
-
-/**
- * Mata-halo: pixel opaco encostado em transparente e ainda parecido com o fundo
- * (tolerância mais larga) também some. Anti-aliasing do Gemini deixa 1-2px de borda cinza.
- */
-/**
- * Fundo PRESO: poça da cor do fundo que o flood fill da borda não alcança
- * porque a arte fecha um anel em volta dela.
- *
- * O lobo é o caso: ele vem pintado em cima de um risco de terra, e o vão entre
- * as patas fica cercado por corpo em cima, pernas dos lados e o risco embaixo.
- * O recorte saía com uma mancha clara chapada no meio do bicho.
- *
- * Só remove COMPONENTE GRANDE (>= minArea). Pixel solto da cor do fundo dentro
- * da arte é pelagem legítima, e furar isso seria pior que a poça. Por isso
- * também é opt-in por folha (`killTrappedBg` na receita): o herói não precisa,
- * e o capuz cinza-marrom dele é exatamente o tipo de coisa que não quero mexer.
- */
-function killTrappedBackground(
-  raw: Raw,
-  bg: [number, number, number],
-  tol: number,
-  minArea: number,
-): number {
-  const { data, width, height } = raw
-  const [br, bg_, bb] = bg
-  const tol2 = tol * tol
-  const seen = new Uint8Array(width * height)
-  let removed = 0
-
-  const isBgColored = (p: number) => data[p * 4 + 3] !== 0 && dist2(data, p * 4, br, bg_, bb) <= tol2
-
-  for (let start = 0; start < width * height; start++) {
-    if (seen[start] || !isBgColored(start)) continue
-    // Componente 4-conectado de pixels da cor do fundo que sobreviveram.
-    const comp: number[] = []
-    const stack = [start]
-    seen[start] = 1
-    while (stack.length) {
-      const p = stack.pop() as number
-      comp.push(p)
-      const x = p % width
-      const y = (p - x) / width
-      const push = (nx: number, ny: number) => {
-        const q = ny * width + nx
-        if (seen[q] || !isBgColored(q)) return
-        seen[q] = 1
-        stack.push(q)
-      }
-      if (x > 0) push(x - 1, y)
-      if (x < width - 1) push(x + 1, y)
-      if (y > 0) push(x, y - 1)
-      if (y < height - 1) push(x, y + 1)
-    }
-    if (comp.length < minArea) continue
-    for (const p of comp) data[p * 4 + 3] = 0
-    removed += comp.length
-  }
-  return removed
-}
-
-function killHalo(raw: Raw, bg: [number, number, number], tol: number, passes: number): void {
-  const { data, width, height } = raw
-  const [br, bg_, bb] = bg
-  const tol2 = tol * tol
-  for (let pass = 0; pass < passes; pass++) {
-    const doomed: number[] = []
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const p = y * width + x
-        if (data[p * 4 + 3] === 0) continue
-        if (dist2(data, p * 4, br, bg_, bb) > tol2) continue
-        const touchesVoid =
-          (x > 0 && data[(p - 1) * 4 + 3] === 0) ||
-          (x < width - 1 && data[(p + 1) * 4 + 3] === 0) ||
-          (y > 0 && data[(p - width) * 4 + 3] === 0) ||
-          (y < height - 1 && data[(p + width) * 4 + 3] === 0)
-        if (touchesVoid) doomed.push(p)
-      }
-    }
-    if (!doomed.length) break
-    for (const p of doomed) data[p * 4 + 3] = 0
-  }
-}
-
-// ============================================================
-// Segmentação (projeções)
-// ============================================================
-
-interface Box {
-  x0: number
-  y0: number
-  x1: number
-  y1: number
-}
-
-/** Runs de índices "cheios" num vetor booleano, ignorando runs curtos demais. */
-function runsOf(filled: boolean[], minLen: number): Array<[number, number]> {
-  const out: Array<[number, number]> = []
-  let start: number | null = null
-  for (let i = 0; i < filled.length; i++) {
-    if (filled[i] && start === null) start = i
-    if (!filled[i] && start !== null) {
-      if (i - start >= minLen) out.push([start, i])
-      start = null
-    }
-  }
-  if (start !== null && filled.length - start >= minLen) out.push([start, filled.length])
-  return out
-}
-
-/** Bandas horizontais (uma por linha de frames da folha). */
-function findBands(raw: Raw): Array<[number, number]> {
-  const filled: boolean[] = []
-  for (let y = 0; y < raw.height; y++) {
-    let any = false
-    for (let x = 0; x < raw.width; x++) {
-      if (alphaAt(raw, x, y) !== 0) {
-        any = true
-        break
-      }
-    }
-    filled.push(any)
-  }
-  return runsOf(filled, MIN_BAND_H)
-}
-
-/** bbox opaco exato dentro de um retângulo. */
-function tightBox(raw: Raw, x0: number, y0: number, x1: number, y1: number): Box | null {
-  let minX = x1
-  let minY = y1
-  let maxX = x0
-  let maxY = y0
-  let found = false
-  for (let y = y0; y < y1; y++) {
-    for (let x = x0; x < x1; x++) {
-      if (alphaAt(raw, x, y) === 0) continue
-      found = true
-      if (x < minX) minX = x
-      if (x > maxX) maxX = x
-      if (y < minY) minY = y
-      if (y > maxY) maxY = y
-    }
-  }
-  return found ? { x0: minX, y0: minY, x1: maxX + 1, y1: maxY + 1 } : null
-}
-
-/** Frames de uma banda, por projeção vertical. */
-function findFrames(raw: Raw, bandY0: number, bandY1: number): Box[] {
-  const filled: boolean[] = []
-  for (let x = 0; x < raw.width; x++) {
-    let any = false
-    for (let y = bandY0; y < bandY1; y++) {
-      if (alphaAt(raw, x, y) !== 0) {
-        any = true
-        break
-      }
-    }
-    filled.push(any)
-  }
-  const boxes: Box[] = []
-  for (const [x0, x1] of runsOf(filled, MIN_FRAME_W)) {
-    const box = tightBox(raw, x0, bandY0, x1, bandY1)
-    if (box) boxes.push(box)
-  }
-  return boxes
-}
-
-/**
- * Descarta blobs chapados (a outra versão da folha veio com um quadrado preto sólido).
- * Personagem tem centenas de cores; um quadrado sólido tem 1.
- */
-/**
- * Frames de uma linha da GRADE forçada: divide a largura em `cols` fatias iguais
- * e pega o bbox real dentro de cada uma. Célula vazia é pulada (folha com a
- * última posição em branco não quebra a numeração das anteriores).
- */
-function gridFrames(raw: Raw, y0: number, y1: number, cols: number): Box[] {
-  const out: Box[] = []
-  for (let c = 0; c < cols; c++) {
-    const x0 = Math.round((c * raw.width) / cols)
-    const x1 = Math.round(((c + 1) * raw.width) / cols)
-    const box = tightBox(raw, x0, y0, x1, y1)
-    if (box) out.push(box)
-  }
-  return out
-}
-
-function isFlatBlob(raw: Raw, box: Box): boolean {
-  const seen = new Set<number>()
-  const stepX = Math.max(1, Math.floor((box.x1 - box.x0) / 40))
-  const stepY = Math.max(1, Math.floor((box.y1 - box.y0) / 40))
-  for (let y = box.y0; y < box.y1; y += stepY) {
-    for (let x = box.x0; x < box.x1; x += stepX) {
-      const i = at(raw, x, y)
-      if (raw.data[i + 3] === 0) continue
-      seen.add((raw.data[i] << 16) | (raw.data[i + 1] << 8) | raw.data[i + 2])
-      if (seen.size > 8) return false
-    }
-  }
-  return true
-}
 
 /**
  * Âncora horizontal do frame: centro de massa dos PÉS (faixa de baixo), não do
@@ -591,11 +309,9 @@ async function sliceOne(job: Job): Promise<string | null> {
     ])
     console.log(`   grade forçada ${grid.cols}x${grid.rows} (linhas de ${bands[0][1] - bands[0][0]}px)`)
   } else {
-    const rawBands = findBands(raw)
-    const heights = rawBands.map(([a, b]) => b - a).sort((x, y) => x - y)
-    const medianH = heights[Math.floor(heights.length / 2)] || 0
-    bands = rawBands.filter(([a, b]) => b - a >= medianH * LABEL_BAND_RATIO)
-    const droppedLabels = rawBands.length - bands.length
+    const kept = dropLabelBands(findBands(raw))
+    bands = kept.bands
+    const droppedLabels = kept.dropped
     console.log(
       `   ${bands.length} linhas${droppedLabels ? ` (${droppedLabels} rótulo(s) de texto descartado(s))` : ''}: ` +
         bands.map(([a, b], i) => `#${i + 1} h=${b - a}`).join(', ')

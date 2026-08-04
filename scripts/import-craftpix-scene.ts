@@ -115,6 +115,13 @@ const WALL_GRADE: Grade = { saturation: 0.12, brightness: 0.82, tint: '#8296ae' 
  */
 const SNOW_WALL_GRADE: Grade = { saturation: 0.12, brightness: 0.34, tint: '#8296ae' }
 
+/**
+ * Peça do `game_background_3` (a NEVE) trazida para o PÂNTANO. Mesmo problema do
+ * `SNOW_WALL_GRADE` — a arte nasce quase branca e no brejo sairia brilhando —, mas
+ * a cor de chegada é outra: pedra tomada de limo, não rocha de caverna.
+ */
+const BOG_STONE_GRADE: Grade = { saturation: 0.28, brightness: 0.5, tint: '#6b7358' }
+
 const BIOME_IMPORT: Record<string, BiomeImport> = {
   // 🌲 Floresta Sombria — o pack já é uma clareira de mata; só fecha o tom.
   floresta: {
@@ -193,6 +200,76 @@ const BIOME_IMPORT: Record<string, BiomeImport> = {
       { from: 'dot', to: 'puddle-1' },
       { from: 'land', to: 'ground', raw: true, opaque: true },
       { from: 'road_5', to: 'road', raw: true },
+    ],
+  },
+
+  // 🐊 Pântano Maldito — nasce do MESMO pack da Floresta (`game_background_4`),
+  // e isso é escolha, não preguiça: a silhueta de mata morta e retorcida já é a
+  // certa para um brejo. O que faz o lugar OUTRO lugar não é trocar a árvore, é
+  // trocar o que está EMBAIXO dela:
+  //
+  //   ground = terra da MINA (bg2), não o gramado verde-oliva da Floresta
+  //   road   = `river_6`, o canal d'água — a trilha É lodo, o herói anda na água
+  //   puddle = lagoa (bg3) + poço de lodo tóxico (a poça de LAVA do bg1, girada
+  //            de matiz) — a água parada é a identidade do bioma
+  //
+  // Mais: a mata é mais RALA e mais BAIXA que a da Floresta (ver propDensity e
+  // spriteH em recipes.ts). Copa fechada lê como floresta; céu aberto lê como brejo.
+  pantano: {
+    pack: 'game_background_4',
+    // Doentio, não escuro. A Floresta fica em 0.86/0.92 sem mexer no matiz; aqui
+    // 14° empurram o verde para o amarelo-podre e a saturação mais baixa tira o
+    // viço — é a mesma mata, um mês depois de afogada.
+    grade: { brightness: 0.74, saturation: 0.8, hue: 14 },
+    pieces: [
+      { from: 'tree_1', to: 'tree-1' },
+      { from: 'tree_2', to: 'tree-2' },
+      { from: 'tree_3', to: 'tree-3' },
+      { from: 'tree_4', to: 'tree-4' },
+      // Os tufos do pack viram JUNCO no brejo — mesmo desenho, outra leitura.
+      { from: 'bush_1', to: 'bush-1' },
+      { from: 'bush_2', to: 'bush-2' },
+      { from: 'bush_3', to: 'bush-3' },
+      { from: 'bush_4', to: 'bush-4' },
+      { from: 'bush_5', to: 'bush-5' },
+      { from: 'stone_1', to: 'rock-1' },
+      { from: 'stone_2', to: 'rock-2' },
+      { from: 'stone_3', to: 'rock-3' },
+      { from: 'stone_4', to: 'rock-4' },
+      // OSSADA no lamaçal, no lugar da quinta pedra. Escapa do banho doentio: osso
+      // que amarela junto com a mata some no chão — ele tem de ler como PÁLIDO.
+      { from: 'decor_5', to: 'rock-5', pack: 'game_background_1', grade: { saturation: 0.3, brightness: 0.95 } },
+      // Marco: choça de pedra AFOGADA. Vem do pack 1 de propósito — a casinha de
+      // madeira com caveira (`decor_1` daqui) já é o marco da Floresta, e repetir
+      // o mesmo sprite entregaria o truque. Silhueta diferente, mesmo traço.
+      // Ela nasce quase preta no pack da lava: 1.3 de brilho é o que a torna
+      // legível no brejo, e o tint de limo tira o marrom queimado.
+      { from: 'decor_2', to: 'house-1', pack: 'game_background_1', grade: { saturation: 0.4, brightness: 1.3, tint: '#6a7350' } },
+      // No lugar do toco: LÁPIDE afundada (do pack da neve — ver BOG_STONE_GRADE).
+      { from: 'decor_3', to: 'stump-1', pack: 'game_background_3', grade: BOG_STONE_GRADE },
+      // Lagoa parada. No pack 3 ela é um lago CONGELADO, azul (~205°): o verde de
+      // água podre está 100° ABAIXO, não acima — girar para o lado errado devolve
+      // uma poça ROSA. Só girar o matiz também não basta: sobra o TEAL de água
+      // limpa. Dessaturar quase tudo e tingir de verde-limo mata a transparência,
+      // que é justamente o que água parada não tem; a borda de neve vira escuma.
+      { from: 'lake', to: 'puddle-1', pack: 'game_background_3', grade: { hue: -100, saturation: 0.4, brightness: 0.55, tint: '#41522f' } },
+      // O ACENTO do bioma, e o mesmo papel que o cristal faz na Caverna: escapa do
+      // banho de cor e é a única coisa que brilha. No pack 1 isto é uma poça de
+      // LAVA (laranja ~25°); +100° a levam ao verde-veneno, e o glow pintado vem
+      // junto de graça — vira lodo borbulhante.
+      { from: 'decor_6', to: 'puddle-2', pack: 'game_background_1', grade: { hue: 100, saturation: 0.85, brightness: 0.7 } },
+      // Chão de LAMA: a terra revirada da mina (bg2), não o gramado do bg4. É a
+      // troca que mais separa o pântano da floresta, porque o chão é o que ocupa
+      // a tela inteira.
+      { from: 'land', to: 'ground', pack: 'game_background_2', raw: true, opaque: true, grade: { saturation: 0.45, brightness: 0.7, tint: '#4a4526' } },
+      // A trilha é ÁGUA. `river_6` (142x256) tem a mesma forma de retrato do
+      // `road_5` que a Floresta usa, com as mesmas bordas onduladas de alpha que
+      // fazem a emenda entre repetições — entra no mesmo slot `raw`.
+      // Escapa do +14° do bioma: aquele empurrão é o que apodrece a MATA, e na
+      // água ele vira amarelo de bambu. Girar o matiz de volta também não resolve
+      // (a fita já nasce oliva) — o que resolve é DESSATURAR e tingir de verde
+      // frio: aí a trilha fica mais escura que a lama e lê como molhada.
+      { from: 'river_6', to: 'road', raw: true, grade: { brightness: 0.55, saturation: 0.6, tint: '#3c4a3a' } },
     ],
   },
 }

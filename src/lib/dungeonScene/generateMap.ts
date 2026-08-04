@@ -181,6 +181,7 @@ export function generateSceneMap(dungeonId: DungeonId, seed: string): SceneMapDe
     variants: recipe.variants,
     spriteH: recipe.spriteH,
     weather: recipe.weather,
+    puddleChance: recipe.puddleChance,
     landmarks,
     groundTexture: recipe.groundTexture,
     entrance: { ...pockets[0].c },

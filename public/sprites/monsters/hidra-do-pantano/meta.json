@@ -1,0 +1,17 @@
+{
+  "slug": "hidra-do-pantano",
+  "kind": "monster",
+  "name": "walk",
+  "src": "/sprites/monsters/hidra-do-pantano/walk.webp",
+  "frameW": 239,
+  "frameH": 288,
+  "frames": 12,
+  "rows": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "source": "~/Documents/dolrath/sprite-sources/monsters/pantano-maldito/hidra-do-pantano.png",
+  "generatedAt": "2026-08-04T00:54:17.881Z"
+}

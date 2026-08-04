@@ -102,6 +102,14 @@ export interface SceneMapDef {
    * ele denuncia o truque: chove dentro da Caverna de Cristal.
    */
   weather?: 'rain' | 'none'
+  /**
+   * Chance de nascer uma poça no miolo da clareira. Ausente = 0.055, o valor
+   * que a cena sempre teve.
+   *
+   * Vira knob de bioma porque no Pântano a água parada não é enfeite, é a
+   * identidade do lugar: a 5,5% a clareira fica seca e o brejo lê como mata.
+   */
+  puddleChance?: number
   /** Marcos de cenário (a casinha perdida na mata). Um punhado por mapa, com
    *  clareira de vegetação em volta para não ficarem soterrados. */
   landmarks: Vec2[]

@@ -1,0 +1,15 @@
+{
+  "slug": "bruxa-do-brejo",
+  "kind": "monster",
+  "name": "walk",
+  "src": "/sprites/monsters/bruxa-do-brejo/walk.webp",
+  "frameW": 233,
+  "frameH": 288,
+  "frames": 12,
+  "rows": [
+    1,
+    2
+  ],
+  "source": "~/Documents/dolrath/sprite-sources/monsters/pantano-maldito/bruxa-do-brejo.png",
+  "generatedAt": "2026-08-04T00:59:24.730Z"
+}

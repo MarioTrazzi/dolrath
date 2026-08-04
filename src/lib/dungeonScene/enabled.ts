@@ -4,11 +4,11 @@
 // em recipes.ts. A arte de ACHADO (baú, erva, fonte) não conta: mora em
 // public/scene/common/ e vale para todas.
 //
-// Pântano e Ruínas seguem na WalkScene até terem cenário próprio.
+// Ruínas Arcanas segue na WalkScene até ter cenário próprio.
 
 import type { DungeonId } from '@/lib/dungeonAdventures'
 
-const SCENE_READY: DungeonId[] = ['floresta', 'caverna']
+const SCENE_READY: DungeonId[] = ['floresta', 'caverna', 'pantano']
 
 export function dungeonSceneEnabled(dungeonId: DungeonId): boolean {
   return SCENE_READY.includes(dungeonId)

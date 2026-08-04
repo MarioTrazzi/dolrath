@@ -142,7 +142,7 @@ export function sceneProps(map: SceneMapDef): SceneProp[] {
           tone: rng(),
           variant: variantOf(kind),
         })
-      } else if (d < -3 && roll < 0.055 && (map.variants.puddle || 0) > 0) {
+      } else if (d < -3 && roll < (map.puddleChance ?? 0.055) && (map.variants.puddle || 0) > 0) {
         // Poça de água esverdeada no miolo da clareira — deitada no chão, então
         // é a única peça achatada: escala maior sem virar obstáculo visual.
         out.push({
@@ -152,8 +152,16 @@ export function sceneProps(map: SceneMapDef): SceneProp[] {
           tone: rng(),
           variant: variantOf('puddle'),
         })
-      } else if (d < -4 && roll < 0.035) {
+      } else if (d < -4 && roll < (map.puddleChance ?? 0.055) + 0.035) {
         // Miolo da clareira: um toco ou pedra solta de vez em quando.
+        //
+        // A faixa é ACIMA da chance de poça, não abaixo: os dois ramos dividem o
+        // MESMO `roll`, e enquanto isto era `roll < 0.035` a condição era
+        // inalcançável (a poça já tinha levado tudo abaixo de 0.055) — o toco
+        // nunca nasceu em bioma nenhum, nem o crânio da Floresta.
+        //
+        // Continua RARO de propósito (3,5% numa faixa que é só o miolo fundo da
+        // clareira: ~1 a 2 peças a cada 6 mapas). Toco/lápide é achado, não mato.
         const kind: SceneProp['kind'] = rng() < 0.5 ? 'stump' : 'rock'
         out.push({
           kind,

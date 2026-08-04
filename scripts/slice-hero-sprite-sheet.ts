@@ -261,6 +261,44 @@ const SHEET_RECIPES: Record<string, SheetRecipe> = {
     rows: [1, 2],
     note: 'paisagem: 6 de perfil na linha 1, 3 de frente + 3 de costas na linha 2',
   },
+
+  // ---- Pântano Maldito ----
+  // A leva veio nos MESMOS dois tamanhos da Caverna (retrato 1686x2528, paisagem
+  // 3836x1120), e isso engana: o tamanho do arquivo NÃO determina a diagramação.
+  // O crocodilo tem CINCO linhas e bate 12 frames por coincidência — a grade 3x4
+  // passa batido na contagem e corta tudo no lugar errado.
+  'sapo-venenoso': {
+    rows: [1, 2],
+    note: 'paisagem 6x2, mas a projeção acerta sozinha (os saltos não se encostam)',
+  },
+  // ⚠️ 6x2 certinho e a projeção acerta sozinha — o susto de que ela teria
+  // fundido as duas colunas do meio é ilusão da tira de conferência: a última
+  // pose virada à direita fica LADO A LADO com a primeira virada à esquerda, e
+  // as duas de frente uma pra outra parecem um frame só. Conferir pelas larguras
+  // no log (6 frames de ~436px), não pelo olho na tira.
+  'bruxa-do-brejo': {
+    rows: [1, 2],
+    note: 'paisagem 6x2; projeção basta (3 de perfil + 3 espelhadas, depois frente e costas)',
+  },
+  // 3,2,3,3: a linha 2 tem só DUAS poses, e o que sobra no meio é o rabo das
+  // vizinhas invadindo a coluna (a projeção devolve uma tira de 562x134 que o
+  // filtro de caco descarta — corretamente). Grade uniforme aqui mentiria.
+  'serpente-do-lodo': {
+    rows: [1, 2, 3, 4],
+    grid: { cols: 3, rows: 4 },
+    note: 'retrato, grade 3x4; linha 2 só tem 2 poses → 11 frames, não 12',
+  },
+  // O único com CINCO linhas (2,2,2,3,3). Bate 12 frames por coincidência, então
+  // a grade 3x4 passa batido na contagem e corta tudo no lugar errado.
+  'crocodilo-anciao': {
+    rows: [1, 2, 3, 4, 5],
+    note: 'retrato 5 linhas 2/2/2/3/3 — projeção, NÃO grade 3x4',
+  },
+  'hidra-do-pantano': {
+    rows: [1, 2, 3, 4],
+    grid: { cols: 3, rows: 4 },
+    note: 'CHEFE; retrato 1686x2528, grade 3x4 igual ao goblin',
+  },
 }
 
 

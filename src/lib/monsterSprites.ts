@@ -238,6 +238,97 @@ export const MONSTER_SPRITES: Record<string, MonsterSpriteDef> = {
     fps: 5,
     worldH: 3.6,
   },
+
+  // ---------------- Pântano Maldito ----------------
+  // Todas as cinco seguem a divisão de sempre — perfil, depois frente, depois
+  // costas — e todas param o `back` um frame antes: o último quadro de costas de
+  // TODA folha gerada veio com o losango branco chapado.
+
+  // 12 frames: [0] sentado, [1][2][3] o SALTO, [4][5] sentado de novo,
+  // [6][7][8] de frente, [9][10][11] de costas.
+  // walk usa só o salto: sapo que "anda" é sapo que pula, e os quadros sentados
+  // são praticamente idênticos entre si (ciclo parado disfarçado de passo).
+  // front pula o [7] pelo mesmo motivo do [11] — respingo branco no pé.
+  'sapo-venenoso': {
+    src: '/sprites/monsters/sapo-venenoso/walk.webp',
+    frameW: 362,
+    frameH: 288,
+    frames: 12,
+    facing: 'right',
+    walk: [1, 2, 3],
+    front: [6, 8],
+    back: [9, 10],
+    fps: 6,
+    worldH: 1.5,
+  },
+
+  // 11 frames, não 12: a linha 2 da folha tem só DUAS poses (ver SHEET_RECIPES).
+  // [0][1][2] perfil, [3][4] perfil esticado, [5][6][7] frente, [8][9][10] costas.
+  // walk fica na linha 1: o corpo esticado de [3][4] é outra silhueta, e alternar
+  // com o enrolado faria a serpente encolher a cada passo.
+  'serpente-do-lodo': {
+    src: '/sprites/monsters/serpente-do-lodo/walk.webp',
+    frameW: 279,
+    frameH: 288,
+    frames: 11,
+    facing: 'right',
+    walk: [0, 1, 2],
+    front: [5, 6, 7],
+    back: [8, 9],
+    fps: 5,
+    worldH: 1.9,
+  },
+
+  // [0][1][2] perfil pra direita, [3][4][5] os mesmos espelhados (o espelho sai
+  // de graça em runtime), [6][7][8] frente, [9][10][11] costas.
+  'bruxa-do-brejo': {
+    src: '/sprites/monsters/bruxa-do-brejo/walk.webp',
+    frameW: 233,
+    frameH: 288,
+    frames: 12,
+    facing: 'right',
+    walk: [0, 1, 2],
+    front: [6, 7, 8],
+    back: [9, 10],
+    fps: 6,
+    worldH: 2.0,
+  },
+
+  // A folha tem 5 linhas (2/2/2/3/3): [0][1] andando de perfil, [2] mais uma de
+  // perfil, [3] espelhada, [4][5] em diagonal, [6][7][8] frente, [9][10][11] costas.
+  // walk fica em [0..2], as três viradas para o mesmo lado.
+  //
+  // worldH alto (3.0) sem o bicho parecer um chefe: a célula é dominada pela pose
+  // de COSTAS, que é vertical; de perfil o crocodilo ocupa ~40% da altura e vira
+  // um bicho baixo e COMPRIDO (dw = worldH × frameW/frameH), que é o que ele é.
+  'crocodilo-anciao': {
+    src: '/sprites/monsters/crocodilo-anciao/walk.webp',
+    frameW: 320,
+    frameH: 288,
+    frames: 12,
+    facing: 'right',
+    walk: [0, 1, 2],
+    front: [6, 7, 8],
+    back: [9, 10],
+    fps: 5,
+    worldH: 3.0,
+  },
+
+  // CHEFE do Pântano. 3.6 como a Anciã e o Wyrm — os três chefes têm de ler do
+  // mesmo tamanho, senão a entrada da arena perde o susto.
+  // [0][1][2] empinada, [3][4][5] baixa (duas poses distintas, não um ciclo só).
+  'hidra-do-pantano': {
+    src: '/sprites/monsters/hidra-do-pantano/walk.webp',
+    frameW: 239,
+    frameH: 288,
+    frames: 12,
+    facing: 'right',
+    walk: [0, 1, 2],
+    front: [6, 7, 8],
+    back: [9, 10],
+    fps: 5,
+    worldH: 3.6,
+  },
 }
 
 /** Busca direta pelo slug. `null` = ainda não tem folha ⇒ vulto procedural. */

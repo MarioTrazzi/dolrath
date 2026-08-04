@@ -21,6 +21,8 @@ export interface BiomeRecipe {
   spriteH?: Partial<Record<PropKind, number>>
   /** Ambiência do céu. Default (ausente) = chuva, como a cena sempre fez. */
   weather?: 'rain' | 'none'
+  /** Chance de poça no miolo da clareira. Default (ausente) = 0.055. */
+  puddleChance?: number
   /** Passo da grade de espalhamento, em unidades. MAIOR = mata mais rala. */
   propStep: number
   /** Chance de nascer vegetação: [junto da clareira, fundo da mata]. */
@@ -118,10 +120,29 @@ export const BIOME_RECIPES: Record<DungeonId, BiomeRecipe> = {
   },
 
   // Pântano: bolsões de terra firme, passagens sinuosas, vegetação baixa.
+  // Arte: mesmo tileset da CraftPix e o MESMO pack da Floresta (`game_background_4`)
+  // — a silhueta de mata morta já é a certa para um brejo. O que troca o lugar é o
+  // que está embaixo: chão de LAMA (do pack da mina), trilha de ÁGUA (`river_6`) e
+  // poça em toda clareira. Ver import-craftpix-scene.ts.
+  //
+  // Papéis reaproveitados, como na Caverna:
+  //   stump  = lápide afundada
+  //   house  = choça de pedra tomada pelo limo (NÃO a casinha da Floresta)
+  //   rock-5 = ossada
+  //   puddle = lagoa parada (1) + poço de lodo tóxico (2), o acento do bioma
   pantano: {
-    variants: { tree: 3, bush: 2, rock: 2, stump: 1, puddle: 0, house: 0 },
+    variants: { tree: 4, bush: 5, rock: 5, stump: 1, puddle: 2, house: 1 },
+    // Árvore afogada é mais baixa que árvore de mata (default 6.5). A copa não
+    // pode fechar: céu aberto sobre água parada é o que lê como brejo — copa
+    // fechada lê como Floresta Sombria, que é exatamente o vizinho de que este
+    // bioma precisa se distinguir.
+    spriteH: { tree: 4.8, bush: 1.5, puddle: 3.6 },
     propStep: 3.4,
-    propDensity: [0.32, 0.8],
+    // Mais arejado que a Floresta (0.62/0.98) pelo mesmo motivo do spriteH.
+    propDensity: [0.45, 0.9],
+    groundTexture: '/scene/pantano/ground.webp',
+    // 2.5× o default: água parada é a identidade daqui, não enfeite.
+    puddleChance: 0.14,
     spacing: 16,
     sway: 11,
     radius: [4.5, 7],
@@ -129,15 +150,19 @@ export const BIOME_RECIPES: Record<DungeonId, BiomeRecipe> = {
     bend: 7,
     bossBonus: 4,
     deadEnds: 4,
+    // `floor` é a média REAL do ground.webp já recolorido (#262417) e `path` a do
+    // road.webp (#242b23) — medidos, não chutados, como na Caverna: o chão pintado
+    // tem de sumir sob a textura em vez de brigar com ela.
     palette: {
-      deep: '#050a05',
-      floor: '#26311a',
-      path: '#3a3520',
-      canopy: '#3f5622',
-      bark: '#1d2413',
-      accent: '#9fd14a',
+      deep: '#0a0b06',
+      floor: '#262417',
+      path: '#242b23',
+      canopy: '#2f3a1c',
+      bark: '#1a1810',
+      accent: '#a3e635',
     },
-    propMix: { tree: 0.42, bush: 0.46, rock: 0.12 },
+    // Junco domina, árvore não: é a mistura que abre o céu.
+    propMix: { tree: 0.34, bush: 0.5, rock: 0.16 },
   },
 
   // Ruínas: pátios pequenos, corredores quase retos, entulho.

@@ -1,0 +1,17 @@
+{
+  "slug": "lich-imperador",
+  "kind": "monster",
+  "name": "walk",
+  "src": "/sprites/monsters/lich-imperador/walk.webp",
+  "frameW": 192,
+  "frameH": 288,
+  "frames": 12,
+  "rows": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "source": "~/Documents/dolrath/sprite-sources/monsters/ruinas-arcanas/lich-imperador.png",
+  "generatedAt": "2026-08-04T02:02:19.028Z"
+}

@@ -299,6 +299,35 @@ const SHEET_RECIPES: Record<string, SheetRecipe> = {
     grid: { cols: 3, rows: 4 },
     note: 'CHEFE; retrato 1686x2528, grade 3x4 igual ao goblin',
   },
+
+  // ---- Ruínas Arcanas ----
+  // A leva mais comportada até agora: três em 3x4 e o fantasma na paisagem de
+  // sempre. A exceção é o esqueleto, que veio em QUATRO colunas — 16 frames, e
+  // sem a grade a projeção para nas duas primeiras linhas e perde frente e costas.
+  'esqueleto-guerreiro': {
+    rows: [1, 2, 3, 4],
+    grid: { cols: 4, rows: 4 },
+    note: 'retrato 4x4 = 16 frames; linha 2 = espelho da 1, e a linha 3 já termina de costas',
+  },
+  'espectro-errante': {
+    rows: [1, 2],
+    note: 'paisagem 6x2; a arte é OPACA apesar de fantasma, então a projeção basta',
+  },
+  'mumia-real': {
+    rows: [1, 2, 3, 4],
+    grid: { cols: 3, rows: 4 },
+    note: 'retrato, grade 3x4 igual ao goblin',
+  },
+  'gargula-de-obsidiana': {
+    rows: [1, 2, 3, 4],
+    grid: { cols: 3, rows: 4 },
+    note: 'retrato, grade 3x4; bicho VOANDO, então a altura varia muito entre poses',
+  },
+  'lich-imperador': {
+    rows: [1, 2, 3, 4],
+    grid: { cols: 3, rows: 4 },
+    note: 'CHEFE; retrato, grade 3x4; linha 3 = 2 de frente + 1 já de costas',
+  },
 }
 
 

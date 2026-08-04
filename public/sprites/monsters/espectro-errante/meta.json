@@ -1,0 +1,15 @@
+{
+  "slug": "espectro-errante",
+  "kind": "monster",
+  "name": "walk",
+  "src": "/sprites/monsters/espectro-errante/walk.webp",
+  "frameW": 313,
+  "frameH": 288,
+  "frames": 12,
+  "rows": [
+    1,
+    2
+  ],
+  "source": "~/Documents/dolrath/sprite-sources/monsters/ruinas-arcanas/espectro-errante.png",
+  "generatedAt": "2026-08-04T02:02:16.445Z"
+}

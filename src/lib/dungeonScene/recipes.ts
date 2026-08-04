@@ -166,10 +166,32 @@ export const BIOME_RECIPES: Record<DungeonId, BiomeRecipe> = {
   },
 
   // Ruínas: pátios pequenos, corredores quase retos, entulho.
+  // Arte: mesmo tileset da CraftPix, base no `game_background_3` (o pack da NEVE)
+  // — é onde mora TODA a alvenaria do set. Ver import-craftpix-scene.ts.
+  //
+  // Fui atrás de COLUNA PARTIDA e ela não existe no tileset: são quatro peças de
+  // alvenaria no pack inteiro. Então as Ruínas não são um bioma de colunas, são
+  // uma NECRÓPOLE SOTERRADA, e os papéis mudam de significado como na Caverna:
+  //   tree  = portão e montes de entulho (a massa que fecha o corredor)
+  //   bush  = LÁPIDE — a franja de cemitério no lugar do mato baixo
+  //   house = muro em ruína com arco, a única alvenaria SEM neve do set
+  //   stump = ossada
+  //   puddle = poça de energia arcana, o único ponto de cor
   ruinas: {
-    variants: { tree: 3, bush: 2, rock: 2, stump: 1, puddle: 0, house: 0 },
+    variants: { tree: 4, bush: 2, rock: 5, stump: 1, puddle: 1, house: 1 },
+    // Arco/entulho não é árvore (6.5) nem paredão de caverna (3.2). E `house`
+    // desce para 3.0: o muro tem 167px de origem e esticado a 4.6 borraria — é
+    // fragmento de muro, não catedral.
+    spriteH: { tree: 3.4, bush: 1.4, rock: 1.0, stump: 0.9, house: 3.0, puddle: 3.0 },
+    // "Poeira de séculos cobre o salão" não combina com chuva. Fica dois biomas
+    // com chuva (Floresta, Pântano) e dois sem (Caverna, Ruínas).
+    weather: 'none',
     propStep: 3.4,
-    propDensity: [0.32, 0.8],
+    // O placeholder vinha em [0.32, 0.8] de quando não havia arte nenhuma: com
+    // essa densidade o corredor não fecha e o pátio vira campo aberto.
+    propDensity: [0.5, 0.95],
+    groundTexture: '/scene/ruinas/ground.webp',
+    // `puddleChance` fica no default (0.055): poça arcana é achado, não piso.
     spacing: 17,
     sway: 6,
     radius: [5, 7.5],
@@ -177,14 +199,19 @@ export const BIOME_RECIPES: Record<DungeonId, BiomeRecipe> = {
     bend: 3,
     bossBonus: 5,
     deadEnds: 6,
+    // `floor` e `path` são as médias REAIS do ground.webp e do road.webp já
+    // recoloridos (#302b3d e #3d384d) — medidas, como na Caverna e no Pântano.
     palette: {
-      deep: '#06040a',
-      floor: '#2b2436',
-      path: '#3a3142',
-      canopy: '#453a55',
-      bark: '#221b2d',
-      accent: '#c08cf0',
+      deep: '#0d0a14',
+      floor: '#302b3d',
+      path: '#3d384d',
+      canopy: '#3a3348',
+      bark: '#221d2c',
+      accent: '#c084fc',
     },
-    propMix: { tree: 0.18, bush: 0.14, rock: 0.68 },
+    // Entulho domina, mas nem tanto quanto o placeholder (0.68): com alvenaria de
+    // verdade no papel de `tree`, ela precisa aparecer o bastante para o lugar
+    // ler como construído. Lápide sobe junto — é ela que dá o bioma.
+    propMix: { tree: 0.28, bush: 0.2, rock: 0.52 },
   },
 }

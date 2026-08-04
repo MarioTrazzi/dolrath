@@ -1,0 +1,17 @@
+{
+  "slug": "gargula-de-obsidiana",
+  "kind": "monster",
+  "name": "walk",
+  "src": "/sprites/monsters/gargula-de-obsidiana/walk.webp",
+  "frameW": 281,
+  "frameH": 288,
+  "frames": 12,
+  "rows": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "source": "~/Documents/dolrath/sprite-sources/monsters/ruinas-arcanas/gargula-de-obsidiana.png",
+  "generatedAt": "2026-08-04T02:02:18.195Z"
+}

@@ -8,6 +8,16 @@ import { WALK_FULL_STRIP, WALK_HERO_SPRITE, FLORESTA_WALK_FALLBACK } from '@/lib
 // ============================================================
 // WalkScene — pan sobre UM mapa (sem tiling):
 // personagem serpenteia; câmera acompanha com clamp nas bordas.
+//
+// ⚠️ SEM USO desde que as Ruínas Arcanas ganharam cena explorável: com as quatro
+// masmorras em `SCENE_READY` (lib/dungeonScene/enabled.ts), o `useWalkScene` do
+// DungeonRun é sempre falso e nada aqui chega a rodar.
+//
+// Continua no repo de propósito, e não por esquecimento: é o fallback pronto de
+// quem chegar sem tileset. Uma masmorra nova entra pela WalkScene e só passa
+// para a cena quando a arte existir — foi assim com todas as quatro. Se um dia
+// ficar decidido que masmorra sem arte simplesmente não entra, ESTE arquivo,
+// `walkSceneAssets.ts` e o ramo `useWalkScene` saem juntos.
 // ============================================================
 
 export type WalkMode = 'idle' | 'scroll' | 'approach'

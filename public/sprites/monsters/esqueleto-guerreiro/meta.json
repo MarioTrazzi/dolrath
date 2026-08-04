@@ -1,0 +1,17 @@
+{
+  "slug": "esqueleto-guerreiro",
+  "kind": "monster",
+  "name": "walk",
+  "src": "/sprites/monsters/esqueleto-guerreiro/walk.webp",
+  "frameW": 192,
+  "frameH": 288,
+  "frames": 16,
+  "rows": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "source": "~/Documents/dolrath/sprite-sources/monsters/ruinas-arcanas/esqueleto-guerreiro.png",
+  "generatedAt": "2026-08-04T02:02:15.521Z"
+}

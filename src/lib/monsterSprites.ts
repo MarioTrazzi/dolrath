@@ -329,6 +329,89 @@ export const MONSTER_SPRITES: Record<string, MonsterSpriteDef> = {
     fps: 5,
     worldH: 3.6,
   },
+
+  // ---------------- Ruínas Arcanas ----------------
+
+  // A ÚNICA folha de 16 frames do jogo: veio em 4x4, não 3x4.
+  // [0..3] perfil pra direita — quatro poses, o ciclo de passo mais completo que
+  // qualquer bicho tem. [4..7] os mesmos espelhados (o espelho sai de graça).
+  // [8][9][10] de frente, e a linha 3 JÁ TERMINA de costas no [11].
+  'esqueleto-guerreiro': {
+    src: '/sprites/monsters/esqueleto-guerreiro/walk.webp',
+    frameW: 192,
+    frameH: 288,
+    frames: 16,
+    facing: 'right',
+    walk: [0, 1, 2, 3],
+    front: [8, 9, 10],
+    back: [11, 12, 13],
+    fps: 7,
+    worldH: 2.0,
+  },
+
+  // Fantasma de arte OPACA — o susto de que o recorte comeria um corpo
+  // semitransparente não se confirmou, a folha saiu no primeiro corte.
+  // walk fica em [0..2]: são os três de perfil que não deixam dúvida de lado.
+  'espectro-errante': {
+    src: '/sprites/monsters/espectro-errante/walk.webp',
+    frameW: 313,
+    frameH: 288,
+    frames: 12,
+    facing: 'right',
+    walk: [0, 1, 2],
+    front: [6, 7, 8],
+    back: [9, 10],
+    fps: 5,
+    worldH: 2.2,
+  },
+
+  // [0][1][2] perfil, [3][4][5] espelhados, [6][7][8] frente, [9][10] costas
+  // (o nemes listrado visto por trás), [11] com o losango branco.
+  'mumia-real': {
+    src: '/sprites/monsters/mumia-real/walk.webp',
+    frameW: 192,
+    frameH: 288,
+    frames: 12,
+    facing: 'right',
+    walk: [0, 1, 2],
+    front: [6, 7, 8],
+    back: [9, 10],
+    fps: 5,
+    worldH: 2.1,
+  },
+
+  // ⚠️ SEM `back`, e de propósito: esta folha não desenhou as costas. As linhas
+  // 3 e 4 são as duas de FRENTE (olhos acesos virados para a câmera nas seis),
+  // com as asas mais ou menos abertas. Usar as de baixo como costas faria a
+  // gárgula voar para o fundo olhando para trás. Sem `back` a cena cai no perfil
+  // (ver DungeonScene), que numa silhueta simétrica e voando quase não se nota.
+  'gargula-de-obsidiana': {
+    src: '/sprites/monsters/gargula-de-obsidiana/walk.webp',
+    frameW: 281,
+    frameH: 288,
+    frames: 12,
+    facing: 'right',
+    walk: [0, 1, 2],
+    front: [6, 7, 8],
+    fps: 8,
+    worldH: 2.4,
+  },
+
+  // CHEFE das Ruínas — 3.6 como a Anciã, o Wyrm e a Hidra.
+  // `front` tem só DOIS frames: a linha 3 é [6][7] de frente e o [8] já virou de
+  // costas. Melhor um ciclo curto que um giro de 180° no meio do passo.
+  'lich-imperador': {
+    src: '/sprites/monsters/lich-imperador/walk.webp',
+    frameW: 192,
+    frameH: 288,
+    frames: 12,
+    facing: 'right',
+    walk: [0, 1, 2],
+    front: [6, 7],
+    back: [8, 9, 10],
+    fps: 5,
+    worldH: 3.6,
+  },
 }
 
 /** Busca direta pelo slug. `null` = ainda não tem folha ⇒ vulto procedural. */

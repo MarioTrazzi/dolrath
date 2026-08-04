@@ -122,6 +122,23 @@ const SNOW_WALL_GRADE: Grade = { saturation: 0.12, brightness: 0.34, tint: '#829
  */
 const BOG_STONE_GRADE: Grade = { saturation: 0.28, brightness: 0.5, tint: '#6b7358' }
 
+/**
+ * Entulho das Ruínas, para as massas trazidas do `game_background_1` (o pack da
+ * LAVA). O brilho vai para CIMA, não para baixo, e é contraintuitivo: a rocha de
+ * lá é marrom quase preta, e no banho do bioma — pensado para a alvenaria já
+ * clara do pack da neve — ela sai como obsidiana, um caco preto que não pertence
+ * à mesma construção. A 1.15 as duas pedras viram a mesma pedra.
+ */
+const RUIN_RUBBLE_GRADE: Grade = { saturation: 0.16, brightness: 1.15, tint: '#8c82a0' }
+
+/**
+ * Peça do pack da NEVE que veio com CAPA DE NEVE pintada (as pedras `stone_2` e
+ * `stone_3`). No brilho do bioma a capa continua lendo como neve — e neve numa
+ * necrópole desmente o lugar inteiro. A 0.34 ela vira a crista clara da pedra,
+ * que é o mesmo truque do `SNOW_WALL_GRADE` da Caverna.
+ */
+const RUIN_SNOWCAP_GRADE: Grade = { saturation: 0.2, brightness: 0.34, tint: '#9a8fb0' }
+
 const BIOME_IMPORT: Record<string, BiomeImport> = {
   // 🌲 Floresta Sombria — o pack já é uma clareira de mata; só fecha o tom.
   floresta: {
@@ -270,6 +287,82 @@ const BIOME_IMPORT: Record<string, BiomeImport> = {
       // (a fita já nasce oliva) — o que resolve é DESSATURAR e tingir de verde
       // frio: aí a trilha fica mais escura que a lama e lê como molhada.
       { from: 'river_6', to: 'road', raw: true, grade: { brightness: 0.55, saturation: 0.6, tint: '#3c4a3a' } },
+    ],
+  },
+
+  // 🏛️ Ruínas Arcanas — base no `game_background_3` (o pack da NEVE), que é onde
+  // mora TODA a alvenaria do tileset: os dois arcos e as duas lápides. Ele ainda
+  // por cima nasce quase branco, que é o estado ideal para receber um tint de LAB.
+  //
+  // Fui atrás de COLUNA PARTIDA e ela não existe no set — o pack inteiro tem
+  // quatro peças de alvenaria e mais três casas já gastas pelos outros biomas.
+  // Então as Ruínas não são "um bioma de colunas": são uma NECRÓPOLE SOTERRADA,
+  // com alvenaria onde dá e entulho onde não dá. Os papéis viram:
+  //   tree  = muro em ruína (1) e montes de entulho (2,3,4)
+  //   bush  = LÁPIDE — a franja de cemitério no lugar do mato baixo
+  //   house = o portão do império morto
+  //   stump = ossada
+  //   puddle = poça de energia arcana, o único ponto de cor
+  //
+  // ⚠️ `decor_5` daqui também é a casa da Caverna. Mesma silhueta, mesmo papel:
+  // o que separa os dois é a COR (ardósia fria × arenito violeta) e a escala
+  // (spriteH.house 3.6 aqui contra o default 4.6). É o 4º bioma tirado de um pack
+  // de ~40 props — reuso é o preço, e vale dizer em voz alta em vez de fingir.
+  ruinas: {
+    pack: 'game_background_3',
+    // Arenito pálido com sombra violeta: a família do card da masmorra
+    // (accent #c084fc), e o oposto exato da ardósia FRIA da Caverna (#7d93ad).
+    grade: { saturation: 0.22, brightness: 0.62, tint: '#9a8fb0' },
+    pieces: [
+      // O portão do pack vem com CAPA DE NEVE, e ela não morre baixando brilho:
+      // sendo o ponto mais claro da peça, escurece junto e continua sendo a coisa
+      // mais clara. Por isso ele é massa de CORREDOR e não o marco — pequeno,
+      // repetido e cercado de entulho, a capa lê como brilho de pedra; no marco,
+      // que é a peça que o jogador para para olhar, leria como neve.
+      { from: 'decor_5', to: 'tree-1', grade: RUIN_SNOWCAP_GRADE },
+      { from: 'stone_2', to: 'tree-2', grade: RUIN_SNOWCAP_GRADE },
+      // As duas massas de entulho saem do pack 1 pelo mesmo motivo da Caverna: é
+      // lá que a rocha tem VOLUME. O `bg2/stone_2` foi tentado aqui e tem só
+      // 101x92 de origem — a 3.4 unidades de mundo ele borra.
+      { from: 'stone_6', to: 'tree-3', pack: 'game_background_1', grade: RUIN_RUBBLE_GRADE },
+      { from: 'decor_3', to: 'tree-4', pack: 'game_background_1', grade: RUIN_RUBBLE_GRADE },
+      // `bush` = LÁPIDE, e é aqui que o bioma ganha identidade sem depender de
+      // peça que o pack não tem. `bush` é o 2º prop mais comum e também nasce na
+      // beirada das clareiras — vira a franja de um cemitério.
+      { from: 'decor_3', to: 'bush-1' },
+      { from: 'decor_4', to: 'bush-2' },
+      // ⚠️ Cascalho começa no `stone_3`: o `stone_1` deste pack é peça de BORDA
+      // (ver o comentário da Caverna), desenhada cortada de propósito.
+      { from: 'stone_3', to: 'rock-1', grade: RUIN_SNOWCAP_GRADE },
+      { from: 'stone_4', to: 'rock-2' },
+      { from: 'stone_5', to: 'rock-3' },
+      { from: 'stone_6', to: 'rock-4' },
+      { from: 'stone_7', to: 'rock-5' },
+      // O MARCO é o muro em ruína com arco — a única alvenaria do tileset inteiro
+      // que veio SEM neve, e por isso ela é que fica no lugar de honra. Também é
+      // a peça que mais lê como "construção que caiu", que é o bioma inteiro.
+      // Vem pequena da origem (167px), então `spriteH.house` desce para 3.0 em
+      // recipes.ts: é fragmento de muro, não catedral — não pode ser esticada.
+      { from: 'decor_6', to: 'house-1' },
+      // Ossada no piso — a mesma do Pântano, lá como pedra comum e aqui como o
+      // achado raro do miolo da clareira.
+      { from: 'decor_5', to: 'stump-1', pack: 'game_background_1', grade: { saturation: 0.3, brightness: 0.95 } },
+      // O ACENTO. Mesma poça de LAVA que o Pântano usa em verde, aqui girada para
+      // o VIOLETA: energia arcana escorrendo do piso. Escolhida no lugar do
+      // cristal `bg2/decor_4` justamente porque a Caverna já o gira para o roxo —
+      // repetir daria a mesma peça na mesma cor em duas masmorras.
+      // 265° e não 250°: a lava é laranja-AMARELA, então o giro tem de passar do
+      // roxo. A 250 ela para no azul (poça de água) e a 285+ atravessa para o
+      // rosa-chiclete; 265 é a janela estreita que dá violeta arcano.
+      { from: 'decor_6', to: 'puddle-1', pack: 'game_background_1', grade: { hue: 265, saturation: 1.0, brightness: 0.8 } },
+      // O chão precisa de banho PRÓPRIO, bem mais escuro que o do bioma: o `land`
+      // do pack da neve é quase branco, e no 0.62 da alvenaria ele sai lavanda
+      // clara — o piso ocupa a tela inteira e puxaria tudo para o dia claro.
+      { from: 'land', to: 'ground', raw: true, opaque: true, grade: { saturation: 0.25, brightness: 0.22, tint: '#6a5f80' } },
+      // A calçada já vem com meio-fio escuro desenhado — de graça, vira lajedo.
+      // Um passo mais clara que o piso, pelo mesmo motivo do paredão da Caverna:
+      // caminho que some no chão deixa de ser caminho.
+      { from: 'road_5', to: 'road', raw: true, grade: { saturation: 0.25, brightness: 0.34, tint: '#7a6f92' } },
     ],
   },
 }

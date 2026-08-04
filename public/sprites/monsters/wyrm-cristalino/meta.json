@@ -3,7 +3,7 @@
   "kind": "monster",
   "name": "walk",
   "src": "/sprites/monsters/wyrm-cristalino/walk.webp",
-  "frameW": 323,
+  "frameW": 324,
   "frameH": 288,
   "frames": 12,
   "rows": [
@@ -11,5 +11,5 @@
     2
   ],
   "source": "~/Documents/dolrath/sprite-sources/monsters/caverna-de-cristal/wyrm-cristalino.png",
-  "generatedAt": "2026-08-03T21:40:51.008Z"
+  "generatedAt": "2026-08-04T08:30:47.234Z"
 }

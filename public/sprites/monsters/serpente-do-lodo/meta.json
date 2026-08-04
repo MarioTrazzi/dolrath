@@ -3,7 +3,7 @@
   "kind": "monster",
   "name": "walk",
   "src": "/sprites/monsters/serpente-do-lodo/walk.webp",
-  "frameW": 279,
+  "frameW": 269,
   "frameH": 288,
   "frames": 11,
   "rows": [
@@ -13,5 +13,5 @@
     4
   ],
   "source": "~/Documents/dolrath/sprite-sources/monsters/pantano-maldito/serpente-do-lodo.png",
-  "generatedAt": "2026-08-04T00:54:15.313Z"
+  "generatedAt": "2026-08-04T08:30:55.479Z"
 }

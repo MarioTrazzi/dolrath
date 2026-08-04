@@ -3,9 +3,9 @@
   "kind": "monster",
   "name": "walk",
   "src": "/sprites/monsters/golem-de-pedra/walk.webp",
-  "frameW": 274,
+  "frameW": 243,
   "frameH": 288,
-  "frames": 12,
+  "frames": 14,
   "rows": [
     1,
     2,
@@ -13,5 +13,5 @@
     4
   ],
   "source": "~/Documents/dolrath/sprite-sources/monsters/caverna-de-cristal/golem-de-pedra.png",
-  "generatedAt": "2026-08-03T21:40:49.702Z"
+  "generatedAt": "2026-08-04T08:30:44.566Z"
 }

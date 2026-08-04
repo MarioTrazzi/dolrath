@@ -3,7 +3,7 @@
   "kind": "monster",
   "name": "walk",
   "src": "/sprites/monsters/sapo-venenoso/walk.webp",
-  "frameW": 362,
+  "frameW": 383,
   "frameH": 288,
   "frames": 12,
   "rows": [
@@ -11,5 +11,5 @@
     2
   ],
   "source": "~/Documents/dolrath/sprite-sources/monsters/pantano-maldito/sapo-venenoso.png",
-  "generatedAt": "2026-08-04T00:54:14.263Z"
+  "generatedAt": "2026-08-04T08:30:54.521Z"
 }

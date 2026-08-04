@@ -289,6 +289,111 @@ export function killGroundShadow(
 }
 
 /**
+ * CHÃO PINTADO sob o bicho — a laje cinza do wyrm, a elipse de sombra do
+ * esqueleto, a lama da hidra, o risco de terra do lobo, a poça do sapo.
+ *
+ * Irmão do `killGroundShadow`, com OUTRO critério, e a diferença não é gosto:
+ * lá o teste é ângulo de cor contra o fundo (a sombra é o fundo multiplicado),
+ * o que funciona na folha do baú porque aquele fundo é esverdeado. As folhas de
+ * monstro têm fundo cinza NEUTRO (medido: 130..133 nos três canais nas 20), e
+ * ângulo contra cinza neutro é ~0 para qualquer coisa dessaturada — que é meio
+ * bestiário. Medido com o teste de ângulo: marcava 32% do corpo da bruxa e 36%
+ * do espectro, dois sprites limpos.
+ *
+ * O que sobra como sinal é LUMINÂNCIA + o contorno do pixel art: o chão é claro
+ * (0.5..1.05 do fundo) e a silhueta vem cercada por uma borda escura que barra o
+ * alastramento. Semeia no transparente e entra pelo que for claro; a borda
+ * escura segura. `maxChroma` é a trava extra pra folha onde o chão é neutro e a
+ * arte é quente (o osso e a espada do esqueleto).
+ *
+ * Não é seguro em toda folha e por isso é opt-in por receita: no espectro a
+ * cauda inteira cai na janela (é um fantasma cinza-claro pairando), e ali a
+ * passada fica desligada — aquela folha já estava limpa.
+ *
+ * `maxFrac` é o freio de mão: se a passada comeu mais que isso da área opaca da
+ * moldura, ela desfaz tudo e devolve 0. É a diferença entre "tirei a sombra" e
+ * "comi o bicho", e sem ela um ajuste ruim de janela some com a pose.
+ *
+ * Retorna quantos pixels apagou.
+ */
+export function killGroundPaint(
+  raw: Raw,
+  box: Box,
+  bg: Rgb,
+  opts: { minLum?: number; maxLum?: number; maxChroma?: number; band?: number; maxFrac?: number } = {},
+): number {
+  const minLum = opts.minLum ?? 0.5
+  const maxLum = opts.maxLum ?? 1.05
+  const maxChroma = opts.maxChroma ?? 255
+  const band = opts.band ?? 0.25
+  const maxFrac = opts.maxFrac ?? 0.25
+  const { data, width } = raw
+  const bgLen = Math.hypot(bg[0], bg[1], bg[2])
+  if (bgLen === 0) return 0
+
+  const h = box.y1 - box.y0
+  const bandY = box.y1 - Math.round(h * band)
+
+  const isGround = (p: number) => {
+    const i = p * 4
+    if (data[i + 3] === 0) return false
+    const r = data[i]
+    const g = data[i + 1]
+    const b = data[i + 2]
+    if (Math.max(r, g, b) - Math.min(r, g, b) > maxChroma) return false
+    const lum = Math.hypot(r, g, b) / bgLen
+    return lum >= minLum && lum <= maxLum
+  }
+
+  const seen = new Set<number>()
+  const stack: number[] = []
+  const tryPush = (x: number, y: number) => {
+    if (x < box.x0 || x >= box.x1 || y < bandY || y >= box.y1) return
+    const p = y * width + x
+    if (seen.has(p)) return
+    seen.add(p)
+    if (!isGround(p)) return
+    stack.push(p)
+  }
+
+  // Semeia em todo transparente da faixa: é a fronteira que o flood fill de
+  // borda deixou, e é de lá que o chão entra.
+  for (let y = bandY; y < box.y1; y++) {
+    for (let x = box.x0; x < box.x1; x++) {
+      if (data[(y * width + x) * 4 + 3] !== 0) continue
+      tryPush(x - 1, y)
+      tryPush(x + 1, y)
+      tryPush(x, y - 1)
+      tryPush(x, y + 1)
+    }
+  }
+
+  const doomed: number[] = []
+  while (stack.length) {
+    const p = stack.pop() as number
+    doomed.push(p)
+    const x = p % width
+    const y = (p - x) / width
+    tryPush(x - 1, y)
+    tryPush(x + 1, y)
+    tryPush(x, y - 1)
+    tryPush(x, y + 1)
+  }
+  if (!doomed.length) return 0
+
+  let opaque = 0
+  for (let y = box.y0; y < box.y1; y++) {
+    for (let x = box.x0; x < box.x1; x++) {
+      if (data[(y * width + x) * 4 + 3] !== 0) opaque++
+    }
+  }
+  if (opaque && doomed.length > opaque * maxFrac) return 0
+
+  for (const p of doomed) data[p * 4 + 3] = 0
+  return doomed.length
+}
+
+/**
  * Mata-halo: pixel opaco encostado em transparente e ainda parecido com o fundo
  * (tolerância mais larga) também some. Anti-aliasing do Gemini deixa 1-2px de borda cinza.
  */
@@ -437,6 +542,115 @@ export function gridFrames(raw: Raw, y0: number, y1: number, cols: number): Box[
     if (box) out.push(box)
   }
   return out
+}
+
+/**
+ * ILHAS: pedaços de alpha soltos dentro da célula de um frame.
+ *
+ * Vêm de dois lugares, e os dois estragam o recorte:
+ *
+ *   VIZINHO — a grade forçada corta em fatias iguais e a fatia pega um naco do
+ *     quadro ao lado ou de cima. Medido: no golem-de-pedra o caco do frame [4]
+ *     tem 20467px, 97.5% da área do próprio golem — é meio golem vizinho dentro
+ *     da célula. No lich e na múmia são abas de manto da linha de cima; na hidra,
+ *     cabeças da linha de baixo.
+ *   POEIRA — partícula pintada em volta do pé, respingo, caco de cenário. São
+ *     centenas por folha (2547 no ent), cada uma de 1-2px.
+ *
+ * Além de aparecerem em cena, os dois INFLAM O BBOX, e como a escala da linha
+ * sai de `maxH` (altura do frame mais alto), um caco alto encolhe TODOS os
+ * frames da folha de uma vez.
+ *
+ * A regra que separa caco de arte destacada não é tamanho — o caco do golem é
+ * maior que o corpo, e a chama do lich é minúscula. É POSIÇÃO: a folha em grade
+ * desenha a pose CENTRADA na célula, então o fragmento do vizinho entra sempre
+ * encostado numa borda e sem alcançar o miolo. Some quem encosta na borda E não
+ * chega na banda central; some poeira; o resto fica.
+ *
+ * Encostar na borda sozinho NÃO basta, e a primeira versão que usou só isso
+ * apagou bicho inteiro: a aranha e a hidra têm perna atravessando a linha da
+ * grade, o corpo delas encosta na borda por direito, e a folha voltou com 9 de
+ * 12 frames (a hidra perdeu uma linha inteira). Por isso o corpo é escolhido
+ * pela banda central, não por "não encostar".
+ *
+ * Retorna quantos pixels apagou.
+ */
+export function killIslands(
+  raw: Raw,
+  rect: Box,
+  opts: { minFrac?: number; minArea?: number; dropEdge?: boolean } = {},
+): number {
+  const minFrac = opts.minFrac ?? 0.01
+  const minArea = opts.minArea ?? 24
+  const dropEdge = opts.dropEdge ?? true
+  const { data, width } = raw
+  const w = rect.x1 - rect.x0
+  const h = rect.y1 - rect.y0
+  if (w <= 0 || h <= 0) return 0
+
+  // Banda central da célula: onde a pose desenhada mora. Fragmento do vizinho
+  // entra pela beirada e não chega aqui.
+  const CENTER = 0.3
+  const cx0 = rect.x0 + w * CENTER
+  const cx1 = rect.x1 - w * CENTER
+  const cy0 = rect.y0 + h * CENTER
+  const cy1 = rect.y1 - h * CENTER
+
+  const seen = new Uint8Array(w * h)
+  const comps: Array<{ px: number[]; edge: boolean; central: boolean }> = []
+
+  for (let y = rect.y0; y < rect.y1; y++) {
+    for (let x = rect.x0; x < rect.x1; x++) {
+      const local = (y - rect.y0) * w + (x - rect.x0)
+      if (seen[local]) continue
+      seen[local] = 1
+      if (data[(y * width + x) * 4 + 3] === 0) continue
+      const px: number[] = []
+      let edge = false
+      let central = false
+      const stack = [y * width + x]
+      while (stack.length) {
+        const p = stack.pop() as number
+        px.push(p)
+        const cx = p % width
+        const cy = (p - cx) / width
+        if (cx === rect.x0 || cx === rect.x1 - 1 || cy === rect.y0 || cy === rect.y1 - 1) edge = true
+        if (cx >= cx0 && cx <= cx1 && cy >= cy0 && cy <= cy1) central = true
+        const push = (nx: number, ny: number) => {
+          if (nx < rect.x0 || nx >= rect.x1 || ny < rect.y0 || ny >= rect.y1) return
+          const l = (ny - rect.y0) * w + (nx - rect.x0)
+          if (seen[l]) return
+          seen[l] = 1
+          if (data[(ny * width + nx) * 4 + 3] === 0) return
+          stack.push(ny * width + nx)
+        }
+        push(cx - 1, cy)
+        push(cx + 1, cy)
+        push(cx, cy - 1)
+        push(cx, cy + 1)
+      }
+      comps.push({ px, edge, central })
+    }
+  }
+  if (comps.length < 2) return 0
+
+  // O corpo é o maior componente que alcança o miolo da célula.
+  const byArea = [...comps].sort((a, b) => b.px.length - a.px.length)
+  const body = byArea.find((c) => c.central) ?? byArea[0]
+  const bodyArea = body.px.length
+
+  let removed = 0
+  for (const comp of comps) {
+    if (comp === body) continue
+    const doomed =
+      (dropEdge && comp.edge && !comp.central) ||
+      comp.px.length <= minArea ||
+      comp.px.length < bodyArea * minFrac
+    if (!doomed) continue
+    for (const p of comp.px) data[p * 4 + 3] = 0
+    removed += comp.px.length
+  }
+  return removed
 }
 
 /** Descarta blobs chapados (a outra versão da folha veio com um quadrado preto sólido). */

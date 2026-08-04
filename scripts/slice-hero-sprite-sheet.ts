@@ -2,7 +2,19 @@
 // Determinístico, sem IA: detecta o fundo, recorta por projeção e normaliza os frames.
 //
 // A folha do Gemini NÃO é pixel art de verdade (milhares de cores, anti-aliasing),
-// então o pipeline é: flood fill de fundo -> mata-halo -> bandas -> frames -> célula fixa.
+// então o pipeline é: flood fill de fundo -> mata-halo -> bandas -> frames ->
+// ILHAS -> CHÃO PINTADO -> ilhas de novo -> célula fixa.
+//
+// As três últimas passadas existem porque o flood fill de borda só alcança o
+// fundo CONECTADO à moldura, e sobra o que ele não vê:
+//   - ilha: naco do quadro vizinho que a grade forçada trouxe pra célula, e
+//     poeira pintada. Some antes de qualquer medida — caco alto infla o bbox e
+//     encolhe a folha INTEIRA pela escala comum.
+//   - chão: sombra/lama/poça pintada sob o bicho, colada na silhueta. Opt-in por
+//     folha, porque o critério que a separa da arte muda de bicho pra bicho.
+//   - ilhas de novo: o chão era a PONTE. Tirada a laje do wyrm, os cristais do
+//     chão viram ilhas — e sem a segunda passada ficavam flutuando ao lado dele.
+// `scripts/audit-monster-sprites.ts` mede as duas coisas antes e depois.
 //
 // Uso:
 //   npx tsx scripts/slice-hero-sprite-sheet.ts --all            # a pasta inteira
@@ -41,7 +53,9 @@ import {
   findFrames,
   gridFrames,
   isFlatBlob,
+  killGroundPaint,
   killHalo,
+  killIslands,
   killTrappedBackground,
   removeBackground,
   tightBox,
@@ -192,12 +206,51 @@ interface SheetRecipe {
   cell?: [number, number]
   /** Folha com sombra/chão pintado que prende fundo dentro da silhueta. */
   killTrappedBg?: boolean
+  /**
+   * Limpeza de ilhas (ver `killIslands`). `false` desliga; objeto ajusta o
+   * limiar de quem tem arte legitimamente destacada. Ausente = padrão do modo
+   * monstro, que é LIGADO — caco de vizinho e poeira existem em todas as folhas.
+   */
+  islands?: IslandOpts | false
+  /**
+   * Chão pintado sob o bicho (ver `killGroundPaint`). Opt-in e com janela por
+   * folha: cada leva pintou o chão de um jeito (laje cinza, lama marrom, poça
+   * verde), e a janela que tira a laje come a cauda do fantasma.
+   */
+  ground?: GroundOpts
   /** Por que essa receita — para não virar número mágico. */
   note: string
 }
 
+interface IslandOpts {
+  minFrac?: number
+  minArea?: number
+  dropEdge?: boolean
+}
+
+interface GroundOpts {
+  minLum?: number
+  maxLum?: number
+  maxChroma?: number
+  band?: number
+  maxFrac?: number
+}
+
 /** Poça menor que isto é pelagem da cor do fundo, não fundo preso. */
 const TRAPPED_MIN_AREA = 400
+
+/**
+ * Limpeza de ilhas padrão do modo MONSTRO. Ligada para todo bicho: a auditoria
+ * (`scripts/audit-monster-sprites.ts`) achou caco de vizinho em 6 das 20 folhas
+ * — o pior com 97.5% da área do corpo — e centenas de pontinhos de poeira em
+ * TODAS as 20, de 483 (sapo) a 2547 (ent).
+ *
+ * `dropEdge` só vale em grade: quem toca a borda da célula é fragmento cortado
+ * pela linha da grade. Na projeção o quadro JÁ é o bbox apertado, então tocar a
+ * borda é o normal (o próprio bicho define os extremos) e a regra não informa
+ * nada — lá sobra o critério de tamanho.
+ */
+const ISLANDS_DEFAULT: IslandOpts = { minFrac: 0.01, minArea: 24 }
 
 /**
  * Célula do bicho: mesma proporção 2:3 da do herói (128x192), 1.5x maior porque
@@ -222,6 +275,10 @@ const SHEET_RECIPES: Record<string, SheetRecipe> = {
     rows: [1, 3, 4],
     grid: { cols: 3, rows: 4 },
     killTrappedBg: true,
+    // Risco de TERRA marrom-claro sob as patas. O lobo é cinza-escuro e não tem
+    // como escapar por cromaticidade (fundo neutro), mas escapa por luminância:
+    // a pelagem fica abaixo de 0.5 do fundo e a terra acima de 0.55.
+    ground: { minLum: 0.52, maxLum: 1.15, band: 0.3 },
     note: 'grade 3x4; linha 2 = espelho da 1; risco de terra prende fundo entre as patas',
   },
 
@@ -241,12 +298,18 @@ const SHEET_RECIPES: Record<string, SheetRecipe> = {
   'goblin-minerador': {
     rows: [1, 2, 3, 4],
     grid: { cols: 3, rows: 4 },
+    // Poeira marrom-clara chutada pelos pés (o grosso já cai como ilha solta).
+    ground: { minLum: 0.6, maxLum: 1.15, band: 0.16 },
     note: 'grade 3x4: perfil, perfil, frente, costas; poeira dos pés some pelo filtro de caco',
   },
+  // ⚠️ NÃO é 3x4, apesar de vir no mesmo 1686x2528 do goblin: as linhas têm
+  // 4/4/3/3 poses. A grade em terços cortava os dois golens das linhas 1 e 2 ao
+  // meio, e o "caco vertical" que o manifesto mandava evitar nos frames [2] e
+  // [5] era a OUTRA METADE do vizinho caindo na célula. Projeção acerta as
+  // quatro linhas e a folha passa a ter 14 frames.
   'golem-de-pedra': {
     rows: [1, 2, 3, 4],
-    grid: { cols: 3, rows: 4 },
-    note: 'grade 3x4, mesma diagramação do goblin',
+    note: 'retrato 4/4/3/3 (linha 2 = espelho da 1) — projeção, NÃO grade 3x4',
   },
   'morcego-sombrio': {
     rows: [1, 2, 3, 4],
@@ -255,11 +318,20 @@ const SHEET_RECIPES: Record<string, SheetRecipe> = {
   },
   'slime-de-cristal': {
     rows: [1, 2],
+    // Poça CINZA sob o corpo; o slime é roxo saturado, então `maxChroma` separa
+    // os dois sem depender de luminância.
+    ground: { minLum: 0.45, maxLum: 1.15, maxChroma: 30, band: 0.3 },
     note: 'paisagem: 8 de perfil na linha 1, 3 de frente + 3 de costas na linha 2; gotas caem no filtro de caco',
   },
   'wyrm-cristalino': {
     rows: [1, 2],
-    note: 'paisagem: 6 de perfil na linha 1, 3 de frente + 3 de costas na linha 2',
+    // O pior chão do bestiário: laje de pedra cinza sob o corpo inteiro nos seis
+    // perfis. O dragão é azul-petróleo saturado, a laje é cinza — daí `maxChroma`.
+    ground: { minLum: 0.45, maxLum: 1.2, maxChroma: 40, band: 0.35 },
+    // Tirada a laje, sobram os tufos de cristal SOLTOS no chão ao lado do bicho —
+    // grandes demais para o limiar padrão de 1%.
+    islands: { minFrac: 0.05 },
+    note: 'paisagem: 6 de perfil na linha 1, 3 de frente + 3 de costas na linha 2; laje de pedra pintada sob o corpo',
   },
 
   // ---- Pântano Maldito ----
@@ -269,6 +341,12 @@ const SHEET_RECIPES: Record<string, SheetRecipe> = {
   // passa batido na contagem e corta tudo no lugar errado.
   'sapo-venenoso': {
     rows: [1, 2],
+    // Poça de gosma no chão. Janela estreita e faixa curta: a poça é do MESMO
+    // verde do sapo, então só o que for claro e neutro sai.
+    ground: { minLum: 0.55, maxLum: 1.15, maxChroma: 34, band: 0.16 },
+    // A poça de gosma no chão dos quadros de salto tem 2% da área do sapo —
+    // acima do limiar padrão, e verde igual ao bicho, então o chão não a pega.
+    islands: { minFrac: 0.03 },
     note: 'paisagem 6x2, mas a projeção acerta sozinha (os saltos não se encostam)',
   },
   // ⚠️ 6x2 certinho e a projeção acerta sozinha — o susto de que ela teria
@@ -286,18 +364,28 @@ const SHEET_RECIPES: Record<string, SheetRecipe> = {
   'serpente-do-lodo': {
     rows: [1, 2, 3, 4],
     grid: { cols: 3, rows: 4 },
+    // Pedras e lodo pintados sob as espiras — marrons como a própria serpente,
+    // então a janela pega só as pedras CLARAS.
+    ground: { minLum: 0.6, maxLum: 1.15, band: 0.2 },
     note: 'retrato, grade 3x4; linha 2 só tem 2 poses → 11 frames, não 12',
   },
   // O único com CINCO linhas (2,2,2,3,3). Bate 12 frames por coincidência, então
   // a grade 3x4 passa batido na contagem e corta tudo no lugar errado.
   'crocodilo-anciao': {
     rows: [1, 2, 3, 4, 5],
+    // Faixas de sombra CINZA sob a barriga; o crocodilo é verde-escuro.
+    ground: { minLum: 0.5, maxLum: 1.15, maxChroma: 30, band: 0.3 },
     note: 'retrato 5 linhas 2/2/2/3/3 — projeção, NÃO grade 3x4',
   },
   'hidra-do-pantano': {
     rows: [1, 2, 3, 4],
     grid: { cols: 3, rows: 4 },
-    note: 'CHEFE; retrato 1686x2528, grade 3x4 igual ao goblin',
+    // Lama pintada sob as patas. A janela pega só a parte CLARA dela: o miolo
+    // da lama tem a mesma luminância do corpo verde-escuro da hidra (0.42 contra
+    // 0.46 medidos), e alargar mais come a pata. O que ficou lê como sombra, e a
+    // cena desenha a própria por cima.
+    ground: { minLum: 0.45, maxLum: 1.15, band: 0.38, maxFrac: 0.35 },
+    note: 'CHEFE; retrato 1686x2528, grade 3x4 igual ao goblin; lama pintada sob as patas',
   },
 
   // ---- Ruínas Arcanas ----
@@ -307,6 +395,10 @@ const SHEET_RECIPES: Record<string, SheetRecipe> = {
   'esqueleto-guerreiro': {
     rows: [1, 2, 3, 4],
     grid: { cols: 4, rows: 4 },
+    // Elipse de sombra CINZA sob os pés em todas as 16. `maxChroma` baixo é o
+    // que salva a espada e a armadura: a sombra é neutra, o osso e o bronze são
+    // quentes (r bem acima de b).
+    ground: { minLum: 0.55, maxLum: 1.05, maxChroma: 16, band: 0.2 },
     note: 'retrato 4x4 = 16 frames; linha 2 = espelho da 1, e a linha 3 já termina de costas',
   },
   'espectro-errante': {
@@ -379,6 +471,15 @@ async function sliceOne(job: Job): Promise<string | null> {
   const [cellWMin, cellH] =
     !recipe || EXPLICIT.cell ? [CELL_W, CELL_H] : (recipe.cell ?? MONSTER_CELL)
   const killTrapped = has('--kill-trapped-bg') || !!recipe?.killTrappedBg
+  // Ilhas: ligado por padrão no bicho, desligado no herói (a folha do herói não
+  // vem em grade forçada e nunca acusou caco na conferência).
+  const islands: IslandOpts | null =
+    has('--no-islands') || job.kind !== 'monster'
+      ? null
+      : recipe?.islands === false
+        ? null
+        : { ...ISLANDS_DEFAULT, ...(recipe?.islands ?? {}) }
+  const ground: GroundOpts | null = has('--no-ground') ? null : (recipe?.ground ?? null)
 
   console.log(
     `\n${job.kind === 'monster' ? '👹' : '🧝'} ${SLUG} — linhas=${rows.join(',')} célula=${cellWMin}x${cellH} tol=${TOL}` +
@@ -439,11 +540,69 @@ async function sliceOne(job: Job): Promise<string | null> {
   // é esse offset que vira o índice de `back` no manifesto.
   const frames: Box[] = []
   const rowStarts: Array<{ row: number; start: number; count: number }> = []
+  let islandPx = 0
+  let islandChunks = 0
+  let groundPx = 0
+  let groundFrames = 0
   for (const row of rows) {
     const [bandY0, bandY1] = bands[row - 1]
-    const found = grid
+    let found = grid
       ? gridFrames(raw, bandY0, bandY1, grid.cols)
       : findFrames(raw, bandY0, bandY1)
+
+    // Ilhas ANTES de qualquer medida: o bbox do frame sai do alpha, então caco
+    // solto não só aparece em cena — ele empurra o bbox e, por `maxH`, encolhe
+    // a folha inteira. Limpar depois de medir seria limpar tarde demais.
+    if (islands) {
+      const rects: Box[] = grid
+        ? Array.from({ length: grid.cols }, (_, c) => ({
+            x0: Math.round((c * raw.width) / grid.cols),
+            x1: Math.round(((c + 1) * raw.width) / grid.cols),
+            y0: bandY0,
+            y1: bandY1,
+          }))
+        : found
+      const rescued: Box[] = []
+      for (const rect of rects) {
+        const n = killIslands(raw, rect, { dropEdge: !!grid, ...islands })
+        if (n > 0) {
+          islandPx += n
+          islandChunks++
+        }
+        const tight = tightBox(raw, rect.x0, rect.y0, rect.x1, rect.y1)
+        if (tight) rescued.push(tight)
+      }
+      found = rescued
+    }
+
+    // Chão pintado DEPOIS das ilhas e sempre sobre o bbox apertado: a faixa de
+    // baixo é relativa ao pé do bicho, não ao fundo da célula, e cada pose senta
+    // numa altura diferente da célula.
+    if (ground) {
+      const cleaned: Box[] = []
+      for (const box of found) {
+        const n = killGroundPaint(raw, box, bg, ground)
+        if (n > 0) {
+          groundPx += n
+          groundFrames++
+        }
+        // Segunda passada de ilha, e ela é OBRIGATÓRIA quando o chão sai: o chão
+        // era a PONTE. Os tufos de cristal do wyrm estavam grudados na laje, e
+        // com a laje ainda no lugar a primeira passada os via como parte do
+        // bicho (um componente só). Sem esta segunda, sobravam cristais soltos
+        // flutuando ao lado do dragão em 6 dos 12 frames.
+        if (islands) {
+          const m = killIslands(raw, box, { dropEdge: !!grid, ...islands })
+          if (m > 0) {
+            islandPx += m
+            islandChunks++
+          }
+        }
+        const tight = tightBox(raw, box.x0, box.y0, box.x1, box.y1)
+        if (tight) cleaned.push(tight)
+      }
+      found = cleaned
+    }
     // Cacos de cenário que a projeção conta como frame: a poeira sob os pés do
     // goblin, as gotas que caem do slime. São blobs soltos na faixa vazia ENTRE
     // duas poses, então `findFrames` os separa como se fossem quadros — e um
@@ -473,6 +632,17 @@ async function sliceOne(job: Job): Promise<string | null> {
   if (!frames.length) {
     console.error(`   ❌ nenhum frame encontrado em ${rows.join(',')} — pulando`)
     return null
+  }
+  if (islands) {
+    console.log(
+      `   ilhas removidas: ${islandPx}px em ${islandChunks} célula(s)${islandPx === 0 ? ' (folha limpa)' : ''}`,
+    )
+  }
+  if (ground) {
+    console.log(
+      `   chão pintado removido: ${groundPx}px em ${groundFrames}/${frames.length} frames` +
+        (groundFrames === 0 ? ' (nada na janela — ou o freio de mão travou)' : ''),
+    )
   }
   for (const r of rowStarts) {
     console.log(

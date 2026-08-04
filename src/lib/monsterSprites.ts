@@ -118,7 +118,7 @@ export const MONSTER_SPRITES: Record<string, MonsterSpriteDef> = {
   // losango). fps mais alto: lobo é o bicho rápido do bestiário.
   'lobo-faminto': {
     src: '/sprites/monsters/lobo-faminto/walk.webp',
-    frameW: 274,
+    frameW: 269,
     frameH: 288,
     frames: 9,
     facing: 'right',
@@ -138,7 +138,7 @@ export const MONSTER_SPRITES: Record<string, MonsterSpriteDef> = {
   // não entram em ciclo nenhum.
   'aranha-gigante': {
     src: '/sprites/monsters/aranha-gigante/walk.webp',
-    frameW: 319,
+    frameW: 335,
     frameH: 288,
     frames: 12,
     facing: 'right',
@@ -162,7 +162,7 @@ export const MONSTER_SPRITES: Record<string, MonsterSpriteDef> = {
   // piscaria a cada passo. Mesmo motivo da chama da Anciã.
   'goblin-minerador': {
     src: '/sprites/monsters/goblin-minerador/walk.webp',
-    frameW: 228,
+    frameW: 195,
     frameH: 288,
     frames: 12,
     facing: 'right',
@@ -175,17 +175,23 @@ export const MONSTER_SPRITES: Record<string, MonsterSpriteDef> = {
 
   // O bruto do bestiário: mais largo e mais alto que o herói, e o fps mais baixo
   // da caverna porque pedra que anda rápido não pesa.
-  // [2] e [5] pegaram uma BARRA VERTICAL do quadro vizinho — a grade forçada
-  // corta em terços exatos e o braço do vizinho invade a coluna. Ficam de fora.
+  //
+  // ⚠️ 14 frames, e a folha NÃO é 3x4 como as vizinhas de caverna: são 4/4/3/3.
+  // A grade em terços cortava os golens das duas primeiras linhas ao meio, e a
+  // "BARRA VERTICAL do quadro vizinho" que a versão anterior mandava evitar em
+  // [2] e [5] era a outra metade do golem cortado. Com projeção sai inteiro:
+  // [0..3] perfil pra direita, [4..7] os mesmos espelhados (o espelho sai de
+  // graça em runtime), [8][9][10] de frente, [11][12][13] de costas — e o [13]
+  // tem o losango branco de sempre.
   'golem-de-pedra': {
     src: '/sprites/monsters/golem-de-pedra/walk.webp',
-    frameW: 274,
+    frameW: 243,
     frameH: 288,
-    frames: 12,
+    frames: 14,
     facing: 'right',
-    walk: [0, 1, 3, 4],
-    front: [6, 7, 8],
-    back: [9, 10],
+    walk: [0, 1, 2, 3],
+    front: [8, 9, 10],
+    back: [11, 12],
     fps: 4,
     worldH: 2.8,
   },
@@ -213,7 +219,7 @@ export const MONSTER_SPRITES: Record<string, MonsterSpriteDef> = {
   // pose derretida (sem patas): dentro do ciclo ela vira o pulo gelatinoso.
   'slime-de-cristal': {
     src: '/sprites/monsters/slime-de-cristal/walk.webp',
-    frameW: 251,
+    frameW: 252,
     frameH: 288,
     frames: 14,
     facing: 'right',
@@ -228,7 +234,7 @@ export const MONSTER_SPRITES: Record<string, MonsterSpriteDef> = {
   // lugar na hierarquia, e ver o chefe do tamanho de um lobo mata a entrada.
   'wyrm-cristalino': {
     src: '/sprites/monsters/wyrm-cristalino/walk.webp',
-    frameW: 323,
+    frameW: 324,
     frameH: 288,
     frames: 12,
     facing: 'right',
@@ -251,7 +257,7 @@ export const MONSTER_SPRITES: Record<string, MonsterSpriteDef> = {
   // front pula o [7] pelo mesmo motivo do [11] — respingo branco no pé.
   'sapo-venenoso': {
     src: '/sprites/monsters/sapo-venenoso/walk.webp',
-    frameW: 362,
+    frameW: 383,
     frameH: 288,
     frames: 12,
     facing: 'right',
@@ -268,7 +274,7 @@ export const MONSTER_SPRITES: Record<string, MonsterSpriteDef> = {
   // com o enrolado faria a serpente encolher a cada passo.
   'serpente-do-lodo': {
     src: '/sprites/monsters/serpente-do-lodo/walk.webp',
-    frameW: 279,
+    frameW: 269,
     frameH: 288,
     frames: 11,
     facing: 'right',
@@ -303,7 +309,7 @@ export const MONSTER_SPRITES: Record<string, MonsterSpriteDef> = {
   // um bicho baixo e COMPRIDO (dw = worldH × frameW/frameH), que é o que ele é.
   'crocodilo-anciao': {
     src: '/sprites/monsters/crocodilo-anciao/walk.webp',
-    frameW: 320,
+    frameW: 321,
     frameH: 288,
     frames: 12,
     facing: 'right',
@@ -319,7 +325,7 @@ export const MONSTER_SPRITES: Record<string, MonsterSpriteDef> = {
   // [0][1][2] empinada, [3][4][5] baixa (duas poses distintas, não um ciclo só).
   'hidra-do-pantano': {
     src: '/sprites/monsters/hidra-do-pantano/walk.webp',
-    frameW: 239,
+    frameW: 255,
     frameH: 288,
     frames: 12,
     facing: 'right',

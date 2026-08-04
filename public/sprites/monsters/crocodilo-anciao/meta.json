@@ -3,7 +3,7 @@
   "kind": "monster",
   "name": "walk",
   "src": "/sprites/monsters/crocodilo-anciao/walk.webp",
-  "frameW": 320,
+  "frameW": 321,
   "frameH": 288,
   "frames": 12,
   "rows": [
@@ -14,5 +14,5 @@
     5
   ],
   "source": "~/Documents/dolrath/sprite-sources/monsters/pantano-maldito/crocodilo-anciao.png",
-  "generatedAt": "2026-08-04T00:57:55.754Z"
+  "generatedAt": "2026-08-04T08:30:52.426Z"
 }

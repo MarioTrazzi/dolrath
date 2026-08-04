@@ -3,7 +3,7 @@
   "kind": "monster",
   "name": "walk",
   "src": "/sprites/monsters/lobo-faminto/walk.webp",
-  "frameW": 274,
+  "frameW": 269,
   "frameH": 288,
   "frames": 9,
   "rows": [
@@ -11,6 +11,6 @@
     3,
     4
   ],
-  "source": "~/Documents/dolrath/.claude/worktrees/zen-engelbart-e78c22/sprite-sources/monsters/floresta-sombria/lobo-faminto.png",
-  "generatedAt": "2026-07-28T18:30:58.907Z"
+  "source": "~/Documents/dolrath/sprite-sources/monsters/floresta-sombria/lobo-faminto.png",
+  "generatedAt": "2026-08-04T08:30:50.800Z"
 }

@@ -51,6 +51,7 @@ scripts/bot-fleet-events.jsonl
 !/sprite-sources/README.md
 public/sprites/**/_contact.png
 public/sprites/**/_review.png
+public/sprites/**/_audit.png
 
 # Vercel
 .vercel

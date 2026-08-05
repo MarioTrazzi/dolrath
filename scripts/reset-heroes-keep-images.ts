@@ -3,8 +3,9 @@
  * re-rolando os 18 pontos de criação com o perfil da CLASSE de cada herói
  * (mesma lógica de src/lib/characterStats.ts / POST /api/character).
  *
- * PRESERVA: avatar, transformationImage, transformationImages, unlockedTransformation,
- *           name/race/class, campos de NFT.
+ * PRESERVA SEMPRE: avatar, transformationImage, transformationImages,
+ *   unlockedTransformation, name/race/class. Nenhuma flag toca nessas colunas —
+ *   as imagens custam gpt-image-1 e são o único ativo que não se regenera de graça.
  *
  * POR PERSONAGEM:
  *   • Rola 18 pts via rollCreationStats(seed, classId) — seed aleatória por herói
@@ -17,9 +18,37 @@
  *
  * Conta: goldBalance=1000, globalInventorySlots=50, UserInventory vazio.
  *
+ * ESCOPO EXTRA (opt-in) — o reset acima devolve o herói ao nível 1, mas não abre
+ * uma TEMPORADA nova nem desfaz o vínculo com contratos antigos. Para isso:
+ *
+ *   RESET_ONCHAIN=1   Corta o vínculo on-chain: limpa nftChainId/nftContract/
+ *                     nftTokenId/nftTokenUri/nftMintTxHash/nftMintedAt e
+ *                     creationTxHash/creationPaidAt no personagem, e apaga
+ *                     ItemNft, GoldTopup, GoldSale e AiGenPayment. É o que se
+ *                     usa quando os contratos são redeployados (endereço novo
+ *                     ⇒ os tokenIds antigos deixam de existir para o jogo).
+ *                     Heróis podem ser re-cunhados depois em /dev/remint-characters.
+ *
+ *   RESET_PROGRESS=1  Apaga DungeonProgress (tiers destravados), QuestProgress,
+ *                     FarmPlot e DailyLoginClaim. Sem isto o herói volta ao
+ *                     nível 1 com o tier V da masmorra já aberto.
+ *
+ *   RESET_SEASON=1    Apaga toda PvpSeason — e por cascata PvpSeasonEntry,
+ *                     PvpRating, PvpMatch, PvpSeasonPayout e
+ *                     DolPrizeContribution — mais o PrizeVault. NÃO cria a
+ *                     temporada nova: ensureActivePvpSeason() (src/lib/pvpRanking.ts)
+ *                     cria "Temporada 1" com PVP_SEASON_DAYS no primeiro acesso
+ *                     a /ranking ou na primeira luta.
+ *
  * USO:
  *   Dry-run:  npx tsx scripts/reset-heroes-keep-images.ts
  *   Live:     CONFIRM=RESET_ALL npx tsx scripts/reset-heroes-keep-images.ts
+ *   Temporada nova em contratos novos (ensaio v2 na Amoy):
+ *     CONFIRM=RESET_ALL RESET_ONCHAIN=1 RESET_PROGRESS=1 RESET_SEASON=1 \
+ *       npx tsx scripts/reset-heroes-keep-images.ts
+ *
+ * ⚠️ Não há guarda de ambiente: o script usa o DATABASE_URL do .env, que aponta
+ *    para o Supabase de PRODUÇÃO.
  */
 
 import { randomBytes } from 'crypto'
@@ -37,6 +66,32 @@ const AVAILABLE_POINTS = 1
 const DEFAULT_GOLD = 1000
 const DEFAULT_GLOBAL_SLOTS = 50
 const DEFAULT_INV_SLOTS = 10
+
+/** Flag de escopo extra: aceita 1/true, qualquer outra coisa é desligado. */
+function flag(name: string): boolean {
+  const raw = (process.env[name] || '').trim().toLowerCase()
+  return raw === '1' || raw === 'true'
+}
+
+const RESET_ONCHAIN = flag('RESET_ONCHAIN')
+const RESET_PROGRESS = flag('RESET_PROGRESS')
+const RESET_SEASON = flag('RESET_SEASON')
+
+/**
+ * Zera os campos que amarram o herói a um contrato específico. Fica separado
+ * do payload base porque só entra com RESET_ONCHAIN — num reset de conteúdo
+ * puro a NFT já cunhada continua válida.
+ */
+const ONCHAIN_CLEAR = {
+  nftChainId: null,
+  nftContract: null,
+  nftTokenId: null,
+  nftTokenUri: null,
+  nftMintTxHash: null,
+  nftMintedAt: null,
+  creationTxHash: null,
+  creationPaidAt: null,
+} as const
 
 function freshSeed(): number {
   return randomBytes(4).readUInt32BE(0)
@@ -110,6 +165,64 @@ function buildFreshCharacter(race: string, classId: string, seed: number) {
   return { rolled, final, derived, baseStats, attributes }
 }
 
+/**
+ * Mostra, antes de qualquer escrita, o que cada flag de escopo extra vai levar.
+ * Flag desligada aparece como dica — é o jeito de descobrir que existe.
+ */
+async function reportExtraScope() {
+  if (RESET_ONCHAIN) {
+    const [minted, paid, itemNfts, topups, sales, aigen] = await Promise.all([
+      prisma.character.count({ where: { nftTokenId: { not: null } } }),
+      prisma.character.count({ where: { creationTxHash: { not: null } } }),
+      prisma.itemNft.count(),
+      prisma.goldTopup.count(),
+      prisma.goldSale.count(),
+      prisma.aiGenPayment.count(),
+    ])
+    console.log(
+      `⛓️  RESET_ONCHAIN: ${minted} heróis cunhados e ${paid} com creationTxHash perdem o vínculo` +
+        ` | apaga ${itemNfts} ItemNft, ${topups} GoldTopup, ${sales} GoldSale, ${aigen} AiGenPayment`
+    )
+  } else {
+    console.log('⛓️  RESET_ONCHAIN=0 — vínculo de NFT/pagamento preservado (contratos NÃO mudaram)')
+  }
+
+  if (RESET_PROGRESS) {
+    const [dungeon, quests, plots, logins] = await Promise.all([
+      prisma.dungeonProgress.count(),
+      prisma.questProgress.count(),
+      prisma.farmPlot.count(),
+      prisma.dailyLoginClaim.count(),
+    ])
+    console.log(
+      `🗺️  RESET_PROGRESS: apaga ${dungeon} DungeonProgress, ${quests} QuestProgress,` +
+        ` ${plots} FarmPlot, ${logins} DailyLoginClaim`
+    )
+  } else {
+    console.log('🗺️  RESET_PROGRESS=0 — tiers de masmorra, missões, fazenda e login diário ficam')
+  }
+
+  if (RESET_SEASON) {
+    const [seasons, entries, ratings, matches, payouts, contribs, vaults] = await Promise.all([
+      prisma.pvpSeason.count(),
+      prisma.pvpSeasonEntry.count(),
+      prisma.pvpRating.count(),
+      prisma.pvpMatch.count(),
+      prisma.pvpSeasonPayout.count(),
+      prisma.dolPrizeContribution.count(),
+      prisma.prizeVault.count(),
+    ])
+    console.log(
+      `🏆 RESET_SEASON: apaga ${seasons} PvpSeason (cascata: ${entries} inscrições,` +
+        ` ${ratings} ratings, ${matches} partidas, ${payouts} pagamentos,` +
+        ` ${contribs} contribuições) + ${vaults} PrizeVault`
+    )
+  } else {
+    console.log('🏆 RESET_SEASON=0 — temporada, ranking e pool intactos')
+  }
+  console.log('')
+}
+
 async function main() {
   const live = process.env.CONFIRM === 'RESET_ALL'
   const chars = await prisma.character.findMany({
@@ -133,6 +246,7 @@ async function main() {
   console.log(
     `🔎 ${chars.length} personagens, ${users} usuários, ${ui} itens no baú geral (UserInventory)\n`
   )
+  await reportExtraScope()
   console.log(
     live
       ? '🔴 LIVE — CONFIRM=RESET_ALL — vai gravar\n'
@@ -186,9 +300,16 @@ async function main() {
       prisma.characterHistory.deleteMany({ where: { characterId: p.id } }),
       prisma.dungeonRun.deleteMany({ where: { characterId: p.id } }),
       prisma.gatheringSession.deleteMany({ where: { characterId: p.id } }),
+      ...(RESET_PROGRESS
+        ? [
+            prisma.dungeonProgress.deleteMany({ where: { characterId: p.id } }),
+            prisma.questProgress.deleteMany({ where: { characterId: p.id } }),
+          ]
+        : []),
       prisma.character.update({
         where: { id: p.id },
         data: {
+          ...(RESET_ONCHAIN ? ONCHAIN_CLEAR : {}),
           level: 1,
           experience: 0,
           gold: 0,
@@ -231,6 +352,42 @@ async function main() {
   console.log(
     `\n✅ ${ok} personagens resetados | baú geral esvaziado | ${uRes.count} contas com gold=${DEFAULT_GOLD}`
   )
+
+  // Ledgers por CONTA (não por personagem): só somem no escopo extra.
+  if (RESET_ONCHAIN) {
+    const [itemNfts, topups, sales, aigen] = await prisma.$transaction([
+      prisma.itemNft.deleteMany({}),
+      prisma.goldTopup.deleteMany({}),
+      prisma.goldSale.deleteMany({}),
+      prisma.aiGenPayment.deleteMany({}),
+    ])
+    console.log(
+      `⛓️  vínculo on-chain cortado | ${itemNfts.count} ItemNft, ${topups.count} GoldTopup,` +
+        ` ${sales.count} GoldSale, ${aigen.count} AiGenPayment apagados` +
+        ` — re-cunhe os heróis em /dev/remint-characters`
+    )
+  }
+
+  if (RESET_PROGRESS) {
+    const [plots, logins] = await prisma.$transaction([
+      prisma.farmPlot.deleteMany({}),
+      prisma.dailyLoginClaim.deleteMany({}),
+    ])
+    console.log(`🗺️  progresso zerado | ${plots.count} FarmPlot, ${logins.count} DailyLoginClaim apagados`)
+  }
+
+  if (RESET_SEASON) {
+    // PvpSeason cascateia entries/ratings/matches/payouts/contributions (schema.prisma).
+    // Apagar em vez de marcar 'ended' faz a próxima nascer como "Temporada 1".
+    const [seasons, vaults] = await prisma.$transaction([
+      prisma.pvpSeason.deleteMany({}),
+      prisma.prizeVault.deleteMany({}),
+    ])
+    console.log(
+      `🏆 ${seasons.count} temporadas e ${vaults.count} cofres apagados` +
+        ` — a nova nasce em PVP_SEASON_DAYS no primeiro acesso a /ranking`
+    )
+  }
 }
 
 main()

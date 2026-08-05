@@ -22,6 +22,12 @@
  *
  * Bots ficam de fora: eles servem de oponente, não disputam prêmio.
  *
+ * RECREATE_SEASON=1 apaga a temporada corrente e deixa ensureActivePvpSeason
+ * criar outra. Serve para quando ela nasceu com envs erradas — é fácil abrir uma
+ * temporada de 90 dias sem querer, porque PVP_SEASON_DAYS só existe em produção
+ * e um script rodado na máquina cai no default. Recusa se já houver partida ou
+ * inscrição: a partir daí a temporada tem história e não se joga fora.
+ *
  * USO:
  *   Dry-run:  npx tsx scripts/enroll-existing-heroes.ts
  *   Live:     CONFIRM=ENROLL npx tsx scripts/enroll-existing-heroes.ts
@@ -33,10 +39,49 @@ import { resolveEnrollmentSeason } from '../src/lib/pvpRanking'
 
 const prisma = new PrismaClient()
 
+/** Dias que a temporada deve durar segundo o ambiente ATUAL deste processo. */
+const EXPECTED_DAYS = Number(process.env.PVP_SEASON_DAYS || 90)
+
+async function recreateSeasonIfAsked(live: boolean) {
+  if (process.env.RECREATE_SEASON !== '1') return
+
+  const [matches, entries] = await Promise.all([
+    prisma.pvpMatch.count(),
+    prisma.pvpSeasonEntry.count(),
+  ])
+  if (matches > 0 || entries > 0) {
+    throw new Error(
+      `RECREATE_SEASON recusado: já existem ${matches} partidas e ${entries} inscrições. ` +
+        `Apagar agora destruiria o placar — ajuste a temporada à mão se for mesmo o caso.`
+    )
+  }
+
+  const doomed = await prisma.pvpSeason.findMany()
+  for (const s of doomed) {
+    const dias = Math.round((s.endsAt.getTime() - s.startsAt.getTime()) / 86_400_000)
+    console.log(`♻️  apagando "${s.name}" (${dias}d, pot ${s.potDol}) — esperado ${EXPECTED_DAYS}d`)
+  }
+  if (live) {
+    await prisma.pvpSeason.deleteMany({})
+    console.log('♻️  temporada(s) apagada(s); a próxima nasce das envs deste processo\n')
+  } else {
+    console.log('♻️  (dry-run) seriam apagadas antes de recriar\n')
+  }
+}
+
 async function main() {
   const live = process.env.CONFIRM === 'ENROLL'
 
+  await recreateSeasonIfAsked(live)
+
   const season = await resolveEnrollmentSeason()
+  const seasonDays = Math.round((season.endsAt.getTime() - season.startsAt.getTime()) / 86_400_000)
+  if (seasonDays !== EXPECTED_DAYS) {
+    console.log(
+      `⚠️  a temporada dura ${seasonDays}d mas PVP_SEASON_DAYS diz ${EXPECTED_DAYS}d.` +
+        ` Rode com RECREATE_SEASON=1 para refazê-la.\n`
+    )
+  }
   const chars = await prisma.character.findMany({
     where: { user: { isBot: false } },
     select: { id: true, name: true, userId: true, user: { select: { walletAddress: true } } },

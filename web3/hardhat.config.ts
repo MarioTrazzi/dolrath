@@ -19,6 +19,19 @@ const DEPLOYER_PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY || "";
 
 const accounts = DEPLOYER_PRIVATE_KEY ? [DEPLOYER_PRIVATE_KEY] : [];
 
+/**
+ * A Polygon (Amoy e mainnet) recusa transação com priority fee abaixo de 25
+ * gwei, e a estimativa automática do Hardhat resvala nesse piso: um mint chegou
+ * a ser rejeitado por 63 wei ("gas tip cap 24999999937, minimum needed
+ * 25000000000"). Fixar 50 gwei legado deixa a margem confortável — em testnet o
+ * custo é irrelevante, e uma transação de deploy que falha no meio da sequência
+ * custa muito mais caro em confusão do que em gas.
+ *
+ * É o mesmo piso que src/lib/gasFees.ts aplica no runtime do servidor; aqui vale
+ * para todo script do Hardhat, que não passava por aquele caminho.
+ */
+const POLYGON_MIN_GAS_PRICE = 50_000_000_000;
+
 const config: HardhatUserConfig = {
   solidity: {
     version: "0.8.24",
@@ -43,10 +56,12 @@ const config: HardhatUserConfig = {
     polygonAmoy: {
       url: POLYGON_AMOY_RPC_URL,
       accounts,
+      gasPrice: POLYGON_MIN_GAS_PRICE,
     },
     polygon: {
       url: POLYGON_MAINNET_RPC_URL,
       accounts,
+      gasPrice: POLYGON_MIN_GAS_PRICE,
     },
   },
 };

@@ -51,15 +51,28 @@ Não versionados — vivem nas envs da Vercel, e o `web3/.env` é o registro do
 deploy (nenhum script grava `deployments/*.json`). Ao ir à mainnet, publicar
 aqui a tabela de endereços verificados no Polygonscan.
 
-### Amoy (80002) — **v1, a ser substituída pelo deploy v2**
+### Amoy (80002) — **v2, em uso** (deploy 2026-08-05, bloco 44129357)
 
 | Contrato | Endereço |
 |---|---|
-| DolToken v1 (pagamento, 18 casas) | `0x996DA80c38Ae95a66015093393b206076596e234` |
-| DolrathGold | `0x412ACaD8dDFB49F0295E62Abc7A288B2A54D5Ac9` |
-| DolrathCharacters | `0xdcA0023eD63aa4c97C6ab8d3E973e062171147A6` |
-| DolrathItems | `0x4a135642D05d2C42C6170eFad7Ac62FDF817867F` |
-| DolrathItemMarket | `0x1fAdEC1a8169bd743C6001d578bDdE82eD1FBF57` |
+| TestUSDC (pagamento, **6 casas**) | `0xF4A612e8D0A709fA19a5e342cdd795cD5Ca01cE0` |
+| DolrathGold | `0xC4f67631a8e0695FC950ab9d3aD5Fb1445A0B81f` |
+| DolrathCharacters | `0x40FFE440ff826Be9cB698907D4b7f8a40DbeE974` |
+| DolrathItems | `0x3FF6DD46Bd0F388Bce9cF2eC35cd152ADa9DA318` |
+| DolrathItemMarket | `0x840bbB94D8d7Db7b3b24CD2086e5B7C1F81AaB83` |
 
-No ensaio v2 o pagamento passa a ser o **TestUSDC (6 casas)** e todos os
-endereços acima mudam. Roteiro: `web3/REHEARSAL-AMOY.md`.
+Signer dos três contratos e tesouraria de taxas: `0x403E0C97…30d88` (na Amoy os
+papéis são a mesma carteira; na mainnet são quatro separadas). Owner: o deployer
+descartável `0x4aD5ff48…28da7` — na mainnet vai para o Safe via
+`chain:transfer-ownership`. Conferido on-chain: `decimals()==6` no TestUSDC e
+split 4% do market (1000 GOLD → 960 vendedor / 20 queima / 20 tesouraria).
+
+### Amoy — v1 aposentada (deploy ~2025-12, substituída em 2026-08-05)
+
+`DolToken` `0x996DA80c…e234` · `Gold` `0x412ACaD8…5Ac9` · `Characters`
+`0xdcA0023e…47A6` · `Items` `0x4a135642…867F` · `ItemMarket` `0x1fAdEC1a…BF57`.
+Os heróis cunhados nela ficaram órfãos e foram re-cunhados na v2.
+
+> **RPC:** `rpc-amoy.polygon.technology` **saiu do ar** (o host perdeu o registro
+> DNS). Usar `https://polygon-amoy-bor-rpc.publicnode.com` — é o que está nas
+> envs e em `src/lib/chainConfig.ts`.

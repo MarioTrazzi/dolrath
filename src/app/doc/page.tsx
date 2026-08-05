@@ -121,6 +121,12 @@ function Soon() {
   return <Tag tone="todo">🔜 EM BREVE</Tag>
 }
 
+// Contrato pronto e testado, deploy agendado para a Fase 2 do lançamento
+// (dentro da temporada 1). Distinto de EM BREVE, que é desenho sem código.
+function Phase2() {
+  return <Tag tone="todo">🛠️ FASE 2</Tag>
+}
+
 // Card visual de item (mesmo tamanho dos cards da /store) com a imagem gerada.
 // Usado na seção Itens para revisar toda a arte de uma vez.
 function ItemArtCard({
@@ -388,9 +394,24 @@ export default function DocPage() {
                     uma única vez no deploy. <strong className="text-white">Não existe função de mint</strong>: o supply só pode
                     diminuir (queimas). Nome on-chain: <Code>Dolrath</Code>.
                   </p>
+                  <p className="mt-2 text-sm">
+                    <strong className="text-white">DOL não é pareado ao dólar.</strong> Não é stablecoin, não tem
+                    lastro, não é resgatável e o estúdio não recompra. Quem paga em dólar é o jogador comprando o
+                    herói — e esse dólar nunca encosta na pool de premiação.
+                  </p>
                   <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
-                    <li>Criação de personagem: <Tag tone="dol">2 DOL</Tag> (<Code>CHARACTER_CREATION_COST_DOL</Code>)</li>
-                    <li>Mercado de personagens negocia em DOL (taxa 5%: 2,5% queima + 2,5% treasury)</li>
+                    <li>
+                      Criação de personagem: <Tag tone="gold">2 USDC</Tag> (<Code>CHARACTER_CREATION_COST_DOL</Code>) —
+                      <strong className="text-white"> 100% receita</strong>: NFT, retrato por IA e infra.
+                    </li>
+                    <li>
+                      Inscrição na temporada ranqueada: <Tag tone="dol">100 DOL</Tag> por herói
+                      (<Code>SEASON_ENTRY_DOL</Code>) — <strong className="text-white">100% vira prêmio</strong>.
+                      Na criação o estúdio aporta os 100 DOL do bucket Play &amp; Achieve e o herói já nasce
+                      inscrito; da temporada 2 em diante o jogador paga do próprio bolso. 100 heróis = pool de
+                      10.000 DOL; o 20º recupera a inscrição, o campeão leva 19×.
+                    </li>
+                    <li>Mercado de personagens negocia em DOL (taxa 5%: 2,5% queima + 2,5% treasury) <Phase2 /></li>
                     <li>Staking com veDOL <Soon /></li>
                     <li>Governança (DAO) <Soon /></li>
                   </ul>
@@ -449,7 +470,7 @@ export default function DocPage() {
                 head={['Onde', 'Taxa', 'Destino', 'Status']}
                 rows={[
                   ['Mercado de itens (GOLD)', '4%', '2% queima real + 2% treasury', <Live key="1" />],
-                  ['Mercado de personagens (DOL)', '5%', '2,5% queima real + 2,5% treasury', <Live key="2" />],
+                  ['Mercado de personagens (DOL)', '5%', '2,5% queima real + 2,5% treasury', <Phase2 key="2" />],
                   ['Forja (craft de equipamento)', '30% do valor de catálogo (mín. 10)', 'sink off-chain', <Live key="3" />],
                   ['Alquimia (craft de poções)', '30% do valor (mín. 5)', 'sink off-chain', <Live key="4" />],
                   ['Venda de item à loja (NPC)', 'recompra a 60% do catálogo', 'sink off-chain (40%)', <Live key="5" />],

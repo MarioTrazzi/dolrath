@@ -67,10 +67,12 @@ export const CHARACTER_PT: Record<string, string> = {
     'Para criar um personagem, precisamos vincular uma carteira EVM (ex: MetaMask) à sua conta.',
   'Linking...': 'Vinculando...',
   'Creation fee': 'Taxa de criação',
-  'To create a character on this testnet, you need to pay {n} DOL.':
-    'Para criar um personagem nesta testnet, é necessário pagar {n} DOL.',
+  'Creating a hero costs {n} USDC — the NFT, the AI portrait and the servers.':
+    'Criar um herói custa {n} USDC — a NFT, o retrato por IA e os servidores.',
+  'It also enrolls your hero in the current season, whose prize pool is paid in DOL.':
+    'A criação já inscreve seu herói na temporada corrente, cuja premiação é paga em DOL.',
   'Processing payment...': 'Processando pagamento...',
-  'Pay {n} DOL': 'Pagar {n} DOL',
+  'Pay {n} USDC': 'Pagar {n} USDC',
   'You will sign an on-chain transaction and pay gas.': 'Você vai assinar uma transação on-chain e pagar gas.',
   'Your NFTs': 'Suas NFTs',
   'Refreshing...': 'Atualizando...',

@@ -21,7 +21,7 @@ const TRANSFORMATION_STEPS = [
   'Finalizando…',
 ];
 
-// Regeração paga de uma forma: campo de ajustes + botão que paga DOL e regera.
+// Regeração paga de uma forma: campo de ajustes + botão que paga USDC e regera.
 function PaidRegenControls({
   cost,
   busy,
@@ -41,7 +41,7 @@ function PaidRegenControls({
         disabled={busy}
         className="text-xs flex items-center gap-1 text-primary hover:underline disabled:opacity-50"
       >
-        <Coins className="w-3 h-3" /> Ajustar e gerar de novo ({cost} DOL)
+        <Coins className="w-3 h-3" /> Ajustar e gerar de novo ({cost} USDC)
       </button>
     );
   }
@@ -61,7 +61,7 @@ function PaidRegenControls({
           className="flex-1 py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-accent to-primary text-white disabled:opacity-50 flex items-center justify-center gap-2"
         >
           {busy ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Coins className="w-4 h-4" />}
-          Pagar {cost} DOL e gerar
+          Pagar {cost} USDC e gerar
         </button>
         <button
           onClick={() => setOpen(false)}
@@ -105,7 +105,7 @@ export function TransformationStep() {
   }, [forms.length, markStepComplete]);
 
   // Gera a arte de uma forma específica a partir da imagem base. A primeira
-  // geração de cada forma está inclusa; regerar é pago (DOL) e aceita ajustes.
+  // geração de cada forma está inclusa; regerar é pago (USDC) e aceita ajustes.
   const generate = useCallback(
     async (form: TransformationType, opts?: { regen?: boolean; modification?: string }) => {
       if (!selectedImage) {
@@ -287,7 +287,7 @@ export function TransformationStep() {
         <p className="text-text-secondary">
           A IA usa sua imagem para revelar a forma que seu herói assume em combate — o mesmo
           personagem, com o mesmo traje, tomado pela energia da transformação. A primeira
-          geração está inclusa; regerar com ajustes custa {regenCostDol} DOL.
+          geração está inclusa; regerar com ajustes custa {regenCostDol} USDC.
         </p>
       </div>
 

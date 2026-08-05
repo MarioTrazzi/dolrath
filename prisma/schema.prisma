@@ -219,6 +219,7 @@ model Character {
   dungeonProgress DungeonProgress[]
   gatheringSessions GatheringSession[]
   pvpRatings        PvpRating[]
+  pvpSeasonEntries  PvpSeasonEntry[]
   questProgress     QuestProgress[]
 
   // On-chain payment for creation (testnet: fixed DOL fee; mainnet: will be oracle-priced)
@@ -532,13 +533,22 @@ model GoldSale {
 // PvP Ranking (Fases 2–3)
 // ============================================================
 
+// A temporada é o ciclo COMPETITIVO, não um wipe: ao virar, só o placar zera
+// (PvpRating novo). Personagem, gear, nível, ouro e progressão continuam — o
+// herói é NFT e o mundo segue aberto. Ver docs/19-seasons.
 model PvpSeason {
   id        String   @id @default(cuid())
   name      String
   startsAt  DateTime
   endsAt    DateTime
-  potDol    Float    @default(1000)
-  status    String   @default("active") // active | ended | paid
+  // Semente do estúdio. O prêmio REAL é potDol + fundedDol (getSeasonPot):
+  // fundedDol é o que os jogadores puseram (criação + inscrições), potDol é
+  // aporte opcional nosso. Era 1000 fixo — número sem lastro nenhum.
+  potDol    Float    @default(0)
+  fundedDol Float    @default(0)
+  // active = pontua | offseason = janela de pagamento/inscrição da próxima,
+  // PvP roda e paga ouro/XP mas NÃO pontua | ended | paid
+  status    String   @default("active")
   paidAt    DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -546,8 +556,71 @@ model PvpSeason {
   ratings PvpRating[]
   matches PvpMatch[]
   payouts PvpSeasonPayout[]
+  entries PvpSeasonEntry[]
+  contributions DolPrizeContribution[]
 
   @@index([status, endsAt])
+}
+
+// Inscrição do herói na temporada — 1 DOL por personagem, por temporada.
+// Nasce da criação do personagem (source 'creation', já paga nos 2 DOL) ou da
+// compra avulsa (source 'purchase'). SEM linha aqui, o PvP continua pagando
+// ouro e XP mas não pontua no ranking.
+//
+// Inscrição é por PERSONAGEM, prêmio é por CONTA (getPayoutBoard colapsa por
+// userId): inscrever cinco heróis custa cinco e ainda rende no máximo um
+// prêmio — multi-boxing vira doação para a pool, não estratégia.
+model PvpSeasonEntry {
+  id          String    @id @default(cuid())
+  seasonId    String
+  season      PvpSeason @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  userId      String
+  source      String    // 'creation' | 'purchase'
+  // Null só nas cortesias concedidas pelo servidor (personagem criado nos
+  // últimos dias de uma temporada entra de graça na seguinte).
+  txHash      String?   @unique
+  paidDol     Float     @default(0)
+  createdAt   DateTime  @default(now())
+
+  @@unique([seasonId, characterId])
+  @@index([seasonId, userId])
+  @@index([characterId])
+}
+
+// Ledger de todo DOL que entra em premiação. Congela o aporte NO MOMENTO do
+// pagamento: mudar SEASON_ENTRY_DOL depois não reescreve o histórico.
+//
+// As duas moedas vivem em colunas separadas de propósito. `paidUsdc` é a
+// receita do estúdio (criação de personagem) e NUNCA vira prêmio; `prizeDol` é
+// o que de fato entra na pool. Misturar as duas foi o que o desenho antigo
+// fazia com PRIZE_SHARE_PCT, e era o que punha dinheiro de jogador sob custódia.
+model DolPrizeContribution {
+  id          String    @id @default(cuid())
+  txHash      String    @unique
+  seasonId    String
+  season      PvpSeason @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  userId      String
+  characterId String?
+  kind        String    // 'creation' | 'entry'
+  paidUsdc    Float     @default(0) // dólares verificados on-chain (receita, não prêmio)
+  paidDol     Float     // DOL aportado na pool (== prizeDol)
+  prizeDol    Float     // fatia que virou prêmio
+  opsDol      Float     // legado: sempre 0 — a operação é paga em USDC, não em DOL
+  createdAt   DateTime  @default(now())
+
+  @@index([seasonId, createdAt])
+  @@index([userId])
+}
+
+// Cofre que ATRAVESSA temporadas: recebe as posições não distribuídas do top 20
+// (quando há menos de 20 elegíveis) e o corte opcional TOURNAMENT_CUT_PCT.
+// Financia os torneios que dão ritmo curto dentro da temporada longa.
+model PrizeVault {
+  kind       String   @id // 'tournament'
+  balanceDol Float    @default(0)
+  updatedAt  DateTime @updatedAt
 }
 
 model PvpRating {

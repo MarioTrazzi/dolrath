@@ -9,6 +9,7 @@ import { verifyCharacterNftMintTx } from '@/lib/characterNftVerify'
 import { rollCreationStatsFromPaymentProof } from '@/lib/characterCreationRoll'
 import { getRaceTransformations } from '@/lib/transformationSystem'
 import { SKILL_TREE_VERSION } from '@/lib/skillTree'
+import { creditCreationToPrizePool } from '@/lib/seasonPool'
 
 function serializeBigIntForJson<T>(value: T): T {
   return JSON.parse(
@@ -149,7 +150,9 @@ export async function POST(req: Request) {
 
   try {
     // Verify on-chain DOL payment (testnet: fixed amount).
-    await verifyDolTransferTx({
+    // O valor VERIFICADO alimenta a pool de premiação da temporada — antes o
+    // retorno era descartado e não havia como auditar a receita de criação.
+    const creationPayment = await verifyDolTransferTx({
       txHash: creationTxHashStr,
       expectedFrom: user.walletAddress,
       expectedTo: treasuryAddress,
@@ -370,6 +373,23 @@ export async function POST(req: Request) {
     } catch (historyError) {
       console.error('Erro ao registrar histórico:', historyError);
       // Não falhar a operação por causa do histórico
+    }
+
+    // 🏆 O estúdio aporta a inscrição do herói (SEASON_ENTRY_DOL) na pool da
+    // temporada, e ele já nasce inscrito. Os USDC pagos são receita de
+    // operação — vão para o ledger em paidUsdc, nunca para a pool.
+    // Best-effort de propósito: a pool é contabilidade, não pode derrubar uma
+    // criação já paga e mintada. O txHash é @unique nas duas tabelas, então um
+    // retry manual depois reconcilia sem duplicar.
+    try {
+      await creditCreationToPrizePool({
+        txHash: creationTxHashStr,
+        userId: session.user.id,
+        characterId: character.id,
+        paidUsdc: Number(creationPayment.formatted),
+      })
+    } catch (poolError) {
+      console.error('Falha ao creditar a pool de temporada na criação:', poolError)
     }
 
     return NextResponse.json(serializeBigIntForJson(character))

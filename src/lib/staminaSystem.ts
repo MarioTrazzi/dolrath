@@ -130,56 +130,11 @@ export const STAMINA_PROGRESSION = {
   }
 }
 
-// 💎 SISTEMA PREMIUM - TEMPLO DE STAMINA
-export const STAMINA_PREMIUM = {
-  // Opções de recarga
-  recharge_options: [
-    {
-      id: 'small_potion',
-      name: 'Poção Pequena',
-      stamina: 50,
-      price_usd: 0.99,
-      price_gems: 100,
-      cooldown_hours: 2,
-      description: '+50 stamina - 2h cooldown'
-    },
-    {
-      id: 'medium_potion',
-      name: 'Poção Média',
-      stamina: 100,
-      price_usd: 1.99,
-      price_gems: 180,
-      cooldown_hours: 4,
-      description: '+100 stamina - 4h cooldown'
-    },
-    {
-      id: 'large_potion',
-      name: 'Poção Grande',
-      stamina: 200,
-      price_usd: 3.99,
-      price_gems: 350,
-      cooldown_hours: 8,
-      description: '+200 stamina - 8h cooldown'
-    },
-    {
-      id: 'daily_pass',
-      name: 'Passe Diário',
-      stamina: 'unlimited_regen',
-      price_usd: 4.99,
-      price_gems: 500,
-      duration_hours: 24,
-      description: 'Regeneração ilimitada por 24h'
-    }
-  ],
-
-  // Limites anti-vício
-  limits: {
-    max_purchases_per_day: 3,
-    max_stamina_cap: 500,          // Não pode passar de 500
-    cooldown_between_purchases: 1,  // 1h entre compras
-    warning_on_excessive_use: true
-  }
-}
+// Aqui existia STAMINA_PREMIUM: venda de stamina por USD/gems (0,99 a 4,99).
+// Removido — nunca foi referenciado por nenhum código e contradizia a política
+// de docs/29-monetization, que lista "stamina extra além do desenho diário"
+// entre as coisas que o estúdio NUNCA vende. Stamina é o portão do faucet de
+// ouro; vendê-la é vender ouro.
 
 // 🎮 CENÁRIOS DE USO TÍPICOS
 export const USAGE_SCENARIOS = {
@@ -297,7 +252,6 @@ export default {
   STAMINA_COSTS,
   STAMINA_REGEN,
   STAMINA_PROGRESSION,
-  STAMINA_PREMIUM,
   USAGE_SCENARIOS,
   computeStaminaRegen,
   calculateStaminaForLevel,

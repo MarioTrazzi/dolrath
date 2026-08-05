@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { io, Socket } from 'socket.io-client'
 import { Users, Sword, Plus, RefreshCw, Crown, Clock, X, Shield, Search } from 'lucide-react'
 import ArenaBackdrop from '@/components/combat/ArenaBackdrop'
@@ -99,9 +100,21 @@ export default function CombatLobbyPage() {
   const [selectedRole, setSelectedRole] = useState<RoomRole>(RoomRole.FIGHTER)
   const [showRoleSelector, setShowRoleSelector] = useState<string | null>(null)
   const [showTrainingPicker, setShowTrainingPicker] = useState(false)
+  // Inscrição na temporada: sem ela a luta paga ouro e XP, mas não pontua.
+  const [seasonEntry, setSeasonEntry] = useState<{
+    season: { name: string }
+    characters: { id: string; enrolled: boolean }[]
+  } | null>(null)
 
   useEffect(() => {
     checkAuthAndLoadData()
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/ranking/enroll')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((payload) => payload && setSeasonEntry(payload))
+      .catch(() => {})
   }, [])
 
   // Sincroniza a seleção com o herói ativo do contexto (navbar), quando existir.
@@ -574,6 +587,32 @@ export default function CombatLobbyPage() {
         </div>
 
         <div className="overflow-hidden rounded-b-[4px] border border-t border-[#46464c] shadow-2xl shadow-black/60" style={{ background: PANEL_BG, borderTopColor: 'rgba(0,0,0,0.6)' }}>
+
+          {/* Herói fora da temporada: luta normal, só não conta pontos */}
+          {selectedCharacter &&
+            seasonEntry &&
+            seasonEntry.characters.some((c) => c.id === selectedCharacter.id && !c.enrolled) && (
+              <div className="border-b border-amber-900/60 bg-amber-950/30 p-4">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center">
+                    <span className="text-xl mr-3">🎟️</span>
+                    <div>
+                      <p className="text-amber-200 font-bold">Fora da {seasonEntry.season.name}</p>
+                      <p className="text-[#8a8a90] text-sm">
+                        A luta paga ouro e XP normalmente, mas não pontua no ranking nem
+                        disputa o prêmio em DOL.
+                      </p>
+                    </div>
+                  </div>
+                  <Link
+                    href="/ranking"
+                    className="rounded-[3px] border border-amber-600/60 bg-amber-600/20 px-3 py-1.5 text-sm text-amber-100 hover:bg-amber-600/30"
+                  >
+                    Inscrever na temporada
+                  </Link>
+                </div>
+              </div>
+            )}
 
           {/* Aviso se personagem está morto */}
           {selectedCharacter && !selectedCharacter.isAlive && (

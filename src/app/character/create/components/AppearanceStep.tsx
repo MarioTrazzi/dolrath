@@ -159,7 +159,7 @@ export function AppearanceStep() {
     }
   };
 
-  // Regeração paga: paga DOL, edita a imagem selecionada aplicando só os
+  // Regeração paga: paga USDC, edita a imagem selecionada aplicando só os
   // ajustes pedidos e adiciona o resultado à galeria para comparação.
   const adjustImage = async () => {
     if (!selectedImage) {
@@ -169,7 +169,7 @@ export function AppearanceStep() {
     setIsAdjusting(true);
     try {
       // Se um pagamento anterior não gerou imagem, reaproveita o txHash em vez
-      // de cobrar de novo — o DOL já está na tesouraria.
+      // de cobrar de novo — o USDC já está na tesouraria.
       const txHash = pendingTxHash ?? (await payDolToTreasury(regenCostDol));
       setPendingTxHash(txHash);
 
@@ -223,7 +223,7 @@ export function AppearanceStep() {
         </h2>
         <p className="text-text-secondary">
           A IA gera a imagem única da sua NFT (inclusa na taxa de criação). Depois, se quiser
-          mudar algo, você pode pedir ajustes pagando {regenCostDol} DOL por versão — ou fazer
+          mudar algo, você pode pedir ajustes pagando {regenCostDol} USDC por versão — ou fazer
           upload da sua própria imagem.
         </p>
       </div>
@@ -273,7 +273,7 @@ export function AppearanceStep() {
             {generatedImages.length > 0 && !genFailed && (
               <p className="text-xs text-text-secondary">
                 Sua imagem inclusa já foi gerada. Quer mudar algo? Use o painel de ajustes
-                abaixo ({regenCostDol} DOL por versão).
+                abaixo ({regenCostDol} USDC por versão).
               </p>
             )}
           </div>
@@ -367,7 +367,7 @@ export function AppearanceStep() {
             <div className="bg-surface/50 border border-white/10 rounded-lg p-6 space-y-3">
               <h4 className="text-base font-medium text-text-primary flex items-center gap-2">
                 <Coins className="w-4 h-4 text-accent" />
-                Quer mudar algo? ({regenCostDol} DOL)
+                Quer mudar algo? ({regenCostDol} USDC)
               </h4>
               <p className="text-xs text-text-secondary">
                 Descreva o que quer mudar na imagem selecionada — a IA mantém o mesmo
@@ -394,7 +394,7 @@ export function AppearanceStep() {
                 ) : (
                   <>
                     <Wand2 className="w-4 h-4" />
-                    Pagar {regenCostDol} DOL e ajustar
+                    Pagar {regenCostDol} USDC e ajustar
                   </>
                 )}
               </button>

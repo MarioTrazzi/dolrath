@@ -24,12 +24,39 @@ function DisclaimerEn() {
         </p>
       </LegalSection>
 
+      <LegalSection heading="What you pay for, and in what">
+        <p>
+          Creating a hero costs <strong>2 USDC</strong>, and that is a purchase: the character NFT, the
+          AI-generated portrait and the servers that run the game. It is{' '}
+          <strong>non-refundable</strong> and it is <strong>not</strong> a stake, a deposit or an
+          entry fee for a prize. We keep it as revenue.
+        </p>
+        <p>
+          Ranked seasons are played in <strong>DOL</strong>, an in-game token. No dollar you pay ever
+          enters the prize pool, and no prize is ever paid in dollars.
+        </p>
+      </LegalSection>
+
       <LegalSection heading="DOL is a utility token">
         <p>
-          DOL is a utility token used inside the game (character market purchases, image adjustments,
+          DOL is a utility token used inside the game (character market purchases, season entries,
           internal fees). It does <strong>not represent</strong> equity, shares, quotas, a promise of
-          profit, dividends or any right over BDI or its developers. We do not guarantee that DOL will
-          have liquidity, an external market or any monetary value — today or in the future.
+          profit, dividends or any right over BDI or its developers. It is{' '}
+          <strong>not pegged</strong> to the dollar or to any currency, it is not redeemable, and we
+          do not buy it back. We do not guarantee that DOL will have liquidity, an external market or
+          any monetary value — today or in the future.
+        </p>
+      </LegalSection>
+
+      <LegalSection heading="Ranked seasons are a skill competition">
+        <p>
+          Entering a ranked season costs 100 DOL per hero — granted by us when you create the hero,
+          and paid by the player from season two onward. That entry is{' '}
+          <strong>non-refundable</strong> and goes entirely into the season prize pool. At season end
+          the pool is split among the Top 20 by <strong>points earned playing</strong> (arena wins),
+          never by chance, draw or wager on an outcome. Most entrants receive nothing: only the Top 20
+          are paid, and eligibility requires a minimum number of ranked matches. Play to compete, not
+          as an investment.
         </p>
       </LegalSection>
 
@@ -91,13 +118,40 @@ function DisclaimerPt() {
         </p>
       </LegalSection>
 
+      <LegalSection heading="O que você paga, e em quê">
+        <p>
+          Criar um herói custa <strong>2 USDC</strong>, e isso é uma compra: a NFT do personagem, o
+          retrato gerado por IA e os servidores que rodam o jogo. É{' '}
+          <strong>não reembolsável</strong> e <strong>não</strong> é aposta, depósito nem inscrição
+          para concorrer a prêmio. Fica conosco como receita.
+        </p>
+        <p>
+          A temporada ranqueada é disputada em <strong>DOL</strong>, um token interno do jogo. Nenhum
+          dólar que você paga entra na pool de premiação, e nenhum prêmio é pago em dólar.
+        </p>
+      </LegalSection>
+
       <LegalSection heading="O token DOL é utilitário">
         <p>
-          O DOL é um token utilitário usado dentro do jogo (compra de personagens no mercado, ajustes
-          de imagem, taxas internas). Ele <strong>não representa</strong> participação, ação, cota,
-          promessa de lucro, dividendo ou qualquer direito sobre a BDI ou seus desenvolvedores. Não
-          garantimos que o DOL terá liquidez, mercado externo ou qualquer valor monetário — hoje ou no
-          futuro.
+          O DOL é um token utilitário usado dentro do jogo (compra de personagens no mercado,
+          inscrição de temporada, taxas internas). Ele <strong>não representa</strong> participação,
+          ação, cota, promessa de lucro, dividendo ou qualquer direito sobre a BDI ou seus
+          desenvolvedores. Ele <strong>não é pareado</strong> ao dólar nem a nenhuma moeda, não é
+          resgatável, e não fazemos recompra. Não garantimos que o DOL terá liquidez, mercado externo
+          ou qualquer valor monetário — hoje ou no futuro.
+        </p>
+      </LegalSection>
+
+      <LegalSection heading="Temporada ranqueada é competição por habilidade">
+        <p>
+          Inscrever um herói na temporada ranqueada custa 100 DOL — concedidos por nós na criação do
+          herói, e pagos pelo jogador a partir da segunda temporada. Essa inscrição é{' '}
+          <strong>não reembolsável</strong> e vai integralmente para a pool de premiação da temporada.
+          No fim da temporada a pool é dividida entre o Top 20 por{' '}
+          <strong>pontos obtidos jogando</strong> (vitórias na arena), nunca por sorteio, azar ou
+          aposta em resultado. A maioria dos inscritos não recebe nada: só o Top 20 é pago, e a
+          elegibilidade exige um número mínimo de lutas ranqueadas. Jogue para competir, não como
+          investimento.
         </p>
       </LegalSection>
 

@@ -16,8 +16,21 @@ Create an env file:
 - Deploy Characters NFT (Amoy): `npm run chain:deploy:characters:amoy`
 - Fund a wallet with DOL (Amoy): set `DOL_TOKEN_ADDRESS`, `DOL_MINT_TO`, `DOL_MINT_AMOUNT` then run `npm run chain:mint:amoy` (transfers from the signer — DOL v2 has no mint)
 
+## Launch
+
+- Ensaio de uma semana na Amoy: [`REHEARSAL-AMOY.md`](./REHEARSAL-AMOY.md)
+- Virada para a mainnet: [`LAUNCH-MAINNET.md`](./LAUNCH-MAINNET.md)
+
+O token de **pagamento** (criação de personagem, ajuste de imagem) é USDC, não
+DOL: a USDC nativa da Circle na mainnet, `TestUSDC` no ensaio. Por histórico, ele
+vive nas envs `DOL_TOKEN_ADDRESS` / `NEXT_PUBLIC_DOL_TOKEN_ADDRESS`. O DOL é a
+moeda da temporada e do mercado de personagens, e entra na Fase 2.
+
 ## Contracts
 
+- `TestUSDC` (ERC-20, **6 decimais**, mocks/) — dublê da USDC para o ensaio na
+  Amoy, com `faucet()` público (50 tUSDC / 12h). O script de deploy se recusa a
+  rodar na mainnet.
 - `DolToken` (ERC-20) — **v2, fixed supply**
   - Name: `Dolrath` · Symbol: `DOL`
   - 1,000,000,000 DOL minted once at deploy to `DOL_TREASURY_ADDRESS` (or deployer)

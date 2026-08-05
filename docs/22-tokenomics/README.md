@@ -9,6 +9,28 @@ Números vivos da economia dual-token. A especificação está no [Whitepaper](.
 - **Emissão a jogadores:** 25% do saldo restante do bucket por ano (ano 1: 75M; ano 2: 56M; ano 3: 42M…).
 - **Queimas:** 2,5% do mercado de personagens, 50% dos passes em DOL, coleções primárias, buyback trimestral (DAO).
 
+### Fluxos de DOL na temporada
+
+**O dinheiro do jogador e a pool são coisas separadas.** A criação de personagem
+é paga em **USDC** e é 100% receita do estúdio; a pool de temporada é 100% em
+**DOL**. Nenhum dólar entra na competição e nenhum prêmio sai em dólar.
+
+| Fluxo | Moeda | Entrada | Saída |
+|---|---|---|---|
+| Criação de personagem | 2 USDC | tesouraria (NFT, IA, infra) | — |
+| Inscrição do herói na criação | 100 DOL | bucket Play & Achieve → pool | top 20 da temporada |
+| Inscrição avulsa (temporada 2+) | 100 DOL | bolso do jogador → pool | top 20 da temporada |
+| Sobra do top 20 | DOL | cofre de torneios | premiação de torneios |
+
+A distinção que importa para o supply: a **inscrição da criação consome bucket**
+(é emissão distribuída, 100 DOL × personagens criados — 3 milhões de personagens
+de folga nos 300M). Da temporada 2 em diante, a **inscrição avulsa é
+redistribuição pura**: sai do bolso de uns e entra no de outros sem tocar o
+bucket. Quanto mais a base se renova sozinha, menos emissão nova a pool exige.
+
+Detalhes em [19 — Seasons](../19-seasons/README.md); aritmética em
+`npm run sim:season` (100 heróis → pool de 10.000 DOL, campeão 1.900, 20º 100).
+
 ## GOLD — resumo
 
 - Emissão elástica gateada por gameplay: teto diário **20.000/usuário** (`DUNGEON_DAILY_GOLD_CAP`), stamina, servidor-autoritativo.

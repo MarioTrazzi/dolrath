@@ -112,5 +112,40 @@ export function calculatePvpStaminaRewards(input: PvpStaminaRewardsInput): {
   }
 }
 
-/** Split do pot DOL top 10 (Fase 3) — percentuais do pot da season. */
-export const PVP_TOP10_DOL_SPLIT = [0.30, 0.18, 0.12, 0.09, 0.07, 0.06, 0.05, 0.05, 0.04, 0.04] as const
+/**
+ * Split do pot DOL — percentuais da pool distribuível, top 20, soma exata 1.0.
+ *
+ * A curva é calibrada para o ponto de equilíbrio de 100 inscritos: com a
+ * inscrição de SEASON_ENTRY_DOL (100), a pool é 10.000 DOL, o 20º recebe 1% —
+ * exatamente os 100 que entraram por ele — e o campeão leva 19×. O equilíbrio
+ * é sempre 100 inscritos, qualquer que seja o valor da inscrição, porque a pool
+ * e o prêmio usam a mesma constante. Sendo percentual, escala sozinha: 500
+ * inscritos → 20º leva 500 DOL, campeão 9.500.
+ *
+ * Posições vazias (menos de 20 elegíveis) NÃO são redistribuídas entre os
+ * presentes: a sobra vai para o cofre de torneios. É o que preserva a promessa
+ * "o 20º recupera a inscrição" independente do tamanho da base.
+ */
+export const PVP_SEASON_DOL_SPLIT = [
+  0.190, 0.135, 0.100, 0.080, 0.067,
+  0.060, 0.052, 0.045, 0.040, 0.035,
+  0.031, 0.028, 0.025, 0.022, 0.020,
+  0.018, 0.016, 0.014, 0.012, 0.010,
+] as const
+
+/** Quantas posições a temporada paga. */
+export const PVP_PAYOUT_SLOTS = PVP_SEASON_DOL_SPLIT.length
+
+/**
+ * Piso de partidas na temporada para entrar na premiação. Sem ele, numa
+ * temporada magra alguém leva DOL com uma vitória solitária.
+ */
+export const PVP_PAYOUT_MIN_MATCHES = Number(process.env.PVP_PAYOUT_MIN_MATCHES || 10)
+
+/**
+ * Lutas por dia (UTC) contra o MESMO oponente que ainda pontuam. Acima disso a
+ * luta segue pagando ouro e XP, mas concede 0 pontos: com DOL real na mesa,
+ * duas contas trocando vitórias em série viram vetor de farm. O bloqueio de
+ * mesma conta (`same_user`) não cobre esse caso.
+ */
+export const PVP_PAIR_DAILY_POINT_CAP = Number(process.env.PVP_PAIR_DAILY_POINT_CAP || 3)

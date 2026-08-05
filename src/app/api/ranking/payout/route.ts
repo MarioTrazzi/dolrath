@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
-import { getLeaderboard } from '@/lib/pvpRanking'
-import { PVP_TOP10_DOL_SPLIT } from '@/lib/pvpRewards'
+import { snapshotSeasonPayouts } from '@/lib/seasonPayout'
+import { getTournamentVaultBalance } from '@/lib/seasonPool'
 
 /**
- * Snapshot top 10 payouts for an ended season.
- * Auth: session admin (ADMIN_WALLETS / ADMIN_USER_IDS) OR x-battle-secret.
+ * Congela o top 20 de uma temporada encerrada. Normalmente quem dispara é o
+ * cron (api/cron/season) — esta rota é a operação manual, para reconciliar ou
+ * antecipar.
+ *
+ * Auth: session admin (ADMIN_USER_IDS) OU x-battle-secret.
  */
 function isAuthorized(request: NextRequest, userId?: string | null): boolean {
   const secret = process.env.BATTLE_REWARDS_SECRET
@@ -44,47 +47,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, alreadyPaid: true, payouts: existing })
     }
 
-    // Close season if still active past end
-    if (season.status === 'active' && season.endsAt <= new Date()) {
-      await prisma.pvpSeason.update({ where: { id: season.id }, data: { status: 'ended' } })
-    }
-
-    // Top 10 humanos apenas — bots pontuam no leaderboard visual, mas não recebem DOL.
-    const board = await getLeaderboard(season.id, 10, { includeBots: false })
-    const pot = season.potDol
-
-    const payouts = []
-    for (let i = 0; i < board.length && i < 10; i++) {
-      const row = board[i]
-      const dolAmount = Math.round(pot * PVP_TOP10_DOL_SPLIT[i] * 100) / 100
-      const char = await prisma.character.findUnique({
-        where: { id: row.characterId },
-        select: { userId: true },
-      })
-      const user = char
-        ? await prisma.user.findUnique({ where: { id: char.userId }, select: { walletAddress: true } })
-        : null
-
-      const payout = await prisma.pvpSeasonPayout.upsert({
-        where: { seasonId_characterId: { seasonId: season.id, characterId: row.characterId } },
-        create: {
-          seasonId: season.id,
-          characterId: row.characterId,
-          rank: i + 1,
-          points: row.points,
-          dolAmount,
-          walletAddress: user?.walletAddress ?? null,
-          status: 'pending',
-        },
-        update: {
-          rank: i + 1,
-          points: row.points,
-          dolAmount,
-          walletAddress: user?.walletAddress ?? null,
-        },
-      })
-      payouts.push(payout)
-    }
+    // O snapshot filtra bots, exige inscrição e o piso de partidas, e colapsa
+    // por conta (um prêmio por usuário) — ver getPayoutBoard.
+    const snapshot = await snapshotSeasonPayouts(season)
 
     await prisma.pvpSeason.update({
       where: { id: season.id },
@@ -93,8 +58,15 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      season: { id: season.id, name: season.name, potDol: pot },
-      payouts,
+      season: {
+        id: season.id,
+        name: season.name,
+        potDol: snapshot.potDol,
+        distributedDol: snapshot.distributedDol,
+        toVaultDol: snapshot.toVaultDol,
+      },
+      tournamentVaultDol: await getTournamentVaultBalance(),
+      payouts: snapshot.payouts,
       note: 'Payouts are pending. Mark paid via PATCH with txHash after on-chain transfer from treasury.',
     })
   } catch (e) {

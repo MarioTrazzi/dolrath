@@ -42,6 +42,20 @@ A tese econômica cabe em três frases:
 2. **DOL é mérito e participação.** Supply fixo, distribuído por conquistas raras, staking e governança — nunca por grind. É o ativo de longo prazo.
 3. **Todo ponto de circulação de valor alimenta o sistema.** Taxas de marketplace e serviços dividem-se entre queima (beneficia quem segura) e tesouro (financia o jogo). A economia devolve valor a quem participa em vez de diluí-lo.
 
+### O que o DOL não é
+
+**DOL não é pareado ao dólar nem a nenhuma moeda.** Não é stablecoin, não tem
+reserva de lastro, não é resgatável e o estúdio não faz recompra a preço fixo.
+Manter um peg exige emissor comprando *e* vendendo a preço fixo contra reserva
+integral — modelo USDC (lastro fiat + mint/burn + licença de moeda eletrônica)
+ou sobrecolateral tipo DAI. O `DolToken.sol` não tem função de mint: nenhum dos
+dois é sequer possível, e é assim de propósito.
+
+Onde o jogo precisa de preço em dólar — a criação de personagem — ele **cobra em
+USDC**, cujo peg é mantido pela Circle contra reserva real. O dólar sustenta o
+estúdio; o DOL é a moeda da competição e do mercado de personagens. As duas não
+se misturam.
+
 ### Por que a maioria dos jogos Web3 quebrou — e o que fazemos diferente
 
 | Erro clássico | Consequência | Resposta do Dolrath |
@@ -143,9 +157,10 @@ Detalhe completo por sistema no [EDD](../07-economy/GAME-ECONOMY-DESIGN.md). Res
 
 | Uso | Mecânica | Status |
 |---|---|---|
-| Mercado de personagens | comprar/vender heróis NFT precificados em DOL (taxa 5%: 2,5% burn / 2,5% treasury) | contrato pronto e testado; deploy pendente **[LAUNCH]** |
+| Mercado de personagens | comprar/vender heróis NFT precificados em DOL (taxa 5%: 2,5% burn / 2,5% treasury) | contrato pronto e testado; deploy na **[FASE 2]** |
 | Staking | lock de DOL → participação nas taxas do protocolo + peso de voto | **[LAUNCH]** |
 | Governança | veDOL (quantidade × duração do lock) | **[LAUNCH→ROADMAP]** |
+| Inscrição na temporada ranqueada | 100 DOL por herói, por temporada — **100% vira prêmio**. Aportada pelo estúdio na criação do herói; paga pelo jogador da temporada 2 em diante | **[AO VIVO]** |
 | Passe de temporada premium | pago em DOL com 50% queimado (ou fiat) | **[ROADMAP]** |
 | Coleções limitadas (lands, pets) | venda primária em DOL, parte queimada | **[ROADMAP]** |
 | Serviços de vaidade | renomear herói, slots de personagem — parte queimada | **[ROADMAP]** |
@@ -208,7 +223,18 @@ Regras duras, em contrato de vesting on-chain (não planilha):
 
 ## 11. Treasury
 
-**Entradas:** 2%/2,5% das taxas de marketplace (GOLD/DOL), GOLD gasto em compras on-chain (`GOLD_TREASURY_ADDRESS` **[AO VIVO]**), venda primária de coleções, receita fiat de passes/cosméticos, bucket DOL de 200M.
+**Entradas:** **os 2 USDC da criação de personagem, que custeiam NFT, imagem por IA e infra [AO VIVO]**, 2%/2,5% das taxas de marketplace (GOLD/DOL), GOLD gasto em compras on-chain (`GOLD_TREASURY_ADDRESS` **[AO VIVO]**), venda primária de coleções, receita fiat de passes/cosméticos, bucket DOL de 200M.
+
+**Não é entrada de tesouraria:** os 100 DOL de inscrição por herói vão
+integralmente para a **pool de premiação** — o tesouro custodia esse DOL, não o
+gasta. Na criação eles saem do bucket "Play & Achieve" (é emissão distribuída);
+da temporada 2 em diante são redistribuição pura entre jogadores, sem consumir
+bucket ([19 — Seasons](../19-seasons/README.md)).
+
+**Separação de moedas:** nenhum USDC entra na pool de premiação e nenhum prêmio
+é pago em dólar. O dólar é receita de um produto vendido (o herói); a temporada
+é uma competição em moeda interna. É essa separação que mantém o estúdio fora da
+posição de custodiar dinheiro de jogador.
 
 **Saídas (política):**
 

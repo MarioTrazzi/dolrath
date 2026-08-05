@@ -9,7 +9,7 @@ import type { BattleEvent, FighterView, EquipmentMap } from '@/components/battle
 import { races } from '@/lib/characterCreationData'
 import { CLASSES } from '@/lib/gameData'
 import { DUNGEONS } from '@/lib/dungeonAdventures'
-import { PVP_TOP10_DOL_SPLIT, PVP_RANK_WIN_POINTS } from '@/lib/pvpRewards'
+import { PVP_SEASON_DOL_SPLIT, PVP_RANK_WIN_POINTS } from '@/lib/pvpRewards'
 import type { TFunction } from '@/lib/i18n/t'
 
 export type JourneyRaceId = 'draconiano' | 'metamorfo' | 'humano' | 'elfo'
@@ -534,8 +534,10 @@ export function buildPvpScript(choice: JourneyChoice, t: TFunction): BattleStep[
 
 // ---------- Slide 8: ranking fake + premiação real ----------
 
-export const RANK_POOL_DOL = 1000
-export { PVP_TOP10_DOL_SPLIT, PVP_RANK_WIN_POINTS }
+// Pot ilustrativo: a pool real é a soma das inscrições (100 DOL por herói),
+// então 100 heróis na disputa = 10.000 DOL. Ver docs/19-seasons.
+export const RANK_POOL_DOL = 10_000
+export { PVP_SEASON_DOL_SPLIT, PVP_RANK_WIN_POINTS }
 
 export interface RankRow {
   rank: number

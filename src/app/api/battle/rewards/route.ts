@@ -12,10 +12,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { addExperienceToCharacter } from '@/lib/characterLevelSystem'
 import { addHistoryEntry } from '@/lib/characterHistory'
 import { regenAndPersist } from '@/lib/staminaServer'
-import { calculatePvpStaminaRewards, PVP_MIN_ENTRY_STAMINA, PVP_RANK_LOSS_POINTS, PVP_RANK_WIN_POINTS } from '@/lib/pvpRewards'
+import {
+  calculatePvpStaminaRewards,
+  PVP_MIN_ENTRY_STAMINA,
+  PVP_PAIR_DAILY_POINT_CAP,
+  PVP_RANK_LOSS_POINTS,
+  PVP_RANK_WIN_POINTS,
+} from '@/lib/pvpRewards'
 import { dailyGoldRemainingTx, applyGearWearTx } from '@/lib/dungeonRunServer'
 import { wearForPvpFight } from '@/lib/durability'
-import { ensureActivePvpSeason, applyPvpMatchRating } from '@/lib/pvpRanking'
+import { ensureActivePvpSeason, applyPvpMatchRating, isScoringSeason } from '@/lib/pvpRanking'
+import { isEnrolled } from '@/lib/seasonPool'
 import { advanceQuestProgress } from '@/lib/questServer'
 import { ActivityType } from '@prisma/client'
 
@@ -60,6 +67,48 @@ function noReward(reason: 'same_user' | 'below_min_stamina', winner: CharacterRo
     staminaCharged: 0, equipmentWear: [] as PvpWearEntry[],
   })
   return { success: true, skipped: reason, winner: side(winner), loser: side(loser) }
+}
+
+/**
+ * Por que esta luta NÃO deve pontuar (ouro e XP são pagos de qualquer jeito).
+ * Devolve null quando pontua normalmente.
+ *
+ * Três motivos, todos consequência de a pool pagar DOL de verdade:
+ *  • `offseason` — entressafra: o mundo roda, o placar não.
+ *  • `not_enrolled` — quem não pagou a inscrição não disputa a pool.
+ *  • `pair_cap` — duas contas trocando vitórias em série. O bloqueio de mesma
+ *    conta (`same_user`) não cobre conluio entre contas distintas; aqui, a
+ *    partir da N-ésima luta do dia contra o MESMO oponente, os pontos zeram.
+ */
+async function resolveRankingSkip(opts: {
+  season: { id: string; status: string }
+  winnerId: string
+  loserId: string
+  winnerUserId: string
+  loserUserId: string
+  since: Date
+}): Promise<string | null> {
+  if (!isScoringSeason(opts.season)) return 'offseason'
+
+  const [winnerIn, loserIn] = await Promise.all([
+    isEnrolled(opts.season.id, opts.winnerId),
+    isEnrolled(opts.season.id, opts.loserId),
+  ])
+  if (!winnerIn || !loserIn) return 'not_enrolled'
+
+  const pairMatchesToday = await prisma.pvpMatch.count({
+    where: {
+      createdAt: { gte: opts.since },
+      OR: [
+        { winnerUserId: opts.winnerUserId, loserUserId: opts.loserUserId },
+        { winnerUserId: opts.loserUserId, loserUserId: opts.winnerUserId },
+      ],
+    },
+  })
+  // O ledger desta luta já foi criado, então a 1ª luta do par conta 1.
+  if (pairMatchesToday > PVP_PAIR_DAILY_POINT_CAP) return 'pair_cap'
+
+  return null
 }
 
 /**
@@ -309,27 +358,47 @@ export async function POST(request: NextRequest) {
       console.error('PvP history write failed:', histErr)
     }
 
-    // Ranking — best-effort. Bots (User.isBot) também pontuam e aparecem no leaderboard;
-    // o payout DOL da season continua filtrando bots em /api/ranking/payout.
-    let ranking: { winnerPoints?: number; loserPoints?: number } = {}
+    // Ranking. Bots (User.isBot) também pontuam e aparecem no leaderboard; o
+    // payout DOL continua filtrando bots em getPayoutBoard.
+    //
+    // A luta SEMPRE paga ouro e XP — o que as regras abaixo decidem é só se ela
+    // conta pontos. `skipped` volta no payload para a UI poder avisar em vez de
+    // o jogador descobrir sozinho que lutou à toa.
+    let ranking: { winnerPoints?: number; loserPoints?: number; skipped?: string } = {}
     {
-      try {
-        ranking = await applyPvpMatchRating({
-          matchKey,
-          seasonId: season.id,
-          winnerId: battleResult.winnerId,
-          loserId: battleResult.loserId,
-          winPoints: PVP_RANK_WIN_POINTS,
-          lossPoints: PVP_RANK_LOSS_POINTS,
-          winnerStaminaSpent: winnerCharged,
-          loserStaminaSpent: loserCharged,
-          winnerGold,
-          loserGold,
-          winnerXp,
-          loserXp,
-        })
-      } catch (rankErr) {
-        console.error('PvP ranking update failed:', rankErr)
+      const rankSkip = await resolveRankingSkip({
+        season,
+        winnerId: battleResult.winnerId,
+        loserId: battleResult.loserId,
+        winnerUserId: winner.userId,
+        loserUserId: loser.userId,
+        since: startOfDay,
+      })
+
+      if (rankSkip) {
+        ranking = { skipped: rankSkip }
+      } else {
+        try {
+          ranking = await applyPvpMatchRating({
+            matchKey,
+            seasonId: season.id,
+            winnerId: battleResult.winnerId,
+            loserId: battleResult.loserId,
+            winPoints: PVP_RANK_WIN_POINTS,
+            lossPoints: PVP_RANK_LOSS_POINTS,
+            winnerStaminaSpent: winnerCharged,
+            loserStaminaSpent: loserCharged,
+            winnerGold,
+            loserGold,
+            winnerXp,
+            loserXp,
+          })
+        } catch (rankErr) {
+          // Antes isso era engolido em silêncio: a luta pagava ouro e não
+          // pontuava sem ninguém ficar sabendo.
+          console.error('PvP ranking update failed:', rankErr)
+          ranking = { skipped: 'error' }
+        }
       }
     }
 
@@ -345,6 +414,7 @@ export async function POST(request: NextRequest) {
         rankPoints: ranking.winnerPoints,
         equipmentWear: equipmentWear[battleResult.winnerId] ?? [],
       },
+      rankingSkipped: ranking.skipped,
       loser: {
         id: battleResult.loserId,
         xpGained: loserXp,

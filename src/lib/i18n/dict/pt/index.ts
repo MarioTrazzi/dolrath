@@ -14,6 +14,7 @@ import { INVENTORY_PT } from './inventory'
 import { REPAIRBENCH_PT } from './repairbench'
 import { SHOP_PT } from './shop'
 import { ENHANCEMENT_PT } from './enhancement'
+import { RANKING_PT } from './ranking'
 
 export const PT_DICT: Record<string, string> = {
   ...COMMON_PT,
@@ -30,4 +31,5 @@ export const PT_DICT: Record<string, string> = {
   ...REPAIRBENCH_PT,
   ...SHOP_PT,
   ...ENHANCEMENT_PT,
+  ...RANKING_PT,
 }

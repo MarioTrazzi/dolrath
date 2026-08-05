@@ -340,7 +340,9 @@ export default function CharacterCreationPage() {
     );
   }
 
-  // Payment gate (testnet): require a fixed DOL transfer before proceeding.
+  // Payment gate: require the USDC creation fee before proceeding. The dollar
+  // pays for the hero (NFT, AI image, infra) — the season prize pool is in DOL
+  // and never touches it.
   if (!creationPaymentTxHash) {
     return (
       <div className="min-h-screen text-white p-8 relative">
@@ -357,7 +359,10 @@ export default function CharacterCreationPage() {
           <div className="rounded-[4px] border border-[#46464c] bg-[#1e1e21]/95 p-8 shadow-2xl shadow-black/60">
             <h2 className="text-2xl font-bold text-text-primary mb-2">{t('Creation fee')}</h2>
             <p className="text-text-secondary mb-6">
-              {t('To create a character on this testnet, you need to pay {n} DOL.', { n: creationCostDol })}
+              {t('Creating a hero costs {n} USDC — the NFT, the AI portrait and the servers.', { n: creationCostDol })}
+            </p>
+            <p className="text-text-secondary mb-6">
+              {t('It also enrolls your hero in the current season, whose prize pool is paid in DOL.')}
             </p>
 
             {paymentError && <p className="text-error mb-4">{paymentError}</p>}
@@ -367,7 +372,7 @@ export default function CharacterCreationPage() {
               disabled={isPaying}
               className="w-full flex items-center justify-center gap-2 rounded-[3px] border border-[#8a6d3b] bg-gradient-to-b from-[#3a3325] to-[#241f16] px-6 py-3 font-semibold tracking-wide text-[#e7c682] shadow-[inset_0_1px_0_rgba(231,198,130,0.25),0_0_14px_rgba(201,162,95,0.2)] transition-all hover:border-[#c9a25f] hover:brightness-125 disabled:opacity-50"
             >
-              {isPaying ? t('Processing payment...') : t('Pay {n} DOL', { n: creationCostDol })}
+              {isPaying ? t('Processing payment...') : t('Pay {n} USDC', { n: creationCostDol })}
             </button>
 
             <p className="text-xs text-text-secondary mt-4">

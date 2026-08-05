@@ -1,7 +1,7 @@
 'use client'
 
 // Slide 10 — Ranking PvP + premiação: top 10 ilustrativo com o herói do
-// visitante em #3 e o split REAL do pot em DOL (PVP_TOP10_DOL_SPLIT).
+// visitante em #3 e o split REAL do pot em DOL (PVP_SEASON_DOL_SPLIT).
 // Fecho do arco: CTA "Comece sua jornada".
 
 import React, { useEffect, useState } from 'react'
@@ -12,7 +12,7 @@ import { useI18n } from '@/lib/i18n/I18nProvider'
 import {
   buildRankRows,
   RANK_POOL_DOL,
-  PVP_TOP10_DOL_SPLIT,
+  PVP_SEASON_DOL_SPLIT,
   type JourneySlideProps,
 } from '../journeyData'
 
@@ -47,7 +47,7 @@ export default function Slide10Ranking({ active }: JourneySlideProps) {
   const { step } = useSlideScript(active, TIMES, { loop: false })
 
   const rows = buildRankRows({ raceId, classId })
-  const heroPrize = Math.round(RANK_POOL_DOL * PVP_TOP10_DOL_SPLIT[2])
+  const heroPrize = Math.round(RANK_POOL_DOL * PVP_SEASON_DOL_SPLIT[2])
   const countedPrize = useCountUp(heroPrize, step >= 2)
 
   return (
@@ -60,7 +60,9 @@ export default function Slide10Ranking({ active }: JourneySlideProps) {
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto rounded-xl border border-white/10 bg-black/30 backdrop-blur-md [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {rows.map((row, i) => {
-            const prize = Math.round(RANK_POOL_DOL * PVP_TOP10_DOL_SPLIT[row.rank - 1])
+            // 1 casa: com pot de 100 a cauda do top 20 é fracionária (o 20º
+            // leva 1,0 DOL) e arredondar para inteiro apagaria a curva.
+            const prize = Math.round(RANK_POOL_DOL * PVP_SEASON_DOL_SPLIT[row.rank - 1] * 10) / 10
             const isHero = !!row.isHero
             return (
               <motion.div

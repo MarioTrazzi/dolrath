@@ -18,9 +18,16 @@ const CHAINS: Record<string, Omit<ChainInfo, 'chainIdDec' | 'chainIdHex'>> = {
     blockExplorerUrls: ['https://polygonscan.com/'],
     isMainnet: true,
   },
+  // ⚠️ `rpc-amoy.polygon.technology` saiu do ar (o host perdeu o registro DNS,
+  // não é timeout). Era o RPC que ia para a MetaMask no wallet_addEthereumChain,
+  // então o testador não conseguia nem ADICIONAR a rede. Dois provedores aqui
+  // porque a carteira cai para o próximo quando o primeiro não responde.
   '80002': {
     name: 'Polygon Amoy',
-    rpcUrls: ['https://rpc-amoy.polygon.technology/'],
+    rpcUrls: [
+      'https://polygon-amoy-bor-rpc.publicnode.com',
+      'https://polygon-amoy.drpc.org',
+    ],
     blockExplorerUrls: ['https://amoy.polygonscan.com/'],
     isMainnet: false,
   },

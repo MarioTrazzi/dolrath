@@ -47,7 +47,13 @@ export const STEP_COST = { minor: 4, main: 8, boss: 6 } as const
 // conta como VIVA e o MESMO herói não pode abrir outra run em outra aba/janela —
 // evita farmar o mesmo personagem em paralelo. Se a aba cair (fechar/crashar), o
 // heartbeat para e o lock expira sozinho após esta janela, liberando o herói.
-export const RUN_LIVE_WINDOW_MS = 60_000
+//
+// A janela é folgada de propósito: com a aba em SEGUNDO PLANO o browser espaça
+// os timers da página, então o heartbeat pode chegar bem depois dos 20s
+// nominais. Apertá-la faria a run idle passar por morta e o /start seguinte
+// (inclusive o do re-run automático) a abandonaria. O custo é o aviso "herói em
+// uso" demorar até ~2,5 min para liberar depois de um crash de verdade.
+export const RUN_LIVE_WINDOW_MS = 150_000
 export function isRunLive(run: { status: string; updatedAt: Date }): boolean {
   return run.status === 'active' && Date.now() - new Date(run.updatedAt).getTime() < RUN_LIVE_WINDOW_MS
 }

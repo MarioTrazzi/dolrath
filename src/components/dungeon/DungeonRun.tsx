@@ -9,6 +9,7 @@ import { buildTrailPoints, NarrationDialog, DiceOverlay } from '@/components/dun
 import WalkScene, { WALK_SCROLL_MS, type WalkMode, type WalkTrailMark } from '@/components/dungeon/WalkScene'
 import DungeonScene from '@/components/dungeon/scene/DungeonScene'
 import { useT } from '@/lib/i18n/I18nProvider'
+import { useIdleScheduler } from '@/hooks/useIdleScheduler'
 import { generateSceneMap } from '@/lib/dungeonScene/generateMap'
 import { dungeonSceneEnabled } from '@/lib/dungeonScene/enabled'
 import { planNodeContents, type SpotContent } from '@/lib/dungeonScene/nodeContents'
@@ -520,6 +521,20 @@ const FLASH_MS = 560
  * do combate: ainda é mapa, não arena, e o mundo gerado (ver generateMap.ts)
  * é uma trilha estreita — alargar demais só exporia vazio nas pontas. */
 const EXPLORE_WIDE_MAX_W = 720
+/**
+ * ⏱️ Watchdog da caminhada — ver o efeito que os usa.
+ *
+ * Aba OCULTA: o loop de animação da cena não corre, então ninguém avisa que o
+ * herói chegou. A espera é curta só para dar chance de a chegada visual ganhar
+ * a corrida caso a aba volte nesse instante.
+ * Aba VISÍVEL: rede de segurança para a caminhada que nunca chega (um /step
+ * que falhou deixa o nó marcado como alcançado na cena, e ela não reemite).
+ * Folgado de propósito — o maior salto entre nós dá ~4s em linha reta e o
+ * caminho real contorna a mata, então um valor apertado cortaria caminhada
+ * legítima e resolveria o nó com o herói ainda a meio da trilha.
+ */
+const HIDDEN_ARRIVE_MS = 300
+const STUCK_ARRIVE_MS = 20000
 
 /**
  * 📱 Moldura da run — a EXPLORAÇÃO é mobile-first em qualquer tela; o COMBATE não.
@@ -742,6 +757,19 @@ export default function DungeonRun({
    * no bolsão; `advance()` empurra pro próximo e a cena caminha até lá sozinha.
    */
   const [sceneTarget, setSceneTarget] = useState(0)
+  /**
+   * 🌀 Pedido de teletransporte do herói na cena.
+   *
+   * Com a aba em segundo plano o loop de animação não corre e os nós são
+   * resolvidos "às cegas" (ver o watchdog da caminhada). Quando o jogador
+   * volta, o herói está desenhado lá atrás: em vez de fazê-lo atravessar o
+   * mapa correndo, ele é plantado no nó lógico atual. `seq` é o selo — o mesmo
+   * nó pode precisar de dois warps ao longo de uma run.
+   */
+  const [warpTo, setWarpTo] = useState<{ node: number; seq: number } | null>(null)
+  const warpSeqRef = useRef(0)
+  /** A cena está dessincronizada porque um nó foi resolvido sem animação. */
+  const headlessResolvedRef = useRef(false)
   /**
    * O que há em CADA nó, sabido desde a entrada na masmorra.
    *
@@ -1028,6 +1056,15 @@ export default function DungeonRun({
    * devolve o passo (ver `staminaRefund` em flushRunRewards).
    */
   const stepPrefetchRef = useRef<StepPrefetch | null>(null)
+  /**
+   * Maior nó cujo /step já foi RECLAMADO por algum caminho de chegada.
+   *
+   * Passaram a existir dois: a chegada visual (o rAF da cena) e o watchdog que
+   * resolve o nó quando o rAF não corre. O /step só é idempotente em nó de
+   * COMBATE — em nó de ACHADO ele avança o cursor e cobra stamina de novo. Esta
+   * reserva monotônica é o que impede o débito dobrado.
+   */
+  const stepClaimRef = useRef(-1)
   // Herói já em uso em outra aba (lock vivo): bloqueia a run com um aviso.
   const [blocked, setBlocked] = useState<string | null>(null)
   // Só o BOSS usa estes refs (o encontro comum extrai o monstro direto do
@@ -1126,12 +1163,14 @@ export default function DungeonRun({
   const bannerKey = useRef(0)
 
   // ---------- Timers ----------
-  const timeouts = useRef<ReturnType<typeof setTimeout>[]>([])
-  const later = useCallback((fn: () => void, ms: number) => {
-    const t = setTimeout(fn, ms)
-    timeouts.current.push(t)
-  }, [])
-  useEffect(() => () => { timeouts.current.forEach(clearTimeout) }, [])
+  // Agendamento pelo relógio idle: em aba oculta o Chrome estrangula os timers
+  // da página (1 disparo/min), e como TODO o combate, o auto-revive e o re-run
+  // automático passam por aqui, a run inteira arrastava. Trocar só este motor
+  // conserta as ~50 chamadas a `later()` de uma vez. Ver lib/idleClock.
+  // A lista de timers pendentes saiu junto: o `dispose()` do agendador (no
+  // unmount do hook) já cancela tudo, e a lista antiga só crescia — nunca tinha
+  // splice, então uma run longa de farm acumulava milhares de ids.
+  const { later, hiddenRef, onVisible } = useIdleScheduler()
 
   // 3 piscadas duram FLASH_MS; passou disso sem resposta, a espera vira calma.
   // Timer próprio (não o `later`, que só limpa na desmontagem) para que uma
@@ -1241,9 +1280,15 @@ export default function DungeonRun({
         }
       } catch { /* rede instável: tenta no próximo tick */ }
     }
-    const id = setInterval(beat, 25000)
-    return () => { stop = true; clearInterval(id) }
-  }, [runReady, phase])
+    // Cadeia auto-reagendada pelo relógio idle, não `setInterval`: em aba oculta
+    // o intervalo cru cairia para 1 disparo/min e a run passaria por morta na
+    // janela de vida do servidor (ver RUN_LIVE_WINDOW_MS) — aí o /start seguinte,
+    // inclusive o do re-run automático, a abandonaria.
+    let cancel: (() => void) | null = null
+    const loop = () => { void beat(); cancel = later(loop, 20000) }
+    cancel = later(loop, 20000)
+    return () => { stop = true; cancel?.() }
+  }, [runReady, phase, later])
 
   // Esconde a dica do rodapé depois de ~30s (aparece uma vez no início da run).
   useEffect(() => {
@@ -1534,6 +1579,13 @@ export default function DungeonRun({
   // Botão principal: treadmill (scroll → approach → /step) ou path clássico.
   const finishWalkStep = useCallback(async (dest: number) => {
     if (walkStepLockRef.current) return
+    // Reserva do nó: dedup entre a chegada visual (rAF) e o watchdog de aba
+    // oculta. O lock acima só barra concorrência; esta reserva barra a
+    // repetição SEQUENCIAL, que é o que custaria stamina em nó de achado.
+    // Depois do lock, senão uma chamada barrada pelo lock deixaria o nó
+    // reservado sem nunca executá-lo — e a run travaria de vez.
+    if (dest <= stepClaimRef.current) return
+    stepClaimRef.current = dest
     walkStepLockRef.current = true
 
     // Promessa já em voo desde o primeiro passo (cena). Se ela JÁ assentou não há
@@ -1555,6 +1607,9 @@ export default function DungeonRun({
       setWalkMode('idle')
       setMoving(false)
       walkStepLockRef.current = false
+      // Devolve a reserva: o nó NÃO foi consumido, então a próxima tentativa
+      // (watchdog ou nova chegada) precisa poder pedi-lo de novo.
+      stepClaimRef.current = dest - 1
       // status 0 = falha de rede, ou runId que nunca chegou (nada a avisar aqui:
       // o /start já reclama por conta própria).
       if (outcome.status === 0 && !runIdRef.current) return
@@ -1641,10 +1696,14 @@ export default function DungeonRun({
    */
   const handleSceneReachSpot = useCallback(
     (spot: MapSpot) => {
-      if (spot.nodeIndex <= tokenIdx) return // já resolvido (chegada repetida)
+      // Ref, não state: com o watchdog resolvendo nós fora do ciclo de render,
+      // o `tokenIdx` de state fica um render atrás e deixaria passar uma
+      // chegada já resolvida. (A guarda real é o `stepClaimRef`; esta é só o
+      // curto-circuito barato.)
+      if (spot.nodeIndex <= tokenIdxRef.current) return // já resolvido
       finishWalkStep(spot.nodeIndex)
     },
-    [tokenIdx, finishWalkStep]
+    [finishWalkStep]
   )
 
   const advance = async () => {
@@ -1655,7 +1714,11 @@ export default function DungeonRun({
     // o /step vem logo em seguida, então continua exigindo a sessão aberta.
     if (!startedRef.current) return
     if (!useScene && (!runReady || !runIdRef.current)) return
-    if (useScene && !sceneReady) return // 1ª entrada: espera os assets da cena carregarem
+    // 1ª entrada: espera os assets da cena carregarem. O portão é puramente
+    // ESTÉTICO (não ter o mapa pintado no primeiro passo), e a escotilha que o
+    // abre é um setTimeout de 8s — que, estrangulado em aba oculta, viraria um
+    // minuto parado no re-run automático. Com ninguém olhando, segue em frente.
+    if (useScene && !sceneReady && !hiddenRef.current) return
     const dest = tokenIdx + 1
 
     // --- Cena: o herói caminha sozinho até o bolsão e avisa em onReachSpot ---
@@ -1827,7 +1890,9 @@ export default function DungeonRun({
     const list = (Array.isArray(group) ? group : [group]).filter(m => m.hp > 0)
     if (list.length === 0) return
     if (phase === 'combat' || combatIntro) return
-    if (reducedMotionRef.current) { startCombat(list); return }
+    // Aba oculta entra direto: a investida é cinema, e com ninguém olhando ela
+    // é só latência morta no meio de uma run automática.
+    if (reducedMotionRef.current || hiddenRef.current) { startCombat(list); return }
     setCombatIntro(true)
     setEncounterZoom(ZOOM_CHARGE)
     later(() => startCombat(list), COMBAT_INTRO_MS)
@@ -2915,11 +2980,15 @@ export default function DungeonRun({
   const closeRunRef = useRef(closeRunOnServer)
   closeRunRef.current = closeRunOnServer
   useEffect(() => {
-    const bail = () => closeRunRef.current('retreat')
+    // `persisted` distingue a página que MORRE da que só vai para o bfcache.
+    // Trocar de app no celular dispara `pagehide` com persisted=true — sem esta
+    // checagem, mandar o jogo para segundo plano ENCERRAVA a run, que é o
+    // oposto do que um jogo idle promete.
+    const bail = (e: PageTransitionEvent) => { if (!e.persisted) closeRunRef.current('retreat') }
     window.addEventListener('pagehide', bail)
     return () => {
       window.removeEventListener('pagehide', bail)
-      bail()
+      closeRunRef.current('retreat')
     }
   }, [])
 
@@ -3100,13 +3169,12 @@ export default function DungeonRun({
   // mais clicar no dado, só no ataque. Vale mesmo fora do piloto automático.
   useEffect(() => {
     if (phase !== 'combat' || stage !== 'playerRoll' || hasRolled || combatEnded || exitConfirm) return
-    const t = setTimeout(() => {
+    return later(() => {
       if (pendingAbility) handleAbilityRoll()
       else handlePlayerAttackRoll()
     }, 400)
-    return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, stage, hasRolled, combatEnded, exitConfirm, pendingAbility, pendingAttack])
+  }, [phase, stage, hasRolled, combatEnded, exitConfirm, pendingAbility, pendingAttack, later])
 
   // ---------- Piloto automático ----------
   // Dano "típico" estimado de um golpe (core × pior sorte do dado). Serve só pro piloto
@@ -3154,8 +3222,8 @@ export default function DungeonRun({
     if (!autoCombat || phase !== 'combat' || combatEnded || exitConfirm) return
     let cancelled = false
     const fire = (fn: () => void, ms: number) => {
-      const t = setTimeout(() => { if (!cancelled) fn() }, ms)
-      return () => { cancelled = true; clearTimeout(t) }
+      const cancel = later(() => { if (!cancelled) fn() }, ms)
+      return () => { cancelled = true; cancel() }
     }
 
     if (stage === 'playerSelect') return fire(() => {
@@ -3232,8 +3300,8 @@ export default function DungeonRun({
     if (moving || exploreRolling || walkBusy || combatIntro) return
     let cancelled = false
     const fire = (fn: () => void, ms: number) => {
-      const t = setTimeout(() => { if (!cancelled) fn() }, ms)
-      return () => { cancelled = true; clearTimeout(t) }
+      const cancel = later(() => { if (!cancelled) fn() }, ms)
+      return () => { cancelled = true; cancel() }
     }
 
     // Poções entre nós (após combate/loot, na trilha): reabastece HP/MP antes de
@@ -3313,11 +3381,51 @@ export default function DungeonRun({
     autoWalkWarnedRef.current = false
 
     // Primeiro passo mais lento: dá tempo de ler a narração de entrada.
-    const t = setTimeout(() => { advance() }, tokenIdx === 0 ? 1500 : 700)
-    return () => clearTimeout(t)
+    return later(() => { advance() }, tokenIdx === 0 ? 1500 : 700)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [useScene, auto, blocked, exitConfirm, showItems, phase, walkBusy, exploreRolling,
       combatIntro, atBoss, runReady, stamina, tokenIdx, sceneReady])
+
+  /**
+   * ⏱️ WATCHDOG DA CAMINHADA — quem resolve o nó quando a animação não corre.
+   *
+   * O avanço LÓGICO (finishWalkStep) estava amarrado à chegada VISUAL
+   * (onReachSpot, disparado só pelo requestAnimationFrame da cena). Aba em
+   * segundo plano = rAF parado = `moving` travado em true = os pilotos abortando
+   * no `walkBusy`, com a stamina do nó já debitada no servidor. Era o que
+   * congelava a run inteira ao trocar de aba.
+   *
+   * Aqui o nó é resolvido sem esperar o desenho; a cena é ressincronizada quando
+   * o jogador volta (ver `warpTo`). O `stepClaimRef` garante que só um dos dois
+   * caminhos consuma o /step.
+   */
+  useEffect(() => {
+    if (!useScene || phase !== 'explore') return
+    if (!moving || sceneTarget <= tokenIdx) return
+    if (blocked || exitConfirm || stopRequestedRef.current) return
+    const dest = sceneTarget
+    const wait = hiddenRef.current ? HIDDEN_ARRIVE_MS : STUCK_ARRIVE_MS
+    return later(() => {
+      if (tokenIdxRef.current >= dest) return // a chegada visual ganhou a corrida
+      if (hiddenRef.current) headlessResolvedRef.current = true
+      finishWalkStep(dest)
+    }, wait)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useScene, phase, moving, sceneTarget, tokenIdx, blocked, exitConfirm, finishWalkStep, later])
+
+  /**
+   * 🌀 Voltou para a aba: planta o herói no nó que a lógica já alcançou.
+   *
+   * Sem isto ele atravessaria o mapa inteiro correndo atrás do atraso — e a
+   * física da cena é clampada por frame (não faz catch-up), então seria uma
+   * caminhada longa e sem sentido com o mundo já resolvido.
+   */
+  useEffect(() => onVisible(() => {
+    if (!headlessResolvedRef.current) return
+    headlessResolvedRef.current = false
+    warpSeqRef.current += 1
+    setWarpTo({ node: tokenIdxRef.current, seq: warpSeqRef.current })
+  }), [onVisible])
 
   // ============================================================
   // RENDER
@@ -3619,6 +3727,7 @@ export default function DungeonRun({
                 heroClass={character.class}
                 contents={sceneContents}
                 targetNode={sceneTarget}
+                warpTo={warpTo}
                 visitedNodes={sceneVisited}
                 /* Congela fora da exploração e no que toma a tela. A narração do
                    Mestre fecha sozinha e não deve travar o passo a cada nó.

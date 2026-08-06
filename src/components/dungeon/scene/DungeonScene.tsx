@@ -62,6 +62,16 @@ export interface DungeonSceneProps {
   focusNode?: number | null
   onReachSpot?: (spot: MapSpot) => void
   /**
+   * 🌀 Ressincronização: a run resolveu nós SEM este loop de animação — é o que
+   * acontece com a aba em segundo plano, onde o browser congela o
+   * requestAnimationFrame mas a run automática segue avançando. Ao voltar, o
+   * herói é PLANTADO no nó lógico atual em vez de atravessar o mapa correndo
+   * atrás do atraso (a física é clampada por quadro, não faz catch-up).
+   *
+   * `seq` é o selo: o mesmo nó pode precisar de dois warps ao longo da run.
+   */
+  warpTo?: { node: number; seq: number } | null
+  /**
    * Dispara UMA vez quando o MAPA INTEIRO terminou de carregar: chão, sprites do
    * bioma (que incluem os objetos de achado), boneco/retrato do herói e as
    * FOLHAS DOS MONSTROS da run. O pai usa para segurar um loading (o d20) e não
@@ -248,6 +258,7 @@ export default function DungeonScene({
   cinematicZoom = 1,
   focusNode = null,
   onReachSpot,
+  warpTo = null,
   onReady,
   className = '',
 }: DungeonSceneProps) {
@@ -314,6 +325,29 @@ export default function DungeonScene({
   focusRef.current = focusNode
   onReachRef.current = onReachSpot
   mapRef.current = map
+
+  /**
+   * 🌀 Teletransporte de ressincronização (ver a prop `warpTo`).
+   *
+   * Mexer em ref dentro de um efeito é seguro aqui: o loop só LÊ estes refs, e
+   * o efeito roda fora do quadro. A câmera vai junto (sem `camReadyRef` falso o
+   * enquadramento faria uma varredura pelo mapa) e todos os nós anteriores
+   * entram em `reachedRef`, senão o herói tentaria "chegar" de novo neles.
+   */
+  useEffect(() => {
+    if (!warpTo) return
+    const m = mapRef.current
+    const spot = m.spots.find(s => s.nodeIndex === warpTo.node)
+    if (!spot) return
+    heroRef.current = { ...spot.pos }
+    camRef.current = { ...spot.pos }
+    camReadyRef.current = true
+    queueRef.current = []
+    queuedNodeRef.current = -1
+    moveSpeedRef.current = 0
+    for (const s of m.spots) if (s.nodeIndex <= warpTo.node) reachedRef.current.add(s.nodeIndex)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [warpTo?.seq])
 
   useEffect(() => {
     let cancelled = false

@@ -154,11 +154,56 @@ function installFetchStub() {
   }
 }
 
+/**
+ * 🌑 Simulador de ABA EM SEGUNDO PLANO — `?bg=1` mostra o botão.
+ *
+ * Reproduz, com a aba na sua frente, as DUAS coisas que o browser faz quando o
+ * jogo vai para trás: `document.hidden` vira true (com o `visibilitychange`
+ * correspondente) e o `requestAnimationFrame` para de correr. Era esse rAF
+ * parado que congelava a run inteira — dá para ver a stamina descendo mesmo com
+ * o mundo imóvel, e o herói sendo replantado no nó certo ao "voltar".
+ *
+ * O que ele NÃO simula: o estrangulamento dos timers da página (1 disparo/min),
+ * que é o que o relógio em worker resolve. Aqui os timers correm normais.
+ */
+function useFakeBackground() {
+  const [faking, setFaking] = useState(false)
+  useEffect(() => {
+    if (!faking) return
+    const realRaf = window.requestAnimationFrame
+    const ownHidden = Object.getOwnPropertyDescriptor(Document.prototype, 'hidden')
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true })
+    window.requestAnimationFrame = (() => 0) as typeof window.requestAnimationFrame
+    document.dispatchEvent(new Event('visibilitychange'))
+    return () => {
+      window.requestAnimationFrame = realRaf
+      delete (document as unknown as Record<string, unknown>).hidden
+      if (ownHidden) Object.defineProperty(Document.prototype, 'hidden', ownHidden)
+      document.dispatchEvent(new Event('visibilitychange'))
+    }
+  }, [faking])
+  return { faking, setFaking }
+}
+
+function BackgroundToggle() {
+  const { faking, setFaking } = useFakeBackground()
+  return (
+    <button
+      onClick={() => setFaking(v => !v)}
+      className="fixed bottom-3 right-3 z-[9999] rounded-lg border border-amber-500/40 bg-zinc-900/95 px-3 py-2 text-xs font-semibold text-amber-200 shadow-lg"
+    >
+      {faking ? '▶ voltar para a aba' : '⏸ simular segundo plano'}
+    </button>
+  )
+}
+
 export default function DungeonMockPage() {
   const [ready, setReady] = useState(false)
+  const [bgTool, setBgTool] = useState(false)
   const [hero, setHero] = useState<DungeonCharacter>(CHAR)
   useEffect(() => {
     installFetchStub()
+    setBgTool(new URLSearchParams(window.location.search).get('bg') === '1')
     // Raça/classe pela query — o boneco da cena vem de heroSprites.ts.
     const q = new URLSearchParams(window.location.search)
     const race = q.get('race')
@@ -170,10 +215,13 @@ export default function DungeonMockPage() {
   }, [])
   if (!ready) return null
   return (
-    <DungeonRun
-      dungeon={DUNGEON}
-      character={hero}
-      onExit={() => window.location.reload()}
-    />
+    <>
+      <DungeonRun
+        dungeon={DUNGEON}
+        character={hero}
+        onExit={() => window.location.reload()}
+      />
+      {bgTool && <BackgroundToggle />}
+    </>
   )
 }

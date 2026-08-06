@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma'
 export const dynamic = 'force-dynamic'
 
 // 💓 Mantém o LOCK VIVO da run (anti-duplicata entre abas). A aba que está jogando
-// chama isto a cada ~25s para tocar updatedAt, mantendo a run "viva" enquanto o
+// chama isto a cada ~20s para tocar updatedAt, mantendo a run "viva" enquanto o
 // jogador explora ocioso (entre /step e /combat). Devolve `active` — se vier false,
 // a run foi encerrada/assumida em outro lugar e o cliente deve parar.
 export async function POST(req: Request) {

@@ -3,16 +3,18 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { getItemVisual, getItemTypeLabel, getItemCategory } from '@/lib/itemVisuals';
-import { itemImagePath } from '@/lib/itemCatalog';
+import { itemImagePath, getForgeMaterialByName, getCatalogItemByName } from '@/lib/itemCatalog';
 import {
   getDisplayName,
   getLevelLabel,
   REPAIR_PER_DUPLICATE,
   getGearCategory,
   ACCESSORY_REPAIR_DUST_NAME,
-  accessoryRepairGoldCost,
 } from '@/lib/enhancementSystem';
+import { repairPlan, type RepairSource } from '@/lib/repairPricing';
 import { sellUnitPrice as sellPrice } from '@/lib/sellPricing';
+import { buyGoldOnChain, isInsufficientGold, parseNeededGold } from '@/lib/buyGold';
+import { confirmBuyGold } from '@/lib/buyGoldPrompt';
 import { formatItemStats } from '@/lib/itemStats';
 import { resolveImageUrl } from '@/lib/imageUrl';
 import EnhancementDialog, { EnhanceablePickerItem } from '@/components/EnhancementDialog';
@@ -184,8 +186,15 @@ export default function RepairBench({
   // Joia + gold, sempre, não importa a raridade. Arma/armadura seguem a regra
   // de sempre: raridade decide a fonte (cópia comum/incomum, estilhaço rara+).
   const isAccessorySelected = selected ? getGearCategory(selected.item.type) === 'ACCESSORY' : false;
+  // Mesma cadeia de fallback do servidor (stats → catálogo → COMMON): sem ela, uma
+  // peça rara sem `stats.rarity` na linha do DB mostraria preço de cópia aqui e o
+  // servidor cobraria estilhaço.
   const itemRarity = selected
-    ? String((selected.item.stats as Record<string, unknown> | null)?.rarity ?? '').toUpperCase()
+    ? String(
+        (selected.item.stats as Record<string, unknown> | null)?.rarity ??
+          getCatalogItemByName(selected.item.name)?.rarity ??
+          'COMMON'
+      ).toUpperCase()
     : '';
   const usesMemoryShard = !isAccessorySelected && ['RARE', 'EPIC', 'LEGENDARY'].includes(itemRarity);
 
@@ -223,16 +232,51 @@ export default function RepairBench({
     ? Math.round((selected.durability / selected.maxDurability) * 100)
     : 0;
 
-  // Prévia do custo em gold do reparo (só acessório cobra — cópia/estilhaço são de graça).
-  const repairGoldCostSingle = isAccessorySelected && selected ? accessoryRepairGoldCost(selected.item.goldPrice, 1) : 0;
-  const repairGoldCostFull =
-    isAccessorySelected && selected
-      ? accessoryRepairGoldCost(selected.item.goldPrice, Math.min(repairUnitsNeeded, repairUnitsAvailable))
+  // De onde sai a durabilidade — mesma classificação que a rota faz no servidor.
+  const repairSource: RepairSource = isAccessorySelected ? 'DUST' : usesMemoryShard ? 'SHARD' : 'COPY';
+
+  // Preço de balcão de UMA unidade: cópia = preço da própria peça (o ferreiro
+  // forja uma lisa de reposição); Pó de Joia = preço de catálogo do material.
+  // Estilhaço de Memória não se compra (gate de chefe).
+  const repairUnitPrice =
+    repairSource === 'COPY'
+      ? Math.max(0, Math.floor(selected?.item.goldPrice ?? 0))
+      : repairSource === 'DUST'
+      ? Math.max(0, Math.floor(getForgeMaterialByName(ACCESSORY_REPAIR_DUST_NAME)?.goldValue ?? 0))
       : 0;
+  const canBuyMissing = repairSource !== 'SHARD' && repairUnitPrice > 0;
+  // Tem material — na bolsa ou no balcão do ferreiro (o slot não fica "apagado").
+  const materialAtHand = repairUnitsAvailable > 0 || canBuyMissing;
+
+  // Prévia servidor-fiel: a MESMA função pura que a rota usa para cobrar.
+  const planFor = useCallback(
+    (mode: 'single' | 'full') =>
+      repairPlan({
+        missing,
+        unitsOwned: repairUnitsAvailable,
+        mode,
+        source: repairSource,
+        unitPrice: repairUnitPrice,
+        itemGoldPrice: selected?.item.goldPrice ?? 0,
+        allowBuy: canBuyMissing,
+      }),
+    [missing, repairUnitsAvailable, repairSource, repairUnitPrice, selected, canBuyMissing]
+  );
+  const singlePlan = planFor('single');
+  const fullPlan = planFor('full');
+
+  // Reparar comprando tudo pode sair mais caro que comprar a peça nova — só vale
+  // a pena em peça aprimorada (+N), que o reparo preserva. Avisa quando não vale.
+  const cheaperToRebuy =
+    selected != null &&
+    selected.enhancementLevel === 0 &&
+    repairSource === 'COPY' &&
+    fullPlan.totalGold > (selected.item.goldPrice ?? 0);
 
   const handleRepair = async (mode: 'single' | 'full') => {
     if (!selected || !selectedCharacterId) return;
-    if (repairUnitsAvailable < 1) {
+    const plan = mode === 'full' ? fullPlan : singlePlan;
+    if (plan.blocked) {
       const itemDisplayName = localizeItemName(selected.item.name, locale);
       toast.error(
         isAccessorySelected
@@ -246,16 +290,50 @@ export default function RepairBench({
       );
       return;
     }
+    // O ferreiro vai vender material: confirma o gasto antes (mesmo padrão da venda).
+    if (plan.buyCost > 0) {
+      const ok = window.confirm(
+        t(
+          'The blacksmith will sell {units} {mat} and melt it on the spot for {gold} 🪙.\nDurability: {from} → {to}. Continue?',
+          {
+            units: plan.unitsBought,
+            mat: repairMatLabel,
+            gold: plan.totalGold,
+            from: selected.durability,
+            to: selected.durability + plan.durabilityGained,
+          }
+        )
+      );
+      if (!ok) return;
+    }
     setBusy(true);
     try {
-      const res = await fetch(`/api/character/${selectedCharacterId}/repair-item`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(
-          selected.equipped ? { equipmentId: selected.id, mode } : { inventoryId: selected.id, mode }
-        ),
-      });
-      const json = await res.json();
+      const payload = {
+        ...(selected.equipped ? { equipmentId: selected.id } : { inventoryId: selected.id }),
+        mode,
+        buyMissing: canBuyMissing,
+      };
+      const doRepair = () =>
+        fetch(`/api/character/${selectedCharacterId}/repair-item`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      let res = await doRepair();
+      let json = await res.json();
+
+      // Sem GOLD na mão → recarga on-chain (compra de GOLD, nunca do item) e
+      // refaz o reparo. [[dolrath-onchain-gold-not-items]]
+      if (!res.ok && isInsufficientGold(json.error)) {
+        const needed = parseNeededGold(json.error);
+        if (!needed || !(await confirmBuyGold(needed))) return;
+        const credited = await buyGoldOnChain({ characterId: selectedCharacterId, amountGold: needed });
+        if (!credited) return;
+        onChanged?.();
+        res = await doRepair();
+        json = await res.json();
+      }
+
       if (!res.ok) {
         toast.error(json.error || t('Failed to repair'));
         return;
@@ -402,7 +480,8 @@ export default function RepairBench({
         {localizeItemName(ACCESSORY_REPAIR_DUST_NAME, locale)} {t('+ gold;')}{' '}
         <span className="text-amber-300 font-semibold">+{REPAIR_PER_DUPLICATE}</span>{' '}
         {t('per unit) or sell it to the blacksmith for half price. Gear wears down on every kill in the')}{' '}
-        {t('dungeon; at 0 it breaks and gives no bonus until repaired.')}
+        {t('dungeon; at 0 it breaks and gives no bonus until repaired.')}{' '}
+        {t('Out of material? The blacksmith sells and melts it on the spot — the button charges the gold.')}
       </p>
 
       {loadingInv && inventory.length === 0 ? (
@@ -650,16 +729,16 @@ export default function RepairBench({
                     <div className="flex flex-col items-center gap-1">
                       <div
                         className={`w-20 h-20 rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden relative ${
-                          repairUnitsAvailable > 0 ? 'bg-black/40' : 'bg-black/20 opacity-50'
+                          materialAtHand ? 'bg-black/40' : 'bg-black/20 opacity-50'
                         }`}
-                        style={{ borderColor: repairUnitsAvailable > 0 ? '#f59e0b99' : '#ffffff33' }}
+                        style={{ borderColor: materialAtHand ? '#f59e0b99' : '#ffffff33' }}
                       >
                         {isAccessorySelected ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={itemImagePath(ACCESSORY_REPAIR_DUST_NAME)}
                             alt={localizeItemName(ACCESSORY_REPAIR_DUST_NAME, locale)}
-                            className={`w-full h-full object-cover ${repairUnitsAvailable > 0 ? 'art-bright' : 'grayscale'}`}
+                            className={`w-full h-full object-cover ${materialAtHand ? 'art-bright' : 'grayscale'}`}
                             referrerPolicy="no-referrer"
                           />
                         ) : usesMemoryShard ? (
@@ -670,7 +749,7 @@ export default function RepairBench({
                             className={`w-full h-full object-cover ${repairUnitsAvailable > 0 ? 'art-bright' : 'grayscale'}`}
                             referrerPolicy="no-referrer"
                           />
-                        ) : repairUnitsAvailable > 0 && selectedImage ? (
+                        ) : materialAtHand && selectedImage ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={selectedImage}
@@ -681,11 +760,19 @@ export default function RepairBench({
                         ) : (
                           <span className="text-3xl grayscale">{visual?.emoji ?? '🗡️'}</span>
                         )}
-                        {repairUnitsAvailable > 0 && (
+                        {/* Na bolsa: x N. Sem nenhuma, mas o ferreiro vende: 🪙. */}
+                        {repairUnitsAvailable > 0 ? (
                           <span className="absolute bottom-0.5 right-1 text-xs font-bold bg-black/70 text-amber-300 px-1.5 rounded">
                             x{repairUnitsAvailable}
                           </span>
-                        )}
+                        ) : canBuyMissing ? (
+                          <span
+                            className="absolute bottom-0.5 right-1 text-xs font-bold bg-black/70 text-amber-300 px-1.5 rounded"
+                            title={t('Sold by the blacksmith')}
+                          >
+                            🪙
+                          </span>
+                        ) : null}
                       </div>
                       <span className="text-[10px] text-white/50">{repairMatLabel}</span>
                     </div>
@@ -716,36 +803,64 @@ export default function RepairBench({
                     <span className={repairUnitsAvailable >= repairUnitsNeeded ? 'text-emerald-300' : 'text-red-300'}>
                       {repairUnitsAvailable}
                     </span>
-                    {isAccessorySelected && (
+                    {fullPlan.totalGold > 0 && (
                       <>
                         {' '}
-                        {t('(+{cost} gold to fully repair)', { cost: repairGoldCostFull })}
+                        {t('(full repair costs {cost} 🪙)', { cost: fullPlan.totalGold })}
                       </>
                     )}
                     .
                   </p>
 
+                  {/* Faltou material e o ferreiro pode vender: avisa que o botão cobra gold. */}
+                  {fullPlan.unitsBought > 0 && (
+                    <p className="text-[11px] text-amber-200/70 mb-2 text-center">
+                      {t('The blacksmith sells the missing {mat} and melts it right here — you only pay for what goes into the piece.', {
+                        mat: repairMatLabel,
+                      })}
+                    </p>
+                  )}
+                  {cheaperToRebuy && (
+                    <p className="text-[11px] text-white/40 mb-2 text-center">
+                      {t('⚠️ A brand-new piece costs {price} 🪙 — repairing only pays off on enhanced gear.', {
+                        price: selected.item.goldPrice ?? 0,
+                      })}
+                    </p>
+                  )}
+
                   <div className="flex gap-3">
                     <button
                       onClick={() => handleRepair('single')}
-                      disabled={busy || repairUnitsAvailable < 1}
+                      disabled={busy || singlePlan.blocked}
                       className="flex-1 rounded-[3px] border border-[#8a6d3b] bg-gradient-to-b from-[#3a3325] to-[#241f16] px-4 py-2.5 text-sm font-semibold text-[#e7c682] transition-all hover:brightness-125 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                      {t('🔧 Repair +{amount} (1 {mat}{extra})', {
-                        amount: REPAIR_PER_DUPLICATE,
-                        mat: repairMatLabel,
-                        extra: isAccessorySelected ? ` + ${repairGoldCostSingle}🪙` : '',
-                      })}
+                      {singlePlan.unitsBought > 0
+                        ? t('🔧 Repair +{amount} (buy 1 {mat} — {gold}🪙)', {
+                            amount: singlePlan.durabilityGained,
+                            mat: repairMatLabel,
+                            gold: singlePlan.totalGold,
+                          })
+                        : t('🔧 Repair +{amount} (1 {mat}{extra})', {
+                            amount: REPAIR_PER_DUPLICATE,
+                            mat: repairMatLabel,
+                            extra: singlePlan.totalGold > 0 ? ` + ${singlePlan.totalGold}🪙` : '',
+                          })}
                     </button>
                     <button
                       onClick={() => handleRepair('full')}
-                      disabled={busy || repairUnitsAvailable < 1}
+                      disabled={busy || fullPlan.blocked}
                       className="flex-1 rounded-[3px] border border-[#c9a25f] bg-gradient-to-b from-[#4a4030] to-[#2c261a] px-4 py-2.5 text-sm font-semibold tracking-wide text-[#e7c682] shadow-[0_0_14px_rgba(201,162,95,0.3)] transition-all hover:brightness-125 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                      {t('⚒️ Repair 100% ({units} un.{extra})', {
-                        units: Math.min(repairUnitsNeeded, repairUnitsAvailable),
-                        extra: isAccessorySelected ? ` + ${repairGoldCostFull}🪙` : '',
-                      })}
+                      {fullPlan.unitsBought > 0
+                        ? t('⚒️ Repair 100% ({units} un., {bought} bought — {gold}🪙)', {
+                            units: fullPlan.unitsUsed,
+                            bought: fullPlan.unitsBought,
+                            gold: fullPlan.totalGold,
+                          })
+                        : t('⚒️ Repair 100% ({units} un.{extra})', {
+                            units: fullPlan.unitsUsed,
+                            extra: fullPlan.totalGold > 0 ? ` + ${fullPlan.totalGold}🪙` : '',
+                          })}
                     </button>
                   </div>
                 </div>

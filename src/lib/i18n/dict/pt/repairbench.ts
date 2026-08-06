@@ -29,6 +29,8 @@ export const REPAIRBENCH_PT: Record<string, string> = {
     'por unidade) ou vendê-lo ao ferreiro por metade do preço. Equipamento desgasta a cada abate na',
   'dungeon; at 0 it breaks and gives no bonus until repaired.':
     'masmorra; em 0 quebra e não dá bônus até reparar.',
+  'Out of material? The blacksmith sells and melts it on the spot — the button charges the gold.':
+    'Sem material? O ferreiro vende e funde na hora — o botão cobra o gold.',
   'Loading inventory…': 'Carregando inventário…',
   '🎒 This character has no equipment.': '🎒 Este personagem não possui equipamentos.',
   'Character inventory — click an item to repair or sell':
@@ -56,8 +58,19 @@ export const REPAIRBENCH_PT: Record<string, string> = {
   'needs': 'precisa de',
   'you have': 'você tem',
   '(+{cost} gold to fully repair)': '(+{cost} gold pra reparar 100%)',
+  '(full repair costs {cost} 🪙)': '(reparo 100% custa {cost} 🪙)',
+  'The blacksmith sells the missing {mat} and melts it right here — you only pay for what goes into the piece.':
+    'O ferreiro vende o {mat} que falta e funde aqui mesmo — você paga só o pedaço que entra na peça.',
+  '⚠️ A brand-new piece costs {price} 🪙 — repairing only pays off on enhanced gear.':
+    '⚠️ Uma peça nova custa {price} 🪙 — reparar só compensa em equipamento aprimorado.',
+  'Sold by the blacksmith': 'Vendido pelo ferreiro',
+  'The blacksmith will sell {units} {mat} and melt it on the spot for {gold} 🪙.\nDurability: {from} → {to}. Continue?':
+    'O ferreiro vai vender {units} {mat} e fundir na hora por {gold} 🪙.\nDurabilidade: {from} → {to}. Continuar?',
   '🔧 Repair +{amount} (1 {mat}{extra})': '🔧 Reparar +{amount} (1 {mat}{extra})',
+  '🔧 Repair +{amount} (buy 1 {mat} — {gold}🪙)': '🔧 Reparar +{amount} (comprar 1 {mat} — {gold}🪙)',
   '⚒️ Repair 100% ({units} un.{extra})': '⚒️ Reparar 100% ({units} un.{extra})',
+  '⚒️ Repair 100% ({units} un., {bought} bought — {gold}🪙)':
+    '⚒️ Reparar 100% ({units} un., {bought} compradas — {gold}🪙)',
   'Selling to the blacksmith destroys the item for half price (½ of {price} 🪙), reduced by its current durability ({pct}%).':
     'Vender ao ferreiro destrói o item por metade do preço (½ de {price} 🪙), reduzido pela durabilidade atual ({pct}%).',
   'Selling to the blacksmith destroys the item for half price (½ of {price} 🪙).':

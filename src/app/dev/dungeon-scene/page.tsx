@@ -68,9 +68,10 @@ export default function DungeonScenePage() {
       setCinematicZoom(flavorNow && flavorNow !== 'chest' ? 1.45 : 1)
       setStamina(s => Math.max(0, s - (KIND_STAMINA[spot.kind] ?? 4)))
       const flavor = contents.get(spot.nodeIndex)?.flavor
+      // Sem o card, o log é quem identifica o nó — por isso leva também o custo.
       setLog(prev =>
         [
-          `Nó ${spot.nodeIndex} · ${flavor ? FLAVOR_LABEL[flavor] : KIND_LABEL[spot.kind]}`,
+          `Nó ${spot.nodeIndex} · ${flavor ? FLAVOR_LABEL[flavor] : KIND_LABEL[spot.kind]} · ⚡${KIND_STAMINA[spot.kind] ?? 4}`,
           ...prev,
         ].slice(0, 6),
       )
@@ -202,57 +203,30 @@ export default function DungeonScenePage() {
         </div>
       )}
 
-      {/* "Combate" fingido — na F1 isto vira /step + o combate por turnos real */}
+      {/* Pausa no nó: DOIS botões pequenos e nada mais.
+          Aqui havia um card `inset-0` com backdrop escuro e blur — ele cobria e
+          desfocava exatamente o que a bancada existe para julgar (o vulto no
+          bolsão, o enquadramento, a investida). A identidade do nó já sai no log
+          do canto, então o card era só estorvo em cima da imagem.
+          Os dois botões ficam SEMPRE montados (investir desabilitado em nó de
+          achado): assim a barra não pula de tamanho a cada parada. */}
       {encounter && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="w-[min(92vw,420px)] rounded-2xl border border-amber-400/30 bg-[#12100c] p-5 text-center shadow-2xl">
-            {(() => {
-              const c = contents.get(encounter.nodeIndex)
-              const isFight = !c || c.category === 'combat'
-              return (
-                <>
-                  <div className="text-4xl mb-2">
-                    {c?.flavor === 'boss'
-                      ? '☠️'
-                      : c?.flavor === 'chest'
-                        ? '🧰'
-                        : c?.flavor === 'herb'
-                          ? '🌿'
-                          : c?.flavor === 'rubble'
-                            ? '🪨'
-                            : c?.flavor === 'fountain'
-                              ? '⛲'
-                              : '⚔️'}
-                  </div>
-                  <div className="text-lg font-bold">
-                    {c ? FLAVOR_LABEL[c.flavor] : KIND_LABEL[encounter.kind]} · nó{' '}
-                    {encounter.nodeIndex}
-                  </div>
-                  <p className="mt-2 text-xs text-white/50 leading-relaxed">
-                    {isFight
-                      ? 'Na run real a câmera aproxima e o combate por turnos acontece aqui mesmo, sem trocar de tela.'
-                      : 'Achado: o herói revira o cenário e o loot cai no chão.'}{' '}
-                    Custo: {KIND_STAMINA[encounter.kind] ?? 4} de stamina.
-                  </p>
-                </>
-              )
-            })()}
-            {cinematicZoom > 1 && (
-              <button
-                onClick={chargeEncounter}
-                className="mt-4 w-full rounded-xl bg-red-700 py-2.5 font-bold hover:bg-red-600"
-                title="Fecha o zoom como a entrada em combate faz na run real"
-              >
-                🎥 Investir (zoom de combate)
-              </button>
-            )}
-            <button
-              onClick={resolveEncounter}
-              className="mt-2 w-full rounded-xl bg-emerald-600 py-2.5 font-bold hover:bg-emerald-500"
-            >
-              Resolver e seguir
-            </button>
-          </div>
+        <div className="absolute bottom-3 right-3 z-30 flex items-center gap-2">
+          <button
+            onClick={chargeEncounter}
+            disabled={cinematicZoom === 1}
+            className="rounded-md border border-white/20 bg-black/70 px-3 py-1 text-[11px] font-bold text-white/85 hover:bg-black/90 disabled:opacity-30"
+            title="Fecha o zoom como a entrada em combate faz na run real"
+          >
+            investir
+          </button>
+          <button
+            onClick={resolveEncounter}
+            className="rounded-md border border-white/20 bg-black/70 px-3 py-1 text-[11px] font-bold text-white/85 hover:bg-black/90"
+            title="Resolve o nó e libera a caminhada"
+          >
+            seguir
+          </button>
         </div>
       )}
 

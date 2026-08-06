@@ -910,6 +910,13 @@ export interface RunFlushGrant {
   leveledUp: boolean
   newLevel: number
   equipmentWear: { slot: string; name: string; durability: number; maxDurability: number; justBroke: boolean }[]
+  /**
+   * ⚡ Stamina final do personagem — só vem quando o flush ESTORNOU o passo de um
+   * nó que ficou por jogar (ver `staminaRefund` abaixo). O cliente sai da run com o
+   * valor da tela, então sem isto a ficha voltaria ao mapa com a stamina
+   * pré-estorno até a próxima leitura.
+   */
+  stamina?: number
 }
 
 interface FlushableRun {
@@ -955,6 +962,8 @@ export async function flushRunRewards(
     select: {
       id: true, level: true, race: true, class: true, experience: true,
       availablePoints: true, baseStats: true, maxHp: true, maxMp: true,
+      // ⚡ Só para o ESTORNO do passo não jogado (ver `staminaRefund`).
+      stamina: true, maxStamina: true, staminaUpdatedAt: true,
     },
   })
   if (!character) return null
@@ -969,20 +978,38 @@ export async function flushRunRewards(
 
   // Desfecho do ÚLTIMO nó — o que não teve /step seguinte para levá-lo de carona.
   let bossDefeated = false
+  /**
+   * ⚡ ESTORNO do passo que o jogador PAGOU e não jogou.
+   *
+   * O /step debita a stamina na SAÍDA do nó anterior (prefetchStep, para a
+   * latência caber debaixo da caminhada), então quem manda parar no meio do
+   * trajeto já pagou por um nó que nunca aconteceu. Como o resto da run só é
+   * creditado aqui no flush, a stamina fecha a conta no mesmo lugar.
+   *
+   * `pending` só existe em nó de COMBATE e o cursor só avança quando o pacote
+   * cai — logo, pendente + nenhum monstro abatido = nó que não rendeu nada.
+   * Achado/fonte não entram: o /step já creditou o espólio e avançou o cursor.
+   * Nunca devolve mais do que foi cobrado, então não abre farm de stamina.
+   */
+  let staminaRefund = 0
   if (run.pending) {
     const pending = run.pending as unknown as RunPending
     const wanted = opts.resolve
     const matches = wanted && (wanted.nodeIdx == null || Number(wanted.nodeIdx) === pending.nodeIdx)
+    // Sem `resolve` que case, ninguém morreu neste nó por definição.
+    let untouched = (pending.killedIds ?? []).length === 0
     if (matches) {
       const outcome: NodeOutcome = wanted.outcome === 'clear' ? 'clear' : opts.reason === 'lose' ? 'lose' : 'retreat'
-      const { delta, allDead } = resolveNodeOutcome(pending, outcome, wanted.killedIds, {
+      const { delta, allDead, newlyKilled } = resolveNodeOutcome(pending, outcome, wanted.killedIds, {
         dungeon,
         character: charForRun,
         tier: run.tier,
       })
       accrued = mergeAccrued(accrued, delta)
       bossDefeated = pending.kind === 'boss' && allDead && outcome === 'clear'
+      if (newlyKilled.length > 0) untouched = false
     }
+    if (untouched) staminaRefund = STEP_COST[pending.kind]
   }
 
   // 🌅 Bônus solo: os primeiros bosses do DIA da CONTA rendem pedras extras.
@@ -1029,7 +1056,7 @@ export async function flushRunRewards(
   // interativa do Prisma tem timeout (P2028) e um rollback aqui significa perder
   // a run inteira do jogador — ela precisa conter só as ESCRITAS.
   const t0 = Date.now()
-  const [catalog, remaining, equipped] = await Promise.all([
+  const [catalog, remaining, equipped, live] = await Promise.all([
     prepareDropItems(accrued.drops),
     dailyGoldRemainingTx(prisma, run.userId),
     weaponWear > 0 || gearWear > 0
@@ -1038,8 +1065,21 @@ export async function flushRunRewards(
           include: { item: { select: { name: true } } },
         })
       : Promise.resolve([] as { slot: string; durability: number; maxDurability: number; item: { name: string } }[]),
+    // ⚡ Estorno: a stamina VIVA (regen passivo ou tiques de coleta já debitados)
+    // é a base do crédito — somar sobre o valor parado da coluna devolveria a
+    // mais. Import dinâmico porque gatheringServer importa este módulo: em
+    // estático o ciclo se fecharia na carga, e aqui a chamada é só neste ramo.
+    staminaRefund > 0
+      ? import('./staminaServer').then(m => m.regenAndPersist(character, { deferWrite: true }))
+      : Promise.resolve(null),
   ])
   const gold = Math.min(Math.max(0, Math.floor(accrued.gold)), remaining)
+
+  // Valor ABSOLUTO (não `increment`) porque precisa do teto; a âncora vai junto,
+  // como no /step — o regen até agora já está dentro de `live`, nada se perde.
+  const staminaUpdate = live
+    ? { stamina: Math.min(character.maxStamina, live.stamina + staminaRefund), staminaUpdatedAt: new Date() }
+    : null
 
   // Relatório de desgaste (só texto para o cliente); a escrita é o applyGearWearTx.
   const equipmentWear: RunFlushGrant['equipmentWear'] = []
@@ -1073,9 +1113,15 @@ export async function flushRunRewards(
 
       await tx.character.update({
         where: { id: character.id },
-        // poolUpdate (hp/mp) viaja no MESMO update: o flush tem orçamento de
-        // tempo (P2028 leva a run inteira junto), então nada de query extra.
-        data: { ...xp.updateData, ...poolUpdate, ...(gold > 0 ? { gold: { increment: gold } } : {}) },
+        // poolUpdate (hp/mp) e o estorno de stamina viajam no MESMO update: o
+        // flush tem orçamento de tempo (P2028 leva a run inteira junto), então
+        // nada de query extra.
+        data: {
+          ...xp.updateData,
+          ...poolUpdate,
+          ...(staminaUpdate ?? {}),
+          ...(gold > 0 ? { gold: { increment: gold } } : {}),
+        },
       })
 
       await tx.dungeonRun.update({
@@ -1109,6 +1155,7 @@ export async function flushRunRewards(
         leveledUp: xp.leveledUp,
         newLevel: xp.leveledUp ? xp.newLevelInfo.level : character.level,
         equipmentWear,
+        ...(staminaUpdate ? { stamina: staminaUpdate.stamina } : {}),
       }
     }, {
       // A transação carrega a run INTEIRA de um jogador: rollback aqui é espólio

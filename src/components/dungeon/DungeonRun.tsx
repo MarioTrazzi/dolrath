@@ -275,6 +275,8 @@ interface FinishResponse {
   leveledUp?: boolean
   newLevel?: number
   equipmentWear?: EquipmentWear[]
+  /** ⚡ Só vem quando o flush estornou o passo de um nó que ficou por jogar. */
+  stamina?: number
   error?: string
   status?: string
 }
@@ -641,6 +643,10 @@ export default function DungeonRun({
     Math.max(0, Math.round(effMaxMp * poolPct(character.mp, character.maxMp)))
   )
   const [stamina, setStamina] = useState(character.stamina)
+  // Espelho da stamina: o /finish pode DEVOLVER o passo de um nó que ficou por
+  // jogar, e o log precisa do valor de antes para dizer quanto voltou.
+  const staminaRef = useRef(stamina)
+  staminaRef.current = stamina
   const hpRef = useRef(hp)
   hpRef.current = hp
   // Espelho do MP: `closeRunOnServer` precisa do valor no INSTANTE do envio
@@ -950,6 +956,32 @@ export default function DungeonRun({
   const [autoConsumables, setAutoConsumables] = useState(true)
   // Diálogo de confirmação ao sair: PAUSA a run (o piloto não age enquanto aberto).
   const [exitConfirm, setExitConfirm] = useState(false)
+  /**
+   * 🛑 Freio de mão da run, em REF de propósito.
+   *
+   * `exitConfirm` só chega nas guardas no próximo render — e o piloto agenda o
+   * passo por `setTimeout`, então um avanço já marcado escapava pela janela e a
+   * masmorra seguia andando (e entrando em combate) atrás do card. O ref é
+   * escrito no mesmo clique que abre o diálogo, antes de qualquer re-render.
+   */
+  const stopRequestedRef = useRef(false)
+  /**
+   * ⏳ "Sair ao fim da luta": o combate segue NORMAL (nada de pausar atrás do
+   * backdrop — o jogador leva o espólio inteiro do encontro) e a run encerra na
+   * vitória, sem dar mais um passo. Mesmo espírito do "aguardar último ciclo"
+   * da Coleta.
+   */
+  const stopAfterFightRef = useRef(false)
+  const [stopAfterFight, setStopAfterFight] = useState(false)
+  /** Havia um /step JÁ PAGO em voo quando o freio foi puxado (texto do card). */
+  const [stopCaughtPaidStep, setStopCaughtPaidStep] = useState(false)
+  /**
+   * Encontro que chegou com o freio puxado: o nó foi pago e resolvido, mas a
+   * arena não abre atrás do card. Cancelar entra nesta luta — sem isto o
+   * `pending` do servidor seria reenviado no passo seguinte e o combate
+   * aconteceria no nó errado.
+   */
+  const caughtEncounterRef = useRef<ScaledMonster[] | null>(null)
   const battleEventCounter = useRef(0)
   // d20 de sorte do nó atual (define a qualidade do loot pós-combate)
   const lootRollRef = useRef(12)
@@ -991,7 +1023,9 @@ export default function DungeonRun({
    *    `resolve` do corpo. O /step atrasado pode escrever num run já 'abandoned',
    *    mas não mexe no `status`, e `flushStaleRuns` só drena run 'active' — logo
    *    aquele `accrued` nunca é recreditado.
-   * O único custo é 1 de stamina cobrada por um nó que o jogador não jogou.
+   * Sobrava a stamina cobrada por um nó que o jogador não chegou a jogar (4/8/6,
+   * não 1): hoje o próprio /finish a ESTORNA — nó pendente sem nenhum abate
+   * devolve o passo (ver `staminaRefund` em flushRunRewards).
    */
   const stepPrefetchRef = useRef<StepPrefetch | null>(null)
   // Herói já em uso em outra aba (lock vivo): bloqueia a run com um aviso.
@@ -1565,12 +1599,26 @@ export default function DungeonRun({
         group = resolved.monsters ?? (resolved.monster ? [resolved.monster] : [])
       }
       if (useScene && !reducedMotionRef.current) setFocusNode(dest)
-      if (group.length > 0) beginEncounterRef.current(group)
+      if (group.length > 0) {
+        // 🛑 Freio puxado durante a caminhada: este nó JÁ foi pago (o /step sai na
+        // saída do nó anterior), mas a arena NÃO abre atrás do card. O bicho fica
+        // à espera no bolsão: cancelar entra na luta, sair deixa o `pending` no
+        // servidor e o /finish estorna a stamina do nó que não foi jogado.
+        if (stopRequestedRef.current) {
+          caughtEncounterRef.current = group
+          setStopCaughtPaidStep(true)
+        } else {
+          beginEncounterRef.current(group)
+        }
+      }
       return
     }
 
     // Achado / fonte: sem d20 na tela, sem card — o espólio (bag+float) e a cura
     // da fonte já aconteceram dentro de applyServerEvent; só segue a jornada.
+    // Com o freio puxado, este nó ainda assim CONTA (pagou, levou o espólio) —
+    // não há estorno, então o card não pode prometer stamina de volta.
+    if (stopRequestedRef.current) setStopCaughtPaidStep(false)
     const resolved = applyServerEvent(data, dest)
     const emoji = resolved.def.icon || '❔'
     setWalkTrailMarks(prev => {
@@ -1600,6 +1648,7 @@ export default function DungeonRun({
   )
 
   const advance = async () => {
+    if (stopRequestedRef.current) return // freio de mão: nenhum /step novo sai daqui
     if (phase !== 'explore' || exploreRolling || walkBusy || atBoss || combatIntro) return
     // Na CENA a caminhada pode começar antes do /start aterrissar (start otimista):
     // quem espera o runId é o finishWalkStep, na chegada ao nó. Nos outros modos
@@ -2632,6 +2681,10 @@ export default function DungeonRun({
       if (m.isBoss) {
         showBanner('👑', `${dungeon.name} conquistada!`, 2400)
         finishRun(true)
+      } else if (stopAfterFightRef.current) {
+        // ⏳ Pedido durante a luta: encerra AQUI, antes de a narração soltar o
+        // piloto para o próximo nó. O espólio deste encontro já entrou.
+        finishRun(false)
       } else {
         showNarration(nextIsBoss
           ? 'A trilha termina adiante. Você sente um olhar antigo cravado em você...'
@@ -2685,6 +2738,13 @@ export default function DungeonRun({
   const canRerun = !!onRestart && stamina >= MINOR_STEP_COST
   const restartRun = async () => {
     if (!onRestart) { exitRun(); return }
+    // Run nova começa com o freio solto — os pedidos de parada valiam para a run
+    // que acabou de fechar.
+    stopRequestedRef.current = false
+    stopAfterFightRef.current = false
+    caughtEncounterRef.current = null
+    setStopAfterFight(false)
+    setStopCaughtPaidStep(false)
     // A ORDEM importa: o /finish persiste a fração de HP/MP E credita o ouro da
     // run. Só depois dele a Alquimista vê o estado certo (e o saldo certo).
     try { await endRunPromiseRef.current } catch { /* segue mesmo assim */ }
@@ -2707,7 +2767,9 @@ export default function DungeonRun({
 
     onRestart({
       ...pools,
-      stamina,
+      // Ref, não o valor do render: o /finish aguardado acima pode ter estornado
+      // o passo de um nó não jogado.
+      stamina: staminaRef.current,
       level: charLevel,
       experience: charExperienceRef.current,
       leveledUp: leveledUpThisRun,
@@ -2724,6 +2786,16 @@ export default function DungeonRun({
    * no meio de uma luta.
    */
   const applyFinishGrant = (data: FinishResponse) => {
+    // ⚡ Estorno do passo não jogado: o `exitRun` empacota a stamina da TELA para
+    // o mapa, então sem espelhar aqui a ficha voltaria com o valor pré-estorno.
+    if (typeof data.stamina === 'number') {
+      const back = data.stamina - staminaRef.current
+      // O ref é escrito AQUI, não só no render: quem sai (`exitRun`/`restartRun`)
+      // lê logo depois do await do /finish, antes de o React ter recomposto.
+      staminaRef.current = data.stamina
+      setStamina(data.stamina)
+      if (back > 0) pushLog(`⚡ ${back} de stamina devolvida — o nó não chegou a ser jogado.`)
+    }
     const gold = data.gold ?? 0
     const optimisticGold = totalsRef.current.gold
     if (gold < optimisticGold) {
@@ -2882,6 +2954,38 @@ export default function DungeonRun({
     }
   }
 
+  /**
+   * 🚪 Clique no Sair: FREIA a run e só depois abre o card. O ref vem antes do
+   * `setState` de propósito — ver `stopRequestedRef`.
+   */
+  const requestStop = () => {
+    stopRequestedRef.current = true
+    // Passo já pago em voo (ou herói ainda a caminho do bolsão): o card avisa que
+    // a stamina volta na saída, em vez de o jogador achar que perdeu.
+    setStopCaughtPaidStep(Boolean(stepPrefetchRef.current) || walkBusy)
+    setExitConfirm(true)
+  }
+
+  const cancelStop = () => {
+    stopRequestedRef.current = false
+    setStopCaughtPaidStep(false)
+    setExitConfirm(false)
+    // O nó já pago que ficou esperando: agora sim entra na arena.
+    const caught = caughtEncounterRef.current
+    caughtEncounterRef.current = null
+    if (caught) later(() => beginEncounterRef.current(caught), 250)
+  }
+
+  /** ⏳ Deixa a luta terminar e encerra na vitória, sem gastar um nó novo. */
+  const stopAfterThisFight = () => {
+    stopAfterFightRef.current = true
+    stopRequestedRef.current = false
+    setStopAfterFight(true)
+    setStopCaughtPaidStep(false)
+    setExitConfirm(false)
+    showBanner('⏳', 'A run encerra ao fim desta luta — sem gastar stamina num nó novo.', 3000)
+  }
+
   const finishRun = async (bossDefeated: boolean) => {
     setPhase('summary')
     closeRunOnServer(bossDefeated ? 'boss' : 'retreat')
@@ -2908,7 +3012,9 @@ export default function DungeonRun({
     try { await endRunPromiseRef.current } catch { /* segue mesmo assim */ }
     // ❤️ HP e MP saem como ESTÃO (o /finish acabou de persistir a mesma fração):
     // o card do mapa mostra o herói machucado na hora, sem esperar refetch.
-    onExit({ ...exitPools(), stamina, leveledUp: leveledUpThisRun })
+    // Stamina pelo REF: o /finish esperado logo acima pode ter devolvido o passo
+    // de um nó que ficou por jogar, e o valor do render é anterior a isso.
+    onExit({ ...exitPools(), stamina: staminaRef.current, leveledUp: leveledUpThisRun })
   }
 
   // 🤖 Interruptor do farm automático, mostrado nas telas de resumo e derrota.
@@ -3453,7 +3559,7 @@ export default function DungeonRun({
             </div>
             {(phase === 'explore' || phase === 'combat') && (
               <button
-                onClick={() => setExitConfirm(true)}
+                onClick={requestStop}
                 className="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-bold transition-colors"
                 title={phase === 'combat' ? 'Abandonar a batalha e sair (mantém recompensas)' : 'Sair da masmorra (mantém recompensas)'}
               >
@@ -3474,6 +3580,15 @@ export default function DungeonRun({
 
         {/* Área de conteúdo abaixo do header (e barras mobile): WalkScene + fases */}
         <div className="relative flex-1 min-h-0 flex flex-col">
+        {/* ⏳ Aviso persistente do "sair ao fim da luta" — o jogador precisa
+            lembrar que a run acaba aqui enquanto a batalha segue normal. */}
+        {stopAfterFight && phase !== 'summary' && (
+          <div className="absolute top-1.5 inset-x-0 z-30 flex justify-center pointer-events-none px-3">
+            <div className="rounded-full border border-amber-300/40 bg-black/75 px-3 py-1 text-[10px] font-bold text-amber-200 backdrop-blur-sm">
+              ⏳ Encerrando ao fim desta luta — sem gastar stamina num nó novo
+            </div>
+          </div>
+        )}
         {/* ============================================================ */}
         {/* WALK SCENE (Anterra treadmill) — só na exploração; combate usa battle BG */}
         {/* ============================================================ */}
@@ -3517,7 +3632,11 @@ export default function DungeonRun({
                    já vivo — sem o corte seco. */
                 paused={
                   phase !== 'explore' ||
-                  combatIntro
+                  combatIntro ||
+                  // 🚪 Card de saída aberto = run CONGELADA. Sem isto o herói
+                  // seguia andando atrás do backdrop, chegava ao bolsão e
+                  // resolvia o nó (podendo cair em combate) com o card na tela.
+                  exitConfirm
                 }
                 cinematicZoom={encounterZoom}
                 focusNode={focusNode}
@@ -3685,7 +3804,12 @@ export default function DungeonRun({
                   {phase === 'combat' ? 'Fugir da batalha?' : 'Sair da masmorra?'}
                 </h3>
                 <p className="text-xs text-textsec leading-snug mb-4">
-                  A run será encerrada. Tudo que você já ganhou está salvo — a stamina se restaura sozinha (+2 a cada 15 min ocioso).
+                  A run está pausada. Tudo que você já ganhou está salvo — a stamina se restaura sozinha (+2 a cada 15 min ocioso).
+                  {stopCaughtPaidStep && (
+                    <span className="block mt-1 text-amber-200/90">
+                      ⚡ O passo em curso já foi cobrado — como você não vai jogar esse nó, a stamina volta ao sair.
+                    </span>
+                  )}
                 </p>
 
                 {/* Log do espólio da run até agora (ouro/XP + itens com ícone real) */}
@@ -3723,9 +3847,21 @@ export default function DungeonRun({
                   )}
                 </div>
 
+                {/* ⏳ Saída em combate sem desperdício: mesma escolha que a
+                    Coleta oferece ("aguardar último ciclo"). Fugir agora larga o
+                    espólio da luta; esperar o fim dela não custa nó nenhum. */}
+                {phase === 'combat' && !stopAfterFight && (
+                  <button
+                    onClick={stopAfterThisFight}
+                    className="w-full py-3 mb-2 rounded-lg font-bold text-white text-sm bg-amber-600/85 hover:bg-amber-500 border border-amber-300/40 transition-colors active:scale-[0.98]"
+                  >
+                    ⏳ Sair ao fim da luta
+                  </button>
+                )}
+
                 <div className="flex gap-2">
                   <button
-                    onClick={() => setExitConfirm(false)}
+                    onClick={cancelStop}
                     className="flex-1 py-3 rounded-lg font-bold text-white text-sm bg-white/10 hover:bg-white/20 border border-white/20 transition-colors active:scale-[0.98]"
                   >
                     Cancelar
@@ -3735,7 +3871,7 @@ export default function DungeonRun({
                     className="flex-1 py-3 rounded-lg font-black text-white text-sm transition-transform active:scale-[0.98] hover:scale-[1.02]"
                     style={{ background: 'linear-gradient(90deg, #e94560, #b91c1c)', boxShadow: '0 0 20px rgba(233,69,96,0.4)' }}
                   >
-                    🚪 {phase === 'combat' ? 'Fugir' : 'Sair'}
+                    🚪 {phase === 'combat' ? 'Fugir agora' : 'Sair'}
                   </button>
                 </div>
               </motion.div>
@@ -3837,10 +3973,11 @@ export default function DungeonRun({
                   {/* Barra: sair, poções ON/OFF, cinto, status do avanço (piloto sempre ligado) */}
                   <div className="mx-auto max-w-md flex items-center gap-1.5">
                     <button
-                      onClick={() => setExitConfirm(true)}
-                      disabled={exploreRolling || walkBusy}
+                      onClick={requestStop}
+                      /* Sem `disabled` de propósito: parar a run é justamente o
+                         que se quer PODER fazer no meio da caminhada. */
                       title="Sair da masmorra (mantém recompensas)"
-                      className="shrink-0 w-11 h-11 grid place-items-center rounded-xl border border-white/10 bg-black/50 backdrop-blur-xl text-textsec hover:text-white hover:border-white/25 transition-colors active:scale-95 disabled:opacity-40"
+                      className="shrink-0 w-11 h-11 grid place-items-center rounded-xl border border-white/10 bg-black/50 backdrop-blur-xl text-textsec hover:text-white hover:border-white/25 transition-colors active:scale-95"
                     >
                       🚪
                     </button>

@@ -6,8 +6,28 @@
  * serve para conferir/ajustar os FX de AbilityFX.tsx sem entrar numa masmorra.
  */
 
-import React, { useRef, useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import BattleScene, { BattleEvent, FighterView } from '@/components/battle/BattleScene'
+import { TRANSFORMATION_SPECIALS } from '@/lib/transformationSpecials'
+import { specialDisplayName, classAttackDisplayName } from '@/lib/weaponFlavor'
+import { classAttackName } from '@/lib/combatModel'
+
+/** Armas primárias (CLASS_WEAPONS) + a classe que as empunha, p/ o preview ser honesto. */
+const WEAPONS: { type: string | null; label: string; cls: string }[] = [
+  { type: 'SWORD', label: '🗡️ Espada', cls: 'Guerreiro' },
+  { type: 'AXE', label: '🪓 Machado', cls: 'Guerreiro' },
+  { type: 'DAGGER', label: '🔪 Adaga', cls: 'Ladino' },
+  { type: 'BOW', label: '🏹 Arco', cls: 'Ladino' },
+  { type: 'STAFF', label: '🔮 Cajado', cls: 'Mago' },
+  { type: 'GAUNTLET', label: '🥊 Manopla', cls: 'Monge' },
+  { type: 'PICKAXE', label: '⛏️ Picareta (ferramenta)', cls: 'Monge' },
+  { type: null, label: '✊ Sem arma', cls: 'Monge' },
+]
+
+/** Todos os SpecialDef por id, p/ mostrar o nome já temperado pela arma. */
+const SPECIAL_BY_ID = Object.fromEntries(
+  Object.values(TRANSFORMATION_SPECIALS).flat().map(def => [def.id, def]),
+)
 
 const HERO_BASE: FighterView = {
   id: 'hero', name: 'Herói', level: 12, race: 'Elfo', class: 'Monge',
@@ -41,13 +61,12 @@ const HIT = { kind: 'resolve' as const, attackerId: 'hero', defenderId: 'foe', d
 
 const GROUPS: { title: string; items: Trigger[] }[] = [
   {
-    title: 'Básico + Ataque de Classe',
+    // Estes dois seguem a ARMA do seletor acima (o Golpe é a arma pura; o Ataque de
+    // Classe mantém a identidade da classe, menos à distância).
+    title: 'Básico + Ataque de Classe (usam a arma selecionada)',
     items: [
       T('👊 Golpe', { ...HIT, action: 'basic' }),
-      T('💥 Investida Pesada (Guerreiro)', { ...HIT, action: 'weapon' }, 'Guerreiro'),
-      T('🗡️ Ataque Furtivo (Ladino)', { ...HIT, action: 'weapon' }, 'Ladino'),
-      T('🔥 Bola de Fogo (Mago)', { ...HIT, action: 'weapon' }, 'Mago'),
-      T('👊 Golpe Triplo (Monge)', { ...HIT, action: 'weapon' }, 'Monge'),
+      T('⚔️ Ataque de Classe', { ...HIT, action: 'weapon' }),
     ],
   },
   {
@@ -87,9 +106,9 @@ const GROUPS: { title: string; items: Trigger[] }[] = [
   {
     title: 'Momentos',
     items: [
-      T('💨 Esquiva do monstro', { kind: 'resolve', attackerId: 'hero', defenderId: 'foe', action: 'weapon', defenseAction: 'none', hit: false, damage: 0 }, 'Monge'),
+      T('💨 Esquiva do monstro', { kind: 'resolve', attackerId: 'hero', defenderId: 'foe', action: 'weapon', defenseAction: 'none', hit: false, damage: 0 }),
       T('💨 Esquiva do herói', { kind: 'resolve', attackerId: 'foe', defenderId: 'hero', action: 'basic', defenseAction: 'none', hit: false, damage: 0 }),
-      T('✴️ CRÍTICO (Bola de Fogo)', { ...HIT, action: 'weapon', damage: 61, isCritical: true }, 'Mago'),
+      T('✴️ CRÍTICO (Ataque de Classe)', { ...HIT, action: 'weapon', damage: 61, isCritical: true }),
       T('🐉 Transformação', { kind: 'transform', actorId: 'hero' }, undefined, 'dragon'),
       T('🧪 Poção (item)', { kind: 'item', actorId: 'hero', hpRestored: 40, mpRestored: 15 }),
     ],
@@ -99,14 +118,40 @@ const GROUPS: { title: string; items: Trigger[] }[] = [
 export default function BattleFxPreview() {
   const counter = useRef(0)
   const [event, setEvent] = useState<BattleEvent | null>(null)
-  const [heroClass, setHeroClass] = useState('Monge')
+  const [heroClass, setHeroClass] = useState('Ladino')
   const [heroForm, setHeroForm] = useState<string | null>(null)
+  const [weaponIdx, setWeaponIdx] = useState(3) // 🏹 arco: o caso que motivou a feature
+  const weapon = WEAPONS[weaponIdx]
 
   const hero: FighterView = {
     ...HERO_BASE,
     class: heroClass,
     isTransformed: !!heroForm,
     transformationType: heroForm,
+    equipmentMap: {
+      ...HERO_BASE.equipmentMap,
+      ...(weapon.type
+        ? { WEAPON: { id: 'w', name: weapon.label, type: weapon.type, enhancementLevel: 3, stats: { attackDamage: 24 } } }
+        : {}),
+    },
+  }
+  // Sem arma: o slot some do mapa (não dá pra "apagar" via spread).
+  if (!weapon.type) delete (hero.equipmentMap as Record<string, unknown>).WEAPON
+
+  // Nome que a UI de combate mostraria para cada golpe com esta arma.
+  const names = useMemo(() => {
+    const classAtk = classAttackDisplayName(heroClass, weapon.type, classAttackName(heroClass))
+    const specials = Object.values(SPECIAL_BY_ID)
+      .filter(d => d.kind === 'dmg')
+      .map(d => ({ id: d.id, canon: d.name, shown: specialDisplayName(d, weapon.type) }))
+      // 💫 Golpe Atordoante é o mesmo em todas as formas — mostra uma vez só.
+      .filter((d, i, arr) => arr.findIndex(x => x.canon === d.canon) === i)
+    return { classAtk, specials }
+  }, [heroClass, weapon.type])
+
+  const selectWeapon = (idx: number) => {
+    setWeaponIdx(idx)
+    setHeroClass(WEAPONS[idx].cls)
   }
 
   const fire = (t: Trigger) => {
@@ -120,6 +165,37 @@ export default function BattleFxPreview() {
     <div className="min-h-screen bg-slate-950 text-white flex flex-col">
       <BattleScene className="h-[380px] flex-shrink-0" left={hero} right={FOE} currentTurnId="hero" event={event} />
       <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-3xl mx-auto w-full">
+        <div>
+          <h2 className="text-xs font-black text-white/50 uppercase mb-1.5">
+            ⚔️ Arma equipada <span className="text-white/30 normal-case font-bold">— troca a animação e o nome dos golpes</span>
+          </h2>
+          <div className="flex flex-wrap gap-1.5">
+            {WEAPONS.map((w, i) => (
+              <button
+                key={w.label}
+                onClick={() => selectWeapon(i)}
+                className={`px-2.5 py-1.5 rounded-lg border text-xs font-bold ${
+                  i === weaponIdx
+                    ? 'bg-amber-400/20 border-amber-300/60 text-amber-100'
+                    : 'bg-white/10 hover:bg-white/20 border-white/15'
+                }`}
+              >
+                {w.label}
+              </button>
+            ))}
+          </div>
+          <div className="mt-2 rounded-lg bg-black/30 border border-white/10 p-2.5 text-[11px] leading-relaxed">
+            <div className="text-white/40 font-bold uppercase mb-1">Nomes com esta arma ({heroClass})</div>
+            <div className="text-white/80">⚔️ Ataque de Classe: <b className="text-amber-200">{names.classAtk}</b></div>
+            {names.specials.map(s => (
+              <div key={s.id + s.canon} className="text-white/80">
+                {s.shown === s.canon
+                  ? <span className="text-white/40">{s.canon} <i>(nome canônico)</i></span>
+                  : <><span className="text-white/40">{s.canon}</span> → <b className="text-amber-200">{s.shown}</b></>}
+              </div>
+            ))}
+          </div>
+        </div>
         {GROUPS.map(g => (
           <div key={g.title}>
             <h2 className="text-xs font-black text-white/50 uppercase mb-1.5">{g.title}</h2>

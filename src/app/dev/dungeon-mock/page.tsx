@@ -73,7 +73,13 @@ function installFetchStub() {
 
     if (url.includes('/api/dungeon/run/start')) {
       // Slots quase no fim: dá pra ver a previsão de "inventário cheio" agir.
-      return json({ runId: 'dev-run', stamina, inventoryUsed: 16, inventorySlots: 20 })
+      // ?bagFull=1 entra com a mochila JÁ cheia — é o caso em que o freio 🎒
+      // encerra a run antes de gastar o primeiro passo.
+      const bagFull = new URLSearchParams(window.location.search).get('bagFull') === '1'
+      return json({
+        runId: 'dev-run', stamina,
+        inventoryUsed: bagFull ? 20 : 16, inventorySlots: 20, inventoryFull: bagFull,
+      })
     }
     if (url.includes('/api/dungeon/run/heartbeat')) return json({ active: true })
     if (url.includes('/api/dungeon/run/step')) {

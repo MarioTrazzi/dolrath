@@ -11,7 +11,8 @@ import { formatItemStats } from '@/lib/itemStats'
 import { useResolvedItemImage } from '@/hooks/useResolvedItemImage'
 import {
   resolveActionFx, ImpactFX, AuraFX, DodgeFX, CritFX,
-  IMPACT_MS, AURA_MS, type ImpactKind, type AuraKind,
+  AURA_MS, impactDurationMs,
+  type ImpactKind, type AuraKind, type LeadKind,
 } from '@/components/battle/AbilityFX'
 
 // ============================================================
@@ -635,7 +636,7 @@ export default function BattleScene({
   const [dodgingId, setDodgingId] = useState<string | null>(null)
   const [defendingId, setDefendingId] = useState<string | null>(null)
   // FX por habilidade: impacto no defensor / aura no conjurador (key = remonta a animação)
-  const [impactFx, setImpactFx] = useState<{ id: string; kind: ImpactKind; key: number } | null>(null)
+  const [impactFx, setImpactFx] = useState<{ id: string; kind: ImpactKind; lead?: LeadKind; key: number } | null>(null)
   const [auraFx, setAuraFx] = useState<{ id: string; kind: AuraKind; color?: string; key: number } | null>(null)
   const [critId, setCritId] = useState<string | null>(null)
   const [dodgeFxId, setDodgeFxId] = useState<string | null>(null)
@@ -710,7 +711,8 @@ export default function BattleScene({
 
       // FX da habilidade: impacto no defensor OU aura no conjurador (buff de forma no PvP
       // chega como resolve com dano 0 — vira aura, sem investida nem "ESQUIVOU!").
-      const fx = resolveActionFx(event.action, fighterById(atkId)?.class)
+      const attacker = fighterById(atkId)
+      const fx = resolveActionFx(event.action, attacker?.class, attacker?.equipmentMap?.WEAPON?.type)
       if ('aura' in fx) {
         showAura(atkId, fx.aura)
         return
@@ -725,8 +727,8 @@ export default function BattleScene({
         if (event.hit) {
           fxKey.current += 1
           const key = fxKey.current
-          setImpactFx({ id: defId, kind: fx.impact, key })
-          later(() => setImpactFx(prev => (prev?.key === key ? null : prev)), IMPACT_MS[fx.impact])
+          setImpactFx({ id: defId, kind: fx.impact, lead: fx.lead, key })
+          later(() => setImpactFx(prev => (prev?.key === key ? null : prev)), impactDurationMs(fx.impact, fx.lead))
           setShakingId(defId)
           later(() => setShakingId(null), 450)
 
@@ -824,7 +826,7 @@ export default function BattleScene({
     // FX por habilidade ancorados no sprite: impacto / aura de buff / esquiva / crítico
     const fxOverlay = (
       <>
-        {impactFx?.id === fighter.id && <ImpactFX key={`imp-${impactFx.key}`} kind={impactFx.kind} side={side} />}
+        {impactFx?.id === fighter.id && <ImpactFX key={`imp-${impactFx.key}`} kind={impactFx.kind} lead={impactFx.lead} side={side} />}
         {auraFx?.id === fighter.id && <AuraFX key={`aura-${auraFx.key}`} kind={auraFx.kind} color={auraFx.color} />}
         {dodgeFxId === fighter.id && <DodgeFX side={side} />}
         {critId === fighter.id && <CritFX />}

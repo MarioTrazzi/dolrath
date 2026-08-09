@@ -43,6 +43,7 @@ import {
   getSkillUnlocks,
   applyRankPatch,
 } from '@/lib/skillTree'
+import { specialDisplayName, classAttackDisplayName } from '@/lib/weaponFlavor'
 import { applyEnhancementToStats } from '@/lib/enhancementSystem'
 import { isBroken, wearFor } from '@/lib/durability'
 import { getLevelInfo } from '@/lib/experienceSystem'
@@ -195,6 +196,7 @@ const TIPS: { icon: string; text: string }[] = [
   { icon: '⚡', text: 'A stamina se restaura sozinha: +2 a cada 15 min, após 15 min sem gastar.' },
   { icon: '💊', text: 'A run joga sozinha — use o botão de poções para ligar ou desligar o uso automático de HP/MP entre os nós.' },
   { icon: '✨', text: 'Salas principais (⚔️) têm monstro garantido e o melhor espólio — os bosses guardam os itens raros.' },
+  { icon: '🎒', text: 'Com o freio da mochila ligado, a run encerra sozinha quando o inventário enche — nada de queimar stamina por espólio que se perde.' },
 ]
 
 const MONSTER_ID = 'dungeon-monster'
@@ -517,6 +519,20 @@ const ZOOM_CHARGE = 2.4
  * fim próprio; quem cobre uma espera mais longa é o overlay calmo (`stepSlow`).
  */
 const FLASH_MS = 560
+/**
+ * Carência antes de DESENHAR qualquer aviso de espera. Na maioria das saídas o
+ * /finish já aterrissou (o jogador passou segundos lendo o resumo) e sair é
+ * instantâneo — sem esta carência o spinner piscaria por um frame em toda saída
+ * e em todo ciclo do farm automático, que é exatamente a sensação de travado que
+ * o aviso deveria matar.
+ */
+const LEAVING_GRACE_MS = 200
+/**
+ * Quanto o overlay de saída espera antes de admitir que está demorando. O /finish
+ * normal aterrissa bem abaixo disto; passar daqui já é rede ruim ou invocação
+ * fria, e aí o texto precisa pedir para NÃO fechar a aba (o retry ainda salva).
+ */
+const LEAVING_SLOW_MS = 4000
 /** Teto de largura da exploração alargada (`wideExplore`) — bem aquém do teto
  * do combate: ainda é mapa, não arena, e o mundo gerado (ver generateMap.ts)
  * é uma trilha estreita — alargar demais só exporia vazio nas pontas. */
@@ -982,6 +998,24 @@ export default function DungeonRun({
   const [autoCombat, setAutoCombat] = useState(true)
   // Uso automático de poções de HP/MP entre nós (e emergência em combate).
   const [autoConsumables, setAutoConsumables] = useState(true)
+  /**
+   * 🎒 Encerrar a run quando a mochila encher. Mesma família das poções
+   * automáticas: uma conveniência LIGADA por padrão, visível e desligável na
+   * barra. Sem slot livre o espólio vira pó e a stamina continua saindo — parar
+   * é quase sempre o que o jogador queria, e quem farma só ouro/XP desliga.
+   *
+   * Persistido no localStorage porque o farm automático REMONTA o componente a
+   * cada run: sem isto, o "desliguei" do jogador voltaria a ligar sozinho na run
+   * seguinte (mesmo caminho do índice das dicas).
+   */
+  const [stopWhenFull, setStopWhenFull] = useState(() => {
+    try { return localStorage.getItem('dgn_stop_full') !== '0' } catch { return true }
+  })
+  const stopWhenFullRef = useRef(true)
+  stopWhenFullRef.current = stopWhenFull
+  useEffect(() => {
+    try { localStorage.setItem('dgn_stop_full', stopWhenFull ? '1' : '0') } catch { /* modo privado */ }
+  }, [stopWhenFull])
   // Diálogo de confirmação ao sair: PAUSA a run (o piloto não age enquanto aberto).
   const [exitConfirm, setExitConfirm] = useState(false)
   /**
@@ -1001,8 +1035,28 @@ export default function DungeonRun({
    */
   const stopAfterFightRef = useRef(false)
   const [stopAfterFight, setStopAfterFight] = useState(false)
+  /** O freio que encerrou a run foi a MOCHILA CHEIA (muda os textos e mata o farm). */
+  const bagFullStopRef = useRef(false)
+  const [bagFullStop, setBagFullStop] = useState(false)
   /** Havia um /step JÁ PAGO em voo quando o freio foi puxado (texto do card). */
   const [stopCaughtPaidStep, setStopCaughtPaidStep] = useState(false)
+  /**
+   * ⏳ Espera do /finish, que é a ÚNICA escrita da run inteira: uma transação com
+   * orçamento de 20s no servidor, ainda por cima reenviada com backoff. Quem
+   * aguarda essa promessa (`exitRun`, `restartRun`) ficava segundos sem mudar
+   * nada na tela, e o clique em "Voltar ao mapa" parecia não ter pegado.
+   *
+   *  • `leaving`      — o jogador já pediu para sair E estamos aguardando
+   *  • `showLeaving`  — o mesmo, passada a carência: só ISTO desenha o overlay
+   *  • `leavingSlow`  — passou do razoável; o texto escala em vez de só girar
+   *  • `finishPending`— o POST está no ar, com ou sem alguém esperando por ele
+   *  • `showSaving`   — o mesmo, passada a carência: só ISTO desenha a pílula
+   */
+  const [leaving, setLeaving] = useState<null | 'exit' | 'rerun'>(null)
+  const [showLeaving, setShowLeaving] = useState(false)
+  const [leavingSlow, setLeavingSlow] = useState(false)
+  const [finishPending, setFinishPending] = useState(false)
+  const [showSaving, setShowSaving] = useState(false)
   /**
    * Encontro que chegou com o freio puxado: o nó foi pago e resolvido, mas a
    * arena não abre atrás do card. Cancelar entra nesta luta — sem isto o
@@ -1184,6 +1238,32 @@ export default function DungeonRun({
     return () => clearTimeout(t)
   }, [exploreRolling])
 
+  // Mesma escada para a saída, com um degrau a mais na frente: a carência (nada
+  // pisca numa saída instantânea), o overlay, e por fim o texto que admite a
+  // demora — senão o jogador fecha a aba achando que o jogo morreu, quando o
+  // retry do /finish ainda salvaria a run.
+  useEffect(() => {
+    if (!leaving) {
+      setShowLeaving(false)
+      setLeavingSlow(false)
+      return
+    }
+    const show = setTimeout(() => setShowLeaving(true), LEAVING_GRACE_MS)
+    const slow = setTimeout(() => setLeavingSlow(true), LEAVING_SLOW_MS)
+    return () => { clearTimeout(show); clearTimeout(slow) }
+  }, [leaving])
+
+  // A pílula do resumo tem a mesma carência: um /finish rápido não deve empurrar
+  // os botões para baixo por 200ms e voltar.
+  useEffect(() => {
+    if (!finishPending) {
+      setShowSaving(false)
+      return
+    }
+    const t = setTimeout(() => setShowSaving(true), LEAVING_GRACE_MS)
+    return () => clearTimeout(t)
+  }, [finishPending])
+
   const pushLog = useCallback((msg: string) => {
     setLog(prev => [...prev.slice(-40), msg])
   }, [])
@@ -1217,6 +1297,28 @@ export default function DungeonRun({
     setBattleEvent({ ...data, id: battleEventCounter.current })
   }, [])
 
+  /**
+   * 🎒 Freio da mochila cheia — chamado na entrada da run e depois de TODO
+   * espólio (é `predictSkipped` quem gasta os slots previstos).
+   *
+   * Não corta nada no meio: reaproveita o "sair ao fim da luta", então a luta em
+   * andamento termina normal (o espólio dela já foi contado) e a run encerra sem
+   * pagar um nó novo — quem barra o /step seguinte é a guarda do `advance`.
+   * Desliga o farm automático junto: re-rodar de mochila cheia é o pior dos dois
+   * mundos (paga a Alquimista e perde o espólio inteiro).
+   */
+  const maybeStopForFullBag = useCallback(() => {
+    if (!stopWhenFullRef.current || bagFullStopRef.current) return
+    if (freeSlotsRef.current == null || freeSlotsRef.current > 0) return
+    bagFullStopRef.current = true
+    stopAfterFightRef.current = true
+    setBagFullStop(true)
+    setStopAfterFight(true)
+    autoFarmRef.current = false
+    setAutoFarm(false)
+    showBanner('🎒', 'Mochila cheia — a run encerra aqui para não perder mais espólio.', 4200, { sticky: true })
+  }, [showBanner])
+
   // Abre a sessão no servidor (uma vez). O servidor valida posse + gating e
   // passa a ser dono do RNG/recompensas. A caminhada até o 1º nó já começa em
   // paralelo — quem espera o runId é o /step, na chegada (runReadyPromiseRef).
@@ -1249,15 +1351,24 @@ export default function DungeonRun({
           freeSlotsRef.current = Math.max(0, data.inventorySlots - data.inventoryUsed)
         }
         setRunReady(true)
-        // Inventário já cheio ao entrar: avisa que os drops não vão ser coletados.
+        // Inventário já cheio ao ENTRAR. Com o freio ligado a run nem chega a dar
+        // o primeiro passo (o `advance` fecha antes de gastar stamina); desligado,
+        // segue como sempre foi — avisando que o espólio vai se perder.
         if (data.inventoryFull) {
-          later(() => showBanner('🎒', 'Inventário cheio — itens encontrados não serão coletados. Abra espaço e saia para farmar de novo.', 3600, { sticky: true }), 400)
+          if (stopWhenFullRef.current) {
+            // Sem atraso de propósito: o piloto dispara o primeiro `advance` ~800ms
+            // depois de montar, e o freio precisa estar armado ANTES disso — senão
+            // a run ainda paga um nó que não podia guardar nada.
+            maybeStopForFullBag()
+          } else {
+            later(() => showBanner('🎒', 'Inventário cheio — itens encontrados não serão coletados. Abra espaço e saia para farmar de novo.', 3600, { sticky: true }), 400)
+          }
         }
       } catch {
         showBanner('⚠️', 'Sem conexão com o servidor')
       }
     })()
-  }, [character.id, dungeon.id, showBanner, later])
+  }, [character.id, dungeon.id, showBanner, later, maybeStopForFullBag])
 
   // 💓 Heartbeat: mantém o lock vivo enquanto a run está aberta. Se o servidor
   // disser que a run não está mais ativa (assumida/encerrada noutro lugar), bloqueia.
@@ -1396,8 +1507,21 @@ export default function DungeonRun({
   useEffect(() => { setHp((h) => Math.min(h, effMaxHp)) }, [effMaxHp])
   // Poder efetivo de um ataque = poder do lever × multiplicador do tipo.
   const playerPowerFor = (kind: AttackKind) => playerLevers.power * ATTACKS[kind].powerMult
+  // ⚔️ Arma equipada: tempera o NOME dos golpes (Explosão de Cosmo + arco = Flecha Cósmica)
+  // e, no BattleScene, a animação. Só flavor — nada de dano/custo muda com ela.
+  const weaponType = useMemo(
+    () => equipList.find((e: any) => e?.slot === 'WEAPON')?.item?.type as string | undefined,
+    [equipList],
+  )
+  const specialName = useCallback(
+    (def: SpecialDef) => specialDisplayName(def, weaponType),
+    [weaponType],
+  )
   // Nome do ATAQUE DE CLASSE (o `weapon`, d8) por classe — Ataque Furtivo/Bola de Fogo/etc.
-  const classAtkName = useMemo(() => classAttackName(character.class), [character.class])
+  const classAtkName = useMemo(
+    () => classAttackDisplayName(character.class, weaponType, classAttackName(character.class)),
+    [character.class, weaponType],
+  )
   // Ataque de Classe efetivo (dado/custo já com os ranks II/III comprados).
   const effWeaponDie = unlocks.classAttackDie
   const effWeaponMp = unlocks.classAttackMp
@@ -1515,6 +1639,7 @@ export default function DungeonRun({
     // showLoot já joga ouro/itens na bag + float do raro+; sem gear/ouro, o log
     // registra a ambientação pra não ficar totalmente mudo (sem card na tela).
     showLoot(loot, predictSkipped(loot.drops), data.roll)
+    maybeStopForFullBag()
 
     const hasGear = loot.drops.some(d => d.kind === 'item' || d.kind === 'stone')
     const anyDrop = loot.drops.length > 0 || loot.gold > 0
@@ -1709,6 +1834,10 @@ export default function DungeonRun({
   const advance = async () => {
     if (stopRequestedRef.current) return // freio de mão: nenhum /step novo sai daqui
     if (phase !== 'explore' || exploreRolling || walkBusy || atBoss || combatIntro) return
+    // ⏳ "Encerrar sem gastar um nó novo" (mochila cheia, ou pedido durante a
+    // luta que acabou fora de combate): a run fecha AQUI, na fronteira em que
+    // ainda não saiu /step nenhum — nada de stamina gasta para nada.
+    if (stopAfterFightRef.current) { finishRun(false); return }
     // Na CENA a caminhada pode começar antes do /start aterrissar (start otimista):
     // quem espera o runId é o finishWalkStep, na chegada ao nó. Nos outros modos
     // o /step vem logo em seguida, então continua exigindo a sessão aberta.
@@ -2179,9 +2308,10 @@ export default function DungeonRun({
       return
     }
     const fx = combatFxRef.current
-    if ((fx.cd[def.id] || 0) > 0) { showBanner('⏳', `${def.name} em recarga (${fx.cd[def.id]})`); return }
+    const shownName = specialName(def)
+    if ((fx.cd[def.id] || 0) > 0) { showBanner('⏳', `${shownName} em recarga (${fx.cd[def.id]})`); return }
     const mpCost = def.cost.mp || 0
-    if (mp < mpCost) { showBanner('🔵', `MP insuficiente para ${def.name} (${mpCost}🔵)`); return }
+    if (mp < mpCost) { showBanner('🔵', `MP insuficiente para ${shownName} (${mpCost}🔵)`); return }
 
     if (def.kind === 'util') {
       setStage('busy'); setPendingAttack(null); setPendingAbility(null); setHasRolled(false)
@@ -2189,8 +2319,8 @@ export default function DungeonRun({
       setCombatFx(prev => ({ ...prev, cd: { ...prev.cd, [def.id]: def.cd } }))
       applyUtil(def)
       pushBattleEvent({ kind: 'buff', actorId: character.id, action: def.id })
-      pushLog(`${def.name}: ${def.desc}`)
-      showBanner('✨', def.name)
+      pushLog(`${shownName}: ${def.desc}`)
+      showBanner('✨', shownName)
       tickPlayerTurn()
       // Espera o STATUS_FX_DELAY (1700ms) render antes de avançar de fase.
       later(() => startEnemyPhase(), 2000)
@@ -2245,8 +2375,9 @@ export default function DungeonRun({
     const newHp = Math.max(0, m.hp - dmg)
     // action = id da habilidade (dragon_breath, super_nova...) → animação própria na arena
     pushBattleEvent({ kind: 'resolve', attackerId: character.id, defenderId: m.id, action: def.id, defenseAction: 'none', hit: true, damage: dmg, isCritical: hit.crit })
-    pushLog(`${def.name} (d${def.die ?? 20}=${roll}): ${dmg} de dano${hit.crit ? ' CRÍTICO' : ''} em ${m.name}`)
-    showBanner('💥', def.name)
+    const shown = specialName(def)
+    pushLog(`${shown} (d${def.die ?? 20}=${roll}): ${dmg} de dano${hit.crit ? ' CRÍTICO' : ''} em ${m.name}`)
+    showBanner('💥', shown)
     later(() => {
       setMonster(prev => (prev && prev.id === m.id ? { ...prev, hp: newHp } : prev))
       setPack(prev => prev.map(x => (x.id === m.id ? { ...x, hp: newHp } : x)))
@@ -2730,6 +2861,9 @@ export default function DungeonRun({
     // Sem card de vitória: showLoot já jogou os itens na bag (e piscou o ícone
     // dos raro+ na tela) — o combate não trava esperando clique nenhum.
     showLoot(loot, predictSkipped(nodeDrops), lootRollRef.current)
+    // 🎒 Encheu com o espólio DESTE nó: arma o freio agora, antes do `later`
+    // abaixo — é ele que lê `stopAfterFightRef` e encerra a run na vitória.
+    maybeStopForFullBag()
     later(() => {
       setMonster(null)
       setPack([])
@@ -2803,12 +2937,17 @@ export default function DungeonRun({
   const canRerun = !!onRestart && stamina >= MINOR_STEP_COST
   const restartRun = async () => {
     if (!onRestart) { exitRun(); return }
+    // ⏳ Mesma espera do exitRun (o /finish), mais o POST da Alquimista quando o
+    // farm automático está ligado. São dois round-trips antes de a run remontar.
+    setLeaving('rerun')
     // Run nova começa com o freio solto — os pedidos de parada valiam para a run
     // que acabou de fechar.
     stopRequestedRef.current = false
     stopAfterFightRef.current = false
     caughtEncounterRef.current = null
+    bagFullStopRef.current = false
     setStopAfterFight(false)
+    setBagFullStop(false)
     setStopCaughtPaidStep(false)
     // A ORDEM importa: o /finish persiste a fração de HP/MP E credita o ouro da
     // run. Só depois dele a Alquimista vê o estado certo (e o saldo certo).
@@ -2830,6 +2969,9 @@ export default function DungeonRun({
       pools = { hp: character.maxHp, mp: character.maxMp }
     }
 
+    // Como no exitRun: baixa junto com a entrega ao pai, que remonta a run com
+    // uma `key` nova (este componente inteiro sai de cena).
+    setLeaving(null)
     onRestart({
       ...pools,
       // Ref, não o valor do render: o /finish aguardado acima pode ter estornado
@@ -2969,7 +3111,13 @@ export default function DungeonRun({
           }
           giveUp()
         })
-    endRunPromiseRef.current = attempt(3, 1000)
+    // A bandeira do POST em voo é levantada AQUI (e não em quem chama): o resumo
+    // aparece antes de o crédito aterrissar, e é essa janela que a pílula
+    // "salvando o espólio" explica.
+    setFinishPending(true)
+    // `attempt` nunca rejeita, e o `.finally` repassa a resolução — quem faz
+    // `await endRunPromiseRef.current` continua vendo a mesma promessa de antes.
+    endRunPromiseRef.current = attempt(3, 1000).finally(() => setFinishPending(false))
   }
 
   // 🔌 Saída "suja": fechar a aba, dar F5 ou navegar pela navbar não passa por
@@ -3071,6 +3219,9 @@ export default function DungeonRun({
   }
 
   const exitRun = async () => {
+    // ⏳ Overlay ANTES do await: o crédito da run pode levar segundos e sem isto
+    // a tela ficava idêntica, como se o clique não tivesse pegado.
+    setLeaving('exit')
     // Garante o encerramento da sessão no servidor ao sair (creditando abates
     // pendentes, se saiu do meio de um combate).
     closeRunOnServer('retreat')
@@ -3083,6 +3234,9 @@ export default function DungeonRun({
     // o card do mapa mostra o herói machucado na hora, sem esperar refetch.
     // Stamina pelo REF: o /finish esperado logo acima pode ter devolvido o passo
     // de um nó que ficou por jogar, e o valor do render é anterior a isso.
+    // Baixar a bandeira no MESMO tick do onExit: o pai desmonta a run em
+    // seguida, então não há frame com o overlay já apagado por cima do resumo.
+    setLeaving(null)
     onExit({ ...exitPools(), stamina: staminaRef.current, leveledUp: leveledUpThisRun })
   }
 
@@ -3091,6 +3245,14 @@ export default function DungeonRun({
   // Alquimista, e a Alquimista cobra (a partir do nível 7).
   const farmToggle = (
     <div className="mb-3 flex flex-col items-center gap-1.5">
+      {/* 🎒 O farm não se desligou sozinho por capricho: sem slot livre a próxima
+          run só queimaria stamina (e o ouro da Alquimista) por espólio nenhum. */}
+      {bagFullStop && (
+        <div className="mb-1 rounded-lg border border-amber-300/30 bg-amber-500/10 px-3 py-1.5 text-[10px] leading-tight text-amber-100/85 max-w-[17rem]">
+          🎒 A mochila encheu — a run parou aqui e o farm automático foi desligado.
+          Libere espaço (ou compre slots) antes de voltar.
+        </div>
+      )}
       <button
         onClick={() => setAutoFarm(v => !v)}
         className={`px-4 py-1.5 rounded-lg text-[11px] font-black border transition-colors ${
@@ -3108,6 +3270,22 @@ export default function DungeonRun({
             : `Refaz a run sozinho. A restauração é gratuita até o nível ${FREE_RESTORE_MAX_LEVEL}.`
           : 'Você refaz a run na mão, com a vida e a mana que sobraram.'}
       </div>
+    </div>
+  )
+
+  /**
+   * ⏳ O resumo aparece na hora (o `finishRun` dispara o POST sem esperar), mas o
+   * crédito ainda está viajando. Esta pílula preenche justamente essa janela —
+   * é a explicação de por que o botão de sair, clicado agora, vai demorar.
+   * Some sozinha quando o /finish aterrissa; quando alguém já está esperando por
+   * ele (`leaving`), o overlay assume e a pílula sai de cena. Num /finish rápido
+   * nem chega a aparecer (ver LEAVING_GRACE_MS).
+   */
+  const savingPill = showSaving && !leaving && (
+    <div className="mb-3 flex justify-center">
+      <span className="inline-flex items-center rounded-full border border-amber-300/40 bg-black/75 px-3 py-1 text-[10px] font-bold text-amber-200 backdrop-blur-sm animate-pulse">
+        ⏳ Salvando o espólio no servidor...
+      </span>
     </div>
   )
 
@@ -3141,7 +3319,7 @@ export default function DungeonRun({
         visible: true,
         diceType: sides,
         hasRolled,
-        label: `${pendingAbility.name} — role o d${sides}!`,
+        label: `${specialName(pendingAbility)} — role o d${sides}!`,
         onRoll: handleAbilityRoll,
         myResult: panelResult,
         waitingForOpponent: false,
@@ -3163,7 +3341,7 @@ export default function DungeonRun({
     }
     return null
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, stage, hasRolled, panelResult, diceResults, pendingAttack, pendingAbility, classAtkName, stamina, mp])
+  }, [phase, stage, hasRolled, panelResult, diceResults, pendingAttack, pendingAbility, classAtkName, specialName, stamina, mp])
 
   // Rola o dado sozinho assim que o jogador escolhe um golpe/habilidade — não precisa
   // mais clicar no dado, só no ataque. Vale mesmo fora do piloto automático.
@@ -3693,7 +3871,9 @@ export default function DungeonRun({
         {stopAfterFight && phase !== 'summary' && (
           <div className="absolute top-1.5 inset-x-0 z-30 flex justify-center pointer-events-none px-3">
             <div className="rounded-full border border-amber-300/40 bg-black/75 px-3 py-1 text-[10px] font-bold text-amber-200 backdrop-blur-sm">
-              ⏳ Encerrando ao fim desta luta — sem gastar stamina num nó novo
+              {bagFullStop
+                ? '🎒 Mochila cheia — encerrando sem gastar stamina num nó novo'
+                : '⏳ Encerrando ao fim desta luta — sem gastar stamina num nó novo'}
             </div>
           </div>
         )}
@@ -3988,6 +4168,54 @@ export default function DungeonRun({
           )}
         </AnimatePresence>
 
+        {/* ---------- ⏳ Saindo: o /finish ainda está no ar ----------
+            O crédito da run inteira é UMA transação (orçamento de 20s no
+            servidor) e ainda é reenviada com backoff. Sem este card o clique em
+            "Voltar ao mapa" não mudava NADA na tela por segundos e parecia
+            travado. Fica acima do card de saída (z-[60]) e do flash de encontro
+            (z-[65]), e captura o ponteiro de propósito: clicar de novo não
+            adianta — a entrega já está em curso. */}
+        <AnimatePresence>
+          {showLeaving && (
+            <motion.div
+              key="leaving"
+              className="absolute inset-0 z-[70] grid place-items-center px-6"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <div className="absolute inset-0 bg-black/85 backdrop-blur-md" />
+              <div
+                className="relative w-full max-w-xs rounded-2xl p-6 text-center"
+                style={{
+                  background: 'linear-gradient(180deg, rgba(30,30,63,0.96), rgba(15,15,35,0.98))',
+                  border: `1px solid ${dungeon.accentSoft}`,
+                  boxShadow: `0 24px 60px -12px ${dungeon.accentSoft}`,
+                }}
+              >
+                <motion.div
+                  className="mx-auto mb-3 h-10 w-10 rounded-full border-2 border-white/10"
+                  style={{ borderTopColor: dungeon.accent }}
+                  animate={reducedMotionRef.current ? undefined : { rotate: 360 }}
+                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                />
+                <h3 className="text-base font-black text-white mb-1">
+                  {leaving === 'rerun' ? 'Preparando a próxima run...' : 'Salvando o espólio da run...'}
+                </h3>
+                <p className="text-[11px] leading-snug text-textsec">
+                  Creditando ouro, XP e itens no seu herói.
+                </p>
+                {leavingSlow && (
+                  <p className="mt-2 text-[11px] leading-snug text-amber-200/90">
+                    Está demorando mais que o normal — não feche a aba, nada foi perdido.
+                  </p>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* ============================================================ */}
         {/* FASE: EXPLORAÇÃO */}
         {/* ============================================================ */}
@@ -4101,6 +4329,20 @@ export default function DungeonRun({
                     >
                       💊
                       <span className={`absolute bottom-1 right-1 w-2 h-2 rounded-full ${autoConsumables ? 'bg-emerald-200' : 'bg-white/25'}`} />
+                    </button>
+                    <button
+                      onClick={() => setStopWhenFull(v => !v)}
+                      title={stopWhenFull
+                        ? 'Encerrar a run quando a mochila encher — clique para desligar'
+                        : 'A run segue mesmo de mochila cheia (o espólio se perde) — clique para ligar o freio'}
+                      className={`shrink-0 w-11 h-11 grid place-items-center rounded-xl border transition-colors active:scale-95 relative ${
+                        stopWhenFull
+                          ? 'bg-amber-600/85 border-amber-300/60 text-white'
+                          : 'bg-black/50 border-white/10 text-white/50 hover:text-white'
+                      }`}
+                    >
+                      🎒
+                      <span className={`absolute bottom-1 right-1 w-2 h-2 rounded-full ${stopWhenFull ? 'bg-amber-200' : 'bg-white/25'}`} />
                     </button>
                     <button
                       onClick={() => { loadConsumables(); setShowItems(true) }}
@@ -4224,7 +4466,7 @@ export default function DungeonRun({
               const mpCost = def.cost.mp || 0
               return {
                 key: def.id,
-                label: def.name,
+                label: specialName(def),
                 locked: cd > 0 || mp < mpCost,
                 sub: cd > 0 ? `recarga ${cd}` : `${def.kind === 'dmg' ? `d${def.die ?? 20}·` : ''}${mpCost}MP`,
                 onPick: () => useAbility(def),
@@ -4314,6 +4556,20 @@ export default function DungeonRun({
                       }`}
                     >
                       💊 {autoConsumables ? 'ON' : 'OFF'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStopWhenFull(v => !v)}
+                      title={stopWhenFull
+                        ? 'Encerrar a run quando a mochila encher — clique para desligar'
+                        : 'A run segue mesmo de mochila cheia (o espólio se perde) — clique para ligar o freio'}
+                      className={`px-3 py-1.5 rounded-full text-[10px] font-black border transition-colors ${
+                        stopWhenFull
+                          ? 'bg-amber-600/85 border-amber-300/60 text-white'
+                          : 'bg-white/5 border-white/15 text-white/50 hover:text-white'
+                      }`}
+                    >
+                      🎒 {stopWhenFull ? 'ON' : 'OFF'}
                     </button>
                   </>
                 ) : null
@@ -4471,19 +4727,22 @@ export default function DungeonRun({
                   🤖 Farm visual: refazendo a run (mantenha a aba aberta)…
                 </div>
               )}
+              {savingPill}
               {farmToggle}
               <div className="flex flex-col sm:flex-row gap-2 justify-center">
                 {canRerun && (
                   <button
                     onClick={restartRun}
-                    className="px-8 py-3 rounded-xl font-black text-white text-sm bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 hover:to-orange-400 shadow-lg transition-all hover:scale-105"
+                    disabled={!!leaving}
+                    className="px-8 py-3 rounded-xl font-black text-white text-sm bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 hover:to-orange-400 shadow-lg transition-all hover:scale-105 disabled:opacity-60 disabled:cursor-wait disabled:hover:scale-100"
                   >
                     🔁 Nova run
                   </button>
                 )}
                 <button
                   onClick={exitRun}
-                  className="px-8 py-3 rounded-xl font-black text-white text-sm bg-gradient-to-r from-emerald-700 to-teal-600 hover:from-emerald-600 hover:to-teal-500 shadow-lg transition-all hover:scale-105"
+                  disabled={!!leaving}
+                  className="px-8 py-3 rounded-xl font-black text-white text-sm bg-gradient-to-r from-emerald-700 to-teal-600 hover:from-emerald-600 hover:to-teal-500 shadow-lg transition-all hover:scale-105 disabled:opacity-60 disabled:cursor-wait disabled:hover:scale-100"
                 >
                   🏠 Voltar ao mapa
                 </button>
@@ -4520,19 +4779,22 @@ export default function DungeonRun({
                   🤖 Farm visual: refazendo a run (mantenha a aba aberta)…
                 </div>
               )}
+              {savingPill}
               {farmToggle}
               <div className="flex flex-col sm:flex-row gap-2 justify-center">
                 {canRerun && (
                   <button
                     onClick={restartRun}
-                    className="px-8 py-3 rounded-xl font-black text-white text-sm bg-gradient-to-r from-emerald-700 to-teal-600 hover:from-emerald-600 hover:to-teal-500 shadow-lg transition-all hover:scale-105"
+                    disabled={!!leaving}
+                    className="px-8 py-3 rounded-xl font-black text-white text-sm bg-gradient-to-r from-emerald-700 to-teal-600 hover:from-emerald-600 hover:to-teal-500 shadow-lg transition-all hover:scale-105 disabled:opacity-60 disabled:cursor-wait disabled:hover:scale-100"
                   >
                     🔁 Refazer a run
                   </button>
                 )}
                 <button
                   onClick={exitRun}
-                  className="px-8 py-3 rounded-xl font-black text-white text-sm bg-gradient-to-r from-stone-700 to-stone-600 hover:from-stone-600 hover:to-stone-500 shadow-lg transition-all hover:scale-105"
+                  disabled={!!leaving}
+                  className="px-8 py-3 rounded-xl font-black text-white text-sm bg-gradient-to-r from-stone-700 to-stone-600 hover:from-stone-600 hover:to-stone-500 shadow-lg transition-all hover:scale-105 disabled:opacity-60 disabled:cursor-wait disabled:hover:scale-100"
                 >
                   🏠 Voltar ao mapa
                 </button>

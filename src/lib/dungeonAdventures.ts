@@ -5,7 +5,10 @@
 // - Usado pela experiência nova de masmorras (DungeonRun + BattleScene)
 // ============================================================
 
-import { getDungeonConsumables, rollEquipmentDrop, getIngredientByName, getForgeMaterialByName, type Rarity } from './itemCatalog'
+import {
+  getDungeonConsumables, getConsumableByName, rollEquipmentDrop, getIngredientByName,
+  getForgeMaterialByName, RARITY_DROP_WEIGHT, type Rarity, type ConsumableItem,
+} from './itemCatalog'
 import { STONE_NAMES, getStatMultiplier } from './enhancementSystem'
 import { computeLevers, powerScale, deriveGearTier, type CombatClass } from './combatModel'
 
@@ -429,7 +432,11 @@ const TIER_POWER_STEP = 0.6  // p/ recompensas (gold/xp) por SALA (s.tier) — n
 export const MAX_DUNGEON_TIER = 5
 export const CONCENTRATED_MIN_TIER = 3
 const DUNGEON_TIER_POWER_STEP = 0.18  // +18% em poder/HP do monstro por tier acima de 1
-const DUNGEON_TIER_REWARD_STEP = 0.15 // +15% em gold/xp por tier acima de 1
+// ⚖️ 2026-08-05 (pedido do Mario): recompensa PAREADA com a dificuldade. Era 0.15
+// contra 0.18 de poder, ou seja, subir de tier custava mais do que rendia em tudo
+// que não fosse pedra concentrada. Como a stamina por run NÃO muda com o tier, a
+// recompensa/stamina agora acompanha exatamente a curva do monstro.
+const DUNGEON_TIER_REWARD_STEP = 0.18 // +18% em gold/xp/drops por tier acima de 1
 export const clampDungeonTier = (t: unknown) =>
   Math.max(1, Math.min(MAX_DUNGEON_TIER, Math.floor(Number(t) || 1)))
 const dungeonTierPowerMult = (tier: number) => 1 + (clampDungeonTier(tier) - 1) * DUNGEON_TIER_POWER_STEP
@@ -965,16 +972,110 @@ const HIGH_TIER_BOSS_ING_CHANCE = 0.15
 
 // Quando um equipamento cai num nó, esta é a chance de ele ser INCOMUM de OUTRA classe
 // (item que o personagem atual não equipa) — incentivo a criar/treinar outro herói.
-const CROSS_CLASS_CHANCE = 0.2
+// ⚠️ Abaixo de CROSS_CLASS_MIN_LEVEL o pool 'foreign' de um ladino tem UM item
+// elegível (o escudo), então o "teaser" virava monocultura: todo drop cross-class
+// era o mesmo escudo, ainda por cima com o +N da Floresta. A partir do nv6 o pool
+// tem 10-11 tipos distintos e o teaser volta a ser variado.
+const CROSS_CLASS_CHANCE = 0.07
+const CROSS_CLASS_MIN_LEVEL = 6
 
 // Acessórios (anel/colar/cinto) NUNCA caem aprimorados — começam no tier base.
 // Só armas/armaduras podem vir com +N embutido.
 const ACCESSORY_TYPES = new Set(['RING', 'NECKLACE', 'BELT'])
 
-// Pó de Fênix (revive) quase não se usa no início, então só passa a cair a partir
-// da Caverna (2★+).
+// Poção de PONTA por masmorra: o cap de nível do herói sozinho não basta, porque
+// nada impede um herói veterano de farmar a Floresta. Estes só passam a cair a
+// partir da masmorra indicada — a 1★ entrega fôlego (HP/MP/stamina), não luxo.
 const CONSUMABLE_MIN_DIFFICULTY_STARS: Record<string, number> = {
-  'Pó de Fênix': 2,
+  'Pó de Fênix': 2,           // revive quase não se usa no início (Caverna+)
+  'Tônico do Berserker': 2,   // buff de ataque de ponta — não é espólio de Floresta
+  'Elixir Supremo': 2,
+  'Poção de Cura Suprema': 3,
+}
+
+// 🧪 CONSUMÍVEL DE MASMORRA
+// Poções básicas da LOJA que a masmorra também entrega. São o miolo do slot de
+// consumível nos primeiros níveis: o CONSUMABLE_CATALOG não tem NENHUM item
+// COMMON com source 'dungeon', e era exatamente por isso que o filtro
+// `rarity === 'COMMON'` produzia pool vazio e o fallback liberava Pó de Fênix
+// (ÉPICO nv12, exclusivo de covil) num nó menor da Floresta para um herói nv3.
+// Não criam entrada nova: addDropToInventoryTx resolve o consumível pelo NOME.
+const BASIC_DUNGEON_CONSUMABLES = [
+  'Poção de Vida Pequena', 'Poção de Mana', 'Poção de Stamina', 'Elixir Menor',
+  'Poção de Vida', 'Antídoto', 'Poção de Força', 'Poção de Defesa', 'Poção de Agilidade',
+]
+
+// O que segura uma run no início é HP/MP — buff de combate é luxo. Estes subtipos
+// ganham peso extra enquanto o herói é novo (ver levelMix.sustain).
+const SUSTAIN_SUBTYPES = new Set(['HEALTH_POTION', 'MANA_POTION', 'ELIXIR'])
+
+// ⚖️ MISTURA DO ESPÓLIO POR NÍVEL (pedido do Mario 2026-08-05)
+// O começo do jogo precisa de FÔLEGO para chegar no chefe, não de insumo de craft
+// que só será usado muito depois. Até `fromLevel` o slot de consumível vale ~2.1×
+// e o material temático cai a 0.6×; de `toLevel` em diante a mistura é a de
+// sempre, interpolando linearmente no meio.
+// NÃO toca em estilhaço/pedra: esses alimentam o APRIMORAMENTO, que o jogador usa
+// desde cedo, e suas âncoras de sim são as mais sensíveis do loot.
+const LOOT_MIX_RAMP = {
+  fromLevel: 5,
+  toLevel: 12,
+  earlyConsumable: 2.1,
+  earlyMaterial: 0.6,
+  earlySustain: 2.5, // peso extra de HP/MP dentro do pool de consumível
+}
+
+function levelMix(level: number) {
+  const { fromLevel, toLevel, earlyConsumable, earlyMaterial, earlySustain } = LOOT_MIX_RAMP
+  const t = Math.max(0, Math.min(1, (level - fromLevel) / (toLevel - fromLevel)))
+  const lerpToOne = (early: number) => early + (1 - early) * t
+  return {
+    consumable: lerpToOne(earlyConsumable),
+    material: lerpToOne(earlyMaterial),
+    sustain: lerpToOne(earlySustain),
+  }
+}
+
+/**
+ * Pool de consumível que a masmorra pode entregar, com TODAS as regras num lugar
+ * só (os 3 branches de consumível usavam filtros diferentes e incompletos):
+ *  - nunca acima do nível do herói (+1 de folga),
+ *  - exclusivo de chefe (`dungeon_boss`) só cai no covil,
+ *  - respeita CONSUMABLE_MIN_DIFFICULTY_STARS,
+ *  - opcionalmente restrito a certas raridades.
+ */
+function dungeonConsumablePool(
+  dungeon: DungeonDef,
+  level: number,
+  opts: { boss: boolean; rarities?: string[] },
+): ConsumableItem[] {
+  // Consumível casa com o nível do herói (sem a folga do gear) E com a banda da
+  // masmorra: farmar Floresta com um herói nv30 não pode entregar poção de Ruínas.
+  const cap = Math.min(level + 1, dungeon.clearLevel)
+  const basics = BASIC_DUNGEON_CONSUMABLES
+    .map(getConsumableByName)
+    .filter((c): c is ConsumableItem => !!c)
+  return [...basics, ...getDungeonConsumables()].filter((c) => {
+    if (c.level > cap) return false
+    if (!opts.boss && c.source === 'dungeon_boss') return false
+    if (opts.rarities && !opts.rarities.includes(rarityOf(c))) return false
+    const minStars = CONSUMABLE_MIN_DIFFICULTY_STARS[c.name]
+    if (minStars && dungeon.difficultyStars < minStars) return false
+    return true
+  })
+}
+
+/** Sorteio de consumível por raridade × bônus de fôlego (HP/MP no início). */
+function pickConsumable(pool: ConsumableItem[], sustainMult: number): ConsumableItem | undefined {
+  if (!pool.length) return undefined
+  const weightOf = (c: ConsumableItem) =>
+    (RARITY_DROP_WEIGHT[c.rarity] ?? 1) * (SUSTAIN_SUBTYPES.has(c.subtype) ? sustainMult : 1)
+  const total = pool.reduce((s, c) => s + weightOf(c), 0)
+  let pick = Math.random() * total
+  for (const c of pool) {
+    pick -= weightOf(c)
+    if (pick < 0) return c
+  }
+  return pool[pool.length - 1]
 }
 
 // Aprimoramento JÁ embutido no drop, por masmorra. A floresta entrega itens +4..+7
@@ -1024,6 +1125,8 @@ export function rollNodeLoot(
   const tierChance = (p: number) => Math.min(0.95, p * tierReward)
   // Quantidade extra nos slots GARANTIDOS: +1 material em t3, +2 em t5.
   const matBonusQty = dt >= 5 ? 2 : dt >= 3 ? 1 : 0
+  // Mistura por nível: herói novo recebe mais poção e menos insumo de craft.
+  const mix = levelMix(level)
 
   const gold = Math.max(
     0,
@@ -1033,7 +1136,7 @@ export function rollNodeLoot(
   // 🌿 Material de craft (ingrediente de alquimia OU material de forja, temático
   // da masmorra). Pool incomum e quantidade extra de tier escalam com o roll
   // (o bônus de qtd fica no 17+, herdeiro do antigo "slot garantido").
-  if (Math.random() < pack.pMat * mult.all) {
+  if (Math.random() < pack.pMat * mult.all * mix.material) {
     const pool = Math.random() < pack.matUncFrac ? 'uncommon' : 'common'
     const qty = roll >= 17 ? 1 + matBonusQty : 1
     for (let i = 0; i < qty; i++) {
@@ -1050,7 +1153,7 @@ export function rollNodeLoot(
   // Estilhaço de Pedra Negra (Arma/Armadura): ligante de TODA receita de forja
   // (10 viram 1 Pedra Negra). É o material de craft "corrente" — deve ser bem
   // frequente. Roll dedicado (não some no sorteio uniforme dos outros materiais).
-  if (Math.random() < pack.pShard * mult.all) {
+  if (Math.random() < tierChance(pack.pShard) * mult.all) {
     const shard = Math.random() < SHARD_WEAPON_SHARE
       ? { name: 'Estilhaço de Pedra Negra (Arma)', emoji: '🔸' }
       : { name: 'Estilhaço de Pedra Negra (Armadura)', emoji: '🔹' }
@@ -1060,23 +1163,18 @@ export function rollNodeLoot(
   if (isBoss) {
     drops.push({ name: 'Estilhaço de Memória', kind: 'material', rarity: 'RARE', emoji: '🧠' })
   }
-  // consumível de masmorra
-  if (Math.random() < tierChance(pack.pConsumable) * mult.all) {
-    const all = getDungeonConsumables()
-    const pool = all.filter(c => rarityOf(c) === 'COMMON')
-    const c = pickFrom(pool.length ? pool : all)
+  // 🧪 Consumível de masmorra. No início o slot vale mais (mix.consumable) e puxa
+  // para HP/MP (mix.sustain): é o que sustenta a run até o chefe.
+  if (Math.random() < tierChance(pack.pConsumable * mix.consumable) * mult.all) {
+    const c = pickConsumable(dungeonConsumablePool(dungeon, level, { boss: isBoss }), mix.sustain)
     if (c) drops.push({ name: c.name, kind: 'consumable', rarity: rarityOf(c), emoji: '🧪' })
   }
   // poção rara/épica pronta fora do covil: chance natural baixa × fator do roll.
   if (!isBoss && Math.random() < pack.pConsumableRare * mult.all) {
-    const pool = getDungeonConsumables().filter(c => {
-      const r = rarityOf(c)
-      if (r !== 'RARE' && r !== 'EPIC') return false
-      const minStars = CONSUMABLE_MIN_DIFFICULTY_STARS[c.name]
-      if (minStars && dungeon.difficultyStars < minStars) return false
-      return true
-    })
-    const c = pickFrom(pool)
+    const c = pickConsumable(
+      dungeonConsumablePool(dungeon, level, { boss: false, rarities: ['RARE', 'EPIC'] }),
+      mix.sustain,
+    )
     if (c) drops.push({ name: c.name, kind: 'consumable', rarity: rarityOf(c), emoji: '🧪' })
   }
 
@@ -1094,7 +1192,7 @@ export function rollNodeLoot(
   }
 
   if (Math.random() < tierChance(pack.pGear) * mult.all) {
-    if (Math.random() < CROSS_CLASS_CHANCE) {
+    if (level >= CROSS_CLASS_MIN_LEVEL && Math.random() < CROSS_CLASS_CHANCE) {
       // Incomum de outra classe; se nada elegível (ex.: nível baixo), volta ao próprio.
       pushGear(
         rollEquipmentDrop(dungeon.id, level, race, charClass, ['UNCOMMON'], { mode: 'foreign' })
@@ -1118,14 +1216,10 @@ export function rollNodeLoot(
     }
     // poção raro/épica PRONTA (alternativa ao craft) — chance baixa, só boss
     if (Math.random() < BOSS_RARE_POTION_CHANCE * mult.all) {
-      const pool = getDungeonConsumables().filter(c => {
-        const r = rarityOf(c)
-        if (r !== 'RARE' && r !== 'EPIC') return false
-        const minStars = CONSUMABLE_MIN_DIFFICULTY_STARS[c.name]
-        if (minStars && dungeon.difficultyStars < minStars) return false
-        return true
-      })
-      const c = pickFrom(pool)
+      const c = pickConsumable(
+        dungeonConsumablePool(dungeon, level, { boss: true, rarities: ['RARE', 'EPIC'] }),
+        mix.sustain,
+      )
       if (c) drops.push({ name: c.name, kind: 'consumable', rarity: rarityOf(c), emoji: '🧪' })
     }
     // 🧪 ingrediente de CHEFE (a volta do Sangue de Monstro/Pena de Fênix e cia.):
@@ -1250,20 +1344,24 @@ export function rollKillLoot(
   }
   const pack = lootPackOf(lootRoll)
   const kindMult = KILL_KIND_MULT[nodeKind]
-  if (Math.random() < pack.killShard * kindMult) {
+  // Espólio de ABATE também acompanha o tier: sem isto o estilhaço — o material
+  // mais farmado do jogo — ficava IGUAL do t1 ao t5, enquanto o monstro subia
+  // +18%/tier. t1 fica inalterado (tierReward(1) = 1.0).
+  const tierChance = (p: number) => Math.min(0.95, p * dungeonTierRewardMult(dt))
+  if (Math.random() < tierChance(pack.killShard) * kindMult) {
     const shard = Math.random() < SHARD_WEAPON_SHARE
       ? { name: 'Estilhaço de Pedra Negra (Arma)', emoji: '🔸' }
       : { name: 'Estilhaço de Pedra Negra (Armadura)', emoji: '🔹' }
     drops.push({ name: shard.name, kind: 'material', rarity: 'COMMON', emoji: shard.emoji })
   }
   // Material do pool temático por abate: a luta também alimenta o craft.
-  if (dungeon && Math.random() < pack.killMat.chance * kindMult) {
+  if (dungeon && Math.random() < tierChance(pack.killMat.chance) * kindMult) {
     const pool = Math.random() < pack.killMat.uncFrac ? 'uncommon' : 'common'
     const d = materialDrop(dungeon, pool)
     if (d) drops.push(d)
   }
   // Pedra por abate: chance natural baixa × fator (o jackpot é do nó).
-  if (Math.random() < pack.killStone * kindMult) {
+  if (Math.random() < tierChance(pack.killStone) * kindMult) {
     const weapon = Math.random() < STONE_WEAPON_SHARE
     const concentrated = dt >= CONCENTRATED_MIN_TIER
     const stone = concentrated

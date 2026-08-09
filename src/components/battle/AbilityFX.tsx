@@ -18,11 +18,22 @@
 import React from 'react'
 import { motion } from 'framer-motion'
 import { normalizeCombatClass } from '@/lib/combatModel'
+import { weaponFamily, weaponDelivery, type WeaponFamily } from '@/lib/weaponFlavor'
 
 export type ImpactKind =
   | 'punch' | 'triple' | 'fireball' | 'stealth' | 'charge'
   | 'firebreath' | 'bite' | 'spiral' | 'cosmic' | 'nova' | 'stunburst'
   | 'claw' | 'clawStrong' | 'generic'
+  // ⚔️ Golpes por ARMA equipada (o 👊 punch cobre a manopla do Monge).
+  | 'arrow' | 'slash' | 'cleave' | 'stab' | 'arcanebolt'
+
+/**
+ * 🏹 "Entrega" do golpe: como ele VIAJA até o alvo antes do impacto da forma acontecer.
+ * Hoje só o arco tem entrega própria (a flecha voando); é o gancho para depois dar
+ * assinatura de viagem às outras armas (dash da adaga, arco do machado, canalização do
+ * cajado) sem mexer de novo na dispatch.
+ */
+export type LeadKind = 'arrow'
 
 export type AuraKind =
   | 'shield' | 'ironskin' | 'fury' | 'wind' | 'heal' | 'focus'
@@ -33,7 +44,11 @@ export const IMPACT_MS: Record<ImpactKind, number> = {
   punch: 550, triple: 850, fireball: 950, stealth: 750, charge: 850,
   firebreath: 1100, bite: 950, spiral: 950, cosmic: 1400, nova: 950,
   stunburst: 1100, claw: 650, clawStrong: 850, generic: 450,
+  arrow: 800, slash: 650, cleave: 800, stab: 700, arcanebolt: 850,
 }
+
+/** Quanto a entrega atrasa o impacto que vem depois dela (ms). */
+export const LEAD_MS: Record<LeadKind, number> = { arrow: 260 }
 
 export const AURA_MS: Record<AuraKind, number> = {
   shield: 1300, ironskin: 1300, fury: 1300, wind: 1100, heal: 1300,
@@ -69,23 +84,60 @@ const CLASS_IMPACT: Record<string, ImpactKind> = {
   monk: 'triple',      // Golpe Triplo
 }
 
-export type ActionFx = { impact: ImpactKind } | { aura: AuraKind }
+// ⚔️ Golpe BÁSICO → a arma na mão (o Golpe é o soco/estocada cru, sem identidade de classe).
+const WEAPON_IMPACT: Record<WeaponFamily, ImpactKind> = {
+  sword: 'slash',
+  axe: 'cleave',
+  dagger: 'stab',
+  bow: 'arrow',
+  staff: 'arcanebolt',
+  fist: 'punch',
+  none: 'punch',      // desarmado ou com ferramenta de coleta = o visual de sempre
+}
+
+export type ActionFx = { impact: ImpactKind; lead?: LeadKind } | { aura: AuraKind }
+
+/** Duração total do overlay (entrega + impacto) — o BattleScene desmonta depois disto. */
+export function impactDurationMs(impact: ImpactKind, lead?: LeadKind): number {
+  return IMPACT_MS[impact] + (lead ? LEAD_MS[lead] : 0)
+}
 
 /**
  * Resolve o efeito visual de um `action` de BattleEvent. `attackerClass` decide o
- * Ataque de Classe; classe não reconhecida (Monstro/Boss) vira garras.
+ * Ataque de Classe; classe não reconhecida (Monstro/Boss) vira garras. `weaponType` é o
+ * tipo do item no slot WEAPON (SWORD/BOW/…) — é ele que troca o Golpe básico e dá a
+ * flecha em quem luta de arco.
  */
-export function resolveActionFx(action: string | undefined, attackerClass: string | null | undefined): ActionFx {
+export function resolveActionFx(
+  action: string | undefined,
+  attackerClass: string | null | undefined,
+  weaponType?: string | null,
+): ActionFx {
   const a = String(action || '')
   if (BUFF_AURA[a]) return { aura: BUFF_AURA[a] }
-  if (SPECIAL_IMPACT[a]) return { impact: SPECIAL_IMPACT[a] }
+
+  const family = weaponFamily(weaponType)
+  // 🏹 Arco: o especial da forma continua sendo o dele, mas chega VOANDO até o alvo.
+  const lead: LeadKind | undefined = weaponDelivery(family) === 'ranged' ? 'arrow' : undefined
+
+  if (SPECIAL_IMPACT[a]) return { impact: SPECIAL_IMPACT[a], lead }
 
   const cls = normalizeCombatClass(attackerClass)
   const isMonster = !cls
   // Aliases do PvP antigo (light/heavy/special_attack) + modelo enxuto (basic/weapon/special)
-  if (a === 'basic' || a === 'light_attack') return { impact: isMonster ? 'claw' : 'punch' }
-  if (a === 'weapon' || a === 'heavy_attack') return { impact: isMonster ? 'claw' : (CLASS_IMPACT[cls!] || 'generic') }
-  if (a === 'special' || a === 'special_attack') return { impact: isMonster ? 'clawStrong' : 'cosmic' }
+  if (a === 'basic' || a === 'light_attack') {
+    return { impact: isMonster ? 'claw' : WEAPON_IMPACT[family] }
+  }
+  if (a === 'weapon' || a === 'heavy_attack') {
+    if (isMonster) return { impact: 'claw' }
+    // O Ataque de Classe guarda a identidade da classe — exceto à distância, onde a
+    // animação corpo-a-corpo (investida, vulto furtivo) não faz sentido nenhum.
+    if (lead) return { impact: 'arrow' }
+    return { impact: CLASS_IMPACT[cls!] || 'generic' }
+  }
+  if (a === 'special' || a === 'special_attack') {
+    return isMonster ? { impact: 'clawStrong' } : { impact: 'cosmic', lead }
+  }
   return { impact: 'generic' }
 }
 
@@ -170,6 +222,34 @@ function Pop({ children, x = 0, y = 0, delay = 0, size = 'text-4xl', duration = 
   )
 }
 
+/**
+ * 🏹 Flecha viajando até o alvo. Desenhada (haste + ponta + penas) em vez de emoji porque
+ * o emoji não roda: a flecha precisa APONTAR pro lado de onde vem o golpe.
+ */
+function ArrowBolt({ from, delay = 0, duration = 0.26, color = '#ffe6a8' }: {
+  from: 1 | -1; delay?: number; duration?: number; color?: string
+}) {
+  return (
+    <motion.div
+      className="absolute flex items-center"
+      // from = -1 (vem da esquerda) ⇒ a flecha aponta pra direita (0°); senão, 180°.
+      style={{ rotate: from === -1 ? 0 : 180 }}
+      initial={{ x: from * 140, y: from * -10, opacity: 0 }}
+      animate={{ x: 0, y: 0, opacity: [0, 1, 1, 1] }}
+      transition={{ delay, duration, ease: 'easeIn' }}
+    >
+      {/* rastro */}
+      <div style={{ width: 34, height: 2, background: `linear-gradient(90deg, transparent, ${color})`, opacity: 0.55 }} />
+      {/* penas */}
+      <div style={{ width: 7, height: 9, background: color, clipPath: 'polygon(0 0, 100% 50%, 0 100%)', opacity: 0.85 }} />
+      {/* haste */}
+      <div style={{ width: 26, height: 3, background: color, boxShadow: `0 0 8px ${color}` }} />
+      {/* ponta */}
+      <div style={{ width: 10, height: 10, background: color, clipPath: 'polygon(0 0, 100% 50%, 0 100%)', boxShadow: `0 0 10px ${color}` }} />
+    </motion.div>
+  )
+}
+
 const Overlay = ({ children }: { children: React.ReactNode }) => (
   // scale-75 no mobile: os tamanhos fixos (anéis 90/130px, partículas ±52px)
   // foram calibrados pro card grande do desktop; o card compacto tem ~96px.
@@ -182,11 +262,96 @@ const Overlay = ({ children }: { children: React.ReactNode }) => (
 // Impactos (no card do DEFENSOR)
 // ============================================================
 
-export function ImpactFX({ kind, side }: { kind: ImpactKind; side: 'left' | 'right' }) {
-  // Direção de onde o golpe VEM: quem apanha à direita é atingido vindo da esquerda.
+/**
+ * Overlay de impacto no card do defensor. Com `lead` (arco), a flecha voa primeiro e o
+ * efeito da forma só estoura quando ela acerta.
+ */
+export function ImpactFX({ kind, side, lead }: { kind: ImpactKind; side: 'left' | 'right'; lead?: LeadKind }) {
+  const [landed, setLanded] = React.useState(!lead)
+  React.useEffect(() => {
+    if (!lead) { setLanded(true); return }
+    setLanded(false)
+    const t = setTimeout(() => setLanded(true), LEAD_MS[lead])
+    return () => clearTimeout(t)
+  }, [lead])
+
   const from = side === 'right' ? -1 : 1
+  return (
+    <>
+      {lead === 'arrow' && <Overlay><ArrowBolt from={from} duration={LEAD_MS.arrow / 1000} /></Overlay>}
+      {landed && <ImpactBody kind={kind} side={side} />}
+    </>
+  )
+}
+
+function ImpactBody({ kind, side }: { kind: ImpactKind; side: 'left' | 'right' }) {
+  // Direção de onde o golpe VEM: quem apanha à direita é atingido vindo da esquerda.
+  const from: 1 | -1 = side === 'right' ? -1 : 1
 
   switch (kind) {
+    case 'arrow': // 🏹 Arco: a flecha voa, crava e solta uma faísca seca
+      return (
+        <Overlay>
+          <ArrowBolt from={from} />
+          <Flash color="radial-gradient(circle, rgba(255,230,170,0.4), transparent 70%)" delay={0.24} duration={0.35} peak={1} />
+          <Ring color="rgba(255,225,150,0.9)" delay={0.24} duration={0.42} to={1.4} border={3} />
+          <Pop delay={0.24} size="text-3xl" duration={0.35}>💢</Pop>
+          <Particle x={0} y={0} toX={-30 * from} toY={-26} delay={0.28} duration={0.45} size="text-sm">✦</Particle>
+          <Particle x={0} y={0} toX={-14 * from} toY={30} delay={0.32} duration={0.45} size="text-sm">✦</Particle>
+        </Overlay>
+      )
+
+    case 'slash': // 🗡️ Espada: dois cortes cruzados de aço
+      return (
+        <Overlay>
+          <Slash color="#eaf2ff" angle={-32} thickness={4} distance={80 * from} />
+          <Slash color="#b8ccff" angle={34} delay={0.12} thickness={3} distance={80 * from} />
+          <Ring color="rgba(220,235,255,0.7)" delay={0.16} duration={0.4} to={1.35} border={3} />
+          <Pop delay={0.14} size="text-3xl" duration={0.32}>✨</Pop>
+        </Overlay>
+      )
+
+    case 'cleave': // 🪓 Machado: um talho pesado só + onda de choque e poeira
+      return (
+        <Overlay>
+          <Slash color="#fff0d0" angle={-58} thickness={7} distance={95 * from} />
+          <Flash color="rgba(255,200,120,0.35)" delay={0.18} duration={0.4} peak={1} />
+          <Ring color="rgba(255,190,90,0.9)" delay={0.18} duration={0.5} to={1.9} border={5} />
+          <Pop delay={0.18} size="text-4xl">💥</Pop>
+          <Particle x={-24} y={40} toX={-48} toY={32} delay={0.22} duration={0.5} size="text-xl">💨</Particle>
+          <Particle x={24} y={40} toX={48} toY={32} delay={0.26} duration={0.5} size="text-xl">💨</Particle>
+        </Overlay>
+      )
+
+    case 'stab': // 🔪 Adaga: três estocadas curtas e rápidas
+      return (
+        <Overlay>
+          <Slash color="#dfe6ff" angle={-8} thickness={2} distance={55 * from} />
+          <Slash color="#dfe6ff" angle={6} delay={0.1} thickness={2} distance={55 * from} />
+          <Slash color="#ffffff" angle={-2} delay={0.2} thickness={3} distance={55 * from} />
+          <Pop x={8 * from} y={-6} delay={0.22} size="text-3xl" duration={0.32}>💢</Pop>
+          <Ring color="rgba(210,220,255,0.7)" delay={0.24} duration={0.35} to={1.2} border={2} />
+        </Overlay>
+      )
+
+    case 'arcanebolt': // 🔮 Cajado: dardo arcano canalizado + estouro violeta
+      return (
+        <Overlay>
+          <motion.div
+            className="absolute w-6 h-6 rounded-full"
+            style={{ background: 'radial-gradient(circle, #e7d5ff 15%, #8b5cf6 60%, rgba(90,40,180,0) 78%)', boxShadow: '0 0 20px #8b5cf6' }}
+            initial={{ x: from * 130, y: -10, scale: 0.5, opacity: 0 }}
+            animate={{ x: 0, y: 0, scale: 1.1, opacity: [0, 1, 1, 0] }}
+            transition={{ duration: 0.3, ease: 'easeIn' }}
+          />
+          <Flash color="radial-gradient(circle, rgba(139,92,246,0.5), transparent 70%)" delay={0.28} duration={0.45} peak={1} />
+          <Ring color="rgba(167,139,250,0.9)" delay={0.28} duration={0.5} to={1.8} border={4} />
+          <Pop delay={0.28} size="text-4xl">✴️</Pop>
+          <Particle x={0} y={0} toX={-34} toY={-28} delay={0.32} duration={0.5} size="text-base">✦</Particle>
+          <Particle x={0} y={0} toX={36} toY={-22} delay={0.34} duration={0.5} size="text-base">✦</Particle>
+        </Overlay>
+      )
+
     case 'punch': // 👊 Golpe básico: soco único + onda curta
       return (
         <Overlay>

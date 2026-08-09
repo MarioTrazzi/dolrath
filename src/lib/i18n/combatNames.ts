@@ -46,6 +46,51 @@ export const SPECIAL_NAME_EN: Record<string, string> = {
   '🧘 Meditação': '🧘 Meditation',
   '💥 Super Nova': '💥 Super Nova',
   '✨ Hyperfoco': '✨ Hyperfocus',
+
+  // ⚔️ Variantes por ARMA equipada (lib/weaponFlavor.ts) — mesmo especial, outra pele.
+  // 🔥 Dragão
+  '🔥 Lâmina Flamejante': '🔥 Flaming Blade',
+  '🔥 Machado Vulcânico': '🔥 Volcanic Axe',
+  '🔥 Presa Incandescente': '🔥 Incandescent Fang',
+  '🔥 Flecha Flamejante': '🔥 Flaming Arrow',
+  '🔥 Punho Dracônico': '🔥 Draconic Fist',
+  // 🩸 Lobo
+  '🩸 Lâmina Dilacerante': '🩸 Rending Blade',
+  '🩸 Talho Sangrento': '🩸 Bloody Gash',
+  '🩸 Presa Sangrenta': '🩸 Bloody Fang',
+  '🩸 Flecha Dilacerante': '🩸 Rending Arrow',
+  '🩸 Maldição Sangrenta': '🩸 Blood Curse',
+  // 💥 Urso
+  '💥 Estocada Imparável': '💥 Unstoppable Thrust',
+  '💥 Machadada Imparável': '💥 Unstoppable Cleave',
+  '💥 Arremetida Imparável': '💥 Unstoppable Lunge',
+  '💥 Flecha Perfurante': '💥 Piercing Arrow',
+  '💥 Impacto Telúrico': '💥 Telluric Impact',
+  // 🌀 Águia
+  '🌀 Lâmina Ciclônica': '🌀 Cyclonic Blade',
+  '🌀 Machado Ciclônico': '🌀 Cyclonic Axe',
+  '🌀 Corte Vertiginoso': '🌀 Dizzying Cut',
+  '🌀 Flecha Vendaval': '🌀 Gale Arrow',
+  '🌀 Vendaval Ascendente': '🌀 Ascending Gale',
+  '🌀 Punho do Vendaval': '🌀 Gale Fist',
+  // 🌌 Sétimo Sentido
+  '🌌 Lâmina Cósmica': '🌌 Cosmic Blade',
+  '🌌 Machado Cósmico': '🌌 Cosmic Axe',
+  '🌌 Relâmpago Cósmico': '🌌 Cosmic Lightning',
+  '🌌 Flecha Cósmica': '🌌 Cosmic Arrow',
+  '🌌 Punho do Cosmo': '🌌 Cosmo Fist',
+  // ✨ Celestial
+  '✨ Lâmina Estelar': '✨ Stellar Blade',
+  '✨ Machado Estelar': '✨ Stellar Axe',
+  '✨ Estilhaço Estelar': '✨ Stellar Shard',
+  '✨ Flecha Estelar': '✨ Stellar Arrow',
+  '✨ Punho Supernova': '✨ Supernova Fist',
+  // 💫 Golpe Atordoante
+  '💫 Golpe de Pomo': '💫 Pommel Strike',
+  '💫 Golpe de Cabo': '💫 Haft Strike',
+  '💫 Punhalada Ofuscante': '💫 Dazzling Stab',
+  '💫 Flecha Ofuscante': '💫 Dazzling Arrow',
+  '💫 Pancada Arcana': '💫 Arcane Bash',
 }
 
 export const SPECIAL_DESC_EN: Record<string, string> = {
@@ -88,6 +133,9 @@ export const CLASS_ATTACK_NAME_EN: Record<string, string> = {
   'Ataque Furtivo': 'Sneak Attack',
   'Bola de Fogo': 'Fireball',
   'Golpe Triplo': 'Triple Strike',
+  // ⚔️ Variantes por arma (só Guerreiro e Ladino têm duas primárias).
+  'Machadada Pesada': 'Heavy Cleave',
+  'Tiro Certeiro': 'True Shot',
 }
 
 /** Rótulo do tipo de ataque (combatModel ATTACK_KINDS[].label: Golpe/Ataque de Classe/Especial). */

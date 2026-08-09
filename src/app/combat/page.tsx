@@ -8,6 +8,7 @@ import BattleScene, { BattleEvent, DiceResult, EquipmentMap, FighterView } from 
 import CombatShell, { type CombatAttackOption } from '@/components/battle/CombatShell'
 import { TRANSFORMATION_CONFIG, getRaceTransformations, type TransformationType } from '@/lib/transformationSystem'
 import { classAttackName } from '@/lib/combatModel'
+import { specialDisplayName, classAttackDisplayName } from '@/lib/weaponFlavor'
 import { getFormSpecials } from '@/lib/transformationSpecials'
 import {
   getSkillTree,
@@ -1201,7 +1202,15 @@ function CombatPageContent() {
   const transformForms = currentPlayer ? getRaceTransformations(currentPlayer.race) : []
   const formType = (currentPlayerView?.transformationType || currentPlayer?.transformationType) as TransformationType | null | undefined
   const cds = (currentPlayerDisplay as { fx?: { abilityCd?: Record<string, number> } } | null)?.fx?.abilityCd || {}
-  const classAtkName = classAttackName(currentPlayer?.class)
+  // ⚔️ Arma equipada tempera o NOME dos golpes (flavor de cliente; o servidor continua
+  // mandando/recebendo o id e o nome canônicos).
+  const weaponType = (currentPlayer as { equipmentMap?: Record<string, { type?: string }> } | null)
+    ?.equipmentMap?.WEAPON?.type
+  const classAtkName = classAttackDisplayName(
+    currentPlayer?.class,
+    weaponType,
+    classAttackName(currentPlayer?.class),
+  )
   const weaponMp = unlocks.classAttackMp
   const weaponDie = unlocks.classAttackDie
   const singleTransformForm = transformForms.length === 1 ? TRANSFORMATION_CONFIG[transformForms[0]] : null
@@ -1248,7 +1257,7 @@ function CombatPageContent() {
           : `${def.kind === 'dmg' ? `d${def.die ?? 20}·` : ''}${mCost ? `${mCost}MP` : ''}${mCost && sCost ? '·' : ''}${sCost ? `${sCost}⚡` : ''}`
         attackOptions.push({
           key: def.id,
-          label: def.name,
+          label: specialDisplayName(def, weaponType),
           sub: costLabel,
           locked,
           onPick: () => handleSpecialAbility(def.id),

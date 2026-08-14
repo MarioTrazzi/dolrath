@@ -35,6 +35,7 @@
     "chain:deploy:character-market:local": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network localhost web3/scripts/deploy-character-market.ts",
     "chain:deploy:character-market:amoy": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network polygonAmoy web3/scripts/deploy-character-market.ts",
     "chain:deploy:character-market:polygon": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network polygon web3/scripts/deploy-character-market.ts",
+    "chain:rehearse:character-market": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network localhost web3/scripts/rehearse-character-market.ts",
     "chain:deploy:usdc:local": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network localhost web3/scripts/deploy-test-usdc.ts",
     "chain:deploy:usdc:amoy": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network polygonAmoy web3/scripts/deploy-test-usdc.ts",
     "chain:mint:usdc:amoy": "HARDHAT_DISABLE_TELEMETRY=1 TS_NODE_PROJECT=web3/tsconfig.json hardhat run --config web3/hardhat.config.ts --network polygonAmoy web3/scripts/mint-test-usdc.ts",

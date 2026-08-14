@@ -123,7 +123,7 @@ interface CharListing {
   character: { id: string; name: string; race: string; class: string; level: number; avatar?: string | null } | null
   dbOwner: { userId: string; walletAddress: string | null } | null
 }
-interface MyCharacter { id: string; name: string; race: string; class: string; level: number; avatar?: string | null; nftTokenId?: string | null }
+interface MyCharacter { id: string; name: string; race: string; class: string; level: number; avatar?: string | null; nftTokenId?: string | null; marketListingId?: string | null; gold?: number }
 
 async function getSigner(expectedChainId: number) {
   const eth = (window as any)?.ethereum
@@ -160,6 +160,8 @@ export default function MarketplacePage() {
   const [loadingCharList, setLoadingCharList] = useState(true)
   const [myCharacters, setMyCharacters] = useState<MyCharacter[]>([])
   const [charPrices, setCharPrices] = useState<Record<string, string>>({})
+  // Compra paga on-chain cujo registro no banco falhou — resgatável pela posse.
+  const [pendingClaim, setPendingClaim] = useState<{ tokenId: string; name: string } | null>(null)
 
   const loadConfigAndListings = useCallback(async () => {
     setLoadingList(true)
@@ -234,6 +236,8 @@ export default function MarketplacePage() {
         level: c.level,
         avatar: c.avatar ?? null,
         nftTokenId: c.nftTokenId != null ? String(c.nftTokenId) : null,
+        marketListingId: c.marketListingId != null ? String(c.marketListingId) : null,
+        gold: Number(c.gold ?? 0),
       }))
       setMyCharacters(list)
     } catch { /* silencioso */ }
@@ -279,7 +283,15 @@ export default function MarketplacePage() {
       const market = new ethers.Contract(check.marketContractAddress, CHAR_MARKET_ABI, signer)
       const priceWei = ethers.parseUnits(String(priceNum), check.dol.decimals)
       toast.loading('Publicando a listagem…', { id })
-      await (await market.createListing(BigInt(check.tokenId), priceWei, fees)).wait()
+      const listTx = await market.createListing(BigInt(check.tokenId), priceWei, fees)
+      await listTx.wait()
+
+      // Espelha a listagem no banco (marca o personagem como "à venda").
+      await fetch('/api/character-market/list-confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ characterId: c.id, txHash: listTx.hash }),
+      }).catch(() => { /* o escrow on-chain já valeu; o espelho ressincroniza depois */ })
 
       toast.success(`Personagem listado por ${priceNum} ${check.dol.symbol}!`, { id })
       setCharPrices((p) => ({ ...p, [c.id]: '' }))
@@ -315,14 +327,51 @@ export default function MarketplacePage() {
       })
       const conf = await confRes.json()
       if (!confRes.ok) {
-        toast.error(conf?.error || 'Compra feita on-chain, mas falha ao registrar. Tente confirmar de novo.', { id })
+        toast.error(
+          conf?.error ||
+            'Compra feita on-chain, mas falha ao registrar. A NFT já é sua — clique de novo para reivindicar o personagem.',
+          { id }
+        )
+        // Guarda o tokenId: o botão de resgate reivindica pela posse on-chain,
+        // sem depender da tx (que pode ter se perdido no caminho).
+        setPendingClaim({ tokenId: l.tokenId, name: l.character?.name || `#${l.tokenId}` })
         return
       }
       toast.success('Personagem comprado! Agora é seu.', { id })
+      setPendingClaim(null)
       loadCharMarket()
       loadMyCharacters()
     } catch (e) {
       toast.error(getWalletTxErrorMessage(e) || 'Falha na compra', { id })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Resgate: a NFT já é do comprador na chain, mas o registro off-chain falhou.
+  // Reivindica a posse pelo tokenId — o servidor confere o `ownerOf`.
+  const handleClaimCharacter = async () => {
+    if (!pendingClaim) return
+    setBusy(true)
+    const id = `claim-char-${pendingClaim.tokenId}`
+    try {
+      toast.loading('Reivindicando o personagem…', { id })
+      const res = await fetch('/api/character-market/purchase-confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tokenId: pendingClaim.tokenId }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data?.error || 'Falha ao reivindicar', { id })
+        return
+      }
+      toast.success('Personagem reivindicado! Agora é seu.', { id })
+      setPendingClaim(null)
+      loadCharMarket()
+      loadMyCharacters()
+    } catch {
+      toast.error('Falha ao reivindicar', { id })
     } finally {
       setBusy(false)
     }
@@ -338,7 +387,17 @@ export default function MarketplacePage() {
       const fees = await getPolygonFeeOverrides(provider)
       const market = new ethers.Contract(charConfig.marketContractAddress, CHAR_MARKET_ABI, signer)
       toast.loading('Cancelando a listagem…', { id })
-      await (await market.cancelListing(BigInt(l.listingId), fees)).wait()
+      const cancelTx = await market.cancelListing(BigInt(l.listingId), fees)
+      await cancelTx.wait()
+
+      if (l.character?.id) {
+        await fetch('/api/character-market/cancel-confirm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ characterId: l.character.id, txHash: cancelTx.hash }),
+        }).catch(() => { /* a NFT já voltou; o espelho ressincroniza depois */ })
+      }
+
       toast.success('Listagem cancelada. O personagem voltou para você.', { id })
       loadCharMarket()
       loadMyCharacters()
@@ -567,6 +626,23 @@ export default function MarketplacePage() {
       </>)}
 
       {tab === 'characters' && (<>
+      {/* COMPRA PAGA MAS NÃO REGISTRADA — resgate pela posse on-chain */}
+      {pendingClaim ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-[4px] border border-amber-700/60 bg-amber-950/30 p-4">
+          <div className="flex-1 min-w-[220px] text-sm text-amber-200">
+            A compra de <span className="font-semibold">{pendingClaim.name}</span> foi paga on-chain, mas o registro no
+            jogo não completou. A NFT já é sua — reivindique o personagem.
+          </div>
+          <button
+            onClick={handleClaimCharacter}
+            disabled={busy}
+            className="rounded-[3px] border border-[#8a6d3b] bg-gradient-to-b from-[#3a2f1c] to-[#241d12] px-3 py-2 text-sm font-semibold text-amber-200 transition-all hover:brightness-125 disabled:opacity-40"
+          >
+            Reivindicar personagem
+          </button>
+        </div>
+      ) : null}
+
       {/* VENDER PERSONAGEM */}
       <section className="overflow-hidden rounded-[4px] border border-[#46464c] shadow-2xl shadow-black/60 bg-[#1e1e21]/95 p-5">
         <h2 className="text-lg font-semibold tracking-wide text-[#c9b3ec] mb-1">Vender um personagem</h2>
@@ -589,19 +665,24 @@ export default function MarketplacePage() {
                   <div className="text-xs text-[#8a8a90] capitalize">{c.race} • {c.class} • Nv.{c.level}</div>
                   {!c.nftTokenId ? (
                     <div className="text-[11px] text-amber-300/80">Ainda não é NFT — registre on-chain antes de vender</div>
+                  ) : c.marketListingId ? (
+                    <div className="text-[11px] text-indigo-300/90">À venda (listagem #{c.marketListingId})</div>
+                  ) : c.gold ? (
+                    <div className="text-[11px] text-[#8a8a90]">{c.gold.toLocaleString('pt-BR')} de ouro voltam para o seu banco na venda</div>
                   ) : null}
                 </div>
                 <input
                   type="number" min={1} placeholder="DOL"
                   value={charPrices[c.id] || ''}
                   onChange={(e) => setCharPrices((p) => ({ ...p, [c.id]: e.target.value }))}
-                  className="w-24 rounded-[3px] border border-[#3c3c41] bg-[#101013] px-2 py-1.5 text-sm text-[#ece7da] outline-none transition-colors focus:border-[#8a6d3b]"
+                  disabled={!!c.marketListingId}
+                  className="w-24 rounded-[3px] border border-[#3c3c41] bg-[#101013] px-2 py-1.5 text-sm text-[#ece7da] outline-none transition-colors focus:border-[#8a6d3b] disabled:opacity-40"
                 />
                 <button
                   onClick={() => handleSellCharacter(c)}
-                  disabled={busy || !c.nftTokenId}
+                  disabled={busy || !c.nftTokenId || !!c.marketListingId}
                   className="rounded-[3px] border border-[#5b3b8a] bg-gradient-to-b from-[#2e2540] to-[#1c1626] px-3 py-1.5 text-sm font-semibold text-[#c9b3ec] transition-all hover:brightness-125 disabled:opacity-40"
-                  title={!c.nftTokenId ? 'Registre o personagem on-chain primeiro' : ''}
+                  title={!c.nftTokenId ? 'Registre o personagem on-chain primeiro' : c.marketListingId ? 'Já está listado' : ''}
                 >
                   Listar
                 </button>

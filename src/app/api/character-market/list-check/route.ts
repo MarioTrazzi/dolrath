@@ -45,10 +45,23 @@ export async function POST(req: Request) {
       )
     }
 
+    if (character.marketListingId != null) {
+      return NextResponse.json(
+        {
+          error: 'Este personagem já está listado no mercado. Cancele a listagem atual antes de criar outra.',
+          alreadyListed: true,
+          listingId: character.marketListingId.toString(),
+        },
+        { status: 409 }
+      )
+    }
+
     // O personagem precisa estar VAZIO (NFT "pelado": só nível/stats).
-    const [equippedCount, inventoryCount] = await Promise.all([
+    const [equippedCount, inventoryCount, activeRuns, activeGathering] = await Promise.all([
       prisma.characterEquipment.count({ where: { characterId } }),
       prisma.characterInventory.count({ where: { characterId } }),
+      prisma.dungeonRun.count({ where: { characterId, status: 'active' } }),
+      prisma.gatheringSession.count({ where: { characterId, status: 'active' } }),
     ])
     if (equippedCount > 0 || inventoryCount > 0) {
       return NextResponse.json(
@@ -58,6 +71,21 @@ export async function POST(req: Request) {
           notEmpty: true,
           equippedCount,
           inventoryCount,
+        },
+        { status: 409 }
+      )
+    }
+
+    // Run/coleta em andamento pertencem ao VENDEDOR — se a venda acontecer no
+    // meio, o espólio pendente é perdido (o purchase-confirm fecha as duas).
+    // Melhor barrar aqui do que estornar depois.
+    if (activeRuns > 0 || activeGathering > 0) {
+      return NextResponse.json(
+        {
+          error: 'Encerre a masmorra e a coleta em andamento antes de listar este personagem.',
+          busy: true,
+          activeRuns,
+          activeGathering,
         },
         { status: 409 }
       )
@@ -88,6 +116,9 @@ export async function POST(req: Request) {
       dol: { decimals: Number(decimals), symbol: String(symbol) },
       tokenId: character.nftTokenId.toString(),
       to: walletAddress,
+      // Informativo: este ouro NÃO vai com o personagem — na venda ele cai no
+      // seu banco (User.goldBalance).
+      goldReturnedOnSale: Math.max(0, character.gold),
     })
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Failed to check character listing'

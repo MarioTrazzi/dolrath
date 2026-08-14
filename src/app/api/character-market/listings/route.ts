@@ -50,7 +50,10 @@ export async function GET() {
 
     const dbCharacters = await prisma.character.findMany({
       where: {
-        nftContract: characterNftContract,
+        // insensitive: o endereço gravado no mint vem do env verbatim — se o env
+        // for reescrito em checksum a busca exata passaria a não casar nada e
+        // toda listagem apareceria como "Fora do banco".
+        nftContract: { equals: characterNftContract, mode: 'insensitive' },
         nftTokenId: { in: tokenIds },
       },
       include: { user: { select: { id: true, walletAddress: true } } },

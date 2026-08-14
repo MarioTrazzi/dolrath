@@ -1,4 +1,5 @@
 import { Contract, FetchRequest, JsonRpcProvider } from 'ethers'
+import { getCharacterNftContractAddress } from './characterNftOnchain'
 
 // ABI mínimo de leitura do DolrathCharacterMarket (escrow de NFT de personagem em DOL).
 const CHARACTER_MARKET_ABI = [
@@ -70,6 +71,24 @@ export function getCharacterMarketContract(): Contract {
   const address = getCharacterMarketContractAddress()
   if (!address) throw new Error('Missing CHARACTER_MARKET_CONTRACT_ADDRESS')
   return new Contract(address, CHARACTER_MARKET_ABI, getCharacterMarketProvider())
+}
+
+const CHARACTER_NFT_OWNER_ABI = ['function ownerOf(uint256 tokenId) view returns (address)'] as const
+
+/**
+ * Dono ATUAL da NFT do personagem, lido da chain.
+ *
+ * Esta é a autoridade da posse — o evento `ListingPurchased` só prova que uma
+ * compra ACONTECEU um dia, não que quem está pedindo ainda é o dono. Sem este
+ * cheque, reenviar uma tx de compra antiga reconquistava o personagem de graça.
+ * Usa o provider do mercado (mesma chain do escrow).
+ */
+export async function getCharacterNftOwner(tokenId: bigint): Promise<string> {
+  const nftAddress = getCharacterNftContractAddress()
+  if (!nftAddress) throw new Error('Missing CHARACTER_NFT_CONTRACT_ADDRESS')
+
+  const nft = new Contract(nftAddress, CHARACTER_NFT_OWNER_ABI, getCharacterMarketProvider())
+  return String(await nft.ownerOf(tokenId))
 }
 
 // Contratos antigos (pré-taxa) não têm os getters — nesse caso a taxa é 0.

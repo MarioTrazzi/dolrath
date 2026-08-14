@@ -233,10 +233,40 @@ model Character {
   nftTokenUri    String?
   nftMintTxHash  String?         @unique
   nftMintedAt    DateTime?
+
+  // 🏷️ Mercado de personagens (DOL): listagem ATIVA com a NFT em escrow no
+  // contrato. Escrito pelo list-confirm (evento ListingCreated verificado) e
+  // limpo por cancel-confirm/purchase-confirm. Serve de espelho off-chain do
+  // escrow — a autoridade continua sendo o `ownerOf` on-chain.
+  marketListingId BigInt?
+  marketListedAt  DateTime?
+
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 
   @@index([userId])
+}
+
+// 📒 Livro-razão das vendas de personagem (DOL). Serve a DOIS propósitos:
+// 1) dedup: `txHash` único impede que a MESMA transação de compra seja
+//    reprocessada — sem isto, um comprador que revendesse o personagem de volta
+//    ao vendedor original podia reenviar a tx antiga e retomar a posse de graça.
+// 2) auditoria: preço, partes e o gold devolvido ao vendedor em cada venda.
+model CharacterSale {
+  id           String   @id @default(cuid())
+  txHash       String   @unique
+  listingId    String
+  tokenId      String
+  characterId  String
+  sellerUserId String
+  buyerUserId  String
+  priceDol     String   // unidades base (wei), como string — o valor não cabe em Int
+  goldReturned Int      @default(0) // gold do personagem devolvido ao banco do vendedor
+  createdAt    DateTime @default(now())
+
+  @@index([characterId])
+  @@index([sellerUserId])
+  @@index([buyerUserId])
 }
 
 model Item {

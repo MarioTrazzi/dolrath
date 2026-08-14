@@ -14,6 +14,17 @@ services:
         value: https://dolrath.vercel.app
       - key: PVP_SEASON_POT_DOL
         value: "1000"
+      # 🤖 Oponente da fila: segundos esperando por humano antes de o servidor subir um
+      # bot espelho. Versionado de propósito — a tentativa anterior morreu esperando
+      # alguém lembrar de ligar uma env no dashboard. Kill switch: PVP_BOTS_ENABLED=false.
+      - key: PVP_BOT_FILL_MS
+        value: "10000"
+      # ⏳ Abandono: carência de reconexão e teto de turno parado. Versionado pelo mesmo
+      # motivo do fill — o valor É a regra do jogo, não um ajuste de dashboard.
+      - key: PVP_DISCONNECT_GRACE_MS
+        value: "30000"
+      - key: PVP_TURN_IDLE_MS
+        value: "90000"
       # Mesmo valor do Vercel BATTLE_REWARDS_SECRET — definir no dashboard (sync: false)
       - key: BATTLE_REWARDS_SECRET
         sync: false

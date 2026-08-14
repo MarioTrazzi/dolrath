@@ -167,18 +167,26 @@ interface BattleRewardSide {
   leveledUp?: boolean
   newLevel?: number
   staminaCharged?: number
+  /** Acumulado da TEMPORADA. */
   rankPoints?: number
+  /** O que ESTA luta somou (antes só o acumulado vinha, e a UI o lia como ganho). */
+  rankPointsGained?: number
   equipmentWear?: { slot: string; name: string; durability: number; maxDurability: number; justBroke: boolean }[]
   /** A rota não respondeu: não há o que mostrar, e mentir número seria pior. */
   failed?: boolean
-  /** Luta que não gera faucet (mesma conta / curta demais). */
-  skipped?: 'same_user' | 'below_min_stamina' | null
+  /** Luta que não gera faucet (mesma conta / sem stamina para a taxa de entrada). */
+  skipped?: 'same_user' | 'cannot_pay_entry' | null
+  /** Pagou ouro/XP mas não pontuou — e por quê. */
+  rankingSkipped?: RankingSkipReason | null
 }
+/** Por que a luta não pontuou (a rota decide; ver resolveRankingSkip). */
+type RankingSkipReason = 'bot_opponent' | 'offseason' | 'not_enrolled' | 'pair_cap' | 'unpaid_entry' | 'error'
 interface BattleRewardsPayload {
   winner?: BattleRewardSide
   loser?: BattleRewardSide
   failed?: boolean
-  skipped?: 'same_user' | 'below_min_stamina' | null
+  skipped?: 'same_user' | 'cannot_pay_entry' | null
+  rankingSkipped?: RankingSkipReason | null
 }
 
 // Função para criar conexão Socket.IO real
@@ -414,10 +422,18 @@ function CombatPageContent() {
               // Atualizar HP apenas se vier menor (dano confirmado) ou maior (cura)
               hp: p1.hp !== prev.hp ? p1.hp : prev.hp,
               maxHp: p1.maxHp,
-              // Para MP/stamina, manter o menor valor (proteção contra dessincronização)
-              mp: Math.min(prev.mp, p1.mp),
+              // ⚡ MP/STA vêm do SERVIDOR, ponto. O `Math.min(prev, novo)` daqui só
+              // deixava o valor CAIR — então o `regenTurnStamina` (+2 STA / +3 MP a
+              // cada turno) NUNCA chegava na tela. O cliente drenava sozinho até 0,
+              // `handlePlayerAction` passava a recusar toda ação (custo mínimo 1 STA)
+              // e, como não existe timer de turno no socket, a luta ficava pendurada
+              // para sempre. Ficava invisível porque todo mundo entrava com 100 falsos.
+              // O decremento otimista continua para o clique parecer instantâneo — o
+              // próximo room_updated (que o servidor emite já com o custo debitado)
+              // reconcilia em milissegundos.
+              mp: p1.mp,
               maxMp: p1.maxMp,
-              stamina: Math.min(prev.stamina, p1.stamina),
+              stamina: p1.stamina,
               maxStamina: p1.maxStamina,
               // Atualizar outros stats que podem mudar (transformações, etc)
               attack: p1.attack,
@@ -450,10 +466,12 @@ function CombatPageContent() {
               // Atualizar HP apenas se vier menor (dano confirmado) ou maior (cura)
               hp: p2.hp !== prev.hp ? p2.hp : prev.hp,
               maxHp: p2.maxHp,
-              // Para MP/stamina, manter o menor valor (proteção contra dessincronização)
-              mp: Math.min(prev.mp, p2.mp),
+              // ⚡ MP/STA vêm do SERVIDOR (ver o comentário longo no ramo do player1):
+              // o Math.min só deixava cair e engolia o regen de +2/turno, travando a
+              // luta em 0 de stamina sem nenhum timer de turno para destravá-la.
+              mp: p2.mp,
               maxMp: p2.maxMp,
-              stamina: Math.min(prev.stamina, p2.stamina),
+              stamina: p2.stamina,
               maxStamina: p2.maxStamina,
               // Atualizar outros stats que podem mudar (transformações, etc)
               attack: p2.attack,
@@ -607,7 +625,12 @@ function CombatPageContent() {
       socket.on('battle_rewards', (data: BattleRewardsPayload) => {
         const side = data.winner?.id === characterId ? data.winner : data.loser?.id === characterId ? data.loser : null
         if (!side) return
-        setBattleReward({ ...side, failed: !!data.failed, skipped: data.skipped ?? null })
+        setBattleReward({
+          ...side,
+          failed: !!data.failed,
+          skipped: data.skipped ?? null,
+          rankingSkipped: data.rankingSkipped ?? null,
+        })
       })
 
       // Se temos characterId, carregar dados do personagem específico
@@ -626,8 +649,10 @@ function CombatPageContent() {
               maxHp: charDetails.maxHp,
               mp: charDetails.baseStats?.mp || 50,
               maxMp: charDetails.baseStats?.maxMp || 50,
-              stamina: charDetails.stamina || 100,
-              maxStamina: charDetails.maxStamina || 100,
+              // ⚡ `??`, não `||`: com `|| 100` um saldo REAL de 0 virava 100 e a luta
+              // rodava num orçamento que não existia (ver o portão no socket).
+              stamina: charDetails.stamina ?? 0,
+              maxStamina: charDetails.maxStamina ?? 100,
               attributes: charDetails.attributes || {
                 str: charDetails.baseStats?.str || 10,
                 agi: charDetails.baseStats?.agi || 10,
@@ -890,6 +915,14 @@ function CombatPageContent() {
     }
   }
 
+  // 🏳️ Desistir. Antes a única saída era fechar a aba — e isso não cobrava stamina de
+  // ninguém nem pagava quem ficou. Agora é uma derrota normal, com recompensas.
+  const handleSurrender = () => {
+    if (!currentPlayer || !combatRoom?.isActive) return
+    if (!window.confirm('Desistir da luta? Conta como derrota e o oponente leva a bolsa.')) return
+    socket.emit('surrender', { playerId: currentPlayer.id, roomId })
+  }
+
   const handlePlayerAction = (action: ActionType) => {
     if (!currentPlayer) return
 
@@ -1078,11 +1111,13 @@ function CombatPageContent() {
         return
       }
 
-      // /transform cobra STA+MP no banco; a forma em si vive só na sessão (socket).
+      // `arena: true`: na arena a rota NÃO cobra STA/MP do banco — os custos saem das
+      // barras da luta (o socket debita no sync abaixo) e a carteira paga só a taxa
+      // fixa de entrada. A forma em si vive só na sessão (socket).
       const response = await fetch(`/api/character/${characterId}/transform`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transformationType }),
+        body: JSON.stringify({ transformationType, arena: true }),
       })
 
       if (response.ok) {
@@ -1337,7 +1372,7 @@ function CombatPageContent() {
             <div className="rounded-lg border border-white/15 bg-black/30 p-2 text-[11px] text-white/60">
               {battleReward.skipped === 'same_user'
                 ? '🤝 Luta entre personagens da mesma conta — sem recompensa.'
-                : '⚡ Luta curta demais para valer recompensa.'}
+                : '⚡ Sem stamina para pagar a entrada da arena — nada foi cobrado.'}
             </div>
           ) : (
             <div className="rounded-lg border border-amber-500/30 bg-amber-900/15 p-2 space-y-1">
@@ -1346,8 +1381,27 @@ function CombatPageContent() {
                 {battleReward.xpGained > 0 && <span className="text-sky-300">+{battleReward.xpGained} XP</span>}
                 {battleReward.goldGained > 0 && <span className="text-amber-300">+{battleReward.goldGained} 💰</span>}
                 {!!battleReward.staminaCharged && <span className="text-emerald-300">−{battleReward.staminaCharged} ⚡</span>}
-                {battleReward.rankPoints != null && <span className="text-fuchsia-300">{battleReward.rankPoints} pts</span>}
+                {battleReward.rankPoints != null && (
+                  <span className="text-fuchsia-300">
+                    {battleReward.rankPointsGained ? `+${battleReward.rankPointsGained} pts` : 'pts'}
+                    <span className="text-fuchsia-300/60"> (total {battleReward.rankPoints})</span>
+                  </span>
+                )}
               </div>
+              {/* Pagou ouro e XP, mas não pontuou. Sem esta linha o jogador só descobria
+                  olhando o placar e não entendia por quê. */}
+              {battleReward.rankingSkipped && (
+                <div className="text-[11px] text-white/55">
+                  {battleReward.rankingSkipped === 'bot_opponent' && '🤖 Oponente da casa — não pontua na temporada.'}
+                  {battleReward.rankingSkipped === 'offseason' && '🏁 Entressafra — a temporada não está pontuando.'}
+                  {battleReward.rankingSkipped === 'not_enrolled' && (
+                    <>🎟️ Sem inscrição na temporada. <a href="/ranking" className="underline text-amber-300">Inscrever-se</a></>
+                  )}
+                  {battleReward.rankingSkipped === 'pair_cap' && '🔁 Limite diário de pontos contra este mesmo oponente.'}
+                  {battleReward.rankingSkipped === 'unpaid_entry' && '⚡ Um dos lados entrou sem stamina para a taxa — a luta não pontua.'}
+                  {battleReward.rankingSkipped === 'error' && '⚠️ O ranking não pôde ser atualizado nesta luta.'}
+                </div>
+              )}
               {battleReward.leveledUp && (
                 <div className="text-xs font-bold text-emerald-400">🎉 Subiu para o nível {battleReward.newLevel}!</div>
               )}
@@ -1393,12 +1447,23 @@ function CombatPageContent() {
     )
   } else {
     statusContent = (
-      <div className="text-white/50 text-xs sm:text-sm font-bold animate-pulse text-center">
-        {combatRoom?.phase === CombatPhase.DICE_ROLL
-          ? '🎲 Resolvendo golpe…'
-          : !isMyTurn
-            ? '⏳ Turno do oponente...'
-            : '⚔️ Executando ação...'}
+      <div className="flex flex-col items-center gap-1.5">
+        <div className="text-white/50 text-xs sm:text-sm font-bold animate-pulse text-center">
+          {combatRoom?.phase === CombatPhase.DICE_ROLL
+            ? '🎲 Resolvendo golpe…'
+            : !isMyTurn
+              ? '⏳ Turno do oponente...'
+              : '⚔️ Executando ação...'}
+        </div>
+        {!isSpectator && !isModerator && !isTraining && combatRoom?.isActive && (
+          <button
+            type="button"
+            onClick={handleSurrender}
+            className="text-[10px] text-white/30 hover:text-red-400 underline underline-offset-2 transition-colors"
+          >
+            🏳️ Desistir
+          </button>
+        )}
       </div>
     )
   }

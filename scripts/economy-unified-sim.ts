@@ -67,7 +67,7 @@ import {
 } from '@/lib/itemCatalog'
 import { getXPForNextLevel } from '@/lib/experienceSystem'
 import { SELL_FRACTION_CRAFT_INPUT, SELL_FRACTION_CONSUMABLE } from '@/lib/sellPricing'
-import { calculatePvpStaminaRewards, PVP_MIN_ENTRY_STAMINA } from '@/lib/pvpRewards'
+import { calculatePvpStaminaRewards, PVP_FIGHT_STAMINA } from '@/lib/pvpRewards'
 import { PVP_FIGHT_WEAR_KILLS, WEAR_WEAPON_PER_KILL, WEAR_GEAR_PER_KILL } from '@/lib/durability'
 
 // ---------------- Parâmetros ----------------
@@ -82,7 +82,10 @@ const POTS_RUN = Number(process.env.POTS_RUN ?? 4)      // poções de vida cons
 // 1 = só arena, 0.5 = o "jogador equilibrado"). O resto sobra p/ a masmorra — é a
 // MESMA stamina disputada, que é o ponto do design (arena=ouro, masmorra=itens).
 const PVP_STA_SHARE = Number(process.env.PVP_STA_SHARE ?? 0.5)
-const PVP_STA_FIGHT = Number(process.env.PVP_STA_FIGHT ?? 20) // stamina gasta por luta (golpes: ~12 ações × ~1.7⚡)
+// 🎟️ Taxa FIXA da arena (src/lib/pvpRewards.ts): 19⚡ por luta, 10 lutas no orçamento
+// do dia. Antes isto era uma ESTIMATIVA do gasto médio em golpes (20), e o número real
+// variava de 11 a 23 conforme o nível.
+const PVP_STA_FIGHT = Number(process.env.PVP_STA_FIGHT ?? PVP_FIGHT_STAMINA)
 const PVP_WINRATE = Number(process.env.PVP_WINRATE ?? 0.5)    // matchmaking justo: 50%
 const PVP_FLAWLESS = Number(process.env.PVP_FLAWLESS ?? 0.15) // % das vitórias sem tomar dano
 // 🔧 Desgaste na arena, em "abates-equivalentes" por luta (durability.ts, aplicado em
@@ -505,9 +508,9 @@ function pvpDay(
   v: Vault, led: Ledger, c: Char, budget: number,
   capLeft: { v: number }, winsToday: { n: number },
 ): number {
-  // Luta abaixo do piso não gera faucet nenhum (a rota devolve `below_min_stamina`),
-  // então nem simula.
-  if (PVP_STA_FIGHT < PVP_MIN_ENTRY_STAMINA) return 0
+  // Sem conseguir pagar a taxa de entrada não há luta (a rota devolve
+  // `cannot_pay_entry`), então nem simula.
+  if (PVP_STA_FIGHT <= 0) return 0
   let spent = 0
   while (budget - spent >= PVP_STA_FIGHT) {
     const mySta = PVP_STA_FIGHT

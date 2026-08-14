@@ -1,5 +1,19 @@
 #!/usr/bin/env node
 // ============================================================
+// ⛔ DEFASADO PARA MEDIR BALANCE (2026-08-14) — use scripts/pvp-band-balance-sim.js
+//    (`npm run sim:pvp-bands`), que REQUER server/combatModel.js em vez de espelhá-lo.
+//
+// Este sim diverge do PvP ao vivo em DOIS pontos, e os dois inflam o Guerreiro:
+//   1. DEFESA POR REAÇÃO — escolhe dodge/block gastando stamina. O socket resolve TUDO
+//      em `defense: 'passive'` (esquiva% → bloqueio% → hit); as reações não existem.
+//      O bloqueio (armadura ×2.5) é justamente o que fazia o Guerreiro parecer o melhor.
+//   2. BARRA DE VIDA = `levers.hp`. Em produção a barra sai de `fightHpPool`
+//      (ficha + gear); `levers.hp` é calculado e NUNCA lido.
+// Resultado: ele dizia "Guerreiro 65.6%, Mago 33.8%" enquanto o servidor de verdade
+// entregava Guerreiro 30.6% e Monge 66.7% no nv50 (lutas reais, não sim).
+//
+// Continua útil para a matriz CLASSE×FORMA dos ESPECIAIS, que o sim novo não modela.
+// ============================================================
 // DOLRATH — Simulador PvP no MODELO DE LEVERS (combatModel.ts)
 //
 // ⚠️ Os sims antigos (pvp-race-class-sim.js / pvp-fight-detailed-sim.js)

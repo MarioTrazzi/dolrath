@@ -5,6 +5,9 @@
  * No combate (PvP/treino) a FORMA é só da sessão (socket `sync_transformation`).
  * Esta rota cobra MP+stamina persistentes e NÃO grava isTransformed no personagem —
  * senão a próxima luta começava já transformada.
+ *
+ * ⚔️ Exceção: `arena: true` (PvP) NÃO cobra nada. Lá os recursos são da luta e a
+ * carteira paga a taxa fixa de entrada — ver src/lib/pvpRewards.ts.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -22,7 +25,13 @@ export async function POST(
 ) {
   try {
     const { characterId } = params
-    const { transformationType } = await req.json()
+    const { transformationType, arena } = await req.json()
+
+    // 🏟️ ARENA: a luta de PvP já cobra uma TAXA FIXA de stamina (PVP_FIGHT_STAMINA) e
+    // os recursos DENTRO dela (barra de stamina, MP) são da luta, não do personagem.
+    // Cobrar aqui também fazia a transformação custar quase DUAS lutas da carteira —
+    // e furava o "10 lutas por dia" de quem usa a forma.
+    const isArena = arena === true
 
     if (!characterId) {
       return NextResponse.json({ error: 'Character ID é obrigatório' }, { status: 400 })
@@ -67,23 +76,24 @@ export async function POST(
       return NextResponse.json({ error: 'Tipo de transformação inválido' }, { status: 400 })
     }
 
-    if (character.mp < config.cost.mp) {
+    if (!isArena && character.mp < config.cost.mp) {
       return NextResponse.json({
         error: `MP insuficiente: precisa de ${config.cost.mp}, tem ${character.mp}`,
         canTransform: false,
       }, { status: 400 })
     }
-    if (character.stamina < config.cost.stamina) {
+    if (!isArena && character.stamina < config.cost.stamina) {
       return NextResponse.json({
         error: `Stamina insuficiente: precisa de ${config.cost.stamina}, tem ${character.stamina}`,
         canTransform: false,
       }, { status: 400 })
     }
 
-    const nextMp = Math.max(0, (character.mp || 0) - config.cost.mp)
-    const nextStamina = Math.max(0, (character.stamina || 0) - config.cost.stamina)
+    // Na arena os custos saem das barras DA LUTA (socket) — aqui só o estado persiste.
+    const nextMp = isArena ? character.mp : Math.max(0, (character.mp || 0) - config.cost.mp)
+    const nextStamina = isArena ? character.stamina : Math.max(0, (character.stamina || 0) - config.cost.stamina)
 
-    // Só cobra recursos. Limpa flag stale (lutas antigas que gravavam isTransformed).
+    // Só cobra recursos (fora da arena). Limpa flag stale (lutas antigas gravavam isTransformed).
     const updatedCharacter = await prisma.character.update({
       where: { id: characterId },
       data: {
@@ -95,7 +105,9 @@ export async function POST(
         },
         mp: nextMp,
         stamina: nextStamina,
-        staminaUpdatedAt: new Date(),
+        // Âncora do regen só se DEBITOU: na arena nada foi gasto, e reancorar zeraria
+        // 15 min de regen a cada transformação.
+        ...(isArena ? {} : { staminaUpdatedAt: new Date() }),
       }
     })
 

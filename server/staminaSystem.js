@@ -7,7 +7,9 @@
 
 // 🎮 CUSTOS DE STAMINA POR ATIVIDADE
 const STAMINA_COSTS = {
-  // ⚔️ Combates PvP - custos baixos para permitir 10 lutas diárias
+  // ⚔️ Combates PvP — estes custos são da BARRA DA LUTA (recurso tático do turno), não
+  // da carteira. A carteira paga uma taxa FIXA por luta (PVP_FIGHT_STAMINA em
+  // src/lib/pvpRewards.ts), e é ela que fixa as 10 lutas diárias.
   pvp: {
     light_attack: 1,   // Golpe
     heavy_attack: 2,   // Ataque de Classe
@@ -113,7 +115,9 @@ function getStaminaCost(activity, options = {}) {
         'defend': 3,
         'use_item': 0
       }
-      return actionCosts[options.actionType] || STAMINA_COSTS.pvp[options.actionType] || 1
+      // `??`, não `||`: com `||` o custo 0 do `use_item` era falsy e caía no fallback,
+      // cobrando 1 de stamina por usar um item que deveria ser de graça.
+      return actionCosts[options.actionType] ?? STAMINA_COSTS.pvp[options.actionType] ?? 1
     }
     
     // Tentar parsing padrão

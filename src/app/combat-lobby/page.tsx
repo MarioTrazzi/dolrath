@@ -9,6 +9,7 @@ import ArenaBackdrop from '@/components/combat/ArenaBackdrop'
 import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider'
 import { GOLD, GOLD_BRIGHT, PANEL_BG, TITLEBAR_BG, BEVEL_BTN_CLASS, BEVEL_COLOR_BTN_CLASS, BEVEL_VARIANTS } from '@/components/crafting/bdoTheme'
 import { TRAINING_OPPONENTS } from '@/lib/trainingOpponents'
+import { PVP_FIGHT_STAMINA, PVP_FIGHTS_PER_DAY } from '@/lib/pvpRewards'
 
 function lobbySocketUrl() {
   return process.env.NODE_ENV === 'production'
@@ -89,6 +90,8 @@ export default function CombatLobbyPage() {
   const [joinPassword, setJoinPassword] = useState('')
   const [showSearchDialog, setShowSearchDialog] = useState(false)
   const [searchPhase, setSearchPhase] = useState<'idle' | 'searching' | 'found'>('idle')
+  /** Recusa do servidor ao entrar na fila (stamina/coleta) — mostrada no lugar do giro. */
+  const [queueBlocked, setQueueBlocked] = useState<string | null>(null)
   const [searchElapsedSec, setSearchElapsedSec] = useState(0)
   const [matchedOpponent, setMatchedOpponent] = useState<{
     id: string
@@ -151,8 +154,11 @@ export default function CombatLobbyPage() {
                 class: char.class || 'Guerreiro',
                 mp: details.baseStats?.mp || 50,
                 maxMp: details.baseStats?.maxMp || 50,
-                stamina: details.stamina || 100,
-                maxStamina: details.maxStamina || 100,
+                // ⚡ `??`, não `||`: `details.stamina || 100` trocava um saldo REAL de 0
+                // por 100 — era assim que um herói esgotado entrava na arena com o
+                // tanque cheio. /api/character/[id] já devolve a stamina viva.
+                stamina: details.stamina ?? 0,
+                maxStamina: details.maxStamina ?? 100,
                 attack: details.baseStats?.str || 10,
                 defense: details.baseStats?.def || 10,
                 strength: details.baseStats?.str || 10,
@@ -372,6 +378,7 @@ export default function CombatLobbyPage() {
       queueSocketRef.current = null
     }
 
+    setQueueBlocked(null)
     setShowSearchDialog(true)
     setSearchPhase('searching')
     setSearchElapsedSec(0)
@@ -414,6 +421,22 @@ export default function CombatLobbyPage() {
         }, 1800)
       }
     )
+
+    // ⚡ O servidor pode RECUSAR a entrada na fila (stamina abaixo do mínimo, ou herói
+    // coletando). Sem este handler o dialog girava para sempre — a página não ouvia
+    // `queue_status` em nenhum momento.
+    sock.on('queue_status', (data: { status: string; reason?: string; stamina?: number; required?: number }) => {
+      if (data?.status !== 'blocked') return
+      sock.disconnect()
+      queueSocketRef.current = null
+      setQueueBlocked(
+        data.reason === 'gathering'
+          ? '⛏️ Seu herói está coletando. Encerre a coleta antes de entrar na arena.'
+          : `⚡ Cada luta na arena custa ${data.required ?? 0}⚡ e você tem ${data.stamina ?? 0}. Ela volta sozinha (+2 a cada 15 min).`
+      )
+      setSearchPhase('idle')
+      setShowSearchDialog(false)
+    })
 
     sock.on('disconnect', () => {
       /* dialog controla o ciclo; não fecha sozinho no disconnect */
@@ -662,6 +685,24 @@ export default function CombatLobbyPage() {
               <Search className="mr-2" size={18} />
               Buscar Oponente
             </button>
+            {/* ⚡ Recusa do servidor: melhor dizer o motivo do que deixar o dialog girar. */}
+            {queueBlocked && (
+              <p className="mt-3 text-sm text-amber-300/90 bg-amber-900/15 border border-amber-500/30 rounded-lg px-3 py-2">
+                {queueBlocked}
+              </p>
+            )}
+            {selectedCharacter && (
+              <p className="mt-3 text-xs text-[#8a8a90]">
+                ⚡ Stamina: <span className="text-[#dcdce0] font-semibold">{selectedCharacter.stamina}</span>
+                /{selectedCharacter.maxStamina} — cada luta custa{' '}
+                <span className="text-[#dcdce0] font-semibold">{PVP_FIGHT_STAMINA}⚡</span> fixos
+                ({PVP_FIGHTS_PER_DAY} lutas por dia). Dá para{' '}
+                <span className="text-[#dcdce0] font-semibold">
+                  {Math.floor(selectedCharacter.stamina / PVP_FIGHT_STAMINA)}
+                </span>{' '}
+                agora.
+              </p>
+            )}
           </div>
 
           {/* Create Room Section */}

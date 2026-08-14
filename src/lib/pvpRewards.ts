@@ -1,5 +1,29 @@
 /**
- * ⚔️ Recompensas da ARENA, proporcionais à stamina gasta.
+ * ⚔️ Recompensas da ARENA — TAXA FIXA DE ENTRADA, 10 lutas por dia.
+ *
+ * 🎟️ DESIGN (2026-08-14) — a luta custa `PVP_FIGHT_STAMINA` da carteira, sempre o
+ * mesmo, independente de quantos turnos durou, de quantos golpes foram dados ou de ter
+ * transformado. O orçamento diário de stamina (o regen de 192⚡/dia) dividido por essa
+ * taxa é EXATAMENTE `PVP_FIGHTS_PER_DAY`.
+ *
+ * Por que trocar o modelo antigo (cobrar a stamina gasta golpe a golpe): o número de
+ * lutas/dia era um efeito colateral do tamanho das lutas, e ele variava com o nível —
+ * `scripts/pvp-band-balance-sim.js` media 14.0 lutas/dia no iniciante contra 8.1 no
+ * nv50 (11.3⚡ vs 23.1⚡ por lado), e o ouro por vitória ia de 491 a 1003 pela mesma
+ * razão. Pior: a barra da luta ERA a carteira, então quem chegava com o saldo raspando
+ * lutava com meia barra de stamina — punição dupla e invisível.
+ *
+ * O que muda em consequência:
+ *   • a barra de stamina DENTRO da luta é da LUTA (nasce cheia, `maxStamina`) e não
+ *     debita mais nada no banco — continua sendo o recurso tático dos golpes;
+ *   • o pool que paga os dois lados é `2 × PVP_FIGHT_STAMINA`, então ouro e XP por luta
+ *     são determinísticos em qualquer nível;
+ *   • abandonar/desistir/dar F5 custa a taxa cheia, igual a uma luta completa;
+ *   • o piso antigo (PVP_MIN_ENTRY_STAMINA = 5, anti-farm de luta de 1 turno) morreu:
+ *     uma luta de 1 turno custa os mesmos 19⚡, então farmá-la não emite ouro extra.
+ *
+ * ⚠️ O faucet DIÁRIO não mudou: 192⚡ × PVP_GOLD_PER_STA continua sendo o teto, só que
+ * agora distribuído em 10 parcelas iguais.
  *
  * 🎲 DESIGN (2026-07-15) — ESPECIALIZAÇÃO DE MOEDA, não paridade de espólio:
  *   • ARENA    = ouro + XP, e NADA MAIS. Lore: os jogadores apostam e o governo paga;
@@ -21,9 +45,23 @@
  *
  * Share: vencedor leva a maior fatia do que AMBOS gastaram; perdedor recebe consolação.
  */
+import { STAMINA_REGEN } from '@/lib/staminaSystem'
 
-/** Stamina mínima gasta p/ a luta valer recompensa (mata o farm de luta de 1 turno). */
-export const PVP_MIN_ENTRY_STAMINA = 5
+/** Lutas de arena que um dia inteiro de stamina compra. É ESTE o número fixado. */
+export const PVP_FIGHTS_PER_DAY = 10
+
+/**
+ * Stamina que o regen passivo devolve em 24h (+2 a cada 15 min = 192). Derivado das
+ * constantes reais para não virar um número solto: mexeu no regen, a taxa acompanha.
+ */
+export const DAILY_STAMINA_BUDGET =
+  STAMINA_REGEN.amountPerTick * Math.floor(86_400 / STAMINA_REGEN.tickSeconds)
+
+/**
+ * 🎟️ Taxa FIXA de uma luta de arena (19⚡). `floor` de propósito: as 10 lutas têm que
+ * caber no orçamento do dia, não estourá-lo por arredondamento.
+ */
+export const PVP_FIGHT_STAMINA = Math.floor(DAILY_STAMINA_BUDGET / PVP_FIGHTS_PER_DAY)
 
 /** Gold médio por ponto de stamina (ver a calibração no cabeçalho). */
 export const PVP_GOLD_PER_STA = 31
@@ -60,8 +98,13 @@ function clampSta(n: number): number {
 }
 
 /**
- * Calcula gold/XP a partir da stamina gasta na luta.
+ * Calcula gold/XP a partir da stamina COBRADA dos dois lados.
  * Pool = (staWinner + staLoser) × taxa; split win/loss; bônus leves com cap.
+ *
+ * Desde a taxa fixa (2026-08-14) os dois lados entram com `PVP_FIGHT_STAMINA`, então o
+ * pool é sempre `2 × PVP_FIGHT_STAMINA` e o valor da luta é o mesmo em qualquer nível.
+ * A assinatura continua parametrizada pela stamina porque é ela que os simuladores
+ * varrem — e porque um lado que não conseguiu pagar entra com 0 e não recebe faucet.
  */
 export function calculatePvpStaminaRewards(input: PvpStaminaRewardsInput): {
   winner: PvpSideReward

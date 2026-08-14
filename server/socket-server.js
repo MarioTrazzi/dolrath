@@ -7,6 +7,10 @@ const { getStaminaCost, checkStaminaLevel, calculateStaminaRegeneration } = requ
 // 🐉 Modo treino - bot monstro que joga pelas regras do PvP
 const { spawnTrainingBot, MONSTERS, DEFAULT_TRAINING_OPPONENT_KEY } = require('./training-bot')
 
+// ⚔️ Oponente de PvP: se a fila não achar humano em PVP_BOT_FILL_MS, o servidor cria
+// um oponente espelho e joga o jogador direto numa sala com ele.
+const { buildQueuePersona, refinePersonaFor, buildBotPlayer, spawnPvpBot } = require('./pvp-bot')
+
 // ⚔️ MODELO DE COMBATE ENXUTO (fonte da verdade): poder × sorte × (1−DR), mitigação
 // proporcional, levers por classe (poder/armadura/hp/evasão) escalados por nível+gear.
 // Ver server/combatModel.js + src/lib/combatModel.ts + docs/combate-ataque-por-arma.md.
@@ -42,16 +46,75 @@ function normalizeClass(cls) {
 // → fallback que mapeia os stats fornecidos para levers (preserva a dificuldade do treino).
 // 🎯 AJUSTE DE CLASSE SÓ-PvP (validado em scripts/pvp-lever-sim.js). Com attrs
 // (AGI/DEF) o tilt já equilibra um pouco; este ajuste fino mantém classes ~47-54%.
-const PVP_CLASS_ADJ = {
-  warrior: { power: 1.00, armor: 0.90, hp: 0.96 },
-  rogue:   { power: 1.10, armor: 1.00, hp: 1.18 },
-  mage:    { power: 0.86, armor: 1.00, hp: 1.00 },
-  monk:    { power: 1.04, armor: 1.00, hp: 1.08 },
+// 🎯 AJUSTE DE CLASSE DO PvP — recalibrado em 2026-08-14 e agora uma CURVA POR NÍVEL.
+//   Ferramenta: scripts/pvp-band-balance-sim.js (--tune --identity --band=<faixa>).
+//
+// Por que mudou: o balance anterior media com `scripts/pvp-lever-sim.js`, que ficou
+// DEFASADO em dois pontos ao mesmo tempo — (1) modela defesa por REAÇÃO (dodge/block
+// gastando stamina) e o PvP ao vivo resolve tudo em `defense: 'passive'`; (2) usa
+// `levers.hp` como barra de vida, e a barra real sai de `fightHpPool` (ficha + gear).
+// Medido com o motor de verdade, o spread entre classes era de 30-50 pontos percentuais.
+// Confirmado em LUTAS REAIS neste socket: Guerreiro 30.6% · Ladino 62.5% · Mago 40.3% ·
+// Monge 66.7% no nv50.
+//
+// Por que uma CURVA e não uma constante: o desequilíbrio ESCALA COM O NÍVEL e chega a
+// inverter de sinal. Em defesa passiva a esquiva é um anulador multiplicativo que cresce
+// linear com AGI, e o Ladino ainda converte AGI em dano a 1.6× (dupla contagem), enquanto
+// a DEF do Guerreiro vira armadura contra a curva de retorno decrescente
+// DR = armor/(armor+K). Resultado sem ajuste nenhum: Guerreiro 48.8% no nv3 → 21.7% no
+// nv50; Ladino 41.4% → 65.8%. Nenhum multiplicador fixo conserta os dois extremos ao
+// mesmo tempo — tunar pelo agregado só move o problema de faixa (o Guerreiro virava 69%
+// no nv3 e 34% no nv50).
+//
+// Âncoras nos níveis 1/22/50, interpoladas linearmente. Cada classe é corrigida pela
+// PRÓPRIA fantasia: Guerreiro por HP (tanque), Mago por PODER (canhão de vidro), Ladino
+// cede poder conforme sobe, Monge leva um corte quase plano (era o dominante em todas as
+// faixas). ⚠️ Mexeu aqui? Rode o sim nas TRÊS faixas — um número que conserta o nv50
+// costuma quebrar o nv3.
+// Tunado sobre DOIS cenários ao mesmo tempo ("kit cheio" com transformação + HP de gear,
+// e "nu" sem nenhum dos dois): otimizar só o kit cheio deixava ~14pp de spread para quem
+// ainda não desbloqueou a forma — e foi isso que as lutas reais flagraram.
+const PVP_ADJ_LEVELS = [1, 22, 50]
+const PVP_CLASS_ADJ_CURVE = {
+  warrior: { power: [1.00, 1.00, 1.00], armor: [1.00, 1.00, 1.00], hp: [1.01, 1.14, 1.25] },
+  rogue:   { power: [1.07, 0.97, 0.91], armor: [1.00, 1.00, 1.00], hp: [1.00, 1.00, 1.00] },
+  mage:    { power: [1.18, 1.06, 1.07], armor: [1.00, 1.00, 1.00], hp: [1.00, 1.00, 1.00] },
+  monk:    { power: [0.92, 0.94, 0.95], armor: [1.00, 1.00, 1.00], hp: [0.92, 0.94, 0.95] },
 }
-function applyPvpClassAdj(levers, cls) {
-  const a = PVP_CLASS_ADJ[cls]
-  if (!a) return levers
-  return { ...levers, power: levers.power * a.power, armor: levers.armor * a.armor, hp: levers.hp * a.hp }
+
+/** Interpola a âncora de um knob no nível do lutador (linear entre os pontos). */
+function pvpAdjAt(cls, knob, level) {
+  const curve = PVP_CLASS_ADJ_CURVE[cls]
+  if (!curve) return 1
+  const pts = curve[knob]
+  const L = Math.max(1, Number(level) || 1)
+  if (L <= PVP_ADJ_LEVELS[0]) return pts[0]
+  for (let i = 1; i < PVP_ADJ_LEVELS.length; i++) {
+    if (L <= PVP_ADJ_LEVELS[i]) {
+      const t = (L - PVP_ADJ_LEVELS[i - 1]) / (PVP_ADJ_LEVELS[i] - PVP_ADJ_LEVELS[i - 1])
+      return pts[i - 1] + (pts[i] - pts[i - 1]) * t
+    }
+  }
+  return pts[pts.length - 1] // acima do nível de referência: segura o último valor
+}
+function applyPvpClassAdj(levers, cls, level) {
+  if (!PVP_CLASS_ADJ_CURVE[cls]) return levers
+  return {
+    ...levers,
+    power: levers.power * pvpAdjAt(cls, 'power', level),
+    armor: levers.armor * pvpAdjAt(cls, 'armor', level),
+  }
+}
+
+/**
+ * Fator de HP da classe no PvP. ⚠️ `levers.hp` é calculado e NUNCA LIDO: a barra da luta
+ * sai de `fightHpPool` (ficha + gear), não dos levers. Ou seja, o `hp` do PVP_CLASS_ADJ
+ * era um botão MORTO — o "+18% de HP do Ladino" da passada de balance anterior nunca
+ * chegou a existir em produção. Aqui ele passa a valer, aplicado onde a barra realmente
+ * nasce. Só PvP: a masmorra usa src/lib/combatModel.ts e não passa por aqui.
+ */
+function pvpClassHpMult(cls, level) {
+  return pvpAdjAt(cls, 'hp', level)
 }
 
 function readAttrs(player) {
@@ -78,7 +141,7 @@ function derivePlayerLevers(player, gearTierOverride) {
   const attrs = readAttrs(player)
 
   if (cls) {
-    const levers = applyPvpClassAdj(CM.computeLevers(cls, level, gearTier, attrs), cls)
+    const levers = applyPvpClassAdj(CM.computeLevers(cls, level, gearTier, attrs), cls, level)
     return { levers, cls, gearTier }
   }
 
@@ -106,9 +169,28 @@ function attackStaminaCost(attackType) {
   return CM.ATTACKS[attackType]?.stamina ?? 1
 }
 
-function trackFightStamina(player, amount) {
-  if (!player || !(amount > 0)) return
-  player.fightStaminaSpent = (player.fightStaminaSpent || 0) + amount
+/**
+ * Teto por uso de consumível NA LUTA. O `item` do evento `use_consumable` vem do
+ * cliente; estes números são os do catálogo (src/app/api/inventory/use-item: Poção de
+ * Stamina 50, Vida 50, Mana 30) com folga para pratos/receitas melhores.
+ */
+const MAX_CONSUMABLE_RESTORE = { hp: 200, mp: 120, stamina: 60 }
+
+/**
+ * ⚡ A BARRA DE STAMINA DA LUTA É DA LUTA (2026-08-14). Ela nasce CHEIA (`maxStamina`),
+ * paga os golpes e regenera +2/turno — e não debita mais nada no banco. A carteira paga
+ * uma TAXA FIXA por luta (PVP_FIGHT_STAMINA, cobrada em /api/battle/rewards), que é o
+ * que fixa a arena em 10 lutas por dia.
+ *
+ * O modelo antigo — barra = carteira, cobrança = stamina gasta — tinha três defeitos:
+ * o número de lutas/dia dependia do tamanho das lutas (14/dia no nv1, 8/dia no nv50),
+ * quem chegava com o saldo raspando lutava com meia barra, e a contabilidade do gasto
+ * (fightStaminaSpent/fightStaminaBudget) precisava de teto, clamp e reconciliação de
+ * poção só para não pagar o oponente honesto a menos. Tudo isso saiu junto.
+ */
+function resetFightStamina(player) {
+  if (!player) return
+  player.stamina = player.maxStamina || player.stamina || 100
 }
 
 /** Multiplicador de aprimoramento (espelho leve de enhancementSystem.getStatMultiplier). */
@@ -311,6 +393,18 @@ function declareWinner(room, winner, loser, roomId, cause) {
   }
   regeneratePlayerResources(room.player1, 'Combat Victory/Defeat')
   regeneratePlayerResources(room.player2, 'Combat Victory/Defeat')
+  // 🔁 REVANCHE NA MESMA SALA (os dois voltam a ficar prontos): é uma luta NOVA, então
+  // a carteira precisa ser reconsultada — a taxa da luta anterior já saiu de lá e o
+  // portão do toggle_ready estava julgando com o saldo velho.
+  if (!room.isTraining) {
+    for (const p of [room.player1, room.player2]) {
+      if (!p || isServerBotId(room, p.id) || String(p.id).startsWith('bot_')) continue
+      p.staminaVerified = false
+      verifyFighterState(roomId, p.id)
+    }
+  }
+  // A luta acabou: nenhum relógio de abandono/inatividade deve continuar armado.
+  clearRoomGraceTimers(roomId)
   io.to(roomId).emit('room_updated', room)
 }
 
@@ -328,11 +422,234 @@ function advanceTurn(room, roomId) {
   room.pendingAction = null
   io.to(roomId).emit('room_updated', room)
   maybeScheduleTrainingBot(room, roomId)
+  scheduleTurnIdle(room, roomId)
 }
 
-/** Id do bot de treino começa com `monster_` (ver training-bot.js). */
-function isTrainingBotId(id) {
-  return typeof id === 'string' && id.startsWith('monster_')
+/**
+ * Timers do fallback de turno do bot, POR SALA — fora do objeto `room`, que é enviado
+ * inteiro no `room_updated` (ver o comentário em maybeScheduleTrainingBot).
+ */
+const botTurnTimers = new Map() // roomId -> Timeout
+
+function clearBotTurnTimer(roomId) {
+  const t = botTurnTimers.get(roomId)
+  if (t) {
+    clearTimeout(t)
+    botTurnTimers.delete(roomId)
+  }
+}
+
+/**
+ * ⏳ Carência de reconexão, POR SALA+JOGADOR — pelo mesmo motivo de botTurnTimers: um
+ * Timeout do Node guardado dentro de `room` derrubava o processo inteiro ("Maximum call
+ * stack size exceeded"), porque a `room` é serializada inteira em todo `room_updated` e
+ * o Timeout carrega a lista circular `_idlePrev/_idleNext`.
+ */
+const disconnectGraceTimers = new Map() // `${roomId}:${playerId}` -> Timeout
+const DISCONNECT_GRACE_MS = Math.max(5000, Number(process.env.PVP_DISCONNECT_GRACE_MS) || 30000)
+
+function clearDisconnectGrace(roomId, playerId) {
+  const key = `${roomId}:${playerId}`
+  const t = disconnectGraceTimers.get(key)
+  if (t) {
+    clearTimeout(t)
+    disconnectGraceTimers.delete(key)
+  }
+}
+
+function clearRoomGraceTimers(roomId) {
+  for (const key of [...disconnectGraceTimers.keys()]) {
+    if (key.startsWith(`${roomId}:`)) {
+      clearTimeout(disconnectGraceTimers.get(key))
+      disconnectGraceTimers.delete(key)
+    }
+  }
+  clearTurnIdleTimer(roomId)
+}
+
+/**
+ * ⏱️ Timer de INATIVIDADE de turno, por sala. Fecha a última porta de fuga grátis: o
+ * disconnect tem carência, mas quem fica CONECTADO e simplesmente não joga (aba em
+ * segundo plano, cliente travado, ou de propósito para não pagar a stamina) pendurava a
+ * luta para sempre — não existia timer de turno nenhum no servidor.
+ * Mesmo Map de módulo dos outros timers: nunca dentro de `room`.
+ */
+const turnIdleTimers = new Map() // roomId -> Timeout
+// Piso baixo só para os testes de integração conseguirem exercitar o caminho; em
+// produção o valor é o default de 90s (folgado para uma jogada humana com reflexão).
+const TURN_IDLE_MS = Math.max(3000, Number(process.env.PVP_TURN_IDLE_MS) || 90000)
+
+function clearTurnIdleTimer(roomId) {
+  const t = turnIdleTimers.get(roomId)
+  if (t) {
+    clearTimeout(t)
+    turnIdleTimers.delete(roomId)
+  }
+}
+
+/** Rearma o relógio de inatividade para o turno atual. */
+function scheduleTurnIdle(room, roomId) {
+  clearTurnIdleTimer(roomId)
+  if (!isFightLive(room) || room.isTraining) return
+  const whose = room.currentTurn
+  if (!whose || isServerBotId(room, whose)) return // bot tem o próprio fallback
+  turnIdleTimers.set(roomId, setTimeout(() => {
+    turnIdleTimers.delete(roomId)
+    const live = rooms.get(roomId)
+    if (!live || !isFightLive(live) || live.currentTurn !== whose) return
+    const idle = live.player1?.id === whose ? live.player1 : live.player2
+    live.combatLog.push({
+      type: 'system',
+      message: `⏱️ ${idle?.name} ficou sem agir por ${Math.round(TURN_IDLE_MS / 1000)}s — derrota por inatividade.`,
+      timestamp: new Date(),
+    })
+    forfeitFight(live, roomId, whose, 'inatividade')
+  }, TURN_IDLE_MS))
+}
+
+/** A luta está valendo? (usado pelos caminhos de abandono) */
+function isFightLive(room) {
+  return !!room?.isActive
+    && room.phase !== CombatPhase.WAITING_PLAYERS
+    && room.phase !== CombatPhase.COMBAT_END
+}
+
+/**
+ * Abandono (desistência, carência estourada, sala fechada pelo criador). Marca a sala
+ * para o `processBattleRewards` saber que não é vitória impecável e declara o vencedor —
+ * que já cai no fluxo normal de recompensas. Antes disso, largar a luta não custava
+ * NADA: nem stamina cobrada, nem recompensa para quem ficou.
+ */
+function forfeitFight(room, roomId, quitterId, reason) {
+  if (!isFightLive(room)) return false
+  const quitter = room.player1?.id === quitterId ? room.player1
+    : room.player2?.id === quitterId ? room.player2
+      : null
+  const opponent = room.player1?.id === quitterId ? room.player2 : room.player1
+  if (!quitter || !opponent) return false
+
+  room.forfeit = { by: quitterId, reason }
+  declareWinner(room, opponent, quitter, roomId, reason)
+  return true
+}
+
+/**
+ * Lutador controlado pelo servidor: monstro do treino (`monster_`, ver training-bot.js)
+ * ou o oponente de PvP desta sala (`room.botFighterId`, gerado em join_room).
+ */
+function isServerBotId(room, id) {
+  if (typeof id !== 'string') return false
+  return id.startsWith('monster_') || id === room?.botFighterId
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ⚡ STAMINA AUTORITATIVA
+//
+// Este processo não tem Prisma. Até aqui o `player.stamina` da luta vinha do PAYLOAD DO
+// CLIENTE — e o lobby caía em `details.stamina || 100`, que transformava um herói zerado
+// em tanque cheio. A luta inteira rodava nesse orçamento fictício e só no fim a rota de
+// recompensas clampava a cobrança pelo saldo real, o que subpagava o oponente HONESTO
+// (o pool é a soma dos dois lados).
+//
+// A verificação é DEPOIS do join, de propósito. Um `await` dentro do join_room não é
+// viável: aquele handler cria a sala, atribui player1/player2, consome pendingBotFills e
+// marca botSpawned — tudo em check-then-act sem lock nenhum. Um await no meio deixaria
+// um segundo join (refresh, o oponente, o bot que nasce 1s depois) interleavar e
+// duplicar lutador/bot. Como a luta só começa no `toggle_ready`, a verificação sempre
+// ganha a corrida do clique humano — e o `toggle_ready` a espera de qualquer jeito.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Verificações em voo, por sala+jogador. Fora do `room` (serializado em todo emit). */
+const fighterVerifications = new Set() // `${roomId}:${playerId}`
+
+const APP_URL = (process.env.APP_URL || process.env.NEXTAUTH_URL || 'https://dolrath.vercel.app').replace(/\/$/, '')
+const FIGHTER_STATE_TIMEOUT_MS = 3000
+
+/** Chama /api/battle/fighter-state. Devolve null em qualquer falha (fail-open). */
+async function fetchFighterState(characterIds) {
+  const secret = process.env.BATTLE_REWARDS_SECRET || ''
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), FIGHTER_STATE_TIMEOUT_MS)
+  try {
+    const res = await fetch(`${APP_URL}/api/battle/fighter-state`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(secret ? { 'x-battle-secret': secret } : {}) },
+      body: JSON.stringify({ characterIds }),
+      signal: controller.signal,
+    })
+    if (!res.ok) {
+      console.error(`⚠️ fighter-state ${res.status} para ${characterIds.join(',')}`)
+      return null
+    }
+    return await res.json()
+  } catch (err) {
+    console.error('⚠️ fighter-state falhou:', err?.message || err)
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * Busca o estado real e o aplica ao lutador da sala. Roda solta (sem await no caller):
+ * quando resolve, a sala pode ter sumido, o jogador pode ter saído ou uma revanche pode
+ * ter recomeçado — por isso tudo é re-buscado aqui dentro, nada é capturado por closure
+ * além dos ids.
+ */
+async function verifyFighterState(roomId, playerId) {
+  const key = `${roomId}:${playerId}`
+  if (fighterVerifications.has(key)) return
+  fighterVerifications.add(key)
+  try {
+    const data = await fetchFighterState([playerId])
+
+    const room = rooms.get(roomId)
+    if (!room) return
+    const player = room.player1?.id === playerId ? room.player1
+      : room.player2?.id === playerId ? room.player2
+        : null
+    if (!player) return
+
+    const state = data?.fighters?.find((f) => f.id === playerId)
+    if (!state || state.virtual) {
+      // Sem resposta utilizável: seguir com o payload, mas deixando o rastro. O piso
+      // sobre o COBRADO na rota de recompensas ainda limita o faucet — um soluço da
+      // Vercel não pode derrubar a arena.
+      player.staminaVerified = true
+      player.staminaUnverified = true
+      console.error(`⚠️ [${roomId}] stamina de ${player.name} NÃO verificada — seguindo com o payload`)
+    } else {
+      // 🎟️ A carteira decide só QUEM ENTRA (tem a taxa fixa da luta?). Ela NÃO é mais a
+      // barra da luta: a barra nasce cheia e é da luta (ver resetFightStamina). Antes,
+      // `player.stamina = state.stamina` fazia quem chegava com o saldo raspando lutar
+      // com meia barra de stamina — punição dupla, e invisível.
+      const fee = Number(data.entryStamina ?? data.minEntryStamina) || 0
+      player.walletStamina = state.stamina
+      player.maxStamina = state.maxStamina
+      player.level = state.level
+      if (!room.isActive) resetFightStamina(player)
+      player.staminaVerified = true
+      player.staminaBlocked = state.gathering ? 'gathering' : (state.stamina < fee ? 'low_stamina' : null)
+      player.staminaEntryFee = fee
+      if (player.staminaBlocked) {
+        console.log(`⛔ [${roomId}] ${player.name} bloqueado (${player.staminaBlocked}: ${state.stamina}⚡ < ${fee}⚡)`)
+      }
+    }
+
+    io.to(roomId).emit('room_updated', room)
+    io.to(roomId).emit('fighter_state_synced', {
+      playerId,
+      stamina: player.stamina,
+      maxStamina: player.maxStamina,
+      // Saldo da CARTEIRA e a taxa da luta — o que a UI precisa para dizer "custa 19⚡,
+      // você tem 12". A `stamina` acima é a barra da luta, outra coisa.
+      walletStamina: player.walletStamina ?? null,
+      blocked: player.staminaBlocked || null,
+      entryFee: player.staminaEntryFee ?? null,
+    })
+  } finally {
+    fighterVerifications.delete(key)
+  }
 }
 
 /**
@@ -341,20 +658,25 @@ function isTrainingBotId(id) {
  * mudam e este timer no-op.
  */
 function maybeScheduleTrainingBot(room, roomId) {
-  if (!room?.isTraining || !room.isActive) return
+  if (!room?.isActive) return
+  if (!room.isTraining && !room.botFighterId) return
   if (room.phase !== CombatPhase.PLAYER_TURN) return
-  if (!isTrainingBotId(room.currentTurn)) return
+  if (!isServerBotId(room, room.currentTurn)) return
 
-  if (room._trainBotTimer) clearTimeout(room._trainBotTimer)
+  // 💥 O timer NÃO pode morar na room: a room inteira é serializada em todo
+  // `room_updated`, e um Timeout do Node carrega a lista circular de timers
+  // (_idlePrev/_idleNext). O parser do socket.io não trata ciclo e o processo
+  // MORRIA com "Maximum call stack size exceeded" no primeiro turno do bot.
+  clearTimeout(botTurnTimers.get(roomId))
   const scheduledFor = room.currentTurn
-  room._trainBotTimer = setTimeout(() => {
-    room._trainBotTimer = null
+  botTurnTimers.set(roomId, setTimeout(() => {
+    botTurnTimers.delete(roomId)
     if (!rooms.has(roomId)) return
     if (!room.isActive || room.phase !== CombatPhase.PLAYER_TURN) return
     if (room.currentTurn !== scheduledFor || room.pendingAction) return
-    console.log(`🤖 [treino:${roomId}] fallback servidor — bot parado, forçando golpe`)
+    console.log(`🤖 [${room.isTraining ? 'treino' : 'pvp-bot'}:${roomId}] fallback servidor — bot parado, forçando golpe`)
     executeTrainingBotAttack(room, roomId)
-  }, 4500)
+  }, 4500))
 }
 
 function executeTrainingBotAttack(room, roomId) {
@@ -403,7 +725,6 @@ function executeTrainingBotAttack(room, roomId) {
   }
 
   bot.stamina = Math.max(0, stam - stamCost)
-  trackFightStamina(bot, stamCost)
   if (mpCost > 0) bot.mp = Math.max(0, mp - mpCost)
 
   const diceType = attackType === 'weapon' ? unlocks.classAttackDie : (CM.PVE_DIE[attackType] || CM.DICE_SIDES)
@@ -636,16 +957,107 @@ function tryMatchmake() {
   console.log(`🔎 Match: ${a.name} vs ${b.name} → ${roomId}`)
 }
 
-setInterval(tryMatchmake, 2000)
+// 🤖 Preenchimento por bot — a fila só sabia PAREAR quem já estava nela: sem outro
+// jogador online, "Buscar oponente" girava para sempre (a frota headless de
+// scripts/bot-fleet-runner.js nunca roda em produção). Passados PVP_BOT_FILL_MS sem
+// par, o servidor cria a sala e sobe um oponente espelho do jogador.
+const PVP_BOTS_ENABLED = process.env.PVP_BOTS_ENABLED !== 'false'
+const PVP_BOT_FILL_MS = Math.max(2000, Number(process.env.PVP_BOT_FILL_MS) || 10000)
+/** Salas com bot prometido no match_found, esperando o humano chegar. */
+const pendingBotFills = new Map() // roomId -> { characterId, persona, expiresAt }
+const PENDING_FILL_TTL_MS = 60000
+
+function cancelBotFillFor(characterId) {
+  for (const [roomId, fill] of pendingBotFills) {
+    if (fill.characterId === characterId) pendingBotFills.delete(roomId)
+  }
+}
+
+function startBotFill(entry) {
+  const roomId = 'mm_' + Math.random().toString(36).slice(2, 11)
+  // Persona provisória: aqui só sabemos o nível. Classe/gear/pools são refinados no
+  // join do humano (refinePersonaFor) — nome e nível do preview ficam de pé.
+  const persona = buildQueuePersona(entry.level)
+  matchQueue.delete(entry.characterId)
+  pendingBotFills.set(roomId, {
+    characterId: entry.characterId,
+    persona,
+    expiresAt: Date.now() + PENDING_FILL_TTL_MS,
+  })
+
+  const payload = {
+    roomId,
+    // id vazio: o id real do bot só nasce quando o jogador entra na sala (o preview
+    // usa só nome/nível, como no match humano).
+    opponentPreview: { id: '', name: persona.name, level: persona.level },
+  }
+  const sock = io.sockets.sockets.get(entry.socketId)
+  if (sock) {
+    sock.emit('match_found', payload)
+    sock.emit('queue_status', { status: 'matched', ...payload })
+  }
+  console.log(`🤖 Fila sem humano: ${entry.name} → ${persona.name} (${persona.class}) em ${roomId}`)
+}
+
+function sweepBotFills() {
+  const now = Date.now()
+  for (const [roomId, fill] of pendingBotFills) {
+    if (fill.expiresAt <= now) {
+      pendingBotFills.delete(roomId)
+      console.log(`🤖 Fill expirado (jogador não entrou): ${roomId}`)
+    }
+  }
+  if (!PVP_BOTS_ENABLED) return
+  for (const entry of matchQueue.values()) {
+    if (entry.isBot) continue // a frota espera humano, não ganha bot
+    if (now - entry.joinedAt < PVP_BOT_FILL_MS) continue
+    startBotFill(entry)
+  }
+}
+
+// 1s (era 2s): a espera pelo bot é uma promessa de tempo ("uns 10 segundos"), e um
+// tick de 2s fazia o match cair só aos ~11-12s.
+setInterval(() => {
+  tryMatchmake()
+  sweepBotFills()
+}, 1000)
 
 io.on('connection', (socket) => {
   console.log('Cliente conectado:', socket.id)
 
-  socket.on('queue_join', ({ characterId, userId, level, name, isBot }) => {
+  socket.on('queue_join', async ({ characterId, userId, level, name, isBot }) => {
     if (!characterId) {
       socket.emit('queue_status', { status: 'cancelled', error: 'characterId obrigatório' })
       return
     }
+
+    // ⚡ PORTÃO DA FILA: sem a taxa fixa da luta no bolso não se entra. Quem entrasse
+    // esgotado travava uma luta inteira, desgastava o equipamento e saía sem nada — a
+    // rota de recompensas recusa quem não consegue pagar a entrada.
+    //
+    // `await` aqui é seguro (ao contrário do join_room): este handler só escreve num
+    // Map indexado por characterId, e repetir a escrita é idempotente. A frota headless
+    // (isBot) pula — ela já checa a própria stamina antes de entrar na fila.
+    if (!isBot) {
+      const data = await fetchFighterState([characterId])
+      const state = data?.fighters?.find((f) => f.id === characterId)
+      // Falha de rede → deixa entrar (fail-open): o portão do toggle_ready e o piso
+      // sobre o cobrado na rota de recompensas ainda seguram o caso.
+      if (state && !state.virtual) {
+        const fee = Number(data.entryStamina ?? data.minEntryStamina) || 0
+        if (state.gathering) {
+          socket.emit('queue_status', { status: 'blocked', reason: 'gathering' })
+          return
+        }
+        if (state.stamina < fee) {
+          socket.emit('queue_status', { status: 'blocked', reason: 'low_stamina', stamina: state.stamina, required: fee })
+          return
+        }
+      }
+      // O jogador pode ter cancelado/desconectado durante o await.
+      if (!socket.connected) return
+    }
+
     matchQueue.set(characterId, {
       socketId: socket.id,
       characterId,
@@ -660,7 +1072,11 @@ io.on('connection', (socket) => {
   })
 
   socket.on('queue_leave', ({ characterId }) => {
-    if (characterId && matchQueue.has(characterId)) {
+    if (!characterId) return
+    // Cancela também um bot já prometido: quem fecha o dialog antes de entrar na sala
+    // não deve deixar um oponente órfão esperando.
+    cancelBotFillFor(characterId)
+    if (matchQueue.has(characterId)) {
       matchQueue.delete(characterId)
       socket.emit('queue_status', { status: 'cancelled' })
     }
@@ -726,11 +1142,24 @@ io.on('connection', (socket) => {
     // (evita duplicar o mesmo jogador como player2 após refresh da página)
     const existingFighterIdx = room.participants.fighters.findIndex(f => f.id === player.id)
     if (existingFighterIdx !== -1) {
-      room.participants.fighters[existingFighterIdx] = { ...room.participants.fighters[existingFighterIdx], socketId: socket.id }
+      const seat = room.participants.fighters[existingFighterIdx]
+      const wasDropped = seat.isConnected === false
+      room.participants.fighters[existingFighterIdx] = { ...seat, socketId: socket.id, isConnected: true }
       if (room.player1?.id === player.id) {
         room.player1.isConnected = true
       } else if (room.player2?.id === player.id) {
         room.player2.isConnected = true
+      }
+      // ⏳ Voltou dentro da carência: cancela a derrota por abandono. Este ramo é
+      // justamente o que preserva HP e a barra de stamina da luta — ele NÃO refaz o
+      // setup do combate, ao contrário do caminho completo lá embaixo.
+      clearDisconnectGrace(roomId, player.id)
+      if (wasDropped) {
+        room.combatLog.push({
+          type: 'system',
+          message: `🔌 ${player.name} reconectou a tempo.`,
+          timestamp: new Date(),
+        })
       }
       io.to(roomId).emit('room_updated', room)
       return
@@ -765,7 +1194,14 @@ io.on('connection', (socket) => {
       const mirrorTier = training && player.trainingTargetGearTier != null
         ? Math.max(0, Math.min(1, Number(player.trainingTargetGearTier) || 0))
         : undefined
-      const { levers, cls, gearTier } = derivePlayerLevers(player, mirrorTier)
+      // 🤖 Oponente de PvP: o bot não tem peças, então herda o gearTier do humano. O
+      // valor NÃO vem do payload — é o tier que o servidor calculou para o jogador desta
+      // sala, e só se aplica ao id que o próprio servidor gerou (room.botFighterId). Um
+      // cliente que se anuncie como `bot_…` cai fora do `if` e luta com tier 0.
+      const botTier = player.id === room.botFighterId && room.botMirrorTier != null
+        ? Math.max(0, Math.min(1, Number(room.botMirrorTier) || 0))
+        : undefined
+      const { levers, cls, gearTier } = derivePlayerLevers(player, mirrorTier ?? botTier)
       const trainMult = training ? (Number(player.trainingLeverMult) || 1) : 1
       // Escala SIMÉTRICA (power/armor/hp/K juntos), igual à transformação: é o que faz o
       // multiplicador significar a mesma dificuldade em qualquer ponto da progressão.
@@ -794,11 +1230,21 @@ io.on('connection', (socket) => {
       if (training && Number.isFinite(mirrorHp) && mirrorHp > 0) {
         player.maxHp = Math.max(1, Math.round(mirrorHp * (trainMult || 1)))
       } else {
-        player.maxHp = fightHpPool(player, joinUnlocks.passives.maxHpPct)
+        // Ajuste de classe só-PvP entra AQUI, onde a barra nasce (levers.hp não é lido).
+        player.maxHp = Math.max(1, Math.round(fightHpPool(player, joinUnlocks.passives.maxHpPct) * pvpClassHpMult(cls, player.level)))
       }
       player.hp = player.maxHp
-      player.fightStaminaSpent = 0
       player.initialHp = player.maxHp
+      // ⚡ Toda luta começa com a barra de stamina CHEIA — ela é da luta, não da
+      // carteira (ver resetFightStamina). O `maxStamina` do payload é do CLIENTE e vale
+      // de placeholder até `verifyFighterState` trazer o do banco, que reenche a barra.
+      resetFightStamina(player)
+      // O portão da carteira (tem a taxa fixa da luta?) espera essa mesma verificação:
+      // `toggle_ready` fica travado enquanto `staminaVerified` for false. Bots do
+      // servidor (treino e oponente da fila) não têm carteira e já nascem verificados.
+      player.staminaVerified = isServerBotId(room, player.id) || String(player.id).startsWith('bot_')
+      player.staminaBlocked = null
+      player.walletStamina = null
       if (joinUnlocks.passives.maxMpPct) {
         player.maxMp = Math.round((player.maxMp || 0) * (1 + joinUnlocks.passives.maxMpPct))
         player.mp = player.maxMp
@@ -872,8 +1318,33 @@ io.on('connection', (socket) => {
       }, 1000)
     }
 
+    // 🤖 FILA SEM HUMANO: a sala foi prometida com um oponente-bot (startBotFill).
+    // O bot só nasce agora, quando o jogador chega — assim ele espelha o gearTier e o
+    // pool de vida JÁ recomputados pelo servidor acima. A sala NÃO é de treino: as
+    // recompensas fluem normalmente (a rota é que não pontua contra bot).
+    const pendingFill = pendingBotFills.get(roomId)
+    if (pendingFill && role === RoomRole.FIGHTER && !room.botSpawned && player.id !== room.botFighterId) {
+      pendingBotFills.delete(roomId)
+      room.botSpawned = true
+      const persona = refinePersonaFor(pendingFill.persona, player)
+      const botPlayer = buildBotPlayer(persona)
+      room.botFighterId = botPlayer.id
+      room.botMirrorTier = player.gearTier
+      console.log(`🤖 [pvp-bot:${roomId}] espelhando ${player.name} (nv${player.level}, tier ${Number(player.gearTier).toFixed(2)}) → ${persona.name} ${persona.class}`)
+      setTimeout(() => {
+        if (!rooms.has(roomId)) return
+        spawnPvpBot({ roomId, port: PORT, persona, botPlayer })
+      }, 1000)
+    }
+
     io.to(roomId).emit('room_updated', room)
     io.to(roomId).emit('player_joined', { player: participantData, role })
+
+    // ⚡ FASE 2 (assíncrona, FORA do handler): buscar o stamina REAL no banco. Não dá
+    // para `await` acima — ver o bloco "STAMINA AUTORITATIVA" no topo do arquivo.
+    if (role === RoomRole.FIGHTER && !player.staminaVerified) {
+      verifyFighterState(roomId, player.id)
+    }
   })
 
   // Função auxiliar para verificar roles disponíveis
@@ -897,6 +1368,32 @@ io.on('connection', (socket) => {
   socket.on('toggle_ready', ({ playerId, roomId }) => {
     const room = rooms.get(roomId)
     if (!room) return
+
+    const readying = room.player1?.id === playerId ? room.player1
+      : room.player2?.id === playerId ? room.player2
+        : null
+
+    // ⚡ PORTÃO DA ARENA. Só vale para FICAR pronto (despronto sempre passa) e só em
+    // sala ranqueada — no treino não há stamina nem recompensa em jogo.
+    if (readying && !readying.isReady && !room.isTraining) {
+      if (!readying.staminaVerified) {
+        socket.emit('error', { message: '⏳ Sincronizando sua stamina com o servidor…' })
+        return
+      }
+      if (readying.staminaBlocked === 'gathering') {
+        // ⛏️ Coletando, o relógio da stamina corre PARA TRÁS: a coleta comeria a mesma
+        // stamina que a taxa da luta vai cobrar, e o jogador terminaria a luta sem
+        // conseguir pagar a entrada (a rota devolve `cannot_pay_entry` e ele lutou à toa).
+        socket.emit('error', { message: '⛏️ Seu herói está coletando — encerre a coleta antes de lutar.' })
+        return
+      }
+      if (readying.staminaBlocked === 'low_stamina') {
+        socket.emit('error', {
+          message: `⚡ Stamina insuficiente: a luta custa ${readying.staminaEntryFee}⚡ e você tem ${readying.walletStamina ?? 0}. Ela volta sozinha (+2 a cada 15 min).`,
+        })
+        return
+      }
+    }
 
     if (room.player1?.id === playerId) {
       room.player1.isReady = !room.player1.isReady
@@ -1015,6 +1512,7 @@ io.on('connection', (socket) => {
         r.phase = CombatPhase.PLAYER_TURN
         io.to(roomId).emit('room_updated', r)
         maybeScheduleTrainingBot(r, roomId)
+        scheduleTurnIdle(r, roomId)
       }, 1600)
 
       return
@@ -1146,6 +1644,8 @@ io.on('connection', (socket) => {
 
     // 🔥 CONSUMIR RECURSOS REDUZIDOS
     player.mp -= reducedMpCost
+    // Custo da barra DA LUTA. A carteira não vê nada disso — a taxa fixa da arena já
+    // foi paga (ou será cobrada no fim), transformando ou não.
     player.stamina -= reducedStaminaCost
 
     // Buff de combate (levers) — sem mexer na barra de HP (igual PvE / sync_transformation).
@@ -1196,9 +1696,14 @@ io.on('connection', (socket) => {
     // Recursos da luta (MP/STA). NUNCA aceitar hp/maxHp/maxMp da API REST aqui —
     // applyTransformation persiste o pool do personagem no banco, que não é o pool
     // da sala (levers + passivas). Sobrescrever maxHp corrompia a barra e o ratio.
+    // ⬇️ SÓ PARA BAIXO. Este payload vem do CLIENTE; aceitar o valor cru era um
+    // "escreva seu próprio stamina" no meio da luta. O cliente só DEBITA o custo da
+    // forma, então uma leitura honesta nunca sobe o valor.
     if (stats && typeof stats === 'object') {
-      if (stats.mp != null) player.mp = stats.mp
-      if (stats.stamina != null) player.stamina = stats.stamina
+      if (stats.mp != null) player.mp = Math.min(player.mp ?? 0, Math.max(0, Number(stats.mp) || 0))
+      if (stats.stamina != null) {
+        player.stamina = Math.min(player.stamina ?? 0, Math.max(0, Number(stats.stamina) || 0))
+      }
     }
 
     // ⚔️ MODELO ENXUTO (igual PvE): buff SIMÉTRICO nos levers (poder/armadura/K).
@@ -1267,6 +1772,13 @@ io.on('connection', (socket) => {
     const room = rooms.get(roomId)
     if (!room || room.currentTurn !== playerId) return
 
+    // 🔁 UMA AÇÃO POR VEZ. O auto-roll resolve em ~400ms + 900ms; nessa janela um
+    // segundo clique sobrescrevia `room.pendingAction`, COBRAVA stamina/MP de novo e a
+    // resolução da primeira morria calada no `room.pendingAction !== pending`. Ou seja:
+    // dois cliques = dois débitos, um golpe só. Com 100 de stamina falsa isso passava
+    // batido; agora o débito é o orçamento real do jogador e o pool que paga os dois.
+    if (room.pendingAction && !room.pendingAction.resolving) return
+
     // 🚫 Imobilizado (Abraço do Urso): perde o turno antes de qualquer ação
     const actor = room.player1?.id === playerId ? room.player1 : room.player2
     if (actor?.fx?.immobilizeTurns > 0) {
@@ -1332,7 +1844,6 @@ io.on('connection', (socket) => {
       }
       if (stamCost > 0) {
         currentPlayer.stamina = Math.max(0, (currentPlayer.stamina || 0) - stamCost)
-        trackFightStamina(currentPlayer, stamCost)
       }
       if (mpCost > 0) currentPlayer.mp = Math.max(0, (currentPlayer.mp || 0) - mpCost)
       diceType = attackType === 'weapon' ? unlocksForAttack.classAttackDie : (CM.PVE_DIE[attackType] || CM.DICE_SIDES)
@@ -1392,7 +1903,6 @@ io.on('connection', (socket) => {
       return
     }
     currentPlayer.stamina = Math.max(0, currentPlayer.stamina - systemStaminaCost)
-    if (systemStaminaCost > 0) trackFightStamina(currentPlayer, systemStaminaCost)
     diceType = CM.DICE_SIDES
 
     io.to(roomId).emit('room_updated', room)
@@ -1451,13 +1961,22 @@ io.on('connection', (socket) => {
     const opponent = room.player1?.id === playerId ? room.player2 : room.player1
     if (!player || !opponent) return
 
-    const hpRestored = Math.max(0, Math.min(Number(item?.hpRestore) || 0, player.maxHp - player.hp))
-    const mpRestored = Math.max(0, Math.min(Number(item?.mpRestore) || 0, player.maxMp - player.mp))
-    const staminaRestored = Math.max(0, Math.min(Number(item?.staminaRestore) || 0, player.maxStamina - player.stamina))
+    // 🔒 `item` vem do CLIENTE. Enquanto a stamina da luta era 100 falsa isso não valia
+    // nada; agora ela é o orçamento da luta E o pool que paga os dois lados, então um
+    // `{ staminaRestore: 999 }` a cada turno viraria stamina infinita — sobreviver ao
+    // oponente honesto até ganhar, e pontos de temporada que pagam DOL. O teto é o do
+    // maior consumível do catálogo (Poção de Stamina = 50, ver api/inventory/use-item).
+    const capRestore = (raw, max) => Math.max(0, Math.min(Number(raw) || 0, max))
+    const hpRestored = Math.min(capRestore(item?.hpRestore, MAX_CONSUMABLE_RESTORE.hp), player.maxHp - player.hp)
+    const mpRestored = Math.min(capRestore(item?.mpRestore, MAX_CONSUMABLE_RESTORE.mp), player.maxMp - player.mp)
+    const staminaRestored = Math.min(capRestore(item?.staminaRestore, MAX_CONSUMABLE_RESTORE.stamina), player.maxStamina - player.stamina)
 
     player.hp += hpRestored
     player.mp += mpRestored
     player.stamina += staminaRestored
+    // A poção repõe a barra DA LUTA (o crédito no banco é problema da rota REST que
+    // consumiu o item). Não existe mais orçamento a reconciliar: a carteira paga a taxa
+    // fixa da arena e nada além dela.
 
     const effects = []
     if (hpRestored > 0) effects.push(`+${hpRestored} HP`)
@@ -1510,9 +2029,39 @@ io.on('connection', (socket) => {
   // Evento roll_defense removido - agora ambos usam roll_dice
 
   // Novo evento para fechar sala (apenas criador)
+  // 🏳️ DESISTIR. Antes não existia: quem estava perdendo fechava a aba e escapava sem
+  // pagar stamina nenhuma, e quem ficou não recebia nada. Cai no mesmo declareWinner das
+  // outras vitórias, então as recompensas fluem normalmente.
+  socket.on('surrender', ({ playerId, roomId }) => {
+    const room = rooms.get(roomId)
+    if (!room) return
+    if (room.player1?.id !== playerId && room.player2?.id !== playerId) return
+    if (!isFightLive(room)) return
+
+    const quitter = room.player1?.id === playerId ? room.player1 : room.player2
+    room.combatLog.push({
+      type: 'system',
+      message: `🏳️ ${quitter?.name} desistiu da luta!`,
+      timestamp: new Date(),
+    })
+    forfeitFight(room, roomId, playerId, 'desistência')
+  })
+
   socket.on('close_room', ({ playerId, roomId }) => {
     const room = rooms.get(roomId)
     if (!room || room.creator !== playerId) return
+
+    // 🚪 Fechar a sala NO MEIO de uma luta valendo é abandono — era a segunda porta de
+    // fuga grátis (a primeira era o disconnect), e a mais barata, porque é um botão.
+    // Resolve a luta primeiro; o teardown abaixo continua igual.
+    if (isFightLive(room)) {
+      room.combatLog.push({
+        type: 'system',
+        message: '🏳️ O criador fechou a sala no meio da luta — conta como desistência.',
+        timestamp: new Date(),
+      })
+      forfeitFight(room, roomId, playerId, 'sala fechada')
+    }
 
     // 💚 REGENERAÇÃO AUTOMÁTICA - Restaurar recursos antes de fechar sala
     if (room.player1) {
@@ -1530,7 +2079,9 @@ io.on('connection', (socket) => {
 
     io.to(roomId).emit('room_closed')
     rooms.delete(roomId)
-    
+    clearBotTurnTimer(roomId)
+    clearRoomGraceTimers(roomId)
+
     // Remover todos os sockets desta sala
     const socketsInRoom = io.sockets.adapter.rooms.get(roomId)
     if (socketsInRoom) {
@@ -1546,9 +2097,12 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     console.log('Cliente desconectado:', socket.id)
 
-    // Limpar fila de matchmaking
+    // Limpar fila de matchmaking (e o bot prometido a quem estava nela)
     for (const [cid, entry] of matchQueue.entries()) {
-      if (entry.socketId === socket.id) matchQueue.delete(cid)
+      if (entry.socketId === socket.id) {
+        matchQueue.delete(cid)
+        cancelBotFillFor(cid)
+      }
     }
     
     // 💚 REGENERAÇÃO AUTOMÁTICA - Se jogador sair de combate
@@ -1561,11 +2115,56 @@ io.on('connection', (socket) => {
           
           // Verificar e remover de fighters
           const fighterIndex = room.participants.fighters.findIndex(p => p.id === playerId)
+
+          // ⏳ CAIU NO MEIO DE UMA LUTA VALENDO: não remover ninguém ainda.
+          //
+          // Dois bugs moravam no caminho antigo (splice + regeneratePlayerResources):
+          //  1. CURA DE GRAÇA — o lutador saía da lista com o HP restaurado, e o
+          //     join_room seguinte refazia o setup do zero (hp = maxHp, barra de
+          //     stamina cheia). Perder estava a um F5 de distância.
+          //  2. FUGA DE GRAÇA — ninguém era declarado vencedor, então a luta morria
+          //     sem cobrar a taxa de entrada e sem pagar quem ficou.
+          // Agora o lutador FICA na sala, marcado como desconectado, e tem
+          // DISCONNECT_GRACE_MS para voltar (o ramo de reconexão do join_room reencontra
+          // a entrada e preserva HP e a barra da luta). Esgotado o prazo, é derrota.
+          if (fighterIndex !== -1 && isFightLive(room)) {
+            const player = room.participants.fighters[fighterIndex]
+            player.isConnected = false
+            if (room.player1?.id === playerId) room.player1.isConnected = false
+            if (room.player2?.id === playerId) room.player2.isConnected = false
+
+            room.combatLog.push({
+              type: 'system',
+              message: `📴 ${player.name} caiu — ${Math.round(DISCONNECT_GRACE_MS / 1000)}s para voltar antes de perder por abandono.`,
+              timestamp: new Date(),
+            })
+
+            clearDisconnectGrace(roomId, playerId)
+            disconnectGraceTimers.set(`${roomId}:${playerId}`, setTimeout(() => {
+              disconnectGraceTimers.delete(`${roomId}:${playerId}`)
+              const live = rooms.get(roomId)
+              if (!live || !isFightLive(live)) return
+              const stillOut = live.player1?.id === playerId ? live.player1
+                : live.player2?.id === playerId ? live.player2
+                  : null
+              if (!stillOut || stillOut.isConnected) return // voltou: nada a fazer
+              live.combatLog.push({
+                type: 'system',
+                message: `🏳️ ${stillOut.name} não voltou a tempo — derrota por abandono.`,
+                timestamp: new Date(),
+              })
+              forfeitFight(live, roomId, playerId, 'abandono')
+            }, DISCONNECT_GRACE_MS))
+
+            io.to(roomId).emit('room_updated', room)
+            return // esta sala está resolvida; não seguir para o teardown abaixo
+          }
+
           if (fighterIndex !== -1) {
             const player = room.participants.fighters[fighterIndex]
             room.participants.fighters.splice(fighterIndex, 1)
             playerFound = true
-            
+
             // Regenerar recursos ao sair do combate
             if (room.phase !== CombatPhase.WAITING_PLAYERS) {
               regeneratePlayerResources(player, 'Disconnect from combat')
@@ -1624,7 +2223,9 @@ io.on('connection', (socket) => {
             
             // Remover sala da memória
             rooms.delete(roomId)
-            
+            clearBotTurnTimer(roomId)
+            clearRoomGraceTimers(roomId)
+
             // Notificar todos os sockets restantes (caso ainda existam)
             io.to(roomId).emit('room_closed', { 
               reason: 'Sala finalizada - todos os participantes saíram',
@@ -1673,8 +2274,11 @@ function regeneratePlayerResources(player, context = 'Activity') {
     player.transformationData.remainingTurns = 0
   }
 
-  // Persistir limpeza no banco (personagens reais — ids de bot de treino começam com monster_)
-  const isRealCharacter = player.id && !String(player.id).startsWith('monster_')
+  // Persistir limpeza no banco (personagens reais — bots do servidor usam os prefixos
+  // `monster_` (treino) e `bot_` (oponente da fila), que não existem no banco)
+  const isRealCharacter = player.id
+    && !String(player.id).startsWith('monster_')
+    && !String(player.id).startsWith('bot_')
   if (isRealCharacter && wasTransformed) {
     const appUrl = (process.env.APP_URL || process.env.NEXTAUTH_URL || 'https://dolrath.vercel.app').replace(/\/$/, '')
     fetch(`${appUrl}/api/character/${player.id}/detransform`, {
@@ -1685,8 +2289,11 @@ function regeneratePlayerResources(player, context = 'Activity') {
     })
   }
 
-  // Stamina NÃO é restaurada — limitação do sistema
-  console.log(`💚 ${context}: ${player.name} teve HP e MP restaurados, transformação resetada (Stamina: ${player.stamina}/${player.maxStamina})`)
+  // A barra de stamina é DA LUTA: encher aqui é o que faz a REVANCHE na mesma sala
+  // começar em pé de igualdade com uma luta recém-criada (a taxa da carteira é cobrada
+  // por luta, não por barra).
+  resetFightStamina(player)
+  console.log(`💚 ${context}: ${player.name} teve HP e MP restaurados, transformação resetada (Stamina da luta: ${player.stamina}/${player.maxStamina})`)
 }
 
 // 🎯 SISTEMA DE BALANCEAMENTO PvP v2 — validado por simulação massiva
@@ -1936,7 +2543,10 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
     } else {
       processBattleRewards(room, attacker, defender, roomId)
     }
-    
+
+    // Vitória normal (HP a zero): desarma abandono/inatividade, senão um timer armado
+    // ainda declararia "derrota por inatividade" numa luta que já acabou.
+    clearRoomGraceTimers(roomId)
     regeneratePlayerResources(room.player1, 'Combat Victory/Defeat')
     regeneratePlayerResources(room.player2, 'Combat Victory/Defeat')
   } else {
@@ -1960,6 +2570,7 @@ function processCompleteAction(room, attackAction, attackRoll, defenseAction, de
   io.to(roomId).emit('room_updated', room)
   if (room.isActive && room.phase === CombatPhase.PLAYER_TURN) {
     maybeScheduleTrainingBot(room, roomId)
+    scheduleTurnIdle(room, roomId)
   }
 }
 
@@ -2003,12 +2614,18 @@ function processActionResult(room, action, playerRoll, roomId) {
   room.pendingAction = null
   io.to(roomId).emit('room_updated', room)
   maybeScheduleTrainingBot(room, roomId)
+  scheduleTurnIdle(room, roomId)
 }
 
 // 🏆 SISTEMA DE RECOMPENSAS PVP — stamina gasta na luta → gold/XP (paridade masmorra)
 async function processBattleRewards(room, winner, loser, roomId) {
   try {
-    const isFlawlessVictory = winner.initialHp && winner.hp === winner.initialHp
+    // 🏳️ Vitória por abandono NÃO é impecável: quem vence porque o outro fechou a aba
+    // está com o HP intacto por definição, e ganharia o bônus de flawless (+15% ouro /
+    // +10% XP) de graça. Com a taxa fixa, a luta curta paga igual a uma longa — então
+    // este filtro é a única coisa entre o bônus e quem sobe sala só para ver o outro
+    // desistir.
+    const isFlawlessVictory = !room.forfeit && winner.initialHp && winner.hp === winner.initialHp
     const winnerTransformed = !!(winner.isTransformed || (winner.transformationType && winner.transformationType !== 'none'))
     const loserTransformed = !!(loser.isTransformed || (loser.transformationType && loser.transformationType !== 'none'))
 
@@ -2028,9 +2645,13 @@ async function processBattleRewards(room, winner, loser, roomId) {
       isFlawlessVictory,
       winnerTransformed,
       loserTransformed,
-      winnerStaminaSpent: winner.fightStaminaSpent || 0,
-      loserStaminaSpent: loser.fightStaminaSpent || 0,
+      // 🎟️ A stamina gasta na luta não vai mais no corpo: a rota cobra a TAXA FIXA
+      // (PVP_FIGHT_STAMINA) de cada lado, independente de quantos golpes rolaram.
       matchKey: room.rewardMatchKey,
+      // Nome só é lido para o lado SINTÉTICO (bot da fila, que não tem linha no banco);
+      // do lado real a rota continua lendo do banco.
+      winnerName: winner.name,
+      loserName: loser.name,
     }
 
     const appUrl = (process.env.APP_URL || process.env.NEXTAUTH_URL || 'https://dolrath.vercel.app').replace(/\/$/, '')
@@ -2083,11 +2704,23 @@ async function processBattleRewards(room, winner, loser, roomId) {
         message: `💝 ${loser.name} ganhou ${rewardData.loser.xpGained} XP e ${rewardData.loser.goldGained} gold (−${battleResult.loserStaminaSpent} STA)!`,
         timestamp: new Date()
       })
+      // A luta pagou ouro/XP mas NÃO pontuou — o jogador precisa saber por quê, em vez
+      // de descobrir sozinho que lutou à toa (a rota devolve `rankingSkipped` desde
+      // sempre; era este repasse que faltava).
+      const rankWhy = {
+        bot_opponent: '🤖 Oponente da casa: paga ouro e XP, mas não pontua na temporada.',
+        offseason: '🏁 Entressafra: a temporada não está pontuando.',
+        not_enrolled: '🎟️ Sem inscrição na temporada: esta luta não pontuou.',
+        pair_cap: '🔁 Limite diário de pontos contra este mesmo oponente atingido.',
+        error: '⚠️ O ranking não pôde ser atualizado nesta luta.',
+      }[rewardData.rankingSkipped]
+      if (rankWhy) room.combatLog.push({ type: 'system', message: rankWhy, timestamp: new Date() })
     }
 
     io.to(roomId).emit('battle_rewards', {
       failed: !!rewardData.failed,
       skipped: rewardData.skipped || null,
+      rankingSkipped: rewardData.rankingSkipped || null,
       winner: rewardData.winner,
       loser: rewardData.loser,
       battleDetails: {
@@ -2238,7 +2871,6 @@ function processSpecialAbility(player, opponent, abilityId) {
 
   const spentSta = cost.stamina || 0
   player.stamina = Math.max(0, (player.stamina || 0) - spentSta)
-  if (spentSta > 0) trackFightStamina(player, spentSta)
   player.mp = Math.max(0, (player.mp || 0) - (cost.mp || 0))
   fx.abilityCd[abilityId] = def.cd || 0
 

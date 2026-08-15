@@ -181,12 +181,17 @@ o DOL não compra nada, e um prêmio em DOL vira número no placar.
    `api/gold/claim-intent|claim-confirm`.
 3. Safe transfere um **lote limitado** ao distribuidor (~1M DOL, não o bucket
    inteiro) — limita o dano se `DOL_SIGNER_PRIVATE_KEY` vazar.
-4. `npm run chain:deploy:character-market:polygon` → paga em DOL, fee 5%
+4. `CHARACTER_MARKET_PAY_TOKEN_ADDRESS=<DolToken do passo 1>` e então
+   `npm run chain:deploy:character-market:polygon` → paga em DOL, fee 5%
    (2,5% queima real). DOL é `ERC20Burnable`, então o `burnFrom` funciona.
+   ✅ **Feito (2026-08-14):** a moeda do mercado saiu de `DOL_TOKEN_ADDRESS` e
+   virou `CHARACTER_MARKET_PAY_TOKEN_ADDRESS` (fallback na antiga). O script se
+   RECUSA a deployar se a moeda for o `USDC_TOKEN_ADDRESS` ou se o token não
+   tiver `burnFrom` — que era o desastre silencioso: `dol` é immutable no
+   contrato, e com TestUSDC toda compra reverteria no `burnFrom`.
 5. Envs: `SEASON_ENTRY_ENABLED=true`, endereços novos, `DOL_SIGNER_PRIVATE_KEY`.
-6. ⚠️ **Separar o token de pagamento do DOL.** Hoje `DOL_TOKEN_ADDRESS` guarda a
-   USDC; a inscrição avulsa (`api/ranking/enroll`) verifica a transferência
-   contra essa var e passaria a cobrar dólar por engano. Introduzir
-   `DOL_TOKEN_ADDRESS` de verdade + `PAYMENT_TOKEN_ADDRESS` antes de ligar o
-   `SEASON_ENTRY_ENABLED`.
+6. ⚠️ **Falta ainda a inscrição avulsa.** `api/ranking/enroll` verifica a
+   transferência contra `DOL_TOKEN_ADDRESS`, que guarda a USDC — passaria a
+   cobrar dólar por engano. Separar antes de ligar `SEASON_ENTRY_ENABLED`.
+   (O mercado de personagens já não depende dessa var — ver passo 4.)
 7. `/doc`: trocar o selo 🛠️ FASE 2 do mercado de personagens por ✅ AO VIVO.

@@ -46,6 +46,39 @@ export function getCharacterMarketContractAddress(): string {
   return (process.env.CHARACTER_MARKET_CONTRACT_ADDRESS || '').trim()
 }
 
+/**
+ * Moeda do mercado de personagens.
+ *
+ * Separada de `DOL_TOKEN_ADDRESS` de propósito: aquela var guarda o token de
+ * PAGAMENTO da criação de personagem, e no ensaio da Amoy ela aponta para o
+ * TestUSDC (6 casas, sem `burnFrom`). O mercado precisa do DOL de verdade — o
+ * `buy()` queima 2,5% via `burnFrom`, então um token não-queimável faz TODA
+ * compra reverter. Sem esta separação, o deploy criaria um mercado imutável
+ * cobrando dólar de teste (`dol` é immutable no contrato: só redeploy conserta).
+ *
+ * Fallback em DOL_TOKEN_ADDRESS para não quebrar ambiente onde os dois são o
+ * mesmo token (o caso normal fora do ensaio).
+ */
+export function getCharacterMarketPayTokenAddress(): string {
+  return (
+    process.env.CHARACTER_MARKET_PAY_TOKEN_ADDRESS ||
+    process.env.DOL_TOKEN_ADDRESS ||
+    ''
+  ).trim()
+}
+
+const PAY_TOKEN_ABI = [
+  'function decimals() view returns (uint8)',
+  'function symbol() view returns (string)',
+  'function balanceOf(address) view returns (uint256)',
+] as const
+
+export function getCharacterMarketPayTokenContract(): Contract {
+  const address = getCharacterMarketPayTokenAddress()
+  if (!address) throw new Error('Missing CHARACTER_MARKET_PAY_TOKEN_ADDRESS (ou DOL_TOKEN_ADDRESS)')
+  return new Contract(address, PAY_TOKEN_ABI, getCharacterMarketProvider())
+}
+
 export function getCharacterMarketRpcUrl(): string {
   const raw =
     process.env.CHARACTER_MARKET_RPC_URL ||

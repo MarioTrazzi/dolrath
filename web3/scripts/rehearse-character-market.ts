@@ -77,6 +77,11 @@ async function main() {
   // env em qualquer capitalização.
   process.env.CHARACTER_MARKET_CONTRACT_ADDRESS = marketAddress.toLowerCase();
   process.env.CHARACTER_NFT_CONTRACT_ADDRESS = charactersAddress.toLowerCase();
+  // A moeda do mercado é PRÓPRIA. DOL_TOKEN_ADDRESS recebe de propósito um
+  // token errado (o dublê de USDC do ensaio da Amoy) para provar que o mercado
+  // não cai no fallback quando a var específica está setada.
+  process.env.CHARACTER_MARKET_PAY_TOKEN_ADDRESS = dolAddress.toLowerCase();
+  process.env.DOL_TOKEN_ADDRESS = "0x000000000000000000000000000000000000dEaD";
   process.env.CHARACTER_MARKET_RPC_URL = RPC_URL;
   process.env.CHARACTER_MARKET_CHAIN_ID = String(net.chainId);
   process.env.CHARACTER_MARKET_RECEIPT_RETRIES = "3";
@@ -84,9 +89,13 @@ async function main() {
 
   // Import DEPOIS do env: as libs leem process.env na chamada, mas manter a
   // ordem deixa o ensaio honesto quanto ao que o servidor faz.
-  const { getCharacterMarketFees, getCharacterMarketContract, getCharacterNftOwner } = await import(
-    "../../src/lib/characterMarketOnchain"
-  );
+  const {
+    getCharacterMarketFees,
+    getCharacterMarketContract,
+    getCharacterNftOwner,
+    getCharacterMarketPayTokenAddress,
+    getCharacterMarketPayTokenContract,
+  } = await import("../../src/lib/characterMarketOnchain");
   const { verifyCharacterListedTx, verifyCharacterPurchasedTx, verifyCharacterListingCancelledTx } =
     await import("../../src/lib/characterMarketVerify");
 
@@ -121,6 +130,18 @@ async function main() {
     assert.equal(fees.burnBps, 250);
     assert.equal(fees.treasuryBps, 250);
     assert.equal(fees.totalBps, 500);
+  });
+
+  // A moeda do mercado NÃO pode vir de DOL_TOKEN_ADDRESS quando a var própria
+  // existe — esse fallback errado é o que criaria um mercado cobrando USDC.
+  const payTokenAddress = getCharacterMarketPayTokenAddress();
+  const payToken = getCharacterMarketPayTokenContract();
+  const paySymbol = String(await payToken.symbol());
+  const payDecimals = Number(await payToken.decimals());
+  check(`moeda do mercado = ${paySymbol} (${payDecimals} casas), ignorando DOL_TOKEN_ADDRESS`, () => {
+    assert.equal(payTokenAddress.toLowerCase(), dolAddress.toLowerCase());
+    assert.equal(paySymbol, "DOL");
+    assert.equal(payDecimals, 18);
   });
 
   const appMarket = getCharacterMarketContract();

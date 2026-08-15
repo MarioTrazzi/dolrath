@@ -1,8 +1,12 @@
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
-import { getDolContract, getDolTokenAddress } from '@/lib/dolOnchain'
-import { getCharacterMarketChainId, getCharacterMarketContractAddress } from '@/lib/characterMarketOnchain'
+import {
+  getCharacterMarketChainId,
+  getCharacterMarketContractAddress,
+  getCharacterMarketPayTokenAddress,
+  getCharacterMarketPayTokenContract,
+} from '@/lib/characterMarketOnchain'
 import { getCharacterNftContractAddress } from '@/lib/characterNftOnchain'
 
 export const dynamic = 'force-dynamic'
@@ -93,7 +97,7 @@ export async function POST(req: Request) {
 
     const marketContractAddress = getCharacterMarketContractAddress()
     const characterNftContractAddress = getCharacterNftContractAddress()
-    const dolTokenAddress = getDolTokenAddress()
+    const dolTokenAddress = getCharacterMarketPayTokenAddress()
     if (!marketContractAddress) {
       return NextResponse.json({ error: 'Missing CHARACTER_MARKET_CONTRACT_ADDRESS' }, { status: 500 })
     }
@@ -101,10 +105,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing CHARACTER_NFT_CONTRACT_ADDRESS' }, { status: 500 })
     }
     if (!dolTokenAddress) {
-      return NextResponse.json({ error: 'Missing DOL_TOKEN_ADDRESS' }, { status: 500 })
+      return NextResponse.json({ error: 'Missing CHARACTER_MARKET_PAY_TOKEN_ADDRESS' }, { status: 500 })
     }
 
-    const dol = getDolContract()
+    const dol = getCharacterMarketPayTokenContract()
     const [decimals, symbol] = await Promise.all([dol.decimals(), dol.symbol()])
 
     return NextResponse.json({

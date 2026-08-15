@@ -1,7 +1,6 @@
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
-import { getDolContract } from '@/lib/dolOnchain'
-import { getCharacterMarketChainId, getCharacterMarketContract } from '@/lib/characterMarketOnchain'
+import { getCharacterMarketChainId, getCharacterMarketContract, getCharacterMarketPayTokenContract } from '@/lib/characterMarketOnchain'
 import { getCharacterNftContractAddress } from '@/lib/characterNftOnchain'
 import { getLevelInfo } from '@/lib/experienceSystem'
 import { resolveImageUrl } from '@/lib/imageUrl'
@@ -20,7 +19,7 @@ export async function GET() {
 
   try {
     const market = getCharacterMarketContract()
-    const dol = getDolContract()
+    const dol = getCharacterMarketPayTokenContract()
     const chainId = getCharacterMarketChainId()
     const characterNftContract = getCharacterNftContractAddress()
 

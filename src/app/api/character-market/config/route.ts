@@ -1,7 +1,12 @@
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { NextResponse } from 'next/server'
-import { getDolContract, getDolTokenAddress } from '@/lib/dolOnchain'
-import { getCharacterMarketChainId, getCharacterMarketContractAddress, getCharacterMarketFees } from '@/lib/characterMarketOnchain'
+import {
+  getCharacterMarketChainId,
+  getCharacterMarketContractAddress,
+  getCharacterMarketFees,
+  getCharacterMarketPayTokenAddress,
+  getCharacterMarketPayTokenContract,
+} from '@/lib/characterMarketOnchain'
 import { getCharacterNftContractAddress } from '@/lib/characterNftOnchain'
 
 export async function GET() {
@@ -11,14 +16,14 @@ export async function GET() {
   }
 
   const marketContractAddress = getCharacterMarketContractAddress()
-  const dolTokenAddress = getDolTokenAddress()
+  const dolTokenAddress = getCharacterMarketPayTokenAddress()
   const characterNftContractAddress = getCharacterNftContractAddress()
 
   if (!marketContractAddress) {
     return NextResponse.json({ error: 'Missing CHARACTER_MARKET_CONTRACT_ADDRESS' }, { status: 500 })
   }
   if (!dolTokenAddress) {
-    return NextResponse.json({ error: 'Missing DOL_TOKEN_ADDRESS' }, { status: 500 })
+    return NextResponse.json({ error: 'Missing CHARACTER_MARKET_PAY_TOKEN_ADDRESS' }, { status: 500 })
   }
   if (!characterNftContractAddress) {
     return NextResponse.json({ error: 'Missing CHARACTER_NFT_CONTRACT_ADDRESS' }, { status: 500 })
@@ -32,7 +37,7 @@ export async function GET() {
   }
 
   try {
-    const dol = getDolContract()
+    const dol = getCharacterMarketPayTokenContract()
     const [decimals, symbol, marketFee] = await Promise.all([dol.decimals(), dol.symbol(), getCharacterMarketFees()])
 
     return NextResponse.json({

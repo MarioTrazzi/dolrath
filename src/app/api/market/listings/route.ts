@@ -50,7 +50,9 @@ export async function GET() {
     const dbNfts = await prisma.itemNft.findMany({
       where: {
         chainId,
-        contract: itemsAddress,
+        // insensitive: o endereço gravado no mint vem do env verbatim — env
+        // reescrito em checksum deixaria toda listagem sem dados do banco.
+        contract: { equals: itemsAddress, mode: 'insensitive' },
         tokenId: { in: tokenIds },
       },
       include: {

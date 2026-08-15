@@ -162,6 +162,7 @@ export default function MarketplacePage() {
   const [charPrices, setCharPrices] = useState<Record<string, string>>({})
   // Compra paga on-chain cujo registro no banco falhou — resgatável pela posse.
   const [pendingClaim, setPendingClaim] = useState<{ tokenId: string; name: string } | null>(null)
+  const [pendingItemClaim, setPendingItemClaim] = useState<{ tokenId: string; name: string } | null>(null)
 
   const loadConfigAndListings = useCallback(async () => {
     setLoadingList(true)
@@ -408,6 +409,33 @@ export default function MarketplacePage() {
     }
   }
 
+  // Resgate do item: a NFT já é do comprador na chain, mas o registro falhou.
+  const handleClaimItem = async () => {
+    if (!pendingItemClaim) return
+    setBusy(true)
+    const id = `claim-item-${pendingItemClaim.tokenId}`
+    try {
+      toast.loading('Reivindicando o item…', { id })
+      const res = await fetch('/api/market/purchase-confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tokenId: pendingItemClaim.tokenId }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data?.error || 'Falha ao reivindicar', { id })
+        return
+      }
+      toast.success('Item reivindicado! Agora é seu.', { id })
+      setPendingItemClaim(null)
+      loadConfigAndListings()
+    } catch {
+      toast.error('Falha ao reivindicar', { id })
+    } finally {
+      setBusy(false)
+    }
+  }
+
   // ---- Comprar (wallet: approve GOLD + market.buy) ----
   const handleBuy = async (l: Listing) => {
     if (!config) return
@@ -421,8 +449,30 @@ export default function MarketplacePage() {
       await (await gold.approve(config.marketContractAddress, BigInt(l.priceGold.raw), fees)).wait()
       const market = new ethers.Contract(config.marketContractAddress, MARKET_ABI, signer)
       toast.loading('Comprando…', { id })
-      await (await market.buy(BigInt(l.listingId), fees)).wait()
+      const tx = await market.buy(BigInt(l.listingId), fees)
+      await tx.wait()
+
+      // Sem este passo a compra fica só na chain: o ItemNft continua do
+      // VENDEDOR no banco e o comprador paga sem receber o item no jogo.
+      toast.loading('Registrando a transferência…', { id })
+      const confRes = await fetch('/api/market/purchase-confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ txHash: tx.hash, listingId: l.listingId }),
+      })
+      const conf = await confRes.json()
+      if (!confRes.ok) {
+        toast.error(
+          conf?.error ||
+            'Compra feita on-chain, mas falha ao registrar. A NFT já é sua — clique para reivindicar o item.',
+          { id }
+        )
+        setPendingItemClaim({ tokenId: l.tokenId, name: l.item?.name || `#${l.tokenId}` })
+        return
+      }
+
       toast.success('Compra concluída! O item NFT é seu.', { id })
+      setPendingItemClaim(null)
       loadConfigAndListings()
     } catch (e) {
       toast.error(getWalletTxErrorMessage(e) || 'Falha na compra', { id })
@@ -534,6 +584,23 @@ export default function MarketplacePage() {
       </div>
 
       {tab === 'items' && (<>
+      {/* COMPRA PAGA MAS NÃO REGISTRADA — resgate pela posse on-chain */}
+      {pendingItemClaim ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-[4px] border border-amber-700/60 bg-amber-950/30 p-4">
+          <div className="flex-1 min-w-[220px] text-sm text-amber-200">
+            A compra de <span className="font-semibold">{pendingItemClaim.name}</span> foi paga on-chain, mas o registro
+            no jogo não completou. A NFT já é sua — reivindique o item.
+          </div>
+          <button
+            onClick={handleClaimItem}
+            disabled={busy}
+            className="rounded-[3px] border border-[#8a6d3b] bg-gradient-to-b from-[#3a2f1c] to-[#241d12] px-3 py-2 text-sm font-semibold text-amber-200 transition-all hover:brightness-125 disabled:opacity-40"
+          >
+            Reivindicar item
+          </button>
+        </div>
+      ) : null}
+
       {/* VENDER */}
       <section className="overflow-hidden rounded-[4px] border border-[#46464c] shadow-2xl shadow-black/60 bg-[#1e1e21]/95 p-5">
         <h2 className="text-lg font-semibold tracking-wide text-[#e7c682] mb-3">Vender um item</h2>

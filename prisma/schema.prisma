@@ -269,6 +269,25 @@ model CharacterSale {
   @@index([buyerUserId])
 }
 
+// 📒 Mesmo papel do CharacterSale, para o mercado de ITENS (GOLD): dedup por
+// `txHash` único + auditoria. A posse do item continua sendo decidida pelo
+// `ownerOf` on-chain; este registro só impede reprocessar a mesma compra.
+model ItemSale {
+  id           String   @id @default(cuid())
+  txHash       String   @unique
+  listingId    String
+  tokenId      String
+  itemNftId    String
+  sellerUserId String
+  buyerUserId  String
+  priceGold    String   // unidades base (wei), como string
+  createdAt    DateTime @default(now())
+
+  @@index([itemNftId])
+  @@index([sellerUserId])
+  @@index([buyerUserId])
+}
+
 model Item {
   id          String    @id @default(cuid())
   name        String

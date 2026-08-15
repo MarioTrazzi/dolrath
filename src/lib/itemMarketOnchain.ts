@@ -66,6 +66,28 @@ export function getItemMarketContract(): Contract {
   return new Contract(address, ITEM_MARKET_ABI, getItemMarketProvider())
 }
 
+const ITEM_NFT_OWNER_ABI = ['function ownerOf(uint256 tokenId) view returns (address)'] as const
+
+export function getItemNftContractAddressForMarket(): string {
+  return (process.env.ITEM_NFT_CONTRACT_ADDRESS || '').trim()
+}
+
+/**
+ * Dono ATUAL da NFT do item, lido da chain — a autoridade da posse.
+ *
+ * O evento `ListingPurchased` prova que uma compra aconteceu um dia, não que
+ * quem está pedindo ainda é o dono: quem revende o item de volta ao vendedor
+ * original consegue reapresentar a tx da própria compra. Mesmo raciocínio do
+ * mercado de personagens (`characterMarketOnchain.getCharacterNftOwner`).
+ */
+export async function getItemNftOwner(tokenId: bigint): Promise<string> {
+  const nftAddress = getItemNftContractAddressForMarket()
+  if (!nftAddress) throw new Error('Missing ITEM_NFT_CONTRACT_ADDRESS')
+
+  const nft = new Contract(nftAddress, ITEM_NFT_OWNER_ABI, getItemMarketProvider())
+  return String(await nft.ownerOf(tokenId))
+}
+
 // Contratos antigos (pré-taxa) não têm os getters — nesse caso a taxa é 0.
 export async function getItemMarketFees(): Promise<{ burnBps: number; treasuryBps: number; totalBps: number }> {
   try {

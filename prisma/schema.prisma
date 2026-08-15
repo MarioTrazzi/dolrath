@@ -625,8 +625,15 @@ model PvpSeasonEntry {
   season      PvpSeason @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   characterId String
   character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  // ⚠️ Quem PAGOU a inscrição, não o dono atual. A inscrição pertence ao
+  // PERSONAGEM: quem compra um herói no meio da temporada herda a vaga e a
+  // pontuação (decisão de design — o vendedor já pagou a temporada). Depois de
+  // uma venda este campo continua apontando para o vendedor, de propósito: a
+  // linha é o recibo do pagamento (com source/txHash/paidDol). Para saber se
+  // um herói está inscrito, consulte por characterId — nunca por userId.
+  // Ver getPayoutBoard, que resolve o prêmio pelo Character.userId VIVO.
   userId      String
-  source      String    // 'creation' | 'purchase'
+  source      String    // 'creation' | 'purchase' — 'purchase' é o passe de temporada
   // Null só nas cortesias concedidas pelo servidor (personagem criado nos
   // últimos dias de uma temporada entra de graça na seguinte).
   txHash      String?   @unique

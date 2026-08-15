@@ -25,17 +25,23 @@ export async function GET() {
   }
 
   const season = await resolveEnrollmentSeason()
-  const [characters, entries] = await Promise.all([
-    prisma.character.findMany({
-      where: { userId: session.user.id },
-      select: { id: true, name: true, level: true, class: true, race: true, avatar: true },
-      orderBy: { createdAt: 'asc' },
-    }),
-    prisma.pvpSeasonEntry.findMany({
-      where: { seasonId: season.id, userId: session.user.id },
-      select: { characterId: true, source: true, createdAt: true },
-    }),
-  ])
+  const characters = await prisma.character.findMany({
+    where: { userId: session.user.id },
+    select: { id: true, name: true, level: true, class: true, race: true, avatar: true },
+    orderBy: { createdAt: 'asc' },
+  })
+
+  // A inscrição pertence ao PERSONAGEM, não à conta: quem compra um herói no
+  // meio da temporada herda a inscrição dele. Por isso a busca é pelos IDS dos
+  // personagens que são meus AGORA, e não por PvpSeasonEntry.userId — aquele
+  // campo é denormalizado e continua apontando para o vendedor depois da venda,
+  // o que fazia o herói comprado aparecer como "não inscrito" para o comprador.
+  const entries = characters.length
+    ? await prisma.pvpSeasonEntry.findMany({
+        where: { seasonId: season.id, characterId: { in: characters.map((c) => c.id) } },
+        select: { characterId: true, source: true, createdAt: true },
+      })
+    : []
 
   const enrolledIds = new Set(entries.map((e) => e.characterId))
 

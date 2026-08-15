@@ -29,6 +29,10 @@ export async function GET(request: Request) {
       const inventory = await prisma.characterInventory.findMany({
         where: {
           characterId: characterId,
+          // Linha zerada é fantasma (herança do consumo antigo, que decrementava
+          // até 0 sem apagar): aparecia na mochila mas não dava pra usar,
+          // transferir nem mandar pro Baú Geral.
+          quantity: { gt: 0 },
         },
         include: {
           item: true,
@@ -57,6 +61,7 @@ export async function GET(request: Request) {
           characterId: {
             in: characters.map(c => c.id),
           },
+          quantity: { gt: 0 },
         },
         include: {
           item: true,

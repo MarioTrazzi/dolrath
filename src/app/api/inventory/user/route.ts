@@ -13,6 +13,9 @@ export async function GET() {
     const userInventory = await prisma.userInventory.findMany({
       where: {
         userId: session.user.id,
+        // Linha zerada é fantasma (herança do consumo antigo, que decrementava
+        // até 0 sem apagar): aparecia no baú mas nenhuma ação a aceitava.
+        quantity: { gt: 0 },
       },
       include: {
         item: true,

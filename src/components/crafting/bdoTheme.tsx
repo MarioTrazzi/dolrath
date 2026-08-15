@@ -135,6 +135,7 @@ export function BdoDialogShell({
   icon,
   title,
   children,
+  footer,
   maxWidthClass = 'max-w-md',
 }: {
   open: boolean;
@@ -142,6 +143,12 @@ export function BdoDialogShell({
   icon: string;
   title: string;
   children: ReactNode;
+  /**
+   * Rodapé FIXO, renderizado fora da área rolável (quantidade + botão de ação).
+   * O corpo é `overflow-y-auto` com a scrollbar escondida: sem esta faixa, o
+   * botão de ação cai abaixo da dobra em tela baixa e some sem nenhuma pista.
+   */
+  footer?: ReactNode;
   /** Largura máxima do card (dialogs mais largas passam `max-w-2xl` etc.). */
   maxWidthClass?: string;
 }) {
@@ -180,10 +187,16 @@ export function BdoDialogShell({
               ✕
             </button>
           </div>
-          {/* Corpo rolável */}
-          <div className="overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {/* Corpo rolável (encolhe até o rodapé caber) */}
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {children}
           </div>
+          {/* Rodapé fixo: nunca sai da dobra */}
+          {footer && (
+            <div className="shrink-0 border-t border-black/70 bg-[#1e1e21] shadow-[0_-8px_16px_-8px_rgba(0,0,0,0.9)]">
+              {footer}
+            </div>
+          )}
         </motion.div>
       </motion.div>
     </AnimatePresence>,
@@ -388,7 +401,9 @@ export function BevelButton({
           ? 'cursor-wait border-[#8a6d3b]/50 bg-[#241f16] text-[#c9a25f]'
           : !disabled
             ? 'border-[#8a6d3b] bg-gradient-to-b from-[#3a3325] to-[#241f16] text-[#e7c682] shadow-[inset_0_1px_0_rgba(231,198,130,0.25),0_0_14px_rgba(201,162,95,0.2)] hover:border-[#c9a25f] hover:from-[#4a4030] hover:to-[#2c261a]'
-            : 'cursor-not-allowed border-[#3c3c41] bg-[#1a1a1d] text-[#57575c]'
+            : // Bloqueado precisa PARECER bloqueado, não sumir: o cinza antigo
+              // (#57575c sobre #1a1a1d) tinha contraste ~1.6:1 e desaparecia.
+              'cursor-not-allowed border-[#5a5a62] bg-[#232327] text-[#9a9aa0]'
       }`}
     >
       {busy ? (

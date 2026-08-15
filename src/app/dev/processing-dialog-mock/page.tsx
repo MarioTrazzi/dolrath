@@ -10,7 +10,7 @@ import ProcessingDialog, {
   type ProcessingCraftResult,
   type ProcessingInventoryItem,
 } from '@/components/crafting/ProcessingDialog';
-import { getProcessingRecipeById } from '@/lib/processing';
+import { getProcessingRecipeById, rollProcessingBatch } from '@/lib/processing';
 import { getIngredientByName } from '@/lib/itemCatalog';
 import { getProfessionLevelInfo, professionXpForLevel } from '@/lib/professionSystem';
 
@@ -34,6 +34,11 @@ const START_INV: [string, number][] = [
   ['Flor de Mana', 8],
   ['Raiz Vigorosa', 8],
   ['Água Pura', 20],
+  ['Água', 60],
+  // Refino — o caso do bug relatado (100+ estilhaços → stepper aparece e
+  // empurrava o botão para fora da dobra). Refino NÃO tem rendimento extra.
+  ['Estilhaço de Pedra Negra (Arma)', 120],
+  ['Estilhaço de Pedra Negra (Armadura)', 120],
 ];
 
 export default function ProcessingDialogMockPage() {
@@ -65,25 +70,30 @@ export default function ProcessingDialogMockPage() {
   ): Promise<ProcessingCraftResult> => {
     await new Promise((r) => setTimeout(r, 600)); // latência fake do servidor
     const recipe = getProcessingRecipeById(recipeId)!;
-    const xpGained = recipe.xp * quantity;
-    // Consome inventário/gold fake e credita a saída (determinístico, sem falha).
+    // Mesmo roll do servidor: unidade a unidade, com rendimento extra por nível
+    // (0 no refino de estilhaço — noYield).
+    const roll = rollProcessingBatch(recipe, level, quantity);
+    // Consome inventário/gold fake e credita a saída (sem falha).
     for (const input of recipe.inputs) {
       invRef.current.set(input.name, (invRef.current.get(input.name) ?? 0) - input.quantity * quantity);
     }
-    invRef.current.set(recipe.outputName, (invRef.current.get(recipe.outputName) ?? 0) + quantity);
+    invRef.current.set(recipe.outputName, (invRef.current.get(recipe.outputName) ?? 0) + roll.produced);
     setGold((g) => g - recipe.goldCost * quantity);
-    setBonusXp((b) => b + xpGained);
+    setBonusXp((b) => b + roll.xpGained);
     return {
-      attempted: quantity,
-      succeeded: quantity,
+      attempted: roll.attempted,
+      succeeded: roll.attempted,
       failed: 0,
       chance: 1,
-      xpGained,
-      levelInfo: getProfessionLevelInfo(xp + xpGained),
+      produced: roll.produced,
+      bonus: roll.bonus,
+      yieldChance: roll.chance,
+      xpGained: roll.xpGained,
+      levelInfo: getProfessionLevelInfo(xp + roll.xpGained),
       characterGold: gold - recipe.goldCost * quantity,
       outputName: recipe.outputName,
       rarity: recipe.rarity,
-      message: `⚙️ ${quantity > 1 ? `${quantity}× ` : ''}${recipe.outputName} processado${quantity > 1 ? 's' : ''} com sucesso!`,
+      message: `⚙️ ${roll.produced > 1 ? `${roll.produced}× ` : ''}${recipe.outputName} processado${roll.produced > 1 ? 's' : ''} com sucesso!`,
     };
   };
 
@@ -124,12 +134,22 @@ export default function ProcessingDialogMockPage() {
         >
           Resetar inventário
         </button>
+        {/* Reproduz o botão "sumido": sem gold, o antigo clamp zerava tudo. */}
+        <button
+          onClick={() => setGold(0)}
+          className="rounded border border-white/20 bg-white/5 px-3 py-1"
+        >
+          Zerar gold
+        </button>
       </div>
       <p className="max-w-xl text-xs text-white/40">
         Teste: livro por bancada (Fundição/Madeira/Têxtil/Moagem/Destilaria), 🔒 por nível da
         RECEITA (Bandagem nv3, Barra de Aço/Lâmina nv5, Verniz/Extrato nv8, Cristal nv10, Joia
-        nv15), "sem falha" sempre, lote (máx 99), XP fixo por receita, saída empilhada no
-        inventário fake (Tecido de Linho processado vira insumo da Bandagem).
+        nv15), &quot;sem falha&quot; sempre, XP fixo por receita, saída empilhada no inventário fake
+        (Tecido de Linho processado vira insumo da Bandagem). Em <b>375×667</b>: o rodapé
+        (quantidade + botão) fica fixo, mesmo com 120 estilhaços. <b>Rendimento extra</b> por
+        nível (nv1 = 0%, nv25 = +24%): processe 12 Águas e veja o ×N passar de 12 — o Refino de
+        estilhaço fica sempre exato.
       </p>
 
       <ProcessingDialog

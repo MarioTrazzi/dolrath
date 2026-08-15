@@ -52,6 +52,8 @@ export interface ProcessingRecipe {
   xp: number;
   /** Taxa de processamento em gold (mão de obra). */
   goldCost: number;
+  /** Receita SEM rendimento extra (rendimento fixo 1:1 por unidade). Ver PROC_YIELD_*. */
+  noYield?: boolean;
 }
 
 function proc(
@@ -63,8 +65,9 @@ function proc(
   minLevel: number,
   xp: number,
   goldCost: number,
+  noYield = false,
 ): ProcessingRecipe {
-  return { id, outputName, rarity, group, inputs, minLevel, xp, goldCost };
+  return { id, outputName, rarity, group, inputs, minLevel, xp, goldCost, ...(noYield ? { noYield } : {}) };
 }
 
 // Ratio padrão 2:1 (2 crus → 1 processado). Receitas nv1 são o caminho de
@@ -134,13 +137,86 @@ export const PROCESSING_RECIPES: ProcessingRecipe[] = [
   // ---------- REFINO DE PEDRA (10 estilhaços → 1 Pedra Negra) ----------
   // Mesma conversão garantida que o resto da bancada; XP/taxa iguais ao
   // REFINE_XP_BASIC / taxa antiga. Concentrada (10 pedras → 1) continua na Forja.
+  // noYield: Pedra Negra é a MOEDA do aprimoramento — rendimento extra aqui
+  // inflacionaria o gear de todo mundo e quebraria a âncora do economy-sim.
   proc('proc_pedra_arma', STONE_NAMES.WEAPON_BASIC, 'UNCOMMON', 'refine', [
     { name: 'Estilhaço de Pedra Negra (Arma)', quantity: 10 },
-  ], 1, REFINE_XP_BASIC, 20),
+  ], 1, REFINE_XP_BASIC, 20, true),
   proc('proc_pedra_armadura', STONE_NAMES.ARMOR_BASIC, 'UNCOMMON', 'refine', [
     { name: 'Estilhaço de Pedra Negra (Armadura)', quantity: 10 },
-  ], 1, REFINE_XP_BASIC, 20),
+  ], 1, REFINE_XP_BASIC, 20, true),
 ];
+
+// ============================================================
+// Lote e RENDIMENTO EXTRA (perk de nível da profissão)
+// ============================================================
+
+/**
+ * Teto de unidades por lote. A transação da rota faz O(linhas de inventário)
+ * queries — não O(quantidade) —, então o lote grande não custa tempo de tx.
+ * Constante única: UI (stepper) e rota (clamp do body) leem daqui.
+ */
+export const PROCESSING_BATCH_MAX = 500;
+
+/** Chance de rendimento extra por nível acima do 1 (+1 p.p./nível). */
+export const PROC_YIELD_PER_LEVEL = 0.01;
+/** Teto do rendimento extra (atingido no nv41). */
+export const PROC_YIELD_CAP = 0.4;
+
+/**
+ * Chance de UMA unidade processada sair dobrada, pelo nível de Processamento:
+ * nv1 = 0% · nv10 = 9% · nv25 = 24% · nv41+ = 40% (teto).
+ *
+ * É o perk de rendimento da profissão — o molde é o mesmo da Coleta/Fazenda
+ * (gatherSeedChance/farmStoneChance): parte inteira garantida + fração vira
+ * chance. Não mexe na promessa "sem falha": o piso continua sendo 1 por
+ * unidade, o bônus só ADICIONA. Receitas `noYield` (refino de estilhaço)
+ * ficam sempre em 0.
+ */
+export function processingYieldChance(recipe: Pick<ProcessingRecipe, 'noYield'>, level: number): number {
+  if (recipe.noYield) return 0;
+  const lv = Math.max(1, Math.floor(level));
+  return Math.min(PROC_YIELD_CAP, PROC_YIELD_PER_LEVEL * (lv - 1));
+}
+
+export interface ProcessingBatchResult {
+  /** Unidades processadas (o que consome insumo e taxa). */
+  attempted: number;
+  /** Itens de saída creditados (attempted + bonus). */
+  produced: number;
+  /** Unidades que saíram dobradas. */
+  bonus: number;
+  /** Chance de rendimento extra usada no lote. */
+  chance: number;
+  /** XP do lote — por TENTATIVA, o extra é brinde e não acelera a profissão. */
+  xpGained: number;
+}
+
+/**
+ * Rola um lote de processamento — cada unidade é resolvida SOZINHA (é o que
+ * dá a chance independente de rendimento extra por unidade).
+ * O servidor chama isto FORA da $transaction e injeta o resultado como dado
+ * (retry de transação não pode re-rolar o RNG) — mesmo contrato do
+ * rollCraftBatch de craftingProfession.ts.
+ */
+export function rollProcessingBatch(
+  recipe: ProcessingRecipe,
+  level: number,
+  quantity: number,
+  rng: () => number = Math.random,
+): ProcessingBatchResult {
+  const attempted = Math.max(1, Math.min(PROCESSING_BATCH_MAX, Math.floor(quantity)));
+  const chance = processingYieldChance(recipe, level);
+  let bonus = 0;
+  for (let i = 0; i < attempted; i++) if (chance > 0 && rng() < chance) bonus++;
+  return {
+    attempted,
+    produced: attempted + bonus,
+    bonus,
+    chance,
+    xpGained: recipe.xp * attempted,
+  };
+}
 
 const RECIPE_BY_ID = new Map(PROCESSING_RECIPES.map((r) => [r.id, r]));
 

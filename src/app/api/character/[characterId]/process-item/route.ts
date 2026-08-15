@@ -3,9 +3,12 @@ import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
 import { ConsumableSubtype } from '@prisma/client'
 import {
+  PROCESSING_BATCH_MAX,
   PROCESSING_RECIPES,
   getProcessingOutput,
   getProcessingRecipeById,
+  processingYieldChance,
+  rollProcessingBatch,
 } from '@/lib/processing'
 import { itemImagePath } from '@/lib/itemCatalog'
 import { addHistoryEntry } from '@/lib/characterHistory'
@@ -20,6 +23,11 @@ import { getProfessionLevel, getProfessionLevelInfo } from '@/lib/professionSyst
 // passa, XP fixo da receita, gating por minLevel. Consome os insumos + taxa em
 // gold (carteira do personagem) e credita processXp no personagem; o NÍVEL é a
 // soma da conta (craftingServer.ts). O servidor decide tudo (nível do aggregate).
+//
+// O lote é resolvido UNIDADE A UNIDADE (rollProcessingBatch): cada unidade tem
+// chance própria de RENDIMENTO EXTRA (sair dobrada) pelo nível da profissão.
+// Insumo/taxa/XP seguem as tentativas; só a saída creditada usa `produced`.
+// Refino de estilhaço é `noYield` — chance 0, sempre 10:1 exato.
 
 // GET — nível de Processamento da conta + gating de cada receita (para a UI).
 export async function GET(
@@ -45,6 +53,7 @@ export async function GET(
       minLevel: r.minLevel,
       chance: 1,
       noFail: true,
+      yieldChance: processingYieldChance(r, levelInfo.level),
       unlocked: levelInfo.level >= r.minLevel,
     }))
     return NextResponse.json({ xp, levelInfo, recipes })
@@ -69,7 +78,9 @@ export async function POST(
       return NextResponse.json({ error: 'recipeId é obrigatório' }, { status: 400 })
     }
     const rawQuantity = Number(body?.quantity ?? 1)
-    const quantity = Number.isFinite(rawQuantity) ? Math.min(99, Math.max(1, Math.floor(rawQuantity))) : 1
+    const quantity = Number.isFinite(rawQuantity)
+      ? Math.min(PROCESSING_BATCH_MAX, Math.max(1, Math.floor(rawQuantity)))
+      : 1
 
     const recipe = getProcessingRecipeById(recipeId)
     if (!recipe) {
@@ -96,16 +107,10 @@ export async function POST(
       return NextResponse.json({ error: `Requer Processamento nível ${recipe.minLevel}.` }, { status: 400 })
     }
 
-    // Sem RNG: processamento é conversão determinística (modelo do refino) —
-    // todas as unidades passam, XP fixo da receita. Mantemos o shape do roll das
-    // rotas irmãs para a UI reutilizar o mesmo contrato.
-    const roll = {
-      attempted: quantity,
-      succeeded: quantity,
-      failed: 0,
-      xpGained: recipe.xp * quantity,
-      chance: 1,
-    }
+    // Sem falha (toda unidade passa), mas COM rendimento: cada unidade rola
+    // sozinha a chance de sair dobrada. Rolado FORA da $transaction — retry de
+    // transação não pode re-rolar o RNG.
+    const roll = rollProcessingBatch(recipe, level, quantity)
 
     const result = await prisma.$transaction(async (tx) => {
       // 1. Gold (taxa da bancada) — carteira do personagem.
@@ -251,12 +256,12 @@ export async function POST(
       if (existing) {
         await tx.characterInventory.update({
           where: { id: existing.id },
-          data: { quantity: { increment: roll.succeeded } },
+          data: { quantity: { increment: roll.produced } },
         })
       } else {
         await assertInventoryRoom(tx, character.id, 1)
         await tx.characterInventory.create({
-          data: { characterId: character.id, itemId: item.id, quantity: roll.succeeded },
+          data: { characterId: character.id, itemId: item.id, quantity: roll.produced },
         })
       }
 
@@ -268,11 +273,12 @@ export async function POST(
     })
 
     const totalGoldCost = recipe.goldCost * quantity
+    const bonusSuffix = roll.bonus > 0 ? ` (+${roll.bonus} de rendimento)` : ''
     try {
       await addHistoryEntry({
         characterId: character.id,
         activityType: 'ITEM_GAINED',
-        description: `⚙️ Processou ${roll.attempted > 1 ? `${roll.attempted}× ` : ''}${recipe.outputName} (−${totalGoldCost} gold).`,
+        description: `⚙️ Processou ${roll.produced > 1 ? `${roll.produced}× ` : ''}${recipe.outputName}${bonusSuffix} (−${totalGoldCost} gold).`,
         itemId: result.outputItemId ?? undefined,
         goldAmount: -totalGoldCost,
       })
@@ -280,9 +286,9 @@ export async function POST(
       console.error('Erro ao registrar histórico de processamento:', historyError)
     }
 
-    // 🗺️ Missões: pós-commit e fire-and-forget.
-    if (roll.succeeded > 0) {
-      advanceQuestProgress(character.id, { type: 'craft_process', amount: roll.succeeded }).catch(() => {})
+    // 🗺️ Missões: pós-commit e fire-and-forget. Conta TENTATIVAS (o extra é brinde).
+    if (roll.attempted > 0) {
+      advanceQuestProgress(character.id, { type: 'craft_process', amount: roll.attempted }).catch(() => {})
     }
 
     // levelInfo pós-crédito (a UI anima a barra de XP com isto).
@@ -291,15 +297,20 @@ export async function POST(
     return NextResponse.json({
       success: true,
       attempted: roll.attempted,
-      succeeded: roll.succeeded,
-      failed: roll.failed,
-      chance: roll.chance,
+      // succeeded/failed/chance seguem o contrato das rotas irmãs (craft com
+      // falha); aqui sucesso == tentativa e a chance exibida é a de rendimento.
+      succeeded: roll.attempted,
+      failed: 0,
+      chance: 1,
+      produced: roll.produced,
+      bonus: roll.bonus,
+      yieldChance: roll.chance,
       xpGained: roll.xpGained,
       levelInfo,
       characterGold: result.characterGold,
       outputName: recipe.outputName,
       rarity: recipe.rarity,
-      message: `⚙️ ${roll.attempted > 1 ? `${roll.attempted}× ` : ''}${recipe.outputName} processado${roll.attempted > 1 ? 's' : ''} com sucesso!`,
+      message: `⚙️ ${roll.produced > 1 ? `${roll.produced}× ` : ''}${recipe.outputName} processado${roll.produced > 1 ? 's' : ''} com sucesso!`,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Erro interno do servidor'

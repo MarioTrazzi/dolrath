@@ -192,14 +192,17 @@ export default function ForgeDialog({
     [have],
   );
 
+  // Teto de MATERIAL — o único que bloqueia o botão. O gold não entra: sem gold
+  // o clique precisa chegar na rota p/ disparar a recarga on-chain.
+  // [[dolrath-onchain-gold-not-items]]
   const maxCraftable = useMemo(() => {
     if (!recipe) return 0;
-    let n = Math.min(...recipe.materials.map((m) => Math.floor(have(m.name) / m.quantity)));
-    if (characterGold != null && recipe.goldCost > 0) {
-      n = Math.min(n, Math.floor(characterGold / recipe.goldCost));
-    }
+    const n = Math.min(...recipe.materials.map((m) => Math.floor(have(m.name) / m.quantity)));
     return Math.max(0, Math.min(99, n));
-  }, [recipe, have, characterGold]);
+  }, [recipe, have]);
+
+  const totalGoldCost = recipe ? recipe.goldCost * craftQty : 0;
+  const goldShort = characterGold != null && totalGoldCost > characterGold;
 
   useEffect(() => {
     setCraftQty((q) => Math.min(Math.max(1, q), Math.max(1, maxCraftable)));
@@ -310,9 +313,95 @@ export default function ForgeDialog({
 
   const groups = useMemo(() => forgeRecipesByGroup(), []);
 
+  // ⚠️ Rodapé FIXO da casca: quantidade + ação. Fora da área rolável, senão em
+  // tela baixa o botão cai abaixo da dobra (scrollbar escondida, sem pista de
+  // que dá pra rolar).
+  const footer = recipe ? (
+    <div className="px-4 pb-4 pt-3">
+      {unlocked && maxCraftable > 1 && (
+        <div className="mb-2 flex items-center justify-center gap-2">
+          <span className="text-xs text-[#8a8a90]">Quantidade:</span>
+          <button
+            type="button"
+            onClick={() => setCraftQty((q) => Math.max(1, q - 1))}
+            disabled={busy || craftQty <= 1}
+            className="grid h-7 w-7 place-items-center rounded-[3px] border border-[#46464c] bg-[#232327] text-sm font-bold text-white transition-colors hover:border-[#8a6d3b] disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            −
+          </button>
+          <input
+            type="number"
+            min={1}
+            max={maxCraftable}
+            value={craftQty}
+            onChange={(e) => {
+              const v = Math.round(Number(e.target.value));
+              setCraftQty(Number.isFinite(v) ? Math.min(maxCraftable, Math.max(1, v)) : 1);
+            }}
+            disabled={busy}
+            className="w-16 rounded-[3px] border border-[#46464c] bg-[#101013] py-1 text-center text-sm text-white"
+          />
+          <button
+            type="button"
+            onClick={() => setCraftQty((q) => Math.min(maxCraftable, q + 1))}
+            disabled={busy || craftQty >= maxCraftable}
+            className="grid h-7 w-7 place-items-center rounded-[3px] border border-[#46464c] bg-[#232327] text-sm font-bold text-white transition-colors hover:border-[#8a6d3b] disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            +
+          </button>
+          <button
+            type="button"
+            onClick={() => setCraftQty(maxCraftable)}
+            disabled={busy || craftQty === maxCraftable}
+            className="text-xs font-semibold underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
+            style={{ color: GOLD_BRIGHT }}
+          >
+            máx {maxCraftable}
+          </button>
+        </div>
+      )}
+
+      {!unlocked ? (
+        <div className="mb-2 text-center text-xs font-semibold text-red-400">
+          🔒 Requer Forja nível {minLevel}.
+        </div>
+      ) : maxCraftable < 1 ? (
+        <div className="mb-2 text-center text-xs font-semibold text-red-400">
+          Faltam materiais para uma peça.
+        </div>
+      ) : goldShort ? (
+        <div className="mb-2 text-center text-xs font-semibold" style={{ color: GOLD_BRIGHT }}>
+          Taxa do lote: {totalGoldCost} 🪙 — sem GOLD na carteira, vamos recarregar.
+        </div>
+      ) : (
+        <div className="mb-2 text-center text-xs text-[#8a8a90]">
+          Taxa do lote: <span style={{ color: GOLD }}>{totalGoldCost} 🪙</span>
+        </div>
+      )}
+
+      <BevelButton
+        onClick={handleForge}
+        disabled={!unlocked || maxCraftable < 1 || (!characterId && !attemptOverride)}
+        busy={busy}
+        busyLabel="⚒ Forjando..."
+      >
+        {craftQty > 1 ? `⚒ Forjar ×${craftQty}` : '⚒ Forjar'}
+      </BevelButton>
+      <div className="mt-2 text-center">
+        <button
+          type="button"
+          onClick={() => setBookOpen(true)}
+          className="text-xs font-semibold text-[#9a9aa0] transition-colors hover:text-white"
+        >
+          📖 Livro da Forja — trocar receita
+        </button>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <>
-      <BdoDialogShell open={open} onClose={onClose} icon="⚒" title="Forja">
+      <BdoDialogShell open={open} onClose={onClose} icon="⚒" title="Forja" footer={footer}>
         {/* Nível da profissão (conta inteira, como a Fazenda) */}
         <div className="border-b border-black/60 bg-[#19191c] px-5 py-3">
           {levelInfo ? (
@@ -470,68 +559,7 @@ export default function ForgeDialog({
               </div>
             )}
 
-            {/* Quantidade + ação */}
-            <div className="px-4 pb-4 pt-2">
-              {unlocked && maxCraftable > 1 && (
-                <div className="mb-2 flex items-center justify-center gap-2">
-                  <span className="text-xs text-[#8a8a90]">Quantidade:</span>
-                  <button
-                    type="button"
-                    onClick={() => setCraftQty((q) => Math.max(1, q - 1))}
-                    disabled={busy || craftQty <= 1}
-                    className="grid h-7 w-7 place-items-center rounded-[3px] border border-[#46464c] bg-[#232327] text-sm font-bold text-white transition-colors hover:border-[#8a6d3b] disabled:cursor-not-allowed disabled:opacity-30"
-                  >
-                    −
-                  </button>
-                  <input
-                    type="number"
-                    min={1}
-                    max={maxCraftable}
-                    value={craftQty}
-                    onChange={(e) => {
-                      const v = Math.round(Number(e.target.value));
-                      setCraftQty(Number.isFinite(v) ? Math.min(maxCraftable, Math.max(1, v)) : 1);
-                    }}
-                    disabled={busy}
-                    className="w-14 rounded-[3px] border border-[#46464c] bg-[#101013] py-1 text-center text-sm text-white"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setCraftQty((q) => Math.min(maxCraftable, q + 1))}
-                    disabled={busy || craftQty >= maxCraftable}
-                    className="grid h-7 w-7 place-items-center rounded-[3px] border border-[#46464c] bg-[#232327] text-sm font-bold text-white transition-colors hover:border-[#8a6d3b] disabled:cursor-not-allowed disabled:opacity-30"
-                  >
-                    +
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCraftQty(maxCraftable)}
-                    disabled={busy || craftQty === maxCraftable}
-                    className="text-xs font-semibold underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
-                    style={{ color: GOLD_BRIGHT }}
-                  >
-                    máx {maxCraftable}
-                  </button>
-                </div>
-              )}
-              <BevelButton
-                onClick={handleForge}
-                disabled={!unlocked || maxCraftable < 1 || (!characterId && !attemptOverride)}
-                busy={busy}
-                busyLabel="⚒ Forjando..."
-              >
-                {craftQty > 1 ? `⚒ Forjar ×${craftQty}` : '⚒ Forjar'}
-              </BevelButton>
-              <div className="mt-2 text-center">
-                <button
-                  type="button"
-                  onClick={() => setBookOpen(true)}
-                  className="text-xs font-semibold text-[#9a9aa0] transition-colors hover:text-white"
-                >
-                  📖 Livro da Forja — trocar receita
-                </button>
-              </div>
-            </div>
+            {/* A ação vive no rodapé FIXO da casca (ver `footer`). */}
           </>
         )}
       </BdoDialogShell>

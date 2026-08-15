@@ -18,8 +18,10 @@ import { confirmBuyGold } from '@/lib/buyGoldPrompt';
 import {
   processingRecipesByGroup,
   processingRecipesUsingInput,
+  processingYieldChance,
   getProcessingOutput,
   processingItemEmoji,
+  PROCESSING_BATCH_MAX,
   PROCESSING_GROUP_LABEL,
   type ProcessingRecipe,
 } from '@/lib/processing';
@@ -54,6 +56,12 @@ export interface ProcessingCraftResult {
   succeeded: number;
   failed: number;
   chance: number;
+  /** Itens creditados (tentativas + rendimento extra). Ausente = contrato antigo. */
+  produced?: number;
+  /** Unidades que saíram dobradas pelo nível da profissão. */
+  bonus?: number;
+  /** Chance de rendimento extra usada no lote. */
+  yieldChance?: number;
   xpGained: number;
   levelInfo: ProfessionLevelInfo;
   characterGold: number | null;
@@ -176,14 +184,21 @@ export default function ProcessingDialog({
     [have],
   );
 
+  // Teto de INSUMO — o único que bloqueia o botão. O gold NÃO entra aqui: sem
+  // gold na mão o clique precisa chegar na rota para disparar a recarga
+  // on-chain (buyGoldOnChain). [[dolrath-onchain-gold-not-items]]
   const maxCraftable = useMemo(() => {
     if (!recipe) return 0;
-    let n = Math.min(...recipe.inputs.map((m) => Math.floor(have(m.name) / m.quantity)));
-    if (characterGold != null && recipe.goldCost > 0) {
-      n = Math.min(n, Math.floor(characterGold / recipe.goldCost));
-    }
-    return Math.max(0, Math.min(99, n));
-  }, [recipe, have, characterGold]);
+    const n = Math.min(...recipe.inputs.map((m) => Math.floor(have(m.name) / m.quantity)));
+    return Math.max(0, Math.min(PROCESSING_BATCH_MAX, n));
+  }, [recipe, have]);
+
+  // Custo do lote escolhido e se a carteira do personagem cobre (só aviso).
+  const totalGoldCost = recipe ? recipe.goldCost * craftQty : 0;
+  const goldShort = characterGold != null && totalGoldCost > characterGold;
+
+  // Rendimento extra da profissão (0 no refino de estilhaço — noYield).
+  const yieldChance = recipe ? processingYieldChance(recipe, level) : 0;
 
   useEffect(() => {
     setCraftQty((q) => Math.min(Math.max(1, q), Math.max(1, maxCraftable)));
@@ -211,7 +226,7 @@ export default function ProcessingDialog({
 
   const handleProcess = async () => {
     if (!recipe || busy || !unlocked || maxCraftable < 1) return;
-    const qty = Math.max(1, Math.min(99, craftQty));
+    const qty = Math.max(1, Math.min(maxCraftable, craftQty));
 
     setBusy(true);
     setResult(null);
@@ -291,9 +306,100 @@ export default function ProcessingDialog({
     [],
   );
 
+  // Itens realmente creditados no último lote (contrato antigo: sem `produced`).
+  const producedCount = result ? (result.produced ?? result.succeeded) : 0;
+  const bonusCount = result?.bonus ?? 0;
+
+  // ⚠️ Rodapé FIXO da casca: quantidade + ação. Fora da área rolável, senão em
+  // tela baixa o botão cai abaixo da dobra (a scrollbar é escondida e não há
+  // nenhuma pista de que dá pra rolar) — era o bug do "botão sumiu".
+  const footer = recipe ? (
+    <div className="px-4 pb-4 pt-3">
+      {unlocked && maxCraftable > 1 && (
+        <div className="mb-2 flex items-center justify-center gap-2">
+          <span className="text-xs text-[#8a8a90]">Quantidade:</span>
+          <button
+            type="button"
+            onClick={() => setCraftQty((q) => Math.max(1, q - 1))}
+            disabled={busy || craftQty <= 1}
+            className="grid h-7 w-7 place-items-center rounded-[3px] border border-[#46464c] bg-[#232327] text-sm font-bold text-white transition-colors hover:border-[#8a6d3b] disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            −
+          </button>
+          <input
+            type="number"
+            min={1}
+            max={maxCraftable}
+            value={craftQty}
+            onChange={(e) => {
+              const v = Math.round(Number(e.target.value));
+              setCraftQty(Number.isFinite(v) ? Math.min(maxCraftable, Math.max(1, v)) : 1);
+            }}
+            disabled={busy}
+            className="w-16 rounded-[3px] border border-[#46464c] bg-[#101013] py-1 text-center text-sm text-white"
+          />
+          <button
+            type="button"
+            onClick={() => setCraftQty((q) => Math.min(maxCraftable, q + 1))}
+            disabled={busy || craftQty >= maxCraftable}
+            className="grid h-7 w-7 place-items-center rounded-[3px] border border-[#46464c] bg-[#232327] text-sm font-bold text-white transition-colors hover:border-[#8a6d3b] disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            +
+          </button>
+          <button
+            type="button"
+            onClick={() => setCraftQty(maxCraftable)}
+            disabled={busy || craftQty === maxCraftable}
+            className="text-xs font-semibold underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
+            style={{ color: GOLD_BRIGHT }}
+          >
+            máx {maxCraftable}
+          </button>
+        </div>
+      )}
+
+      {/* Por que o botão está bloqueado / por que a taxa não cabe na carteira */}
+      {!unlocked ? (
+        <div className="mb-2 text-center text-xs font-semibold text-red-400">
+          🔒 Requer Processamento nível {recipe.minLevel}.
+        </div>
+      ) : maxCraftable < 1 ? (
+        <div className="mb-2 text-center text-xs font-semibold text-red-400">
+          Faltam insumos para uma unidade.
+        </div>
+      ) : goldShort ? (
+        <div className="mb-2 text-center text-xs font-semibold" style={{ color: GOLD_BRIGHT }}>
+          Taxa do lote: {totalGoldCost} 🪙 — sem GOLD na carteira, vamos recarregar.
+        </div>
+      ) : (
+        <div className="mb-2 text-center text-xs text-[#8a8a90]">
+          Taxa do lote: <span style={{ color: GOLD }}>{totalGoldCost} 🪙</span>
+        </div>
+      )}
+
+      <BevelButton
+        onClick={handleProcess}
+        disabled={!unlocked || maxCraftable < 1 || (!characterId && !attemptOverride)}
+        busy={busy}
+        busyLabel="⚙ Processando..."
+      >
+        {craftQty > 1 ? `⚙ Processar ×${craftQty}` : '⚙ Processar'}
+      </BevelButton>
+      <div className="mt-2 text-center">
+        <button
+          type="button"
+          onClick={() => setBookOpen(true)}
+          className="text-xs font-semibold text-[#9a9aa0] transition-colors hover:text-white"
+        >
+          📖 Livro de Processamento — trocar receita
+        </button>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <>
-      <BdoDialogShell open={open} onClose={onClose} icon="⚙" title="Processamento">
+      <BdoDialogShell open={open} onClose={onClose} icon="⚙" title="Processamento" footer={footer}>
         {/* Nível da profissão (conta inteira, como Forja/Alquimia) */}
         <div className="border-b border-black/60 bg-[#19191c] px-5 py-3">
           {levelInfo ? (
@@ -330,9 +436,7 @@ export default function ProcessingDialog({
                 outputName={recipe.outputName}
                 outputEmoji={processingItemEmoji(recipe.outputName)}
                 glowColor={centerUi?.glow}
-                plate={
-                  phase === 'done' && result && result.succeeded > 1 ? `×${result.succeeded}` : null
-                }
+                plate={phase === 'done' && producedCount > 1 ? `×${producedCount}` : null}
                 statusNode={
                   !unlocked ? (
                     <div className="text-center">
@@ -342,7 +446,18 @@ export default function ProcessingDialog({
                       </div>
                     </div>
                   ) : (
-                    <NoFailSeal />
+                    <div className="text-center">
+                      <NoFailSeal />
+                      {/* Perk de rendimento da profissão (0 no refino de estilhaço) */}
+                      <div
+                        className="mt-1 text-[10px] font-semibold uppercase tracking-[0.12em]"
+                        style={{ color: yieldChance > 0 ? GOLD_BRIGHT : '#77777d' }}
+                      >
+                        {yieldChance > 0
+                          ? `rend. +${Math.round(yieldChance * 100)}%`
+                          : 'rend. fixo'}
+                      </div>
+                    </div>
                   )
                 }
               />
@@ -367,11 +482,7 @@ export default function ProcessingDialog({
               </div>
             )}
 
-            {!unlocked && (
-              <div className="px-5 pb-1 pt-3 text-center text-[12.5px] font-semibold text-red-400">
-                Requer Processamento nível {recipe.minLevel} para esta receita.
-              </div>
-            )}
+            {/* O gate de nível é dito no rodapé fixo (e no selo do rig). */}
 
             {/* Veredito em texto */}
             {phase !== 'idle' && (
@@ -397,6 +508,11 @@ export default function ProcessingDialog({
                     className="mt-1 text-center text-sm font-bold text-emerald-300"
                   >
                     {result.message}
+                    {bonusCount > 0 && (
+                      <div className="mt-0.5 text-xs font-bold" style={{ color: GOLD_BRIGHT }}>
+                        ✨ +{bonusCount} de rendimento extra (nv de Processamento)
+                      </div>
+                    )}
                     <div className="mt-0.5 text-xs font-normal" style={{ color: GOLD }}>
                       +{result.xpGained} XP de Processamento
                     </div>
@@ -411,68 +527,6 @@ export default function ProcessingDialog({
               </div>
             )}
 
-            {/* Quantidade + ação */}
-            <div className="px-4 pb-4 pt-2">
-              {unlocked && maxCraftable > 1 && (
-                <div className="mb-2 flex items-center justify-center gap-2">
-                  <span className="text-xs text-[#8a8a90]">Quantidade:</span>
-                  <button
-                    type="button"
-                    onClick={() => setCraftQty((q) => Math.max(1, q - 1))}
-                    disabled={busy || craftQty <= 1}
-                    className="grid h-7 w-7 place-items-center rounded-[3px] border border-[#46464c] bg-[#232327] text-sm font-bold text-white transition-colors hover:border-[#8a6d3b] disabled:cursor-not-allowed disabled:opacity-30"
-                  >
-                    −
-                  </button>
-                  <input
-                    type="number"
-                    min={1}
-                    max={maxCraftable}
-                    value={craftQty}
-                    onChange={(e) => {
-                      const v = Math.round(Number(e.target.value));
-                      setCraftQty(Number.isFinite(v) ? Math.min(maxCraftable, Math.max(1, v)) : 1);
-                    }}
-                    disabled={busy}
-                    className="w-14 rounded-[3px] border border-[#46464c] bg-[#101013] py-1 text-center text-sm text-white"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setCraftQty((q) => Math.min(maxCraftable, q + 1))}
-                    disabled={busy || craftQty >= maxCraftable}
-                    className="grid h-7 w-7 place-items-center rounded-[3px] border border-[#46464c] bg-[#232327] text-sm font-bold text-white transition-colors hover:border-[#8a6d3b] disabled:cursor-not-allowed disabled:opacity-30"
-                  >
-                    +
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCraftQty(maxCraftable)}
-                    disabled={busy || craftQty === maxCraftable}
-                    className="text-xs font-semibold underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
-                    style={{ color: GOLD_BRIGHT }}
-                  >
-                    máx {maxCraftable}
-                  </button>
-                </div>
-              )}
-              <BevelButton
-                onClick={handleProcess}
-                disabled={!unlocked || maxCraftable < 1 || (!characterId && !attemptOverride)}
-                busy={busy}
-                busyLabel="⚙ Processando..."
-              >
-                {craftQty > 1 ? `⚙ Processar ×${craftQty}` : '⚙ Processar'}
-              </BevelButton>
-              <div className="mt-2 text-center">
-                <button
-                  type="button"
-                  onClick={() => setBookOpen(true)}
-                  className="text-xs font-semibold text-[#9a9aa0] transition-colors hover:text-white"
-                >
-                  📖 Livro de Processamento — trocar receita
-                </button>
-              </div>
-            </div>
           </>
         )}
       </BdoDialogShell>

@@ -25,7 +25,7 @@ import {
 import { professionXpForLevel, PROFESSION_MAX_LEVEL } from '@/lib/professionSystem'
 import { POTION_RECIPES } from '@/lib/alchemy'
 import { FORGE_RECIPES } from '@/lib/forge'
-import { PROCESSING_RECIPES } from '@/lib/processing'
+import { PROCESSING_RECIPES, processingYieldChance, rollProcessingBatch } from '@/lib/processing'
 import type { Rarity } from '@/lib/itemCatalog'
 
 const RARITIES: Rarity[] = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC']
@@ -98,6 +98,34 @@ for (const r of PROCESSING_RECIPES) {
   console.log(
     `  ${r.outputName.padEnd(22)} nv${String(r.minLevel).padStart(2)}+  taxa ${String(r.goldCost).padStart(3)}g  +${String(r.xp).padStart(2)}xp  ← ${inputs}`,
   )
+}
+{
+  // Rendimento extra (perk de nível): chance por unidade de sair dobrada.
+  console.log('\n  rendimento extra por nível (receita normal × refino de estilhaço):')
+  const normal = PROCESSING_RECIPES.find((r) => r.id === 'proc_agua_pura')!
+  const refino = PROCESSING_RECIPES.find((r) => r.id === 'proc_pedra_arma')!
+  for (const lv of [1, 5, 10, 25, 41, 50]) {
+    console.log(
+      `    nv${String(lv).padStart(2)}  normal ${pct(processingYieldChance(normal, lv))}` +
+        `  →  lote de 12 rende ~${(12 * (1 + processingYieldChance(normal, lv))).toFixed(1)}` +
+        `   |  refino ${pct(processingYieldChance(refino, lv))} (sempre exato)`,
+    )
+  }
+}
+{
+  // Monte-Carlo do lote unidade-a-unidade.
+  const agua = PROCESSING_RECIPES.find((r) => r.id === 'proc_agua_pura')!
+  const pedra = PROCESSING_RECIPES.find((r) => r.id === 'proc_pedra_arma')!
+  const N = 10_000
+  let totAgua = 0
+  let totPedra = 0
+  for (let i = 0; i < N; i++) {
+    totAgua += rollProcessingBatch(agua, 10, 12).produced
+    totPedra += rollProcessingBatch(pedra, 50, 12).produced
+  }
+  console.log('\n  monte-carlo (10.000 lotes de 12):')
+  console.log(`    Água Pura nv10  → ${(totAgua / N).toFixed(2)} itens (esperado 13.08)`)
+  console.log(`    Refino    nv50  → ${(totPedra / N).toFixed(2)} itens (esperado 12.00, noYield)`)
 }
 {
   // Progressão: quantas operações tier-1 (XP 6) levam a cada marco de desbloqueio.

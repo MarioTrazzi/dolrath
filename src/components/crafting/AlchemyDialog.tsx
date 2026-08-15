@@ -229,14 +229,17 @@ export default function AlchemyDialog({
     [have],
   );
 
+  // Teto de INGREDIENTE — o único que bloqueia o botão. O gold não entra: sem
+  // gold o clique precisa chegar na rota p/ disparar a recarga on-chain.
+  // [[dolrath-onchain-gold-not-items]]
   const maxCraftable = useMemo(() => {
     if (!matchedRecipe) return 0;
-    let n = Math.min(...matchedRecipe.ingredients.map((i) => Math.floor(have(i.name) / i.quantity)));
-    if (characterGold != null && matchedRecipe.goldCost > 0) {
-      n = Math.min(n, Math.floor(characterGold / matchedRecipe.goldCost));
-    }
+    const n = Math.min(...matchedRecipe.ingredients.map((i) => Math.floor(have(i.name) / i.quantity)));
     return Math.max(0, Math.min(99, n));
-  }, [matchedRecipe, have, characterGold]);
+  }, [matchedRecipe, have]);
+
+  const totalGoldCost = matchedRecipe ? matchedRecipe.goldCost * craftQty : 0;
+  const goldShort = characterGold != null && totalGoldCost > characterGold;
 
   useEffect(() => {
     setCraftQty((q) => Math.min(Math.max(1, q), Math.max(1, maxCraftable)));
@@ -381,9 +384,97 @@ export default function AlchemyDialog({
 
   const edgePoints = `${POS.top.x},${POS.top.y} ${POS.left.x},${POS.left.y} ${POS.right.x},${POS.right.y}`;
 
+  // ⚠️ Rodapé FIXO da casca: quantidade + ação. Fora da área rolável, senão em
+  // tela baixa o botão cai abaixo da dobra (scrollbar escondida, sem pista).
+  const footer = (
+    <div className="px-4 pb-4 pt-3">
+      {matchedRecipe && unlocked && maxCraftable > 1 && (
+        <div className="mb-2 flex items-center justify-center gap-2">
+          <span className="text-xs text-[#8a8a90]">Quantidade:</span>
+          <button
+            type="button"
+            onClick={() => setCraftQty((q) => Math.max(1, q - 1))}
+            disabled={busy || craftQty <= 1}
+            className="grid h-7 w-7 place-items-center rounded-[3px] border border-[#46464c] bg-[#232327] text-sm font-bold text-white transition-colors hover:border-[#8a6d3b] disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            −
+          </button>
+          <input
+            type="number"
+            min={1}
+            max={maxCraftable}
+            value={craftQty}
+            onChange={(e) => {
+              const v = Math.round(Number(e.target.value));
+              setCraftQty(Number.isFinite(v) ? Math.min(maxCraftable, Math.max(1, v)) : 1);
+            }}
+            disabled={busy}
+            className="w-14 rounded-[3px] border border-[#46464c] bg-[#101013] py-1 text-center text-sm text-white"
+          />
+          <button
+            type="button"
+            onClick={() => setCraftQty((q) => Math.min(maxCraftable, q + 1))}
+            disabled={busy || craftQty >= maxCraftable}
+            className="grid h-7 w-7 place-items-center rounded-[3px] border border-[#46464c] bg-[#232327] text-sm font-bold text-white transition-colors hover:border-[#8a6d3b] disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            +
+          </button>
+          <button
+            type="button"
+            onClick={() => setCraftQty(maxCraftable)}
+            disabled={busy || craftQty === maxCraftable}
+            className="text-xs font-semibold underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
+            style={{ color: GOLD_BRIGHT }}
+          >
+            máx {maxCraftable}
+          </button>
+        </div>
+      )}
+      {matchedRecipe && (
+        unlocked && maxCraftable >= 1 && goldShort ? (
+          <div className="mb-2 text-center text-xs font-semibold" style={{ color: GOLD_BRIGHT }}>
+            Taxa do lote: {totalGoldCost} 🪙 — sem GOLD na carteira, vamos recarregar.
+          </div>
+        ) : unlocked && maxCraftable >= 1 ? (
+          <div className="mb-2 text-center text-xs text-[#8a8a90]">
+            Taxa do lote: <span style={{ color: GOLD }}>{totalGoldCost} 🪙</span>
+          </div>
+        ) : null
+      )}
+      <BevelButton
+        onClick={handleTransmute}
+        disabled={!matchedRecipe || !unlocked || maxCraftable < 1 || (!characterId && !attemptOverride)}
+        busy={busy}
+        busyLabel="⚗ Transmutando..."
+      >
+        {craftQty > 1 ? `⚗ Transmutar ×${craftQty}` : '⚗ Transmutar'}
+      </BevelButton>
+      <div className="mt-2 flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => setRecipesOpen(true)}
+          className="text-xs font-semibold text-[#9a9aa0] transition-colors hover:text-white"
+        >
+          📖 Livro de Receitas
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            clearVerdict();
+            setSlots([null, null, null]);
+          }}
+          disabled={busy || (filled.length === 0 && !result)}
+          className="text-xs font-semibold text-[#9a9aa0] transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+        >
+          Limpar
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <>
-      <BdoDialogShell open={open} onClose={onClose} icon="⚗" title="Alquimia">
+      <BdoDialogShell open={open} onClose={onClose} icon="⚗" title="Alquimia" footer={footer}>
         {/* Nível da profissão (conta inteira, como a Fazenda) */}
         <div className="border-b border-black/60 bg-[#19191c] px-5 py-3">
           {levelInfo ? (
@@ -662,79 +753,7 @@ export default function AlchemyDialog({
           </div>
         )}
 
-        {/* Quantidade + ação */}
-        <div className="px-4 pb-4 pt-1">
-          {matchedRecipe && unlocked && maxCraftable > 1 && (
-            <div className="mb-2 flex items-center justify-center gap-2">
-              <span className="text-xs text-[#8a8a90]">Quantidade:</span>
-              <button
-                type="button"
-                onClick={() => setCraftQty((q) => Math.max(1, q - 1))}
-                disabled={busy || craftQty <= 1}
-                className="grid h-7 w-7 place-items-center rounded-[3px] border border-[#46464c] bg-[#232327] text-sm font-bold text-white transition-colors hover:border-[#8a6d3b] disabled:cursor-not-allowed disabled:opacity-30"
-              >
-                −
-              </button>
-              <input
-                type="number"
-                min={1}
-                max={maxCraftable}
-                value={craftQty}
-                onChange={(e) => {
-                  const v = Math.round(Number(e.target.value));
-                  setCraftQty(Number.isFinite(v) ? Math.min(maxCraftable, Math.max(1, v)) : 1);
-                }}
-                disabled={busy}
-                className="w-14 rounded-[3px] border border-[#46464c] bg-[#101013] py-1 text-center text-sm text-white"
-              />
-              <button
-                type="button"
-                onClick={() => setCraftQty((q) => Math.min(maxCraftable, q + 1))}
-                disabled={busy || craftQty >= maxCraftable}
-                className="grid h-7 w-7 place-items-center rounded-[3px] border border-[#46464c] bg-[#232327] text-sm font-bold text-white transition-colors hover:border-[#8a6d3b] disabled:cursor-not-allowed disabled:opacity-30"
-              >
-                +
-              </button>
-              <button
-                type="button"
-                onClick={() => setCraftQty(maxCraftable)}
-                disabled={busy || craftQty === maxCraftable}
-                className="text-xs font-semibold underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
-                style={{ color: GOLD_BRIGHT }}
-              >
-                máx {maxCraftable}
-              </button>
-            </div>
-          )}
-          <BevelButton
-            onClick={handleTransmute}
-            disabled={!matchedRecipe || !unlocked || maxCraftable < 1 || (!characterId && !attemptOverride)}
-            busy={busy}
-            busyLabel="⚗ Transmutando..."
-          >
-            {craftQty > 1 ? `⚗ Transmutar ×${craftQty}` : '⚗ Transmutar'}
-          </BevelButton>
-          <div className="mt-2 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => setRecipesOpen(true)}
-              className="text-xs font-semibold text-[#9a9aa0] transition-colors hover:text-white"
-            >
-              📖 Livro de Receitas
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                clearVerdict();
-                setSlots([null, null, null]);
-              }}
-              disabled={busy || (filled.length === 0 && !result)}
-              className="text-xs font-semibold text-[#9a9aa0] transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
-            >
-              Limpar
-            </button>
-          </div>
-        </div>
+        {/* A ação vive no rodapé FIXO da casca (ver `footer`). */}
 
         {/* Paleta de ingredientes (clique para colocar num vértice) */}
         <div className="border-t border-black/60 bg-[#19191c] px-4 py-3">

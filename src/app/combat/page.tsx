@@ -180,7 +180,9 @@ interface BattleRewardSide {
   rankingSkipped?: RankingSkipReason | null
 }
 /** Por que a luta não pontuou (a rota decide; ver resolveRankingSkip). */
-type RankingSkipReason = 'bot_opponent' | 'offseason' | 'not_enrolled' | 'pair_cap' | 'unpaid_entry' | 'error'
+// 'offseason' e 'not_enrolled' saíram com a temporada: o ranking é global e
+// permanente, então não há janela sem pontuação nem inscrição que habilite.
+type RankingSkipReason = 'bot_opponent' | 'pair_cap' | 'unpaid_entry' | 'error'
 interface BattleRewardsPayload {
   winner?: BattleRewardSide
   loser?: BattleRewardSide
@@ -1392,11 +1394,7 @@ function CombatPageContent() {
                   olhando o placar e não entendia por quê. */}
               {battleReward.rankingSkipped && (
                 <div className="text-[11px] text-white/55">
-                  {battleReward.rankingSkipped === 'bot_opponent' && '🤖 Oponente da casa — não pontua na temporada.'}
-                  {battleReward.rankingSkipped === 'offseason' && '🏁 Entressafra — a temporada não está pontuando.'}
-                  {battleReward.rankingSkipped === 'not_enrolled' && (
-                    <>🎟️ Sem inscrição na temporada. <a href="/ranking" className="underline text-amber-300">Inscrever-se</a></>
-                  )}
+                  {battleReward.rankingSkipped === 'bot_opponent' && '🤖 Oponente da casa — não pontua no ranking.'}
                   {battleReward.rankingSkipped === 'pair_cap' && '🔁 Limite diário de pontos contra este mesmo oponente.'}
                   {battleReward.rankingSkipped === 'unpaid_entry' && '⚡ Um dos lados entrou sem stamina para a taxa — a luta não pontua.'}
                   {battleReward.rankingSkipped === 'error' && '⚠️ O ranking não pôde ser atualizado nesta luta.'}

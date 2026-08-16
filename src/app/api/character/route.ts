@@ -9,7 +9,6 @@ import { verifyCharacterNftMintTx } from '@/lib/characterNftVerify'
 import { rollCreationStatsFromPaymentProof } from '@/lib/characterCreationRoll'
 import { getRaceTransformations } from '@/lib/transformationSystem'
 import { SKILL_TREE_VERSION } from '@/lib/skillTree'
-import { creditCreationToPrizePool } from '@/lib/seasonPool'
 
 function serializeBigIntForJson<T>(value: T): T {
   return JSON.parse(
@@ -149,10 +148,9 @@ export async function POST(req: Request) {
   }
 
   try {
-    // Verify on-chain DOL payment (testnet: fixed amount).
-    // O valor VERIFICADO alimenta a pool de premiação da temporada — antes o
-    // retorno era descartado e não havia como auditar a receita de criação.
-    const creationPayment = await verifyDolTransferTx({
+    // Verify on-chain DOL payment (testnet: fixed amount). É a prova que libera a
+    // criação; o valor é receita de operação e não alimenta premiação nenhuma.
+    await verifyDolTransferTx({
       txHash: creationTxHashStr,
       expectedFrom: user.walletAddress,
       expectedTo: treasuryAddress,
@@ -375,22 +373,10 @@ export async function POST(req: Request) {
       // Não falhar a operação por causa do histórico
     }
 
-    // 🏆 O estúdio aporta a inscrição do herói (SEASON_ENTRY_DOL) na pool da
-    // temporada, e ele já nasce inscrito. Os USDC pagos são receita de
-    // operação — vão para o ledger em paidUsdc, nunca para a pool.
-    // Best-effort de propósito: a pool é contabilidade, não pode derrubar uma
-    // criação já paga e mintada. O txHash é @unique nas duas tabelas, então um
-    // retry manual depois reconcilia sem duplicar.
-    try {
-      await creditCreationToPrizePool({
-        txHash: creationTxHashStr,
-        userId: session.user.id,
-        characterId: character.id,
-        paidUsdc: Number(creationPayment.formatted),
-      })
-    } catch (poolError) {
-      console.error('Falha ao creditar a pool de temporada na criação:', poolError)
-    }
+    // 🏆 Criar personagem NÃO inscreve mais em temporada nem financia pool: o
+    // ranking é global e sem prêmio, e o sistema de recompensa será redesenhado.
+    // O pagamento verificado (creationPayment) segue sendo a prova on-chain que
+    // libera a criação — é receita de operação, não prêmio.
 
     return NextResponse.json(serializeBigIntForJson(character))
   } catch (error) {

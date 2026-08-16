@@ -2708,9 +2708,7 @@ async function processBattleRewards(room, winner, loser, roomId) {
       // de descobrir sozinho que lutou à toa (a rota devolve `rankingSkipped` desde
       // sempre; era este repasse que faltava).
       const rankWhy = {
-        bot_opponent: '🤖 Oponente da casa: paga ouro e XP, mas não pontua na temporada.',
-        offseason: '🏁 Entressafra: a temporada não está pontuando.',
-        not_enrolled: '🎟️ Sem inscrição na temporada: esta luta não pontuou.',
+        bot_opponent: '🤖 Oponente da casa: paga ouro e XP, mas não pontua no ranking.',
         pair_cap: '🔁 Limite diário de pontos contra este mesmo oponente atingido.',
         error: '⚠️ O ranking não pôde ser atualizado nesta luta.',
       }[rewardData.rankingSkipped]

@@ -1,7 +1,7 @@
 'use client'
 
-// Slide 10 — Ranking PvP + premiação: top 10 ilustrativo com o herói do
-// visitante em #3 e o split REAL do pot em DOL (PVP_SEASON_DOL_SPLIT).
+// Slide 10 — Ranking PvP: top 10 ilustrativo com o herói do visitante em #3.
+// O placar é GLOBAL, permanente e sem premiação — nada de pot em DOL aqui.
 // Fecho do arco: CTA "Comece sua jornada".
 
 import React, { useEffect, useState } from 'react'
@@ -9,14 +9,9 @@ import { motion } from 'framer-motion'
 import { useJourney } from '../JourneyContext'
 import { useSlideScript } from '../useSlideScript'
 import { useI18n } from '@/lib/i18n/I18nProvider'
-import {
-  buildRankRows,
-  RANK_POOL_DOL,
-  PVP_SEASON_DOL_SPLIT,
-  type JourneySlideProps,
-} from '../journeyData'
+import { buildRankRows, type JourneySlideProps } from '../journeyData'
 
-// 0 tabela entra · 1 herói destaca · 2 prêmio conta · 3 CTA
+// 0 tabela entra · 1 herói destaca · 2 pontos contam · 3 CTA
 const TIMES = [0, 1200, 2200, 3400]
 
 function useCountUp(target: number, run: boolean, ms = 1000): number {
@@ -47,22 +42,19 @@ export default function Slide10Ranking({ active }: JourneySlideProps) {
   const { step } = useSlideScript(active, TIMES, { loop: false })
 
   const rows = buildRankRows({ raceId, classId })
-  const heroPrize = Math.round(RANK_POOL_DOL * PVP_SEASON_DOL_SPLIT[2])
-  const countedPrize = useCountUp(heroPrize, step >= 2)
+  const heroPoints = rows.find((r) => r.isHero)?.points ?? 0
+  const countedPoints = useCountUp(heroPoints, step >= 2)
 
   return (
     <div className="relative h-full w-full flex flex-col md:flex-row gap-3 p-3 pt-12 sm:p-4 sm:pt-12 overflow-y-auto md:overflow-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {/* Tabela top 10 */}
       <div className="md:w-3/5 min-h-0 flex flex-col">
         <div className="flex items-baseline justify-between mb-2">
-          <span className="text-xs font-black uppercase tracking-[0.2em] text-primary">{t('🏆 Season ranking')}</span>
-          <span className="text-[10px] text-textsec">{t('illustrative pot:')} {RANK_POOL_DOL.toLocaleString(locale === 'pt' ? 'pt-BR' : 'en-US')} DOL</span>
+          <span className="text-xs font-black uppercase tracking-[0.2em] text-primary">{t('🏆 Global ranking')}</span>
+          <span className="text-[10px] text-textsec">{t('permanent · no reset')}</span>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto rounded-xl border border-white/10 bg-black/30 backdrop-blur-md [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {rows.map((row, i) => {
-            // 1 casa: com pot de 100 a cauda do top 20 é fracionária (o 20º
-            // leva 1,0 DOL) e arredondar para inteiro apagaria a curva.
-            const prize = Math.round(RANK_POOL_DOL * PVP_SEASON_DOL_SPLIT[row.rank - 1] * 10) / 10
             const isHero = !!row.isHero
             return (
               <motion.div
@@ -94,16 +86,15 @@ export default function Slide10Ranking({ active }: JourneySlideProps) {
                     </span>
                   )}
                 </span>
-                <span className="font-combat text-[11px] text-white/60 hidden sm:inline">{row.points.toLocaleString(locale === 'pt' ? 'pt-BR' : 'en-US')} pts</span>
-                <span className={`font-combat text-xs w-20 text-right ${isHero ? 'font-black text-amber-300' : 'text-amber-200/70'}`}>
-                  {isHero && step >= 2 ? countedPrize : prize} DOL
+                <span className={`font-combat text-xs w-24 text-right ${isHero ? 'font-black text-amber-300' : 'text-white/60'}`}>
+                  {(isHero && step >= 2 ? countedPoints : row.points).toLocaleString(locale === 'pt' ? 'pt-BR' : 'en-US')} pts
                 </span>
               </motion.div>
             )
           })}
         </div>
         <p className="text-[10px] text-textsec mt-1.5">
-          {t('Real pot split: 30% · 18% · 12% · 9% · 7% · 6% · 5% · 5% · 4% · 4% — every season, the top 10 splits the prize in DOL.')}
+          {t('One permanent scoreboard: no seasons, no resets. Every arena win counts forever.')}
         </p>
       </div>
 

@@ -341,8 +341,8 @@ export default function CharacterCreationPage() {
   }
 
   // Payment gate: require the USDC creation fee before proceeding. The dollar
-  // pays for the hero (NFT, AI image, infra) — the season prize pool is in DOL
-  // and never touches it.
+  // pays for the hero (NFT, AI image, infra) and is revenue — it does not buy
+  // into any prize pool, and the ranking has no prize attached.
   if (!creationPaymentTxHash) {
     return (
       <div className="min-h-screen text-white p-8 relative">
@@ -361,10 +361,6 @@ export default function CharacterCreationPage() {
             <p className="text-text-secondary mb-6">
               {t('Creating a hero costs {n} USDC — the NFT, the AI portrait and the servers.', { n: creationCostDol })}
             </p>
-            <p className="text-text-secondary mb-6">
-              {t('It also enrolls your hero in the current season, whose prize pool is paid in DOL.')}
-            </p>
-
             {paymentError && <p className="text-error mb-4">{paymentError}</p>}
 
             <button

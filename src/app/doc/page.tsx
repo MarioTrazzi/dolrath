@@ -397,7 +397,7 @@ export default function DocPage() {
                   <p className="mt-2 text-sm">
                     <strong className="text-white">DOL não é pareado ao dólar.</strong> Não é stablecoin, não tem
                     lastro, não é resgatável e o estúdio não recompra. Quem paga em dólar é o jogador comprando o
-                    herói — e esse dólar nunca encosta na pool de premiação.
+                    herói — e esse dólar é receita, não vira prêmio para ninguém.
                   </p>
                   <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
                     <li>
@@ -405,11 +405,9 @@ export default function DocPage() {
                       <strong className="text-white"> 100% receita</strong>: NFT, retrato por IA e infra.
                     </li>
                     <li>
-                      Inscrição na temporada ranqueada: <Tag tone="dol">100 DOL</Tag> por herói
-                      (<Code>SEASON_ENTRY_DOL</Code>) — <strong className="text-white">100% vira prêmio</strong>.
-                      Na criação o estúdio aporta os 100 DOL do bucket Play &amp; Achieve e o herói já nasce
-                      inscrito; da temporada 2 em diante o jogador paga do próprio bolso. 100 heróis = pool de
-                      10.000 DOL; o 20º recupera a inscrição, o campeão leva 19×.
+                      Premiação por ranking <Soon /> — hoje o placar da arena é{' '}
+                      <strong className="text-white">global, permanente e sem prêmio</strong>: nenhuma
+                      inscrição, nenhuma pool, nenhum pagamento. O sistema de recompensa será redesenhado.
                     </li>
                     <li>Mercado de personagens negocia em DOL (taxa 5%: 2,5% queima + 2,5% treasury) <Phase2 /></li>
                     <li>Staking com veDOL <Soon /></li>

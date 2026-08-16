@@ -6,7 +6,7 @@
 // exigindo apenas que o chamador fosse dono do vencedor OU do perdedor. Dava p/ forjar
 // uma vitória contra QUALQUER personagem, cobrar a stamina do oponente e embolsar ouro
 // e pontos de ranking sem lutar. Com a arena virando a fonte principal de ouro do jogo
-// (PVP_GOLD_PER_STA 31) e o top 10 da season pagando DOL, isso deixou de ser aceitável.
+// (PVP_GOLD_PER_STA 31), isso deixou de ser aceitável.
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
 import { addExperienceToCharacter } from '@/lib/characterLevelSystem'
@@ -21,8 +21,7 @@ import {
 } from '@/lib/pvpRewards'
 import { dailyGoldRemainingTx, applyGearWearTx } from '@/lib/dungeonRunServer'
 import { wearForPvpFight } from '@/lib/durability'
-import { ensureActivePvpSeason, applyPvpMatchRating, isScoringSeason } from '@/lib/pvpRanking'
-import { isEnrolled } from '@/lib/seasonPool'
+import { applyGlobalMatchRating } from '@/lib/pvpGlobalRanking'
 import { advanceQuestProgress } from '@/lib/questServer'
 import { ActivityType } from '@prisma/client'
 
@@ -96,29 +95,20 @@ function noReward(reason: 'same_user' | 'cannot_pay_entry', winner: CharacterRow
  * Por que esta luta NÃO deve pontuar (ouro e XP são pagos de qualquer jeito).
  * Devolve null quando pontua normalmente.
  *
- * Três motivos, todos consequência de a pool pagar DOL de verdade:
- *  • `offseason` — entressafra: o mundo roda, o placar não.
- *  • `not_enrolled` — quem não pagou a inscrição não disputa a pool.
+ * O ranking é GLOBAL e permanente: não há entressafra que pare o placar nem
+ * inscrição que decida quem pontua — quem luta, pontua. Sobra um único motivo:
  *  • `pair_cap` — duas contas trocando vitórias em série. O bloqueio de mesma
  *    conta (`same_user`) não cobre conluio entre contas distintas; aqui, a
  *    partir da N-ésima luta do dia contra o MESMO oponente, os pontos zeram.
+ *    Sem prêmio o incentivo caiu, mas placar poluído continua sendo placar ruim.
  */
 async function resolveRankingSkip(opts: {
-  season: { id: string; status: string }
   winnerId: string
   loserId: string
   winnerUserId: string
   loserUserId: string
   since: Date
 }): Promise<string | null> {
-  if (!isScoringSeason(opts.season)) return 'offseason'
-
-  const [winnerIn, loserIn] = await Promise.all([
-    isEnrolled(opts.season.id, opts.winnerId),
-    isEnrolled(opts.season.id, opts.loserId),
-  ])
-  if (!winnerIn || !loserIn) return 'not_enrolled'
-
   const pairMatchesToday = await prisma.pvpMatch.count({
     where: {
       createdAt: { gte: opts.since },
@@ -299,8 +289,6 @@ export async function POST(request: NextRequest) {
       return amount
     }
 
-    const season = await ensureActivePvpSeason()
-
     const startOfDay = new Date()
     startOfDay.setUTCHours(0, 0, 0, 0)
     const winsToday = await prisma.pvpMatch.count({
@@ -314,7 +302,6 @@ export async function POST(request: NextRequest) {
       await prisma.pvpMatch.create({
         data: {
           matchKey,
-          seasonId: season.id,
           winnerId: battleResult.winnerId,
           loserId: battleResult.loserId,
           winnerUserId: winner.userId,
@@ -458,15 +445,14 @@ export async function POST(request: NextRequest) {
     if (winnerVirtual || loserVirtual) {
       // 🤖 Luta contra o oponente da fila: paga ouro e XP, mas NÃO pontua. Um oponente
       // que aparece garantido a cada 10s valendo 25 pontos por vitória viraria uma
-      // escada infinita num placar que paga DOL de verdade.
+      // escada infinita no placar.
       ranking = { skipped: 'bot_opponent' }
     } else if (!winnerPays || !loserPays) {
       // Um dos dois entrou sem a taxa. A luta rolou e o lado pagante recebeu ouro/XP,
-      // mas pontuar seria abrir uma escada de graça num placar que paga DOL.
+      // mas pontuar seria abrir uma escada de graça no placar.
       ranking = { skipped: 'unpaid_entry' }
     } else {
       const rankSkip = await resolveRankingSkip({
-        season,
         winnerId: battleResult.winnerId,
         loserId: battleResult.loserId,
         winnerUserId: winner.userId!,
@@ -478,9 +464,8 @@ export async function POST(request: NextRequest) {
         ranking = { skipped: rankSkip }
       } else {
         try {
-          ranking = await applyPvpMatchRating({
+          ranking = await applyGlobalMatchRating({
             matchKey,
-            seasonId: season.id,
             winnerId: battleResult.winnerId,
             loserId: battleResult.loserId,
             winPoints: PVP_RANK_WIN_POINTS,
@@ -510,7 +495,7 @@ export async function POST(request: NextRequest) {
         leveledUp: winnerXpResult.leveledUp,
         newLevel: winnerXpResult.newLevelInfo?.level ?? winnerLevel,
         staminaCharged: winnerCharged,
-        // `rankPoints` = acumulado da TEMPORADA (o que applyPvpMatchRating devolve).
+        // `rankPoints` = acumulado GLOBAL (o que applyGlobalMatchRating devolve).
         // `rankPointsGained` = o que ESTA luta somou — a UI mostrava só o acumulado,
         // rotulado "N pts", e o jogador lia como se fosse o ganho da partida.
         rankPoints: ranking.winnerPoints,

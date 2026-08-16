@@ -32,15 +32,15 @@ function DisclaimerEn() {
           entry fee for a prize. We keep it as revenue.
         </p>
         <p>
-          Ranked seasons are played in <strong>DOL</strong>, an in-game token. No dollar you pay ever
-          enters the prize pool, and no prize is ever paid in dollars.
+          There is <strong>no prize pool</strong>: the arena ranking pays no prize at all, in any
+          currency. Nothing you pay is ever pooled and redistributed to players.
         </p>
       </LegalSection>
 
       <LegalSection heading="DOL is a utility token">
         <p>
-          DOL is a utility token used inside the game (character market purchases, season entries,
-          internal fees). It does <strong>not represent</strong> equity, shares, quotas, a promise of
+          DOL is a utility token used inside the game (character market purchases, internal fees). It
+          does <strong>not represent</strong> equity, shares, quotas, a promise of
           profit, dividends or any right over BDI or its developers. It is{' '}
           <strong>not pegged</strong> to the dollar or to any currency, it is not redeemable, and we
           do not buy it back. We do not guarantee that DOL will have liquidity, an external market or
@@ -48,15 +48,12 @@ function DisclaimerEn() {
         </p>
       </LegalSection>
 
-      <LegalSection heading="Ranked seasons are a skill competition">
+      <LegalSection heading="The arena ranking pays no prize">
         <p>
-          Entering a ranked season costs 100 DOL per hero — granted by us when you create the hero,
-          and paid by the player from season two onward. That entry is{' '}
-          <strong>non-refundable</strong> and goes entirely into the season prize pool. At season end
-          the pool is split among the Top 20 by <strong>points earned playing</strong> (arena wins),
-          never by chance, draw or wager on an outcome. Most entrants receive nothing: only the Top 20
-          are paid, and eligibility requires a minimum number of ranked matches. Play to compete, not
-          as an investment.
+          The arena has a single <strong>global and permanent</strong> leaderboard: no seasons, no
+          resets, no entry fee and <strong>no prize</strong>. Ranked matches pay in-game gold and
+          experience; ranking points are bragging rights and nothing else. There is no pot, no payout
+          and no Top 20 distribution. Play to compete, not as an investment.
         </p>
       </LegalSection>
 
@@ -126,15 +123,15 @@ function DisclaimerPt() {
           para concorrer a prêmio. Fica conosco como receita.
         </p>
         <p>
-          A temporada ranqueada é disputada em <strong>DOL</strong>, um token interno do jogo. Nenhum
-          dólar que você paga entra na pool de premiação, e nenhum prêmio é pago em dólar.
+          <strong>Não existe pool de premiação</strong>: o ranking da arena não paga prêmio nenhum, em
+          moeda nenhuma. Nada do que você paga é juntado e redistribuído entre jogadores.
         </p>
       </LegalSection>
 
       <LegalSection heading="O token DOL é utilitário">
         <p>
-          O DOL é um token utilitário usado dentro do jogo (compra de personagens no mercado,
-          inscrição de temporada, taxas internas). Ele <strong>não representa</strong> participação,
+          O DOL é um token utilitário usado dentro do jogo (compra de personagens no mercado, taxas
+          internas). Ele <strong>não representa</strong> participação,
           ação, cota, promessa de lucro, dividendo ou qualquer direito sobre a BDI ou seus
           desenvolvedores. Ele <strong>não é pareado</strong> ao dólar nem a nenhuma moeda, não é
           resgatável, e não fazemos recompra. Não garantimos que o DOL terá liquidez, mercado externo
@@ -142,16 +139,12 @@ function DisclaimerPt() {
         </p>
       </LegalSection>
 
-      <LegalSection heading="Temporada ranqueada é competição por habilidade">
+      <LegalSection heading="O ranking da arena não paga prêmio">
         <p>
-          Inscrever um herói na temporada ranqueada custa 100 DOL — concedidos por nós na criação do
-          herói, e pagos pelo jogador a partir da segunda temporada. Essa inscrição é{' '}
-          <strong>não reembolsável</strong> e vai integralmente para a pool de premiação da temporada.
-          No fim da temporada a pool é dividida entre o Top 20 por{' '}
-          <strong>pontos obtidos jogando</strong> (vitórias na arena), nunca por sorteio, azar ou
-          aposta em resultado. A maioria dos inscritos não recebe nada: só o Top 20 é pago, e a
-          elegibilidade exige um número mínimo de lutas ranqueadas. Jogue para competir, não como
-          investimento.
+          A arena tem um único placar <strong>global e permanente</strong>: sem temporada, sem reset,
+          sem inscrição e <strong>sem prêmio</strong>. As lutas ranqueadas pagam ouro e experiência do
+          jogo; os pontos de ranking são só honra. Não há pot, não há pagamento e não há distribuição
+          para Top 20. Jogue para competir, não como investimento.
         </p>
       </LegalSection>
 

@@ -162,7 +162,7 @@ export default function Slide9Pvp({ active, onNext }: JourneySlideProps) {
               onClick={onNext}
               className="px-3.5 py-2 rounded-lg bg-primary hover:bg-primary-dark text-white text-xs font-bold shadow-[0_0_18px_rgba(233,69,96,0.5)] animate-pulse"
             >
-              {t('See the ranking and the prize →')}
+              {t('See the global ranking →')}
             </button>
           </motion.div>
         )}

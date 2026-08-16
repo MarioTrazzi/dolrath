@@ -267,14 +267,14 @@ export const JOURNEY_PT: Record<string, string> = {
   '+{n} ranking pts': '+{n} pts de ranking',
   'Not even the transformation survives a NAT 20 — the dice decides.':
     'Nem a transformação salva de um NAT 20 — o dado decide.',
-  'See the ranking and the prize →': 'Ver o ranking e o prêmio →',
+  'See the global ranking →': 'Ver o ranking global →',
 
   // Slide 10
-  '🏆 Season ranking': '🏆 Ranking da temporada',
-  'illustrative pot:': 'pot ilustrativo:',
+  '🏆 Global ranking': '🏆 Ranking global',
+  'permanent · no reset': 'permanente · sem reset',
   'YOU': 'VOCÊ',
-  'Real pot split: 30% · 18% · 12% · 9% · 7% · 6% · 5% · 5% · 4% · 4% — every season, the top 10 splits the prize in DOL.':
-    'Split real do pot: 30% · 18% · 12% · 9% · 7% · 6% · 5% · 5% · 4% · 4% — toda temporada, o top 10 divide o prêmio em DOL.',
+  'One permanent scoreboard: no seasons, no resets. Every arena win counts forever.':
+    'Um placar permanente: sem temporadas, sem reset. Cada vitória na arena conta para sempre.',
   'From the first click to the top of the ranking — {name} made it.':
     'Do primeiro clique ao topo do ranking — {name} chegou lá.',
   'The next hero on this list could be yours.': 'O próximo herói dessa lista pode ser o seu.',

@@ -218,6 +218,9 @@ model Character {
   dungeonRuns   DungeonRun[]
   dungeonProgress DungeonProgress[]
   gatheringSessions GatheringSession[]
+  // Placar vivo da arena. pvpRatings/pvpSeasonEntries são o modelo de TEMPORADA,
+  // hoje congelado: nada no jogo escreve neles (ver PvpGlobalRating).
+  globalRating      PvpGlobalRating?
   pvpRatings        PvpRating[]
   pvpSeasonEntries  PvpSeasonEntry[]
   questProgress     QuestProgress[]
@@ -679,6 +682,24 @@ model PrizeVault {
   updatedAt  DateTime @updatedAt
 }
 
+// 🏆 Placar GLOBAL e permanente da arena: sem ciclo, sem reset, sem prêmio.
+// Não tem seasonId de propósito — a pontuação não pertence a temporada nenhuma,
+// só acumula. É a ÚNICA tabela de rating que o jogo escreve hoje; PvpRating
+// (abaixo) é o modelo de temporada, congelado com os dados históricos.
+model PvpGlobalRating {
+  characterId String    @id
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  points      Int       @default(0)
+  wins        Int       @default(0)
+  losses      Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([points])
+}
+
+// ⚠️ CONGELADO: rating por temporada. Nada no jogo escreve aqui desde que o
+// ranking virou global — os dados ficam como histórico das temporadas passadas.
 model PvpRating {
   id          String    @id @default(cuid())
   characterId String
@@ -701,8 +722,12 @@ model PvpMatch {
   // recompensas cria esta linha ANTES de creditar — retry bate no @unique (P2002)
   // e não credita de novo. Null só em linhas legadas (criadas pelo ranking antigo).
   matchKey            String?   @unique
-  seasonId            String
-  season              PvpSeason @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  // Null nas lutas do ranking GLOBAL (todas, desde que a temporada saiu do
+  // caminho vivo). Continua sendo uma tabela só de propósito: o teto diário de
+  // ouro (dungeonRunServer) e o cap de pontos por par somam este ledger sem
+  // filtrar temporada — partir em duas tabelas quebraria os dois.
+  seasonId            String?
+  season              PvpSeason? @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   winnerId            String
   loserId             String
   // Donos das contas — alimentam a soma do teto diário de ouro por usuário

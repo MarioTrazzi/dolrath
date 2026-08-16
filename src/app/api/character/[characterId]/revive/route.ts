@@ -2,6 +2,7 @@ import { requireApiActor } from '@/lib/botFleetAuth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { PotionType, PREDEFINED_POTIONS } from '@/types/item'
+import { serializeBigInt } from '@/lib/serializeBigInt'
 
 export async function POST(
   req: Request,
@@ -82,9 +83,12 @@ export async function POST(
       isAlive: revivedCharacter.isAlive
     })
 
+    // serializeBigInt: a linha crua de Character traz colunas BigInt
+    // (nftTokenId, marketListingId) e estouraria o JSON DEPOIS do update —
+    // o herói revivia no banco e o jogador via erro.
     return NextResponse.json({
       success: true,
-      character: revivedCharacter,
+      character: serializeBigInt(revivedCharacter),
       message: `${character.name} foi revivido com ${revivalHp} HP!`
     })
   } catch (error) {

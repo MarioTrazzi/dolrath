@@ -176,7 +176,7 @@ export async function PUT(
       deathTimestamp: updatedCharacter.deathTimestamp
     })
 
-    return NextResponse.json({ success: true, character: updatedCharacter })
+    return NextResponse.json({ success: true, character: serializeBigInt(updatedCharacter) })
   } catch (error) {
     console.error('Error updating character:', error)
     return NextResponse.json(

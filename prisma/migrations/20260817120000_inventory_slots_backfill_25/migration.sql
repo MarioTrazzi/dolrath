@@ -1,0 +1,11 @@
+-- 🎒 25 slots para TODO MUNDO, não só para quem nasceu depois.
+--
+-- As três migrações anteriores (10 → 20 → 25) só mexeram no DEFAULT da coluna, de
+-- propósito: quem já existia continuava no valor antigo e expandia pagando gold.
+-- O playtest mostrou o custo dessa escolha — um herói nv6 criado antes da mudança
+-- roda com 15 slots e enche a mochila no meio da primeira run, enquanto um herói
+-- novo do mesmo nível tem 25. A diferença não é progressão, é data de nascimento.
+--
+-- Sobe todo mundo que está ABAIXO de 25. Quem já expandiu além disso (25+ pagos em
+-- /expand-inventory) não é tocado — o WHERE garante que a migração nunca REDUZ.
+UPDATE "Character" SET "inventorySlots" = 25 WHERE "inventorySlots" < 25;

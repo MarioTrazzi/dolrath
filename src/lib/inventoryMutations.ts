@@ -61,7 +61,10 @@ export async function freeInventorySlots(
     tx.characterInventory.count({ where: { characterId } }),
     tx.character.findUnique({ where: { id: characterId }, select: { inventorySlots: true } }),
   ])
-  const limit = character?.inventorySlots ?? 10
+  // O fallback tem que acompanhar o DEFAULT do schema (25). Enquanto ficou em 10
+  // ele contradizia o banco: qualquer leitura que falhasse tratava o herói como
+  // tendo 10 slots e descartava espólio em silêncio.
+  const limit = character?.inventorySlots ?? 25
   return { used, limit, free: Math.max(0, limit - used) }
 }
 

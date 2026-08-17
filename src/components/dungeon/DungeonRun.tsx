@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import BattleScene, { BattleEvent, DiceResult, EquipmentMap, FighterView } from '@/components/battle/BattleScene'
 import CombatShell, { type CombatAttackOption } from '@/components/battle/CombatShell'
+import { splitCardEmoji, type CombatCard } from '@/components/battle/CardHand'
 import DungeonBackdrop from '@/components/dungeon/DungeonBackdrop'
 import { buildTrailPoints, NarrationDialog, DiceOverlay } from '@/components/dungeon/DungeonMap'
 import WalkScene, { WALK_SCROLL_MS, type WalkMode, type WalkTrailMark } from '@/components/dungeon/WalkScene'
@@ -125,6 +126,13 @@ interface DungeonRunProps {
   backgroundImageUrl?: string
   /** Overlay opacity for custom background image (0-1, default 0.3) */
   backgroundImageOverlay?: number
+  /**
+   * 🃏 Modo carta: as ações viram uma mão de cartas no lugar do flyout "⚔️ Ataque".
+   * Puramente visual — as mesmas ações, dados, custos e gates de sempre.
+   * Ausente ⇒ decide pela URL (`?cards=1` liga), e o padrão é o menu de hoje.
+   * A /dev/dungeon-mock passa `cards` explícito para testar sem depender da query.
+   */
+  cards?: boolean
 }
 
 type RunPhase = 'explore' | 'combat' | 'summary' | 'defeat'
@@ -639,10 +647,19 @@ export default function DungeonRun({
   initialAuto: _initialAuto,
   backgroundImageUrl,
   backgroundImageOverlay = 0.3,
+  cards,
 }: DungeonRunProps) {
   // i18n: `t` era usado em tickPlayerTurn sem existir no escopo — quando a
   // transformação acabava em combate, o ReferenceError derrubava a run inteira.
   const t = useT()
+  // 🃏 Modo carta. Sem a prop, quem manda é `?cards=1` na URL — lido só no efeito para
+  // não divergir do HTML do servidor (a primeira pintura é sempre o menu de hoje).
+  const [urlCards, setUrlCards] = useState(false)
+  useEffect(() => {
+    if (cards !== undefined) return
+    setUrlCards(new URLSearchParams(window.location.search).get('cards') === '1')
+  }, [cards])
+  const cardsMode = cards ?? urlCards
   // 🌳 Árvore de habilidades: computado ANTES dos pools de recurso (maxHpPct/maxMpPct
   // entram no teto inicial). `skillTree` null (legado) libera tudo nos valores BASE
   // (ver LEGACY_UNLOCKS em lib/skillTree.ts).
@@ -4473,6 +4490,56 @@ export default function DungeonRun({
               }
             }),
           ]
+          // 🃏 A MESMA lista, vestida de carta. Nada de novo é decidido aqui: o que é
+          // jogável, o custo e o que acontece ao jogar continuam vindo do bloco acima —
+          // a carta só acrescenta emoji, dado e o tom da moldura.
+          const hand: CombatCard[] | undefined = cardsMode
+            ? [
+                {
+                  key: 'basic',
+                  name: ATTACKS.basic.label,
+                  emoji: ATTACKS.basic.icon,
+                  tone: 'basic',
+                  die: PVE_DIE.basic,
+                  costLabel: 'grátis',
+                  effectLine: 'Ataque livre — não gasta MP.',
+                  locked: mp < ATTACKS.basic.mp,
+                  onPlay: () => choosePlayerAttack('basic'),
+                },
+                ...(unlocks.classAttack
+                  ? [{
+                      key: 'weapon',
+                      name: classAtkName,
+                      emoji: ATTACKS.weapon.icon,
+                      tone: 'class' as const,
+                      die: effWeaponDie,
+                      costLabel: `${effWeaponMp}🔵`,
+                      effectLine: 'O ataque de assinatura da sua classe.',
+                      locked: mp < effWeaponMp,
+                      lockReason: mp < effWeaponMp ? 'MP' : undefined,
+                      onPlay: () => choosePlayerAttack('weapon'),
+                    }]
+                  : []),
+                ...formSpecials.map(def => {
+                  const cd = combatFx.cd[def.id] || 0
+                  const mpCost = def.cost.mp || 0
+                  const noMp = mp < mpCost
+                  const { emoji, label } = splitCardEmoji(specialName(def), def.kind === 'util' ? '✨' : '💥')
+                  return {
+                    key: def.id,
+                    name: label,
+                    emoji,
+                    tone: (def.kind === 'util' ? 'buff' : 'special') as CombatCard['tone'],
+                    die: def.kind === 'util' ? undefined : def.die ?? 20,
+                    costLabel: `${mpCost}🔵`,
+                    effectLine: def.desc,
+                    locked: cd > 0 || noMp,
+                    lockReason: cd > 0 ? `recarga ${cd}` : noMp ? 'MP' : undefined,
+                    onPlay: () => useAbility(def),
+                  }
+                }),
+              ]
+            : undefined
           const singleForm = transformForms.length === 1 ? TRANSFORMATION_CONFIG[transformForms[0]] : null
           const transformDisabled = transformedThisFight || (!!singleForm && mp < singleForm.cost.mp)
 
@@ -4481,6 +4548,7 @@ export default function DungeonRun({
               logLines={log}
               showActions={!combatEnded && stage === 'playerSelect'}
               attackOptions={attackOptions}
+              hand={hand}
               onOpenItems={() => { loadConsumables(); setShowItems(true) }}
               transform={
                 transformForms.length > 0

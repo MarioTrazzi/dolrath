@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, type ReactNode } from 'react'
+import CardHand, { type CombatCard } from './CardHand'
 
 /** Opção no flyout ⚔️ Ataque (host monta label/sub/locked — PvE: MP; PvP: MP+STA). */
 export type CombatAttackOption = {
@@ -49,6 +50,13 @@ type CombatShellProps = {
   showActions: boolean
   statusContent?: ReactNode
   attackOptions: CombatAttackOption[]
+  /**
+   * 🃏 Mão de cartas. Presente ⇒ a fileira de cartas SUBSTITUI o botão "⚔️ Ataque" e seu
+   * flyout (`attackOptions` fica sem uso). Ausente ⇒ nada muda: o shell renderiza
+   * exatamente o menu de sempre. É esta ausência que mantém produção intocada enquanto
+   * o modo carta não é o padrão.
+   */
+  hand?: CombatCard[]
   transform?: CombatTransformConfig | null
   showItemButton?: boolean
   onOpenItems?: () => void
@@ -69,6 +77,7 @@ export default function CombatShell({
   showActions,
   statusContent,
   attackOptions,
+  hand,
   transform,
   showItemButton = true,
   onOpenItems,
@@ -80,6 +89,87 @@ export default function CombatShell({
 
   const visibleLog = logLines.slice(-4)
   const multiForms = (transform?.forms?.length ?? 0) > 1
+
+  // Transformar / Item / extras são os MESMOS nos dois modos (menu e carta) — só o
+  // seletor de golpe muda. Extraídos para não duplicar a árvore inteira no ramo novo.
+  const transformNode = transform?.available ? (
+    <div className="relative">
+      {transform.activeLabel ? (
+        <div className="px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white whitespace-nowrap bg-gradient-to-r from-fuchsia-700 to-purple-600 shadow-lg shadow-purple-900/50">
+          {transform.activeLabel}
+          {transform.activeTurnsHint && (
+            <span className="ml-1.5 text-[10px] opacity-75 font-semibold">
+              {transform.activeTurnsHint}
+            </span>
+          )}
+        </div>
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              if (transform.used || transform.disabled) return
+              setShowAttackMenu(false)
+              if (multiForms) setShowFormPicker(v => !v)
+              else transform.onClick()
+            }}
+            disabled={!!transform.used || !!transform.disabled}
+            title={transform.title}
+            className={`px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white whitespace-nowrap transition-all shadow-lg ${
+              transform.used || transform.disabled
+                ? 'bg-gray-700/60 opacity-50 cursor-not-allowed'
+                : 'bg-gradient-to-r from-fuchsia-700 to-purple-600 hover:scale-105'
+            }`}
+          >
+            {transform.buttonLabel ?? (transform.used ? 'Transf. usada' : 'Transformar')}
+            {!transform.used && transform.costHint && (
+              <span className="ml-1.5 text-[10px] opacity-75 font-semibold">
+                {transform.costHint}
+              </span>
+            )}
+          </button>
+
+          {showFormPicker && multiForms && transform.forms && (
+            <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-50 w-60 bg-black/90 backdrop-blur-md border border-white/15 rounded-xl p-2 shadow-2xl space-y-1">
+              {transform.forms.map(f => (
+                <button
+                  type="button"
+                  key={f.key}
+                  onClick={() => {
+                    setShowFormPicker(false)
+                    f.onPick()
+                  }}
+                  disabled={f.locked}
+                  className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
+                    f.locked ? 'opacity-40 cursor-not-allowed bg-white/5' : 'bg-white/10 hover:bg-white/20'
+                  }`}
+                >
+                  <span className="font-bold text-white text-xs">{f.label}</span>
+                  <span className="block text-[10px] text-white/60">{f.sub}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  ) : null
+
+  const itemNode =
+    showItemButton && onOpenItems ? (
+      <button
+        type="button"
+        onClick={() => {
+          setShowAttackMenu(false)
+          setShowFormPicker(false)
+          onOpenItems()
+        }}
+        title="Poções — usar gasta o turno"
+        className="px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white whitespace-nowrap transition-all shadow-lg bg-gradient-to-r from-emerald-700 to-green-600 hover:scale-105"
+      >
+        Item
+      </button>
+    ) : null
 
   return (
     <div className={`flex-1 flex flex-col min-h-0 relative z-10 ${className}`}>
@@ -108,7 +198,21 @@ export default function CombatShell({
         <div className="h-9 flex items-center justify-end gap-1.5">{toolbar}</div>
 
         <div className="min-h-[56px] flex items-center justify-center">
-          {showActions ? (
+          {showActions && hand ? (
+            // 🃏 MODO CARTA: a mão ocupa a linha de cima e os comandos que não são golpe
+            // (Transformar · Item · Recuar) descem para uma faixa compacta embaixo —
+            // é a divisão "Lutar / Carta" da referência, empilhada para caber no celular.
+            <div className="w-full flex flex-col items-center gap-1.5">
+              <CardHand cards={hand} />
+              {(transformNode || itemNode || extraActions) && (
+                <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
+                  {transformNode}
+                  {itemNode}
+                  {extraActions}
+                </div>
+              )}
+            </div>
+          ) : showActions ? (
             <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
               <div className="relative">
                 <button
@@ -145,84 +249,8 @@ export default function CombatShell({
                 )}
               </div>
 
-              {transform?.available && (
-                <div className="relative">
-                  {transform.activeLabel ? (
-                    <div className="px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white whitespace-nowrap bg-gradient-to-r from-fuchsia-700 to-purple-600 shadow-lg shadow-purple-900/50">
-                      {transform.activeLabel}
-                      {transform.activeTurnsHint && (
-                        <span className="ml-1.5 text-[10px] opacity-75 font-semibold">
-                          {transform.activeTurnsHint}
-                        </span>
-                      )}
-                    </div>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (transform.used || transform.disabled) return
-                          setShowAttackMenu(false)
-                          if (multiForms) setShowFormPicker(v => !v)
-                          else transform.onClick()
-                        }}
-                        disabled={!!transform.used || !!transform.disabled}
-                        title={transform.title}
-                        className={`px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white whitespace-nowrap transition-all shadow-lg ${
-                          transform.used || transform.disabled
-                            ? 'bg-gray-700/60 opacity-50 cursor-not-allowed'
-                            : 'bg-gradient-to-r from-fuchsia-700 to-purple-600 hover:scale-105'
-                        }`}
-                      >
-                        {transform.buttonLabel ?? (transform.used ? 'Transf. usada' : 'Transformar')}
-                        {!transform.used && transform.costHint && (
-                          <span className="ml-1.5 text-[10px] opacity-75 font-semibold">
-                            {transform.costHint}
-                          </span>
-                        )}
-                      </button>
-
-                      {showFormPicker && multiForms && transform.forms && (
-                        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-50 w-60 bg-black/90 backdrop-blur-md border border-white/15 rounded-xl p-2 shadow-2xl space-y-1">
-                          {transform.forms.map(f => (
-                            <button
-                              type="button"
-                              key={f.key}
-                              onClick={() => {
-                                setShowFormPicker(false)
-                                f.onPick()
-                              }}
-                              disabled={f.locked}
-                              className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
-                                f.locked ? 'opacity-40 cursor-not-allowed bg-white/5' : 'bg-white/10 hover:bg-white/20'
-                              }`}
-                            >
-                              <span className="font-bold text-white text-xs">{f.label}</span>
-                              <span className="block text-[10px] text-white/60">{f.sub}</span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
-
-              {showItemButton && onOpenItems && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowAttackMenu(false)
-                    setShowFormPicker(false)
-                    onOpenItems()
-                  }}
-                  title="Poções — usar gasta o turno"
-                  className="px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white whitespace-nowrap transition-all shadow-lg bg-gradient-to-r from-emerald-700 to-green-600 hover:scale-105"
-                >
-                  Item
-                </button>
-              )}
-
+              {transformNode}
+              {itemNode}
               {extraActions}
             </div>
           ) : (

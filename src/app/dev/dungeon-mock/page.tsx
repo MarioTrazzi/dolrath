@@ -14,6 +14,7 @@ const DUNGEON = DUNGEONS.floresta
 //   /dev/dungeon-mock?race=metamorfo&class=monk
 //   /dev/dungeon-mock?race=draconiano&class=warrior
 // Uma combinação sem boneco (ex.: elfo/mage) cai no retrato/procedural.
+// 🃏 As cartas vêm LIGADAS aqui; `?cards=0` volta ao menu "⚔️ Ataque" pra comparar.
 const CHAR: DungeonCharacter = {
   id: 'dev-char',
   name: 'Lyra',
@@ -207,9 +208,13 @@ export default function DungeonMockPage() {
   const [ready, setReady] = useState(false)
   const [bgTool, setBgTool] = useState(false)
   const [hero, setHero] = useState<DungeonCharacter>(CHAR)
+  // 🃏 Modo carta LIGADO por padrão nesta bancada (é aqui que ele se testa); `?cards=0`
+  // volta ao menu de sempre para comparar lado a lado. Em produção o padrão é o inverso.
+  const [cards, setCards] = useState(true)
   useEffect(() => {
     installFetchStub()
     setBgTool(new URLSearchParams(window.location.search).get('bg') === '1')
+    setCards(new URLSearchParams(window.location.search).get('cards') !== '0')
     // Raça/classe pela query — o boneco da cena vem de heroSprites.ts.
     const q = new URLSearchParams(window.location.search)
     const race = q.get('race')
@@ -225,6 +230,7 @@ export default function DungeonMockPage() {
       <DungeonRun
         dungeon={DUNGEON}
         character={hero}
+        cards={cards}
         onExit={() => window.location.reload()}
       />
       {bgTool && <BackgroundToggle />}

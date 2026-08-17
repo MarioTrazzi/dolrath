@@ -122,13 +122,40 @@ export default function CardHand({
 
   if (cards.length === 0) return null
 
+  // O detalhe vive FORA da fileira: `overflow-x-auto` também recorta na vertical, então
+  // uma pré-visualização ancorada na carta seria cortada pelo topo do contêiner. Centrado
+  // acima da mão ele também não escapa da borda da tela num celular estreito.
+  const detail = detailKey ? cards.find(c => c.key === detailKey) : null
+
   return (
     <div className={`relative w-full ${className}`}>
+      {detail && (
+        <div
+          className="absolute bottom-full left-1/2 z-50 mb-1.5 w-56 max-w-[92vw] -translate-x-1/2 rounded-[4px] border p-2.5 shadow-2xl shadow-black/70"
+          style={{ borderColor: TONE[detail.tone].border, background: '#1e1e21' }}
+        >
+          <div className="text-[11px] font-semibold" style={{ color: TONE[detail.tone].ink }}>
+            {detail.emoji} {detail.name}
+          </div>
+          <div className="mt-1 flex flex-wrap gap-x-2 text-[10px] text-[#8a8a90]">
+            {detail.die != null && <span>🎲 d{detail.die}</span>}
+            <span>{detail.costLabel || 'grátis'}</span>
+          </div>
+          {detail.effectLine && (
+            <div className="mt-1.5 text-[10px] leading-snug text-[#c9c9ce]">{detail.effectLine}</div>
+          )}
+          {detail.locked && detail.lockReason && (
+            <div className="mt-1.5 text-[10px] font-semibold text-[#e09a3a]">
+              🔒 {detail.lockReason}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* pt-2 dá o espaço pro card "levantar" no hover sem ser cortado pelo overflow */}
       <div className="flex items-end justify-center gap-1.5 overflow-x-auto overscroll-x-contain px-1 pt-2 pb-0.5">
         {cards.map(card => {
           const tone = TONE[card.tone]
-          const open = detailKey === card.key
 
           const startPress = () => {
             longPressed.current = false
@@ -141,34 +168,11 @@ export default function CardHand({
 
           return (
             <div key={card.key} className="relative shrink-0">
-              {open && (
-                <div
-                  className="absolute bottom-full left-1/2 z-50 mb-2 w-52 -translate-x-1/2 rounded-[4px] border p-2.5 shadow-2xl shadow-black/70"
-                  style={{ borderColor: tone.border, background: '#1e1e21' }}
-                >
-                  <div className="text-[11px] font-semibold" style={{ color: tone.ink }}>
-                    {card.emoji} {card.name}
-                  </div>
-                  <div className="mt-1 flex flex-wrap gap-x-2 text-[10px] text-[#8a8a90]">
-                    {card.die != null && <span>🎲 d{card.die}</span>}
-                    <span>{card.costLabel || 'grátis'}</span>
-                  </div>
-                  {card.effectLine && (
-                    <div className="mt-1.5 text-[10px] leading-snug text-[#c9c9ce]">
-                      {card.effectLine}
-                    </div>
-                  )}
-                  {card.locked && card.lockReason && (
-                    <div className="mt-1.5 text-[10px] font-semibold text-[#e09a3a]">
-                      🔒 {card.lockReason}
-                    </div>
-                  )}
-                </div>
-              )}
-
               <button
                 type="button"
-                disabled={card.locked}
+                // `disabled` mataria hover/toque — e é na carta TRAVADA que o jogador mais
+                // precisa ler o porquê. Fica clicável e o próprio onClick barra a jogada.
+                aria-disabled={card.locked}
                 title={card.effectLine || card.name}
                 onPointerDown={startPress}
                 onPointerUp={clearPress}
@@ -184,6 +188,11 @@ export default function CardHand({
                   // O clique sintético que segue o toque longo só fecha o detalhe.
                   if (longPressed.current) {
                     longPressed.current = false
+                    return
+                  }
+                  // Tocar numa carta travada explica o motivo em vez de não fazer nada.
+                  if (card.locked) {
+                    setDetailKey(card.key)
                     return
                   }
                   setDetailKey(null)

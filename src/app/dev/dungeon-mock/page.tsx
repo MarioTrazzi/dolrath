@@ -51,6 +51,15 @@ const CHAR: DungeonCharacter = {
   ],
 }
 
+// Snapshot do set para o espólio de manutenção (o que a rota /step monta com
+// gearSnapshotOf). Mesmas peças e durabilidades do CHAR acima.
+const MOCK_GEAR = CHAR.equipment.map(eq => ({
+  name: eq.item.name,
+  type: eq.item.type,
+  durability: eq.durability,
+  maxDurability: eq.maxDurability,
+}))
+
 function installFetchStub() {
   const real = window.fetch.bind(window)
   // ⏱️ Latência FALSA do /step, em ms — o stub responde instantâneo, o que
@@ -117,9 +126,11 @@ function installFetchStub() {
       // card de vitória sair sem rede.
       const killDrops: Record<string, any[]> = {}
       for (const m of monsters) {
-        killDrops[m.id] = rollKillLoot('minor', false, DUNGEON.difficultyStars, 1, roll, DUNGEON)
+        killDrops[m.id] = rollKillLoot('minor', false, DUNGEON.difficultyStars, 1, roll, DUNGEON, MOCK_GEAR)
       }
-      const nodeLoot = rollNodeLoot(DUNGEON, roll, 'minor', CHAR.level, CHAR.race, CHAR.class, 1)
+      // 🔧 O set do mock entra quase quebrado, então o espólio de MANUTENÇÃO cai
+      // na frequência máxima — é o jeito de ver o "🔧 (repara X)" no log sem banco.
+      const nodeLoot = rollNodeLoot(DUNGEON, roll, 'minor', CHAR.level, CHAR.race, CHAR.class, 1, MOCK_GEAR)
       pending = { monsters, killDrops, nodeLoot, roll }
       // `resolved` fecha o protocolo real: é a confirmação que autoriza o cliente
       // a descartar o desfecho guardado. Sem ele a bancada reenviava o mesmo

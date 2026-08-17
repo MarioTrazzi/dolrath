@@ -7,10 +7,15 @@
 
 import {
   getDungeonConsumables, getConsumableByName, rollEquipmentDrop, getIngredientByName,
-  getForgeMaterialByName, RARITY_DROP_WEIGHT, type Rarity, type ConsumableItem,
+  getForgeMaterialByName, getProcessedByName, getCatalogItemByName,
+  RARITY_DROP_WEIGHT, type Rarity, type ConsumableItem,
 } from './itemCatalog'
 import { STONE_NAMES, getStatMultiplier } from './enhancementSystem'
 import { computeLevers, powerScale, deriveGearTier, type CombatClass } from './combatModel'
+import {
+  maintenanceWearFactor, rollMaintenanceMaterial, rollSparePart,
+  SPARE_PART_DURABILITY, type GearWearSnapshot,
+} from './maintenanceLoot'
 
 export type DungeonId = 'floresta' | 'caverna' | 'pantano' | 'ruinas'
 
@@ -794,6 +799,12 @@ export interface LootDrop {
   emoji: string
   /** Equipamento já aprimorado ao cair (ex.: floresta dropa +4..+7). */
   enhancement?: number
+  /** Durabilidade com que a peça entra no inventário (peça de reposição = 25). */
+  durability?: number
+  /** Por que este drop existe — o cliente marca 🔧 os de manutenção. */
+  reason?: 'maintenance' | 'spare'
+  /** Peça equipada que motivou o drop de manutenção (para o log). */
+  forItem?: string
 }
 export interface NodeLoot {
   gold: number
@@ -849,6 +860,37 @@ function materialDrop(dungeon: DungeonDef, pool: 'common' | 'uncommon'): LootDro
   return { name, kind: ing ? 'ingredient' : 'material', rarity: String(meta.rarity), emoji: meta.emoji }
 }
 
+// 🔧 Drop de manutenção: insumo CRU da receita da peça equipada. O nome já veio
+// validado contra os catálogos por rollMaintenanceMaterial.
+function maintenanceDrop(name: string, forItem: string): LootDrop {
+  const meta = getForgeMaterialByName(name) ?? getProcessedByName(name)
+  return {
+    name,
+    kind: 'material',
+    rarity: String(meta?.rarity ?? 'COMMON'),
+    emoji: meta?.emoji ?? '🔧',
+    reason: 'maintenance',
+    forItem,
+  }
+}
+
+// 🔧 Peça de reposição: cópia LISA da peça equipada, com durabilidade parcial.
+// enhancement 0 é o que a faz servir de cópia no ferreiro (repair-item exige
+// enhancementLevel 0); a durabilidade parcial é o que a impede de virar upgrade.
+function sparePartDrop(name: string): LootDrop {
+  const item = getCatalogItemByName(name)
+  return {
+    name,
+    kind: 'item',
+    rarity: String(item?.rarity ?? 'COMMON'),
+    emoji: '🔧',
+    enhancement: 0,
+    durability: SPARE_PART_DURABILITY,
+    reason: 'spare',
+    forItem: name,
+  }
+}
+
 function bossIngredientDrop(rarity: 'rare' | 'epic'): LootDrop | null {
   const name = pickFrom(BOSS_INGREDIENTS[rarity])
   const ing = name ? getIngredientByName(name) : undefined
@@ -901,6 +943,18 @@ const BASE_LOOT = {
   killMatChance: 0.18,   // material temático POR ABATE
   killMatUncFrac: 0.30,  // fração incomum do killMat
   killStone: 0.03,       // pedra POR ABATE
+  // 🔧 MANUTENÇÃO (2026-08-17): slots ADITIVOS, dirigidos ao set equipado — não
+  // mexem em nada acima, então as âncoras do dungeon-loot-sim seguem válidas.
+  // Todos são multiplicados por maintenanceWearFactor(gear) (0.4 com o set novo,
+  // 1.0 com ele em frangalhos): quem não gasta, quase não recebe.
+  // Calibrado em scripts/repair-economy-sim.ts: alvo de COBERTURA 60-80% (a run
+  // banca a maior parte do próprio conserto, o resto sai de ouro/coleta/craft).
+  // Os valores de estreia (0.55/0.22/0.10/0.35) davam 100% — conserto automático,
+  // desgaste sem decisão nenhuma.
+  pMaint: 0.38,          // insumo da receita de uma peça equipada, no NÓ
+  killMaint: 0.15,       // idem, POR ABATE
+  pSpareMain: 0.07,      // peça de reposição INTEIRA em sala principal
+  pSpareBoss: 0.25,      // peça de reposição INTEIRA no chefe
 }
 
 interface LootPackCfg {
@@ -915,6 +969,10 @@ interface LootPackCfg {
   killShard: number
   killMat: { chance: number; uncFrac: number }
   killStone: number
+  pMaint: number
+  killMaint: number
+  pSpareMain: number
+  pSpareBoss: number
 }
 
 const rollFactor = (roll: number) => Math.max(1, Math.min(20, Math.floor(roll) || 1)) / 10
@@ -935,6 +993,10 @@ const lootPackOf = (roll: number): LootPackCfg => {
     killShard: crit ? 1.0 : c(BASE_LOOT.killShard),
     killMat: { chance: c(BASE_LOOT.killMatChance), uncFrac: Math.min(1, BASE_LOOT.killMatUncFrac * f) },
     killStone: c(BASE_LOOT.killStone),
+    pMaint: c(BASE_LOOT.pMaint),
+    killMaint: c(BASE_LOOT.killMaint),
+    pSpareMain: c(BASE_LOOT.pSpareMain),
+    pSpareBoss: c(BASE_LOOT.pSpareBoss),
   }
 }
 
@@ -1110,6 +1172,7 @@ export function rollNodeLoot(
   race?: string | null,
   charClass?: string | null,
   dungeonTier: number = 1,
+  gear: GearWearSnapshot[] = [],
 ): NodeLoot {
   // roll é o d20 da exploração — fator linear sobre as chances naturais (BASE_LOOT).
   // RARE e EPIC de gear só aparecem em BOSS (DUNGEON_GEAR_RARITY).
@@ -1162,6 +1225,28 @@ export function rollNodeLoot(
   // Estilhaço de Memória (repara raro/épico/lendário): SOMENTE no chefe (1 por boss).
   if (isBoss) {
     drops.push({ name: 'Estilhaço de Memória', kind: 'material', rarity: 'RARE', emoji: '🧠' })
+  }
+
+  // 🔧 MANUTENÇÃO — insumo da receita de uma peça EQUIPADA (a cópia que o
+  // ferreiro funde no reparo). Dirigido ao set, não ao bioma: era exatamente
+  // isso que faltava, porque a Floresta não solta o material das armas de
+  // guerreiro/ladino/monge. Quantidade dobra na sorte alta, como o material
+  // temático. Escala com o desgaste do set (maintenanceWearFactor).
+  const maintFactor = maintenanceWearFactor(gear)
+  if (maintFactor > 0 && Math.random() < tierChance(pack.pMaint) * mult.all * maintFactor) {
+    const qty = roll >= 14 ? 2 : 1
+    for (let i = 0; i < qty; i++) {
+      const m = rollMaintenanceMaterial(gear)
+      if (m) drops.push(maintenanceDrop(m.name, m.forItem))
+    }
+  }
+  // 🔧 PEÇA DE REPOSIÇÃO inteira (+0, 25 de durabilidade): só sala principal e
+  // chefe, e deliberadamente MENOS frequente que o material — é o socorro de
+  // quem já está com a peça quase quebrada, não a fonte normal de gear.
+  const spareChance = isBoss ? pack.pSpareBoss : nodeKind === 'main' ? pack.pSpareMain : 0
+  if (maintFactor > 0 && spareChance > 0 && Math.random() < spareChance * maintFactor) {
+    const s = rollSparePart(gear)
+    if (s) drops.push(sparePartDrop(s.name))
   }
   // 🧪 Consumível de masmorra. No início o slot vale mais (mix.consumable) e puxa
   // para HP/MP (mix.sustain): é o que sustenta a run até o chefe.
@@ -1317,6 +1402,7 @@ export function rollKillLoot(
   dungeonTier = 1,
   lootRoll = 10,
   dungeon?: DungeonDef,
+  gear: GearWearSnapshot[] = [],
 ): LootDrop[] {
   const drops: LootDrop[] = []
   const dt = clampDungeonTier(dungeonTier)
@@ -1359,6 +1445,13 @@ export function rollKillLoot(
     const pool = Math.random() < pack.killMat.uncFrac ? 'uncommon' : 'common'
     const d = materialDrop(dungeon, pool)
     if (d) drops.push(d)
+  }
+  // 🔧 Manutenção por ABATE: é aqui que está o VOLUME (a run tem mais abates que
+  // nós), e é o abate que gasta a durabilidade — quem paga a conta é quem a gera.
+  const maintFactor = maintenanceWearFactor(gear)
+  if (maintFactor > 0 && Math.random() < tierChance(pack.killMaint) * kindMult * maintFactor) {
+    const m = rollMaintenanceMaterial(gear)
+    if (m) drops.push(maintenanceDrop(m.name, m.forItem))
   }
   // Pedra por abate: chance natural baixa × fator (o jackpot é do nó).
   if (Math.random() < tierChance(pack.killStone) * kindMult) {

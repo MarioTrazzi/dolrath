@@ -55,6 +55,7 @@
     "art:monsters:audit": "tsx scripts/audit-monster-sprites.ts",
     "sim:economy": "TS_NODE_TRANSPILE_ONLY=1 ts-node --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\",\"esModuleInterop\":true,\"jsx\":\"react-jsx\"}' -r tsconfig-paths/register scripts/economy-unified-sim.ts",
     "sim:crafting": "TS_NODE_TRANSPILE_ONLY=1 ts-node --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\",\"esModuleInterop\":true,\"jsx\":\"react-jsx\"}' -r tsconfig-paths/register scripts/crafting-profession-sim.ts",
+    "sim:repair": "TS_NODE_TRANSPILE_ONLY=1 ts-node --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\",\"esModuleInterop\":true,\"jsx\":\"react-jsx\"}' -r tsconfig-paths/register scripts/repair-economy-sim.ts",
     "sim:season": "node scripts/season-pool-sim.js",
     "sim:pvp-bands": "node scripts/pvp-band-balance-sim.js",
     "check:i18n": "TS_NODE_TRANSPILE_ONLY=1 ts-node --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\",\"esModuleInterop\":true,\"jsx\":\"react-jsx\"}' -r tsconfig-paths/register scripts/check-i18n-catalog.ts",

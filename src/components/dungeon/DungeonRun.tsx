@@ -1437,7 +1437,14 @@ export default function DungeonRun({
     // qual número rende qual classe de espólio.
     const dicePrefix = roll != null ? `🎲 ${roll} · ` : ''
     for (const d of loot.drops) {
-      const label = d.enhancement ? `${d.name} +${d.enhancement}` : d.name
+      // 🔧 Manutenção: o drop caiu porque uma peça EQUIPADA está gasta. Sem dizer
+      // isso, o jogador vê "mais um material" e não liga o espólio ao conserto.
+      const maintTag = d.reason === 'spare'
+        ? ' 🔧 (reposição)'
+        : d.reason === 'maintenance' && d.forItem
+        ? ` 🔧 (repara ${d.forItem})`
+        : ''
+      const label = (d.enhancement ? `${d.name} +${d.enhancement}` : d.name) + maintTag
       if (skippedNames.has(d.name)) {
         pushLog(`🚫 Inventário cheio — ${label} foi perdido!`)
         continue

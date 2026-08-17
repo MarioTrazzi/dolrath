@@ -10,6 +10,7 @@ import {
   resolveNodeOutcome,
   rollCombatLoot,
   rollKillLoot,
+  gearSnapshotOf,
   readAccrued,
   mergeAccrued,
   pendingMonsters,
@@ -20,6 +21,7 @@ import {
 import { planDungeonRun } from '@/lib/dungeonRunPlan'
 import { regenAndPersist } from '@/lib/staminaServer'
 import type { DungeonDef, LootDrop } from '@/lib/dungeonAdventures'
+import type { GearWearSnapshot } from '@/lib/maintenanceLoot'
 
 export const dynamic = 'force-dynamic'
 
@@ -52,9 +54,24 @@ export async function POST(req: Request) {
     // e esta rota está no caminho crítico da chegada ao nó, onde cada round-trip
     // vira espera na cara do jogador. A posse continua checada pelo `userId` da
     // run, e o personagem é o dono dela por definição do schema.
+    // O equipamento vem de carona: é o que o espólio de MANUTENÇÃO precisa para
+    // mirar as peças que o herói está usando (src/lib/maintenanceLoot.ts).
+    // Nenhuma query nova — só colunas a mais na leitura que já existia.
     const run = await prisma.dungeonRun.findFirst({
       where: { id: runId, userId },
-      include: { character: true },
+      include: {
+        character: {
+          include: {
+            equipment: {
+              select: {
+                durability: true,
+                maxDurability: true,
+                item: { select: { name: true, type: true } },
+              },
+            },
+          },
+        },
+      },
     })
     if (!run) return NextResponse.json({ error: 'Run não encontrada' }, { status: 404 })
     if (run.status !== 'active') {
@@ -71,6 +88,7 @@ export async function POST(req: Request) {
       level: character.level,
       race: character.race,
       class: character.class,
+      gear: gearSnapshotOf(character.equipment),
     }
 
     // ---------- Desfecho do nó anterior (de carona) ----------
@@ -154,7 +172,7 @@ export async function POST(req: Request) {
     // sair instantâneo no cliente.
     const withLoot = (pending: RunPending): RunPending => ({
       ...pending,
-      killDrops: rollKillDrops(dungeon, pending, run.tier),
+      killDrops: rollKillDrops(dungeon, pending, run.tier, charForRun.gear),
       nodeLoot: rollCombatLoot(dungeon, charForRun, pending, run.tier),
     })
 
@@ -249,10 +267,15 @@ export async function POST(req: Request) {
 // Drop por ABATE de cada monstro do pacote. O d20 do nó (pending.lootRoll) define
 // a CLASSE do drop, então recuar depois de 1 abate num nó de sorte 20 ainda rende
 // drop "classe 20". Boss é sempre sorte máxima (lootRoll 20 no resolveBossNode).
-function rollKillDrops(dungeon: DungeonDef, pending: RunPending, tier: number): Record<string, LootDrop[]> {
+function rollKillDrops(
+  dungeon: DungeonDef,
+  pending: RunPending,
+  tier: number,
+  gear?: GearWearSnapshot[],
+): Record<string, LootDrop[]> {
   const out: Record<string, LootDrop[]> = {}
   for (const m of pendingMonsters(pending)) {
-    out[m.id] = rollKillLoot(pending.kind, !!m.isBoss, dungeon.difficultyStars, tier, pending.lootRoll, dungeon)
+    out[m.id] = rollKillLoot(pending.kind, !!m.isBoss, dungeon.difficultyStars, tier, pending.lootRoll, dungeon, gear)
   }
   return out
 }

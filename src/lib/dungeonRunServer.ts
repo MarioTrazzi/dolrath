@@ -32,6 +32,7 @@ import {
   type DungeonMonsterDef,
 } from './dungeonAdventures'
 import { normalizeCombatClass, type CombatClass } from './combatModel'
+import type { GearWearSnapshot } from './maintenanceLoot'
 import type { PlannedNode } from './dungeonRunPlan'
 import { SELL_FRACTION_GEAR, SELL_FRACTION_CRAFT_INPUT, SELL_FRACTION_CONSUMABLE } from './sellPricing'
 import { getCatalogItemByName, getConsumableByName, getIngredientByName, getForgeMaterialByName, getSeedByName, itemImagePath } from './itemCatalog'
@@ -192,7 +193,7 @@ export function resolveNodeOutcome(
     drops.push(
       ...(pre ??
         (fallback
-          ? rollKillLoot(pending.kind, !!m.isBoss, fallback.dungeon.difficultyStars, fallback.tier, pending.lootRoll, fallback.dungeon)
+          ? rollKillLoot(pending.kind, !!m.isBoss, fallback.dungeon.difficultyStars, fallback.tier, pending.lootRoll, fallback.dungeon, fallback.character.gear)
           : []))
     )
   }
@@ -237,6 +238,12 @@ export interface CharacterForRun {
   level: number
   race: string
   class: string
+  /**
+   * Set equipado com a durabilidade de cada peça. É o que faz o espólio de
+   * MANUTENÇÃO mirar o que o herói está usando (src/lib/maintenanceLoot.ts).
+   * Ausente = comportamento antigo (nenhum drop de manutenção).
+   */
+  gear?: GearWearSnapshot[]
 }
 
 // Resolve o PRÓXIMO nó (não-boss): rola o d20 no SERVIDOR e decide monstro vs. achado.
@@ -291,7 +298,7 @@ export function resolveExploreNode(
     return { type: 'find', roll, loot: { gold: 0, drops: [], fountain: true } }
   }
 
-  const loot = rollNodeLoot(dungeon, roll, isMain ? 'main' : 'minor', character.level, character.race, character.class, tier)
+  const loot = rollNodeLoot(dungeon, roll, isMain ? 'main' : 'minor', character.level, character.race, character.class, tier, character.gear)
   return { type: 'find', roll, loot }
 }
 
@@ -311,7 +318,25 @@ export function resolveBossNode(
 export function rollCombatLoot(dungeon: DungeonDef, character: CharacterForRun, pending: RunPending, tier: number = 1): NodeLoot {
   const raw = pending.kind === 'boss' ? 20 : pending.lootRoll
   const roll = Math.max(1, Math.min(20, Math.floor(Number(raw)) || 10))
-  return rollNodeLoot(dungeon, roll, pending.kind, character.level, character.race, character.class, tier)
+  return rollNodeLoot(dungeon, roll, pending.kind, character.level, character.race, character.class, tier, character.gear)
+}
+
+/**
+ * Snapshot do set equipado para o espólio de manutenção. Lê a peça e a
+ * durabilidade ATUAL — o desgaste da run em curso só é gravado no flush, então
+ * durante uma run longa o snapshot fica levemente otimista; a diferença é de
+ * poucos pontos e o `maintenanceWearFactor` tem piso, então não vale uma escrita
+ * por passo para corrigir.
+ */
+export function gearSnapshotOf(
+  equipment: { durability: number; maxDurability: number; item: { name: string; type: string } }[],
+): GearWearSnapshot[] {
+  return equipment.map(eq => ({
+    name: eq.item.name,
+    type: String(eq.item.type),
+    durability: eq.durability,
+    maxDurability: eq.maxDurability,
+  }))
 }
 
 export { rollKillLoot }
@@ -665,7 +690,7 @@ export async function ensureCatalogItemTx(
 export async function addDropToInventoryTx(
   tx: Prisma.TransactionClient,
   characterId: string,
-  drop: { name: string; rarity?: string; enhancement?: number; qty?: number },
+  drop: { name: string; rarity?: string; enhancement?: number; qty?: number; durability?: number },
   slots?: SlotBudget,
 ) {
   const qty = Math.max(1, Math.floor(Number(drop.qty) || 1))
@@ -695,8 +720,19 @@ export async function addDropToInventoryTx(
   }
 
   const enhancementLevel = isConsumable ? 0 : Math.max(0, Math.floor(Number(drop.enhancement) || 0))
+  // Peça de reposição entra com durabilidade parcial; todo o resto usa o default
+  // da coluna (100).
+  const durability = !isConsumable && drop.durability != null
+    ? Math.max(0, Math.floor(drop.durability))
+    : undefined
   await tx.characterInventory.create({
-    data: { characterId, itemId: existingItem.id, quantity: isConsumable ? qty : 1, enhancementLevel },
+    data: {
+      characterId,
+      itemId: existingItem.id,
+      quantity: isConsumable ? qty : 1,
+      enhancementLevel,
+      ...(durability != null ? { durability } : {}),
+    },
   })
   return true
 }
@@ -776,7 +812,7 @@ export async function creditDropsBatchTx(
   const skipped: LootDrop[] = []
   const bumps: { id: string; inc: number }[] = [] // linha existente → quanto somar
   const bumpIdx = new Map<string, number>()
-  const creates: { itemId: string; quantity: number; enhancementLevel: number }[] = []
+  const creates: { itemId: string; quantity: number; enhancementLevel: number; durability?: number }[] = []
   const newStackIdx = new Map<string, number>() // consumível inédito empilha entre si
 
   for (const d of ordered) {
@@ -801,7 +837,14 @@ export async function creditDropsBatchTx(
     // Equipamento NUNCA agrupa: 1 slot por peça. [[dolrath-inventory-stacking-rule]]
     if (slotsFree <= 0) { skipped.push(d); continue }
     slotsFree -= 1
-    creates.push({ itemId: cat.id, quantity: 1, enhancementLevel: Math.max(0, Math.floor(Number(d.enhancement) || 0)) })
+    creates.push({
+      itemId: cat.id,
+      quantity: 1,
+      enhancementLevel: Math.max(0, Math.floor(Number(d.enhancement) || 0)),
+      // Peça de REPOSIÇÃO cai com durabilidade parcial (o resto do gear cai
+      // cheio, e o default da coluna é 100).
+      ...(d.durability != null ? { durability: Math.max(0, Math.floor(d.durability)) } : {}),
+    })
   }
 
   // Sequencial de propósito: queries concorrentes na mesma transação interativa
@@ -835,7 +878,7 @@ export async function applyLootTx(
     return rank(a) - rank(b)
   })
   for (const d of ordered) {
-    const added = await addDropToInventoryTx(tx, characterId, { name: d.name, rarity: d.rarity, enhancement: d.enhancement })
+    const added = await addDropToInventoryTx(tx, characterId, { name: d.name, rarity: d.rarity, enhancement: d.enhancement, durability: d.durability })
     if (!added) skippedDrops.push(d)
   }
   return { gold: credited, skippedDrops }

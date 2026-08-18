@@ -157,7 +157,7 @@ function runCampaign(dungeon: DungeonDef, klass: string, level: number): Campaig
           // Desgaste do abate — a conta real de flushRunRewards.
           for (const eq of gear) {
             if (eq.durability <= 0) continue
-            const w = wearFor(isWeaponSlot(eq.type) ? 'WEAPON' : 'ARMOR', 1, t.kind === 'boss')
+            const w = wearFor(isWeaponSlot(eq.type) ? 'WEAPON' : 'ARMOR', 1, t.kind === 'boss', level)
             const applied = Math.min(eq.durability, w)
             eq.durability -= applied
             wearSpent += applied
@@ -204,8 +204,14 @@ function main() {
   console.log('\n🔧 ECONOMIA DE MANUTENÇÃO — a run paga o próprio conserto?')
   console.log(`   ${CAMPAIGNS} campanhas × ${RUNS_PER_CAMPAIGN} runs · set de 5 peças · tier 1\n`)
 
-  for (const dungeon of DUNGEON_LIST) {
-    const level = dungeon.clearLevel
+  // O nível do playtest (6, Floresta) entra como cenário próprio: é o caso que
+  // motivou tudo isto, e é onde o amaciamento de WEAR_SOFTENING está ligado.
+  const scenarios: { dungeon: DungeonDef; level: number }[] = [
+    { dungeon: DUNGEON_LIST[0], level: 6 },
+    ...DUNGEON_LIST.map(d => ({ dungeon: d, level: d.clearLevel })),
+  ]
+
+  for (const { dungeon, level } of scenarios) {
     console.log(`\n🗺️  ${dungeon.name}  (nv ${level}, ${dungeon.difficultyStars}★)`)
     console.log('   classe     desgaste/run   reposto/run   cobertura   mats/run   peças/run   taxa forja/run   runs c/ peça quebrada')
     for (const klass of Object.keys(SETS)) {

@@ -6,6 +6,10 @@ export const REPAIRBENCH_PT: Record<string, string> = {
   'You need a Memory Shard (from a boss) to repair {item}.':
     'Você precisa de um Estilhaço de Memória (de chefe) para reparar {item}.',
   'You need a copy of {item} to repair.': 'Você precisa de uma cópia de {item} para reparar.',
+  'You need a Memory Shard (from a boss) — or a level-0 copy — to repair {item}. Dungeons drop spare parts of the gear you are wearing.':
+    'Você precisa de um Estilhaço de Memória (de chefe) — ou de uma cópia nível 0 — para reparar {item}. A masmorra solta peças de reposição do que você está usando.',
+  'You need a copy of {item} to repair. Dungeons drop spare parts and the materials of the gear you are wearing.':
+    'Você precisa de uma cópia de {item} para reparar. A masmorra solta peças de reposição e os materiais do que você está usando.',
   'Failed to repair': 'Erro ao reparar',
   '🔧 Item repaired!': '🔧 Item reparado!',
   'Unexpected error repairing': 'Erro inesperado ao reparar',
@@ -48,12 +52,8 @@ export const REPAIRBENCH_PT: Record<string, string> = {
   'item': 'item',
   'Accessory — repaired with {mat} (Gathering) + gold, not with copies.':
     'Acessório — reparado com {mat} (Coleta) + gold, não com cópias.',
-  'Rare piece — repaired with a Memory Shard (from a boss), not with copies.':
-    'Peça rara — reparada com Estilhaço de Memória (de chefe), não com cópias.',
-  'Epic piece — repaired with a Memory Shard (from a boss), not with copies.':
-    'Peça épica — reparada com Estilhaço de Memória (de chefe), não com cópias.',
-  'Legendary piece — repaired with a Memory Shard (from a boss), not with copies.':
-    'Peça lendária — reparada com Estilhaço de Memória (de chefe), não com cópias.',
+  'High-rarity piece — repaired with a Memory Shard (from a boss), or with a level-0 copy when you have one.':
+    'Peça de alta raridade — reparada com Estilhaço de Memória (de chefe), ou com uma cópia nível 0 quando você tiver uma.',
   'Missing': 'Faltam',
   'needs': 'precisa de',
   'you have': 'você tem',

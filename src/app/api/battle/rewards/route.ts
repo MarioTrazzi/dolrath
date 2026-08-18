@@ -129,9 +129,16 @@ async function resolveRankingSkip(opts: {
  * espelha a masmorra (dungeon/run/combat), inclusive no aviso de peça quebrada.
  */
 async function applyFightWear(characterId: string): Promise<PvpWearEntry[]> {
-  const weaponWear = wearForPvpFight('WEAPON')
-  const gearWear = wearForPvpFight('ARMOR')
   return prisma.$transaction(async (tx) => {
+    // O nível entra na conta por causa do amaciamento do começo (WEAR_SOFTENING):
+    // a arena segue a mesma régua da masmorra, senão o herói novo consertaria a
+    // run e quebraria na luta.
+    const character = await tx.character.findUnique({
+      where: { id: characterId },
+      select: { level: true },
+    })
+    const weaponWear = wearForPvpFight('WEAPON', character?.level)
+    const gearWear = wearForPvpFight('ARMOR', character?.level)
     const equipped = await tx.characterEquipment.findMany({
       where: { characterId },
       include: { item: { select: { name: true } } },

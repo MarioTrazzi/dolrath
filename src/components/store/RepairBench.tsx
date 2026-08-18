@@ -11,7 +11,7 @@ import {
   getGearCategory,
   ACCESSORY_REPAIR_DUST_NAME,
 } from '@/lib/enhancementSystem';
-import { repairPlan, type RepairSource } from '@/lib/repairPricing';
+import { repairPlan, resolveRepairSource, canBuyCopyOf, type RepairSource } from '@/lib/repairPricing';
 import { sellUnitPrice as sellPrice } from '@/lib/sellPricing';
 import { buyGoldOnChain, isInsufficientGold, parseNeededGold } from '@/lib/buyGold';
 import { confirmBuyGold } from '@/lib/buyGoldPrompt';
@@ -196,7 +196,14 @@ export default function RepairBench({
           'COMMON'
       ).toUpperCase()
     : '';
-  const usesMemoryShard = !isAccessorySelected && ['RARE', 'EPIC', 'LEGENDARY'].includes(itemRarity);
+  // Peça rara+ usa Estilhaço de Memória só quando NÃO há cópia lisa na bolsa —
+  // mesma decisão que a rota toma (resolveRepairSource).
+  const usesMemoryShard =
+    resolveRepairSource({
+      isAccessory: isAccessorySelected,
+      rarity: itemRarity,
+      copiesOwned: copiesAvailable,
+    }) === 'SHARD';
 
   const memoryShardsAvailable = useMemo(
     () =>
@@ -240,7 +247,8 @@ export default function RepairBench({
   // Estilhaço de Memória não se compra (gate de chefe).
   const repairUnitPrice =
     repairSource === 'COPY'
-      ? Math.max(0, Math.floor(selected?.item.goldPrice ?? 0))
+      // Cópia de peça rara+ não se compra no balcão (só a que já está na bolsa).
+      ? canBuyCopyOf(itemRarity) ? Math.max(0, Math.floor(selected?.item.goldPrice ?? 0)) : 0
       : repairSource === 'DUST'
       ? Math.max(0, Math.floor(getForgeMaterialByName(ACCESSORY_REPAIR_DUST_NAME)?.goldValue ?? 0))
       : 0;
@@ -285,8 +293,14 @@ export default function RepairBench({
               item: itemDisplayName,
             })
           : usesMemoryShard
-          ? t('You need a Memory Shard (from a boss) to repair {item}.', { item: itemDisplayName })
-          : t('You need a copy of {item} to repair.', { item: itemDisplayName })
+          ? t(
+              'You need a Memory Shard (from a boss) — or a level-0 copy — to repair {item}. Dungeons drop spare parts of the gear you are wearing.',
+              { item: itemDisplayName }
+            )
+          : t(
+              'You need a copy of {item} to repair. Dungeons drop spare parts and the materials of the gear you are wearing.',
+              { item: itemDisplayName }
+            )
       );
       return;
     }
@@ -787,11 +801,11 @@ export default function RepairBench({
                   )}
                   {usesMemoryShard && (
                     <p className="text-[11px] text-amber-200/70 mb-2 text-center">
-                      {itemRarity === 'RARE'
-                        ? t('Rare piece — repaired with a Memory Shard (from a boss), not with copies.')
-                        : itemRarity === 'EPIC'
-                        ? t('Epic piece — repaired with a Memory Shard (from a boss), not with copies.')
-                        : t('Legendary piece — repaired with a Memory Shard (from a boss), not with copies.')}
+                      {/* Sem cópia na bolsa é o estilhaço; com cópia, ela vem primeiro
+                          (resolveRepairSource) e este aviso nem aparece. */}
+                      {t(
+                        'High-rarity piece — repaired with a Memory Shard (from a boss), or with a level-0 copy when you have one.'
+                      )}
                     </p>
                   )}
 

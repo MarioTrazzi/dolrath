@@ -7,14 +7,16 @@ import {
   getGearCategory,
   ACCESSORY_REPAIR_DUST_NAME,
 } from '@/lib/enhancementSystem'
-import { repairPlan, isPurchasableSource, type RepairSource } from '@/lib/repairPricing'
+import {
+  repairPlan, isPurchasableSource, resolveRepairSource, canBuyCopyOf, type RepairSource,
+} from '@/lib/repairPricing'
 import { getCatalogItemByName, getForgeMaterialByName } from '@/lib/itemCatalog'
 
-// Reparo de alto nível: peças RARAS/ÉPICAS/LENDÁRIAS quase nunca têm cópias, então
-// são reparadas com Estilhaço de Memória (só de chefe), +REPAIR_PER_DUPLICATE de
-// durabilidade cada, como toda fonte de reparo.
+// Reparo de alto nível: peça RARA/ÉPICA/LENDÁRIA repara com Estilhaço de Memória
+// (só de chefe) QUANDO não há cópia lisa na bolsa — a regra mora em
+// resolveRepairSource (repairPricing.ts), compartilhada com a Bancada de Reparo.
+// Toda fonte vale +REPAIR_PER_DUPLICATE de durabilidade.
 const MEMORY_SHARD_NAME = 'Estilhaço de Memória'
-const HIGH_RARITIES = new Set(['RARE', 'EPIC', 'LEGENDARY'])
 
 class RepairError extends Error {
   constructor(message: string, readonly status: number) {
@@ -87,11 +89,25 @@ export async function POST(
         getCatalogItemByName(target.item.name)?.rarity ??
         'COMMON'
       ).toUpperCase()
-      const source: RepairSource = isAccessory
-        ? 'DUST'
-        : HIGH_RARITIES.has(rarity)
-        ? 'SHARD'
-        : 'COPY'
+
+      // Cópias lisas na bolsa — consultadas ANTES da decisão, porque em peça
+      // rara+ é a existência de uma cópia que escolhe entre COPY e SHARD.
+      const copies = isAccessory
+        ? []
+        : (await tx.characterInventory.findMany({
+            where: {
+              characterId: params.characterId,
+              itemId: target.itemId,
+              enhancementLevel: 0,
+              quantity: { gte: 1 },
+              // Reparando uma linha do inventário, ela mesma não serve de cópia.
+              ...(inventoryId ? { id: { not: target.id } } : {}),
+            },
+            orderBy: { quantity: 'asc' },
+          })).map((d) => ({ id: d.id, quantity: d.quantity }))
+      const copiesOwned = copies.reduce((sum, c) => sum + c.quantity, 0)
+
+      const source: RepairSource = resolveRepairSource({ isAccessory, rarity, copiesOwned })
 
       // Stacks da fonte de reparo (Pó de Joia, estilhaço de memória ou cópia).
       const sources =
@@ -113,17 +129,7 @@ export async function POST(
               },
               orderBy: { quantity: 'asc' },
             })).map((s) => ({ id: s.id, quantity: s.quantity }))
-          : (await tx.characterInventory.findMany({
-              where: {
-                characterId: params.characterId,
-                itemId: target.itemId,
-                enhancementLevel: 0,
-                quantity: { gte: 1 },
-                // Reparando uma linha do inventário, ela mesma não serve de cópia.
-                ...(inventoryId ? { id: { not: target.id } } : {}),
-              },
-              orderBy: { quantity: 'asc' },
-            })).map((d) => ({ id: d.id, quantity: d.quantity }))
+          : copies
 
       const totalUnits = sources.reduce((sum, s) => sum + s.quantity, 0)
 
@@ -132,7 +138,9 @@ export async function POST(
       // estoque); Pó de Joia = preço de catálogo do material.
       let unitPrice = 0
       if (source === 'COPY') {
-        unitPrice = Math.max(0, Math.floor(target.item.goldPrice ?? 0))
+        // Cópia de peça RARA+ o ferreiro não forja no balcão (viraria vitrine de
+        // gear raro por gold) — ela só vale o que já está na bolsa.
+        unitPrice = canBuyCopyOf(rarity) ? Math.max(0, Math.floor(target.item.goldPrice ?? 0)) : 0
       } else if (source === 'DUST') {
         const dustItem = await tx.item.findFirst({
           where: { name: ACCESSORY_REPAIR_DUST_NAME },

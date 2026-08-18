@@ -23,10 +23,33 @@ export function isBroken(eq: { durability?: number | null } | null | undefined):
   return typeof eq?.durability === 'number' && eq.durability <= 0
 }
 
-/** Desgaste de uma peça para `kills` abates (chefe dobra). */
-export function wearFor(slot: string, kills: number, boss: boolean): number {
+// 🌱 AMACIAMENTO DO COMEÇO (2026-08-17). O desgaste supõe um jogador que forja
+// cópias e tem ouro de sobra; o herói de nível baixo não tem nenhum dos dois, e
+// no playtest a conta fechava contra ele — set quebrado, sem ouro, farmando pior
+// por estar quebrado. Até `untilLevel` a peça gasta `factor` do normal, subindo
+// linear até 100% em `fullLevel`. Não é desconto permanente: é a rampa até o
+// jogador ter forja, coleta e caixa para bancar a manutenção.
+export const WEAR_SOFTENING = { untilLevel: 10, fullLevel: 20, factor: 0.7 }
+
+/** Multiplicador de desgaste pelo nível (1 = sem amaciamento). */
+export function wearLevelMult(level?: number | null): number {
+  if (typeof level !== 'number' || !Number.isFinite(level)) return 1
+  const { untilLevel, fullLevel, factor } = WEAR_SOFTENING
+  if (level <= untilLevel) return factor
+  if (level >= fullLevel) return 1
+  const t = (level - untilLevel) / (fullLevel - untilLevel)
+  return factor + (1 - factor) * t
+}
+
+/**
+ * Desgaste de uma peça para `kills` abates (chefe dobra).
+ * `level` liga o amaciamento do começo; omitido = desgaste cheio (callers
+ * legados e simulações que querem a conta crua).
+ */
+export function wearFor(slot: string, kills: number, boss: boolean, level?: number | null): number {
   const perKill = slot === 'WEAPON' ? WEAR_WEAPON_PER_KILL : WEAR_GEAR_PER_KILL
-  return perKill * kills * (boss ? WEAR_BOSS_MULT : 1)
+  const raw = perKill * kills * (boss ? WEAR_BOSS_MULT : 1)
+  return Math.round(raw * wearLevelMult(level))
 }
 
 // ⚔️ ARENA (2026-07-15): a luta de PvP também gasta o equipamento — antes a arena era
@@ -43,6 +66,6 @@ export function wearFor(slot: string, kills: number, boss: boolean): number {
 export const PVP_FIGHT_WEAR_KILLS = 4
 
 /** Desgaste de uma peça por LUTA de arena (equivale a PVP_FIGHT_WEAR_KILLS abates). */
-export function wearForPvpFight(slot: string): number {
-  return wearFor(slot, PVP_FIGHT_WEAR_KILLS, false)
+export function wearForPvpFight(slot: string, level?: number | null): number {
+  return wearFor(slot, PVP_FIGHT_WEAR_KILLS, false, level)
 }

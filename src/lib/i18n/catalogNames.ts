@@ -216,7 +216,7 @@ export const CATALOG_EN: Record<string, CatalogEnEntry> = {
   'Cristal Bruto': { en: 'Raw Crystal', descEn: "Uncut arcane crystal; the core of casters' orbs." },
   'Fragmentos de Joias': { en: 'Gem Fragments', descEn: "Hardened gem shards; they stud the monk's gauntlets." },
   'Pó de Joia': { en: 'Gem Dust', descEn: 'Fine dust of crushed gems; the smith uses it (plus gold) to repair rings, necklaces and belts.' },
-  'Estilhaço de Memória': { en: 'Memory Shard', descEn: 'A fragment that remembers the original shape of legendary equipment; restores +10 durability on rare, epic and legendary pieces.' },
+  'Estilhaço de Memória': { en: 'Memory Shard', descEn: 'A fragment that remembers the original shape of legendary equipment; restores +25 durability on rare, epic and legendary pieces.' },
   'Fibra de Linho': { en: 'Linen Fiber', descEn: 'Linen threads spun at the farm; the textile base of light vestments and bandages.' },
 
   // ============ ⚙️ PROCESSADOS ============

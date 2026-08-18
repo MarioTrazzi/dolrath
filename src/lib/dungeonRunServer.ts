@@ -1077,10 +1077,12 @@ export async function flushRunRewards(
   // 'finished' (que destrava o tier seguinte) com o chefe comprovadamente morto.
   const status = bossDefeated ? 'finished' : opts.reason === 'lose' ? 'defeated' : 'abandoned'
 
-  // Desgaste: linear nos abates, chefe dobra. Soma idêntica à do débito por nó.
+  // Desgaste: linear nos abates, chefe dobra, amaciado no começo (WEAR_SOFTENING).
+  // Soma idêntica à do débito por nó.
   const normalKills = Math.max(0, accrued.kills - accrued.bossKills)
-  const weaponWear = wearFor('WEAPON', normalKills, false) + wearFor('WEAPON', accrued.bossKills, true)
-  const gearWear = wearFor('ARMOR', normalKills, false) + wearFor('ARMOR', accrued.bossKills, true)
+  const lv = character.level
+  const weaponWear = wearFor('WEAPON', normalKills, false, lv) + wearFor('WEAPON', accrued.bossKills, true, lv)
+  const gearWear = wearFor('ARMOR', normalKills, false, lv) + wearFor('ARMOR', accrued.bossKills, true, lv)
 
   const xp = buildXpUpdate(character, accrued.xp)
 

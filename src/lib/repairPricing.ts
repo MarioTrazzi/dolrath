@@ -23,6 +23,37 @@ export function isPurchasableSource(source: RepairSource): boolean {
   return source !== 'SHARD'
 }
 
+/** Raridades que, sem cópia na bolsa, só reparam com Estilhaço de Memória. */
+export const HIGH_RARITIES = new Set(['RARE', 'EPIC', 'LEGENDARY'])
+
+/**
+ * De onde sai a durabilidade. Fonte ÚNICA da decisão — servidor e Bancada de
+ * Reparo chamam esta função, senão a prévia promete uma coisa e a rota cobra outra.
+ *
+ * A cópia vem PRIMEIRO mesmo em peça rara: desde que a masmorra passou a soltar
+ * PEÇA DE REPOSIÇÃO da peça equipada (src/lib/maintenanceLoot.ts), exigir
+ * Estilhaço de Memória com uma cópia parada na bolsa era só travar o jogador —
+ * eram 4 chefes por peça cheia. Sem cópia, o estilhaço segue sendo o caminho.
+ */
+export function resolveRepairSource(opts: {
+  isAccessory: boolean
+  rarity: string
+  copiesOwned: number
+}): RepairSource {
+  if (opts.isAccessory) return 'DUST'
+  if (!HIGH_RARITIES.has(String(opts.rarity).toUpperCase())) return 'COPY'
+  return opts.copiesOwned > 0 ? 'COPY' : 'SHARD'
+}
+
+/**
+ * O ferreiro forja a cópia de reposição no balcão — menos a de peça RARA+, que
+ * não está ao alcance dele. Sem isto, aceitar cópia em peça rara viraria uma
+ * vitrine de gear raro por gold.
+ */
+export function canBuyCopyOf(rarity: string): boolean {
+  return !HIGH_RARITIES.has(String(rarity).toUpperCase())
+}
+
 export interface RepairPlanInput {
   /** maxDurability - durability (quanto falta encher). */
   missing: number

@@ -2732,8 +2732,8 @@ export default function DungeonRun({
   /** Desgaste dos abates de UM nó — espelha wearFor() do /finish. */
   const applyLocalWear = (kills: number, boss: boolean) => {
     if (kills <= 0) return
-    const weaponWear = wearFor('WEAPON', kills, boss)
-    const gearWear = wearFor('ARMOR', kills, boss)
+    const weaponWear = wearFor('WEAPON', kills, boss, character.level)
+    const gearWear = wearFor('ARMOR', kills, boss, character.level)
     setEquipList(prev => prev.map((eq: any) => {
       const before = Number(eq.durability)
       if (!Number.isFinite(before) || before <= 0) return eq

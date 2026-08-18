@@ -1346,7 +1346,7 @@ export const FORGE_MATERIAL_CATALOG: ForgeMaterial[] = [
   { name: 'Pó de Joia', description: 'Pó fino de gemas trituradas; o ferreiro usa para reparar anéis, colares e cintos (junto com gold).', emoji: '✨', rarity: 'COMMON', goldValue: 40, source: 'dungeon' },
 
   // ---------- REPARO DE ALTO NÍVEL (só de chefe; repara raro/épico/lendário) ----------
-  { name: 'Estilhaço de Memória', description: 'Fragmento que guarda a forma original de um equipamento lendário; restaura +10 de durabilidade em peças raras, épicas e lendárias.', emoji: '🧠', rarity: 'RARE', goldValue: 80, source: 'dungeon_boss', memoryShard: true },
+  { name: 'Estilhaço de Memória', description: 'Fragmento que guarda a forma original de um equipamento lendário; restaura +25 de durabilidade em peças raras, épicas e lendárias.', emoji: '🧠', rarity: 'RARE', goldValue: 80, source: 'dungeon_boss', memoryShard: true },
 
   // ---------- CULTIVO (só da fazenda — NÃO cai em masmorra) ----------
   { name: 'Fibra de Linho', description: 'Fios de linho fiados na fazenda; a base têxtil das vestes leves e das bandagens.', emoji: '🧵', rarity: 'COMMON', goldValue: 7, source: 'farm' },

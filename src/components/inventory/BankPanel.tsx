@@ -8,7 +8,12 @@ import { getChainInfo } from '@/lib/chainConfig'
 
 interface CharWallet { id: string; name: string; class: string; gold: number }
 
-// ⛓️ Claim de GOLD: o Baú Geral agora representa a CARTEIRA on-chain do jogador.
+// 🏦 COFRE DA CONTA + claim de GOLD. O cofre (User.goldBalance) é o caixa
+// COMPARTILHADO entre todos os personagens: um herói deposita o que tem no
+// bolso, outro saca — é assim que o ouro viaja de um personagem pro outro sem
+// passar pela blockchain (sem gas, instantâneo).
+//
+// ⛓️ Claim de GOLD: o Baú Geral também representa a CARTEIRA on-chain do jogador.
 // "Reivindicar" move o ouro do herói (Character.gold) para o banco da conta
 // (User.goldBalance) e em seguida minta o token GOLD on-chain via claimWithSig
 // (assinatura EIP-712 do servidor; o jogador assina o tx e paga o gas). É assim
@@ -112,7 +117,9 @@ export default function BankPanel({ characterId, onChanged }: { characterId?: st
     }
   }
 
-  const withdraw = async (charId: string) => {
+  // 🏦 Cofre da conta ↔ bolso do herói (off-chain, sem gas). Depositar com um
+  // personagem e sacar com outro é o caminho oficial pra mover ouro entre heróis.
+  const move = async (charId: string, op: 'deposit' | 'withdraw') => {
     const amount = Math.floor(Number(amounts[charId] || 0))
     if (!Number.isFinite(amount) || amount <= 0) {
       toast.error('Informe uma quantia válida.')
@@ -120,14 +127,14 @@ export default function BankPanel({ characterId, onChanged }: { characterId?: st
     }
     setBusy(true)
     try {
-      const res = await fetch('/api/bank/withdraw', {
+      const res = await fetch(`/api/bank/${op}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ characterId: charId, amount }),
       })
       const data = await res.json()
       if (!res.ok) {
-        toast.error(data?.error || 'Falha ao sacar')
+        toast.error(data?.error || (op === 'deposit' ? 'Falha ao depositar' : 'Falha ao sacar'))
         return
       }
       toast.success(data?.message || 'Pronto!')
@@ -154,7 +161,7 @@ export default function BankPanel({ characterId, onChanged }: { characterId?: st
         style={{ background: 'linear-gradient(180deg, #2b2b2f, #1a1a1d)', borderBottom: '1px solid rgba(0,0,0,0.7)' }}
       >
         <h2 className="flex items-center gap-2 text-[15px] font-semibold tracking-wide text-[#dcdce0]">
-          <span style={{ color: '#c9a25f' }}>⛓️</span> Reivindicar GOLD
+          <span style={{ color: '#c9a25f' }}>🏦</span> Cofre da Conta
         </h2>
         <div className="text-right">
           <span className="mr-2 text-[11px] uppercase tracking-[0.14em] text-[#77777d]">on-chain</span>
@@ -165,6 +172,11 @@ export default function BankPanel({ characterId, onChanged }: { characterId?: st
       </div>
 
       <div className="p-5">
+      <p className="text-xs text-[#8a8a90] mb-2">
+        <b className="text-[#c9c9ce]">Depositar</b> guarda o ouro do herói no cofre da conta e{' '}
+        <b className="text-[#c9c9ce]">Sacar</b> devolve pro bolso de <i>qualquer</i> personagem seu —
+        é assim que você passa ouro de um herói para outro (sem gas, na hora).
+      </p>
       <p className="text-xs text-[#8a8a90] mb-2">
         <b className="text-[#c9c9ce]">Reivindicar</b> transforma o ouro do herói em token <b className="text-[#c9c9ce]">GOLD on-chain</b> na sua carteira —
         é assim que você saca o que ganhou nas masmorras e no PvP (você assina a transação e paga o gas).
@@ -185,21 +197,21 @@ export default function BankPanel({ characterId, onChanged }: { characterId?: st
           </span>
         </p>
       )}
-      {hasBankGold && (
-        <div className="flex flex-wrap items-center gap-2 mb-3 rounded-[3px] border px-3 py-2" style={{ borderColor: '#8a6d3b', background: 'linear-gradient(180deg, rgba(58,51,37,0.7), rgba(36,31,22,0.7))' }}>
-          <span className="text-xs" style={{ color: '#e7c682' }}>
-            🏦 {bankGold} 🪙 no banco aguardando claim
-          </span>
+      <div className="flex flex-wrap items-center gap-2 mb-3 rounded-[3px] border px-3 py-2" style={{ borderColor: '#8a6d3b', background: 'linear-gradient(180deg, rgba(58,51,37,0.7), rgba(36,31,22,0.7))' }}>
+        <span className="text-xs" style={{ color: '#e7c682' }}>
+          🏦 <b className="tabular-nums">{bankGold ?? '…'}</b> 🪙 no cofre — compartilhado por todos os seus personagens
+        </span>
+        {hasBankGold && (
           <button
             onClick={claimBank}
             disabled={busy || !walletLinked}
             className="ml-auto rounded-[3px] border px-3 py-1 text-xs font-semibold text-emerald-200 transition-all hover:brightness-125 disabled:opacity-40"
             style={{ borderColor: '#2f6b3a', background: 'linear-gradient(180deg, #25351f, #161f12)' }}
           >
-            ⛓️ Reivindicar saldo do banco
+            ⛓️ Reivindicar saldo do cofre
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {(() => {
         // Com herói ativo definido, opera só sobre ele; senão, lista todos (fallback).
@@ -220,17 +232,24 @@ export default function BankPanel({ characterId, onChanged }: { characterId?: st
                 onChange={(e) => setAmounts((p) => ({ ...p, [c.id]: e.target.value }))}
                 className="w-28 rounded-[3px] border border-[#3c3c41] bg-[#101013] px-2 py-1.5 text-sm text-[#ece7da] outline-none transition-colors focus:border-[#8a6d3b]"
               />
-              {hasBankGold && (
-                <button
-                  onClick={() => withdraw(c.id)}
-                  disabled={busy}
-                  title="Banco → personagem (habilita compras off-chain)"
-                  className="rounded-[3px] border px-3 py-1.5 text-sm font-semibold transition-all hover:brightness-125 disabled:opacity-40"
-                  style={{ borderColor: '#8a6d3b', background: 'linear-gradient(180deg, #3a3325, #241f16)', color: '#e7c682' }}
-                >
-                  ↓ Sacar
-                </button>
-              )}
+              <button
+                onClick={() => move(c.id, 'deposit')}
+                disabled={busy || c.gold <= 0}
+                title="Personagem → cofre da conta (outro herói pode sacar depois)"
+                className="rounded-[3px] border px-3 py-1.5 text-sm font-semibold transition-all hover:brightness-125 disabled:opacity-40"
+                style={{ borderColor: '#8a6d3b', background: 'linear-gradient(180deg, #3a3325, #241f16)', color: '#e7c682' }}
+              >
+                ↑ Depositar
+              </button>
+              <button
+                onClick={() => move(c.id, 'withdraw')}
+                disabled={busy || !hasBankGold}
+                title="Cofre da conta → personagem (habilita compras no ferreiro/alquimista)"
+                className="rounded-[3px] border px-3 py-1.5 text-sm font-semibold transition-all hover:brightness-125 disabled:opacity-40"
+                style={{ borderColor: '#8a6d3b', background: 'linear-gradient(180deg, #3a3325, #241f16)', color: '#e7c682' }}
+              >
+                ↓ Sacar
+              </button>
               <button
                 onClick={() => claim(c.id)}
                 disabled={busy || !walletLinked}

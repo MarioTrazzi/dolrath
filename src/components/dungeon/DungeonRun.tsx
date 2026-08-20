@@ -304,23 +304,33 @@ interface EquipmentWear {
 function consumableEffect(stats: any): {
   hp: number; mp: number; cure: string | null
   atk: number; def: number; dodge: number; buffTurns: number
-  revive: number
+  revive: number; stamina: number
 } {
   const s = stats || {}
+  // 🛡️ `shieldAmount` (Núcleo de Adamantite) entra como bônus de DEFESA: é um buff
+  // de dano recebido por N turnos, exatamente o que `defenseBonus` já move. Sem
+  // este mapa o item saía com todos os efeitos zerados e o cinto o descartava —
+  // o jogador tinha um LENDÁRIO na mochila que nunca aparecia na masmorra.
+  const shield = Number(s.shieldAmount) || 0
   return {
     hp: Number(s.healAmount) || 0,
     mp: Number(s.manaAmount) || 0,
     cure: s.cure || null,
     atk: Number(s.attackBonus) || 0,
-    def: Number(s.defenseBonus) || 0,
+    def: (Number(s.defenseBonus) || 0) || (shield > 0 ? Math.round(shield / 20) : 0),
     dodge: Number(s.dodgeBonus) || 0,
     buffTurns: Number(s.duration) || 0,
     revive: Number(s.reviveHpPercent) || 0,
+    // ⚡ Stamina NÃO é aplicada no cliente (é servidor-autoritativa, ver
+    // regenAndPersist): quem bebe é a rota /api/inventory/use-item e a run só
+    // ressincroniza o número que ela devolve.
+    stamina: Number(s.staminaAmount ?? s.stamina_restore) || 0,
   }
 }
 function consumableIcon(stats: any): string {
   const e = consumableEffect(stats)
   if (e.revive) return '🪶'
+  if (e.stamina && !e.hp && !e.mp) return '⚡'
   if (e.cure === 'poison') return '🧉'
   if (e.cure === 'bleed') return '🩹'
   if (e.atk) return '💪'
@@ -345,6 +355,7 @@ interface DungeonConsumable {
   dodge: number
   buffTurns: number
   revive: number
+  stamina: number
 }
 
 // Item coletado durante a run (guarda o nome para a arte real /items/<slug>.webp).
@@ -908,6 +919,17 @@ export default function DungeonRun({
   >([])
   // Consumíveis do inventário do personagem (usáveis no mapa e no combate)
   const [consumables, setConsumables] = useState<DungeonConsumable[]>([])
+  /**
+   * 🧪 Cinto em REF — mesma razão de `hpRef`/`packRef`/`combatFxRef`.
+   *
+   * A cadeia de turnos é agendada por `later()`, então quem lê o STATE lê o valor
+   * congelado no render que agendou. O auto-revive (ver `resolveMonsterAttack`) e o
+   * piloto de consumíveis rodam nessas cadeias: sem o ref, uma poção comprada/bebida
+   * há menos de um render — ou um `loadConsumables()` que só resolveu agora — deixa a
+   * lista defasada e o item deixa de ser usado sem nenhum aviso.
+   */
+  const consumablesRef = useRef<DungeonConsumable[]>([])
+  consumablesRef.current = consumables
   const [showItems, setShowItems] = useState(false)
   const atBoss = tokenIdx === LAST
   const nextIsBoss = tokenIdx === LAST - 1
@@ -1015,9 +1037,22 @@ export default function DungeonRun({
   autoFarmRef.current = autoFarm
   // Piloto do COMBATE: liga por padrão (mesma experiência de antes), mas o jogador
   // pode desligar (⚡ Auto ON/OFF na barra de combate) para escolher alvo/ataque na mão.
-  const [autoCombat, setAutoCombat] = useState(true)
-  // Uso automático de poções de HP/MP entre nós (e emergência em combate).
-  const [autoConsumables, setAutoConsumables] = useState(true)
+  // Persistidos no localStorage pela MESMA razão de `stopWhenFull` (abaixo): o farm
+  // automático REMONTA o componente a cada run, então sem isto o "eu desliguei" do
+  // jogador voltava a ligar sozinho na run seguinte.
+  const [autoCombat, setAutoCombat] = useState(() => {
+    try { return localStorage.getItem('dgn_auto_combat') !== '0' } catch { return true }
+  })
+  useEffect(() => {
+    try { localStorage.setItem('dgn_auto_combat', autoCombat ? '1' : '0') } catch { /* modo privado */ }
+  }, [autoCombat])
+  // Uso automático de poções entre nós e em combate (cura, antídoto/bandagem, buff).
+  const [autoConsumables, setAutoConsumables] = useState(() => {
+    try { return localStorage.getItem('dgn_auto_potion') !== '0' } catch { return true }
+  })
+  useEffect(() => {
+    try { localStorage.setItem('dgn_auto_potion', autoConsumables ? '1' : '0') } catch { /* modo privado */ }
+  }, [autoConsumables])
   /**
    * 🎒 Encerrar a run quando a mochila encher. Mesma família das poções
    * automáticas: uma conveniência LIGADA por padrão, visível e desligável na
@@ -1469,18 +1504,30 @@ export default function DungeonRun({
       if (!res.ok) return
       const data = await res.json()
       const list: DungeonConsumable[] = (Array.isArray(data) ? data : [])
-        // battleUsable:false = comida da Culinária (Pão cura FORA de combate;
-        // o buff dos pratos entra pelos levers) — fica fora do cinto da run.
-        .filter((row: any) => row?.item?.type === 'CONSUMABLE' && row.quantity > 0 && row?.item?.stats?.battleUsable !== false)
+        // O que entra no cinto se decide pelo que o item FAZ, não por `battleUsable`:
+        // essa flag carrega DOIS sentidos no catálogo e filtrar por ela cegamente
+        // apagava as poções de revive do cinto (bug do auto-revive, 2026-08).
+        .filter((row: any) => {
+          if (row?.item?.type !== 'CONSUMABLE' || row.quantity <= 0) return false
+          const s = row.item.stats || {}
+          // 🪶 Revive entra SEMPRE: nela `battleUsable:false` quer dizer "não se usa
+          // na mão", não "fica fora do combate" — é justo o que age sozinho ao cair.
+          if (Number(s.reviveHpPercent) > 0) return true
+          // 🍳 Comida da Culinária (Pão cura FORA de combate; o buff dos pratos entra
+          // pelos levers) e insumo de fazenda (Ração): fora do cinto da run.
+          if (s.foodBuff || s.farmFeed) return false
+          return s.battleUsable !== false
+        })
         .map((row: any) => {
           const e = consumableEffect(row.item.stats)
           return {
             id: row.item.id, name: row.item.name, hp: e.hp, mp: e.mp, qty: row.quantity,
             icon: consumableIcon(row.item.stats), cure: e.cure,
             atk: e.atk, def: e.def, dodge: e.dodge, buffTurns: e.buffTurns, revive: e.revive,
+            stamina: e.stamina,
           }
         })
-        .filter((c: DungeonConsumable) => c.hp > 0 || c.mp > 0 || !!c.cure || c.atk > 0 || c.def > 0 || c.dodge > 0 || c.revive > 0)
+        .filter((c: DungeonConsumable) => c.hp > 0 || c.mp > 0 || !!c.cure || c.atk > 0 || c.def > 0 || c.dodge > 0 || c.revive > 0 || c.stamina > 0)
       setConsumables(list)
     } catch {
       /* silencioso */
@@ -2517,6 +2564,36 @@ export default function DungeonRun({
       showBanner('🪶', 'Guardada: age sozinha se você cair em combate')
       return
     }
+    /**
+     * ⚡ Poção de Stamina: caminho PRÓPRIO, servidor-autoritativo.
+     *
+     * A stamina é o orçamento diário de runs e tem um relógio único no servidor
+     * (`regenAndPersist`); somar no cliente como se faz com HP/MP criaria stamina
+     * do nada. Então quem aplica é /api/inventory/use-item (que já lê
+     * `staminaAmount` do catálogo) e a run só reancora no número que ele devolve.
+     */
+    if (c.stamina > 0 && c.hp === 0 && c.mp === 0) {
+      setConsumables(prev => prev.map(x => (x.id === c.id ? { ...x, qty: x.qty - 1 } : x)).filter(x => x.qty > 0))
+      setShowItems(false)
+      showBanner('⚡', `${c.name} usada!`)
+      fetch('/api/inventory/use-item', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemId: c.id, characterId: character.id }),
+      })
+        .then(r => (r.ok ? r.json() : null))
+        .then(data => {
+          if (typeof data?.character?.stamina === 'number') {
+            setStamina(data.character.stamina)
+            pushLog(`⚡ ${c.name}: stamina ${data.character.stamina}`)
+          }
+        })
+        .catch(() => {
+          // Falhou no servidor: devolve a unidade ao cinto em vez de mentir.
+          loadConsumables()
+        })
+      return
+    }
     // 💪 Buff de combate: só faz sentido durante uma luta (dura N turnos).
     if (isBuff && phase !== 'combat') {
       showBanner('⚔️', 'Use durante um combate')
@@ -2666,7 +2743,7 @@ export default function DungeonRun({
     if (newHp <= 0) {
       // 🪶 Poção de Reviver: consumida SOZINHA ao cair — volta com % do HP máx e a
       // luta continua (fase inimiga segue). É o que sustenta o farm automático.
-      const reviver = consumables.find(x => x.revive > 0 && x.qty > 0)
+      const reviver = consumablesRef.current.find(x => x.revive > 0 && x.qty > 0)
       if (reviver) {
         const back = Math.max(1, Math.round(effMaxHp * (reviver.revive / 100)))
         setConsumables(prev => prev.map(x => (x.id === reviver.id ? { ...x, qty: x.qty - 1 } : x)).filter(x => x.qty > 0))
@@ -3409,11 +3486,85 @@ export default function DungeonRun({
       })
       .map(def => applyRankPatch(def, unlocks, form))
 
-  // Poção mais "justa" pro déficit: a MAIOR que restaura sem desperdiçar; se todas
-  // passam do buraco, a menor disponível. Só restauradores puros (nada de buff/revive).
-  const pickPotion = (kind: 'hp' | 'mp', deficit: number): DungeonConsumable | null => {
+  /**
+   * 💥 Dano que o PACOTE inteiro tende a causar numa rodada, pela mesma conta do
+   * combate real (`computeMonsterOutcome` + os multiplicadores de `dfx`).
+   *
+   * O piloto curava em 35% do HP máximo fixo, mas o nó traz 1-3 monstros: uma
+   * rodada inimiga inteira passa de 35% com folga, e o herói ia de meia-vida a
+   * zero sem NUNCA voltar ao `playerSelect` para beber. O gatilho de cura precisa
+   * olhar o que vem pela frente, não uma fração fixa.
+   *
+   * DETERMINÍSTICA de propósito (`rng: () => 0.5`, esquiva e bloqueio zerados):
+   * é um limiar de SEGURANÇA, e um limiar não pode encolher porque a amostra deu
+   * sorte. `resolveMonsterHit` sorteia a esquiva por `rng()`, então reaproveitar a
+   * função com a evasão real devolveria 0 de dano sempre que o sorteio esquivasse —
+   * o piloto acharia o pacote inofensivo justo quando ele não é. A conta aqui é
+   * "e se todos acertarem", que é o cenário que mata.
+   */
+  const expectedIncomingRound = (): number => {
+    const dfx = combatFxRef.current
+    const half = () => 0.5
+    const mult = dfx.dmgTakenMult * dfx.enemyDmgMult * unlocks.passives.selfDmgTakenMult
+    return packRef.current
+      .filter(m => m.hp > 0)
+      .reduce((sum, m) => {
+        const r = resolveMonsterHit({
+          power: monsterPowerFor(m, 'basic'),
+          sides: PVE_DIE.basic,
+          defender: { armor: playerLevers.armor, K: playerLevers.K, evade: 0, block: 0 },
+          forcedDefRoll: 1,
+          rng: half,
+        })
+        return sum + Math.max(1, Math.round(r.damage * mult))
+      }, 0)
+  }
+
+  /**
+   * 💪 Poção de buff para uma luta que vale a pena (Força/Defesa/Agilidade/Tônico).
+   *
+   * Sem isto elas só se acumulavam na mochila: `pickPotion` só olha restauradores
+   * e nenhum outro caminho automático as tocava.
+   *
+   * Duas regras que parecem detalhe e não são:
+   *  • Buff PURO — quem também restaura (Sangue de Dragão: +15 ⚔️ e cura 9999) é
+   *    cura de emergência, não buff de abertura; sai por `pickPotion`, no aperto.
+   *  • A MAIS FRACA primeiro, ao contrário do resto: gastar o Tônico do Berserker
+   *    num pacote comum enquanto a Poção de Força mofa na mochila é desperdício —
+   *    a rara tem que sobrar para quando a fraca acabar.
+   */
+  const pickBuffPotion = (): DungeonConsumable | null => {
+    const pool = consumablesRef.current.filter(
+      c => c.qty > 0 && c.revive === 0 && c.hp === 0 && c.mp === 0 && (c.atk > 0 || c.def > 0 || c.dodge > 0)
+    )
+    if (pool.length === 0) return null
+    // Ataque encurta a luta (é o que mais reduz dano tomado); depois defesa, depois esquiva.
+    const weakest = (list: DungeonConsumable[], amt: (c: DungeonConsumable) => number) =>
+      list.reduce((a, b) => (amt(b) < amt(a) ? b : a))
+    const byAtk = pool.filter(c => c.atk > 0)
+    if (byAtk.length > 0) return weakest(byAtk, c => c.atk)
+    const byDef = pool.filter(c => c.def > 0)
+    if (byDef.length > 0) return weakest(byDef, c => c.def)
+    return weakest(pool, c => c.dodge)
+  }
+
+  /**
+   * Poção mais "justa" pro déficit: a MAIOR que restaura sem desperdiçar; se todas
+   * passam do buraco, a menor disponível.
+   *
+   * Buff junto não desqualifica (Sangue de Dragão cura 9999 E dá +15 ⚔️): excluí-lo
+   * daqui e do `pickBuffPotion` deixava o item sem NENHUM caminho automático. A
+   * regra do "maior que cabe" já o guarda naturalmente para o último caso — um
+   * item que cura 9999 nunca "cabe" num buraco real.
+   */
+  const pickPotion = (kind: 'hp' | 'mp', deficit: number, pureOnly = false): DungeonConsumable | null => {
     const amt = (c: DungeonConsumable) => (kind === 'hp' ? c.hp : c.mp)
-    const pool = consumables.filter(c => c.qty > 0 && amt(c) > 0 && c.revive === 0 && c.atk === 0 && c.def === 0 && c.dodge === 0)
+    // `pureOnly` é do reabastecimento NA TRILHA: fora de combate o `useConsumable`
+    // recusa qualquer coisa com buff ("use durante um combate"), e o piloto ficaria
+    // reoferecendo o mesmo item para sempre — a caminhada travava sem nenhum aviso.
+    const pool = consumablesRef.current.filter(
+      c => c.qty > 0 && amt(c) > 0 && c.revive === 0 && (!pureOnly || (c.atk === 0 && c.def === 0 && c.dodge === 0))
+    )
     if (pool.length === 0) return null
     const fits = pool.filter(c => amt(c) <= deficit)
     if (fits.length > 0) return fits.reduce((a, b) => (amt(b) > amt(a) ? b : a))
@@ -3436,26 +3587,55 @@ export default function DungeonRun({
       const refDmg = autoRefDamage()
       // Consumíveis automáticos (se o switch estiver ligado):
       if (autoConsumables) {
-        // 1) Cura de emergência: HP baixo + poção de vida no inventário.
-        if (hpRef.current <= effMaxHp * 0.35 && hpRef.current < effMaxHp) {
+        const fx = combatFxRef.current
+        // 1) Corta o dano CONTÍNUO antes de qualquer coisa: veneno e sangramento são
+        // permanentes pela RUN inteira (o FX0 não é reaplicado entre lutas e só o
+        // Antídoto/Bandagem os limpam). Estancar vale mais que repor HP num balde
+        // furado — sem isto, uma mordida no primeiro nó drenava a run até o fim.
+        if (fx.poisoned) {
+          const anti = consumablesRef.current.find(c => c.cure === 'poison' && c.qty > 0)
+          if (anti) { useConsumable(anti); return }
+        }
+        if (fx.bleeding) {
+          const band = consumablesRef.current.find(c => c.cure === 'bleed' && c.qty > 0)
+          if (band) { useConsumable(band); return }
+        }
+        // 2) Cura de emergência: o gatilho é o MAIOR entre 35% do HP máximo e a rodada
+        // que o pacote ainda tem para dar — ver expectedIncomingRound. O teto de 70%
+        // é o freio: num pacote que bate mais forte que a barra inteira, sem ele o
+        // piloto beberia TODO turno e nunca revidaria, torrando o estoque à toa.
+        const danger = Math.min(effMaxHp * 0.7, Math.max(effMaxHp * 0.35, expectedIncomingRound()))
+        if (hpRef.current <= danger && hpRef.current < effMaxHp) {
           const potion = pickPotion('hp', effMaxHp - hpRef.current)
           if (potion) { useConsumable(potion); return }
         }
-        // 2) Repõe MP só quando o Ataque de Classe está liberado e ainda não cabe no MP atual.
+        // 3) Repõe MP só quando o Ataque de Classe está liberado e ainda não cabe no MP atual.
         if (unlocks.classAttack && mp < effWeaponMp && mp < character.maxMp) {
           const mPotion = pickPotion('mp', character.maxMp - mp)
           if (mPotion) { useConsumable(mPotion); return }
         }
       }
       // O combate NÃO gasta stamina (tudo custa MP); a stamina é só o orçamento diário de runs.
-      // 3) Transforma (1× por luta) — mas só se o PACOTE ainda tem luta pela frente (não
-      // desperdiça a transformação num resto de encontro que cai em 1-2 golpes baratos).
       const packHp = alive.reduce((sum, m) => sum + m.hp, 0)
+      // 4) 💪 Poção de buff numa luta que vale a pena — mesma leitura que decide a
+      // transformação logo abaixo (`packHp > refDmg * 2`): num resto de encontro que
+      // cai em 1-2 golpes o buff seria jogado fora. Uma por vez, e só se não houver
+      // nenhum buff ativo (não empilha nem renova por cima do que ainda está de pé).
+      if (autoConsumables && packHp > refDmg * 2) {
+        const fx = combatFxRef.current
+        const buffActive = fx.dmgDealtTurns > 0 || fx.dmgTakenTurns > 0 || fx.evadeBuffTurns > 0
+        if (!buffActive) {
+          const buff = pickBuffPotion()
+          if (buff) { useConsumable(buff); return }
+        }
+      }
+      // 5) Transforma (1× por luta) — mas só se o PACOTE ainda tem luta pela frente (não
+      // desperdiça a transformação num resto de encontro que cai em 1-2 golpes baratos).
       if (!transform && !transformedThisFightRef.current && transformForms.length > 0 && packHp > refDmg * 2) {
         const cfg = TRANSFORMATION_CONFIG[transformForms[0]]
         if (cfg && mp >= cfg.cost.mp) { activateTransform(transformForms[0]); return }
       }
-      // 4) Transformado: usa a HABILIDADE DE DANO da forma (d20) se pagável e fora da
+      // 6) Transformado: usa a HABILIDADE DE DANO da forma (d20) se pagável e fora da
       // recarga — mas NUNCA em quem já cai com o melhor golpe liberado: o especial vai no
       // inimigo mais FORTE que ainda aguenta; o quase-morto é finalizado com golpe barato.
       if (transform) {
@@ -3472,7 +3652,7 @@ export default function DungeonRun({
           }
           // Nenhum alvo "merece" o especial — guarda o MP e cai pros golpes baratos.
         } else if (dmgAbility && packHp > refDmg * 2) {
-          // 4b) Dano em recarga numa luta ainda longa: aproveita o turno com o UTILITÁRIO
+          // 6b) Dano em recarga numa luta ainda longa: aproveita o turno com o UTILITÁRIO
           // da forma (buff/cura) — só se a árvore já liberou (autoFormSpecials filtra).
           const fx = combatFxRef.current
           const util = specials.find(d => d.kind === 'util')
@@ -3485,7 +3665,7 @@ export default function DungeonRun({
           }
         }
       }
-      // 5) Golpes baratos: foca o inimigo MAIS FRACO vivo do pacote (atualiza o ref de
+      // 7) Golpes baratos: foca o inimigo MAIS FRACO vivo do pacote (atualiza o ref de
       // forma síncrona) e ataca com o melhor golpe liberado/pagável sem desperdiçar MP.
       const weak = weakestOf(packRef.current)
       if (weak && weak.id !== monsterRef.current?.id) setActiveTarget(weak.id)
@@ -3514,11 +3694,11 @@ export default function DungeonRun({
     const refillPotion = (): DungeonConsumable | null => {
       if (!autoConsumables) return null
       if (hp < effMaxHp * 0.9) {
-        const potion = pickPotion('hp', effMaxHp - hp)
+        const potion = pickPotion('hp', effMaxHp - hp, true)
         if (potion) return potion
       }
       if (mp < character.maxMp * 0.9) {
-        const mPotion = pickPotion('mp', character.maxMp - mp)
+        const mPotion = pickPotion('mp', character.maxMp - mp, true)
         if (mPotion) return mPotion
       }
       return null
@@ -4036,10 +4216,12 @@ export default function DungeonRun({
                     const hpFull = hp >= effMaxHp
                     const mpFull = mp >= character.maxMp
                     const isBuff = c.atk > 0 || c.def > 0 || c.dodge > 0
+                    const isStamina = c.stamina > 0 && c.hp === 0 && c.mp === 0
                     const disabled =
                       (c.hp > 0 && c.mp === 0 && hpFull) ||
                       (c.mp > 0 && c.hp === 0 && mpFull) ||
                       (c.hp > 0 && c.mp > 0 && hpFull && mpFull) ||
+                      (isStamina && stamina >= character.maxStamina) ||
                       (c.cure === 'poison' && !combatFx.poisoned) ||
                       (c.cure === 'bleed' && !combatFx.bleeding) ||
                       (isBuff && phase !== 'combat') ||
@@ -4062,6 +4244,7 @@ export default function DungeonRun({
                               {c.def > 0 ? `+${c.def} 🛡️ por ${c.buffTurns || 3} turnos` : ''}
                               {c.dodge > 0 ? `+${c.dodge}% 💨 por ${c.buffTurns || 3} turnos` : ''}
                               {c.revive > 0 ? `Revive com ${c.revive}% do HP — age sozinha ao cair` : ''}
+                              {isStamina ? `+${c.stamina} ⚡ stamina` : ''}
                             </div>
                           </div>
                         </div>

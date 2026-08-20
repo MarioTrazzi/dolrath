@@ -46,7 +46,7 @@ import {
 } from '@/lib/skillTree'
 import { specialDisplayName, classAttackDisplayName } from '@/lib/weaponFlavor'
 import { applyEnhancementToStats } from '@/lib/enhancementSystem'
-import { isBroken, wearFor } from '@/lib/durability'
+import { isBroken, isLowDurability, wearFor } from '@/lib/durability'
 import { getLevelInfo } from '@/lib/experienceSystem'
 import { itemImagePath } from '@/lib/itemCatalog'
 import { parseActiveFood, foodBuffAttrBonus, foodBuffLabel, foodBuffRemainingMin } from '@/lib/foodBuff'
@@ -428,6 +428,9 @@ function mapEquipment(equipArray: any[]): EquipmentMap {
         type: eq.item.type,
         stats: eq.item.stats || {},
         enhancementLevel: eq.enhancementLevel || 0,
+        // Estado de desgaste vai junto: o tile do combate marca quebrado/quase quebrando.
+        durability: typeof eq.durability === 'number' ? eq.durability : null,
+        maxDurability: typeof eq.maxDurability === 'number' ? eq.maxDurability : null,
       }
     }
   }
@@ -2742,7 +2745,7 @@ export default function DungeonRun({
       if (after === 0) {
         pushLog(`💔 ${eq.item?.name ?? 'Equipamento'} QUEBROU! Sem bônus até reparar no ferreiro.`)
         showBanner('💔', `${eq.item?.name ?? 'Equipamento'} quebrou!`, 2600)
-      } else if (after <= 15 && !wearWarnedRef.current.has(eq.slot)) {
+      } else if (isLowDurability({ durability: after }) && !wearWarnedRef.current.has(eq.slot)) {
         wearWarnedRef.current.add(eq.slot)
         pushLog(`⚠️ ${eq.item?.name ?? 'Equipamento'} está quase quebrando (${after}/${eq.maxDurability}).`)
       }

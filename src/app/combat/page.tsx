@@ -220,6 +220,9 @@ function mapEquipment(equipArray: any[]): EquipmentMap {
         type: eq.item.type,
         stats: eq.item.stats || {},
         enhancementLevel: eq.enhancementLevel || 0,
+        // Estado de desgaste vai junto: o tile do combate marca quebrado/quase quebrando.
+        durability: typeof eq.durability === 'number' ? eq.durability : null,
+        maxDurability: typeof eq.maxDurability === 'number' ? eq.maxDurability : null,
       }
     }
   }

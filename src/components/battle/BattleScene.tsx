@@ -8,6 +8,7 @@ import { AnimatedDie } from '@/components/battle/AnimatedDice'
 import { getTransformationGlow } from '@/lib/transformationSystem'
 import { applyEnhancementToStats, getLevelLabel } from '@/lib/enhancementSystem'
 import { formatItemStats } from '@/lib/itemStats'
+import { isBroken, isLowDurability } from '@/lib/durability'
 import { useResolvedItemImage } from '@/hooks/useResolvedItemImage'
 import {
   resolveActionFx, ImpactFX, AuraFX, DodgeFX, CritFX,
@@ -27,6 +28,9 @@ export interface EquippedItem {
   stats?: Record<string, number | undefined>
   /** Nível de aprimoramento da instância equipada (+1, +2, ...). */
   enhancementLevel?: number
+  /** Desgaste da instância equipada. Ausente = peça sã (payloads antigos/mocks). */
+  durability?: number | null
+  maxDurability?: number | null
 }
 
 // Chaves: WEAPON, SHIELD, HELMET, ARMOR, GLOVES, BOOTS, NECKLACE, RING_1, RING_2
@@ -256,6 +260,11 @@ function EquipSlot({ slot, item, size = 'sm' }: { slot: string; item: EquippedIt
 
   const level = item.enhancementLevel || 0
   const stats = formatItemStats(applyEnhancementToStats(item.stats, level), item.type)
+  // ⚔️ Estado de desgaste: peça quebrada não soma NADA no combate, e a que está
+  // por um fio avisa antes. Número de durabilidade não aparece aqui de propósito —
+  // no meio da luta o que importa é só "isso ainda funciona?".
+  const broken = isBroken(item)
+  const low = isLowDurability(item)
 
   const show = () => {
     const r = ref.current?.getBoundingClientRect()
@@ -284,12 +293,24 @@ function EquipSlot({ slot, item, size = 'sm' }: { slot: string; item: EquippedIt
       onMouseEnter={show}
       onMouseLeave={() => setHover(false)}
       onClick={() => (hover ? setHover(false) : show())}
-      className={`relative flex items-center justify-center overflow-hidden bg-black/40 border shadow-lg hover:border-amber-400 hover:scale-110 transition-all cursor-help ${
-        isLg
-          ? 'w-11 h-11 sm:w-16 sm:h-16 rounded-xl border-amber-400/60'
-          : 'w-9 h-9 rounded-lg border-amber-500/40 shadow-black/50'
+      className={`relative flex items-center justify-center overflow-hidden bg-black/40 border shadow-lg hover:scale-110 transition-all cursor-help ${
+        isLg ? 'w-11 h-11 sm:w-16 sm:h-16 rounded-xl' : 'w-9 h-9 rounded-lg shadow-black/50'
+      } ${
+        broken
+          ? 'border-red-500/80 hover:border-red-400'
+          : low
+            ? 'border-orange-400/80 hover:border-orange-300'
+            : `${isLg ? 'border-amber-400/60' : 'border-amber-500/40'} hover:border-amber-400`
       }`}
-      style={isLg ? { boxShadow: '0 0 14px rgba(251,191,36,0.35)' } : undefined}
+      style={
+        broken
+          ? { boxShadow: '0 0 12px rgba(239,68,68,0.45)' }
+          : low
+            ? { boxShadow: '0 0 12px rgba(251,146,60,0.45)' }
+            : isLg
+              ? { boxShadow: '0 0 14px rgba(251,191,36,0.35)' }
+              : undefined
+      }
     >
       {itemImage ? (
         // eslint-disable-next-line @next/next/no-img-element
@@ -298,19 +319,36 @@ function EquipSlot({ slot, item, size = 'sm' }: { slot: string; item: EquippedIt
           alt={item.name}
           onError={onItemImageError}
           referrerPolicy="no-referrer"
-          className="w-full h-full object-cover"
+          className={`w-full h-full object-cover ${broken ? 'grayscale opacity-45' : ''}`}
         />
       ) : item.type ? (
-        <ItemIcon type={item.type as any} size={isLg ? 30 : 18} className="text-amber-300" />
+        <ItemIcon type={item.type as any} size={isLg ? 30 : 18} className={broken ? 'text-gray-500 opacity-60' : 'text-amber-300'} />
       ) : (
         <span className={isLg ? 'text-2xl' : 'text-sm'}>{SLOT_EMOJI[slot] || '❔'}</span>
       )}
       {level > 0 && (
         <span
-          className={`absolute right-0 bottom-0 font-black leading-none text-amber-300 px-0.5 ${isLg ? 'text-xs' : 'text-[9px]'}`}
+          className={`absolute right-0 font-black leading-none px-0.5 ${broken ? 'top-0 text-gray-400' : 'bottom-0 text-amber-300'} ${isLg ? 'text-xs' : 'text-[9px]'}`}
           style={{ textShadow: '0 1px 2px #000, 0 0 3px #000' }}
         >
           {getLevelLabel(level)}
+        </span>
+      )}
+
+      {/* Selo de estado: quebrada (💔, sem bônus) ou por um fio (⚠️). */}
+      {(broken || low) && (
+        <span
+          className={`absolute left-0 top-0 leading-none px-0.5 ${isLg ? 'text-sm' : 'text-[10px]'}`}
+          style={{ textShadow: '0 1px 2px #000, 0 0 3px #000' }}
+        >
+          {broken ? '💔' : '⚠️'}
+        </span>
+      )}
+      {/* A palavra só cabe no tile grande (armas em punho); no pequeno o 💔 + borda
+          vermelha fazem o aviso e o card de hover explica. */}
+      {broken && isLg && (
+        <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-red-900/85 text-center font-black uppercase tracking-wide text-red-100 text-[8px] leading-[11px]">
+          quebrado
         </span>
       )}
 
@@ -323,10 +361,25 @@ function EquipSlot({ slot, item, size = 'sm' }: { slot: string; item: EquippedIt
             <span className="truncate">{item.name}</span>
             {level > 0 && <span className="flex-shrink-0 text-[10px] font-black text-amber-300">{getLevelLabel(level)}</span>}
           </div>
+          {broken && (
+            <div className="mt-1 rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] font-bold text-red-300">
+              💔 Quebrado — não dá nenhum bônus. Repare no ferreiro.
+            </div>
+          )}
+          {low && (
+            <div className="mt-1 rounded bg-orange-500/15 px-1.5 py-0.5 text-[10px] font-bold text-orange-300">
+              ⚠️ Quase quebrando
+            </div>
+          )}
           {stats.length > 0 && (
             <div className="mt-1 flex flex-wrap gap-1">
               {stats.map((s, i) => (
-                <span key={i} className="rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">
+                <span
+                  key={i}
+                  className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                    broken ? 'bg-gray-500/15 text-gray-500 line-through' : 'bg-emerald-500/20 text-emerald-300'
+                  }`}
+                >
                   {s}
                 </span>
               ))}

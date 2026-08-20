@@ -69,3 +69,16 @@ export const PVP_FIGHT_WEAR_KILLS = 4
 export function wearForPvpFight(slot: string, level?: number | null): number {
   return wearFor(slot, PVP_FIGHT_WEAR_KILLS, false, level)
 }
+
+// ⚠️ ALERTA DE DESGASTE (2026-08-19). A tela de combate mostra as peças equipadas, mas
+// não o estado delas — dava pra lutar uma run inteira com a arma quebrada sem perceber.
+// A durabilidade em número não interessa ao jogador no meio da luta; o que interessa é
+// "isso ainda funciona?". Então são só DOIS estados visíveis: quase quebrando e quebrado.
+/** Abaixo (ou igual) disto a peça entra em alerta de "quase quebrando". */
+export const LOW_DURABILITY = 15
+
+/** Peça ainda funcional, mas prestes a quebrar (mesmo limiar do aviso da masmorra). */
+export function isLowDurability(eq: { durability?: number | null } | null | undefined): boolean {
+  const d = eq?.durability
+  return typeof d === 'number' && d > 0 && d <= LOW_DURABILITY
+}

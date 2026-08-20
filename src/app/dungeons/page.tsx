@@ -444,13 +444,6 @@ export default function DungeonsPage() {
           </div>
         )}
 
-        {selectedCharacter && (selectedCharacter as any).isAlive === false && (
-          <div className="rounded-[3px] border border-red-900/70 bg-red-950/40 p-4 mb-6 text-center">
-            <p className="text-red-300 font-bold text-sm">💀 Personagem morto</p>
-            <p className="text-red-400/80 text-xs">Use uma Poção de Reviver antes de entrar em masmorras.</p>
-          </div>
-        )}
-
         {/* ⚗️ Herói ferido: HP/MP sobrevivem à run, então entrar assim é escolha
             (e às vezes a certa — poções custam menos que a taxa). O atalho para
             sarar fica aqui para não obrigar a volta pela loja. */}

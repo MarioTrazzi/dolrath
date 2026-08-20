@@ -1027,7 +1027,8 @@ export const ITEM_CATALOG: CatalogItem[] = [
 ];
 
 // === CATÁLOGO DE CONSUMÍVEIS ===
-// Loja: básicos/intermediários (espelham seed-battle-consumables.ts).
+// Loja: básicos/intermediários. Este catálogo é a ÚNICA fonte da verdade — o
+// /api/seed grava os stats daqui no banco (ver seedConsumableCatalog).
 // Masmorras/Aventuras: aprimorados e únicos (drop de chefe).
 
 export interface ConsumableItem {
@@ -1114,6 +1115,10 @@ export const CONSUMABLE_CATALOG: ConsumableItem[] = [
     stats: { attackBonus: 12, duration: 4, effect: 'temporary', battleUsable: true },
   },
   {
+    // ⚠️ `battleUsable: false` nos REVIVE_POTION significa "não se usa NA MÃO" — a
+    // poção age sozinha ao cair (ver o auto-revive em DungeonRun). NÃO use essa
+    // flag para decidir o que entra no cinto da run: foi exatamente esse
+    // duplo-sentido que apagou os revives do combate uma vez.
     name: 'Pó de Fênix', description: 'Revive um personagem caído com 50% do HP máximo.',
     subtype: 'REVIVE_POTION', level: 12, rarity: 'EPIC', goldPrice: 1200, source: 'dungeon_boss',
     stats: { reviveHpPercent: 50, effect: 'revive', battleUsable: false },

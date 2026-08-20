@@ -599,21 +599,6 @@ export default function CombatLobbyPage() {
 
         <div className="overflow-hidden rounded-b-[4px] border border-t border-[#46464c] shadow-2xl shadow-black/60" style={{ background: PANEL_BG, borderTopColor: 'rgba(0,0,0,0.6)' }}>
 
-          {/* Aviso se personagem está morto */}
-          {selectedCharacter && !selectedCharacter.isAlive && (
-            <div className="border-b border-red-900/70 bg-red-950/40 p-4">
-              <div className="flex items-center">
-                <span className="text-xl mr-3">💀</span>
-                <div>
-                  <p className="text-red-300 font-bold">Personagem Morto</p>
-                  <p className="text-[#8a8a90] text-sm">
-                    Use uma Poção de Reviver antes de entrar em combate PvP.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Aviso se não há personagens */}
           {characters.length === 0 && (
             <div className="border-b p-4" style={{ borderColor: 'rgba(224,154,58,0.4)', background: 'rgba(58,45,22,0.5)' }}>

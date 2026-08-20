@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { ITEM_CATALOG, TOOL_CATALOG, itemImagePath } from '@/lib/itemCatalog'
-import { ItemType } from '@prisma/client'
+import { ITEM_CATALOG, TOOL_CATALOG, CONSUMABLE_CATALOG, FOOD_CATALOG, itemImagePath } from '@/lib/itemCatalog'
+import { SELL_FRACTION_CONSUMABLE } from '@/lib/sellPricing'
+import { ConsumableSubtype, ItemType } from '@prisma/client'
 
 // Verificação básica: header X-SEED-SECRET deve corresponder à variável SEED_SECRET
 const SEED_SECRET = process.env.SEED_SECRET || 'dev-secret'
@@ -53,6 +54,68 @@ async function seedItemCatalog() {
       })
       results.created++
       results.items.push(`✨ ${item.name}`)
+    }
+  }
+
+  return results
+}
+
+/**
+ * 🧪 Poções e pratos (CONSUMABLE_CATALOG + FOOD_CATALOG).
+ *
+ * Sem isto o catálogo de consumíveis NUNCA chegava ao banco: as linhas de `Item`
+ * nasciam no primeiro drop/craft (ver dungeonRunServer/craft-potion, que só criam
+ * quando não existe) e congelavam ali. Toda mudança de balanceamento de poção
+ * ficava só no TypeScript — foi assim que a "Poção de Reviver" ficou com o
+ * `reviveHpPercent: 25` de um seed antigo enquanto o catálogo já dizia 30.
+ *
+ * `subtype` entra junto porque é ele que distingue REVIVE_POTION de HEALTH_POTION
+ * no inventário; sem ele o item volta do banco sem categoria.
+ */
+async function seedConsumableCatalog() {
+  const results = { created: 0, updated: 0, items: [] as string[] }
+
+  for (const c of [...CONSUMABLE_CATALOG, ...FOOD_CATALOG]) {
+    const stats = {
+      ...c.stats,
+      rarity: c.rarity,
+      source: c.source,
+      adventureBoss: c.adventureBoss ?? null,
+      sellPrice: Math.floor(c.goldPrice * SELL_FRACTION_CONSUMABLE),
+    }
+
+    const existing = await prisma.item.findFirst({ where: { name: c.name } })
+
+    if (existing) {
+      await prisma.item.update({
+        where: { id: existing.id },
+        data: {
+          description: c.description,
+          type: ItemType.CONSUMABLE,
+          subtype: c.subtype as ConsumableSubtype,
+          level: c.level,
+          goldPrice: c.goldPrice,
+          image: itemImagePath(c.name),
+          stats,
+        },
+      })
+      results.updated++
+      results.items.push(`🔄 ${c.name}`)
+    } else {
+      await prisma.item.create({
+        data: {
+          name: c.name,
+          description: c.description,
+          type: ItemType.CONSUMABLE,
+          subtype: c.subtype as ConsumableSubtype,
+          level: c.level,
+          goldPrice: c.goldPrice,
+          image: itemImagePath(c.name),
+          stats,
+        },
+      })
+      results.created++
+      results.items.push(`✨ ${c.name}`)
     }
   }
 
@@ -150,9 +213,10 @@ export async function POST(request: Request) {
       )
     }
 
-    console.log('🌱 Iniciando seed do catálogo e pedras de aprimoramento...')
+    console.log('🌱 Iniciando seed do catálogo, consumíveis e pedras de aprimoramento...')
 
     const catalogResults = await seedItemCatalog()
+    const consumableResults = await seedConsumableCatalog()
     const stonesResults = await seedEnhancementStones()
 
     return NextResponse.json({
@@ -163,6 +227,12 @@ export async function POST(request: Request) {
         updated: catalogResults.updated,
         total: catalogResults.items.length,
         preview: catalogResults.items.slice(0, 5),
+      },
+      consumables: {
+        created: consumableResults.created,
+        updated: consumableResults.updated,
+        total: consumableResults.items.length,
+        preview: consumableResults.items.slice(0, 5),
       },
       stones: {
         created: stonesResults.created,

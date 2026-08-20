@@ -167,12 +167,12 @@ const subjects: Subject[] = [
   ...TOOL_CATALOG.map((t) => ({
     name: t.name, description: t.description, type: t.type, rarity: t.rarity,
   })),
-  // Consumíveis legados que vivem só no seed-battle-consumables.ts (nomes que
-  // não estão no CONSUMABLE_CATALOG) — gerados para não deixar refs quebradas.
+  // Consumíveis LEGADOS: nomes que não estão no CONSUMABLE_CATALOG mas ainda têm
+  // linhas de Item no banco (vinham de um seed antigo, já removido) — a arte é
+  // gerada para não deixar referência quebrada no inventário de quem os tem.
   { name: 'Poção de Mana Grande', description: 'Restaura 50 MP instantaneamente em combate.', type: 'CONSUMABLE', rarity: 'COMMON' as any },
   { name: 'Elixir de Energia', description: 'Restaura 40 de stamina instantaneamente.', type: 'CONSUMABLE', rarity: 'COMMON' as any },
   { name: 'Elixir Maior', description: 'Restaura 40 HP e 30 MP em combate.', type: 'CONSUMABLE', rarity: 'UNCOMMON' as any },
-  { name: 'Poção de Reviver', description: 'Revive um personagem morto com 25% do HP máximo.', type: 'CONSUMABLE', rarity: 'RARE' as any },
   // Pedras de aprimoramento (obtidas em masmorras). type ENHANCEMENT_STONE só
   // muda o PROMPT (no DB continuam CONSUMABLE); o wiring da imagem é por nome.
   { name: 'Pedra Negra (Arma)', description: 'Fragmento de pedra negra com brilho âmbar quente e uma marca de espadas cruzadas gravada em runas na face. Aprimora ARMAS de +1 a +15.', type: 'ENHANCEMENT_STONE', rarity: 'UNCOMMON' as any },

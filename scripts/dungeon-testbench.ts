@@ -923,65 +923,147 @@ function buildHtml(matrices: BossMatrix[], rows: Phase2Row[], findings: Finding[
     <ul class="findings">${items}</ul></div>`)
   }
 
+  // ---- Leitura rápida: o resumo ANTES do detalhe ----
+  // Um relatório de 4 masmorras × 4 classes × 3 fases não se lê de cima a
+  // baixo. Este painel carrega a única conclusão que muda decisão: quanto o
+  // jogo que está no ar se afastou do jogo que foi calibrado.
+  let summary = ''
+  if (matrices.length) {
+    const cards = DUNGEONS_TO_RUN.map(dg => {
+      const reals = matrices.filter(x => x.dungeon.id === dg.id && x.mode === 'real')
+      const calibs = matrices.filter(x => x.dungeon.id === dg.id && x.mode === 'calib')
+      if (!reals.length) return ''
+      const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
+      const real = avg(reals.map(m => m.atTarget))
+      const calib = avg(calibs.map(m => m.atTarget))
+      const drift = (real - calib) * 100
+      const tg = TARGET_GEAR[dg.id]
+      // Escada de tier média entre as classes — onde a dificuldade realmente vive.
+      const tiers = ROMAN.map((_r, i) => avg(reals.map(m => m.byTier[i] || 0)))
+      return `<article class="card">
+        <h3>${esc(dg.emoji)} ${esc(dg.name)}</h3>
+        <p class="sub">nv${dg.levelReq}→${dg.clearLevel} · alvo ${esc(RARITY_PT[tg.rarity])} ${esc(tg.tag)}</p>
+        <div class="pair">
+          <div><span>no ar</span><b class="big">${pctS(real)}</b></div>
+          <div><span>calibrado</span><b class="big dim">${pctS(calib)}</b></div>
+          <div><span>desvio</span><b class="big ${drift > 15 ? 'crit' : drift > 5 ? 'warn' : ''}">+${drift.toFixed(0)}pp</b></div>
+        </div>
+        <p class="sub">chefe por tier, no gear-alvo</p>
+        <div class="tierbar">${tiers.map((w, i) => `<span class="t" title="tier ${ROMAN[i]} → ${pctS(w)}"><i style="height:${Math.max(3, Math.round(w * 100))}%"></i><em>${ROMAN[i]}</em></span>`).join('')}</div>
+      </article>`
+    }).join('')
+    const highs = findings.filter(f => f.severity === 'ALTO').length
+    summary = `<div class="phase summary">
+      <h2>Leitura rápida</h2>
+      <p class="lead">Cada masmorra foi calibrada para um win-rate de chefe específico — 88% na Floresta descendo até 52% nas Ruínas, uma curva de "fácil" para "bem difícil".
+      <b>no ar</b> é o que o jogo entrega com a fórmula de HP que o banco grava; <b>calibrado</b> é o que os sims descrevem.
+      A barra mostra onde a dificuldade realmente vive hoje: no tier da masmorra, não na progressão de gear dentro da banda.${findings.length ? ` A auditoria de drop levantou <b>${findings.length}</b> achados, ${highs} de severidade alta.` : ''}</p>
+      <div class="cards">${cards}</div>
+    </div>`
+  }
+
   return `<title>Bateria das Masmorras</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-:root{--bg:#0b0d10;--panel:#14181d;--panel2:#1b2027;--line:#2a3138;--ink:#e8e3d6;--dim:#8b939c;--gold:#d4af5a;--good:#5aa469;--warn:#c9922e;--bad:#b4543f}
+/* Mundo visual único e deliberado: a "pedra amaldiçoada" chumbo+ouro do jogo.
+   Sem alternância de tema — a página pinta o próprio fundo e todas as cores,
+   então não empresta o ground do host em nenhum dos dois modos. */
+:root{
+  --bg:#0d0f12; --panel:#161a20; --panel2:#1c222a; --line:#2b323b;
+  --ink:#e9e4d7; --dim:#8d949d;
+  --gold:#d4af5a; --gold-dim:#8d7333;
+  --good:#6a9f74; --warn:#c9922e; --crit:#b4543f;
+  --display:'Cinzel',Georgia,serif;
+  --sans:'IBM Plex Sans',ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-header{padding:28px 32px;border-bottom:2px solid var(--gold);background:linear-gradient(180deg,#171b21,#0b0d10)}
-header h1{margin:0 0 6px;font-size:24px;letter-spacing:.3px;color:var(--gold)}
-header p{margin:0;color:var(--dim);max-width:70ch}
-.phase{padding:8px 32px 32px;border-bottom:8px solid #06080a}
-.phase>h2{color:var(--gold);font-size:19px;margin:26px 0 6px}
-.lead{color:var(--dim);max-width:88ch;margin:0 0 18px}
-section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:0 0 16px}
-section h3{margin:0 0 12px;font-size:16px}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 var(--sans)}
+h1,h2,h3,h4{text-wrap:balance;margin:0}
+
+header{padding:40px 32px 30px;border-bottom:1px solid var(--gold-dim);background:
+  radial-gradient(120% 140% at 12% -10%,#1e242c 0%,#0d0f12 62%)}
+header h1{font-family:var(--display);font-size:clamp(26px,4vw,38px);font-weight:600;letter-spacing:.02em;color:var(--gold)}
+header p{margin:12px 0 0;color:var(--dim);max-width:66ch}
+header b{color:var(--ink);font-weight:500}
+
+.phase{padding:4px 32px 36px;border-bottom:1px solid var(--line)}
+.phase>h2{font-family:var(--display);color:var(--gold);font-size:22px;font-weight:600;letter-spacing:.02em;margin:34px 0 8px}
+.lead{color:var(--dim);max-width:86ch;margin:0 0 20px}
+.lead b{color:var(--ink);font-weight:500}
+.summary{background:linear-gradient(180deg,#12161b,var(--bg))}
+
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+.card h3{font-size:15px;font-weight:600}
+.card .sub{margin:4px 0 12px;color:var(--dim);font-size:12px}
+.pair{display:flex;gap:18px;margin:0 0 16px}
+.pair span{display:block;color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.08em}
+.big{font-family:var(--mono);font-size:20px;font-weight:500;font-variant-numeric:tabular-nums}
+.big.dim{color:var(--dim)}.big.warn{color:var(--warn)}.big.crit{color:var(--crit)}
+
+.tierbar{display:flex;align-items:flex-end;gap:6px;height:56px}
+.tierbar .t{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}
+.tierbar i{display:block;width:100%;background:linear-gradient(180deg,var(--gold),var(--gold-dim));border-radius:2px 2px 0 0}
+.tierbar em{font-family:var(--mono);font-style:normal;font-size:10px;color:var(--dim);margin-top:4px}
+
+section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:0 0 14px}
+section h3{margin:0 0 12px;font-size:16px;font-weight:600}
 .tag{color:var(--dim);font-weight:400;font-size:12px;margin-left:8px}
-.klass{border-top:1px solid var(--line);padding:12px 0 4px}
-.klass h4{margin:0 0 6px;color:var(--gold);font-size:13px;text-transform:uppercase;letter-spacing:.6px}
-.drift{margin:0 0 8px;color:var(--dim)}
-.tiers{margin:0 0 10px;color:var(--dim);font-size:12px}
-.drift b{color:var(--ink)}
+.klass{border-top:1px solid var(--line);padding:14px 0 4px}
+.klass h4{margin:0 0 8px;color:var(--gold);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.12em}
+.drift,.tiers{margin:0 0 10px;color:var(--dim);font-size:13px}
+.drift b{color:var(--ink);font-weight:500}
 .dim{color:var(--dim)}
-.badge{display:inline-block;margin-left:8px;padding:1px 8px;border:1px solid var(--line);border-radius:99px;font-size:12px}
+.badge{display:inline-block;margin-left:8px;padding:1px 9px;border:1px solid var(--line);border-radius:99px;font-size:12px;font-family:var(--mono)}
 .badge.warn{border-color:var(--warn);color:var(--warn)}
-table.th{margin:0 0 14px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;font-size:12px}
-table.th thead th{color:var(--dim);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--line)}
-table.th tbody th{color:var(--dim);font-weight:500;text-align:left}
+
+table.th{margin:0 0 16px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;font-size:13px}
+table.th thead th{color:var(--dim);font-weight:500;font-size:10px;text-transform:uppercase;letter-spacing:.1em;border-bottom:1px solid var(--line)}
+table.th tbody th{color:var(--dim);font-weight:500;text-align:left;white-space:nowrap}
 table.th td{color:var(--ink)}
-.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
-table{border-collapse:collapse;font-size:12px;min-width:100%}
-th,td{padding:5px 9px;text-align:left;white-space:nowrap}
-table.heat th{color:var(--dim);font-weight:500;font-size:11px}
-table.heat td{color:#fff;text-align:center;font-variant-numeric:tabular-nums;border:1px solid #0b0d10;min-width:44px}
-table.heat .mk{margin-left:3px;opacity:.85}
+
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:8px}
+table{border-collapse:collapse;font-size:12.5px;min-width:100%}
+th,td{padding:6px 10px;text-align:left;white-space:nowrap}
+table.heat th{color:var(--dim);font-weight:500;font-size:10.5px;font-family:var(--mono)}
+table.heat td{color:#fff;text-align:center;font-family:var(--mono);font-variant-numeric:tabular-nums;border:1px solid var(--bg);min-width:46px}
+table.heat .mk{margin-left:3px;opacity:.9}
 table.heat tr.anchor th{color:var(--gold)}
 table.heat tr.anchor td{outline:1px solid var(--gold);outline-offset:-1px}
-table.grid th{color:var(--dim);border-bottom:1px solid var(--line);font-weight:500}
-table.grid td{border-bottom:1px solid #1e242b;font-variant-numeric:tabular-nums}
-table.grid tr.alt td{background:#171c22}
-td.good{color:var(--good)}td.warn{color:var(--warn)}td.bad{color:var(--bad)}
-.groups{white-space:normal;max-width:340px}
-.chip{display:inline-block;padding:1px 7px;margin:1px;border:1px solid var(--line);border-radius:99px;font-size:11px;color:var(--dim)}
+table.grid th{color:var(--dim);border-bottom:1px solid var(--line);font-weight:500;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em}
+table.grid td{border-bottom:1px solid #1e242b;font-family:var(--mono);font-variant-numeric:tabular-nums}
+td.good{color:var(--good)}td.warn{color:var(--warn)}td.bad{color:var(--crit)}
+table.grid tr.alt td{background:#191f26}
+.groups{white-space:normal;max-width:330px;font-family:var(--sans)}
+.chip{display:inline-block;padding:1px 8px;margin:1px;border:1px solid var(--line);border-radius:99px;font-size:11px;color:var(--dim);font-family:var(--sans)}
 .chip.warn{border-color:var(--warn);color:var(--warn)}
-.chip.bad{border-color:var(--bad);color:var(--bad)}
-ul.findings{list-style:none;margin:0;padding:0}
-ul.findings li{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--dim);border-radius:8px;padding:12px 16px;margin:0 0 10px}
-li.sev-high{border-left-color:var(--bad)}
+.chip.bad{border-color:var(--crit);color:var(--crit)}
+
+ul.findings{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+ul.findings li{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--dim);border-radius:8px;padding:13px 17px}
+li.sev-high{border-left-color:var(--crit)}
 li.sev-med{border-left-color:var(--warn)}
 .fh{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
-.sev{font-size:11px;letter-spacing:.6px;color:var(--dim)}
+.fh b{font-weight:600}
+.sev{font-size:10px;letter-spacing:.12em;color:var(--dim);font-family:var(--mono)}
 .where{color:var(--dim);font-size:12px}
-ul.findings p{margin:6px 0 0;color:var(--dim);max-width:100ch}
-code{background:var(--panel2);padding:1px 5px;border-radius:4px;font-size:12px}
+ul.findings p{margin:7px 0 0;color:var(--dim);max-width:100ch}
+code{background:var(--panel2);padding:1px 6px;border-radius:4px;font-family:var(--mono);font-size:12px}
+footer{padding:24px 32px 40px;color:var(--dim);font-size:12px}
+@media (max-width:640px){header,.phase,footer{padding-left:18px;padding-right:18px}.pair{gap:12px}}
 </style>
 <header>
-<h1>🗺️ Bateria das Masmorras</h1>
-<p>Limiar do chefe, saúde do drop e auditoria estrutural — sobre os geradores de produção.
-Toda tabela de vitória sai em duas leituras: <b>real</b> (a fórmula de HP que o banco grava e o combate usa)
-e <b>calib</b> (a fórmula contra a qual o boss foi dimensionado). A distância entre elas é o desvio.</p>
+<h1>Bateria das Masmorras</h1>
+<p>Limiar do chefe, saúde do drop e auditoria estrutural — medidos sobre os geradores de produção.
+Toda tabela de vitória sai em duas leituras: <b>no ar</b>, a fórmula de HP que o banco grava e o combate usa,
+e <b>calibrado</b>, a fórmula contra a qual o boss foi dimensionado. A distância entre elas é o desvio.</p>
 </header>
-${sections.join('')}`
+${summary}
+${sections.join('')}
+<footer>Gerado por <code>npm run sim:dungeons</code> · ${ITERS} lutas por célula da Fase 1 · ${RUNS} runs por célula da Fase 2 · ${AUDIT_SAMPLES} sorteios por célula da Fase 3 · raça de referência: ${esc(RACE)}</footer>`
 }
 
 // ============================================================

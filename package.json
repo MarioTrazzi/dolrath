@@ -61,7 +61,8 @@
     "check:i18n": "TS_NODE_TRANSPILE_ONLY=1 ts-node --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\",\"esModuleInterop\":true,\"jsx\":\"react-jsx\"}' -r tsconfig-paths/register scripts/check-i18n-catalog.ts",
     "bot:fleet:seed": "TS_NODE_TRANSPILE_ONLY=1 ts-node --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\",\"esModuleInterop\":true,\"jsx\":\"react-jsx\"}' -r tsconfig-paths/register scripts/bot-fleet-seed.ts",
     "bot:fleet:run": "node scripts/bot-fleet-runner.js",
-    "bot:fleet:report": "node scripts/bot-fleet-report.js"
+    "bot:fleet:report": "node scripts/bot-fleet-report.js",
+    "sim:dungeons": "TS_NODE_TRANSPILE_ONLY=1 ts-node --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\",\"esModuleInterop\":true,\"jsx\":\"react-jsx\",\"target\":\"es2019\"}' -r tsconfig-paths/register scripts/dungeon-testbench.ts"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

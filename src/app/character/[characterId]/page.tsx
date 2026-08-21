@@ -9,6 +9,7 @@ import { sellUnitPrice as sellPrice } from '@/lib/sellPricing';
 import { EquipmentSlotType } from '@prisma/client';
 import { getRaceById, getClassById } from '@/lib/gameData';
 import { applyEnhancementToStats } from '@/lib/enhancementSystem';
+import { deriveGearTier, MAX_GEAR_TIER } from '@/lib/combatModel';
 import { getRaceTransformations, getTransformationGlow, TRANSFORMATION_CONFIG, TransformationType } from '@/lib/transformationSystem';
 import Link from 'next/link';
 import { DndProvider } from 'react-dnd';
@@ -195,7 +196,17 @@ export default function CharacterDetailsPage() {
       int: (character.attributes as any)?.int || (character.baseStats as any)?.int || 0
     };
 
-    // Somar stats dos equipamentos (com o aprimoramento aplicado, igual ao combate)
+    // Somar stats dos equipamentos, com o aprimoramento aplicado.
+    //
+    // ⚠️ O que destes números o COMBATE de fato usa: só `hp` (e `mp`). O motor
+    // (DungeonRun/socket) monta os levers com computeLevers(classe, nível,
+    // gearTier, attrs do PERSONAGEM) — os `str`/`def` das peças não somam poder
+    // nenhum; a contribuição do equipamento vem da QUALIDADE do conjunto
+    // (raridade × +N sobre os 9 slots → deriveGearTier). Até 2026-08-21 esta
+    // ficha somava str/def ao total e dizia "igual ao combate", o que fazia o
+    // jogador ver um número que a luta ignorava. Os campos seguem calculados
+    // porque a lista de peças os exibe individualmente — o que mudou é que não
+    // entram mais no TOTAL do personagem.
     const equipmentStats = (character.equipment || []).reduce((total, equipment) => {
       const itemStats = applyEnhancementToStats(equipment.item.stats, equipment.enhancementLevel || 0);
       return {
@@ -227,9 +238,18 @@ export default function CharacterDetailsPage() {
       bonusSpeed: 0
     });
 
+    // Qualidade do conjunto: é ISTO que o combate lê do equipamento. Peça
+    // quebrada não conta, igual ao motor.
+    const gearTier = deriveGearTier(
+      (character.equipment || [])
+        .filter((eq) => (eq.durability ?? 1) > 0)
+        .map((eq) => ({ rarity: (eq.item.stats as any)?.rarity, enhancementLevel: eq.enhancementLevel || 0 }))
+    );
+
     return {
       base: baseStats,
       equipment: equipmentStats,
+      gearTier,
       total: {
         hp: baseStats.hp + equipmentStats.hp,
         maxHp: baseStats.maxHp + equipmentStats.maxHp,
@@ -237,8 +257,10 @@ export default function CharacterDetailsPage() {
         maxMp: baseStats.maxMp + equipmentStats.maxMp,
         stamina: baseStats.stamina + equipmentStats.stamina,
         maxStamina: baseStats.maxStamina + equipmentStats.maxStamina,
-        str: baseStats.str + equipmentStats.str,
-        def: baseStats.def + equipmentStats.def,
+        // str/def NÃO somam o gear: o combate não os lê (ver acima). AGI/INT já
+        // eram assim; agora os quatro atributos são consistentes entre si.
+        str: baseStats.str,
+        def: baseStats.def,
         agi: baseStats.agi + equipmentStats.agi,
         int: baseStats.int + equipmentStats.int,
         bonusDamage: equipmentStats.bonusDamage,
@@ -963,6 +985,7 @@ export default function CharacterDetailsPage() {
               {[
                 { icon: <Sword size={18} style={{ color: '#e8d08a' }} />, base: stats.total.str, label: t('STR'), mult: activeFormMods?.strength },
                 { icon: <Shield size={18} style={{ color: '#6aa9d6' }} />, base: stats.total.def, label: t('DEF'), mult: activeFormMods?.defense },
+                /* total.str/def já são a base pura — ver o comentário em stats. */
                 { icon: <Zap size={18} style={{ color: '#8fd6e0' }} />, base: stats.base.agi, label: t('AGI'), mult: activeFormMods?.agility },
                 { icon: <Brain size={18} style={{ color: '#c3a6ec' }} />, base: stats.base.int, label: t('INT'), mult: activeFormMods?.intelligence },
                 { icon: <Star size={18} style={{ color: '#f0c873' }} />, base: stats.base.agi * 0.2, label: t('CRIT'), mult: activeFormMods?.critical, isPercent: true },
@@ -995,9 +1018,12 @@ export default function CharacterDetailsPage() {
                 e o +N verde é o bônus somado pelos equipamentos. */}
             <div style={{ padding: '4px 22px 10px', borderTop: '1px solid rgba(0,0,0,0.6)' }}>
               {[
-                { icon: <Sword size={18} style={{ color: '#c98a6a' }} />, label: t('Attack (AD)'), base: stats.base.str, equip: stats.equipment.str + (stats.total.bonusDamage || 0), mult: activeFormMods?.attack },
+                /* `equip` fica em 0: o poder que o equipamento acrescenta não vem dos
+                   str/def das peças (o combate os ignora) e sim da qualidade do
+                   conjunto, mostrada logo abaixo como uma linha própria. */
+                { icon: <Sword size={18} style={{ color: '#c98a6a' }} />, label: t('Attack (AD)'), base: stats.base.str, equip: 0, mult: activeFormMods?.attack },
                 { icon: <Zap size={18} style={{ color: '#b06ae0' }} />, label: t('Magic Power (AP)'), base: stats.base.int, equip: 0, mult: activeFormMods?.attack },
-                { icon: <Shield size={18} style={{ color: '#6aa9d6' }} />, label: t('Defense (DP)'), base: stats.base.def, equip: stats.equipment.def, mult: activeFormMods?.defense },
+                { icon: <Shield size={18} style={{ color: '#6aa9d6' }} />, label: t('Defense (DP)'), base: stats.base.def, equip: 0, mult: activeFormMods?.defense },
               ].map((row, i, arr) => {
                 const transformedBase = activeFormMods && row.mult ? Math.round(row.base * row.mult) : row.base;
                 const transformDelta = transformedBase - row.base;
@@ -1023,6 +1049,33 @@ export default function CharacterDetailsPage() {
                   </div>
                 );
               })}
+
+              {/* Qualidade do conjunto — o que o equipamento REALMENTE acrescenta na
+                  luta. O motor lê raridade × aprimoramento sobre os 9 slots
+                  (deriveGearTier) e usa isso como 60% do multiplicador de poder; os
+                  str/def das peças não entram. Peça quebrada sai da conta, igual ao
+                  combate. 100% = set completo lendário TET; acima disso é PEN. */}
+              {(() => {
+                const pct = (stats.gearTier / 1) * 100;
+                const capPct = (MAX_GEAR_TIER / 1) * 100;
+                const color = pct >= 95 ? '#86efac' : pct >= 60 ? '#e8d08a' : pct >= 30 ? '#c9922e' : '#a1a1aa';
+                return (
+                  <div className="flex items-center justify-between" style={{ padding: '10px 0 2px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div className="flex items-center" style={{ gap: 9 }}>
+                      <span style={{ fontSize: 9, color: GOLD }}>✦</span>
+                      <Star size={18} style={{ color: '#e8d08a' }} />
+                      <div className="flex flex-col">
+                        <span style={{ fontSize: 14, color: '#c9c9ce' }}>{t('Gear quality')}</span>
+                        <span style={{ fontSize: 10, color: '#77777d' }}>{t('rarity x enhancement across 9 slots')}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-baseline" style={{ gap: 6 }}>
+                      <span style={{ fontSize: 22, fontWeight: 700, color }}>{pct.toFixed(0)}%</span>
+                      <span style={{ fontSize: 11, color: '#77777d' }}>/ {capPct.toFixed(0)}%</span>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
 

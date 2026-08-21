@@ -51,9 +51,14 @@ function chooseAttack(opts) {
   return 'basic'
 }
 
+// ⚠️ Espelho de src/lib/combatModel.ts — MAX_GEAR_TIER. O teto era 1.0, que é o
+// que LENDÁRIO TET já atinge: TET→PEN não comprava poder nenhum. Ver o comentário
+// completo no TS. Se mudar lá, mude aqui — os dois motores têm que concordar.
+const MAX_GEAR_TIER = 3.3 / 2.8
+
 function clampGearTier(tier) {
   if (Number.isNaN(tier)) return GEAR_FLOOR
-  return Math.max(GEAR_FLOOR, Math.min(1, tier))
+  return Math.max(GEAR_FLOOR, Math.min(MAX_GEAR_TIER, tier))
 }
 
 // === tier do gear (equipamento → [0,1], BiS lendário IV = 1) ===
@@ -74,7 +79,7 @@ function deriveGearTier(equipped) {
     const w = RARITY_WEIGHT[(eq.rarity || '').toUpperCase()] != null ? RARITY_WEIGHT[(eq.rarity || '').toUpperCase()] : 0.25
     sum += w * enhanceTierFactor(eq.enhancementLevel || 0)
   }
-  return Math.min(1, sum / NOMINAL_SLOTS)
+  return Math.min(MAX_GEAR_TIER, sum / NOMINAL_SLOTS)
 }
 
 function powerScale(level, gearTier) {
@@ -251,7 +256,7 @@ module.exports = {
   PROFILE, DICE_SIDES, LUCK_LO, LUCK_HI, CRIT_MULT, K50,
   WEIGHT_LEVEL, WEIGHT_GEAR, GEAR_FLOOR, MAX_LEVEL_REF, DODGE_STAMINA_COST, BLOCK_ARMOR_MULT,
   TRANSFORM_SCALE, transformLevers, revertTransformLevers,
-  clampGearTier, powerScale, computeLevers, luckOf, rollDie, damageReduction, resolveHit,
+  clampGearTier, MAX_GEAR_TIER, powerScale, computeLevers, luckOf, rollDie, damageReduction, resolveHit,
   RARITY_WEIGHT, NOMINAL_SLOTS, enhanceTierFactor, deriveGearTier,
   ATTACKS, attackPower, chooseAttack, CLASS_ATTACK_NAME, classAttackName,
   ATTR_TILT, ATTR_POWER_WEIGHT, applyAttrTilt, normalizeCombatClass,

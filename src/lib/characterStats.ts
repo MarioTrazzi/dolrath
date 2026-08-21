@@ -11,6 +11,7 @@
 // ============================================================
 
 import { getRaceById, getClassById } from '@/lib/gameData'
+import { computeDerivedStats } from '@/lib/combatFormulas'
 
 export interface StatFour {
   str: number
@@ -180,11 +181,14 @@ export function computeCreationStats(
     def: base.def + race.def + klass.def,
   }
 
-  // Fórmulas idênticas ao servidor (route.ts)
+  // Fórmulas idênticas ao servidor (route.ts), que usa computeDerivedStats no nv1.
+  // ⚠️ Não reescrever à mão: esta prévia É o que o jogador vê antes de mintar, e
+  // divergir dela do que o banco grava foi exatamente o bug de 2026-08-21.
+  const core = computeDerivedStats({ ...final, level: 1 })
   const derived: DerivedStats = {
-    hp: 80 + final.str * 2 + final.def * 4,
-    mp: 60 + final.int * 3 + final.agi * 1,
-    stamina: 120 + final.agi * 3,
+    hp: core.maxHp,
+    mp: core.maxMp,
+    stamina: core.maxStamina,
     attack: Math.floor(final.str * 1.2),
     defense: Math.floor(final.def * 0.8),
     critical: final.agi * 0.8 + 5,

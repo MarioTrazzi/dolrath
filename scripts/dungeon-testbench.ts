@@ -14,18 +14,14 @@
 //      A Fase 2 roda runs completas com o herói NO limiar e mede o espólio.
 //      A Fase 3 audita a estrutura do sorteio e aponta buracos.
 //
-// ⚠️ AS DUAS FÓRMULAS DE HP (o motivo de esta bateria existir)
-// O boss é dimensionado por dungeonAdventures.anchorAt, que assume que o
-// jogador tem `80 + str*2 + def*4` de HP. Mas do nível 2 em diante o banco
-// grava `100 + level*6 + str/2 + def*4` (computeDerivedStats), e é ESSE valor
-// que DungeonRun.tsx leva para a luta. O jogador real entra com bem mais HP do
-// que a calibração supõe, e o erro cresce com o nível.
-//
-// Por isso toda tabela sai em DUAS colunas:
-//   real  → fórmula de produção (o jogo que está no ar)
-//   calib → fórmula que dimensionou o boss (o jogo que os sims descrevem)
-// Medir só com `calib` seria repetir o desvio em silêncio; medir só com `real`
-// esconderia de onde ele veio.
+// FÓRMULA DE HP — uma só, desde 2026-08-21
+// O herói leva para a luta o HP de `computeDerivedStats`, a mesma fórmula que o
+// banco grava e que DungeonRun lê. Até esta data havia DUAS: anchorAt dimensionava
+// o monstro contra `80 + str*2 + def*4`, uma fórmula que só a criação usava, e o
+// jogador entrava com 17% (nv10) a 110% (nv50) mais vida do que o boss supunha.
+// A curva de dificuldade 88/78/63/52 virava 99/99/98/94 na prática. Corrigido em
+// anchorAt; BOSS_HP_MULT, ROOM_RAMP e o passo do tier foram recalibrados por
+// `PHASE=solve` contra o scaleMonster real.
 //
 // Uso:
 //   npm run sim:dungeons                      → tudo (as 3 fases, 4 masmorras)
@@ -47,6 +43,7 @@ import {
   DUNGEONS, DUNGEON_LIST, scaleMonster, scaleMonsterGroup, pickMonster,
   rollNodeLoot, rollKillLoot, clampDungeonTier, MAX_DUNGEON_TIER,
   type DungeonDef, type DungeonId, type ScaledMonster, type LootDrop, type LootNodeKind,
+  type ScaleOverrides,
 } from '@/lib/dungeonAdventures'
 import {
   computeLevers, transformLevers, resolveHit, resolveMonsterHit,
@@ -59,7 +56,7 @@ import { rollEquipmentDrop, dropSlotGroupOf, ITEM_CATALOG, RARITY_DROP_WEIGHT } 
 import { REPAIR_PER_DUPLICATE } from '@/lib/enhancementSystem'
 
 import {
-  buildHero, gearFor, TARGET_GEAR, ALL_CLASSES, RARITY_PT, enhLabel,
+  buildHero, gearFor, TARGET_GEAR, ENTRY_GEAR, ALL_CLASSES, RARITY_PT, enhLabel,
   type Hero, type Rarity,
 } from './lib/synthHero'
 
@@ -81,8 +78,14 @@ const CLASSES_TO_RUN: CombatClass[] = ONLY_CLASS ? [ONLY_CLASS] : ALL_CLASSES
 
 const ROMAN = ['I', 'II', 'III', 'IV', 'V']
 
-/** Qual fórmula de HP o herói leva para a luta. */
-type HpMode = 'real' | 'calib'
+/**
+ * Win-rate de design do chefe por masmorra, no gear-ALVO e no tier I: a curva
+ * "1ª fácil → 4ª bem difícil" que dungeonAdventures documenta em BOSS_HP_MULT.
+ * É o gabarito contra o qual a Fase 1 se compara.
+ */
+const TARGET_WIN: Record<string, number> = {
+  floresta: 0.88, caverna: 0.78, pantano: 0.63, ruinas: 0.52,
+}
 
 // Limiares de leitura da matriz da Fase 1.
 const TH_TIGHT = 0.50    // "APERTADO" — dá pra tentar
@@ -199,13 +202,11 @@ function fightPack(base: Levers, startHp: number, pack: ScaledMonster[]): { resu
   return { result: !alive() && php > 0 ? 'win' : php <= 0 ? 'loss' : 'timeout', hp: Math.max(0, php), killed }
 }
 
-/** Levers + HP efetivo de um herói, na fórmula de HP escolhida. */
 function leversOf(h: Hero): Levers {
   return computeLevers(h.klass, h.level, h.gear.gearTier, h.attrs)
 }
-function hpOf(h: Hero, mode: HpMode): number {
-  return mode === 'real' ? h.maxHp : h.maxHpCalib
-}
+/** HP que o herói leva para a luta — a fórmula que o banco grava (computeDerivedStats). */
+const hpOf = (h: Hero) => h.maxHp
 
 // ============================================================
 // FASE 1 — LIMIAR DO CHEFE
@@ -232,7 +233,6 @@ interface ThresholdPair {
 interface BossMatrix {
   dungeon: DungeonDef
   klass: CombatClass
-  mode: HpMode
   levels: number[]
   cells: Cell[]                    // indexado por [levelIdx * RUNGS.length + rungIdx]
   tight: ThresholdPair
@@ -244,10 +244,10 @@ interface BossMatrix {
   byTier: number[]
 }
 
-function bossWinRate(dg: DungeonDef, klass: CombatClass, level: number, rung: Rung, mode: HpMode, iters: number, dungeonTier = 1): number {
+function bossWinRate(dg: DungeonDef, klass: CombatClass, level: number, rung: Rung, iters: number, dungeonTier = 1): number {
   const hero = buildHero(RACE, klass, level, rung.rarity, rung.enh)
   const levers = leversOf(hero)
-  const hp = hpOf(hero, mode)
+  const hp = hpOf(hero)
   // O boss ancora no clearLevel FIXO (não no nível do jogador) — é o que faz
   // under-leveled travar e over-leveled virar farm. scaleMonster cuida disso.
   // `dungeonTier` é o outro eixo: +18% em poder/HP por degrau acima de I.
@@ -282,12 +282,12 @@ function targetRungIndex(dg: DungeonDef): number {
   return RUNGS.length - 1
 }
 
-function buildBossMatrix(dg: DungeonDef, klass: CombatClass, mode: HpMode): BossMatrix {
+function buildBossMatrix(dg: DungeonDef, klass: CombatClass): BossMatrix {
   const levels = levelAxis(dg)
   const cells: Cell[] = []
   for (let li = 0; li < levels.length; li++) {
     for (let ri = 0; ri < RUNGS.length; ri++) {
-      cells.push({ level: levels[li], rung: ri, win: bossWinRate(dg, klass, levels[li], RUNGS[ri], mode, ITERS) })
+      cells.push({ level: levels[li], rung: ri, win: bossWinRate(dg, klass, levels[li], RUNGS[ri], ITERS) })
     }
   }
   const clearIdx = levels.indexOf(dg.clearLevel)
@@ -314,9 +314,9 @@ function buildBossMatrix(dg: DungeonDef, klass: CombatClass, mode: HpMode): Boss
   const tg = TARGET_GEAR[dg.id]
   const targetRung: Rung = { rarity: tg.rarity, enh: tg.enh, label: tg.tag }
   const byTier: number[] = []
-  for (let t = 1; t <= MAX_DUNGEON_TIER; t++) byTier.push(bossWinRate(dg, klass, dg.clearLevel, targetRung, mode, ITERS, t))
+  for (let t = 1; t <= MAX_DUNGEON_TIER; t++) byTier.push(bossWinRate(dg, klass, dg.clearLevel, targetRung, ITERS, t))
   return {
-    dungeon: dg, klass, mode, levels, cells,
+    dungeon: dg, klass, levels, cells,
     tight: pairFor(TH_TIGHT), comfy: pairFor(TH_COMFY), easy: pairFor(TH_EASY),
     atTarget: byTier[0], byTier,
   }
@@ -338,25 +338,278 @@ function runPhase1(): BossMatrix[] {
   console.log('\n' + '='.repeat(100))
   console.log('  FASE 1 — LIMIAR DO CHEFE   (o herói MÍNIMO que vence)')
   console.log(`  ${ITERS} lutas/célula · raça ${RACE} · APERTADO ≥${TH_TIGHT * 100}% · CONFORTÁVEL ≥${TH_COMFY * 100}% · COM FOLGA ≥${TH_EASY * 100}%`)
-  console.log('  real = fórmula de HP que o jogo usa · calib = fórmula contra a qual o boss foi dimensionado')
   console.log('='.repeat(100))
   for (const dg of DUNGEONS_TO_RUN) {
     const tg = TARGET_GEAR[dg.id]
-    console.log(`\n── ${dg.emoji} ${dg.name.toUpperCase()} (nv${dg.levelReq}→${dg.clearLevel}) — alvo de design: ${RARITY_PT[tg.rarity]} ${tg.tag} ──`)
+    const target = TARGET_WIN[dg.id] ?? 0.65
+    console.log(`\n── ${dg.emoji} ${dg.name.toUpperCase()} (nv${dg.levelReq}→${dg.clearLevel}) — alvo: ${RARITY_PT[tg.rarity]} ${tg.tag} a ${(target * 100).toFixed(0)}% ──`)
     for (const klass of CLASSES_TO_RUN) {
-      const real = buildBossMatrix(dg, klass, 'real')
-      const calib = buildBossMatrix(dg, klass, 'calib')
-      out.push(real, calib)
-      const drift = (real.atTarget - calib.atTarget) * 100
-      console.log(`   ${klass.padEnd(8)} no alvo: real ${(real.atTarget * 100).toFixed(0)}%  vs  calib ${(calib.atTarget * 100).toFixed(0)}%   (desvio ${drift >= 0 ? '+' : ''}${drift.toFixed(0)}pp)`)
-      console.log(`      APERTADO ≥50%     ${thLabel(dg, real.tight)}`)
-      console.log(`      CONFORTÁVEL ≥65%  ${thLabel(dg, real.comfy)}`)
-      console.log(`      COM FOLGA ≥85%    ${thLabel(dg, real.easy)}`)
-      console.log(`      no gear-alvo, por tier:  ` +
-        real.byTier.map((w, i) => `${ROMAN[i]} ${(w * 100).toFixed(0)}%`).join('  ·  '))
+      const m = buildBossMatrix(dg, klass)
+      out.push(m)
+      const off = (m.atTarget - target) * 100
+      const flag = Math.abs(off) <= 4 ? 'ok' : Math.abs(off) <= 8 ? 'atencao' : 'FORA'
+      console.log(`   ${klass.padEnd(8)} no gear-alvo: ${(m.atTarget * 100).toFixed(0)}%  (alvo ${(target * 100).toFixed(0)}%, ${off >= 0 ? '+' : ''}${off.toFixed(0)}pp — ${flag})`)
+      console.log(`      APERTADO ≥50%     ${thLabel(dg, m.tight)}`)
+      console.log(`      CONFORTÁVEL ≥65%  ${thLabel(dg, m.comfy)}`)
+      console.log(`      COM FOLGA ≥85%    ${thLabel(dg, m.easy)}`)
+      console.log(`      por tier de masmorra:  ` + m.byTier.map((w, i) => `${ROMAN[i]} ${(w * 100).toFixed(0)}%`).join('  ·  '))
     }
   }
   return out
+}
+
+// ============================================================
+// FASE SOLVE — CALIBRADOR
+//
+// Resolve BOSS_HP_MULT e ROOM_RAMP por busca binária CONTRA scaleMonster, a
+// função que o jogo de fato chama. O dungeon-difficulty-sim resolvia contra um
+// boss sintético próprio e a tabela era transcrita à mão para dungeonAdventures
+// — a calibração não sobrevivia à transcrição (pedia 88%, entregava 95%).
+//
+// Uso:  PHASE=solve npm run sim:dungeons
+// Imprime as tabelas prontas para colar.
+// ============================================================
+
+/**
+ * Alvo das SALAS — medido no CLEAR DA RUN, não numa sala isolada.
+ *
+ * A primeira tentativa mirou "o jogador-gate vence ~60% na sala do meio", que é
+ * como o design descrevia a rampa. Mas 60% por sala compõe: a Caverna tem 4 salas
+ * principais e ~3 lutas de nó menor, e 0.6^4 leva o clear da run inteira para
+ * ~16%. O jogador não sente a sala isolada — ele sente se terminou a masmorra.
+ *
+ * Então o alvo é o clear da run no gear-ALVO, tier I: 85% do alvo do CHEFE. As
+ * salas são atrito (gastam poção e durabilidade), o chefe é o gate. Isso segue a
+ * visão registrada de "progressão sem penalidade, stamina gateia".
+ */
+const RUN_CLEAR_FRACTION = 0.85
+const runClearTargetOf = (id: string) => (TARGET_WIN[id] ?? 0.65) * RUN_CLEAR_FRACTION
+
+const SOLVE_ITERS = Number(process.env.SOLVE_ITERS) || 1500
+
+/** Espelho do ROOM_RAMP atual de dungeonAdventures.ts (a const é privada). */
+const CURRENT_RAMP: Record<string, { pow: number; hpLo: number; hpHi: number; minorHp: number; minorStr: number }> = {
+  floresta: { pow: 0.90, hpLo: 1.40, hpHi: 3.00, minorHp: 0.70, minorStr: 0.78 },
+  caverna:  { pow: 1.15, hpLo: 2.30, hpHi: 2.45, minorHp: 0.73, minorStr: 0.85 },
+  pantano:  { pow: 1.15, hpLo: 2.40, hpHi: 2.50, minorHp: 0.80, minorStr: 0.90 },
+  ruinas:   { pow: 1.15, hpLo: 2.50, hpHi: 2.50, minorHp: 0.89, minorStr: 0.94 },
+}
+
+/** Busca binária monotônica: mais HP no monstro ⇒ menos vitória. */
+function solveMult(winAt: (mult: number) => number, target: number, lo = 0.3, hi = 12): number {
+  let a = lo, b = hi
+  for (let i = 0; i < 22; i++) {
+    const mid = (a + b) / 2
+    if (winAt(mid) > target) a = mid   // fácil demais → mais HP
+    else b = mid
+  }
+  return Math.round(((a + b) / 2) * 100) / 100
+}
+
+function bossWinWithMult(dg: DungeonDef, klass: CombatClass, mult: number): number {
+  const tg = TARGET_GEAR[dg.id]
+  const hero = buildHero(RACE, klass, dg.clearLevel, tg.rarity, tg.enh)
+  const levers = leversOf(hero)
+  const hp = hpOf(hero)
+  const ov: ScaleOverrides = { bossHpMult: mult }
+  let wins = 0
+  for (let i = 0; i < SOLVE_ITERS; i++) {
+    const boss = scaleMonster(dg.boss, dg, dg.clearLevel, { tier: dg.rooms, isMain: true, isBoss: true }, klass, 1, ov)
+    if (fight(levers, hp, boss).result === 'win') wins++
+  }
+  return wins / SOLVE_ITERS
+}
+
+/**
+ * Jogador-GATE de uma sala: nível e gear interpolados da ENTRADA da masmorra
+ * (= alvo da anterior) ao ALVO, na MESMA proporção `p` que scaleMonster usa
+ * para o monstro. É o "jogador que deveria estar ali".
+ *
+ * ⚠️ O gear interpola o +N linearmente e vira a raridade na metade do caminho —
+ * não por degrau da escada RUNGS. Interpolar por degrau (a primeira tentativa)
+ * faz o poder do gate crescer em saltos que não acompanham o lerp contínuo de
+ * gearTier do scaleMonster, e a rampa resolvida sai INVERTIDA (1ª sala mais
+ * tanque que a última).
+ */
+function gateHeroFor(dg: DungeonDef, klass: CombatClass, roomTier: number, isMain: boolean): Hero {
+  const p = isMain
+    ? roomTier / (dg.rooms + 1)
+    : Math.max(0.04, roomTier / (dg.rooms + 1) - 0.5 / (dg.rooms + 1))
+  const tg = TARGET_GEAR[dg.id]
+  const eg = ENTRY_GEAR[dg.id]
+  const from = eg ? { rarity: eg.rarity, enh: eg.enh } : { rarity: 'COMMON' as Rarity, enh: 0 }
+  const level = Math.round(dg.levelReq + (dg.clearLevel - dg.levelReq) * p)
+  const enh = Math.round(from.enh + (tg.enh - from.enh) * p)
+  const rarity = p > 0.5 ? tg.rarity : from.rarity
+  return buildHero(RACE, klass, level, rarity, enh)
+}
+
+function roomWin(dg: DungeonDef, klass: CombatClass, roomTier: number, isMain: boolean, ov: ScaleOverrides, hero?: Hero): number {
+  const h = hero || gateHeroFor(dg, klass, roomTier, isMain)
+  const levers = leversOf(h)
+  const hp = hpOf(h)
+  let wins = 0
+  for (let i = 0; i < SOLVE_ITERS; i++) {
+    const m = scaleMonster(pickMonster(dg), dg, h.level, { tier: roomTier, isMain, isBoss: false }, klass, 1, ov)
+    if (fight(levers, hp, m).result === 'win') wins++
+  }
+  return wins / SOLVE_ITERS
+}
+
+/**
+ * Resolve o PASSO do tier de masmorra.
+ *
+ * `dungeonTierPowerMult` multiplica attack, defense E hp pelo mesmo fator, então
+ * o efeito na dificuldade é composto e cresce MUITO mais rápido que o número: com
+ * o passo de 0.18 o tier V vale 1.72×, e o win-rate do chefe no gear-alvo cai de
+ * 88% para 0-2%. Os tiers III-V ficam inacessíveis mesmo para quem completou a
+ * masmorra — o oposto de "escolha o tier que você aguenta".
+ *
+ * Alvo: no GEAR-ALVO da masmorra, o tier V fica em ~22%. Quem quiser mais leva
+ * gear acima do alvo — que agora existe, porque LENDÁRIO PEN voltou a dar poder
+ * (ver MAX_GEAR_TIER em combatModel).
+ */
+const TIER_V_TARGET_WIN = 0.22
+
+function bossWinAtTierPow(dg: DungeonDef, klass: CombatClass, tierPow: number): number {
+  const tg = TARGET_GEAR[dg.id]
+  const hero = buildHero(RACE, klass, dg.clearLevel, tg.rarity, tg.enh)
+  const levers = leversOf(hero)
+  const hp = hpOf(hero)
+  let wins = 0
+  for (let i = 0; i < SOLVE_ITERS; i++) {
+    const boss = scaleMonster(dg.boss, dg, dg.clearLevel, { tier: dg.rooms, isMain: true, isBoss: true }, klass, 5, { tierPow })
+    if (fight(levers, hp, boss).result === 'win') wins++
+  }
+  return wins / SOLVE_ITERS
+}
+
+function solveTierStep() {
+  console.log('\n' + '-'.repeat(100))
+  console.log(`  TIER — resolve o passo para o tier V ficar em ~${(TIER_V_TARGET_WIN * 100).toFixed(0)}% no gear-alvo`)
+  const meanWin = (tierPow: number) => {
+    let sum = 0, n = 0
+    for (const dg of DUNGEONS_TO_RUN) for (const klass of CLASSES_TO_RUN) { sum += bossWinAtTierPow(dg, klass, tierPow); n++ }
+    return sum / n
+  }
+  const before = meanWin(1 + 4 * 0.18)
+  const mult = solveMult(meanWin, TIER_V_TARGET_WIN, 1.0, 2.5)
+  const step = Math.round(((mult - 1) / 4) * 1000) / 1000
+  console.log(`   passo atual 0.180 → tier V vale ${(1 + 4 * 0.18).toFixed(2)}× e entrega ${(before * 100).toFixed(0)}%`)
+  console.log(`   passo resolvido ${step.toFixed(3)} → tier V vale ${mult.toFixed(2)}× e entrega ${(meanWin(mult) * 100).toFixed(0)}%`)
+  console.log(`\n  const DUNGEON_TIER_POWER_STEP = ${step.toFixed(2)}`)
+  // Escada resultante por tier, para conferir a curva inteira.
+  console.log('\n   curva por tier no gear-alvo (média das masmorras e classes):')
+  const row: string[] = []
+  for (let t = 1; t <= 5; t++) row.push(`${ROMAN[t - 1]} ${(meanWin(1 + (t - 1) * step) * 100).toFixed(0)}%`)
+  console.log(`      ${row.join('  ·  ')}\n`)
+}
+
+/**
+ * Run enxuta: só responde "limpou?". Sem espólio, sem desgaste — a Fase 2 mede
+ * isso; aqui o que importa é a fração de clear, e rolar loot em cada passo da
+ * busca binária multiplicaria o custo sem mudar a resposta.
+ */
+function probeRun(dg: DungeonDef, hero: Hero, ov: ScaleOverrides): boolean {
+  const levers = leversOf(hero)
+  const maxHp = hpOf(hero)
+  let php = maxHp
+  for (let room = 1; room <= dg.rooms; room++) {
+    for (let mn = 0; mn < dg.minorNodes; mn++) {
+      if (Math.random() >= MINOR_MONSTER_CHANCE) continue
+      php = maxHp // poção entre encontros, como no piloto automático
+      const pack = scaleMonsterGroup(dg, hero.level, { tier: room, isMain: false }, hero.klass, 1, { ov })
+      const f = fightPack(levers, php, pack)
+      if (f.result !== 'win') return false
+      php = f.hp
+    }
+    php = maxHp
+    const m = scaleMonster(pickMonster(dg), dg, hero.level, { tier: room, isMain: true }, hero.klass, 1, ov)
+    const f = fight(levers, php, m)
+    if (f.result !== 'win') return false
+    php = f.hp
+  }
+  php = maxHp
+  const boss = scaleMonster(dg.boss, dg, hero.level, { tier: dg.rooms, isMain: true, isBoss: true }, hero.klass, 1, ov)
+  return fight(levers, php, boss).result === 'win'
+}
+
+function runSolve() {
+  console.log('\n' + '='.repeat(100))
+  console.log('  CALIBRADOR — resolve BOSS_HP_MULT e ROOM_RAMP contra scaleMonster (a função real)')
+  console.log(`  ${SOLVE_ITERS} lutas por passo de busca · raça ${RACE}`)
+  console.log('='.repeat(100))
+
+  // ---- BOSS ----
+  const boss: Record<string, Record<string, number>> = {}
+  for (const dg of DUNGEONS_TO_RUN) {
+    const target = TARGET_WIN[dg.id]
+    boss[dg.id] = {}
+    const parts: string[] = []
+    for (const klass of CLASSES_TO_RUN) {
+      const mult = solveMult(m => bossWinWithMult(dg, klass, m), target)
+      boss[dg.id][klass] = mult
+      parts.push(`${klass} ${mult.toFixed(2)} (${(bossWinWithMult(dg, klass, mult) * 100).toFixed(0)}%)`)
+    }
+    console.log(`\n   ${dg.emoji} ${dg.name} — alvo ${(target * 100).toFixed(0)}%`)
+    console.log(`      ${parts.join(' · ')}`)
+  }
+  console.log('\n' + '-'.repeat(100))
+  console.log('  const BOSS_HP_MULT: Record<DungeonId, Record<CombatClass, number>> = {')
+  for (const dg of DUNGEONS_TO_RUN) {
+    const row = ALL_CLASSES.map(k => `${k}: ${(boss[dg.id][k] ?? 0).toFixed(2)}`).join(', ')
+    console.log(`    ${(dg.id + ':').padEnd(10)} { ${row} }, // ~${(TARGET_WIN[dg.id] * 100).toFixed(0)}%`)
+  }
+  console.log('  }')
+
+  // ---- SALAS ----
+  //
+  // A FORMA da rampa não se refaz: hpLo→hpHi, o alívio do nó menor e o `pow` mais
+  // alto fora da Floresta ("a sala é o susto, o boss é a maratona") são decisões de
+  // design. O que se resolve é um FATOR ÚNICO por masmorra sobre a rampa inteira,
+  // contra o CLEAR DA RUN — ver RUN_CLEAR_FRACTION para por que não é a sala isolada.
+  console.log('\n' + '-'.repeat(100))
+  console.log('  SALAS — fator de escala sobre a rampa existente (alvo: clear da run no gear-alvo, tier I)')
+  const scaled: Record<string, { pow: number; hpLo: number; hpHi: number; minorHp: number; minorStr: number }> = {}
+  for (const dg of DUNGEONS_TO_RUN) {
+    const cur = CURRENT_RAMP[dg.id]
+    const tg = TARGET_GEAR[dg.id]
+    const target = runClearTargetOf(dg.id)
+    // Clear medido com o herói no clearLevel e no gear-alvo — o jogador que a
+    // masmorra espera. Runs baratas: o que importa é a fração, não o espólio.
+    const RUNS_PER_PROBE = Math.max(120, Math.round(SOLVE_ITERS / 6))
+    const clearAt = (f: number) => {
+      const ov: ScaleOverrides = { roomHpLo: cur.hpLo * f, roomHpHi: cur.hpHi * f }
+      let clears = 0, total = 0
+      for (const klass of CLASSES_TO_RUN) {
+        const hero = buildHero(RACE, klass, dg.clearLevel, tg.rarity, tg.enh)
+        for (let i = 0; i < RUNS_PER_PROBE; i++) {
+          total++
+          if (probeRun(dg, hero, ov)) clears++
+        }
+      }
+      return clears / total
+    }
+    const before = clearAt(1)
+    const f = solveMult(clearAt, target, 0.15, 4)
+    const after = clearAt(f)
+    scaled[dg.id] = {
+      pow: cur.pow,
+      hpLo: Math.round(cur.hpLo * f * 100) / 100,
+      hpHi: Math.round(cur.hpHi * f * 100) / 100,
+      minorHp: cur.minorHp,
+      minorStr: cur.minorStr,
+    }
+    console.log(`   ${dg.emoji} ${dg.name}: clear ${(before * 100).toFixed(0)}% → fator ${f.toFixed(2)} → ${(after * 100).toFixed(0)}%  (alvo ${(target * 100).toFixed(0)}%)`)
+  }
+  console.log('\n  const ROOM_RAMP: Record<DungeonId, { pow: number; hpLo: number; hpHi: number; minorHp: number; minorStr: number }> = {')
+  for (const dg of DUNGEONS_TO_RUN) {
+    const r = scaled[dg.id]
+    console.log(`    ${(dg.id + ':').padEnd(10)} { pow: ${r.pow.toFixed(2)}, hpLo: ${r.hpLo.toFixed(2)}, hpHi: ${r.hpHi.toFixed(2)}, minorHp: ${r.minorHp.toFixed(2)}, minorStr: ${r.minorStr.toFixed(2)} },`)
+  }
+  console.log('  }\n')
+
+  solveTierStep()
 }
 
 // ============================================================
@@ -465,9 +718,9 @@ interface RunResult {
   potions: number
 }
 
-function simulateRun(dg: DungeonDef, hero: Hero, mode: HpMode, tier: number, gear: GearWearSnapshot[], t: LootTally): RunResult {
+function simulateRun(dg: DungeonDef, hero: Hero, tier: number, gear: GearWearSnapshot[], t: LootTally): RunResult {
   const levers = leversOf(hero)
-  const maxHp = hpOf(hero, mode)
+  const maxHp = hpOf(hero)
   const level = hero.level
   let php = maxHp
   let fights = 0, kills = 0, wearSpent = 0, potions = 0
@@ -575,7 +828,7 @@ function runPhase2(matrices: BossMatrix[]): Phase2Row[] {
 
   for (const dg of DUNGEONS_TO_RUN) {
     for (const klass of CLASSES_TO_RUN) {
-      const m = matrices.filter(x => x.dungeon.id === dg.id && x.klass === klass && x.mode === 'real')[0]
+      const m = matrices.filter(x => x.dungeon.id === dg.id && x.klass === klass)[0]
       const tg = TARGET_GEAR[dg.id]
       // Dois perfis, sempre no nível-alvo da banda: o gear MÍNIMO que basta para
       // o chefe (a pergunta do Mario) e o gear-ALVO de design (o contrafactual).
@@ -593,7 +846,7 @@ function runPhase2(matrices: BossMatrix[]): Phase2Row[] {
           let clears = 0, bossWins = 0, bossAtt = 0, wearSpent = 0, potions = 0
           for (let i = 0; i < RUNS; i++) {
             const gear = buildRealSet(dg.clearLevel, RACE, klass, prof.rarity)
-            const r = simulateRun(dg, hero, 'real', clampDungeonTier(tier), gear, t)
+            const r = simulateRun(dg, hero, clampDungeonTier(tier), gear, t)
             if (r.cleared) clears++
             if (r.bossAttempted) { bossAtt++; if (r.bossWin) bossWins++ }
             wearSpent += r.wearSpent
@@ -846,16 +1099,16 @@ function buildHtml(matrices: BossMatrix[], rows: Phase2Row[], findings: Finding[
     const blocks = DUNGEONS_TO_RUN.map(dg => {
       const tg = TARGET_GEAR[dg.id]
       const perClass = CLASSES_TO_RUN.map(klass => {
-        const real = matrices.filter(x => x.dungeon.id === dg.id && x.klass === klass && x.mode === 'real')[0]
-        const calib = matrices.filter(x => x.dungeon.id === dg.id && x.klass === klass && x.mode === 'calib')[0]
+        const real = matrices.filter(x => x.dungeon.id === dg.id && x.klass === klass)[0]
         if (!real) return ''
-        const drift = calib ? (real.atTarget - calib.atTarget) * 100 : 0
+        const target = TARGET_WIN[dg.id] ?? 0.65
+        const off = (real.atTarget - target) * 100
         return `
   <div class="klass">
     <h4>${esc(klass)}</h4>
-    <p class="drift">No alvo de design (nv${dg.clearLevel} · ${esc(RARITY_PT[tg.rarity])} ${esc(tg.tag)}):
-      <b>real ${pctS(real.atTarget)}</b> vs <span class="dim">calib ${calib ? pctS(calib.atTarget) : '—'}</span>
-      <span class="badge ${drift > 5 ? 'warn' : ''}">desvio ${drift >= 0 ? '+' : ''}${drift.toFixed(0)}pp</span></p>
+    <p class="drift">No gear-alvo (nv${dg.clearLevel} · ${esc(RARITY_PT[tg.rarity])} ${esc(tg.tag)}):
+      <b>${pctS(real.atTarget)}</b> <span class="dim">contra o alvo de design ${pctS(target)}</span>
+      <span class="badge ${Math.abs(off) > 8 ? 'warn' : ''}">${off >= 0 ? '+' : ''}${off.toFixed(0)}pp</span></p>
     <table class="th"><thead><tr><th></th><th>gear mínimo no nv${dg.clearLevel}</th><th>nível mínimo com ${esc(RARITY_PT[tg.rarity])} ${esc(tg.tag)}</th></tr></thead><tbody>
       ${([['APERTADO ≥50%', real.tight], ['CONFORTÁVEL ≥65%', real.comfy], ['COM FOLGA ≥85%', real.easy]] as [string, ThresholdPair][]).map(([lab, p]) => `<tr><th>${lab}</th>
         <td>${p.gearAt ? `${esc(p.gearAt.rung.label)} <span class="dim">(${pctS(p.gearAt.win)})</span>` : '<span class="dim">nem lendário PEN chega</span>'}</td>
@@ -930,13 +1183,12 @@ function buildHtml(matrices: BossMatrix[], rows: Phase2Row[], findings: Finding[
   let summary = ''
   if (matrices.length) {
     const cards = DUNGEONS_TO_RUN.map(dg => {
-      const reals = matrices.filter(x => x.dungeon.id === dg.id && x.mode === 'real')
-      const calibs = matrices.filter(x => x.dungeon.id === dg.id && x.mode === 'calib')
+      const reals = matrices.filter(x => x.dungeon.id === dg.id)
       if (!reals.length) return ''
       const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
       const real = avg(reals.map(m => m.atTarget))
-      const calib = avg(calibs.map(m => m.atTarget))
-      const drift = (real - calib) * 100
+      const target = TARGET_WIN[dg.id] ?? 0.65
+      const off = (real - target) * 100
       const tg = TARGET_GEAR[dg.id]
       // Escada de tier média entre as classes — onde a dificuldade realmente vive.
       const tiers = ROMAN.map((_r, i) => avg(reals.map(m => m.byTier[i] || 0)))
@@ -944,9 +1196,9 @@ function buildHtml(matrices: BossMatrix[], rows: Phase2Row[], findings: Finding[
         <h3>${esc(dg.emoji)} ${esc(dg.name)}</h3>
         <p class="sub">nv${dg.levelReq}→${dg.clearLevel} · alvo ${esc(RARITY_PT[tg.rarity])} ${esc(tg.tag)}</p>
         <div class="pair">
-          <div><span>no ar</span><b class="big">${pctS(real)}</b></div>
-          <div><span>calibrado</span><b class="big dim">${pctS(calib)}</b></div>
-          <div><span>desvio</span><b class="big ${drift > 15 ? 'crit' : drift > 5 ? 'warn' : ''}">+${drift.toFixed(0)}pp</b></div>
+          <div><span>medido</span><b class="big">${pctS(real)}</b></div>
+          <div><span>alvo</span><b class="big dim">${pctS(target)}</b></div>
+          <div><span>desvio</span><b class="big ${Math.abs(off) > 8 ? 'crit' : Math.abs(off) > 4 ? 'warn' : ''}">${off >= 0 ? '+' : ''}${off.toFixed(0)}pp</b></div>
         </div>
         <p class="sub">chefe por tier, no gear-alvo</p>
         <div class="tierbar">${tiers.map((w, i) => `<span class="t" title="tier ${ROMAN[i]} → ${pctS(w)}"><i style="height:${Math.max(3, Math.round(w * 100))}%"></i><em>${ROMAN[i]}</em></span>`).join('')}</div>
@@ -1077,6 +1329,8 @@ function main() {
   let rows: Phase2Row[] = []
   let findings: Finding[] = []
 
+  if (PHASE === 'solve') { runSolve(); return }
+
   if (wants('1')) matrices = runPhase1()
   if (wants('2')) {
     // A Fase 2 precisa do perfil da Fase 1. Se rodou sozinha, resolve o limiar
@@ -1084,7 +1338,7 @@ function main() {
     if (!matrices.length) {
       console.log('\n   (PHASE=2 sozinha: resolvendo o limiar com amostra reduzida para escolher o perfil…)')
       for (const dg of DUNGEONS_TO_RUN) {
-        for (const klass of CLASSES_TO_RUN) matrices.push(buildBossMatrix(dg, klass, 'real'))
+        for (const klass of CLASSES_TO_RUN) matrices.push(buildBossMatrix(dg, klass))
       }
     }
     rows = runPhase2(matrices)

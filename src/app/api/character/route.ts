@@ -9,6 +9,7 @@ import { verifyCharacterNftMintTx } from '@/lib/characterNftVerify'
 import { rollCreationStatsFromPaymentProof } from '@/lib/characterCreationRoll'
 import { getRaceTransformations } from '@/lib/transformationSystem'
 import { SKILL_TREE_VERSION } from '@/lib/skillTree'
+import { computeDerivedStats } from '@/lib/combatFormulas'
 
 function serializeBigIntForJson<T>(value: T): T {
   return JSON.parse(
@@ -216,10 +217,18 @@ export async function POST(req: Request) {
     const finalInt = Math.max(8, distributedInt + raceInt + classInt)
     const finalDef = distributedDef + raceDef + classDef
 
-    // 🔥 FÓRMULAS BALANCEADAS COM BÔNUS - Todos os stats são úteis
-    const baseHp = 80 + (finalStr * 2) + (finalDef * 4)    // DEF mais valioso para HP
-    const baseMp = 60 + (finalInt * 3) + (finalAgi * 1)    // INT menos dominante
-    const baseStamina = 120 + (finalAgi * 3)               // AGI menos dominante
+    // 🔥 DERIVADOS — fonte única: computeDerivedStats (src/lib/combatFormulas.ts).
+    // ⚠️ 2026-08-21: aqui havia um terceiro jogo de fórmulas (hp 80+str*2+def*4,
+    // mp 60+int*3+agi, stamina 120+agi*3). Como characterLevelSystem e
+    // attributeRecalc já gravam computeDerivedStats, o personagem TROCAVA de
+    // fórmula no primeiro level-up — e a versão da criação não tinha termo de
+    // nível nenhum, então o mago quase não ganhava vida ao subir.
+    const creationDerived = computeDerivedStats({
+      str: finalStr, agi: finalAgi, int: finalInt, def: finalDef, level: 1,
+    })
+    const baseHp = creationDerived.maxHp
+    const baseMp = creationDerived.maxMp
+    const baseStamina = creationDerived.maxStamina
 
     const baseStats = {
       hp: baseHp,

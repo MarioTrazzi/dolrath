@@ -12,6 +12,7 @@ import {
 } from './itemCatalog'
 import { STONE_NAMES, getStatMultiplier } from './enhancementSystem'
 import { computeLevers, powerScale, deriveGearTier, type CombatClass } from './combatModel'
+import { computeDerivedStats } from './combatFormulas'
 import {
   maintenanceWearFactor, rollMaintenanceMaterial, rollSparePart,
   SPARE_PART_DURABILITY, type GearWearSnapshot,
@@ -436,7 +437,14 @@ const TIER_POWER_STEP = 0.6  // p/ recompensas (gold/xp) por SALA (s.tier) — n
 // Os passos são a ALAVANCA — os valores finais saem do sim (Fase E / dungeon-difficulty-sim).
 export const MAX_DUNGEON_TIER = 5
 export const CONCENTRATED_MIN_TIER = 3
-const DUNGEON_TIER_POWER_STEP = 0.18  // +18% em poder/HP do monstro por tier acima de 1
+// 🔁 2026-08-21: era 0.18. `dungeonTierPowerMult` multiplica attack, defense E hp
+// pelo MESMO fator, então o efeito na dificuldade é composto e cresce muito mais
+// rápido que o número — com 0.18 o tier V valia 1.72× e o chefe no gear-alvo caía
+// de 88% para 0-2%. Os tiers III-V ficavam inacessíveis mesmo para quem tinha
+// acabado de fechar a masmorra, o oposto de "escolha o tier que você aguenta".
+// Resolvido em `PHASE=solve npm run sim:dungeons` para o tier V ficar em ~22% no
+// gear-alvo. Curva resultante (média masmorra × classe): 70/56/43/32/22.
+const DUNGEON_TIER_POWER_STEP = 0.06  // +6% em poder/HP do monstro por tier acima de 1
 // ⚖️ 2026-08-05 (pedido do Mario): recompensa PAREADA com a dificuldade. Era 0.15
 // contra 0.18 de poder, ou seja, subir de tier custava mais do que rendia em tudo
 // que não fosse pedra concentrada. Como a stamina por run NÃO muda com o tier, a
@@ -457,11 +465,17 @@ const dungeonTierRewardMult = (tier: number) => 1 + (clampDungeonTier(tier) - 1)
 // Re-sincronizado 2026-07-09 (tiers I–V reforçados + refGearHp corrigido): cada célula
 // foi escalada pelo ratio hpMult_novo/hpMult_antigo resolvido no dungeon-difficulty-sim,
 // preservando a curva de dificuldade original por masmorra.
+// 🔁 RESOLVIDO EM 2026-08-21 por `PHASE=solve npm run sim:dungeons`, contra o
+// scaleMonster desta função — não contra um boss sintético transcrito à mão, que
+// era como a tabela anterior nascia (e por isso pedia 88% e entregava 95%).
+// Recalibrado junto com a correção de anchorAt (ver o comentário lá): o HP do
+// jogador de referência subiu, então o mesmo multiplicador passou a gerar um
+// boss bem mais tanque — nas Ruínas o guerreiro caiu para 12%.
 const BOSS_HP_MULT: Record<DungeonId, Record<CombatClass, number>> = {
-  floresta: { warrior: 2.46, rogue: 2.32, mage: 2.27, monk: 2.55 }, // ~88% — muito fácil (onboarding)
-  caverna:  { warrior: 2.50, rogue: 2.61, mage: 2.59, monk: 2.60 }, // ~78% — moderada, ainda fácil
-  pantano:  { warrior: 2.87, rogue: 3.12, mage: 2.99, monk: 3.11 }, // ~63% — moderada, um pouco difícil
-  ruinas:   { warrior: 3.32, rogue: 3.54, mage: 3.34, monk: 3.62 }, // ~52% — bem difícil
+  floresta: { warrior: 2.36, rogue: 2.39, mage: 2.31, monk: 2.80 }, // ~88% — muito fácil (onboarding)
+  caverna:  { warrior: 2.25, rogue: 2.61, mage: 2.55, monk: 2.87 }, // ~78% — moderada, ainda fácil
+  pantano:  { warrior: 2.40, rogue: 3.04, mage: 2.91, monk: 3.15 }, // ~63% — moderada, um pouco difícil
+  ruinas:   { warrior: 2.44, rogue: 3.29, mage: 3.07, monk: 3.27 }, // ~52% — bem difícil
 }
 // 🎚️ RAMPA DAS SALAS POR MASMORRA (fase de SALAS do dungeon-difficulty-sim, 2026-07-06).
 // Antes eram escalares únicos (hp 1.4→3.0, minor 0.7/0.78, poder 0.9 do boss) estimados à
@@ -472,11 +486,21 @@ const BOSS_HP_MULT: Record<DungeonId, Record<CombatClass, number>> = {
 // UMA-BANDA-ATRÁS vencer ~45% no 1º nó (arranha XP, não farma). `pow` das salas novas é
 // 1.15 (> boss 0.9): golpe mais perigoso + hpMult menor = mesmo win% com luta mais curta
 // (o boss é a maratona; a sala é o susto). Floresta = valores antigos (onboarding OK).
+// 🔁 Re-escalado em 2026-08-21 (`PHASE=solve npm run sim:dungeons`). A FORMA da
+// rampa é a original — hpLo→hpHi, o alívio do nó menor e o `pow` mais alto fora da
+// Floresta ("a sala é o susto, o boss é a maratona") são decisões de design, não
+// resultado de busca. O que mudou foi a MAGNITUDE, por um fator único por masmorra.
+//
+// O alvo é o CLEAR DA RUN no gear-alvo (tier I), não o win% de uma sala isolada:
+// 60% por sala compõe, e com as 4 salas da Caverna leva a run inteira para ~16%.
+// O jogador não sente a sala, sente se terminou a masmorra. Alvo = 85% do win-rate
+// do CHEFE: as salas são atrito (poção, durabilidade), o chefe é o gate.
+// Clear medido depois: Floresta 73% · Caverna 68% · Pântano 55% · Ruínas 47%.
 const ROOM_RAMP: Record<DungeonId, { pow: number; hpLo: number; hpHi: number; minorHp: number; minorStr: number }> = {
-  floresta: { pow: 0.90, hpLo: 1.40, hpHi: 3.00, minorHp: 0.70, minorStr: 0.78 },
-  caverna:  { pow: 1.15, hpLo: 2.30, hpHi: 2.45, minorHp: 0.73, minorStr: 0.85 },
-  pantano:  { pow: 1.15, hpLo: 2.40, hpHi: 2.50, minorHp: 0.80, minorStr: 0.90 },
-  ruinas:   { pow: 1.15, hpLo: 2.50, hpHi: 2.50, minorHp: 0.89, minorStr: 0.94 },
+  floresta: { pow: 0.90, hpLo: 1.68, hpHi: 3.60, minorHp: 0.70, minorStr: 0.78 },
+  caverna:  { pow: 1.15, hpLo: 1.54, hpHi: 1.64, minorHp: 0.73, minorStr: 0.85 },
+  pantano:  { pow: 1.15, hpLo: 1.51, hpHi: 1.58, minorHp: 0.80, minorStr: 0.90 },
+  ruinas:   { pow: 1.15, hpLo: 1.42, hpHi: 1.42, minorHp: 0.89, minorStr: 0.94 },
 }
 const GEAR_TIER_FLOOR = 0.25 // piso de gear "pelado" (= GEAR_FLOOR do modelo)
 
@@ -514,7 +538,7 @@ const REF_BUILD: Record<CombatClass, Record<string, number>> = {
   monk:    { agi: 0.55, def: 0.45 },
 }
 const REF_CLASSES: CombatClass[] = ['warrior', 'rogue', 'mage', 'monk']
-const REF_CREATION_PTS = 18, REF_STAT_CAP = 10, REF_SET_HP = 42
+const REF_CREATION_PTS = 18, REF_STAT_CAP = 10, REF_SET_HP = 42, REF_STAT_FLOOR = 8
 
 function refAttrs(klass: CombatClass, level: number) {
   const w = REF_BUILD[klass]
@@ -525,9 +549,15 @@ function refAttrs(klass: CombatClass, level: number) {
   out.def = Math.min(REF_STAT_CAP, out.def + spill)
   for (const k of Object.keys(w)) out[k] += Math.round(levelPts * w[k])
   const cb = REF_CLASS_BONUS[klass]
+  // ⚖️ Piso 8 em str/agi/int, igual à produção (api/character/route.ts + attributeRecalc).
+  // Sem ele o mago de referência ficava com str 2 contra os 10 do mago real, e o
+  // monstro saía dimensionado contra um jogador mais frágil do que qualquer um que
+  // exista. DEF não tem piso (RES baixa mantém o mago matável).
   return {
-    str: out.str + REF_RACE.str + cb.str, agi: out.agi + REF_RACE.agi + cb.agi,
-    int: out.int + REF_RACE.int + cb.int, def: out.def + REF_RACE.def + cb.def,
+    str: Math.max(REF_STAT_FLOOR, out.str + REF_RACE.str + cb.str),
+    agi: Math.max(REF_STAT_FLOOR, out.agi + REF_RACE.agi + cb.agi),
+    int: Math.max(REF_STAT_FLOOR, out.int + REF_RACE.int + cb.int),
+    def: out.def + REF_RACE.def + cb.def,
   }
 }
 // HP sintético do set de referência escala com a MESMA curva do enhancement real
@@ -538,13 +568,21 @@ const targetGearTierOf = (t: { rarity: string; enh: number }) =>
   deriveGearTier(Array.from({ length: 9 }, () => ({ rarity: t.rarity, enhancementLevel: t.enh })))
 
 // Âncora NEUTRA (classe-independente) em (nível, gearTier, gearHp) arbitrários: média do
-// poder/HP das 4 classes de referência. Carrega os componentes FLAT (HP base 80 + tilt).
+// poder/HP das 4 classes de referência.
+//
+// ⚠️ 2026-08-21 — O HP vem de computeDerivedStats, a MESMA fórmula que o banco grava
+// (characterLevelSystem/attributeRecalc) e que DungeonRun lê. Antes daqui usava-se
+// `80 + str*2 + def*4`, que é a fórmula ANTIGA da criação: o monstro era dimensionado
+// contra um jogador com 17% (nv10) a 110% (nv50) MENOS vida do que o real, e a curva
+// de dificuldade 88/78/63/52 virava 99/99/98/94 na prática. Medido em
+// scripts/dungeon-testbench.ts; a divergência crescia com o nível porque só
+// computeDerivedStats tem o termo `nível·6`.
 function anchorAt(level: number, gearTier: number, gearHp: number) {
   let powerSum = 0, hpSum = 0
   for (const k of REF_CLASSES) {
     const a = refAttrs(k, level)
     powerSum += computeLevers(k, level, gearTier, a).power
-    hpSum += 80 + a.str * 2 + a.def * 4 + gearHp
+    hpSum += computeDerivedStats({ ...a, level }).maxHp + gearHp
   }
   return { power: powerSum / REF_CLASSES.length, hp: hpSum / REF_CLASSES.length }
 }
@@ -566,6 +604,26 @@ function nodeProgress(s: NodeScaling, rooms: number): number {
   return s.isMain ? base : Math.max(0.04, base - 0.5 / (rooms + 1)) // menor = antes da sala
 }
 
+/**
+ * Alavancas injetáveis, para o CALIBRADOR e só para ele.
+ *
+ * `npm run sim:dungeons -- PHASE=solve` resolve BOSS_HP_MULT/ROOM_RAMP por busca
+ * binária, e precisa varrer o multiplicador sem editar o arquivo a cada passo.
+ * Antes disso o dungeon-difficulty-sim montava um boss SINTÉTICO próprio e a
+ * tabela resolvida era transcrita à mão para cá — a calibração não sobrevivia à
+ * transcrição (medido: alvo 88%, entregue 95%). Resolver contra a função real
+ * fecha esse buraco. Nada em produção passa este parâmetro.
+ */
+export interface ScaleOverrides {
+  bossHpMult?: number
+  /** Substitui dungeonTierPowerMult(tier) — para resolver o passo do tier. */
+  tierPow?: number
+  roomHpLo?: number
+  roomHpHi?: number
+  minorHp?: number
+  minorStr?: number
+}
+
 export function scaleMonster(
   def: DungeonMonsterDef,
   dungeon: DungeonDef,
@@ -573,8 +631,9 @@ export function scaleMonster(
   s: NodeScaling,
   combatClass: CombatClass = 'warrior',
   tier: number = 1,
+  ov?: ScaleOverrides,
 ): ScaledMonster {
-  const tierPow = dungeonTierPowerMult(tier)   // monstro mais forte em tier alto
+  const tierPow = ov?.tierPow ?? dungeonTierPowerMult(tier)   // monstro mais forte em tier alto
   const tierReward = dungeonTierRewardMult(tier) // recompensa melhor em tier alto
   const tg = TARGET_GEAR[dungeon.id]
   const targetTier = targetGearTierOf(tg)
@@ -586,7 +645,7 @@ export function scaleMonster(
     level = dungeon.clearLevel
     gearTier = targetTier
     gearHp = targetHp
-    hpMult = BOSS_HP_MULT[dungeon.id]?.[combatClass] ?? 4.0
+    hpMult = ov?.bossHpMult ?? BOSS_HP_MULT[dungeon.id]?.[combatClass] ?? 4.0
     strFac = 1
     powMult = BOSS_POW_MULT
   } else {
@@ -605,8 +664,12 @@ export function scaleMonster(
     gearTier = lerp(entryTier, targetTier, p)
     gearHp = Math.floor(lerp(entryHp, targetHp, p))
     const ramp = ROOM_RAMP[dungeon.id]
-    hpMult = lerp(ramp.hpLo, ramp.hpHi, p) * (s.isMain ? 1 : ramp.minorHp)
-    strFac = s.isMain ? 1 : ramp.minorStr
+    const hpLo = ov?.roomHpLo ?? ramp.hpLo
+    const hpHi = ov?.roomHpHi ?? ramp.hpHi
+    const mHp = ov?.minorHp ?? ramp.minorHp
+    const mStr = ov?.minorStr ?? ramp.minorStr
+    hpMult = lerp(hpLo, hpHi, p) * (s.isMain ? 1 : mHp)
+    strFac = s.isMain ? 1 : mStr
     powMult = ramp.pow
   }
 
@@ -736,6 +799,8 @@ export function scaleMonsterGroup(
      * o sorteio agora acontece na criação da run, não no /step.
      */
     species?: DungeonMonsterDef[]
+    /** Só para o calibrador (PHASE=solve) — ver ScaleOverrides. */
+    ov?: ScaleOverrides
   },
 ): ScaledMonster[] {
   const planned = opts?.species?.length ? opts.species : null
@@ -749,7 +814,7 @@ export function scaleMonsterGroup(
       : opts?.pool?.length
         ? opts.pool[Math.floor(Math.random() * opts.pool.length)]
         : pickMonster(dungeon, { earlyBias: opts?.earlyBias })
-    const m = scaleMonster(def, dungeon, characterLevel, s, combatClass, tier)
+    const m = scaleMonster(def, dungeon, characterLevel, s, combatClass, tier, opts?.ov)
     if (size > 1) {
       m.hp = Math.max(1, Math.floor(m.hp * hpShare))
       m.maxHp = m.hp

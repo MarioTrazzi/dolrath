@@ -195,7 +195,7 @@ export function chooseAttack(opts: { transformed?: boolean; stamina?: number } =
  */
 export function clampGearTier(tier: number): number {
   if (Number.isNaN(tier)) return GEAR_FLOOR
-  return Math.max(GEAR_FLOOR, Math.min(1, tier))
+  return Math.max(GEAR_FLOOR, Math.min(MAX_GEAR_TIER, tier))
 }
 
 // === TIER DO GEAR (equipamento → [0,1], BiS lendário IV = 1) ===
@@ -212,6 +212,20 @@ export const NOMINAL_SLOTS = 9
  * Fator de aprimoramento p/ TIERING ∈ [~0.45, 1], normalizado p/ IV (TET, nível 19) = 1.
  * Espelha a forma da curva de enhancementSystem (+5%/nível até +15; I..V).
  */
+/**
+ * Teto do gearTier = set completo de LENDÁRIO PEN.
+ *
+ * ⚠️ 2026-08-21: o teto era 1.0 fixo, que é exatamente o que LENDÁRIO **TET**
+ * já atinge — então o último degrau de aprimoramento (TET→PEN) não comprava
+ * poder NENHUM, só o HP da peça. O jogador pagava a fase mais cara da forja
+ * (1.2% de chance por tentativa) por zero de combate. Agora o teto é o máximo
+ * de fato alcançável, calculado e não mágico: PEN dá ~+18% de gearTier sobre
+ * TET, o que vira ~+11% de S no nível 50.
+ *
+ * Vale para PvE e PvP — é o mesmo motor. Ver server/combatModel.js (espelho).
+ */
+export const MAX_GEAR_TIER = 3.3 / 2.8  // = enhanceTierFactor(20) × RARITY_WEIGHT.LEGENDARY
+
 export function enhanceTierFactor(enhancementLevel: number): number {
   const lvl = Math.max(0, Math.min(20, Math.floor(enhancementLevel || 0)))
   const TIER: Record<number, number> = { 16: 2.0, 17: 2.2, 18: 2.45, 19: 2.8, 20: 3.3 }
@@ -232,7 +246,7 @@ export function deriveGearTier(equipped: EquippedRef[] | null | undefined): numb
     const w = RARITY_WEIGHT[(eq.rarity || '').toUpperCase()] ?? 0.25
     sum += w * enhanceTierFactor(eq.enhancementLevel ?? 0)
   }
-  return Math.min(1, sum / NOMINAL_SLOTS)
+  return Math.min(MAX_GEAR_TIER, sum / NOMINAL_SLOTS)
 }
 
 /** S = wL·(nível/50) + wG·tier_gear  (o multiplicador de poder). */

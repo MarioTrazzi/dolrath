@@ -1083,7 +1083,11 @@ const DUNGEON_GEAR_RARITY: Record<DungeonId, { node: Rarity[]; boss: Rarity[] }>
   floresta: { node: ['COMMON', 'UNCOMMON'], boss: ['RARE'] },
   caverna:  { node: ['UNCOMMON', 'RARE'],   boss: ['RARE', 'EPIC'] },
   pantano:  { node: ['RARE'],               boss: ['EPIC'] },
-  ruinas:   { node: ['RARE', 'EPIC'],       boss: ['EPIC', 'LEGENDARY'] },
+  // ⚠️ O nó das Ruínas declarava ['RARE', 'EPIC'], mas a masmorra NUNCA teve um
+  // item raro: o pool saía vazio e metade da tabela era letra morta (medido em
+  // `PHASE=3 npm run sim:dungeons`). Voltar a encher de raro seria retroceder —
+  // o Pântano já é a banda do raro. A tabela agora diz o que de fato acontece.
+  ruinas:   { node: ['EPIC'],               boss: ['EPIC', 'LEGENDARY'] },
 }
 
 // Gear/poção/ingrediente de CHEFE: chances próprias (as duas primeiras absorvem o

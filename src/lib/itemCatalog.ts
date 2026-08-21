@@ -449,17 +449,17 @@ export const ITEM_CATALOG: CatalogItem[] = [
   },
   {
     name: 'Couraça de Escamas Ígneas', description: 'Escamas sobrepostas que fervem ao toque inimigo.',
-    type: 'HEAVY_ARMOR', level: 16, rarity: 'RARE', goldPrice: 1800, source: 'dungeon', raceRestriction: 'draconiano',
-    stats: { str: 2, def: 16, hp: 28 }, dungeons: ['pantano'],
+    type: 'HEAVY_ARMOR', level: 29, rarity: 'RARE', goldPrice: 1800, source: 'dungeon', raceRestriction: 'draconiano',
+    stats: { str: 3, def: 21, hp: 36 }, dungeons: ['pantano'],
   },
   {
     name: 'Égide do Dragão Ancião', description: 'Couraça das escamas de um dragão milenar. Só um descendente suporta seu peso ardente.',
-    type: 'HEAVY_ARMOR', level: 24, rarity: 'EPIC', goldPrice: 3400, source: 'dungeon_boss', raceRestriction: 'draconiano',
+    type: 'HEAVY_ARMOR', level: 37, rarity: 'EPIC', goldPrice: 3400, source: 'dungeon_boss', raceRestriction: 'draconiano',
     stats: { str: 5, def: 26, hp: 55, specialEffect: 'Imunidade parcial a fogo' }, dungeons: ['pantano'],
   },
   {
     name: 'Presas do Cataclismo', description: 'Machado gêmeo feito das presas de um dragão. Pulsa com fúria ancestral.',
-    type: 'AXE', level: 30, rarity: 'LEGENDARY', goldPrice: 9000, source: 'dungeon_boss', raceRestriction: 'draconiano',
+    type: 'AXE', level: 49, rarity: 'LEGENDARY', goldPrice: 9000, source: 'dungeon_boss', raceRestriction: 'draconiano',
     stats: { str: 76, agi: 4, specialEffect: 'Explosão ígnea massiva em crítico' }, dungeons: ['ruinas'],
   },
 
@@ -476,12 +476,12 @@ export const ITEM_CATALOG: CatalogItem[] = [
   },
   {
     name: 'Cajado da Aurora Arcana', description: 'Canaliza a luz das primeiras horas; magia mais barata e brilhante.',
-    type: 'STAFF', level: 23, rarity: 'EPIC', goldPrice: 3600, source: 'dungeon_boss', raceRestriction: 'elfo',
+    type: 'STAFF', level: 41, rarity: 'EPIC', goldPrice: 3600, source: 'dungeon_boss', raceRestriction: 'elfo',
     stats: { int: 34, mp: 48, specialEffect: 'Reduz drasticamente o custo de mana' }, dungeons: ['ruinas'],
   },
   {
     name: 'Manto da Forma Celestial', description: 'Tecido de luz astral que ergue o elfo à sua forma ascendida.',
-    type: 'LIGHT_ARMOR', level: 29, rarity: 'LEGENDARY', goldPrice: 9500, source: 'dungeon_boss', raceRestriction: 'elfo',
+    type: 'LIGHT_ARMOR', level: 48, rarity: 'LEGENDARY', goldPrice: 9500, source: 'dungeon_boss', raceRestriction: 'elfo',
     stats: { agi: 21, int: 14, def: 12, mp: 69, specialEffect: 'Aumenta poder mágico e esquiva' }, dungeons: ['ruinas'],
   },
 
@@ -493,8 +493,8 @@ export const ITEM_CATALOG: CatalogItem[] = [
   },
   {
     name: 'Pelagem Mutável', description: 'Tecido vivo que se adapta à forma e ao instinto do portador.',
-    type: 'MEDIUM_ARMOR', level: 14, rarity: 'RARE', goldPrice: 1600, source: 'dungeon', raceRestriction: 'metamorfo',
-    stats: { agi: 14, def: 6, hp: 23, specialEffect: 'Aumenta a esquiva' }, dungeons: ['pantano'],
+    type: 'MEDIUM_ARMOR', level: 26, rarity: 'RARE', goldPrice: 1600, source: 'dungeon', raceRestriction: 'metamorfo',
+    stats: { agi: 18, def: 8, hp: 30, specialEffect: 'Aumenta a esquiva' }, dungeons: ['pantano'],
   },
   {
     name: 'Manto da Fera Primal', description: 'Carrega o cheiro de mil caçadas; desperta o predador interior.',
@@ -503,7 +503,7 @@ export const ITEM_CATALOG: CatalogItem[] = [
   },
   {
     name: 'Garras do Caçador Lunar', description: 'Brilham sob a lua cheia; cada golpe encadeia o próximo.',
-    type: 'DAGGER', level: 28, rarity: 'LEGENDARY', goldPrice: 9200, source: 'dungeon_boss', raceRestriction: 'metamorfo',
+    type: 'DAGGER', level: 38, rarity: 'LEGENDARY', goldPrice: 9200, source: 'dungeon_boss', raceRestriction: 'metamorfo',
     stats: { str: 6, agi: 75, specialEffect: 'Golpes em sequência ignoram parte da defesa' }, dungeons: ['pantano'],
   },
 
@@ -520,12 +520,12 @@ export const ITEM_CATALOG: CatalogItem[] = [
   },
   {
     name: 'Égide do Herói', description: 'Carrega a determinação inquebrável da humanidade.',
-    type: 'HEAVY_ARMOR', level: 21, rarity: 'EPIC', goldPrice: 3200, source: 'dungeon_boss', raceRestriction: 'humano',
-    stats: { str: 4, def: 24, hp: 45, specialEffect: 'Reduz dano físico' }, dungeons: ['pantano'],
+    type: 'HEAVY_ARMOR', level: 34, rarity: 'EPIC', goldPrice: 3200, source: 'dungeon_boss', raceRestriction: 'humano',
+    stats: { str: 5, def: 29, hp: 55, specialEffect: 'Reduz dano físico' }, dungeons: ['pantano'],
   },
   {
     name: 'Lâmina do Sétimo Sentido', description: 'Desperta com o portador; corta onde a mente prevê o golpe.',
-    type: 'SWORD', level: 28, rarity: 'LEGENDARY', goldPrice: 9500, source: 'dungeon_boss', raceRestriction: 'humano',
+    type: 'SWORD', level: 46, rarity: 'LEGENDARY', goldPrice: 9500, source: 'dungeon_boss', raceRestriction: 'humano',
     stats: { str: 12, agi: 17, int: 52, specialEffect: 'Ignora parte da defesa e concede XP extra' }, dungeons: ['ruinas'],
   },
 
@@ -548,12 +548,12 @@ export const ITEM_CATALOG: CatalogItem[] = [
   },
   {
     name: 'Anel da Névoa Tóxica', description: 'Condensa os miasmas do Pântano Maldito num aro de osso.',
-    type: 'RING', level: 18, rarity: 'EPIC', goldPrice: 2800, source: 'dungeon_boss', dungeons: ['pantano'],
-    stats: { agi: 27 },
+    type: 'RING', level: 28, rarity: 'EPIC', goldPrice: 2800, source: 'dungeon_boss', dungeons: ['pantano'],
+    stats: { agi: 31 },
   },
   {
     name: 'Anel do Selo Imperial', description: 'Insígnia de um império morto que ainda comanda obediência.',
-    type: 'RING', level: 26, rarity: 'EPIC', goldPrice: 3600, source: 'dungeon_boss', dungeons: ['ruinas'],
+    type: 'RING', level: 45, rarity: 'EPIC', goldPrice: 3600, source: 'dungeon_boss', dungeons: ['ruinas'],
     stats: { str: 8, int: 8, agi: 8, def: 8, specialEffect: 'Bônus em todos os atributos' },
   },
 
@@ -570,12 +570,12 @@ export const ITEM_CATALOG: CatalogItem[] = [
   },
   {
     name: 'Talismã do Fogo-Fátuo', description: 'Aprisiona uma chama-fantasma do pântano que devolve energia.',
-    type: 'NECKLACE', level: 18, rarity: 'EPIC', goldPrice: 3000, source: 'dungeon_boss', dungeons: ['pantano'],
+    type: 'NECKLACE', level: 28, rarity: 'EPIC', goldPrice: 3000, source: 'dungeon_boss', dungeons: ['pantano'],
     stats: { int: 8, mp: 40, specialEffect: 'Restaura mana e stamina ao derrotar inimigos' },
   },
   {
     name: 'Relicário do Lich', description: 'Guarda um fragmento da alma imortal do Imperador morto.',
-    type: 'NECKLACE', level: 26, rarity: 'EPIC', goldPrice: 3800, source: 'dungeon_boss', dungeons: ['ruinas'],
+    type: 'NECKLACE', level: 45, rarity: 'EPIC', goldPrice: 3800, source: 'dungeon_boss', dungeons: ['ruinas'],
     stats: { int: 5, hp: 26, mp: 26, specialEffect: 'Regeneração acelerada de HP/MP' },
   },
 
@@ -593,12 +593,12 @@ export const ITEM_CATALOG: CatalogItem[] = [
   },
   {
     name: 'Punhos do Mestre Marcial', description: 'Disciplina de mil treinos cristalizada em aço; a velocidade vira sequência.',
-    type: 'GAUNTLET', level: 22, rarity: 'EPIC', goldPrice: 3300, source: 'dungeon_boss', dungeons: ['pantano'],
+    type: 'GAUNTLET', level: 35, rarity: 'EPIC', goldPrice: 3300, source: 'dungeon_boss', dungeons: ['pantano'],
     stats: { agi: 46, def: 4, hp: 14, specialEffect: 'Rajada de golpes em sequência' },
   },
   {
     name: 'Punhos do Dragão Interior', description: 'Despertam o cosmo do portador; o golpe atravessa carne e armadura.',
-    type: 'GAUNTLET', level: 29, rarity: 'LEGENDARY', goldPrice: 9300, source: 'dungeon_boss', dungeons: ['ruinas'],
+    type: 'GAUNTLET', level: 48, rarity: 'LEGENDARY', goldPrice: 9300, source: 'dungeon_boss', dungeons: ['ruinas'],
     stats: { str: 5, agi: 71, def: 5, specialEffect: 'Golpes encadeados ignoram parte da defesa' },
   },
 
@@ -610,12 +610,12 @@ export const ITEM_CATALOG: CatalogItem[] = [
   },
   {
     name: 'Orbe da Tempestade Arcana', description: 'Raios miniaturizados orbitam o núcleo, prontos para se espalhar pelo campo.',
-    type: 'ORB', level: 22, rarity: 'EPIC', goldPrice: 3400, source: 'dungeon_boss', dungeons: ['pantano'],
+    type: 'ORB', level: 35, rarity: 'EPIC', goldPrice: 3400, source: 'dungeon_boss', dungeons: ['pantano'],
     stats: { int: 27, mp: 31, specialEffect: 'Feitiços atingem em área' },
   },
   {
     name: 'Coração de Mana Eterno', description: 'Um cristal que pulsa como um coração vivo de pura energia arcana.',
-    type: 'ORB', level: 29, rarity: 'LEGENDARY', goldPrice: 9400, source: 'dungeon_boss', dungeons: ['ruinas'],
+    type: 'ORB', level: 48, rarity: 'LEGENDARY', goldPrice: 9400, source: 'dungeon_boss', dungeons: ['ruinas'],
     stats: { int: 39, mp: 43, specialEffect: 'Reduz o custo de mana e amplifica o dano mágico' },
   },
 
@@ -632,7 +632,7 @@ export const ITEM_CATALOG: CatalogItem[] = [
   },
   {
     name: 'Fio do Crepúsculo', description: 'Lâmina que corta a fronteira entre luz e sombra; apara o destino e o devolve em sangue.',
-    type: 'PARRY_DAGGER', level: 29, rarity: 'LEGENDARY', goldPrice: 9300, source: 'dungeon_boss', dungeons: ['ruinas'],
+    type: 'PARRY_DAGGER', level: 48, rarity: 'LEGENDARY', goldPrice: 9300, source: 'dungeon_boss', dungeons: ['ruinas'],
     stats: { agi: 55, def: 5, specialEffect: 'Aparar concede um contra-ataque crítico garantido' },
   },
 
@@ -644,12 +644,12 @@ export const ITEM_CATALOG: CatalogItem[] = [
   },
   {
     name: 'Selo do Punho Sereno', description: 'Um selo que aquieta a mente; o golpe encontra o centro sozinho.',
-    type: 'TALISMAN', level: 22, rarity: 'EPIC', goldPrice: 3300, source: 'dungeon_boss', dungeons: ['pantano'],
+    type: 'TALISMAN', level: 35, rarity: 'EPIC', goldPrice: 3300, source: 'dungeon_boss', dungeons: ['pantano'],
     stats: { agi: 33, mp: 19, specialEffect: 'Reduz o custo de energia dos golpes especiais' },
   },
   {
     name: 'Mandala do Cosmo', description: 'Um círculo sagrado que gira com o cosmo do portador; cada golpe ressoa com o universo.',
-    type: 'TALISMAN', level: 29, rarity: 'LEGENDARY', goldPrice: 9300, source: 'dungeon_boss', dungeons: ['ruinas'],
+    type: 'TALISMAN', level: 48, rarity: 'LEGENDARY', goldPrice: 9300, source: 'dungeon_boss', dungeons: ['ruinas'],
     stats: { agi: 49, mp: 24, specialEffect: 'Amplifica o dano dos golpes especiais e restaura energia ao acertar' },
   },
 
@@ -666,12 +666,12 @@ export const ITEM_CATALOG: CatalogItem[] = [
   },
   {
     name: 'Cinturão do Colosso', description: 'Placa central do tamanho de um escudo; carrega o peso de uma muralha.',
-    type: 'BELT', level: 18, rarity: 'EPIC', goldPrice: 2900, source: 'dungeon_boss', dungeons: ['pantano'],
-    stats: { str: 3, def: 13, hp: 30, specialEffect: 'Reduz o dano físico recebido' },
+    type: 'BELT', level: 28, rarity: 'EPIC', goldPrice: 2900, source: 'dungeon_boss', dungeons: ['pantano'],
+    stats: { str: 4, def: 15, hp: 36, specialEffect: 'Reduz o dano físico recebido' },
   },
   {
     name: 'Faixa do Destino', description: 'Tecida com fios de eras esquecidas; eleva tudo no portador.',
-    type: 'BELT', level: 26, rarity: 'EPIC', goldPrice: 3700, source: 'dungeon_boss', dungeons: ['ruinas'],
+    type: 'BELT', level: 45, rarity: 'EPIC', goldPrice: 3700, source: 'dungeon_boss', dungeons: ['ruinas'],
     stats: { str: 5, agi: 5, int: 5, def: 7, hp: 32, specialEffect: 'Bônus em todos os atributos' },
   },
 
@@ -688,12 +688,12 @@ export const ITEM_CATALOG: CatalogItem[] = [
   },
   {
     name: 'Égide do Baluarte', description: 'Tão grande que vira uma parede; pouco a atravessa.',
-    type: 'SHIELD', level: 22, rarity: 'EPIC', goldPrice: 3300, source: 'dungeon_boss', dungeons: ['pantano'],
+    type: 'SHIELD', level: 35, rarity: 'EPIC', goldPrice: 3300, source: 'dungeon_boss', dungeons: ['pantano'],
     stats: { def: 29, hp: 27, specialEffect: 'Reduz o dano recebido por alguns turnos' },
   },
   {
     name: 'Muralha Viva', description: 'Metal rúnico que endurece ao receber o golpe e o devolve.',
-    type: 'SHIELD', level: 29, rarity: 'LEGENDARY', goldPrice: 9300, source: 'dungeon_boss', dungeons: ['ruinas'],
+    type: 'SHIELD', level: 48, rarity: 'LEGENDARY', goldPrice: 9300, source: 'dungeon_boss', dungeons: ['ruinas'],
     stats: { def: 41, hp: 39, specialEffect: 'Reflete parte do dano ao atacante' },
   },
 
@@ -707,7 +707,7 @@ export const ITEM_CATALOG: CatalogItem[] = [
   // --- ARMAS ÉPICAS (preenchem o tier vazio) ---
   {
     name: 'Lâmina do Carrasco', description: 'Espada larga que pesa como uma sentença; busca o golpe final.',
-    type: 'SWORD', level: 22, rarity: 'EPIC', goldPrice: 3400, source: 'dungeon_boss', dungeons: ['pantano'],
+    type: 'SWORD', level: 35, rarity: 'EPIC', goldPrice: 3400, source: 'dungeon_boss', dungeons: ['pantano'],
     stats: { str: 57, specialEffect: 'Dano extra contra alvos feridos' },
   },
   {
@@ -717,7 +717,7 @@ export const ITEM_CATALOG: CatalogItem[] = [
   },
   {
     name: 'Arco da Tormenta', description: 'A corda zune como vento de tempestade; a flecha não conhece armadura.',
-    type: 'BOW', level: 26, rarity: 'EPIC', goldPrice: 3500, source: 'dungeon_boss', dungeons: ['ruinas'],
+    type: 'BOW', level: 45, rarity: 'EPIC', goldPrice: 3500, source: 'dungeon_boss', dungeons: ['ruinas'],
     stats: { agi: 53, int: 8, specialEffect: 'Flecha perfurante ignora parte da defesa' },
   },
 
@@ -735,125 +735,125 @@ export const ITEM_CATALOG: CatalogItem[] = [
   // --- ARMAS PRIMÁRIAS (nv16, B≈32.7) ---
   {
     name: 'Lâmina do Charco Fétido', description: 'O aço guarda o cheiro do brejo; a ferida que abre custa a fechar.',
-    type: 'SWORD', level: 16, rarity: 'RARE', goldPrice: 1800, source: 'dungeon', dungeons: ['pantano'],
-    stats: { str: 33 },
+    type: 'SWORD', level: 29, rarity: 'RARE', goldPrice: 1800, source: 'dungeon', dungeons: ['pantano'],
+    stats: { str: 41 },
   },
   {
     name: 'Machado do Lodo Ancestral', description: 'Pesado de limo endurecido, cai com o peso de séculos de pântano.',
-    type: 'AXE', level: 16, rarity: 'RARE', goldPrice: 1800, source: 'dungeon', dungeons: ['pantano'],
-    stats: { str: 29, agi: 4 },
+    type: 'AXE', level: 29, rarity: 'RARE', goldPrice: 1800, source: 'dungeon', dungeons: ['pantano'],
+    stats: { str: 36, agi: 5 },
   },
   {
     name: 'Presa da Serpente do Brejo', description: 'Lâmina curva arrancada de uma naja gigante — ainda escorre peçonha.',
-    type: 'DAGGER', level: 16, rarity: 'RARE', goldPrice: 1800, source: 'dungeon', dungeons: ['pantano'],
-    stats: { agi: 33, specialEffect: 'Chance de envenenar o alvo' },
+    type: 'DAGGER', level: 29, rarity: 'RARE', goldPrice: 1800, source: 'dungeon', dungeons: ['pantano'],
+    stats: { agi: 41, specialEffect: 'Chance de envenenar o alvo' },
   },
   {
     name: 'Arco de Junco Peçonhento', description: 'Junco do mangue curvado a frio; as flechas assobiam baixo entre a névoa.',
-    type: 'BOW', level: 16, rarity: 'RARE', goldPrice: 1800, source: 'dungeon', dungeons: ['pantano'],
-    stats: { agi: 29, hp: 8 },
+    type: 'BOW', level: 29, rarity: 'RARE', goldPrice: 1800, source: 'dungeon', dungeons: ['pantano'],
+    stats: { agi: 36, hp: 10 },
   },
   {
     name: 'Cajado da Bruma Pútrida', description: 'A ponta condensa o miasma do charco em magia úmida e pesada.',
-    type: 'STAFF', level: 16, rarity: 'RARE', goldPrice: 1800, source: 'dungeon', dungeons: ['pantano'],
-    stats: { int: 22, mp: 22 },
+    type: 'STAFF', level: 29, rarity: 'RARE', goldPrice: 1800, source: 'dungeon', dungeons: ['pantano'],
+    stats: { int: 27, mp: 27 },
   },
   {
     name: 'Manoplas do Pântano Vivo', description: 'Raízes vivas se enroscam nos punhos e endurecem no impacto.',
-    type: 'GAUNTLET', level: 16, rarity: 'RARE', goldPrice: 1800, source: 'dungeon', dungeons: ['pantano'],
-    stats: { agi: 26, def: 3, hp: 8 },
+    type: 'GAUNTLET', level: 29, rarity: 'RARE', goldPrice: 1800, source: 'dungeon', dungeons: ['pantano'],
+    stats: { agi: 32, def: 4, hp: 10 },
   },
 
   // --- SECUNDÁRIAS (nv16, B≈24.5) ---
   {
     name: 'Broquel de Casco de Jabuti', description: 'Casco de um quelônio ancião do brejo, mais duro que escudo de aço.',
-    type: 'SHIELD', level: 16, rarity: 'RARE', goldPrice: 1700, source: 'dungeon', dungeons: ['pantano'],
-    stats: { def: 17, hp: 15 },
+    type: 'SHIELD', level: 29, rarity: 'RARE', goldPrice: 1700, source: 'dungeon', dungeons: ['pantano'],
+    stats: { def: 21, hp: 19 },
   },
   {
     name: 'Aparo de Caniço', description: 'Fina como um talo, firme o bastante para desviar a estocada.',
-    type: 'PARRY_DAGGER', level: 16, rarity: 'RARE', goldPrice: 1700, source: 'dungeon', dungeons: ['pantano'],
-    stats: { agi: 21, def: 3, hp: 2 },
+    type: 'PARRY_DAGGER', level: 29, rarity: 'RARE', goldPrice: 1700, source: 'dungeon', dungeons: ['pantano'],
+    stats: { agi: 26, def: 4, hp: 2 },
   },
   {
     name: 'Orbe do Miasma Verde', description: 'Esfera turva onde o gás do pântano gira sem nunca escapar.',
-    type: 'ORB', level: 16, rarity: 'RARE', goldPrice: 1700, source: 'dungeon', dungeons: ['pantano'],
-    stats: { int: 16, mp: 17 },
+    type: 'ORB', level: 29, rarity: 'RARE', goldPrice: 1700, source: 'dungeon', dungeons: ['pantano'],
+    stats: { int: 20, mp: 21 },
   },
   {
     name: 'Amuleto do Sapo Oráculo', description: 'O coaxar preso no âmbar avisa o golpe antes dele vir.',
-    type: 'TALISMAN', level: 16, rarity: 'RARE', goldPrice: 1700, source: 'dungeon', dungeons: ['pantano'],
-    stats: { agi: 19, hp: 11 },
+    type: 'TALISMAN', level: 29, rarity: 'RARE', goldPrice: 1700, source: 'dungeon', dungeons: ['pantano'],
+    stats: { agi: 24, hp: 14 },
   },
 
   // --- ARMADURA DE CORPO (nv16, B≈32.7) ---
   {
     name: 'Vestes de Musgo Encharcado', description: 'O musgo bebe a magia do charco e a devolve a quem o veste.',
-    type: 'LIGHT_ARMOR', level: 16, rarity: 'RARE', goldPrice: 1800, source: 'dungeon', dungeons: ['pantano'],
-    stats: { int: 8, def: 12, mp: 25, specialEffect: 'Regeneração de mana' },
+    type: 'LIGHT_ARMOR', level: 29, rarity: 'RARE', goldPrice: 1800, source: 'dungeon', dungeons: ['pantano'],
+    stats: { int: 10, def: 15, mp: 32, specialEffect: 'Regeneração de mana' },
   },
   {
     name: 'Gibão Curtido no Brejo', description: 'Couro curtido na água parada: leve, flexível e imune ao mofo.',
-    type: 'MEDIUM_ARMOR', level: 16, rarity: 'RARE', goldPrice: 1800, source: 'dungeon', dungeons: ['pantano'],
-    stats: { agi: 12, def: 12, hp: 18 },
+    type: 'MEDIUM_ARMOR', level: 29, rarity: 'RARE', goldPrice: 1800, source: 'dungeon', dungeons: ['pantano'],
+    stats: { agi: 15, def: 15, hp: 22 },
   },
   {
     name: 'Couraça do Guardião do Mangue', description: 'Placas amarradas com raiz de mangue — não cedem nem no atoleiro.',
-    type: 'HEAVY_ARMOR', level: 16, rarity: 'RARE', goldPrice: 1800, source: 'dungeon', dungeons: ['pantano'],
-    stats: { str: 3, def: 20, hp: 20 },
+    type: 'HEAVY_ARMOR', level: 29, rarity: 'RARE', goldPrice: 1800, source: 'dungeon', dungeons: ['pantano'],
+    stats: { str: 4, def: 25, hp: 25 },
   },
 
   // --- ELMOS (nv15, B≈19.1) ---
   {
     name: 'Capuz de Vime Trançado', description: 'Trama fina de vime que abafa o som e filtra o ar podre.',
-    type: 'LIGHT_HELMET', level: 15, rarity: 'RARE', goldPrice: 1600, source: 'dungeon', dungeons: ['pantano'],
-    stats: { agi: 8, def: 5, mp: 12 },
+    type: 'LIGHT_HELMET', level: 27, rarity: 'RARE', goldPrice: 1600, source: 'dungeon', dungeons: ['pantano'],
+    stats: { agi: 10, def: 6, mp: 16 },
   },
   {
     name: 'Elmo do Vigia do Charco', description: 'Visor estreito de quem passou a vida esperando o vulto na névoa.',
-    type: 'HEAVY_HELMET', level: 15, rarity: 'RARE', goldPrice: 1600, source: 'dungeon', dungeons: ['pantano'],
-    stats: { str: 2, def: 12, hp: 10 },
+    type: 'HEAVY_HELMET', level: 27, rarity: 'RARE', goldPrice: 1600, source: 'dungeon', dungeons: ['pantano'],
+    stats: { str: 3, def: 16, hp: 13 },
   },
 
   // --- LUVAS (nv15, B≈19.1) ---
   {
     name: 'Luvas de Seda Palustre', description: 'Fiadas pela aranha-d\'água: quase não se sente que estão nas mãos.',
-    type: 'LIGHT_GLOVES', level: 15, rarity: 'RARE', goldPrice: 1600, source: 'dungeon', dungeons: ['pantano'],
-    stats: { agi: 12, int: 4, mp: 6 },
+    type: 'LIGHT_GLOVES', level: 27, rarity: 'RARE', goldPrice: 1600, source: 'dungeon', dungeons: ['pantano'],
+    stats: { agi: 16, int: 5, mp: 8 },
   },
   {
     name: 'Manoplas de Placas Enlameadas', description: 'A lama seca virou uma segunda casca sobre o metal.',
-    type: 'HEAVY_GLOVES', level: 15, rarity: 'RARE', goldPrice: 1600, source: 'dungeon', dungeons: ['pantano'],
-    stats: { str: 10, def: 7, hp: 4 },
+    type: 'HEAVY_GLOVES', level: 27, rarity: 'RARE', goldPrice: 1600, source: 'dungeon', dungeons: ['pantano'],
+    stats: { str: 13, def: 9, hp: 5 },
   },
 
   // --- BOTAS (nv15, B≈19.1) ---
   {
     name: 'Botas do Passo Silencioso', description: 'Sola larga que não afunda no lodo nem estala no junco seco.',
-    type: 'LIGHT_BOOTS', level: 15, rarity: 'RARE', goldPrice: 1600, source: 'dungeon', dungeons: ['pantano'],
-    stats: { agi: 14, def: 3, hp: 4 },
+    type: 'LIGHT_BOOTS', level: 27, rarity: 'RARE', goldPrice: 1600, source: 'dungeon', dungeons: ['pantano'],
+    stats: { agi: 18, def: 4, hp: 5 },
   },
   {
     name: 'Grevas do Atoleiro', description: 'Pesadas de propósito: quem as calça não é arrastado pela lama.',
-    type: 'HEAVY_BOOTS', level: 15, rarity: 'RARE', goldPrice: 1600, source: 'dungeon', dungeons: ['pantano'],
-    stats: { str: 3, def: 11, hp: 10 },
+    type: 'HEAVY_BOOTS', level: 27, rarity: 'RARE', goldPrice: 1600, source: 'dungeon', dungeons: ['pantano'],
+    stats: { str: 4, def: 14, hp: 13 },
   },
 
   // --- ACESSÓRIOS (nv17) ---
   {
     name: 'Anel de Escamas de Sanguessuga', description: 'Aro de escamas que devolve ao portador um pouco do que tira.',
-    type: 'RING', level: 17, rarity: 'RARE', goldPrice: 1750, source: 'dungeon', dungeons: ['pantano'],
-    stats: { agi: 10, hp: 13, specialEffect: 'Recupera HP ao acertar golpes' },
+    type: 'RING', level: 30, rarity: 'RARE', goldPrice: 1750, source: 'dungeon', dungeons: ['pantano'],
+    stats: { agi: 12, hp: 16, specialEffect: 'Recupera HP ao acertar golpes' },
   },
   {
     name: 'Colar de Presas de Naja', description: 'Presas enfileiradas em couro cru — troféu e advertência.',
-    type: 'NECKLACE', level: 17, rarity: 'RARE', goldPrice: 1750, source: 'dungeon', dungeons: ['pantano'],
-    stats: { str: 5, agi: 5, hp: 13 },
+    type: 'NECKLACE', level: 30, rarity: 'RARE', goldPrice: 1750, source: 'dungeon', dungeons: ['pantano'],
+    stats: { str: 6, agi: 6, hp: 16 },
   },
   {
     name: 'Faixa de Couro de Jacaré', description: 'Couro de dorso, o mais grosso do bicho; aguenta o que vier.',
-    type: 'BELT', level: 17, rarity: 'RARE', goldPrice: 1750, source: 'dungeon', dungeons: ['pantano'],
-    stats: { str: 2, def: 8, hp: 20 },
+    type: 'BELT', level: 30, rarity: 'RARE', goldPrice: 1750, source: 'dungeon', dungeons: ['pantano'],
+    stats: { str: 2, def: 10, hp: 25 },
   },
 
   // ============================================================
@@ -868,103 +868,400 @@ export const ITEM_CATALOG: CatalogItem[] = [
   // --- ARMAS PRIMÁRIAS (nv25, B≈53.2) — o arco já existia (Arco da Tormenta) ---
   {
     name: 'Lâmina do Trono Partido', description: 'Espada cerimonial de um reino que as Ruínas engoliram.',
-    type: 'SWORD', level: 25, rarity: 'EPIC', goldPrice: 3600, source: 'dungeon', dungeons: ['ruinas'],
+    type: 'SWORD', level: 44, rarity: 'EPIC', goldPrice: 3600, source: 'dungeon', dungeons: ['ruinas'],
     stats: { str: 53, specialEffect: 'Dano extra contra inimigos com mais vida' },
   },
   {
     name: 'Machado do Juramento Quebrado', description: 'A runa de lealdade na lâmina foi lascada de propósito.',
-    type: 'AXE', level: 25, rarity: 'EPIC', goldPrice: 3600, source: 'dungeon', dungeons: ['ruinas'],
+    type: 'AXE', level: 44, rarity: 'EPIC', goldPrice: 3600, source: 'dungeon', dungeons: ['ruinas'],
     stats: { str: 47, agi: 6 },
   },
   {
     name: 'Estilete do Silêncio Arcano', description: 'Não faz som ao sair da bainha nem ao entrar no alvo.',
-    type: 'DAGGER', level: 25, rarity: 'EPIC', goldPrice: 3600, source: 'dungeon', dungeons: ['ruinas'],
+    type: 'DAGGER', level: 44, rarity: 'EPIC', goldPrice: 3600, source: 'dungeon', dungeons: ['ruinas'],
     stats: { agi: 53, specialEffect: 'Golpes pelas costas causam dano ampliado' },
   },
   {
     name: 'Cajado do Cânone Perdido', description: 'Guarda as fórmulas de uma escola de magia que ninguém mais ensina.',
-    type: 'STAFF', level: 25, rarity: 'EPIC', goldPrice: 3600, source: 'dungeon', dungeons: ['ruinas'],
+    type: 'STAFF', level: 44, rarity: 'EPIC', goldPrice: 3600, source: 'dungeon', dungeons: ['ruinas'],
     stats: { int: 36, mp: 34 },
   },
   {
     name: 'Punhos da Ordem Extinta', description: 'Ataduras rúnicas dos monges que guardavam as Ruínas antes da queda.',
-    type: 'GAUNTLET', level: 25, rarity: 'EPIC', goldPrice: 3600, source: 'dungeon', dungeons: ['ruinas'],
+    type: 'GAUNTLET', level: 44, rarity: 'EPIC', goldPrice: 3600, source: 'dungeon', dungeons: ['ruinas'],
     stats: { agi: 45, def: 4, hp: 8 },
   },
 
   // --- SECUNDÁRIAS (nv25, B≈39.9) ---
   {
     name: 'Broquel do Selo Rúnico', description: 'As runas acendem no instante do impacto e apagam logo depois.',
-    type: 'SHIELD', level: 25, rarity: 'EPIC', goldPrice: 3500, source: 'dungeon', dungeons: ['ruinas'],
+    type: 'SHIELD', level: 44, rarity: 'EPIC', goldPrice: 3500, source: 'dungeon', dungeons: ['ruinas'],
     stats: { def: 27, hp: 26 },
   },
   {
     name: 'Aparo do Eco Arcano', description: 'Cada defesa devolve o eco do golpe a quem o desferiu.',
-    type: 'PARRY_DAGGER', level: 25, rarity: 'EPIC', goldPrice: 3500, source: 'dungeon', dungeons: ['ruinas'],
+    type: 'PARRY_DAGGER', level: 44, rarity: 'EPIC', goldPrice: 3500, source: 'dungeon', dungeons: ['ruinas'],
     stats: { agi: 34, def: 4, hp: 4 },
   },
   {
     name: 'Orbe do Vazio Silente', description: 'Dentro dela não há luz, som nem reflexo — só mana em espera.',
-    type: 'ORB', level: 25, rarity: 'EPIC', goldPrice: 3500, source: 'dungeon', dungeons: ['ruinas'],
+    type: 'ORB', level: 44, rarity: 'EPIC', goldPrice: 3500, source: 'dungeon', dungeons: ['ruinas'],
     stats: { int: 26, mp: 28 },
   },
   {
     name: 'Selo da Ordem Extinta', description: 'O sinete que autenticava as ordens do templo, hoje sem templo.',
-    type: 'TALISMAN', level: 25, rarity: 'EPIC', goldPrice: 3500, source: 'dungeon', dungeons: ['ruinas'],
+    type: 'TALISMAN', level: 44, rarity: 'EPIC', goldPrice: 3500, source: 'dungeon', dungeons: ['ruinas'],
     stats: { agi: 31, mp: 18 },
   },
 
   // --- ARMADURA DE CORPO (nv25, B≈53.2) ---
   {
     name: 'Vestes do Escriba Arcano', description: 'A tinta das margens ainda se move quando ninguém olha.',
-    type: 'LIGHT_ARMOR', level: 25, rarity: 'EPIC', goldPrice: 3600, source: 'dungeon', dungeons: ['ruinas'],
+    type: 'LIGHT_ARMOR', level: 44, rarity: 'EPIC', goldPrice: 3600, source: 'dungeon', dungeons: ['ruinas'],
     stats: { int: 14, def: 18, mp: 42, specialEffect: 'Regeneração acelerada de mana' },
   },
   {
     name: 'Brigantina do Sentinela Eterno', description: 'A guarda que nunca foi rendida — a armadura seguiu de pé.',
-    type: 'MEDIUM_ARMOR', level: 25, rarity: 'EPIC', goldPrice: 3600, source: 'dungeon', dungeons: ['ruinas'],
+    type: 'MEDIUM_ARMOR', level: 44, rarity: 'EPIC', goldPrice: 3600, source: 'dungeon', dungeons: ['ruinas'],
     stats: { agi: 20, def: 19, hp: 28 },
   },
   {
     name: 'Couraça do Colosso de Pedra', description: 'Placas talhadas na mesma rocha das colunas das Ruínas.',
-    type: 'HEAVY_ARMOR', level: 25, rarity: 'EPIC', goldPrice: 3600, source: 'dungeon', dungeons: ['ruinas'],
+    type: 'HEAVY_ARMOR', level: 44, rarity: 'EPIC', goldPrice: 3600, source: 'dungeon', dungeons: ['ruinas'],
     stats: { str: 5, def: 32, hp: 32, specialEffect: 'Reduz o dano físico recebido' },
   },
 
   // --- ELMOS (nv24, B≈31.2) ---
   {
     name: 'Diadema do Vidente', description: 'Aro fino que mantém a mente aberta mesmo sob o peso da magia.',
-    type: 'LIGHT_HELMET', level: 24, rarity: 'EPIC', goldPrice: 3500, source: 'dungeon', dungeons: ['ruinas'],
+    type: 'LIGHT_HELMET', level: 42, rarity: 'EPIC', goldPrice: 3500, source: 'dungeon', dungeons: ['ruinas'],
     stats: { agi: 12, int: 7, mp: 24 },
   },
   {
     name: 'Elmo do Guardião Selado', description: 'A viseira foi soldada por dentro: quem o vestiu não pretendia sair.',
-    type: 'HEAVY_HELMET', level: 24, rarity: 'EPIC', goldPrice: 3500, source: 'dungeon', dungeons: ['ruinas'],
+    type: 'HEAVY_HELMET', level: 42, rarity: 'EPIC', goldPrice: 3500, source: 'dungeon', dungeons: ['ruinas'],
     stats: { str: 3, def: 20, hp: 16 },
   },
 
   // --- LUVAS (nv24, B≈31.2) ---
   {
     name: 'Luvas do Tecelão de Runas', description: 'Os dedos guardam o traço das runas que desenharam mil vezes.',
-    type: 'LIGHT_GLOVES', level: 24, rarity: 'EPIC', goldPrice: 3500, source: 'dungeon', dungeons: ['ruinas'],
+    type: 'LIGHT_GLOVES', level: 42, rarity: 'EPIC', goldPrice: 3500, source: 'dungeon', dungeons: ['ruinas'],
     stats: { agi: 18, int: 7, mp: 12 },
   },
   {
     name: 'Manoplas do Punho de Ferro', description: 'Feitas para quebrar portas de templo — e o que estivesse atrás.',
-    type: 'HEAVY_GLOVES', level: 24, rarity: 'EPIC', goldPrice: 3500, source: 'dungeon', dungeons: ['ruinas'],
+    type: 'HEAVY_GLOVES', level: 42, rarity: 'EPIC', goldPrice: 3500, source: 'dungeon', dungeons: ['ruinas'],
     stats: { str: 17, def: 10, hp: 8 },
   },
 
   // --- BOTAS (nv24, B≈31.2) ---
   {
     name: 'Passos do Andarilho Arcano', description: 'Quem as calça atravessa o salão sem despertar as runas do chão.',
-    type: 'LIGHT_BOOTS', level: 24, rarity: 'EPIC', goldPrice: 3500, source: 'dungeon', dungeons: ['ruinas'],
+    type: 'LIGHT_BOOTS', level: 42, rarity: 'EPIC', goldPrice: 3500, source: 'dungeon', dungeons: ['ruinas'],
     stats: { agi: 23, def: 4, hp: 8 },
   },
   {
     name: 'Grevas do Bastião', description: 'Firmam o passo como se as pernas fossem parte da própria muralha.',
-    type: 'HEAVY_BOOTS', level: 24, rarity: 'EPIC', goldPrice: 3500, source: 'dungeon', dungeons: ['ruinas'],
+    type: 'HEAVY_BOOTS', level: 42, rarity: 'EPIC', goldPrice: 3500, source: 'dungeon', dungeons: ['ruinas'],
     stats: { str: 4, def: 19, hp: 16 },
+  },
+
+  // ============================================================
+  // 🕳️ TAPA-BURACOS DO ESPÓLIO DE CHEFE (2026-08-21)
+  //
+  // A auditoria da bateria (`PHASE=3 npm run sim:dungeons`) mediu, com 20k
+  // sorteios por célula, grupos de slot que o chefe NUNCA soltava — a Anciã da
+  // Mata não dava nenhuma armadura rara, o Wyrm não dava arma nem acessório
+  // épico, o Lich não dava acessório lendário. Como o gear conta no combate por
+  // raridade × +N sobre os 9 slots (deriveGearTier), um grupo que nunca sobe de
+  // raridade TRAVA aqueles slots: o jogador farma e o gearTier não anda.
+  //
+  // Nenhum destes tem raceRestriction, de propósito: os buracos apareciam porque
+  // os poucos itens de cada célula eram todos restritos a uma raça, e um pool
+  // restrito de 1-2 peças vira monocultura mesmo quando não está vazio.
+  // Budget pela fórmula do cabeçalho, com o prêmio de chefe (×1.15).
+  // ============================================================
+
+  // 🌲 Floresta — RARO de chefe (faltava o grupo `armor` inteiro). Budget nv12: 33 corpo / 20 demais.
+  {
+    name: 'Couraça do Guardião da Mata', description: 'Placas de casca endurecida que ainda cicatrizam sozinhas depois do golpe.',
+    type: 'MEDIUM_ARMOR', level: 12, rarity: 'RARE', goldPrice: 1350, source: 'dungeon_boss', dungeons: ['floresta'],
+    stats: { str: 3, def: 18, hp: 24, specialEffect: 'Regeneração lenta fora de combate' },
+  },
+  {
+    name: 'Peitoral de Cerne Antigo', description: 'Cortado do coração de uma árvore que viu a floresta nascer.',
+    type: 'HEAVY_ARMOR', level: 12, rarity: 'RARE', goldPrice: 1400, source: 'dungeon_boss', dungeons: ['floresta'],
+    stats: { def: 22, con: 2, hp: 18 },
+  },
+  {
+    name: 'Elmo de Galhos Retorcidos', description: 'A copa fechada abafa o mundo — e os golpes que vêm de cima.',
+    type: 'HEAVY_HELMET', level: 12, rarity: 'RARE', goldPrice: 900, source: 'dungeon_boss', dungeons: ['floresta'],
+    stats: { str: 2, def: 12, hp: 12 },
+  },
+  {
+    name: 'Passos de Musgo Fundo', description: 'O chão da mata amortece o passo de quem a floresta aceitou.',
+    type: 'LIGHT_BOOTS', level: 12, rarity: 'RARE', goldPrice: 900, source: 'dungeon_boss', dungeons: ['floresta'],
+    stats: { agi: 12, def: 5, hp: 6 },
+  },
+
+  // 💎 Caverna — ÉPICO de chefe (o pool tinha 3 peças, todas de rogue/metamorfo:
+  //    para guerreiro, mago e monge a célula saía VAZIA). Budget nv22: 57 / 29.
+  {
+    name: 'Lâmina de Quartzo Rúnico', description: 'O cristal canta baixinho antes de cada corte, como se avisasse.',
+    type: 'SWORD', level: 22, rarity: 'EPIC', goldPrice: 3400, source: 'dungeon_boss', dungeons: ['caverna'],
+    stats: { str: 40, agi: 10, hp: 14 },
+  },
+  {
+    name: 'Cajado do Veio Profundo', description: 'Puxa mana da mesma veia que alimenta a caverna inteira.',
+    type: 'STAFF', level: 22, rarity: 'EPIC', goldPrice: 3400, source: 'dungeon_boss', dungeons: ['caverna'],
+    stats: { int: 45, def: 6, mp: 12 },
+  },
+  {
+    name: 'Manoplas de Cristal Vivo', description: 'Crescem uma lasca nova a cada punho fechado.',
+    type: 'GAUNTLET', level: 22, rarity: 'EPIC', goldPrice: 3400, source: 'dungeon_boss', dungeons: ['caverna'],
+    stats: { str: 10, agi: 35, def: 12 },
+  },
+  {
+    name: 'Placas de Ametista', description: 'Pesadas como a montanha e igualmente pouco impressionáveis.',
+    type: 'HEAVY_ARMOR', level: 22, rarity: 'EPIC', goldPrice: 3500, source: 'dungeon_boss', dungeons: ['caverna'],
+    stats: { str: 3, def: 34, hp: 40 },
+  },
+  {
+    name: 'Colar do Coração Geodo', description: 'Fechado por fora, inteiro por dentro — como toda geoda que vale a pena.',
+    type: 'NECKLACE', level: 22, rarity: 'EPIC', goldPrice: 2900, source: 'dungeon_boss', dungeons: ['caverna'],
+    stats: { int: 10, def: 8, con: 5, hp: 12 },
+  },
+
+  // 🏛️ Ruínas — LENDÁRIO de chefe (faltava `accessory`, e o único `armor` era
+  //    restrito a elfo). Budget nv30: 40 acessório / 81 corpo (G satura no nv25).
+  {
+    name: 'Anel do Selo Quebrado', description: 'O selo que continha o Lich; partido, serve a quem o carrega.',
+    type: 'RING', level: 49, rarity: 'LEGENDARY', goldPrice: 8800, source: 'dungeon_boss', dungeons: ['ruinas'],
+    stats: { str: 12, agi: 10, int: 10, def: 8, specialEffect: 'Reduz o custo de mana dos especiais' },
+  },
+  {
+    name: 'Colar das Eras Perdidas', description: 'Cada conta é um século que o império preferiu esquecer.',
+    type: 'NECKLACE', level: 49, rarity: 'LEGENDARY', goldPrice: 8800, source: 'dungeon_boss', dungeons: ['ruinas'],
+    stats: { int: 16, def: 12, con: 6, mp: 12, specialEffect: 'Amplia a duração da transformação' },
+  },
+  {
+    name: 'Brigantina do Vazio', description: 'As placas não refletem nada — nem a luz, nem quem a veste.',
+    type: 'MEDIUM_ARMOR', level: 49, rarity: 'LEGENDARY', goldPrice: 9200, source: 'dungeon_boss', dungeons: ['ruinas'],
+    stats: { agi: 11, def: 45, hp: 50, specialEffect: 'Absorve parte do dano mágico' },
+  },
+
+  // 🌲 Floresta — RARO de chefe, cobertura por CLASSE. O pool tinha só peças de
+  //    guerreiro/mago: ladino e monge não tinham arma NEM secundária rara.
+  {
+    name: 'Escudo de Casca Petrificada', description: 'Uma lasca do tronco que aguentou mil invernos — e continua de pé.',
+    type: 'SHIELD', level: 12, rarity: 'RARE', goldPrice: 1000, source: 'dungeon_boss', dungeons: ['floresta'],
+    stats: { str: 3, def: 16, hp: 12 },
+  },
+  {
+    name: 'Presa da Loba Anciã', description: 'Curva como a mordida que a arrancou; encontra o vão da armadura sozinha.',
+    type: 'DAGGER', level: 12, rarity: 'RARE', goldPrice: 1300, source: 'dungeon_boss', dungeons: ['floresta'],
+    stats: { agi: 26, str: 5, hp: 4 },
+  },
+  {
+    name: 'Espinho de Parada', description: 'Um galho farpado que prende a lâmina inimiga por um segundo — o suficiente.',
+    type: 'PARRY_DAGGER', level: 12, rarity: 'RARE', goldPrice: 1000, source: 'dungeon_boss', dungeons: ['floresta'],
+    stats: { agi: 17, def: 6, hp: 4 },
+  },
+  {
+    name: 'Punhos de Raiz Viva', description: 'As raízes se enroscam no antebraço e endurecem no momento do impacto.',
+    type: 'GAUNTLET', level: 12, rarity: 'RARE', goldPrice: 1300, source: 'dungeon_boss', dungeons: ['floresta'],
+    stats: { agi: 20, str: 8, def: 5 },
+  },
+  {
+    name: 'Talismã da Seiva Antiga', description: 'Uma gota de resina que nunca secou, pendurada em fibra trançada.',
+    type: 'TALISMAN', level: 12, rarity: 'RARE', goldPrice: 1000, source: 'dungeon_boss', dungeons: ['floresta'],
+    stats: { agi: 10, int: 6, def: 5, mp: 8 },
+  },
+
+  // 💎 Caverna — ÉPICO de chefe para o MAGO, que não tinha armadura nem
+  //    secundária elegível em toda a célula.
+  {
+    name: 'Vestes de Fio Cristalino', description: 'Tecidas com fibras de quartzo; leves, e mesmo assim difíceis de rasgar.',
+    type: 'LIGHT_ARMOR', level: 22, rarity: 'EPIC', goldPrice: 3400, source: 'dungeon_boss', dungeons: ['caverna'],
+    stats: { int: 26, def: 19, mp: 24 },
+  },
+  {
+    name: 'Orbe do Veio Adormecido', description: 'Pulsa devagar, no mesmo compasso da caverna que o gerou.',
+    type: 'ORB', level: 22, rarity: 'EPIC', goldPrice: 3200, source: 'dungeon_boss', dungeons: ['caverna'],
+    stats: { int: 30, def: 7, mp: 12 },
+  },
+
+  // 🐊 Pântano — ÉPICO de chefe: ladino, mago e monge não tinham armadura, e
+  //    ladino e mago não tinham arma nenhuma elegível no covil da Hidra.
+  {
+    name: 'Arco da Névoa Estagnada', description: 'A flecha some no nevoeiro e só reaparece no alvo.',
+    type: 'BOW', level: 36, rarity: 'EPIC', goldPrice: 3600, source: 'dungeon_boss', dungeons: ['pantano'],
+    stats: { agi: 44, int: 10, hp: 8 },
+  },
+  {
+    name: 'Ferrão de Aparar', description: 'Arrancado da cauda da Hidra; ainda goteja quando encontra sangue.',
+    type: 'PARRY_DAGGER', level: 36, rarity: 'EPIC', goldPrice: 3300, source: 'dungeon_boss', dungeons: ['pantano'],
+    stats: { agi: 32, def: 8, str: 4 },
+  },
+  {
+    name: 'Cajado das Três Cabeças', description: 'Cada nó do bastão guarda uma das cabeças — e o rancor de todas.',
+    type: 'STAFF', level: 36, rarity: 'EPIC', goldPrice: 3600, source: 'dungeon_boss', dungeons: ['pantano'],
+    stats: { int: 46, def: 8, mp: 8 },
+  },
+  {
+    name: 'Túnica de Escamas Úmidas', description: 'Escorrega o golpe como a pele da serpente escorrega do bote.',
+    type: 'LIGHT_ARMOR', level: 36, rarity: 'EPIC', goldPrice: 3700, source: 'dungeon_boss', dungeons: ['pantano'],
+    stats: { agi: 20, int: 12, def: 22, mp: 8 },
+  },
+  {
+    name: 'Peitoral de Couro de Crocodilo', description: 'Curtido no lodo por décadas; aguenta o que o brejo joga.',
+    type: 'MEDIUM_ARMOR', level: 36, rarity: 'EPIC', goldPrice: 3700, source: 'dungeon_boss', dungeons: ['pantano'],
+    stats: { agi: 14, def: 32, hp: 24 },
+  },
+
+
+  // 🌲 Floresta — elmo/luvas/botas de covil. O chefe só soltava a peça de
+  //    CORPO, então o grupo `armor` (42% do peso do sorteio) caía inteiro num item só.
+  {
+    name: 'Vestes de Fibra da Mata', description: 'Trama vegetal leve que a floresta reconhece como sua.',
+    type: 'LIGHT_ARMOR', level: 12, rarity: 'RARE', goldPrice: 1350, source: 'dungeon_boss', dungeons: ['floresta'],
+    stats: { int: 8, agi: 7, def: 12, mp: 12 },
+  },
+  {
+    name: 'Capuz de Folhas Sussurrantes', description: 'As folhas farfalham antes do golpe — quem escuta, desvia.',
+    type: 'LIGHT_HELMET', level: 12, rarity: 'RARE', goldPrice: 900, source: 'dungeon_boss', dungeons: ['floresta'],
+    stats: { agi: 9, def: 7, hp: 8 },
+  },
+  {
+    name: 'Elmo de Casco de Javali', description: 'Ainda tem a marca da presa que não conseguiu atravessá-lo.',
+    type: 'MEDIUM_HELMET', level: 12, rarity: 'RARE', goldPrice: 900, source: 'dungeon_boss', dungeons: ['floresta'],
+    stats: { str: 9, def: 7, hp: 8 },
+  },
+  {
+    name: 'Luvas de Trama Vegetal', description: 'Finas o bastante para sentir a corda do arco.',
+    type: 'LIGHT_GLOVES', level: 12, rarity: 'RARE', goldPrice: 900, source: 'dungeon_boss', dungeons: ['floresta'],
+    stats: { agi: 9, def: 7, hp: 8 },
+  },
+  {
+    name: 'Manoplas de Couro Curtido', description: 'Curtidas na fumaça; endurecem no frio da mata.',
+    type: 'MEDIUM_GLOVES', level: 12, rarity: 'RARE', goldPrice: 900, source: 'dungeon_boss', dungeons: ['floresta'],
+    stats: { str: 9, def: 7, hp: 8 },
+  },
+  {
+    name: 'Botas do Rastreador', description: 'Deixam pouca pegada e leem bem as dos outros.',
+    type: 'MEDIUM_BOOTS', level: 12, rarity: 'RARE', goldPrice: 900, source: 'dungeon_boss', dungeons: ['floresta'],
+    stats: { str: 9, def: 7, hp: 8 },
+  },
+
+  // 💎 Caverna — elmo/luvas/botas de covil. O chefe só soltava a peça de
+  //    CORPO, então o grupo `armor` (42% do peso do sorteio) caía inteiro num item só.
+  {
+    name: 'Capuz de Fio de Geoda', description: 'Fios de cristal tecidos finos como cabelo.',
+    type: 'LIGHT_HELMET', level: 22, rarity: 'EPIC', goldPrice: 3400, source: 'dungeon_boss', dungeons: ['caverna'],
+    stats: { agi: 15, def: 12, hp: 14 },
+  },
+  {
+    name: 'Elmo de Placa Cristalina', description: 'Reflete a tocha em mil pontos e confunde quem mira.',
+    type: 'MEDIUM_HELMET', level: 22, rarity: 'EPIC', goldPrice: 3400, source: 'dungeon_boss', dungeons: ['caverna'],
+    stats: { str: 15, def: 12, hp: 14 },
+  },
+  {
+    name: 'Luvas de Pó de Quartzo', description: 'O pó agarrado ao couro dá firmeza a qualquer empunhadura.',
+    type: 'LIGHT_GLOVES', level: 22, rarity: 'EPIC', goldPrice: 3400, source: 'dungeon_boss', dungeons: ['caverna'],
+    stats: { agi: 15, def: 12, hp: 14 },
+  },
+  {
+    name: 'Manoplas de Veio Bruto', description: 'Cristal cru encaixado no dorso, do jeito que saiu da rocha.',
+    type: 'MEDIUM_GLOVES', level: 22, rarity: 'EPIC', goldPrice: 3400, source: 'dungeon_boss', dungeons: ['caverna'],
+    stats: { str: 15, def: 12, hp: 14 },
+  },
+  {
+    name: 'Sapatos de Sola Fosforescente', description: 'Marcam o caminho de volta por algumas horas.',
+    type: 'LIGHT_BOOTS', level: 22, rarity: 'EPIC', goldPrice: 3400, source: 'dungeon_boss', dungeons: ['caverna'],
+    stats: { agi: 15, def: 12, hp: 14 },
+  },
+  {
+    name: 'Botas de Mineração Reforçadas', description: 'Feitas para quem passa o dia sobre cascalho solto.',
+    type: 'MEDIUM_BOOTS', level: 22, rarity: 'EPIC', goldPrice: 3400, source: 'dungeon_boss', dungeons: ['caverna'],
+    stats: { str: 15, def: 12, hp: 14 },
+  },
+
+  // 🐊 Pantano — elmo/luvas/botas de covil. O chefe só soltava a peça de
+  //    CORPO, então o grupo `armor` (42% do peso do sorteio) caía inteiro num item só.
+  {
+    name: 'Capuz de Junco Trançado', description: 'Escorre a água e abafa o cheiro de quem o veste.',
+    type: 'LIGHT_HELMET', level: 36, rarity: 'EPIC', goldPrice: 3400, source: 'dungeon_boss', dungeons: ['pantano'],
+    stats: { agi: 16, def: 12, hp: 14 },
+  },
+  {
+    name: 'Elmo de Placa Lodosa', description: 'O lodo secou sobre o metal e virou uma segunda casca.',
+    type: 'MEDIUM_HELMET', level: 36, rarity: 'EPIC', goldPrice: 3400, source: 'dungeon_boss', dungeons: ['pantano'],
+    stats: { str: 16, def: 12, hp: 14 },
+  },
+  {
+    name: 'Luvas de Pele de Sapo', description: 'Aderentes no molhado, que é o único estado do brejo.',
+    type: 'LIGHT_GLOVES', level: 36, rarity: 'EPIC', goldPrice: 3400, source: 'dungeon_boss', dungeons: ['pantano'],
+    stats: { agi: 16, def: 12, hp: 14 },
+  },
+  {
+    name: 'Manoplas de Escama de Jacaré', description: 'Sobrepostas como no dorso do bicho que as cedeu.',
+    type: 'MEDIUM_GLOVES', level: 36, rarity: 'EPIC', goldPrice: 3400, source: 'dungeon_boss', dungeons: ['pantano'],
+    stats: { str: 16, def: 12, hp: 14 },
+  },
+  {
+    name: 'Sapatos de Passo Silencioso', description: 'Não estalam o galho submerso — e no brejo isso é tudo.',
+    type: 'LIGHT_BOOTS', level: 36, rarity: 'EPIC', goldPrice: 3400, source: 'dungeon_boss', dungeons: ['pantano'],
+    stats: { agi: 16, def: 12, hp: 14 },
+  },
+  {
+    name: 'Botas de Vadear', description: 'Altas até o joelho, seladas com resina.',
+    type: 'MEDIUM_BOOTS', level: 36, rarity: 'EPIC', goldPrice: 3400, source: 'dungeon_boss', dungeons: ['pantano'],
+    stats: { str: 16, def: 12, hp: 14 },
+  },
+
+  // 💎 Caverna — RARO de armadura. O sorteio escolhe a raridade primeiro, e RARE
+  //    pesa 18 contra 5 do épico: na maior parte das vezes o grupo `armor` caía em
+  //    RARE, onde só existia a Brigantina do Mercenário (42% de todos os drops).
+  //    Estes também puxam o teto de nível da banda para perto do nv25 dela.
+  {
+    name: 'Loriga de Estalactite', description: 'Lâminas finas de calcário sobrepostas, leves e cortantes ao toque.',
+    type: 'MEDIUM_ARMOR', level: 20, rarity: 'RARE', goldPrice: 2100, source: 'dungeon', dungeons: ['caverna'],
+    stats: { agi: 8, def: 21, hp: 14 },
+  },
+  {
+    name: 'Vestes de Poeira Luminosa', description: 'O brilho preso ao tecido não aquece, mas mostra o caminho.',
+    type: 'LIGHT_ARMOR', level: 20, rarity: 'RARE', goldPrice: 2100, source: 'dungeon', dungeons: ['caverna'],
+    stats: { int: 12, agi: 5, def: 14, mp: 10 },
+  },
+  {
+    name: 'Elmo do Capataz da Mina', description: 'Amassado em três lugares — e ainda assim o capataz saiu andando.',
+    type: 'HEAVY_HELMET', level: 21, rarity: 'RARE', goldPrice: 1500, source: 'dungeon', dungeons: ['caverna'],
+    stats: { str: 4, def: 13, hp: 10 },
+  },
+  {
+    name: 'Botas de Cravo de Rocha', description: 'Os cravos mordem a pedra molhada onde qualquer sola escorregaria.',
+    type: 'MEDIUM_BOOTS', level: 21, rarity: 'RARE', goldPrice: 1500, source: 'dungeon', dungeons: ['caverna'],
+    stats: { agi: 10, def: 8, hp: 8 },
+  },
+
+  // 💎 Caverna — conjunto LEVE raro. Sem elmo/luvas/botas leves de nível da banda,
+  //    o grupo `armor` do mago caía quase todo nas Vestes de Poeira Luminosa.
+  //    Budget nv20-21 RARE `dungeon`: 22 pts (fator de slot 0.6).
+  {
+    name: 'Tiara de Fibra de Cristal', description: 'Um aro fino que mantém o cabelo fora dos olhos e a mente no feitiço.',
+    type: 'LIGHT_HELMET', level: 20, rarity: 'RARE', goldPrice: 1500, source: 'dungeon', dungeons: ['caverna'],
+    stats: { int: 9, def: 8, mp: 10 },
+  },
+  {
+    name: 'Mitenes de Prospector', description: 'Deixam os dedos livres para o gesto — e para separar o cascalho.',
+    type: 'LIGHT_GLOVES', level: 20, rarity: 'RARE', goldPrice: 1500, source: 'dungeon', dungeons: ['caverna'],
+    stats: { agi: 10, int: 6, def: 6 },
+  },
+  {
+    name: 'Sandálias de Sola de Feltro', description: 'Abafam o passo na galeria, onde o eco entrega qualquer um.',
+    type: 'LIGHT_BOOTS', level: 21, rarity: 'RARE', goldPrice: 1500, source: 'dungeon', dungeons: ['caverna'],
+    stats: { agi: 12, def: 7, hp: 6 },
   },
 
   // ============================================================
@@ -1731,8 +2028,18 @@ export function dropSlotGroupOf(itemType: string): DropSlotGroup {
  * mas NUNCA some do pool — o pool COMMON/UNCOMMON é todo da loja, que para no
  * nível 10, então um piso duro esvaziaria o sorteio no late-game.
  */
+/**
+ * Peso por proximidade de nível: item perto do herói vale mais que item velho.
+ *
+ * ⚠️ 2026-08-21: o piso era 0.20 e saturava cedo demais. A partir de ~13 níveis
+ * de diferença TODO item ficava no piso, então para um herói nv40 uma peça nv12
+ * e uma nv30 eram igualmente prováveis — a proximidade de nível deixava de
+ * discriminar exatamente na faixa onde o catálogo tem mais opções. Piso 0.05
+ * mantém o item antigo possível (o pool não pode secar) sem empatá-lo com o novo:
+ * no exemplo acima o nv30 passa a ser ~2.4× mais provável que o nv12.
+ */
 function levelDropWeight(itemLevel: number, charLevel: number): number {
-  return Math.max(0.2, 1 / (1 + 0.3 * Math.max(0, charLevel - itemLevel)));
+  return Math.max(0.05, 1 / (1 + 0.3 * Math.max(0, charLevel - itemLevel)));
 }
 
 // 🎯 Restrições de equipamento por CLASSE (não por raça): peso de armadura e
@@ -1922,17 +2229,45 @@ export function rollEquipmentDrop(
 
   if (eligible.length === 0) return null;
 
-  // 1) Sorteia o GRUPO de slot entre os presentes (peso alvo renormalizado): é o
-  //    que garante variedade independente de quantas entradas o catálogo tem.
-  const byGroup = new Map<DropSlotGroup, CatalogItem[]>();
+  // 1) Sorteia a RARIDADE entre as presentes, com RARITY_DROP_WEIGHT renormalizado.
+  //
+  //    ⚠️ 2026-08-21: esta etapa não existia — a raridade era só mais um fator no
+  //    peso final do item, junto com a proximidade de nível. O efeito era que a
+  //    raridade ALTA quase nunca saía quando havia muitos itens da raridade baixa:
+  //    no chefe das Ruínas (['EPIC','LEGENDARY']) o lendário aparecia em 3.6% dos
+  //    gears, porque 23 épicos de peso 5 esmagavam 8 lendários de peso 1. E o
+  //    gear-ALVO das Ruínas É lendário — a masmorra exigia uma peça que ela mesma
+  //    quase não soltava. Sorteando a raridade primeiro, a proporção passa a ser a
+  //    da TABELA (aqui ~83/17) em vez de refém de quantas entradas o catálogo tem.
+  //    É o mesmo remédio que o passo 2 já aplicava ao grupo de slot.
+  const byRarity: Record<string, CatalogItem[]> = {};
+  const rarityKeys: Rarity[] = [];
   for (const item of eligible) {
-    const g = dropSlotGroupOf(item.type);
-    const list = byGroup.get(g);
-    if (list) list.push(item);
-    else byGroup.set(g, [item]);
+    if (!byRarity[item.rarity]) { byRarity[item.rarity] = []; rarityKeys.push(item.rarity); }
+    byRarity[item.rarity].push(item);
   }
-  const groups = Array.from(byGroup.keys());
-  const groupTotal = groups.reduce((sum, g) => sum + SLOT_GROUP_WEIGHT[g], 0);
+  let rarityTotal = 0;
+  for (const r of rarityKeys) rarityTotal += RARITY_DROP_WEIGHT[r];
+  let rarityPick = rng() * rarityTotal;
+  let chosenRarity = rarityKeys[rarityKeys.length - 1];
+  for (const r of rarityKeys) {
+    rarityPick -= RARITY_DROP_WEIGHT[r];
+    if (rarityPick < 0) { chosenRarity = r; break; }
+  }
+  const inRarity = byRarity[chosenRarity];
+
+  // 2) Sorteia o GRUPO de slot entre os presentes NESSA raridade (peso alvo
+  //    renormalizado): é o que garante variedade independente de quantas entradas
+  //    o catálogo tem em cada tipo.
+  const byGroup: Record<string, CatalogItem[]> = {};
+  const groups: DropSlotGroup[] = [];
+  for (const item of inRarity) {
+    const g = dropSlotGroupOf(item.type);
+    if (!byGroup[g]) { byGroup[g] = []; groups.push(g); }
+    byGroup[g].push(item);
+  }
+  let groupTotal = 0;
+  for (const g of groups) groupTotal += SLOT_GROUP_WEIGHT[g];
   let groupPick = rng() * groupTotal;
   let chosen = groups[groups.length - 1];
   for (const g of groups) {
@@ -1940,10 +2275,12 @@ export function rollEquipmentDrop(
     if (groupPick < 0) { chosen = g; break; }
   }
 
-  // 2) Sorteia o item dentro do grupo por raridade × proximidade de nível.
-  const pool = byGroup.get(chosen) ?? eligible;
-  const weightOf = (i: CatalogItem) => RARITY_DROP_WEIGHT[i.rarity] * levelDropWeight(i.level, characterLevel);
-  const totalWeight = pool.reduce((sum, i) => sum + weightOf(i), 0);
+  // 3) Sorteia o item dentro do grupo por proximidade de nível (a raridade já foi
+  //    decidida no passo 1, então não entra de novo aqui).
+  const pool = byGroup[chosen] ?? inRarity;
+  const weightOf = (i: CatalogItem) => levelDropWeight(i.level, characterLevel);
+  let totalWeight = 0;
+  for (const i of pool) totalWeight += weightOf(i);
   let pick = rng() * totalWeight;
   for (const item of pool) {
     pick -= weightOf(item);

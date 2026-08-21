@@ -54,6 +54,7 @@ import {
   buildTrail, STEP_COST, resolveExploreNode, resolveBossNode, rollCombatLoot, rollKillLoot,
   type RunPending, type CharacterForRun,
 } from '@/lib/dungeonRunServer'
+import { planDungeonRun } from '@/lib/dungeonRunPlan'
 import { rollGatherYield, GATHER_TICK_STAMINA, type GatherFieldId } from '@/lib/gathering'
 import { CROPS, WELL, PEN, FARM_ACTION_STAMINA, WELL_COLLECT_STAMINA, cropGrowSeconds, rollCropYield } from '@/lib/farming'
 import { farmPlotCount, professionXpForLevel, PROFESSION_MAX_LEVEL } from '@/lib/professionSystem'
@@ -241,9 +242,17 @@ function absorbDrops(v: Vault, led: Ledger, drops: LootDrop[], c: Char | null, c
   }
 }
 
+let runSeq = 0
+
 // ---------------- Uma RUN (trilha real do servidor) ----------------
 function runDungeon(v: Vault, led: Ledger, c: Char, capLeft: { v: number }, bossesToday: { n: number }): number {
   const trail = buildTrail(dungeon)
+  // ⚠️ A planta da run: desde que o arranjo passou a ser decidido na CRIAÇÃO
+  // (dungeonRunPlan), resolveExploreNode exige o nó planejado. Este sim continuava
+  // chamando com 4 argumentos e `planned` chegava undefined — o sim inteiro
+  // estourava em `planned.category`. runId sintético por run, como no servidor.
+  const runId = `sim-${(runSeq++).toString(36)}`
+  const plan = planDungeonRun(dungeon, runId)
   const meAsRun: CharacterForRun = { id: 'sim', level: c.level, race: 'elfo', class: 'rogue' }
   let stamina = 0
 
@@ -264,7 +273,9 @@ function runDungeon(v: Vault, led: Ledger, c: Char, capLeft: { v: number }, boss
     if (node.kind === 'boss') {
       pending = resolveBossNode(dungeon, meAsRun, idx)
     } else {
-      const r = resolveExploreNode(dungeon, meAsRun, node, idx)
+      const planned = plan.get(idx)
+      if (!planned) continue
+      const r = resolveExploreNode(dungeon, meAsRun, node, idx, 1, planned)
       if (r.type === 'find') {
         credit(r.loot.gold, false)
         absorbDrops(v, led, r.loot.drops, c, capLeft)

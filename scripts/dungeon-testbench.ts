@@ -895,7 +895,7 @@ const GEAR_RARITY_MIRROR: Record<string, { node: Rarity[]; boss: Rarity[] }> = {
   floresta: { node: ['COMMON', 'UNCOMMON'], boss: ['RARE'] },
   caverna:  { node: ['UNCOMMON', 'RARE'],   boss: ['RARE', 'EPIC'] },
   pantano:  { node: ['RARE'],               boss: ['EPIC'] },
-  ruinas:   { node: ['RARE', 'EPIC'],       boss: ['EPIC', 'LEGENDARY'] },
+  ruinas:   { node: ['EPIC'],               boss: ['EPIC', 'LEGENDARY'] },
 }
 
 /** Grupos que SLOT_GROUP_WEIGHT espera ver representados no sorteio. */
@@ -988,10 +988,15 @@ function auditCell(dg: DungeonDef, klass: CombatClass, level: number, rarities: 
     }
   }
 
-  // 5) TETO DE NÍVEL — o catálogo acabou antes do herói.
-  if (maxItemLevel > 0 && level > maxItemLevel + 8) {
-    push('MÉDIO', 'teto-nivel', `catálogo satura em nv${maxItemLevel}, herói está no nv${level}`,
-      `O item mais alto que esta célula consegue entregar é nv${maxItemLevel}, ${level - maxItemLevel} níveis abaixo do herói. levelDropWeight cai no piso 0.2 e deixa de discriminar por proximidade de nível — daqui para cima o drop para de evoluir e só o aprimoramento progride.`)
+  // 5) TETO DE NÍVEL — a masmorra não tem conteúdo da própria banda.
+  //
+  // O limiar é 40% abaixo do clearLevel, não uma diferença fixa: o gear evolui
+  // por RARIDADE × +N, não pelo nível do item, então um item alguns níveis atrás
+  // é normal e não vale alerta. O que vale é a masmorra inteira estar servindo
+  // peças de uma banda anterior — aí o espólio nunca parece "das Ruínas".
+  if (maxItemLevel > 0 && maxItemLevel < level * 0.6) {
+    push('MÉDIO', 'teto-nivel', `catálogo satura em nv${maxItemLevel}, banda vai até nv${level}`,
+      `O item mais alto que esta célula consegue entregar é nv${maxItemLevel} — ${(100 - (maxItemLevel / level) * 100).toFixed(0)}% abaixo do topo da banda. O espólio desta masmorra é conteúdo de uma banda anterior; a progressão continua só pelo aprimoramento. Pendência de CONTEÚDO (criar peças da faixa), não de fórmula.`)
   }
 }
 

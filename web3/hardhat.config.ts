@@ -48,6 +48,12 @@ const config: HardhatUserConfig = {
     cache: "./cache",
     artifacts: "./artifacts",
   },
+  /**
+   * `chainId` declarado de propósito: sem ele o Hardhat aceita o que quer que o
+   * RPC devolva, e um `POLYGON_MAINNET_RPC_URL` apontando para testnet (ou
+   * vice-versa) passa despercebido até o deploy sair na rede errada. Com o
+   * campo setado, a divergência vira erro antes da primeira transação.
+   */
   networks: {
     hardhat: {},
     localhost: {
@@ -55,11 +61,13 @@ const config: HardhatUserConfig = {
     },
     polygonAmoy: {
       url: POLYGON_AMOY_RPC_URL,
+      chainId: 80002,
       accounts,
       gasPrice: POLYGON_MIN_GAS_PRICE,
     },
     polygon: {
       url: POLYGON_MAINNET_RPC_URL,
+      chainId: 137,
       accounts,
       gasPrice: POLYGON_MIN_GAS_PRICE,
     },

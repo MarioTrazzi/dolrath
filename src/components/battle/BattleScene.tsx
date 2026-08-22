@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useRef, useState } from 'react'
+import { useT } from '@/lib/i18n/I18nProvider'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import ItemIcon from '@/components/ItemIcon'
@@ -251,6 +252,7 @@ function StatBar({
 // um card (via portal) com os stats já aprimorados — mesmo formato do inventário.
 // `size='lg'` = tile grande em destaque (arma em punho, à frente do card).
 function EquipSlot({ slot, item, size = 'sm' }: { slot: string; item: EquippedItem; size?: 'sm' | 'lg' }) {
+  const t = useT()
   const isLg = size === 'lg'
   const ref = useRef<HTMLDivElement>(null)
   const [hover, setHover] = useState(false)
@@ -363,7 +365,7 @@ function EquipSlot({ slot, item, size = 'sm' }: { slot: string; item: EquippedIt
           </div>
           {broken && (
             <div className="mt-1 rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] font-bold text-red-300">
-              💔 Quebrado — não dá nenhum bônus. Repare no ferreiro.
+              {t('💔 Broken — gives no bonus. Repair at the blacksmith.')}
             </div>
           )}
           {low && (
@@ -681,6 +683,7 @@ export default function BattleScene({
   diceSize = 88,
   fighterDice,
 }: BattleSceneProps) {
+  const t = useT()
   const [floatingTexts, setFloatingTexts] = useState<FloatingText[]>([])
   // Animações são por-ID (não por-lado): num pacote, só o monstro alvo sacode/avança,
   // os outros ficam parados. Em PvP (left/right) o id do lutador equivale ao lado.
@@ -793,7 +796,7 @@ export default function BattleScene({
           if (event.isCritical) {
             setCritId(defId)
             later(() => setCritId(null), 800)
-            pushText(defId, 'CRÍTICO!', 'text-yellow-300', true)
+            pushText(defId, t('CRITICAL!'), 'text-yellow-300', true)
             later(() => pushText(defId, `-${event.damage}`, 'text-yellow-300', true), 150)
           } else {
             pushText(defId, `-${event.damage}`, 'text-red-400', (event.damage || 0) > 30)
@@ -825,7 +828,7 @@ export default function BattleScene({
       }
       const glow = getTransformationGlow(fighterById(id)?.transformationType)
       showAura(id, 'transform', glow.hex)
-      pushText(id, 'TRANSFORMAÇÃO!', 'text-purple-300', true)
+      pushText(id, t('TRANSFORMATION!'), 'text-purple-300', true)
     } else if (event.kind === 'buff') {
       // Habilidade utilitária usada no PvE (o PvP manda como 'resolve' com o id da habilidade)
       const id = event.actorId
@@ -1011,7 +1014,7 @@ export default function BattleScene({
                 <>
                   <div className="flex items-center justify-center gap-3 sm:gap-5">
                     <div className="flex flex-col items-center gap-0.5">
-                      <span className="text-[9px] text-white/50 font-bold uppercase truncate max-w-[72px]">{left?.name || 'Você'}</span>
+                      <span className="text-[9px] text-white/50 font-bold uppercase truncate max-w-[72px]">{left?.name || t('You')}</span>
                       <AnimatedDie sides={dicePanel.diceType} size={64} mode="rolling" result={dicePanel.myResult || null} />
                     </div>
                     <span className="text-white/30 font-black text-base sm:text-lg">×</span>

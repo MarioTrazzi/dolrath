@@ -11,6 +11,7 @@ import { resolveImageUrl } from '@/lib/imageUrl'
 import { itemImagePath } from '@/lib/itemCatalog'
 import { getItemVisual, getItemTypeLabel } from '@/lib/itemVisuals'
 import { useI18n } from '@/lib/i18n/I18nProvider'
+import { localizeItemTypeLabel } from '@/lib/i18n/catalog'
 
 // Miniatura do item: imagem (Cloudinary/URL), fallback por nome (asset estático), ou emoji/categoria.
 function ItemThumb({ image, name, type, enhancement }: { image?: string | null; name?: string | null; type: string; enhancement?: number }) {
@@ -127,7 +128,7 @@ interface MyCharacter { id: string; name: string; race: string; class: string; l
 
 async function getSigner(expectedChainId: number) {
   const eth = (window as any)?.ethereum
-  if (!eth) throw new Error('MetaMask não encontrada')
+  if (!eth) throw new Error('MetaMask not found')
   const provider = new ethers.BrowserProvider(eth)
   await provider.send('eth_requestAccounts', [])
   const network = await provider.getNetwork()
@@ -138,7 +139,7 @@ async function getSigner(expectedChainId: number) {
 }
 
 export default function MarketplacePage() {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const { data: session } = useSession()
   const [config, setConfig] = useState<MarketConfig | null>(null)
   const [listings, setListings] = useState<Listing[]>([])
@@ -174,9 +175,9 @@ export default function MarketplacePage() {
       if (cfgRes.ok) setConfig(await cfgRes.json())
       const lst = await lstRes.json()
       if (lstRes.ok) setListings(lst.listings || [])
-      else toast.error(lst?.error || 'Falha ao carregar o mercado')
+      else toast.error(lst?.error || t('Failed to load the market'))
     } catch {
-      toast.error('Falha ao carregar o mercado')
+      toast.error(t('Failed to load the market'))
     } finally {
       setLoadingList(false)
     }
@@ -216,9 +217,9 @@ export default function MarketplacePage() {
       if (cfgRes.ok) setCharConfig(await cfgRes.json())
       const lst = await lstRes.json()
       if (lstRes.ok) setCharListings(lst.listings || [])
-      else toast.error(lst?.error || 'Falha ao carregar o mercado de personagens')
+      else toast.error(lst?.error || t('Failed to load the character market'))
     } catch {
-      toast.error('Falha ao carregar o mercado de personagens')
+      toast.error(t('Failed to load the character market'))
     } finally {
       setLoadingCharList(false)
     }
@@ -253,13 +254,13 @@ export default function MarketplacePage() {
     const priceStr = (charPrices[c.id] || '').trim()
     const priceNum = Number(priceStr)
     if (!Number.isFinite(priceNum) || priceNum <= 0) {
-      toast.error('Defina um preço em DOL maior que zero.')
+      toast.error(t('Set a DOL price greater than zero.'))
       return
     }
     setBusy(true)
     const id = `sell-char-${c.id}`
     try {
-      toast.loading('Verificando o personagem…', { id })
+      toast.loading(t('Checking the character…'), { id })
       const checkRes = await fetch('/api/character-market/list-check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -267,7 +268,7 @@ export default function MarketplacePage() {
       })
       const check = await checkRes.json()
       if (!checkRes.ok) {
-        toast.error(check?.error || 'Não foi possível listar este personagem', { id })
+        toast.error(check?.error || t('Could not list this character'), { id })
         return
       }
 
@@ -277,13 +278,13 @@ export default function MarketplacePage() {
 
       const approved = await (nft as any).isApprovedForAll(check.to, check.marketContractAddress)
       if (!approved) {
-        toast.loading('Autorizando o mercado…', { id })
+        toast.loading(t('Authorising the market…'), { id })
         await (await nft.setApprovalForAll(check.marketContractAddress, true, fees)).wait()
       }
 
       const market = new ethers.Contract(check.marketContractAddress, CHAR_MARKET_ABI, signer)
       const priceWei = ethers.parseUnits(String(priceNum), check.dol.decimals)
-      toast.loading('Publicando a listagem…', { id })
+      toast.loading(t('Publishing the listing…'), { id })
       const listTx = await market.createListing(BigInt(check.tokenId), priceWei, fees)
       await listTx.wait()
 
@@ -294,12 +295,12 @@ export default function MarketplacePage() {
         body: JSON.stringify({ characterId: c.id, txHash: listTx.hash }),
       }).catch(() => { /* o escrow on-chain já valeu; o espelho ressincroniza depois */ })
 
-      toast.success(`Personagem listado por ${priceNum} ${check.dol.symbol}!`, { id })
+      toast.success(t('Character listed for {price} {symbol}!', { price: priceNum, symbol: check.dol.symbol }), { id })
       setCharPrices((p) => ({ ...p, [c.id]: '' }))
       loadCharMarket()
       loadMyCharacters()
     } catch (e) {
-      toast.error(getWalletTxErrorMessage(e) || 'Falha ao listar o personagem', { id })
+      toast.error(getWalletTxErrorMessage(e) || t('Failed to list the character'), { id })
     } finally {
       setBusy(false)
     }
@@ -314,13 +315,13 @@ export default function MarketplacePage() {
       const { provider, signer } = await getSigner(charConfig.chainId)
       const fees = await getPolygonFeeOverrides(provider)
       const dol = new ethers.Contract(charConfig.dolTokenAddress, ERC20_ABI, signer)
-      toast.loading(`Aprovando ${charConfig.dol.symbol}…`, { id })
+      toast.loading(t('Approving {symbol}…', { symbol: charConfig.dol.symbol }), { id })
       await (await dol.approve(charConfig.marketContractAddress, BigInt(l.priceDol.raw), fees)).wait()
       const market = new ethers.Contract(charConfig.marketContractAddress, CHAR_MARKET_ABI, signer)
-      toast.loading('Comprando…', { id })
+      toast.loading(t('Buying…'), { id })
       const tx = await market.buy(BigInt(l.listingId), fees)
       await tx.wait()
-      toast.loading('Registrando a transferência…', { id })
+      toast.loading(t('Registering the transfer…'), { id })
       const confRes = await fetch('/api/character-market/purchase-confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -330,7 +331,7 @@ export default function MarketplacePage() {
       if (!confRes.ok) {
         toast.error(
           conf?.error ||
-            'Compra feita on-chain, mas falha ao registrar. A NFT já é sua — clique de novo para reivindicar o personagem.',
+            t('Purchase made on-chain, but failed to register. The NFT is already yours — click again to claim the character.'),
           { id }
         )
         // Guarda o tokenId: o botão de resgate reivindica pela posse on-chain,
@@ -338,12 +339,12 @@ export default function MarketplacePage() {
         setPendingClaim({ tokenId: l.tokenId, name: l.character?.name || `#${l.tokenId}` })
         return
       }
-      toast.success('Personagem comprado! Agora é seu.', { id })
+      toast.success(t('Character bought! It is yours now.'), { id })
       setPendingClaim(null)
       loadCharMarket()
       loadMyCharacters()
     } catch (e) {
-      toast.error(getWalletTxErrorMessage(e) || 'Falha na compra', { id })
+      toast.error(getWalletTxErrorMessage(e) || t('Failed to buy'), { id })
     } finally {
       setBusy(false)
     }
@@ -356,7 +357,7 @@ export default function MarketplacePage() {
     setBusy(true)
     const id = `claim-char-${pendingClaim.tokenId}`
     try {
-      toast.loading('Reivindicando o personagem…', { id })
+      toast.loading(t('Claiming the character…'), { id })
       const res = await fetch('/api/character-market/purchase-confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -364,15 +365,15 @@ export default function MarketplacePage() {
       })
       const data = await res.json()
       if (!res.ok) {
-        toast.error(data?.error || 'Falha ao reivindicar', { id })
+        toast.error(data?.error || t('Failed to claim'), { id })
         return
       }
-      toast.success('Personagem reivindicado! Agora é seu.', { id })
+      toast.success(t('Character claimed! It is yours now.'), { id })
       setPendingClaim(null)
       loadCharMarket()
       loadMyCharacters()
     } catch {
-      toast.error('Falha ao reivindicar', { id })
+      toast.error(t('Failed to claim'), { id })
     } finally {
       setBusy(false)
     }
@@ -387,7 +388,7 @@ export default function MarketplacePage() {
       const { provider, signer } = await getSigner(charConfig.chainId)
       const fees = await getPolygonFeeOverrides(provider)
       const market = new ethers.Contract(charConfig.marketContractAddress, CHAR_MARKET_ABI, signer)
-      toast.loading('Cancelando a listagem…', { id })
+      toast.loading(t('Cancelling the listing…'), { id })
       const cancelTx = await market.cancelListing(BigInt(l.listingId), fees)
       await cancelTx.wait()
 
@@ -399,7 +400,7 @@ export default function MarketplacePage() {
         }).catch(() => { /* a NFT já voltou; o espelho ressincroniza depois */ })
       }
 
-      toast.success('Listagem cancelada. O personagem voltou para você.', { id })
+      toast.success(t('Listing cancelled. The character is back with you.'), { id })
       loadCharMarket()
       loadMyCharacters()
     } catch (e) {
@@ -415,7 +416,7 @@ export default function MarketplacePage() {
     setBusy(true)
     const id = `claim-item-${pendingItemClaim.tokenId}`
     try {
-      toast.loading('Reivindicando o item…', { id })
+      toast.loading(t('Claiming the item…'), { id })
       const res = await fetch('/api/market/purchase-confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -423,14 +424,14 @@ export default function MarketplacePage() {
       })
       const data = await res.json()
       if (!res.ok) {
-        toast.error(data?.error || 'Falha ao reivindicar', { id })
+        toast.error(data?.error || t('Failed to claim'), { id })
         return
       }
-      toast.success('Item reivindicado! Agora é seu.', { id })
+      toast.success(t('Item claimed! It is yours now.'), { id })
       setPendingItemClaim(null)
       loadConfigAndListings()
     } catch {
-      toast.error('Falha ao reivindicar', { id })
+      toast.error(t('Failed to claim'), { id })
     } finally {
       setBusy(false)
     }
@@ -445,16 +446,16 @@ export default function MarketplacePage() {
       const { provider, signer } = await getSigner(config.chainId)
       const fees = await getPolygonFeeOverrides(provider)
       const gold = new ethers.Contract(config.goldContractAddress, ERC20_ABI, signer)
-      toast.loading('Aprovando GOLD…', { id })
+      toast.loading(t('Approving GOLD…'), { id })
       await (await gold.approve(config.marketContractAddress, BigInt(l.priceGold.raw), fees)).wait()
       const market = new ethers.Contract(config.marketContractAddress, MARKET_ABI, signer)
-      toast.loading('Comprando…', { id })
+      toast.loading(t('Buying…'), { id })
       const tx = await market.buy(BigInt(l.listingId), fees)
       await tx.wait()
 
       // Sem este passo a compra fica só na chain: o ItemNft continua do
       // VENDEDOR no banco e o comprador paga sem receber o item no jogo.
-      toast.loading('Registrando a transferência…', { id })
+      toast.loading(t('Registering the transfer…'), { id })
       const confRes = await fetch('/api/market/purchase-confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -464,18 +465,18 @@ export default function MarketplacePage() {
       if (!confRes.ok) {
         toast.error(
           conf?.error ||
-            'Compra feita on-chain, mas falha ao registrar. A NFT já é sua — clique para reivindicar o item.',
+            t('Purchase made on-chain, but failed to register. The NFT is already yours — click to claim the item.'),
           { id }
         )
         setPendingItemClaim({ tokenId: l.tokenId, name: l.item?.name || `#${l.tokenId}` })
         return
       }
 
-      toast.success('Compra concluída! O item NFT é seu.', { id })
+      toast.success(t('Purchase complete! The item NFT is yours.'), { id })
       setPendingItemClaim(null)
       loadConfigAndListings()
     } catch (e) {
-      toast.error(getWalletTxErrorMessage(e) || 'Falha na compra', { id })
+      toast.error(getWalletTxErrorMessage(e) || t('Failed to buy'), { id })
     } finally {
       setBusy(false)
     }
@@ -487,14 +488,14 @@ export default function MarketplacePage() {
     const priceStr = (prices[row.id] || '').trim()
     const priceNum = Number(priceStr)
     if (!Number.isFinite(priceNum) || priceNum <= 0) {
-      toast.error('Defina um preço em GOLD maior que zero.')
+      toast.error(t('Set a GOLD price greater than zero.'))
       return
     }
     setBusy(true)
     const id = `sell-${row.id}`
     try {
       // 1) Voucher de mint (servidor assina; valida posse do item ganho).
-      toast.loading('Preparando o mint…', { id })
+      toast.loading(t('Preparing the mint…'), { id })
       const intentRes = await fetch('/api/marketplace/list-intent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -512,12 +513,12 @@ export default function MarketplacePage() {
       const m = intent.mint
 
       // 2) Mint do NFT (paga só o gas).
-      toast.loading('Cunhando o NFT…', { id })
+      toast.loading(t('Minting the NFT…'), { id })
       const mintTx = await items.mintWithSig(m.to, m.purchaseId, m.itemKey, BigInt(m.paidGold), m.tokenURI, BigInt(m.deadline), m.signature, fees)
       await mintTx.wait()
 
       // 3) Confirma no servidor: QUEIMA a linha de inventário + registra o NFT.
-      toast.loading('Registrando o item…', { id })
+      toast.loading(t('Registering the item…'), { id })
       const confRes = await fetch('/api/marketplace/list-confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -534,14 +535,14 @@ export default function MarketplacePage() {
       const market = new ethers.Contract(config.marketContractAddress, MARKET_ABI, signer)
       const approved = await (items as any).isApprovedForAll(m.to, config.marketContractAddress)
       if (!approved) {
-        toast.loading('Autorizando o mercado…', { id })
+        toast.loading(t('Authorising the market…'), { id })
         await (await items.setApprovalForAll(config.marketContractAddress, true, fees)).wait()
       }
-      toast.loading('Publicando a listagem…', { id })
+      toast.loading(t('Publishing the listing…'), { id })
       const priceWei = ethers.parseUnits(String(priceNum), config.gold.decimals)
       await (await market.createListing(tokenId, priceWei, fees)).wait()
 
-      toast.success(`Listado por ${priceNum} ${config.gold.symbol}!`, { id })
+      toast.success(t('Listed for {price} {symbol}!', { price: priceNum, symbol: config.gold.symbol }), { id })
       setPrices((p) => ({ ...p, [row.id]: '' }))
       loadInventory(selectedChar)
       loadConfigAndListings()
@@ -553,7 +554,7 @@ export default function MarketplacePage() {
   }
 
   if (!session) {
-    return <div className="max-w-5xl mx-auto p-8 text-center text-[#8a8a90]">Faça login para acessar o mercado.</div>
+    return <div className="max-w-5xl mx-auto p-8 text-center text-[#8a8a90]">{t('Log in to access the market.')}</div>
   }
 
   return (
@@ -562,8 +563,8 @@ export default function MarketplacePage() {
         <h1 className="text-3xl font-black text-[#ece7da]">🏪 Mercado</h1>
         <p className="text-[#8a8a90] text-sm mt-1">
           {tab === 'items'
-            ? 'Compre e venda equipamentos entre jogadores em GOLD. Itens ganhos só viram NFT quando você os lista (lazy-mint) — você paga apenas o gás.'
-            : 'Compre e venda personagens entre jogadores em DOL. A NFT vai só com o nível e os atributos — esvazie o inventário antes de listar.'}
+            ? t('Buy and sell gear between players in GOLD. Items you earn only become NFTs when you list them (lazy-mint) — you only pay the gas.')
+            : t('Buy and sell characters between players in DOL. The NFT goes with only the level and the attributes — empty the inventory before listing.')}
         </p>
       </header>
 
@@ -573,13 +574,13 @@ export default function MarketplacePage() {
           onClick={() => setTab('items')}
           className={`px-4 py-2 rounded-[3px] text-sm font-semibold border transition-all ${tab === 'items' ? 'border-[#8a6d3b] bg-gradient-to-b from-[#3a3325] to-[#241f16] text-[#e7c682] shadow-[0_0_10px_rgba(201,162,95,0.3)]' : 'border-[#46464c] bg-gradient-to-b from-[#2b2b2f] to-[#1c1c1f] text-[#8a8a90] hover:border-[#8a6d3b]'}`}
         >
-          ⚔️ Itens
+          {t('⚔️ Items')}
         </button>
         <button
           onClick={() => setTab('characters')}
           className={`px-4 py-2 rounded-[3px] text-sm font-semibold border transition-all ${tab === 'characters' ? 'border-[#5b3b8a] bg-gradient-to-b from-[#2e2540] to-[#1c1626] text-[#c9b3ec] shadow-[0_0_10px_rgba(139,92,246,0.3)]' : 'border-[#46464c] bg-gradient-to-b from-[#2b2b2f] to-[#1c1c1f] text-[#8a8a90] hover:border-[#8a6d3b]'}`}
         >
-          🧙 Personagens
+          {t('🧙 Characters')}
         </button>
       </div>
 
@@ -588,30 +589,32 @@ export default function MarketplacePage() {
       {pendingItemClaim ? (
         <div className="flex flex-wrap items-center gap-3 rounded-[4px] border border-amber-700/60 bg-amber-950/30 p-4">
           <div className="flex-1 min-w-[220px] text-sm text-amber-200">
-            A compra de <span className="font-semibold">{pendingItemClaim.name}</span> foi paga on-chain, mas o registro
-            no jogo não completou. A NFT já é sua — reivindique o item.
+            {t('The purchase of ')}
+            <span className="font-semibold">{pendingItemClaim.name}</span>
+            {t(' was paid on-chain, but the registration ')}
+            {t('in the game did not complete. The NFT is already yours — claim the item.')}
           </div>
           <button
             onClick={handleClaimItem}
             disabled={busy}
             className="rounded-[3px] border border-[#8a6d3b] bg-gradient-to-b from-[#3a2f1c] to-[#241d12] px-3 py-2 text-sm font-semibold text-amber-200 transition-all hover:brightness-125 disabled:opacity-40"
           >
-            Reivindicar item
+            {t('Claim item')}
           </button>
         </div>
       ) : null}
 
       {/* VENDER */}
       <section className="overflow-hidden rounded-[4px] border border-[#46464c] shadow-2xl shadow-black/60 bg-[#1e1e21]/95 p-5">
-        <h2 className="text-lg font-semibold tracking-wide text-[#e7c682] mb-3">Vender um item</h2>
+        <h2 className="text-lg font-semibold tracking-wide text-[#e7c682] mb-3">{t('Sell an item')}</h2>
         {config?.marketFee && config.marketFee.totalBps > 0 ? (
           <p className="text-[#8a8a90] text-xs mb-3">
-            Taxa de mercado: <span className="text-amber-300 font-semibold">{(config.marketFee.totalBps / 100).toFixed(1).replace('.0', '')}%</span> do preço
+            {t('Market fee: ')}<span className="text-amber-300 font-semibold">{(config.marketFee.totalBps / 100).toFixed(1).replace('.0', '')}%</span>{t(' of the price')}
             ({(config.marketFee.burnBps / 100).toFixed(1).replace('.0', '')}% queimado + {(config.marketFee.treasuryBps / 100).toFixed(1).replace('.0', '')}% treasury) — o restante vai direto para o vendedor.
           </p>
         ) : null}
         <div className="flex items-center gap-3 mb-4">
-          <label className="text-sm text-[#8a8a90]">Personagem:</label>
+          <label className="text-sm text-[#8a8a90]">{t('Character:')}</label>
           <select
             value={selectedChar}
             onChange={(e) => setSelectedChar(e.target.value)}
@@ -621,7 +624,7 @@ export default function MarketplacePage() {
           </select>
         </div>
         {inventory.length === 0 ? (
-          <p className="text-[#8a8a90] text-sm">Nenhum equipamento neste personagem para vender.</p>
+          <p className="text-[#8a8a90] text-sm">{t('No gear on this character to sell.')}</p>
         ) : (
           <div className="grid gap-2 sm:grid-cols-2">
             {inventory.map((row) => (
@@ -635,7 +638,7 @@ export default function MarketplacePage() {
                   <div className="text-xs text-[#8a8a90]">valor base {row.item.goldPrice} 🪙</div>
                 </div>
                 <input
-                  type="number" min={1} placeholder="preço"
+                  type="number" min={1} placeholder={t('price')}
                   value={prices[row.id] || ''}
                   onChange={(e) => setPrices((p) => ({ ...p, [row.id]: e.target.value }))}
                   className="w-24 rounded-[3px] border border-[#3c3c41] bg-[#101013] px-2 py-1.5 text-sm text-[#ece7da] outline-none transition-colors focus:border-[#8a6d3b]"
@@ -645,7 +648,7 @@ export default function MarketplacePage() {
                   disabled={busy}
                   className="rounded-[3px] border border-[#8a6d3b] bg-gradient-to-b from-[#3a3325] to-[#241f16] px-3 py-1.5 text-sm font-semibold text-[#e7c682] transition-all hover:brightness-125 disabled:opacity-40"
                 >
-                  Listar
+                  {t('List')}
                 </button>
               </div>
             ))}
@@ -672,7 +675,9 @@ export default function MarketplacePage() {
                       {l.item?.enhancementLevel ? <span className="text-amber-300"> +{l.item.enhancementLevel}</span> : null}
                     </div>
                     <div className="text-xs text-[#8a8a90]">
-                      {l.item ? `${getItemTypeLabel(l.item.type)} • Nv.${l.item.level}` : 'Item fora do catálogo'}
+                      {l.item
+                        ? `${localizeItemTypeLabel(getItemTypeLabel(l.item.type), locale)} • ${t('Lv.{n}', { n: l.item.level })}`
+                        : t('Item outside the catalog')}
                     </div>
                   </div>
                 </div>
@@ -681,9 +686,9 @@ export default function MarketplacePage() {
                   onClick={() => handleBuy(l)}
                   disabled={busy || l.dbOwner?.userId === session.user?.id}
                   className="rounded-[3px] border border-[#2f6b3a] bg-gradient-to-b from-[#25351f] to-[#161f12] px-3 py-2 text-sm font-semibold text-emerald-200 transition-all hover:brightness-125 disabled:opacity-40"
-                  title={l.dbOwner?.userId === session.user?.id ? 'Sua própria listagem' : ''}
+                  title={l.dbOwner?.userId === session.user?.id ? t('Your own listing') : ''}
                 >
-                  {l.dbOwner?.userId === session.user?.id ? 'Sua listagem' : '💰 Comprar'}
+                  {l.dbOwner?.userId === session.user?.id ? t('Your listing') : t('💰 Buy')}
                 </button>
               </div>
             ))}
@@ -697,31 +702,33 @@ export default function MarketplacePage() {
       {pendingClaim ? (
         <div className="flex flex-wrap items-center gap-3 rounded-[4px] border border-amber-700/60 bg-amber-950/30 p-4">
           <div className="flex-1 min-w-[220px] text-sm text-amber-200">
-            A compra de <span className="font-semibold">{pendingClaim.name}</span> foi paga on-chain, mas o registro no
-            jogo não completou. A NFT já é sua — reivindique o personagem.
+            {t('The purchase of ')}
+            <span className="font-semibold">{pendingClaim.name}</span>
+            {t(' was paid on-chain, but the registration ')}
+            {t('in the game did not complete. The NFT is already yours — claim the character.')}
           </div>
           <button
             onClick={handleClaimCharacter}
             disabled={busy}
             className="rounded-[3px] border border-[#8a6d3b] bg-gradient-to-b from-[#3a2f1c] to-[#241d12] px-3 py-2 text-sm font-semibold text-amber-200 transition-all hover:brightness-125 disabled:opacity-40"
           >
-            Reivindicar personagem
+            {t('Claim character')}
           </button>
         </div>
       ) : null}
 
       {/* VENDER PERSONAGEM */}
       <section className="overflow-hidden rounded-[4px] border border-[#46464c] shadow-2xl shadow-black/60 bg-[#1e1e21]/95 p-5">
-        <h2 className="text-lg font-semibold tracking-wide text-[#c9b3ec] mb-1">Vender um personagem</h2>
+        <h2 className="text-lg font-semibold tracking-wide text-[#c9b3ec] mb-1">{t('Sell a character')}</h2>
         <p className="text-[#8a8a90] text-xs mb-4">
-          A NFT vai só com o nível e os atributos. Desequipe e mande todos os itens para o inventário global antes de listar.
+          {t('The NFT goes with only the level and the attributes. Unequip and send every item to the global inventory before listing.')}
           {charConfig?.marketFee && charConfig.marketFee.totalBps > 0 ? (
-            <> Taxa de mercado: <span className="text-indigo-300 font-semibold">{(charConfig.marketFee.totalBps / 100).toFixed(1).replace('.0', '')}%</span> do preço
+            <> {t('Market fee: ')}<span className="text-indigo-300 font-semibold">{(charConfig.marketFee.totalBps / 100).toFixed(1).replace('.0', '')}%</span>{t(' of the price')}
             ({(charConfig.marketFee.burnBps / 100).toFixed(1).replace('.0', '')}% queimado + {(charConfig.marketFee.treasuryBps / 100).toFixed(1).replace('.0', '')}% treasury).</>
           ) : null}
         </p>
         {myCharacters.length === 0 ? (
-          <p className="text-[#8a8a90] text-sm">Você não tem personagens.</p>
+          <p className="text-[#8a8a90] text-sm">{t('You have no characters.')}</p>
         ) : (
           <div className="grid gap-2 sm:grid-cols-2">
             {myCharacters.map((c) => (
@@ -731,11 +738,11 @@ export default function MarketplacePage() {
                   <div className="font-semibold text-[#ece7da] truncate">{c.name}</div>
                   <div className="text-xs text-[#8a8a90] capitalize">{c.race} • {c.class} • Nv.{c.level}</div>
                   {!c.nftTokenId ? (
-                    <div className="text-[11px] text-amber-300/80">Ainda não é NFT — registre on-chain antes de vender</div>
+                    <div className="text-[11px] text-amber-300/80">{t('Not an NFT yet — register on-chain before selling')}</div>
                   ) : c.marketListingId ? (
-                    <div className="text-[11px] text-indigo-300/90">À venda (listagem #{c.marketListingId})</div>
+                    <div className="text-[11px] text-indigo-300/90">{t('For sale (listing #{id})', { id: c.marketListingId })}</div>
                   ) : c.gold ? (
-                    <div className="text-[11px] text-[#8a8a90]">{c.gold.toLocaleString('pt-BR')} de ouro voltam para o seu banco na venda</div>
+                    <div className="text-[11px] text-[#8a8a90]">{t('{n} gold comes back to your bank on the sale', { n: c.gold.toLocaleString(locale === 'pt' ? 'pt-BR' : 'en-US') })}</div>
                   ) : null}
                 </div>
                 <input
@@ -749,9 +756,9 @@ export default function MarketplacePage() {
                   onClick={() => handleSellCharacter(c)}
                   disabled={busy || !c.nftTokenId || !!c.marketListingId}
                   className="rounded-[3px] border border-[#5b3b8a] bg-gradient-to-b from-[#2e2540] to-[#1c1626] px-3 py-1.5 text-sm font-semibold text-[#c9b3ec] transition-all hover:brightness-125 disabled:opacity-40"
-                  title={!c.nftTokenId ? 'Registre o personagem on-chain primeiro' : c.marketListingId ? 'Já está listado' : ''}
+                  title={!c.nftTokenId ? t('Register the character on-chain first') : c.marketListingId ? t('Already listed') : ''}
                 >
-                  Listar
+                  {t('List')}
                 </button>
               </div>
             ))}
@@ -779,7 +786,9 @@ export default function MarketplacePage() {
                         {l.character?.name ?? `Personagem #${l.tokenId}`}
                       </div>
                       <div className="text-xs text-[#8a8a90] capitalize">
-                        {l.character ? `${l.character.race} • ${l.character.class} • Nv.${l.character.level}` : 'Fora do banco'}
+                        {l.character
+                          ? `${l.character.race} • ${l.character.class} • ${t('Lv.{n}', { n: l.character.level })}`
+                          : t('Outside the database')}
                       </div>
                     </div>
                   </div>
@@ -790,7 +799,7 @@ export default function MarketplacePage() {
                       disabled={busy}
                       className="rounded-[3px] border border-[#8a3b3b] bg-gradient-to-b from-[#3a2525] to-[#241616] px-3 py-2 text-sm font-semibold text-red-300 transition-all hover:brightness-125 disabled:opacity-40"
                     >
-                      Cancelar listagem
+                      {t('Cancel listing')}
                     </button>
                   ) : (
                     <button

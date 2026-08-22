@@ -7,6 +7,7 @@
 // ============================================================
 
 import { useState } from 'react'
+import { useT } from '@/lib/i18n/I18nProvider'
 import { signIn, useSession } from 'next-auth/react'
 import Link from 'next/link'
 import { Wallet, Swords, ArrowRight, Scroll, PenLine } from 'lucide-react'
@@ -25,12 +26,13 @@ const STEP_LABEL: Record<Exclude<LoginStep, 'idle'>, string> = {
 }
 
 const STEPS: { key: Exclude<LoginStep, 'idle'>; Icon: typeof Wallet; title: string; desc: string }[] = [
-  { key: 'connect', Icon: Wallet, title: 'Conecte a carteira', desc: 'MetaMask ou compatível — sem cadastro, sem senha.' },
-  { key: 'sign', Icon: PenLine, title: 'Assine a mensagem', desc: 'Assinatura gratuita: prova que a carteira é sua. Nenhuma transação é enviada.' },
-  { key: 'verify', Icon: Swords, title: 'Entre na arena', desc: 'Primeira vez? Sua conta é criada na hora, vinculada à carteira.' },
+  { key: 'connect', Icon: Wallet, title: 'Connect the wallet', desc: 'MetaMask or compatible — no sign-up, no password.' },
+  { key: 'sign', Icon: PenLine, title: 'Sign the message', desc: 'Free signature: proves the wallet is yours. No transaction is sent.' },
+  { key: 'verify', Icon: Swords, title: 'Enter the arena', desc: 'First time? Your account is created on the spot, linked to the wallet.' },
 ]
 
 export function LoginForm() {
+  const t = useT()
   const { data: session } = useSession()
   const [step, setStep] = useState<LoginStep>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -43,7 +45,7 @@ export function LoginForm() {
       setStep('connect')
       const eth = (window as any)?.ethereum
       if (!eth) {
-        throw new Error('MetaMask não encontrada. Instale/ative a extensão para continuar.')
+        throw new Error(t('MetaMask not found. Install/enable the extension to continue.'))
       }
 
       const provider = new ethers.BrowserProvider(eth)
@@ -86,7 +88,7 @@ export function LoginForm() {
       })
 
       if (result?.error) {
-        setError('Não foi possível validar sua carteira. Tente novamente.')
+        setError(t('Could not validate your wallet. Try again.'))
         setStep('idle')
       } else {
         // Reload completo: garante que SessionProvider, GoldProvider e
@@ -94,7 +96,7 @@ export function LoginForm() {
         window.location.href = '/dashboard'
       }
     } catch (e) {
-      setError(getWalletTxErrorMessage(e, 'Não foi possível conectar. Tente novamente.'))
+      setError(getWalletTxErrorMessage(e, t('Could not connect. Try again.')))
       setStep('idle')
     }
   }
@@ -121,7 +123,7 @@ export function LoginForm() {
           </span>
         </h1>
         <p className="mt-3 text-textsec text-pretty">
-          Sua carteira é sua conta. Conecte, assine de graça e role seu primeiro d20.
+          {t('Your wallet is your account. Connect, sign for free and roll your first d20.')}
         </p>
       </div>
 
@@ -132,7 +134,7 @@ export function LoginForm() {
             Continuar como {session.user?.name || 'aventureiro'}
           </Button>
           <p className="text-center text-xs text-textsec">
-            Você já está conectado. Para trocar de carteira, saia primeiro.
+            {t('You are already connected. To switch wallets, log out first.')}
           </p>
         </div>
       ) : (
@@ -193,7 +195,7 @@ export function LoginForm() {
 
           <div className="mt-8 flex flex-col gap-2 text-center">
             <p className="text-sm text-textsec">
-              Não tem uma carteira?{' '}
+              {t('No wallet yet?')}{' '}
               <a
                 href="https://metamask.io/download/"
                 target="_blank"
@@ -204,7 +206,7 @@ export function LoginForm() {
               </a>
             </p>
             <p className="text-xs text-textsec/70 text-pretty">
-              Você pode adicionar um email depois, nas configurações, para receber novidades.
+              {t('You can add an email later, in the settings, to receive news.')}
             </p>
           </div>
         </>
@@ -212,7 +214,7 @@ export function LoginForm() {
 
       <div className="mt-8 border-t border-white/5 pt-4 text-center">
         <Link href="/" className="text-xs text-textsec transition-colors hover:text-white">
-          ← Voltar para a página inicial
+          {t('← Back to the home page')}
         </Link>
       </div>
     </GlassCard>

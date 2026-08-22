@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { useT } from '@/lib/i18n/I18nProvider';
+import { clientT } from '@/lib/i18n/client';
 import { motion } from 'framer-motion';
 import { 
   Clock, 
@@ -103,18 +105,19 @@ const formatDate = (dateString: string) => {
   const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
   
   if (diffInMinutes < 1) return 'Agora mesmo';
-  if (diffInMinutes < 60) return `${diffInMinutes}m atrás`;
+  if (diffInMinutes < 60) return clientT()('{n}m ago', { n: diffInMinutes });
   
   const diffInHours = Math.floor(diffInMinutes / 60);
-  if (diffInHours < 24) return `${diffInHours}h atrás`;
+  if (diffInHours < 24) return clientT()('{n}h ago', { n: diffInHours });
   
   const diffInDays = Math.floor(diffInHours / 24);
-  if (diffInDays < 7) return `${diffInDays}d atrás`;
+  if (diffInDays < 7) return clientT()('{n}d ago', { n: diffInDays });
   
   return date.toLocaleDateString('pt-BR');
 };
 
 export default function CharacterHistory({ characterId }: CharacterHistoryProps) {
+  const t = useT();
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -127,10 +130,10 @@ export default function CharacterHistory({ characterId }: CharacterHistoryProps)
           const data = await response.json();
           setHistory(data);
         } else {
-          setError('Erro ao carregar histórico');
+          setError(t('Failed to load history'));
         }
       } catch (err) {
-        setError('Erro ao carregar histórico');
+        setError(t('Failed to load history'));
         console.error('Error fetching history:', err);
       } finally {
         setLoading(false);
@@ -147,7 +150,7 @@ export default function CharacterHistory({ characterId }: CharacterHistoryProps)
       <div className="rounded-[4px] border border-[#46464c] bg-[#1e1e21]/95 p-6 shadow-2xl shadow-black/60">
         <h3 className="text-xl font-bold text-text-primary mb-4 flex items-center gap-2">
           <Clock className="w-5 h-5" />
-          Histórico
+          {t('History')}
         </h3>
         <div className="space-y-3">
           {[...Array(5)].map((_, i) => (
@@ -165,7 +168,7 @@ export default function CharacterHistory({ characterId }: CharacterHistoryProps)
       <div className="rounded-[4px] border border-[#46464c] bg-[#1e1e21]/95 p-6 shadow-2xl shadow-black/60">
         <h3 className="text-xl font-bold text-text-primary mb-4 flex items-center gap-2">
           <Clock className="w-5 h-5" />
-          Histórico
+          {t('History')}
         </h3>
         <div className="text-red-400 text-center py-4">
           {error}
@@ -178,14 +181,14 @@ export default function CharacterHistory({ characterId }: CharacterHistoryProps)
     <div className="rounded-[4px] border border-[#46464c] bg-[#1e1e21]/95 p-6 shadow-2xl shadow-black/60">
       <h3 className="text-xl font-bold text-text-primary mb-4 flex items-center gap-2">
         <Clock className="w-5 h-5" />
-        Histórico
+        {t('History')}
       </h3>
       
       {history.length === 0 ? (
         <div className="text-text-secondary text-center py-8">
           <Clock className="w-12 h-12 mx-auto mb-3 opacity-50" />
           <p>Nenhuma atividade registrada ainda.</p>
-          <p className="text-sm">Comece jogando para ver seu histórico aqui!</p>
+          <p className="text-sm">{t('Start playing to see your history here!')}</p>
         </div>
       ) : (
         <div className="space-y-2 max-h-96 overflow-y-auto">

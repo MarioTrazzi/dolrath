@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
+import { useT } from '@/lib/i18n/I18nProvider'
 import { Plus, Minus } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { refreshCharacterAlerts } from '@/hooks/useCharacterNotifications'
@@ -34,6 +35,7 @@ export default function AttributeDistributionPanel({
   currentStats,
   onPointsDistributed 
 }: AttributeDistributionProps) {
+  const t = useT()
   const [pendingPoints, setPendingPoints] = useState({
     str: 0,
     agi: 0,
@@ -94,7 +96,7 @@ export default function AttributeDistributionPanel({
 
   const handleDistribute = async () => {
     if (totalPendingPoints === 0) {
-      toast.error('Você precisa distribuir pelo menos 1 ponto!')
+      toast.error(t('You must distribute at least 1 point!'))
       return
     }
 
@@ -117,7 +119,7 @@ export default function AttributeDistributionPanel({
       }
 
       if (response.ok && result?.success) {
-        toast.success(result.message || 'Pontos distribuídos com sucesso!')
+        toast.success(result.message || t('Points distributed successfully!'))
         setPendingPoints({ str: 0, agi: 0, int: 0, def: 0 })
         onPointsDistributed()
         // Gastou os pontos: o selo de pendências do card do herói acompanha.
@@ -159,7 +161,7 @@ export default function AttributeDistributionPanel({
           <div className="flex items-center gap-3">
             <span className="text-2xl">💪</span>
             <div>
-              <div className="font-semibold text-text-primary">Força</div>
+              <div className="font-semibold text-text-primary">{t('Strength')}</div>
               <div className="text-xs text-text-secondary">
                 Atual: {currentAttributes.str} → {currentAttributes.str + pendingPoints.str}
               </div>
@@ -219,7 +221,7 @@ export default function AttributeDistributionPanel({
           <div className="flex items-center gap-3">
             <span className="text-2xl">🧠</span>
             <div>
-              <div className="font-semibold text-text-primary">Inteligência</div>
+              <div className="font-semibold text-text-primary">{t('Intelligence')}</div>
               <div className="text-xs text-text-secondary">
                 Atual: {currentAttributes.int} → {currentAttributes.int + pendingPoints.int}
               </div>
@@ -297,7 +299,7 @@ export default function AttributeDistributionPanel({
       {totalPendingPoints > 0 && statsPreview && currentStats && (
         <div className="mt-6 p-4 bg-gradient-to-br from-success/10 to-primary/10 border border-success/20 rounded-lg">
           <h4 className="text-lg font-bold text-text-primary mb-3 flex items-center gap-2">
-            👁️ Prévia dos Novos Stats
+            {t('👁️ Preview of the New Stats')}
           </h4>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* HP Preview */}

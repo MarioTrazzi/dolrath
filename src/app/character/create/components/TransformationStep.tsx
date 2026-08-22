@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useT } from '@/lib/i18n/I18nProvider';
 import { Wand2, RefreshCw, Check, Coins } from 'lucide-react';
 import { useCharacterCreationStore } from '@/lib/stores/characterCreationStore';
 import { payDolToTreasury, getImageRegenCostDol } from '@/lib/payDol';
@@ -17,7 +18,7 @@ import { GenerationProgress } from './GenerationProgress';
 // Mensagens de loading enquanto a IA gera a arte da transformação.
 const TRANSFORMATION_STEPS = [
   'Coletando e ajustando o prompt para a lore de Dolrath…',
-  'Revelando a forma de combate do seu herói…',
+  'Revealing your hero combat form…',
   'Finalizando…',
 ];
 
@@ -31,6 +32,7 @@ function PaidRegenControls({
   busy: boolean;
   onGenerate: (modification: string) => void;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
 
@@ -41,7 +43,7 @@ function PaidRegenControls({
         disabled={busy}
         className="text-xs flex items-center gap-1 text-primary hover:underline disabled:opacity-50"
       >
-        <Coins className="w-3 h-3" /> Ajustar e gerar de novo ({cost} USDC)
+        <Coins className="w-3 h-3" /> {t('Adjust and generate again ({cost} USDC)', { cost })}
       </button>
     );
   }
@@ -51,7 +53,7 @@ function PaidRegenControls({
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="Opcional: o que quer mudar nesta forma? Ex: aura mais intensa, manter o cajado visível…"
+        placeholder={t('Optional: what do you want to change in this form? e.g. more intense aura, keep the staff visible…')}
         className="w-full h-16 px-3 py-2 text-sm bg-background border border-white/20 rounded-lg text-text-primary placeholder:text-text-secondary resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
       />
       <div className="flex items-center gap-2">
@@ -61,14 +63,14 @@ function PaidRegenControls({
           className="flex-1 py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-accent to-primary text-white disabled:opacity-50 flex items-center justify-center gap-2"
         >
           {busy ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Coins className="w-4 h-4" />}
-          Pagar {cost} USDC e gerar
+          {t('Pay {cost} USDC and generate', { cost })}
         </button>
         <button
           onClick={() => setOpen(false)}
           disabled={busy}
           className="px-3 py-2 rounded-lg text-sm bg-surface border border-white/20 text-text-secondary hover:text-text-primary disabled:opacity-50"
         >
-          Cancelar
+          {t('Cancel')}
         </button>
       </div>
     </div>
@@ -76,6 +78,7 @@ function PaidRegenControls({
 }
 
 export function TransformationStep() {
+  const t = useT();
   const {
     selectedRace,
     selectedClass,
@@ -109,7 +112,7 @@ export function TransformationStep() {
   const generate = useCallback(
     async (form: TransformationType, opts?: { regen?: boolean; modification?: string }) => {
       if (!selectedImage) {
-        toast.error('Escolha a imagem do personagem primeiro.');
+        toast.error(t('Choose the character image first.'));
         return;
       }
       setGenerating((g) => ({ ...g, [form]: true }));
@@ -135,7 +138,7 @@ export function TransformationStep() {
         });
         const json = await res.json().catch(() => null);
         if (!res.ok || !json?.image) {
-          throw new Error(json?.error || 'Falha ao gerar a transformação');
+          throw new Error(json?.error || t('Failed to generate the transformation'));
         }
         if (isMultiForm) {
           setTransformationImageFor(form, json.image);
@@ -143,7 +146,7 @@ export function TransformationStep() {
           setTransformationImage(json.image);
         }
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Erro ao gerar transformação');
+        toast.error(error instanceof Error ? error.message : t('Error generating transformation'));
         // Regen: mantém a arte anterior em caso de falha (o jogador não perde nada).
         if (!opts?.regen) {
           if (isMultiForm) setTransformationImageFor(form, null);
@@ -174,9 +177,9 @@ export function TransformationStep() {
   if (forms.length === 0) {
     return (
       <div className="space-y-4">
-        <h2 className="text-2xl font-bold text-text-primary">Transformação</h2>
+        <h2 className="text-2xl font-bold text-text-primary">{t('Transformation')}</h2>
         <p className="text-text-secondary">
-          Esta raça não possui uma transformação de combate. Você pode seguir para a confirmação.
+          {t('This race has no combat transformation. You can move on to the confirmation.')}
         </p>
       </div>
     );
@@ -190,11 +193,10 @@ export function TransformationStep() {
     return (
       <div className="space-y-8">
         <div>
-          <h2 className="text-2xl font-bold text-text-primary mb-2">Transformações</h2>
+          <h2 className="text-2xl font-bold text-text-primary mb-2">{t('Transformations')}</h2>
           <p className="text-text-secondary">
-            Como metamorfo, você domina <strong>todas</strong> as formas. A IA usa sua imagem
-            humana para criar a arte de cada uma — em combate (masmorra e PvP) você escolhe na
-            hora qual assumir. Gere as {forms.length} formas para concluir.
+            {t('As a shapeshifter, you master ')}<strong>{t('all')}</strong>
+            {t(' the forms. The AI uses your human image to create the art of each one — in combat (dungeon and PvP) you choose which to take on. Generate the {n} forms to finish.', { n: forms.length })}
           </p>
         </div>
 
@@ -207,7 +209,7 @@ export function TransformationStep() {
             disabled={anyGenerating || doneCount === forms.length || !selectedImage}
             className="text-xs flex items-center gap-1 text-primary hover:underline disabled:opacity-50"
           >
-            <Wand2 className="w-3 h-3" /> Gerar todas as faltantes
+            <Wand2 className="w-3 h-3" /> {t('Generate all missing ones')}
           </button>
         </div>
 
@@ -231,7 +233,7 @@ export function TransformationStep() {
                   {busy ? (
                     <div className="flex flex-col items-center gap-2 text-text-secondary">
                       <RefreshCw className="w-6 h-6 animate-spin" />
-                      <span className="text-xs">Gerando...</span>
+                      <span className="text-xs">{t('Generating...')}</span>
                     </div>
                   ) : img ? (
                     <>
@@ -242,7 +244,7 @@ export function TransformationStep() {
                       </div>
                     </>
                   ) : (
-                    <span className="text-xs text-text-secondary px-3 text-center">Ainda não gerada</span>
+                    <span className="text-xs text-text-secondary px-3 text-center">{t('Not generated yet')}</span>
                   )}
                 </div>
 
@@ -262,7 +264,7 @@ export function TransformationStep() {
                       <RefreshCw className="w-4 h-4 animate-spin" />
                     ) : (
                       <>
-                        <Wand2 className="w-4 h-4" /> Gerar
+                        <Wand2 className="w-4 h-4" /> {t('Generate')}
                       </>
                     )}
                   </button>
@@ -283,11 +285,9 @@ export function TransformationStep() {
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-2xl font-bold text-text-primary mb-2">Transformação</h2>
+        <h2 className="text-2xl font-bold text-text-primary mb-2">{t('Transformation')}</h2>
         <p className="text-text-secondary">
-          A IA usa sua imagem para revelar a forma que seu herói assume em combate — o mesmo
-          personagem, com o mesmo traje, tomado pela energia da transformação. A primeira
-          geração está inclusa; regerar com ajustes custa {regenCostDol} USDC.
+          {t('The AI uses your image to reveal the form your hero takes in combat — the same character, in the same outfit, taken over by the energy of the transformation. The first generation is included; regenerating with adjustments costs {cost} USDC.', { cost: regenCostDol })}
         </p>
       </div>
 
@@ -309,7 +309,7 @@ export function TransformationStep() {
         <div className="bg-surface/50 border border-white/10 rounded-lg p-4">
           <h3 className="text-sm font-medium text-text-secondary mb-3 flex items-center gap-2">
             <Wand2 className="w-4 h-4 text-primary" />
-            {activeForm ? TRANSFORMATION_CONFIG[activeForm]?.name : 'Transformação'}
+            {activeForm ? TRANSFORMATION_CONFIG[activeForm]?.name : t('Transformation')}
           </h3>
           <div
             className="relative w-full aspect-square rounded-lg overflow-hidden bg-background/40 flex items-center justify-center"
@@ -318,7 +318,7 @@ export function TransformationStep() {
             {isGenerating ? (
               <div className="flex flex-col items-center gap-2 text-text-secondary">
                 <RefreshCw className="w-6 h-6 animate-spin" />
-                <span className="text-sm">Gerando transformação...</span>
+                <span className="text-sm">{t('Generating transformation...')}</span>
               </div>
             ) : transformationImage ? (
               <>
@@ -329,7 +329,7 @@ export function TransformationStep() {
                 </div>
               </>
             ) : (
-              <span className="text-sm text-text-secondary px-4 text-center">Aguardando geração...</span>
+              <span className="text-sm text-text-secondary px-4 text-center">{t('Waiting for generation...')}</span>
             )}
           </div>
 

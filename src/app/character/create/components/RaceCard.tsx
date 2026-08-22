@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { useT } from '@/lib/i18n/I18nProvider';
 import { Check } from 'lucide-react';
 import { CharacterRace } from '@/types/character';
 import CreationCardBackdrop from '@/components/character/CreationCardBackdrop';
@@ -12,6 +13,7 @@ interface RaceCardProps {
 }
 
 export function RaceCard({ race, isSelected, onSelect, onHover }: RaceCardProps) {
+  const t = useT();
   const visual = getCreationVisual(race.id);
 
   return (
@@ -58,7 +60,7 @@ export function RaceCard({ race, isSelected, onSelect, onHover }: RaceCardProps)
             </span>
             {race.transformation && (
               <span className="px-3 py-1 bg-white/10 text-white/80 text-xs rounded-full border border-white/20">
-                Transformação: {race.transformation}
+                {t('Transformation:')} {race.transformation}
               </span>
             )}
           </div>

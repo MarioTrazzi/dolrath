@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { useT } from '@/lib/i18n/I18nProvider';
 
 interface StatRevealRadarProps {
   str: number;
@@ -33,6 +34,7 @@ function axisPoint(index: number, fraction: number) {
 }
 
 export function StatRevealRadar({ str, agi, int, def }: StatRevealRadarProps) {
+  const t = useT();
   const values = { str, agi, int, def };
   // Escala dinâmica: acompanha o maior stat rolado (piso 20 cobre a maioria dos rolls).
   const maxScale = Math.max(20, Math.ceil(Math.max(str, agi, int, def) / 5) * 5);
@@ -44,7 +46,7 @@ export function StatRevealRadar({ str, agi, int, def }: StatRevealRadarProps) {
 
   return (
     <div className="flex flex-col items-center">
-      <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} role="img" aria-label="Distribuição de atributos do personagem">
+      <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} role="img" aria-label={t('Character attribute distribution')}>
         {/* Grade recessiva */}
         {rings.map((r) => {
           const ringPoints = AXES.map((_, i) => axisPoint(i, r));

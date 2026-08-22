@@ -1,6 +1,7 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
+import { useT } from '@/lib/i18n/I18nProvider';
 import { Sparkles } from 'lucide-react';
 import { CharacterRace } from '@/types/character';
 import { CharacterClass } from '@/types/game';
@@ -13,10 +14,11 @@ interface CharacterSummaryProps {
 }
 
 export function CharacterSummary({ race, characterClass, characterName, imageUrl }: CharacterSummaryProps) {
+  const t = useT();
   return (
     <div className="bg-surface/50 backdrop-blur-sm rounded-xl p-6 border border-white/10 h-full flex flex-col items-center text-center">
       <h3 className="text-xl font-bold text-text-primary mb-4">
-        Resumo do Personagem
+        {t('Character Summary')}
       </h3>
 
       <AnimatePresence mode="wait">
@@ -41,7 +43,7 @@ export function CharacterSummary({ race, characterClass, characterName, imageUrl
             )}
 
             <h4 className="text-3xl font-extrabold text-text-primary mb-2">
-              {characterName || 'Seu Personagem'}
+              {characterName || t('Your Character')}
             </h4>
             <p className="text-lg text-primary mb-4">
               {race.name}{characterClass ? ` · ${characterClass.name}` : ''}
@@ -49,18 +51,18 @@ export function CharacterSummary({ race, characterClass, characterName, imageUrl
 
             <div className="w-full flex items-start gap-2 text-left text-sm text-[#c9a25f] bg-[#3a3325]/30 border border-[#8a6d3b]/40 rounded-lg px-3 py-2 mb-4">
               <Sparkles className="w-4 h-4 flex-shrink-0 mt-0.5" />
-              <span>Os atributos (STR/AGI/INT/DEF) são revelados no momento do mint.</span>
+              <span>{t('The attributes (STR/AGI/INT/DEF) are revealed at the moment of the mint.')}</span>
             </div>
 
             <div className="w-full text-left">
-              <h5 className="text-lg font-bold text-text-primary mb-2">Habilidades:</h5>
+              <h5 className="text-lg font-bold text-text-primary mb-2">{t('Abilities:')}</h5>
               <ul className="list-disc list-inside text-text-secondary text-sm space-y-1">
-                <li><span className="font-medium text-primary">Raça:</span> {race.specialAbility}</li>
+                <li><span className="font-medium text-primary">{t('Race:')}</span> {race.specialAbility}</li>
                 {race.transformation && (
-                  <li><span className="font-medium text-accent">Transformação:</span> {race.transformation}</li>
+                  <li><span className="font-medium text-accent">{t('Transformation:')}</span> {race.transformation}</li>
                 )}
                 {characterClass && characterClass.abilities?.length > 0 && (
-                  <li><span className="font-medium text-primary">Classe:</span> {characterClass.abilities.join(', ')}</li>
+                  <li><span className="font-medium text-primary">{t('Class:')}</span> {characterClass.abilities.join(', ')}</li>
                 )}
               </ul>
             </div>
@@ -74,7 +76,7 @@ export function CharacterSummary({ race, characterClass, characterName, imageUrl
             transition={{ duration: 0.3 }}
             className="flex-1 flex items-center justify-center text-text-secondary/60 text-center"
           >
-            <p>Preencha os passos anteriores para ver o resumo do seu personagem.</p>
+            <p>{t('Fill in the previous steps to see your character summary.')}</p>
           </motion.div>
         )}
       </AnimatePresence>

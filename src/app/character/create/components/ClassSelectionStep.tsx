@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { useT } from '@/lib/i18n/I18nProvider';
 import { useState } from 'react';
 import { CharacterClass } from '@/types/game';
 import { ClassCard } from './ClassCard';
@@ -9,6 +10,7 @@ import { CLASSES } from '@/lib/gameData';
 import { useCharacterCreationStore } from '@/lib/stores/characterCreationStore';
 
 export function ClassSelectionStep() {
+  const t = useT();
   const {
     selectedClass,
     setSelectedClass,
@@ -27,10 +29,10 @@ export function ClassSelectionStep() {
       <div className="space-y-6">
         <div>
           <h2 className="text-2xl font-bold text-text-primary mb-2">
-            Escolha sua Classe
+            {t('Choose your Class')}
           </h2>
           <p className="text-text-secondary">
-            Cada classe possui habilidades e equipamentos únicos
+            {t('Each class has unique abilities and gear')}
           </p>
         </div>
         

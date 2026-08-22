@@ -37,7 +37,19 @@ for (const file of walk(SRC)) {
   // Array.from: sob target es5 sem downlevelIteration um for..of direto no
   // iterador do matchAll roda ZERO vezes em silêncio (a armadilha do es5).
   for (const m of Array.from(code.matchAll(CALL))) {
-    const key = m[2].replace(/\\(['"`\\])/g, '$1')
+    // Desescapa como o TS faria: \n, \t e os escapes de aspas/barra. Sem isso
+    // uma chave com quebra de linha nunca casa com a do dicionário.
+    const key = m[2].replace(/\\(u\{[0-9a-fA-F]+\}|u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|.)/g, (_, esc: string) => {
+      if (esc === 'n') return '\n'
+      if (esc === 't') return '\t'
+      if (esc === 'r') return '\r'
+      if (esc === '0') return '\0'
+      if (esc[0] === 'u' || esc[0] === 'x') {
+        const hex = esc.startsWith('u{') ? esc.slice(2, -1) : esc.slice(1)
+        return String.fromCodePoint(parseInt(hex, 16))
+      }
+      return esc
+    })
     calls++
     if (!(key in PT_DICT)) {
       const rel = path.relative(path.resolve(__dirname, '..'), file)

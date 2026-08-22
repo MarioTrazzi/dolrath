@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useT } from '@/lib/i18n/I18nProvider';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Wand2, RefreshCw, Download, Upload, Check, Coins } from 'lucide-react';
 import { generateCharacterImage, editCharacterImage } from '@/lib/openai';
@@ -14,6 +15,7 @@ import { getRaceStatBonuses, getClassStatBonuses } from '@/lib/characterStats';
 import toast from 'react-hot-toast';
 
 export function AppearanceStep() {
+  const t = useT();
   const { selectedRace, selectedClass, selectedImage, setSelectedImage, markStepComplete } = useCharacterCreationStore();
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
@@ -151,9 +153,9 @@ export function AppearanceStep() {
         setSelectedImage(finalImages[0]); // Auto-select the first generated image
       }
     } catch (error) {
-      console.error('Erro ao gerar imagens:', error);
+      console.error('Failed to generate images:', error);
       setGenFailed(true);
-      toast.error(error instanceof Error ? error.message : 'Erro ao gerar imagens');
+      toast.error(error instanceof Error ? error.message : t('Failed to generate images'));
     } finally {
       setIsGenerating(false);
     }
@@ -185,7 +187,7 @@ export function AppearanceStep() {
       if (result.error || !result.image) {
         // Tx consumida por uma geração que deu certo: não dá para reusar.
         if ((result.error || '').includes('já foi usada')) setPendingTxHash(null);
-        throw new Error(result.error || 'Falha ao regerar imagem');
+        throw new Error(result.error || t('Failed to regenerate the image'));
       }
       setPendingTxHash(null);
 
@@ -206,10 +208,10 @@ export function AppearanceStep() {
       setGeneratedImages((imgs) => [...imgs, finalImage]);
       setSelectedImage(finalImage);
       setAdjustPrompt('');
-      toast.success('Nova versão gerada! Compare e escolha a que preferir.');
+      toast.success(t('New version generated! Compare and pick the one you prefer.'));
     } catch (error) {
-      console.error('Erro ao ajustar imagem:', error);
-      toast.error(error instanceof Error ? error.message : 'Erro ao ajustar imagem');
+      console.error('Failed to adjust image:', error);
+      toast.error(error instanceof Error ? error.message : t('Failed to adjust the image'));
     } finally {
       setIsAdjusting(false);
     }
@@ -219,12 +221,10 @@ export function AppearanceStep() {
     <div className="space-y-8">
       <div>
         <h2 className="text-2xl font-bold text-text-primary mb-2">
-          Aparência do Personagem
+          {t('Character Appearance')}
         </h2>
         <p className="text-text-secondary">
-          A IA gera a imagem única da sua NFT (inclusa na taxa de criação). Depois, se quiser
-          mudar algo, você pode pedir ajustes pagando {regenCostDol} USDC por versão — ou fazer
-          upload da sua própria imagem.
+          {t('The AI generates the unique image of your NFT (included in the creation fee). Afterwards, if you want to change something, you can request adjustments paying {cost} USDC per version — or upload your own image.', { cost: regenCostDol })}
         </p>
       </div>
       
@@ -234,18 +234,18 @@ export function AppearanceStep() {
         <div className="bg-surface/50 border border-white/10 rounded-lg p-6">
           <h3 className="text-lg font-medium text-text-primary mb-4 flex items-center gap-2">
             <Wand2 className="w-5 h-5 text-primary" />
-            Gerar com IA
+            {t('Generate with AI')}
           </h3>
           
           <div className="space-y-4">
             <div>
               <label className="block text-sm text-text-secondary mb-2">
-                Prompt personalizado (opcional)
+                {t('Custom prompt (optional)')}
               </label>
               <textarea
                 value={customPrompt}
                 onChange={(e) => setCustomPrompt(e.target.value)}
-                placeholder="Opcional: descreva a imagem que você quer. Se vazio, a IA gera usando a lore + raça/classe + seus atributos."
+                placeholder={t('Optional: describe the image you want. If empty, the AI generates using the lore + race/class + your attributes.')}
                 className="w-full h-24 px-3 py-2 bg-background border border-white/20 rounded-lg text-text-primary placeholder:text-text-secondary resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
               />
             </div>
@@ -258,22 +258,21 @@ export function AppearanceStep() {
               {isGenerating ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin" />
-                  Gerando...
+                  {t('Generating...')}
                 </>
               ) : (
                 <>
                   <Wand2 className="w-4 h-4" />
-                  Gerar Imagem
+                  {t('Generate Image')}
                 </>
               )}
             </button>
             {!selectedRace && (
-              <p className="text-sm text-red-400">Selecione uma raça primeiro para gerar imagens.</p>
+              <p className="text-sm text-red-400">{t('Select a race first to generate images.')}</p>
             )}
             {generatedImages.length > 0 && !genFailed && (
               <p className="text-xs text-text-secondary">
-                Sua imagem inclusa já foi gerada. Quer mudar algo? Use o painel de ajustes
-                abaixo ({regenCostDol} USDC por versão).
+                {t('Your included image has already been generated. Want to change something? Use the adjustments panel below ({cost} USDC per version).', { cost: regenCostDol })}
               </p>
             )}
           </div>
@@ -283,7 +282,7 @@ export function AppearanceStep() {
         <div className="bg-surface/50 border border-white/10 rounded-lg p-6">
           <h3 className="text-lg font-medium text-text-primary mb-4 flex items-center gap-2">
             <Upload className="w-5 h-5 text-accent" />
-            Upload Manual
+            {t('Manual Upload')}
           </h3>
           
           <ImageUpload
@@ -297,18 +296,18 @@ export function AppearanceStep() {
       <GenerationProgress
         active={isGenerating}
         steps={[
-          'Coletando e ajustando o prompt para a lore de Dolrath…',
-          'Criando a imagem única do seu herói…',
-          'Finalizando…',
+          t('Collecting and tuning the prompt for the lore of Dolrath…'),
+          t('Creating the unique image of your hero…'),
+          t('Finishing…'),
         ]}
         stepDurationMs={6000}
       />
       <GenerationProgress
         active={isAdjusting}
         steps={[
-          'Confirmando o pagamento…',
-          'Aplicando seus ajustes na imagem…',
-          'Finalizando…',
+          t('Confirming the payment…'),
+          t('Applying your adjustments to the image…'),
+          t('Finishing…'),
         ]}
         stepDurationMs={8000}
       />
@@ -324,7 +323,7 @@ export function AppearanceStep() {
             className="space-y-4"
           >
             <h3 className="text-lg font-medium text-text-primary">
-              {generatedImages.length > 1 ? 'Escolha a versão que vira sua NFT' : 'Sua imagem'}
+              {generatedImages.length > 1 ? t('Choose the version that becomes your NFT') : t('Your image')}
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -344,7 +343,7 @@ export function AppearanceStep() {
                 >
                   <img
                     src={image}
-                    alt={`Opção ${index + 1}`}
+                    alt={t('Option {n}', { n: index + 1 })}
                     className="w-full h-full object-cover art-bright"
                   />
                   
@@ -367,18 +366,15 @@ export function AppearanceStep() {
             <div className="bg-surface/50 border border-white/10 rounded-lg p-6 space-y-3">
               <h4 className="text-base font-medium text-text-primary flex items-center gap-2">
                 <Coins className="w-4 h-4 text-accent" />
-                Quer mudar algo? ({regenCostDol} USDC)
+                {t('Want to change something? ({cost} USDC)', { cost: regenCostDol })}
               </h4>
               <p className="text-xs text-text-secondary">
-                Descreva o que quer mudar na imagem selecionada — a IA mantém o mesmo
-                personagem e aplica só os seus ajustes (custo cobre a geração da imagem
-                e o refinamento do prompt). A versão anterior continua disponível para
-                comparar.
+                {t('Describe what you want to change in the selected image — the AI keeps the same character and applies only your adjustments (the cost covers generating the image and refining the prompt). The previous version stays available to compare.')}
               </p>
               <textarea
                 value={adjustPrompt}
                 onChange={(e) => setAdjustPrompt(e.target.value)}
-                placeholder="Ex: cabelo mais longo e branco, capuz abaixado, cicatriz no olho esquerdo, fundo com ruínas…"
+                placeholder={t('e.g. longer white hair, hood down, scar on the left eye, background with ruins…')}
                 className="w-full h-20 px-3 py-2 bg-background border border-white/20 rounded-lg text-text-primary placeholder:text-text-secondary resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
               />
               <button
@@ -389,12 +385,12 @@ export function AppearanceStep() {
                 {isAdjusting ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    Gerando nova versão...
+                    {t('Generating new version...')}
                   </>
                 ) : (
                   <>
                     <Wand2 className="w-4 h-4" />
-                    Pagar {regenCostDol} USDC e ajustar
+                    {t('Pay {cost} USDC and adjust', { cost: regenCostDol })}
                   </>
                 )}
               </button>

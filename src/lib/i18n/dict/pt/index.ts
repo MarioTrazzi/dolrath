@@ -25,6 +25,8 @@ import { QUESTS_PT } from './quests'
 import { DUNGEON_PT } from './dungeon'
 import { PVP_PT } from './pvp'
 import { MARKET_PT } from './market'
+import { CREATION_PT } from './creation'
+import { WALLET_PT } from './wallet'
 
 export const PT_DICT: Record<string, string> = {
   ...COMMON_PT,
@@ -52,4 +54,6 @@ export const PT_DICT: Record<string, string> = {
   ...DUNGEON_PT,
   ...PVP_PT,
   ...MARKET_PT,
+  ...CREATION_PT,
+  ...WALLET_PT,
 }

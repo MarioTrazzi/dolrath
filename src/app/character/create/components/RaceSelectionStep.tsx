@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { useT } from '@/lib/i18n/I18nProvider';
 import { useState } from 'react';
 import { CharacterRace } from '@/types/character';
 import { RaceCard } from './RaceCard';
@@ -9,6 +10,7 @@ import { races } from '@/lib/characterCreationData';
 import { useCharacterCreationStore } from '@/lib/stores/characterCreationStore';
 
 export function RaceSelectionStep() {
+  const t = useT();
   const { selectedRace, setSelectedRace, markStepComplete } = useCharacterCreationStore();
   const [hoveredRace, setHoveredRace] = useState<CharacterRace | null>(null);
   
@@ -23,10 +25,10 @@ export function RaceSelectionStep() {
       <div className="space-y-6">
         <div>
           <h2 className="text-2xl font-bold text-text-primary mb-2">
-            Escolha sua Raça
+            {t('Choose your Race')}
           </h2>
           <p className="text-text-secondary">
-            Cada raça possui atributos únicos e habilidades especiais
+            {t('Each race has unique attributes and special abilities')}
           </p>
         </div>
         

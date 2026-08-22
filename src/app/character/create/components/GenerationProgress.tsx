@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useT } from '@/lib/i18n/I18nProvider';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles } from 'lucide-react';
 
@@ -23,6 +24,7 @@ export function GenerationProgress({
   stepDurationMs?: number;
   className?: string;
 }) {
+  const t = useT();
   const [index, setIndex] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -94,7 +96,7 @@ export function GenerationProgress({
       </div>
 
       <p className="mt-2 text-xs text-text-secondary">
-        A IA leva alguns segundos — não feche esta janela.
+        {t('The AI takes a few seconds — do not close this window.')}
       </p>
     </div>
   );

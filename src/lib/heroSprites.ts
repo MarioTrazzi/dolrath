@@ -2,8 +2,12 @@
 // O NFT continua sendo a arte pessoal no retrato e no combate; aqui é o boneco genérico
 // que anda pela masmorra, para a combinação certa aparecer no mapa.
 //
-// Assets vêm de scripts/slice-hero-sprite-sheet.ts (recorte determinístico da folha do Gemini):
-//   npx tsx scripts/slice-hero-sprite-sheet.ts --race elfo --class rogue --row 2
+// Assets vêm de um de DOIS importadores, conforme a origem da arte:
+//   - folha do Gemini (a maioria) — scripts/slice-hero-sprite-sheet.ts:
+//       npx tsx scripts/slice-hero-sprite-sheet.ts --race elfo --class rogue --row 2
+//   - pack de pixel art direcional com atlas.json — scripts/slice-hero-pack.ts:
+//       npx tsx scripts/slice-hero-pack.ts --in ~/Downloads/mago --race draconiano --class mage
+// Os dois cospem a MESMA tira horizontal, então o def abaixo não muda de forma.
 // Calibre os índices/fps na bancada /dev/sprite-lab antes de congelar aqui.
 
 import { normalizeCombatClass } from '@/lib/combatModel'
@@ -216,18 +220,27 @@ export const HERO_SPRITES: Record<string, HeroSpriteDef> = {
     fps: 4,
   },
 
-  // [0]/[1] são costas com o cajado (uma é o espelho da outra, o que já alterna
-  // as pernas). [2]/[4] olham pra direita e [3]/[5] são os espelhos deles. O
-  // cajado some nos frames de perfil — de novo o Gemini, não o recorte.
+  // ⚠️ ÚNICO que não vem da folha do Gemini: é um pack de pixel art direcional
+  // (Seven Sprites), importado por `scripts/slice-hero-pack.ts` a partir do
+  // atlas.json do pack. Daí os 18 frames onde as outras têm 6 — [0..8] é o
+  // ciclo de perfil pra direita e [9..17] o de costas, ambos completos e
+  // desenhados quadro a quadro, então não há espelho alternado nem frame
+  // repetido pra fingir passada. É também o único com o cajado presente no
+  // perfil (nas folhas do Gemini ele some) e o único a 10 fps: com 9 frames por
+  // ciclo, os 4 fps das outras deixariam a caminhada em câmera lenta.
+  //
+  // O oeste do pack (`Mago_Walk_West.png`) fica de fora: a cena espelha o
+  // perfil em runtime, como faz com todas as outras. A pose de frente
+  // (`Mago_Walk_South.png`) também — o herói nunca anda na direção da câmera.
   'draconiano-mage': {
     src: '/sprites/draconiano-mage/walk.webp',
-    frameW: 128,
-    frameH: 192,
-    frames: 6,
+    frameW: 84,
+    frameH: 121,
+    frames: 18,
     facing: 'right',
-    walk: [2, 4],
-    back: [0, 1],
-    fps: 4,
+    walk: [0, 1, 2, 3, 4, 5, 6, 7, 8],
+    back: [9, 10, 11, 12, 13, 14, 15, 16, 17],
+    fps: 10,
   },
 
   // ---------- metamorfo ----------

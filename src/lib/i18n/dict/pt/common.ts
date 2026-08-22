@@ -50,4 +50,15 @@ export const COMMON_PT: Record<string, string> = {
   'CRITICAL!': 'CRÍTICO!',
   'TRANSFORMATION!': 'TRANSFORMAÇÃO!',
   'You': 'Você',
+  'Signature expired. Reload the page and try again.': 'Assinatura expirada. Recarregue a página e tente novamente.',
+  'The connected wallet does not match the recipient.': 'Carteira conectada não confere com o destinatário.',
+  'This action has already been executed (signature/id already used).':
+    'Essa ação já foi executada (assinatura/id já utilizado).',
+  'Invalid signature. Try again.': 'Assinatura inválida. Tente novamente.',
+  'Failed to send transaction': 'Erro ao enviar transação',
+  'Transaction cancelled in the wallet': 'Transação cancelada na carteira',
+  'Fee too low to replace the pending transaction. Raise the gas or wait.':
+    'Taxa baixa para substituir transação pendente. Aumente o gas ou aguarde.',
+  'Not enough MATIC for gas': 'Saldo insuficiente de MATIC para gas',
+  'Nonce too low. Try again in a moment.': 'Nonce muito baixo. Tente novamente em instantes.',
 }

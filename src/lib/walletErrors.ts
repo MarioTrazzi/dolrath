@@ -1,3 +1,5 @@
+import { clientT } from './i18n/client'
+
 export type ContractInterfaceLike = {
   parseError(data: string): { name?: string }
 }
@@ -38,10 +40,10 @@ export function extractEthersErrorData(err: any): string | null {
 }
 
 const DEFAULT_CUSTOM_ERROR_MESSAGES: Record<string, string> = {
-  Expired: 'Assinatura expirada. Recarregue a página e tente novamente.',
-  OnlyRecipient: 'Carteira conectada não confere com o destinatário.',
-  AlreadyMinted: 'Essa ação já foi executada (assinatura/id já utilizado).',
-  InvalidSignature: 'Assinatura inválida. Tente novamente.',
+  Expired: 'Signature expired. Reload the page and try again.',
+  OnlyRecipient: 'The connected wallet does not match the recipient.',
+  AlreadyMinted: 'This action has already been executed (signature/id already used).',
+  InvalidSignature: 'Invalid signature. Try again.',
 }
 
 export function decodeContractCustomErrorMessage(params: {
@@ -69,11 +71,13 @@ export function decodeContractCustomErrorMessage(params: {
   }
 }
 
-export function getWalletTxErrorMessage(err: unknown, fallback = 'Erro ao enviar transação'): string {
+export function getWalletTxErrorMessage(err: unknown, fallback?: string): string {
+  const t = clientT()
+  const fb = fallback ?? t('Failed to send transaction')
   const e: any = err
 
   // Standard MetaMask / EIP-1193 rejection
-  if (e?.code === 4001) return 'Transação cancelada na carteira'
+  if (e?.code === 4001) return t('Transaction cancelled in the wallet')
 
   const msg = pickFirstString([
     e?.shortMessage,
@@ -87,14 +91,15 @@ export function getWalletTxErrorMessage(err: unknown, fallback = 'Erro ao enviar
     e?.cause?.message,
   ])
 
-  if (!msg) return fallback
+  if (!msg) return fb
 
   const lower = msg.toLowerCase()
 
-  if (lower.includes('user rejected') || lower.includes('rejected')) return 'Transação cancelada na carteira'
-  if (lower.includes('insufficient funds')) return 'Saldo insuficiente de MATIC para gas'
-  if (lower.includes('nonce too low')) return 'Nonce muito baixo. Tente novamente em instantes.'
-  if (lower.includes('replacement fee too low')) return 'Taxa baixa para substituir transação pendente. Aumente o gas ou aguarde.'
+  if (lower.includes('user rejected') || lower.includes('rejected')) return t('Transaction cancelled in the wallet')
+  if (lower.includes('insufficient funds')) return t('Not enough MATIC for gas')
+  if (lower.includes('nonce too low')) return t('Nonce too low. Try again in a moment.')
+  if (lower.includes('replacement fee too low'))
+    return t('Fee too low to replace the pending transaction. Raise the gas or wait.')
 
   // Providers often wrap the real reason inside an "Internal JSON-RPC error" umbrella.
   if (lower.includes('internal json-rpc error')) {

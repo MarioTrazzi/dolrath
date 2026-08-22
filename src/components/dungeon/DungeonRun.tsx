@@ -16,7 +16,7 @@ import { dungeonSceneEnabled } from '@/lib/dungeonScene/enabled'
 import { planNodeContents, type SpotContent } from '@/lib/dungeonScene/nodeContents'
 import type { MapSpot } from '@/lib/dungeonScene/types'
 import { buildWalkPathPoints, DUNGEON_BATTLE_BG } from '@/lib/walkSceneAssets'
-import { FREE_RESTORE_MAX_LEVEL } from '@/lib/restoreCost'
+import { FREE_RESTORE_MAX_LEVEL, restoreCost } from '@/lib/restoreCost'
 import {
   DungeonDef,
   DungeonEventDef,
@@ -94,6 +94,8 @@ export interface DungeonCharacter {
   maxMp: number
   stamina: number
   maxStamina: number
+  /** 🪙 Ouro na carteira do personagem — usado para prever a taxa da Alquimista entre runs. */
+  gold?: number
   attack: number
   defense: number
   /** Poder mágico (AP), derivado de INT. Alimenta a Investida Arcana. */
@@ -117,11 +119,32 @@ interface DungeonRunProps {
   character: DungeonCharacter
   /** 🏆 Tier da masmorra escolhido (1..5). Default 1. Escala monstro + drops no servidor. */
   tier?: number
-  onExit: (updates: { hp: number; mp: number; stamina: number; leveledUp?: boolean }) => void
+  onExit: (updates: {
+    hp: number
+    mp: number
+    stamina: number
+    leveledUp?: boolean
+    /**
+     * ⚗️ Motivo da saída, quando NÃO foi o jogador que pediu. Hoje só
+     * 'no-gold-restore': o farm automático parou porque faltou ouro para a
+     * Alquimista — o mapa precisa saber para explicar e oferecer o botão de pagar
+     * (o banner desta tela morre junto com o componente).
+     */
+    stopped?: 'no-gold-restore'
+    /** Ouro que faltava para a restauração, quando `stopped === 'no-gold-restore'`. */
+    restoreNeeded?: number
+  }) => void
   /** Re-run: o pai remonta a run do zero (mesma masmorra). */
-  onRestart?: (updates: { hp: number; mp: number; stamina: number; level?: number; experience?: number; leveledUp?: boolean; auto: boolean }) => void
+  onRestart?: (updates: { hp: number; mp: number; stamina: number; level?: number; experience?: number; leveledUp?: boolean; auto: boolean; restorePaid?: number; gold?: number }) => void
   /** @deprecated A run é sempre automática; mantido só por compatibilidade com o pai. */
   initialAuto?: boolean
+  /**
+   * ⚗️ Taxa que a Alquimista cobrou ANTES desta run (farm automático). O pai a
+   * devolve no re-run só para o log da run nova abrir com a conta — sem isto a
+   * cobrança acontecia no instante em que o componente era desmontado e o
+   * jogador nunca via para onde o ouro tinha ido.
+   */
+  restorePaid?: number
   /** Optional custom background image for battles (path relative to /public/) */
   backgroundImageUrl?: string
   /** Overlay opacity for custom background image (0-1, default 0.3) */
@@ -659,6 +682,7 @@ export default function DungeonRun({
   onExit, 
   onRestart, 
   initialAuto: _initialAuto,
+  restorePaid,
   backgroundImageUrl,
   backgroundImageOverlay = 0.3,
   cards,
@@ -1566,6 +1590,15 @@ export default function DungeonRun({
   useEffect(() => {
     if (!runReady || !foodBuff) return
     pushLog(`🍽 Bem alimentado: ${foodBuffLabel(foodBuff)} (${foodBuff.name}, ~${foodBuffRemainingMin(foodBuff)} min restantes)`)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runReady])
+  // ⚗️ Conta da Alquimista do re-run: o farm automático paga a restauração no
+  // instante em que a run ANTERIOR é desmontada, então o log dela nunca chegava
+  // aos olhos do jogador. Abre a run nova dizendo quanto custou entrar inteiro.
+  useEffect(() => {
+    if (!runReady || !restorePaid || restorePaid <= 0) return
+    pushLog(`⚗️ A Alquimista restaurou sua vida e mana por ${restorePaid} 🪙 antes desta run.`)
+    showBanner('⚗️', `Restauração paga: ${restorePaid} 🪙`, 2600)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runReady])
   // Transformação = buff simétrico por cima dos levers-base (×TRANSFORM_SCALE).
@@ -3013,23 +3046,30 @@ export default function DungeonRun({
    * que foi cobrado. Devolve false quando não deu para restaurar (sem ouro ou
    * erro de rede): quem chama desliga o farm e volta ao mapa.
    */
-  const payRestore = async (): Promise<boolean> => {
+  const payRestore = async (): Promise<{ ok: boolean; cost: number; gold?: number; needed?: number; noGold?: boolean }> => {
     try {
       const res = await fetch(`/api/character/${character.id}/restore`, { method: 'POST' })
       const data = await res.json().catch(() => null)
       if (!res.ok) {
         showBanner('⚗️', data?.error || 'A Alquimista não pôde restaurar você — farm encerrado.', 4200, { sticky: true })
-        return false
+        // Falta de ouro tem tratamento PRÓPRIO no mapa (aviso + botão de pagar);
+        // qualquer outra falha volta em silêncio, sem acusar bolso vazio.
+        // Mesmo formato de `lib/buyGold` ("…insuficiente… precisa de N 🪙"), lido
+        // aqui na mão: aquele módulo arrasta a ethers inteira para o bundle da run.
+        const msg = String(data?.error ?? '')
+        const noGold = /insuficiente/i.test(msg) && /precisa de/i.test(msg)
+        const needed = Number(msg.match(/precisa de\s+(\d+)/i)?.[1] ?? 0)
+        return { ok: false, cost: 0, noGold, needed: noGold && needed > 0 ? needed : undefined }
       }
       if (data?.restored && data.cost > 0) {
         pushLog(`⚗️ A Alquimista restaurou sua vida e mana por ${data.cost} 🪙.`)
       } else if (data?.restored) {
-        pushLog('⚗️ A Alquimista restaurou sua vida e mana — cortesia até o nível 6.')
+        pushLog(`⚗️ A Alquimista restaurou sua vida e mana — cortesia até o nível ${FREE_RESTORE_MAX_LEVEL}.`)
       }
-      return true
+      return { ok: true, cost: data?.cost ?? 0, gold: typeof data?.characterGold === 'number' ? data.characterGold : undefined }
     } catch {
       showBanner('⚗️', 'Sem conexão com a Alquimista — farm encerrado.', 4200, { sticky: true })
-      return false
+      return { ok: false, cost: 0 }
     }
   }
 
@@ -3061,13 +3101,19 @@ export default function DungeonRun({
     // farm se desliga e volta ao mapa — nada de re-rodar com o herói caído,
     // queimando stamina à toa.
     let pools = exitPools()
+    let paid = 0
+    let goldAfter: number | undefined
     if (autoFarmRef.current) {
       const restored = await payRestore()
-      if (!restored) {
+      if (!restored.ok) {
         setAutoFarm(false)
-        exitRun()
+        // Volta ao mapa CONTANDO o motivo: a tela que mostraria o banner some
+        // junto com este componente (ver `onExit.stopped`).
+        exitRun(restored.noGold ? { stopped: 'no-gold-restore', restoreNeeded: restored.needed } : undefined)
         return
       }
+      paid = restored.cost
+      goldAfter = restored.gold
       // Restaurado: o pai remonta com os pools cheios (escala do banco) e o
       // initializer da run volta a expandi-los com gear e passivas.
       pools = { hp: character.maxHp, mp: character.maxMp }
@@ -3085,6 +3131,8 @@ export default function DungeonRun({
       experience: charExperienceRef.current,
       leveledUp: leveledUpThisRun,
       auto,
+      restorePaid: paid,
+      gold: goldAfter,
     })
   }
 
@@ -3322,7 +3370,7 @@ export default function DungeonRun({
     }
   }
 
-  const exitRun = async () => {
+  const exitRun = async (reason?: { stopped?: 'no-gold-restore'; restoreNeeded?: number }) => {
     // ⏳ Overlay ANTES do await: o crédito da run pode levar segundos e sem isto
     // a tela ficava idêntica, como se o clique não tivesse pegado.
     setLeaving('exit')
@@ -3341,12 +3389,29 @@ export default function DungeonRun({
     // Baixar a bandeira no MESMO tick do onExit: o pai desmonta a run em
     // seguida, então não há frame com o overlay já apagado por cima do resumo.
     setLeaving(null)
-    onExit({ ...exitPools(), stamina: staminaRef.current, leveledUp: leveledUpThisRun })
+    onExit({ ...exitPools(), stamina: staminaRef.current, leveledUp: leveledUpThisRun, ...reason })
   }
 
   // 🤖 Interruptor do farm automático, mostrado nas telas de resumo e derrota.
   // Deixa explícito o custo da conveniência: refazer a run sozinho passa pela
   // Alquimista, e a Alquimista cobra (a partir do nível 7).
+  // ⚗️ Conta prevista da Alquimista para o PRÓXIMO re-run: mesma função que o
+  // servidor usa para cobrar (lib/restoreCost.ts), nos pools da escala do banco —
+  // a mesma conversão do `exitPools`. Só previsão: quem cobra é a rota.
+  const nextRestore = restoreCost({
+    hp: Math.max(1, Math.round(character.maxHp * poolPct(hp, effMaxHp))),
+    maxHp: character.maxHp,
+    mp: Math.max(0, Math.round(character.maxMp * poolPct(mp, effMaxMp))),
+    maxMp: character.maxMp,
+    level: charLevel,
+  })
+  // Saldo previsto ao fim desta run: o ouro que o pai conhece MAIS o que a run
+  // rendeu (o /finish credita tudo de uma vez, e o `character.gold` da prop só é
+  // ressincronizado no re-run seguinte). Sem somar, o aviso de "sem ouro"
+  // dispararia com o saldo de antes da run.
+  const heroGold = character.gold != null ? character.gold + totals.gold : null
+  const cantAffordRestore = heroGold !== null && nextRestore.cost > heroGold
+
   const farmToggle = (
     <div className="mb-3 flex flex-col items-center gap-1.5">
       {/* 🎒 O farm não se desligou sozinho por capricho: sem slot livre a próxima
@@ -3374,6 +3439,21 @@ export default function DungeonRun({
             : `Refaz a run sozinho. A restauração é gratuita até o nível ${FREE_RESTORE_MAX_LEVEL}.`
           : 'Você refaz a run na mão, com a vida e a mana que sobraram.'}
       </div>
+      {/* 💸 O preço da conveniência com NÚMERO: a cobrança acontece no instante em
+          que esta tela sai de cena, então sem isto o ouro sumia sem explicação. */}
+      {autoFarm && !nextRestore.free && !nextRestore.alreadyFull && (
+        <div
+          className={`rounded-lg border px-3 py-1.5 text-[10px] leading-tight max-w-[17rem] ${
+            cantAffordRestore
+              ? 'border-red-400/40 bg-red-500/10 text-red-200'
+              : 'border-amber-300/30 bg-amber-500/10 text-amber-100/85'
+          }`}
+        >
+          {cantAffordRestore
+            ? `⚗️ Faltam ${nextRestore.cost - (heroGold ?? 0)} 🪙 para a Alquimista restaurar vida e mana (${nextRestore.cost} 🪙). Sem isso o farm para e volta ao mapa.`
+            : `⚗️ A Alquimista vai cobrar ~${nextRestore.cost} 🪙 para você entrar inteiro na próxima run.`}
+        </div>
+      )}
     </div>
   )
 
@@ -5001,7 +5081,7 @@ export default function DungeonRun({
                   </button>
                 )}
                 <button
-                  onClick={exitRun}
+                  onClick={() => exitRun()}
                   disabled={!!leaving}
                   className="px-8 py-3 rounded-xl font-black text-white text-sm bg-gradient-to-r from-emerald-700 to-teal-600 hover:from-emerald-600 hover:to-teal-500 shadow-lg transition-all hover:scale-105 disabled:opacity-60 disabled:cursor-wait disabled:hover:scale-100"
                 >
@@ -5053,7 +5133,7 @@ export default function DungeonRun({
                   </button>
                 )}
                 <button
-                  onClick={exitRun}
+                  onClick={() => exitRun()}
                   disabled={!!leaving}
                   className="px-8 py-3 rounded-xl font-black text-white text-sm bg-gradient-to-r from-stone-700 to-stone-600 hover:from-stone-600 hover:to-stone-500 shadow-lg transition-all hover:scale-105 disabled:opacity-60 disabled:cursor-wait disabled:hover:scale-100"
                 >

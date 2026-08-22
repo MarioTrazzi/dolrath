@@ -54,6 +54,12 @@ export default function DungeonsPage() {
   // ⚗️ Restauração de HP/MP direto do mapa (mesma rota da Alquimista): entrar
   // ferido é jogada válida, mas quem quiser sarar não precisa dar a volta pela loja.
   const [restoring, setRestoring] = useState(false)
+  // 🤖 O farm automático parou porque faltou ouro para a Alquimista: a run avisa
+  // ao sair (`onExit.stopped`) e o mapa é quem consegue mostrar — o banner da run
+  // morre junto com a tela. Guarda também o quanto faltava, e a taxa paga no
+  // último re-run (só para o mapa poder dizer para onde o ouro foi).
+  const [restoreBlocked, setRestoreBlocked] = useState<number | null>(null)
+  const [lastRestorePaid, setLastRestorePaid] = useState(0)
   // Acabamos de sair da NOSSA run: ignora a detecção por uns segundos (o /finish
   // pode ainda estar em voo, então o lock constaria "vivo" e piscaria o bloqueio à toa).
   const [recentExit, setRecentExit] = useState(false)
@@ -220,7 +226,7 @@ export default function DungeonsPage() {
 
   // 🔁 Re-run: mantém a masmorra ativa e remonta a DungeonRun do zero (nova key),
   // sincronizando os recursos e preservando o estado do piloto automático.
-  const handleRunRestart = (updates: { hp: number; mp: number; stamina: number; level?: number; experience?: number; leveledUp?: boolean; auto: boolean }) => {
+  const handleRunRestart = (updates: { hp: number; mp: number; stamina: number; level?: number; experience?: number; leveledUp?: boolean; auto: boolean; restorePaid?: number; gold?: number }) => {
     const hero = selectedCharacter
     if (hero) {
       // O re-run remonta <DungeonRun> do zero com este `character` como prop — nível
@@ -232,6 +238,9 @@ export default function DungeonsPage() {
         hp: updates.hp,
         mp: updates.mp,
         stamina: updates.stamina,
+        // 🪙 A Alquimista acabou de cobrar: sem o saldo novo aqui, a run seguinte
+        // preveria a taxa com o ouro de antes (e o aviso de "sem ouro" atrasaria uma run).
+        ...(updates.gold != null ? { gold: updates.gold } : {}),
         ...(updates.level != null ? { level: updates.level } : {}),
         ...(updates.experience != null ? { experience: updates.experience } : {}),
       }
@@ -239,7 +248,11 @@ export default function DungeonsPage() {
       setCharacters(prev => prev.map(c => (c.id === updated.id ? updated : c)))
     }
     setResumeAuto(updates.auto)
+    setLastRestorePaid(updates.restorePaid ?? 0)
+    setRestoreBlocked(null)
     setRunSeq(s => s + 1)
+    // A taxa saiu da carteira agora — a navbar precisa refletir na hora.
+    if (updates.restorePaid) refreshActiveCharacter()
   }
 
   // ⚗️ Paga a Alquimista sem sair do mapa. O preço mostrado é só espelho: quem
@@ -267,7 +280,8 @@ export default function DungeonsPage() {
         setError(data?.error || 'Não foi possível restaurar.')
         return
       }
-      const patch = { hp: data.hp, mp: data.mp }
+      setRestoreBlocked(null)
+      const patch = { hp: data.hp, mp: data.mp, ...(typeof data.characterGold === 'number' ? { gold: data.characterGold } : {}) }
       setSelectedCharacter(prev => (prev && prev.id === hero.id ? { ...prev, ...patch } : prev))
       setCharacters(prev => prev.map(c => (c.id === hero.id ? { ...c, ...patch } : c)))
       refreshActiveCharacter() // o ouro gasto aparece na navbar na hora
@@ -279,14 +293,24 @@ export default function DungeonsPage() {
   }
 
   // Ao sair da masmorra, sincroniza os recursos locais do personagem
-  const handleRunExit =(updates: { hp: number; mp: number; stamina: number; leveledUp?: boolean }) => {
+  const handleRunExit =(updates: {
+    hp: number
+    mp: number
+    stamina: number
+    leveledUp?: boolean
+    stopped?: 'no-gold-restore'
+    restoreNeeded?: number
+  }) => {
+    const { stopped, restoreNeeded, ...resources } = updates
     setActiveDungeon(null)
     setResumeAuto(false)
+    setLastRestorePaid(0)
+    setRestoreBlocked(stopped === 'no-gold-restore' ? (restoreNeeded ?? 0) : null)
     setRecentExit(true)
     setTimeout(() => setRecentExit(false), 4000)
     const hero = selectedCharacter
     if (hero) {
-      const updated = { ...hero, ...updates }
+      const updated = { ...hero, ...resources }
       setSelectedCharacter(updated)
       setCharacters(prev => prev.map(c => (c.id === updated.id ? updated : c)))
     }
@@ -345,6 +369,7 @@ export default function DungeonsPage() {
         onExit={handleRunExit}
         onRestart={handleRunRestart}
         initialAuto={resumeAuto}
+        restorePaid={lastRestorePaid}
         backgroundImageUrl={DUNGEON_BATTLE_BG[activeDungeon.id]}
         backgroundImageOverlay={0.35}
       />
@@ -456,29 +481,42 @@ export default function DungeonsPage() {
             maxMp: selectedCharacter.maxMp,
             level: selectedCharacter.level,
           })
-          if (alreadyFull) return null
+          if (alreadyFull && restoreBlocked === null) return null
           const hurt = selectedCharacter.hp < selectedCharacter.maxHp * 0.3
+          const blocked = restoreBlocked !== null
           return (
             <div
               className="rounded-[3px] border p-4 mb-6 flex flex-col sm:flex-row items-center justify-center gap-3 text-center"
-              style={{ borderColor: hurt ? 'rgba(220,80,80,0.55)' : BORDER_GOLD, background: PANEL_BG }}
+              style={{ borderColor: blocked || hurt ? 'rgba(220,80,80,0.55)' : BORDER_GOLD, background: PANEL_BG }}
             >
               <div className="text-xs">
-                <p className="font-bold text-sm" style={{ color: hurt ? '#e07a7a' : GOLD_BRIGHT }}>
-                  {hurt ? '🩸 Você está gravemente ferido' : '⚗️ Vida ou mana incompletas'}
+                <p className="font-bold text-sm" style={{ color: blocked || hurt ? '#e07a7a' : GOLD_BRIGHT }}>
+                  {blocked
+                    ? '🤖 Farm automático parado — sem gold para a Alquimista'
+                    : hurt ? '🩸 Você está gravemente ferido' : '⚗️ Vida ou mana incompletas'}
                 </p>
                 <p className="text-[#8a8a90]">
-                  Vida e mana não se recuperam sozinhas entre as runs — use poções ou a Alquimista.
-                  {free && ` Restauração gratuita até o nível ${FREE_RESTORE_MAX_LEVEL}.`}
+                  {blocked ? (
+                    <>
+                      A run terminou e você não tinha ouro para restaurar vida e mana
+                      {restoreBlocked ? ` (faltavam ${Math.max(0, restoreBlocked - (selectedCharacter.gold ?? 0))} 🪙 dos ${restoreBlocked} 🪙)` : ''}.
+                      Consiga ouro — vendendo espólio, na coleta ou na arena — e clique em Restaurar para voltar a farmar.
+                    </>
+                  ) : (
+                    <>
+                      Vida e mana não se recuperam sozinhas entre as runs — use poções ou a Alquimista.
+                      {free && ` Restauração gratuita até o nível ${FREE_RESTORE_MAX_LEVEL}.`}
+                    </>
+                  )}
                 </p>
               </div>
               <button
                 onClick={handleRestore}
-                disabled={restoring}
+                disabled={restoring || alreadyFull}
                 className="shrink-0 px-5 py-2.5 rounded-[3px] font-black text-sm text-[#100d06] transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-60"
                 style={{ background: `linear-gradient(180deg, ${GOLD_BRIGHT}, ${GOLD})` }}
               >
-                {restoring ? 'Restaurando…' : free ? '⚗️ Restaurar (grátis)' : `⚗️ Restaurar (${cost} 🪙)`}
+                {restoring ? 'Restaurando…' : alreadyFull ? '⚗️ Já está inteiro' : free ? '⚗️ Restaurar (grátis)' : `⚗️ Restaurar (${cost} 🪙)`}
               </button>
             </div>
           )

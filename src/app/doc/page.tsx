@@ -422,35 +422,36 @@ export default function DocPage() {
                   </p>
                   <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
                     <li>
-                      Criação de personagem: <Tag tone="gold">2 USDC</Tag> (<Code>CHARACTER_CREATION_COST_DOL</Code>) —
-                      <strong className="text-white"> 100% receita</strong>: NFT, retrato por IA e infra.
+                      {t('Character creation: ')}<Tag tone="gold">2 USDC</Tag> (<Code>CHARACTER_CREATION_COST_DOL</Code>) —
+                      <strong className="text-white">{t(' 100% revenue')}</strong>{t(': NFT, AI portrait and infra.')}
                     </li>
                     <li>
-                      Premiação por ranking <Soon /> — hoje o placar da arena é{' '}
-                      <strong className="text-white">global, permanente e sem prêmio</strong>: nenhuma
-                      inscrição, nenhuma pool, nenhum pagamento. O sistema de recompensa será redesenhado.
+                      {t('Ranking prizes')} <Soon />{t(' — today the arena scoreboard is ')}
+                      <strong className="text-white">{t('global, permanent and prizeless')}</strong>
+                      {t(': no entry, no pool, no payout. The reward system will be redesigned.')}
                     </li>
-                    <li>Mercado de personagens negocia em DOL (taxa 5%: 2,5% queima + 2,5% treasury) <Phase2 /></li>
-                    <li>Staking com veDOL <Soon /></li>
-                    <li>Governança (DAO) <Soon /></li>
+                    <li>{t('The character market trades in DOL (5% fee: 2.5% burn + 2.5% treasury)')} <Phase2 /></li>
+                    <li>{t('Staking with veDOL')} <Soon /></li>
+                    <li>{t('Governance (DAO)')} <Soon /></li>
                   </ul>
                 </Card>
                 <Card>
-                  <div className="flex items-center justify-between"><h3 className="font-semibold text-white">GOLD — moeda do gameplay</h3><Tag tone="gold">GOLD</Tag></div>
+                  <div className="flex items-center justify-between"><h3 className="font-semibold text-white">{t('GOLD — gameplay currency')}</h3><Tag tone="gold">GOLD</Tag></div>
                   <p className="mt-2 text-sm">
-                    ERC-20 <Code>DolrathGold.sol</Code> — emissão elástica <strong className="text-white">gateada por gameplay</strong>:
-                    todo GOLD nasce off-chain (servidor-autoritativo, stamina, teto diário) e só vira token quando o jogador
-                    <strong className="text-white"> reivindica on-chain</strong> (EIP-712, <Code>claimWithSig</Code>, taxa de claim 0%).
+                    ERC-20 <Code>DolrathGold.sol</Code>{t(' — elastic issuance ')}
+                    <strong className="text-white">{t('gated by gameplay')}</strong>
+                    {t(': every GOLD is born off-chain (server-authoritative, stamina, daily cap) and only becomes a token when the player ')}
+                    <strong className="text-white">{t(' claims it on-chain')}</strong> (EIP-712, <Code>claimWithSig</Code>{t(', claim fee 0%).')}
                   </p>
                   <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
-                    <li>Ganho em PvE (masmorras), PvP e eventos</li>
-                    <li>Gasto em loja, forja, alquimia e mercado de itens</li>
-                    <li>Teto de emissão: <strong className="text-white">20.000/dia por usuário</strong> (<Code>DUNGEON_DAILY_GOLD_CAP</Code>)</li>
+                    <li>{t('Earned in PvE (dungeons), PvP and events')}</li>
+                    <li>{t('Spent in the shop, forge, alchemy and item market')}</li>
+                    <li>{t('Issuance cap: ')}<strong className="text-white">{t('20,000/day per user')}</strong> (<Code>DUNGEON_DAILY_GOLD_CAP</Code>)</li>
                   </ul>
                 </Card>
               </div>
 
-              <h3 className="pt-2 text-lg font-semibold text-white">Fluxo do GOLD — três camadas</h3>
+              <h3 className="pt-2 text-lg font-semibold text-white">{t('GOLD flow — three layers')}</h3>
               <Card>
                 <Formula>{`[1] Personagem (Character.gold)   ← masmorra, PvP, venda de item
         │  gasta na loja, forja, alquimia (sinks OFF-chain)
@@ -461,100 +462,106 @@ export default function DocPage() {
 [3] GOLD on-chain (ERC-20)   ← mercado de itens P2P, loja on-chain
         └─ queima real: 2% de cada venda no mercado destrói supply`}</Formula>
                 <p className="mt-2 text-xs">
-                  Os sinks atacam o saldo <strong className="text-white">antes</strong> do claim: na prática só 20–40% do GOLD ganho
-                  vira token. A saída (claim) não é taxada; a <em>circulação</em> é — a taxa vive no mercado, não na porta.
+                  {t('The sinks hit the balance ')}<strong className="text-white">{t('before')}</strong>
+                  {t(' the claim: in practice only 20–40% of the GOLD earned becomes a token. The exit (claim) is not taxed; ')}
+                  <em>{t('circulation')}</em>{t(' is — the fee lives in the market, not at the door.')}
                 </p>
               </Card>
 
-              <h3 className="pt-2 text-lg font-semibold text-white">Alocação do DOL (1B, supply fixo)</h3>
+              <h3 className="pt-2 text-lg font-semibold text-white">{t('DOL allocation (1B, fixed supply)')}</h3>
               <Table
-                head={['Bucket', '%', 'DOL', 'Vesting']}
+                head={[t('Bucket'), '%', 'DOL', t('Vesting')]}
                 rows={[
-                  [<strong key="p" className="text-white">Play &amp; Achieve</strong>, '30%', '300M', 'emissão de 25% do saldo restante/ano (ano 1: 75M, ano 2: 56M…)'],
-                  [<strong key="t" className="text-white">Treasury / DAO</strong>, '20%', '200M', 'linear em 48 meses'],
-                  [<strong key="e" className="text-white">Equipe</strong>, '15%', '150M', 'cliff 12 meses + linear 36 meses'],
-                  [<strong key="i" className="text-white">Investidores</strong>, '12%', '120M', 'cliff 6 meses + linear 24 meses'],
-                  [<strong key="l" className="text-white">Liquidez</strong>, '10%', '100M', '25% no TGE, resto conforme necessidade (LP com lock)'],
-                  [<strong key="ec" className="text-white">Ecossistema</strong>, '8%', '80M', 'parcerias, grants e integrações'],
-                  [<strong key="c" className="text-white">Comunidade</strong>, '5%', '50M', '40% no TGE (airdrops, eventos de lançamento)'],
+                  [<strong key="p" className="text-white">Play &amp; Achieve</strong>, '30%', '300M', t('issuance of 25% of the remaining balance/year (year 1: 75M, year 2: 56M…)')],
+                  [<strong key="t" className="text-white">{t('Treasury / DAO')}</strong>, '20%', '200M', t('linear over 48 months')],
+                  [<strong key="e" className="text-white">{t('Team')}</strong>, '15%', '150M', t('12-month cliff + 36-month linear')],
+                  [<strong key="i" className="text-white">{t('Investors')}</strong>, '12%', '120M', t('6-month cliff + 24-month linear')],
+                  [<strong key="l" className="text-white">{t('Liquidity')}</strong>, '10%', '100M', t('25% at TGE, the rest as needed (LP with lock)')],
+                  [<strong key="ec" className="text-white">{t('Ecosystem')}</strong>, '8%', '80M', t('partnerships, grants and integrations')],
+                  [<strong key="c" className="text-white">{t('Community')}</strong>, '5%', '50M', t('40% at TGE (airdrops, launch events)')],
                 ]}
               />
               <p className="text-xs text-textsec">
-                A emissão a jogadores decai 25% ao ano sobre o saldo restante do bucket — nunca zera de repente, nunca explode.
-                Detalhe completo no <Code>docs/21-whitepaper</Code> do repositório.
+                {t('Issuance to players decays 25% per year over the remaining balance of the bucket — it never drops to zero suddenly, never explodes. Full detail in the ')}
+                <Code>docs/21-whitepaper</Code>{t(' of the repository.')}
               </p>
 
-              <h3 className="pt-2 text-lg font-semibold text-white">Taxas & queimas</h3>
+              <h3 className="pt-2 text-lg font-semibold text-white">{t('Fees & burns')}</h3>
               <Table
-                head={['Onde', 'Taxa', 'Destino', 'Status']}
+                head={[t('Where'), t('Fee'), t('Destination'), t('Status')]}
                 rows={[
-                  ['Mercado de itens (GOLD)', '4%', '2% queima real + 2% treasury', <Live key="1" />],
-                  ['Mercado de personagens (DOL)', '5%', '2,5% queima real + 2,5% treasury', <Phase2 key="2" />],
-                  ['Forja (craft de equipamento)', '30% do valor de catálogo (mín. 10)', 'sink off-chain', <Live key="3" />],
-                  ['Alquimia (craft de poções)', '30% do valor (mín. 5)', 'sink off-chain', <Live key="4" />],
-                  ['Venda de item à loja (NPC)', 'recompra a 60% do catálogo', 'sink off-chain (40%)', <Live key="5" />],
-                  ['Claim de GOLD on-chain', '0% (só gas)', '—', <Live key="6" />],
-                  ['Passes de temporada em DOL', '50% queimado', 'queima + treasury', <Soon key="7" />],
-                  ['Coleções primárias (NFT)', '100% da venda primária', 'queima parcial + treasury', <Soon key="8" />],
-                  ['Buyback trimestral', 'definido pela DAO', 'queima', <Soon key="9" />],
+                  [t('Item market (GOLD)'), '4%', t('2% real burn + 2% treasury'), <Live key="1" />],
+                  [t('Character market (DOL)'), '5%', t('2.5% real burn + 2.5% treasury'), <Phase2 key="2" />],
+                  [t('Forge (gear craft)'), t('30% of catalog value (min. 10)'), t('off-chain sink'), <Live key="3" />],
+                  [t('Alchemy (potion craft)'), t('30% of the value (min. 5)'), t('off-chain sink'), <Live key="4" />],
+                  [t('Selling an item to the shop (NPC)'), t('buyback at 60% of catalog'), t('off-chain sink (40%)'), <Live key="5" />],
+                  [t('On-chain GOLD claim'), t('0% (gas only)'), '—', <Live key="6" />],
+                  [t('Season passes in DOL'), t('50% burned'), t('burn + treasury'), <Soon key="7" />],
+                  [t('Primary collections (NFT)'), t('100% of the primary sale'), t('partial burn + treasury'), <Soon key="8" />],
+                  [t('Quarterly buyback'), t('set by the DAO'), t('burn'), <Soon key="9" />],
                 ]}
               />
               <p className="text-xs text-textsec">
-                As taxas dos dois mercados estão no contrato (<Code>burnFeeBps</Code>/<Code>treasuryFeeBps</Code>, teto rígido de 10%)
-                e a queima é <strong className="text-white">destruição real de supply</strong> (<Code>burnFrom</Code>), não carteira morta.
+                {t('The fees of both markets are in the contract (')}<Code>burnFeeBps</Code>/<Code>treasuryFeeBps</Code>
+                {t(', hard cap of 10%) and the burn is ')}
+                <strong className="text-white">{t('real destruction of supply')}</strong> (<Code>burnFrom</Code>{t('), not a dead wallet.')}
               </p>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <Card>
-                  <div className="flex items-center gap-2"><Soon /><h3 className="font-semibold text-white">Staking de DOL (veDOL)</h3></div>
+                  <div className="flex items-center gap-2"><Soon /><h3 className="font-semibold text-white">{t('DOL staking (veDOL)')}</h3></div>
                   <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
-                    <li>Locks de 3 a 24 meses — quanto mais longo, mais peso (veDOL)</li>
-                    <li>Recompensa: 20% de cada epoch de emissão + 50% das taxas do treasury</li>
-                    <li><strong className="text-white">Sem APY fixo prometido</strong> — o yield vem de receita real do jogo</li>
+                    <li>{t('Locks from 3 to 24 months — the longer, the more weight (veDOL)')}</li>
+                    <li>{t('Reward: 20% of each issuance epoch + 50% of the treasury fees')}</li>
+                    <li><strong className="text-white">{t('No fixed APY promised')}</strong>{t(' — the yield comes from real game revenue')}</li>
                   </ul>
                 </Card>
                 <Card>
-                  <h3 className="font-semibold text-white">Liquidez — postura oficial</h3>
+                  <h3 className="font-semibold text-white">{t('Liquidity — official stance')}</h3>
                   <p className="mt-2 text-sm">
-                    O par oficial com liquidez do projeto (e lock de LP) é <strong className="text-white">só do DOL</strong>.
-                    O GOLD vale pelo que compra dentro do jogo: o projeto <strong className="text-white">não subsidia</strong> preço
-                    externo de GOLD. Um par GOLD/DOL pode existir por arbitragem natural do mercado.
+                    {t('The official pair with project liquidity (and LP lock) is ')}
+                    <strong className="text-white">{t('DOL only')}</strong>
+                    {t('. GOLD is worth what it buys inside the game: the project ')}
+                    <strong className="text-white">{t('does not subsidise')}</strong>
+                    {t(' external GOLD price. A GOLD/DOL pair may exist through natural market arbitrage.')}
                   </p>
                 </Card>
               </div>
 
-              <h3 className="pt-2 text-lg font-semibold text-white">Roadmap econômico</h3>
+              <h3 className="pt-2 text-lg font-semibold text-white">{t('Economic roadmap')}</h3>
               <Table
-                head={['Etapa', 'O quê', 'Status']}
+                head={[t('Stage'), t('What'), t('Status')]}
                 rows={[
-                  ['E0 — Fundação', 'GOLD off-chain com teto diário, sinks (loja/forja/alquimia), claim assinado', <Live key="0" />],
-                  ['E1 — Contratos v2', 'DOL supply fixo 1B, taxas de mercado com queima real (deploy mainnet pendente)', <Tag key="1" tone="warn">🚧 CONTRATOS PRONTOS</Tag>],
-                  ['E2 — TGE & liquidez', 'Distribuição do DOL, par oficial com LP lock, listagem', <Soon key="2" />],
-                  ['E3 — Staking', 'veDOL, epochs, distribuição de taxas do treasury', <Soon key="3" />],
-                  ['E4 — DAO', 'Governança sobre treasury, buyback e parâmetros econômicos', <Soon key="4" />],
-                  ['E5 — Expansão', 'Guildas, terrenos, raids e seasons plugados nos mesmos sinks', <Soon key="5" />],
+                  [t('E0 — Foundation'), t('Off-chain GOLD with a daily cap, sinks (shop/forge/alchemy), signed claim'), <Live key="0" />],
+                  [t('E1 — v2 contracts'), t('DOL fixed 1B supply, market fees with real burn (mainnet deploy pending)'), <Tag key="1" tone="warn">{t('🚧 CONTRACTS READY')}</Tag>],
+                  [t('E2 — TGE & liquidity'), t('DOL distribution, official pair with LP lock, listing'), <Soon key="2" />],
+                  [t('E3 — Staking'), t('veDOL, epochs, treasury fee distribution'), <Soon key="3" />],
+                  [t('E4 — DAO'), t('Governance over treasury, buyback and economic parameters'), <Soon key="4" />],
+                  [t('E5 — Expansion'), t('Guilds, land, raids and seasons plugged into the same sinks'), <Soon key="5" />],
                 ]}
               />
 
-              <h3 className="pt-2 text-lg font-semibold text-white">Contratos on-chain</h3>
+              <h3 className="pt-2 text-lg font-semibold text-white">{t('On-chain contracts')}</h3>
               <Table
-                head={['Contrato', 'Padrão', 'Função']}
+                head={[t('Contract'), t('Standard'), t('Function')]}
                 rows={[
-                  [<Code key="a">DolToken.sol</Code>, 'ERC-20', 'DOL — supply fixo 1B, sem mint, burnable'],
-                  [<Code key="b">DolrathGold.sol</Code>, 'ERC-20', 'GOLD — claim por assinatura EIP-712, burnable'],
-                  [<Code key="c">DolrathCharacters.sol</Code>, 'ERC-721', 'Personagens como NFT (mint pago + assinatura)'],
-                  [<Code key="d">DolrathItems.sol</Code>, 'ERC-721', 'Itens como NFT (guarda GOLD pago no mint)'],
-                  [<Code key="e">DolrathCharacterMarket.sol</Code>, 'Market', 'Escrow + venda por DOL · taxa 5% (2,5% burn / 2,5% treasury)'],
-                  [<Code key="f">DolrathItemMarket.sol</Code>, 'Market', 'Escrow + venda por GOLD · taxa 4% (2% burn / 2% treasury)'],
+                  [<Code key="a">DolToken.sol</Code>, 'ERC-20', t('DOL — fixed 1B supply, no mint, burnable')],
+                  [<Code key="b">DolrathGold.sol</Code>, 'ERC-20', t('GOLD — claim by EIP-712 signature, burnable')],
+                  [<Code key="c">DolrathCharacters.sol</Code>, 'ERC-721', t('Characters as NFT (paid mint + signature)')],
+                  [<Code key="d">DolrathItems.sol</Code>, 'ERC-721', t('Items as NFT (holds the GOLD paid at mint)')],
+                  [<Code key="e">DolrathCharacterMarket.sol</Code>, t('Market'), t('Escrow + sale in DOL · 5% fee (2.5% burn / 2.5% treasury)')],
+                  [<Code key="f">DolrathItemMarket.sol</Code>, t('Market'), t('Escrow + sale in GOLD · 4% fee (2% burn / 2% treasury)')],
                 ]}
               />
-              <p className="text-sm">Mints e claims exigem <strong className="text-white">assinatura do servidor</strong> (EIP-712) para impedir cunhagem arbitrária; os mercados usam <Code>nonReentrant</Code> e escrow do NFT.</p>
+              <p className="text-sm">
+                {t('Mints and claims require a ')}<strong className="text-white">{t('server signature')}</strong>
+                {t(' (EIP-712) to prevent arbitrary minting; the markets use ')}<Code>nonReentrant</Code>{t(' and NFT escrow.')}
+              </p>
 
               <Card>
-                <h3 className="font-semibold text-white">📊 Dashboard de tokenomics</h3>
+                <h3 className="font-semibold text-white">{t('📊 Tokenomics dashboard')}</h3>
                 <p className="mt-2 text-sm">
-                  Projeção determinística de 120 meses (3 cenários: pessimista/base/otimista) — circulação do DOL, emissão × queima,
-                  staking, treasury, crescimento de jogadores e market cap por premissa de preço.
+                  {t('Deterministic 120-month projection (3 scenarios: pessimistic/base/optimistic) — DOL circulation, issuance × burn, staking, treasury, player growth and market cap per price assumption.')}
                 </p>
                 <a
                   href="/tokenomics/dashboard.html"
@@ -562,16 +569,20 @@ export default function DocPage() {
                   rel="noopener noreferrer"
                   className="mt-3 inline-flex items-center gap-2 rounded-lg bg-primary/15 px-4 py-2 text-sm font-semibold text-primary ring-1 ring-primary/40 hover:bg-primary/25"
                 >
-                  Abrir dashboard interativo →
+                  {t('Open the interactive dashboard →')}
                 </a>
               </Card>
             </Section>
 
             {/* Raças */}
-            <Section id="races" kicker="Personagem" title="Raças">
-              <p>Quatro raças jogáveis. Draconiano e Metamorfo têm transformação; Humano e Elfo recebem buffs compensatórios.</p>
+            <Section id="races" kicker={t('Character')} title={t('Races')}>
+              <p>{t('Four playable races. Draconian and Shapeshifter have a transformation; Human and Elf receive compensating buffs.')}</p>
               <p className="text-xs text-textsec">
-                <Tag tone="warn">⚠️ valores de exibição</Tag> Os números abaixo vêm de <Code>characterCreationData.ts</Code> (arquivo mais novo, mostrado na tela de criação — a <em>intenção rebalanceada</em>). Hoje o servidor ainda calcula os stats reais por <Code>gameData.ts</Code>; alinhar as duas fontes está no roadmap.
+                <Tag tone="warn">{t('⚠️ display values')}</Tag>
+                {t(' The numbers below come from ')}<Code>characterCreationData.ts</Code>
+                {t(' (a newer file, shown on the creation screen — the ')}<em>{t('rebalanced intent')}</em>
+                {t('). Today the server still computes the real stats from ')}<Code>gameData.ts</Code>
+                {t('; aligning the two sources is on the roadmap.')}
               </p>
               <div className="grid gap-4 sm:grid-cols-2">
                 {RACES_SRC.map((r) => (
@@ -582,10 +593,10 @@ export default function DocPage() {
                     </div>
                     <p className="mt-3 text-sm">{r.description}</p>
                     <dl className="mt-3 space-y-1.5 text-xs">
-                      <div><dt className="inline font-semibold text-white">Base: </dt><dd className="inline font-game text-emerald-300">str {r.baseStats.str} · agi {r.baseStats.agi} · int {r.baseStats.int} · res {r.baseStats.res} · hp {r.baseStats.hp} · mp {r.baseStats.mp}</dd></div>
-                      <div><dt className="inline font-semibold text-white">Bônus racial: </dt><dd className="inline">{bonusToString(r.bonusStats as any) || '—'}</dd></div>
-                      <div><dt className="inline font-semibold text-white">Transformação: </dt><dd className="inline">{r.transformation ?? '—'}</dd></div>
-                      <div><dt className="inline font-semibold text-white">Restrições: </dt><dd className="inline text-orange-300">{(r.restrictions && r.restrictions.length) ? r.restrictions.join(' · ') : 'Nenhuma'}</dd></div>
+                      <div><dt className="inline font-semibold text-white">{t('Base: ')}</dt><dd className="inline font-game text-emerald-300">str {r.baseStats.str} · agi {r.baseStats.agi} · int {r.baseStats.int} · res {r.baseStats.res} · hp {r.baseStats.hp} · mp {r.baseStats.mp}</dd></div>
+                      <div><dt className="inline font-semibold text-white">{t('Racial bonus: ')}</dt><dd className="inline">{bonusToString(r.bonusStats as any) || '—'}</dd></div>
+                      <div><dt className="inline font-semibold text-white">{t('Transformation: ')}</dt><dd className="inline">{r.transformation ?? '—'}</dd></div>
+                      <div><dt className="inline font-semibold text-white">{t('Restrictions: ')}</dt><dd className="inline text-orange-300">{(r.restrictions && r.restrictions.length) ? r.restrictions.join(' · ') : t('None')}</dd></div>
                     </dl>
                   </Card>
                 ))}
@@ -593,10 +604,10 @@ export default function DocPage() {
             </Section>
 
             {/* Classes */}
-            <Section id="classes" kicker="Personagem" title="Classes">
-              <p>A classe define bônus de atributo, armas permitidas e habilidades temáticas. <Tag>fonte: gameData.ts</Tag></p>
+            <Section id="classes" kicker={t('Character')} title={t('Classes')}>
+              <p>{t('The class defines attribute bonuses, allowed weapons and thematic abilities.')} <Tag>source: gameData.ts</Tag></p>
               <Table
-                head={['Classe', 'Descrição', 'Bônus', 'Armas', 'Habilidades']}
+                head={[t('Class'), t('Description'), t('Bonus'), t('Weapons'), t('Abilities')]}
                 rows={CLASSES.map((c) => [
                   <span key={c.id} className="font-semibold text-white">{c.name}</span>,
                   c.description,
@@ -608,20 +619,20 @@ export default function DocPage() {
             </Section>
 
             {/* Atributos */}
-            <Section id="attributes" kicker="Sistema" title="Atributos & Stats">
-              <p>Atributos primários alimentam stats de combate derivados. Distribua pontos na criação e a cada nível.</p>
+            <Section id="attributes" kicker={t('System')} title={t('Attributes & Stats')}>
+              <p>{t('Primary attributes feed derived combat stats. Distribute points at creation and at every level.')}</p>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Card>
-                  <h3 className="font-semibold text-white">Atributos primários</h3>
+                  <h3 className="font-semibold text-white">{t('Primary attributes')}</h3>
                   <ul className="mt-2 space-y-1 text-sm">
-                    <li><Code>STR</Code> força — dano físico, HP/STA</li>
-                    <li><Code>AGI</Code> agilidade — crítico, velocidade, esquiva, MP</li>
-                    <li><Code>INT</Code> inteligência — dano mágico, MP</li>
-                    <li><Code>RES/DEF</Code> resistência — defesa, bloqueio e stamina</li>
+                    <li><Code>STR</Code>{t(' strength — physical damage, HP/STA')}</li>
+                    <li><Code>AGI</Code>{t(' agility — critical, speed, dodge, MP')}</li>
+                    <li><Code>INT</Code>{t(' intelligence — magic damage, MP')}</li>
+                    <li><Code>RES/DEF</Code>{t(' resistance — defense, block and stamina')}</li>
                   </ul>
                 </Card>
                 <Card>
-                  <h3 className="font-semibold text-white">Stats derivados</h3>
+                  <h3 className="font-semibold text-white">{t('Derived stats')}</h3>
                   <Formula>{`crit  = AGI × 0.2   (% de chance)
 speed = AGI × 0.5
 
@@ -633,36 +644,36 @@ Lm (mult. de nível) = 1 + (nível-1) × 0.1`}</Formula>
                 </Card>
               </div>
               <Card>
-                <h3 className="font-semibold text-white">Distribuição de pontos</h3>
+                <h3 className="font-semibold text-white">{t('Point distribution')}</h3>
                 <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
-                  <li><strong className="text-white">Criação:</strong> {pointSystem.creation.availablePoints} pontos livres, máx. {pointSystem.creation.maxStatValue} por stat (1 ponto = 1 stat).</li>
-                  <li><strong className="text-white">Level up:</strong> {pointSystem.leveling.pointsPerLevel} ponto por nível.</li>
+                  <li><strong className="text-white">{t('Creation:')}</strong> {pointSystem.creation.availablePoints}{t(' free points, max. ')}{pointSystem.creation.maxStatValue}{t(' per stat (1 point = 1 stat).')}</li>
+                  <li><strong className="text-white">{t('Level up:')}</strong> {pointSystem.leveling.pointsPerLevel}{t(' point per level.')}</li>
                 </ul>
               </Card>
             </Section>
 
             {/* Progressão */}
-            <Section id="progression" kicker="Sistema" title="Progressão & XP">
-              <p>Curva exponencial suave até o nível máximo 100. Subir de nível recalcula HP/MP/STA e concede pontos.</p>
+            <Section id="progression" kicker={t('System')} title={t('Progression & XP')}>
+              <p>{t('A smooth exponential curve up to max level 100. Levelling up recalculates HP/MP/STA and grants points.')}</p>
               <Card><Formula>{`XP_para_próximo(nível) = baseXP × nível^exp + nível × mult
   baseXP = 100   exp = 1.4   mult = 50   maxLevel = 100`}</Formula></Card>
               <Table
-                head={['Nível', 'XP p/ próximo']}
-                rows={XP_SAMPLE.map((l) => [`${l} → ${l + 1}`, getXPForNextLevel(l).toLocaleString('pt-BR')])}
+                head={[t('Level'), t('XP to next')]}
+                rows={XP_SAMPLE.map((l) => [`${l} → ${l + 1}`, getXPForNextLevel(l).toLocaleString(locale === 'pt' ? 'pt-BR' : 'en-US')])}
               />
-              <p className="text-xs text-textsec">Valores calculados em tempo real por <Code>getXPForNextLevel()</Code> (experienceSystem.ts).</p>
+              <p className="text-xs text-textsec">{t('Values computed in real time by ')}<Code>getXPForNextLevel()</Code> (experienceSystem.ts).</p>
             </Section>
 
             {/* Combate */}
-            <Section id="combat" kicker="Mecânicas" title="Sistema de Combate">
-              <p>Combate por rodadas: o atacante escolhe ação ofensiva e o defensor reage (esquivar ou bloquear). Tudo passa por rolagens de dado.</p>
+            <Section id="combat" kicker={t('Mechanics')} title={t('Combat System')}>
+              <p>{t('Round-based combat: the attacker chooses an offensive action and the defender reacts (dodge or block). Everything goes through dice rolls.')}</p>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Card>
-                  <h3 className="font-semibold text-white">Ações & dados</h3>
-                  <Table head={['Ação', 'Dado', 'Dano base']} rows={[['Ataque leve', 'd6', '8'], ['Ataque pesado', 'd10', '12'], ['Ataque especial', 'd20', '20'], ['Esquivar', 'd12', '—'], ['Defender/Bloquear', 'd10', '—']]} />
+                  <h3 className="font-semibold text-white">{t('Actions & dice')}</h3>
+                  <Table head={[t('Action'), t('Die'), t('Base damage')]} rows={[[t('Light attack'), 'd6', '8'], [t('Heavy attack'), 'd10', '12'], [t('Special attack'), 'd20', '20'], [t('Dodge'), 'd12', '—'], [t('Defend/Block'), 'd10', '—']]} />
                 </Card>
                 <Card>
-                  <h3 className="font-semibold text-white">Fórmula de dano</h3>
+                  <h3 className="font-semibold text-white">{t('Damage formula')}</h3>
                   <Formula>{`dano = base + STR + (dado+mod) + bônus_arma
 
 crítico: só quando rola o MÁXIMO do dado
@@ -671,31 +682,31 @@ mult. crítico = 1.5 + (crit/100)`}</Formula>
                 </Card>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
-                <Card><h3 className="font-semibold text-white">Esquiva (SPEED)</h3><Formula>{`valor   = dado + speed_defensor
+                <Card><h3 className="font-semibold text-white">{t('Dodge (SPEED)')}</h3><Formula>{`valor   = dado + speed_defensor
 difícil = 10 + speed_atacante × 0.3
 sucesso → dano = 0`}</Formula></Card>
-                <Card><h3 className="font-semibold text-white">Bloqueio (RES)</h3><Formula>{`valor = dado + RES + bônus_escudo  (dif. 12)
+                <Card><h3 className="font-semibold text-white">{t('Block (RES)')}</h3><Formula>{`valor = dado + RES + bônus_escudo  (dif. 12)
 bloqueio total  → dano × 0.2 (−80%)
 bloqueio parcial→ redução = RES/100 (10%–80%)`}</Formula></Card>
               </div>
-              <p className="text-xs text-textsec">Bônus de equipamento entram já escalados pelo nível de aprimoramento. Fonte: <Code>enhancedCombatSystem.ts</Code>.</p>
+              <p className="text-xs text-textsec">{t('Gear bonuses come in already scaled by the enhancement level. Source: ')}<Code>enhancedCombatSystem.ts</Code>.</p>
             </Section>
 
             {/* Transformações */}
-            <Section id="transformations" kicker="Mecânicas" title="Transformações">
-              <p>Habilidades limitadas que alteram stats temporariamente e liberam skills exclusivas. Custam MP + Stamina, com duração e cooldown em turnos. <Tag>fonte: transformationSystem.ts</Tag></p>
+            <Section id="transformations" kicker={t('Mechanics')} title={t('Transformations')}>
+              <p>{t('Limited abilities that temporarily change stats and unlock exclusive skills. They cost MP + Stamina, with a duration and a cooldown in turns.')} <Tag>source: transformationSystem.ts</Tag></p>
               <div className="grid gap-4 sm:grid-cols-2">
                 {transformations.map(([key, cfg]) => (
                   <Card key={key}>
                     <div className="flex items-center justify-between"><h3 className="font-semibold text-white">{cfg.name}</h3><Tag>{TRANSF_RACE[key] ?? '—'}</Tag></div>
                     <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                      <Tag>⏱️ {cfg.duration} turnos</Tag>
+                      <Tag>⏱️ {t('{n} turns', { n: cfg.duration })}</Tag>
                       <Tag>♻️ CD {cfg.cooldown}</Tag>
                       <Tag tone="warn">{cfg.cost.mp} MP · {cfg.cost.stamina} STA</Tag>
                     </div>
-                    <p className="mt-3 text-xs"><span className="font-semibold text-white">Modificadores:</span> <span className="font-game text-emerald-300">{modsToString(cfg.statModifiers as any)}</span></p>
+                    <p className="mt-3 text-xs"><span className="font-semibold text-white">{t('Modifiers:')}</span> <span className="font-game text-emerald-300">{modsToString(cfg.statModifiers as any)}</span></p>
                     <p className="mt-2 text-xs"><span className="font-semibold text-white">Skills:</span> {cfg.specialAbilities.map((s) => s.name).join(' · ')}</p>
-                    <p className="mt-2 text-xs"><span className="font-semibold text-emerald-300">Resiste:</span> {cfg.resistances.join(', ')} · <span className="font-semibold text-orange-300">Vulnerável:</span> {cfg.vulnerabilities.join(', ')}</p>
+                    <p className="mt-2 text-xs"><span className="font-semibold text-emerald-300">{t('Resists:')}</span> {cfg.resistances.join(', ')} · <span className="font-semibold text-orange-300">{t('Vulnerable:')}</span> {cfg.vulnerabilities.join(', ')}</p>
                   </Card>
                 ))}
               </div>
@@ -724,7 +735,7 @@ bloqueio parcial→ redução = RES/100 (10%–80%)`}</Formula></Card>
 
             {/* PvE */}
             <Section id="pve" kicker="Modos de jogo" title="PvE & Masmorras">
-              <p>Quatro masmorras temáticas. Você explora salas rolando um <strong className="text-white">d20</strong> por evento; ao fim, enfrenta o boss. Monstros e recompensas escalam com nível, sala e dificuldade. <Tag>fonte: dungeonAdventures.ts</Tag></p>
+              <p>Quatro masmorras temáticas. Você explora salas rolando um <strong className="text-white">d20</strong> por evento; ao fim, enfrenta o boss. Monstros e recompensas escalam com nível, sala e dificuldade. <Tag>source: dungeonAdventures.ts</Tag></p>
               <Table
                 head={['Masmorra', 'Dificuldade', 'Salas', 'Boss']}
                 rows={DUNGEON_LIST.map((d) => [
@@ -764,7 +775,7 @@ boss: +2 níveis, recompensa maior`}</Formula>
 
             {/* Itens */}
             <Section id="items" kicker="Conteúdo" title="Itens">
-              <p>O catálogo é a fonte única de itens, dividido por <strong className="text-white">como o item é obtido</strong>. A loja (NPC) vende o básico→intermediário para sustentar o early/mid-game; tudo <em>raro ou acima</em>, acessórios e os melhores consumíveis vêm de masmorras e aventuras. <Tag>fonte: itemCatalog.ts</Tag></p>
+              <p>O catálogo é a fonte única de itens, dividido por <strong className="text-white">como o item é obtido</strong>. A loja (NPC) vende o básico→intermediário para sustentar o early/mid-game; tudo <em>raro ou acima</em>, acessórios e os melhores consumíveis vêm de masmorras e aventuras. <Tag>source: itemCatalog.ts</Tag></p>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Card>
                   <h3 className="font-semibold text-white">Tiers & origem</h3>
@@ -890,7 +901,7 @@ boss: +2 níveis, recompensa maior`}</Formula>
 
             {/* Aprimoramento */}
             <Section id="enhancement" kicker="Progressão de gear" title="Aprimoramento (estilo Black Desert)">
-              <p>Equipamentos sobem de <Code>+0</Code> a <Code>+15</Code> e depois para os tiers romanos <Code>I (PRI)</Code> → <Code>V (PEN)</Code>. Falhas têm consequências e acumulam <em>failstacks</em>. <Tag>fonte: enhancementSystem.ts</Tag></p>
+              <p>Equipamentos sobem de <Code>+0</Code> a <Code>+15</Code> e depois para os tiers romanos <Code>I (PRI)</Code> → <Code>V (PEN)</Code>. Falhas têm consequências e acumulam <em>failstacks</em>. <Tag>source: enhancementSystem.ts</Tag></p>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Card>
                   <h3 className="font-semibold text-white">Regras por categoria</h3>
@@ -1103,7 +1114,7 @@ até +${SAFE_ENHANCE_MAX}: chance = 100% (seguro)`}</Formula>
 
             {/* IA */}
             <Section id="ai" kicker="Sistema" title="IA & Geração de Imagens">
-              <p>Uma IA narra o combate de forma cinematográfica, comenta rolagens e dá conselhos táticos. Hoje a narração usa respostas pré-escritas (fallback). <Tag>fonte: aiJudge.ts</Tag></p>
+              <p>Uma IA narra o combate de forma cinematográfica, comenta rolagens e dá conselhos táticos. Hoje a narração usa respostas pré-escritas (fallback). <Tag>source: aiJudge.ts</Tag></p>
               <Card>
                 <div className="flex items-center gap-2"><Todo /><h3 className="font-semibold text-white">Geração de imagens de personagem (Anthropic)</h3></div>
                 <p className="mt-2 text-sm">

@@ -161,4 +161,224 @@ export const DOC_PT: Record<string, string> = {
   'DOL is not pegged to the dollar.': 'DOL não é pareado ao dólar.',
   ' It is not a stablecoin, has no backing, is not redeemable and the studio does not buy it back. The one paying in dollars is the player buying the hero — and that dollar is revenue, it does not become a prize for anyone.':
     ' Não é stablecoin, não tem lastro, não é resgatável e o estúdio não recompra. Quem paga em dólar é o jogador comprando o herói — e esse dólar é receita, não vira prêmio para ninguém.',
+
+  // Tokenomics — DOL / GOLD
+  'Character creation: ': 'Criação de personagem: ',
+  ' 100% revenue': ' 100% receita',
+  ': NFT, AI portrait and infra.': ': NFT, retrato por IA e infra.',
+  'Ranking prizes': 'Premiação por ranking',
+  ' — today the arena scoreboard is ': ' — hoje o placar da arena é ',
+  'global, permanent and prizeless': 'global, permanente e sem prêmio',
+  ': no entry, no pool, no payout. The reward system will be redesigned.':
+    ': nenhuma inscrição, nenhuma pool, nenhum pagamento. O sistema de recompensa será redesenhado.',
+  'The character market trades in DOL (5% fee: 2.5% burn + 2.5% treasury)':
+    'Mercado de personagens negocia em DOL (taxa 5%: 2,5% queima + 2,5% treasury)',
+  'Staking with veDOL': 'Staking com veDOL',
+  'Governance (DAO)': 'Governança (DAO)',
+  'GOLD — gameplay currency': 'GOLD — moeda do gameplay',
+  ' — elastic issuance ': ' — emissão elástica ',
+  'gated by gameplay': 'gateada por gameplay',
+  ': every GOLD is born off-chain (server-authoritative, stamina, daily cap) and only becomes a token when the player ':
+    ': todo GOLD nasce off-chain (servidor-autoritativo, stamina, teto diário) e só vira token quando o jogador ',
+  ' claims it on-chain': ' reivindica on-chain',
+  ', claim fee 0%).': ', taxa de claim 0%).',
+  'Earned in PvE (dungeons), PvP and events': 'Ganho em PvE (masmorras), PvP e eventos',
+  'Spent in the shop, forge, alchemy and item market': 'Gasto em loja, forja, alquimia e mercado de itens',
+  'Issuance cap: ': 'Teto de emissão: ',
+  '20,000/day per user': '20.000/dia por usuário',
+  'GOLD flow — three layers': 'Fluxo do GOLD — três camadas',
+  'The sinks hit the balance ': 'Os sinks atacam o saldo ',
+  'before': 'antes',
+  ' the claim: in practice only 20–40% of the GOLD earned becomes a token. The exit (claim) is not taxed; ':
+    ' do claim: na prática só 20–40% do GOLD ganho vira token. A saída (claim) não é taxada; a ',
+  'circulation': 'circulação',
+  ' is — the fee lives in the market, not at the door.': ' é — a taxa vive no mercado, não na porta.',
+
+  // Alocação
+  'DOL allocation (1B, fixed supply)': 'Alocação do DOL (1B, supply fixo)',
+  'Bucket': 'Bucket',
+  'Vesting': 'Vesting',
+  'issuance of 25% of the remaining balance/year (year 1: 75M, year 2: 56M…)':
+    'emissão de 25% do saldo restante/ano (ano 1: 75M, ano 2: 56M…)',
+  'Treasury / DAO': 'Treasury / DAO',
+  'linear over 48 months': 'linear em 48 meses',
+  'Team': 'Equipe',
+  '12-month cliff + 36-month linear': 'cliff 12 meses + linear 36 meses',
+  'Investors': 'Investidores',
+  '6-month cliff + 24-month linear': 'cliff 6 meses + linear 24 meses',
+  'Liquidity': 'Liquidez',
+  '25% at TGE, the rest as needed (LP with lock)': '25% no TGE, resto conforme necessidade (LP com lock)',
+  'Ecosystem': 'Ecossistema',
+  'partnerships, grants and integrations': 'parcerias, grants e integrações',
+  'Community': 'Comunidade',
+  '40% at TGE (airdrops, launch events)': '40% no TGE (airdrops, eventos de lançamento)',
+  'Issuance to players decays 25% per year over the remaining balance of the bucket — it never drops to zero suddenly, never explodes. Full detail in the ':
+    'A emissão a jogadores decai 25% ao ano sobre o saldo restante do bucket — nunca zera de repente, nunca explode. Detalhe completo no ',
+  ' of the repository.': ' do repositório.',
+
+  // Taxas
+  'Fees & burns': 'Taxas & queimas',
+  'Where': 'Onde',
+  'Fee': 'Taxa',
+  'Destination': 'Destino',
+  'Status': 'Status',
+  'Item market (GOLD)': 'Mercado de itens (GOLD)',
+  '2% real burn + 2% treasury': '2% queima real + 2% treasury',
+  'Character market (DOL)': 'Mercado de personagens (DOL)',
+  '2.5% real burn + 2.5% treasury': '2,5% queima real + 2,5% treasury',
+  'Forge (gear craft)': 'Forja (craft de equipamento)',
+  '30% of catalog value (min. 10)': '30% do valor de catálogo (mín. 10)',
+  'off-chain sink': 'sink off-chain',
+  'Alchemy (potion craft)': 'Alquimia (craft de poções)',
+  '30% of the value (min. 5)': '30% do valor (mín. 5)',
+  'Selling an item to the shop (NPC)': 'Venda de item à loja (NPC)',
+  'buyback at 60% of catalog': 'recompra a 60% do catálogo',
+  'off-chain sink (40%)': 'sink off-chain (40%)',
+  'On-chain GOLD claim': 'Claim de GOLD on-chain',
+  '0% (gas only)': '0% (só gas)',
+  'Season passes in DOL': 'Passes de temporada em DOL',
+  '50% burned': '50% queimado',
+  'burn + treasury': 'queima + treasury',
+  'Primary collections (NFT)': 'Coleções primárias (NFT)',
+  '100% of the primary sale': '100% da venda primária',
+  'partial burn + treasury': 'queima parcial + treasury',
+  'Quarterly buyback': 'Buyback trimestral',
+  'set by the DAO': 'definido pela DAO',
+  'burn': 'queima',
+  'The fees of both markets are in the contract (': 'As taxas dos dois mercados estão no contrato (',
+  ', hard cap of 10%) and the burn is ': ', teto rígido de 10%) e a queima é ',
+  'real destruction of supply': 'destruição real de supply',
+  '), not a dead wallet.': '), não carteira morta.',
+
+  // Staking / liquidez
+  'DOL staking (veDOL)': 'Staking de DOL (veDOL)',
+  'Locks from 3 to 24 months — the longer, the more weight (veDOL)':
+    'Locks de 3 a 24 meses — quanto mais longo, mais peso (veDOL)',
+  'Reward: 20% of each issuance epoch + 50% of the treasury fees':
+    'Recompensa: 20% de cada epoch de emissão + 50% das taxas do treasury',
+  'No fixed APY promised': 'Sem APY fixo prometido',
+  ' — the yield comes from real game revenue': ' — o yield vem de receita real do jogo',
+  'Liquidity — official stance': 'Liquidez — postura oficial',
+  'The official pair with project liquidity (and LP lock) is ': 'O par oficial com liquidez do projeto (e lock de LP) é ',
+  'DOL only': 'só do DOL',
+  '. GOLD is worth what it buys inside the game: the project ': '. O GOLD vale pelo que compra dentro do jogo: o projeto ',
+  'does not subsidise': 'não subsidia',
+  ' external GOLD price. A GOLD/DOL pair may exist through natural market arbitrage.':
+    ' preço externo de GOLD. Um par GOLD/DOL pode existir por arbitragem natural do mercado.',
+
+  // Roadmap econômico
+  'Economic roadmap': 'Roadmap econômico',
+  'Stage': 'Etapa',
+  'What': 'O quê',
+  'E0 — Foundation': 'E0 — Fundação',
+  'Off-chain GOLD with a daily cap, sinks (shop/forge/alchemy), signed claim':
+    'GOLD off-chain com teto diário, sinks (loja/forja/alquimia), claim assinado',
+  'E1 — v2 contracts': 'E1 — Contratos v2',
+  'DOL fixed 1B supply, market fees with real burn (mainnet deploy pending)':
+    'DOL supply fixo 1B, taxas de mercado com queima real (deploy mainnet pendente)',
+  '🚧 CONTRACTS READY': '🚧 CONTRATOS PRONTOS',
+  'E2 — TGE & liquidity': 'E2 — TGE & liquidez',
+  'DOL distribution, official pair with LP lock, listing':
+    'Distribuição do DOL, par oficial com LP lock, listagem',
+  'E3 — Staking': 'E3 — Staking',
+  'veDOL, epochs, treasury fee distribution': 'veDOL, epochs, distribuição de taxas do treasury',
+  'E4 — DAO': 'E4 — DAO',
+  'Governance over treasury, buyback and economic parameters':
+    'Governança sobre treasury, buyback e parâmetros econômicos',
+  'E5 — Expansion': 'E5 — Expansão',
+  'Guilds, land, raids and seasons plugged into the same sinks':
+    'Guildas, terrenos, raids e seasons plugados nos mesmos sinks',
+
+  // Contratos
+  'On-chain contracts': 'Contratos on-chain',
+  'Contract': 'Contrato',
+  'Standard': 'Padrão',
+  'Function': 'Função',
+  'DOL — fixed 1B supply, no mint, burnable': 'DOL — supply fixo 1B, sem mint, burnable',
+  'GOLD — claim by EIP-712 signature, burnable': 'GOLD — claim por assinatura EIP-712, burnable',
+  'Characters as NFT (paid mint + signature)': 'Personagens como NFT (mint pago + assinatura)',
+  'Items as NFT (holds the GOLD paid at mint)': 'Itens como NFT (guarda GOLD pago no mint)',
+  'Market': 'Market',
+  'Escrow + sale in DOL · 5% fee (2.5% burn / 2.5% treasury)':
+    'Escrow + venda por DOL · taxa 5% (2,5% burn / 2,5% treasury)',
+  'Escrow + sale in GOLD · 4% fee (2% burn / 2% treasury)':
+    'Escrow + venda por GOLD · taxa 4% (2% burn / 2% treasury)',
+  'Mints and claims require a ': 'Mints e claims exigem ',
+  'server signature': 'assinatura do servidor',
+  ' (EIP-712) to prevent arbitrary minting; the markets use ': ' (EIP-712) para impedir cunhagem arbitrária; os mercados usam ',
+  ' and NFT escrow.': ' e escrow do NFT.',
+  '📊 Tokenomics dashboard': '📊 Dashboard de tokenomics',
+  'Deterministic 120-month projection (3 scenarios: pessimistic/base/optimistic) — DOL circulation, issuance × burn, staking, treasury, player growth and market cap per price assumption.':
+    'Projeção determinística de 120 meses (3 cenários: pessimista/base/otimista) — circulação do DOL, emissão × queima, staking, treasury, crescimento de jogadores e market cap por premissa de preço.',
+  'Open the interactive dashboard →': 'Abrir dashboard interativo →',
+
+  // Raças / classes
+  'Character': 'Personagem',
+  'Four playable races. Draconian and Shapeshifter have a transformation; Human and Elf receive compensating buffs.':
+    'Quatro raças jogáveis. Draconiano e Metamorfo têm transformação; Humano e Elfo recebem buffs compensatórios.',
+  '⚠️ display values': '⚠️ valores de exibição',
+  ' The numbers below come from ': ' Os números abaixo vêm de ',
+  ' (a newer file, shown on the creation screen — the ': ' (arquivo mais novo, mostrado na tela de criação — a ',
+  'rebalanced intent': 'intenção rebalanceada',
+  '). Today the server still computes the real stats from ': '). Hoje o servidor ainda calcula os stats reais por ',
+  '; aligning the two sources is on the roadmap.': '; alinhar as duas fontes está no roadmap.',
+  'Base: ': 'Base: ',
+  'Racial bonus: ': 'Bônus racial: ',
+  'Transformation: ': 'Transformação: ',
+  'Restrictions: ': 'Restrições: ',
+  'None': 'Nenhuma',
+  'The class defines attribute bonuses, allowed weapons and thematic abilities.':
+    'A classe define bônus de atributo, armas permitidas e habilidades temáticas.',
+
+  // Classes / atributos / progressão
+  'Class': 'Classe',
+  'Description': 'Descrição',
+  'Bonus': 'Bônus',
+  'Weapons': 'Armas',
+  'Abilities': 'Habilidades',
+  'System': 'Sistema',
+  'Primary attributes feed derived combat stats. Distribute points at creation and at every level.':
+    'Atributos primários alimentam stats de combate derivados. Distribua pontos na criação e a cada nível.',
+  'Primary attributes': 'Atributos primários',
+  ' strength — physical damage, HP/STA': ' força — dano físico, HP/STA',
+  ' agility — critical, speed, dodge, MP': ' agilidade — crítico, velocidade, esquiva, MP',
+  ' intelligence — magic damage, MP': ' inteligência — dano mágico, MP',
+  ' resistance — defense, block and stamina': ' resistência — defesa, bloqueio e stamina',
+  'Derived stats': 'Stats derivados',
+  'Point distribution': 'Distribuição de pontos',
+  'Creation:': 'Criação:',
+  ' free points, max. ': ' pontos livres, máx. ',
+  ' per stat (1 point = 1 stat).': ' por stat (1 ponto = 1 stat).',
+  'Level up:': 'Level up:',
+  ' point per level.': ' ponto por nível.',
+  'A smooth exponential curve up to max level 100. Levelling up recalculates HP/MP/STA and grants points.':
+    'Curva exponencial suave até o nível máximo 100. Subir de nível recalcula HP/MP/STA e concede pontos.',
+  'Level': 'Nível',
+  'XP to next': 'XP p/ próximo',
+  'Values computed in real time by ': 'Valores calculados em tempo real por ',
+
+  // Combate
+  'Mechanics': 'Mecânicas',
+  'Combat System': 'Sistema de Combate',
+  'Round-based combat: the attacker chooses an offensive action and the defender reacts (dodge or block). Everything goes through dice rolls.':
+    'Combate por rodadas: o atacante escolhe ação ofensiva e o defensor reage (esquivar ou bloquear). Tudo passa por rolagens de dado.',
+  'Actions & dice': 'Ações & dados',
+  'Action': 'Ação',
+  'Die': 'Dado',
+  'Base damage': 'Dano base',
+  'Light attack': 'Ataque leve',
+  'Heavy attack': 'Ataque pesado',
+  'Special attack': 'Ataque especial',
+  'Dodge': 'Esquivar',
+  'Defend/Block': 'Defender/Bloquear',
+  'Damage formula': 'Fórmula de dano',
+  'Dodge (SPEED)': 'Esquiva (SPEED)',
+  'Block (RES)': 'Bloqueio (RES)',
+  'Gear bonuses come in already scaled by the enhancement level. Source: ':
+    'Bônus de equipamento entram já escalados pelo nível de aprimoramento. Fonte: ',
+  'Limited abilities that temporarily change stats and unlock exclusive skills. They cost MP + Stamina, with a duration and a cooldown in turns.':
+    'Habilidades limitadas que alteram stats temporariamente e liberam skills exclusivas. Custam MP + Stamina, com duração e cooldown em turnos.',
+  'Modifiers:': 'Modificadores:',
+  'Resists:': 'Resiste:',
+  'Vulnerable:': 'Vulnerável:',
 }

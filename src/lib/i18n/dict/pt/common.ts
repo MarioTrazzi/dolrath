@@ -61,4 +61,14 @@ export const COMMON_PT: Record<string, string> = {
     'Taxa baixa para substituir transação pendente. Aumente o gas ou aguarde.',
   'Not enough MATIC for gas': 'Saldo insuficiente de MATIC para gas',
   'Nonce too low. Try again in a moment.': 'Nonce muito baixo. Tente novamente em instantes.',
+  'Server configuration error. Try again in a moment.': 'Erro de configuração do servidor. Tente novamente em instantes.',
+  'Access denied. Your wallet could not be validated.': 'Acesso negado. Sua carteira não pôde ser validada.',
+  'Signature challenge expired or invalid. Connect the wallet again.':
+    'Desafio de assinatura expirado ou inválido. Conecte a carteira de novo.',
+  'Could not validate your signature. Try connecting again.':
+    'Não foi possível validar sua assinatura. Tente conectar novamente.',
+  'An unexpected error occurred during login.': 'Ocorreu um erro inesperado durante o login.',
+  'The roll failed': 'A rolagem falhou',
+  'Try again': 'Tentar novamente',
+  'Back to the home page': 'Voltar para a página inicial',
 }

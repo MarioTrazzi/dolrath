@@ -11,23 +11,26 @@ import { motion } from 'framer-motion'
 import { AlertTriangle, ArrowLeft, Home, Wallet } from 'lucide-react'
 import { Suspense } from 'react'
 import { ArenaSky, Button, GlassCard } from '@/components/landing/ui'
+import { useT } from '@/lib/i18n/I18nProvider'
+import type { TFunction } from '@/lib/i18n/t'
 
-function getErrorMessage(error: string | null) {
+function getErrorMessage(error: string | null, t: TFunction) {
   switch (error) {
     case 'Configuration':
-      return 'Erro de configuração do servidor. Tente novamente em instantes.'
+      return t('Server configuration error. Try again in a moment.')
     case 'AccessDenied':
-      return 'Acesso negado. Sua carteira não pôde ser validada.'
+      return t('Access denied. Your wallet could not be validated.')
     case 'Verification':
-      return 'Desafio de assinatura expirado ou inválido. Conecte a carteira de novo.'
+      return t('Signature challenge expired or invalid. Connect the wallet again.')
     case 'CredentialsSignin':
-      return 'Não foi possível validar sua assinatura. Tente conectar novamente.'
+      return t('Could not validate your signature. Try connecting again.')
     default:
-      return 'Ocorreu um erro inesperado durante o login.'
+      return t('An unexpected error occurred during login.')
   }
 }
 
 function ErrorContent() {
+  const t = useT()
   const searchParams = useSearchParams()
   const error = searchParams?.get('error') ?? null
 
@@ -49,16 +52,16 @@ function ErrorContent() {
         </motion.div>
 
         <h1 className="text-2xl sm:text-3xl font-bold text-white text-balance">
-          A rolagem falhou
+          {t('The roll failed')}
         </h1>
-        <p className="mt-3 mb-8 text-textsec text-pretty">{getErrorMessage(error)}</p>
+        <p className="mt-3 mb-8 text-textsec text-pretty">{getErrorMessage(error, t)}</p>
 
         <div className="flex flex-col gap-3">
           <Button as="a" href="/auth/login" size="lg" className="w-full" icon={<Wallet size={18} />}>
-            Tentar novamente
+            {t('Try again')}
           </Button>
           <Button as="a" href="/" variant="secondary" className="w-full" icon={<Home size={16} />}>
-            Voltar para a página inicial
+            {t('Back to the home page')}
           </Button>
         </div>
       </GlassCard>

@@ -23,7 +23,8 @@ import {
   itemImagePath,
 } from '@/lib/itemCatalog'
 import type { ProfessionLevelInfo } from '@/lib/professionSystem'
-import { useT } from '@/lib/i18n/I18nProvider'
+import { useT, useI18n } from '@/lib/i18n/I18nProvider'
+import { localizeItemName } from '@/lib/i18n/catalog'
 
 // Paleta por campo (borda/brilho dos cards, como o accent das masmorras).
 export const FIELD_ACCENT: Record<GatherFieldId, string> = {
@@ -107,6 +108,8 @@ export function FieldGrid({
   disabledReason?: string
   onEnter: (field: GatherFieldDef) => void
 }) {
+  const t = useT()
+  const { locale } = useI18n()
   const fields = Object.values(GATHER_FIELDS)
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -124,7 +127,7 @@ export function FieldGrid({
           >
             <div className="p-5 flex flex-col flex-1">
               <div className="text-4xl mb-2">{field.emoji}</div>
-              <h2 className="text-white font-black text-lg">{field.name}</h2>
+              <h2 className="text-white font-black text-lg">{localizeItemName(field.name, locale)}</h2>
               <p className="text-white/60 text-xs italic mb-3">{field.tagline}</p>
 
               <div className="flex flex-wrap gap-1.5 mb-4">
@@ -162,7 +165,7 @@ export function FieldGrid({
                   }`}
                   style={{ background: `linear-gradient(90deg, ${accent}cc, ${accent}77)` }}
                 >
-                  {disabled ? '🔒 Indisponível' : '⛏️ Começar a coletar'}
+                  {disabled ? t('🔒 Unavailable') : t('⛏️ Start gathering')}
                 </button>
               </div>
             </div>
@@ -187,6 +190,7 @@ function StopConfirmDialog({
   onStopAfterCycle: () => void
   onClose: () => void
 }) {
+  const t = useT()
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
 
@@ -211,10 +215,9 @@ function StopConfirmDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-4" style={{ borderBottom: '1px solid #2a323b' }}>
-          <h3 className="font-black text-white text-base">🚪 Encerrar a coleta?</h3>
+          <h3 className="font-black text-white text-base">{t('🚪 Stop gathering?')}</h3>
           <p className="text-xs text-white/60 mt-1">
-            Você pode encerrar agora (perde o progresso do ciclo em curso) ou esperar o ciclo atual
-            terminar — o último espólio cai sozinho e o herói é liberado sem gastar stamina num ciclo novo.
+            {t('Stop now (losing the progress of the cycle in progress) or wait for the current cycle to finish — the last haul drops on its own and the hero is freed without spending stamina on a new cycle.')}
           </p>
         </div>
         <div className="p-4 flex flex-col gap-2">
@@ -223,20 +226,20 @@ function StopConfirmDialog({
             className="w-full px-4 py-2.5 rounded-xl font-black text-sm text-white transition-all hover:scale-[1.02]"
             style={{ background: `linear-gradient(90deg, ${accent}cc, ${accent}77)` }}
           >
-            ⏳ Aguardar último ciclo ({fmtDuration(secondsToNextTick)})
+            {t('⏳ Wait for the last cycle ({time})', { time: fmtDuration(secondsToNextTick) })}
           </button>
           <button
             onClick={() => { onStopNow(); onClose() }}
             className="w-full px-4 py-2.5 rounded-xl font-bold text-sm text-white/90 transition-all hover:scale-[1.02]"
             style={{ background: '#2f3842', border: '1px solid #46505c' }}
           >
-            🚪 Encerrar agora
+            {t('🚪 Stop now')}
           </button>
           <button
             onClick={onClose}
             className="w-full px-4 py-2 rounded-xl font-semibold text-sm text-white/60 hover:text-white/90 transition-colors"
           >
-            Cancelar
+            {t('Cancel')}
           </button>
         </div>
       </div>
@@ -277,6 +280,8 @@ export function SessionPanel({
   secondsToNextTick, gather, busy, onCollect, onStopNow, onStopAfterCycle, onCancelStop,
   stopRequested, inventoryFull,
 }: SessionPanelProps) {
+  const t = useT()
+  const { locale } = useI18n()
   const field = GATHER_FIELDS[fieldId]
   const accent = FIELD_ACCENT[fieldId]
   const exhausted = status === 'exhausted'
@@ -295,35 +300,40 @@ export function SessionPanel({
       <div className="p-5 sm:p-6">
         {paused && (
           <div className="mb-4 rounded-xl border border-amber-500/50 bg-amber-950/40 px-3 py-2.5 text-amber-200 text-xs font-bold text-center">
-            🎒 Inventário cheio — coleta pausada, sem gastar stamina. Abra espaço no inventário para continuar.
+            {t('🎒 Inventory full — gathering paused, no stamina spent. Free up inventory space to continue.')}
           </div>
         )}
         {!exhausted && stopRequested && (
           <div className="mb-4 rounded-xl border border-sky-500/50 bg-sky-950/40 px-3 py-2.5 text-sky-200 text-xs font-bold text-center">
-            ⏳ Encerrando sozinho ao final deste ciclo ({fmtDuration(secondsToNextTick)}) — sem gastar stamina num ciclo novo.
+            {t('⏳ Stopping on its own at the end of this cycle ({time}) — no stamina spent on a new cycle.', { time: fmtDuration(secondsToNextTick) })}
           </div>
         )}
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
             <div className="text-4xl mb-1">{field.emoji}</div>
-            <h2 className="text-white font-black text-xl">{field.name}</h2>
+            <h2 className="text-white font-black text-xl">{localizeItemName(field.name, locale)}</h2>
             <p className="text-white/50 text-xs">
               {exhausted
-                ? '💤 Stamina esgotada — colete o espólio para encerrar.'
+                ? t('💤 Stamina exhausted — collect the haul to finish.')
                 : paused
-                  ? 'Aguardando espaço no inventário...'
-                  : `Coletando há ${fmtDuration(sinceMs / 1000)} · ${pending.ticks} tique${pending.ticks === 1 ? '' : 's'} rendido${pending.ticks === 1 ? '' : 's'}`}
+                  ? t('Waiting for inventory space...')
+                  : t(
+                      pending.ticks === 1
+                        ? 'Gathering for {time} · 1 tick yielded'
+                        : 'Gathering for {time} · {n} ticks yielded',
+                      { time: fmtDuration(sinceMs / 1000), n: pending.ticks },
+                    )}
             </p>
           </div>
           <div className="text-right text-xs text-white/60 shrink-0">
             <div>⚡ {stamina}/{maxStamina}</div>
             <div className="mt-1">
               {exhausted ? (
-                <span className="text-amber-300 font-bold">parado</span>
+                <span className="text-amber-300 font-bold">{t('stopped')}</span>
               ) : paused ? (
-                <span className="text-amber-300 font-bold">🎒 pausado</span>
+                <span className="text-amber-300 font-bold">{t('🎒 paused')}</span>
               ) : (
-                <>próximo em <span className="text-white font-bold">{fmtDuration(secondsToNextTick)}</span></>
+                <>{t('next in')} <span className="text-white font-bold">{fmtDuration(secondsToNextTick)}</span></>
               )}
             </div>
           </div>
@@ -345,18 +355,23 @@ export function SessionPanel({
         {/* Espólio acumulado */}
         <div className="rounded-2xl border border-white/10 bg-white/5 p-4 mb-4">
           <div className="text-white/70 text-xs font-bold mb-2">
-            🎒 Espólio acumulado {totalItems > 0 ? `(${totalItems} ite${totalItems === 1 ? 'm' : 'ns'})` : ''}
+            {totalItems > 0
+              ? t(
+                  totalItems === 1 ? '🎒 Accumulated haul (1 item)' : '🎒 Accumulated haul ({n} items)',
+                  { n: totalItems },
+                )
+              : t('🎒 Accumulated haul')}
           </div>
           {pending.drops.length === 0 ? (
             <p className="text-white/40 text-xs">
-              Nada ainda — o primeiro tique rende em até 15 minutos. Pode fechar a página: a coleta continua sozinha.
+              {t('Nothing yet — the first tick yields within 15 minutes. You can close the page: gathering continues on its own.')}
             </p>
           ) : (
             <div className="flex flex-wrap gap-2">
               {pending.drops.map((d) => (
                 <div
                   key={d.name}
-                  title={d.name}
+                  title={localizeItemName(d.name, locale)}
                   className="flex items-center gap-1.5 rounded-lg border border-white/15 bg-black/50 pr-2 overflow-hidden"
                 >
                   <span className="w-8 h-8 flex items-center justify-center overflow-hidden">
@@ -368,12 +383,14 @@ export function SessionPanel({
             </div>
           )}
           {pending.xp > 0 && (
-            <div className="text-amber-300/90 text-[11px] mt-2 font-bold">+{pending.xp} XP de Coleta ao coletar</div>
+            <div className="text-amber-300/90 text-[11px] mt-2 font-bold">
+              {t('+{n} Gathering XP on collect', { n: pending.xp })}
+            </div>
           )}
         </div>
 
         <div className="mb-4">
-          <ProfessionBar label="Coleta" emoji="⛏️" info={gather} />
+          <ProfessionBar label={t('Gathering')} emoji="⛏️" info={gather} />
         </div>
 
         <div className="flex gap-2">
@@ -382,7 +399,7 @@ export function SessionPanel({
             disabled={busy || (pending.drops.length === 0 && pending.xp === 0)}
             className="flex-1 px-4 py-2.5 rounded-xl font-black text-sm text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
-            🎒 Coletar espólio
+            {t('🎒 Collect haul')}
           </button>
           {!exhausted && stopRequested ? (
             <button
@@ -390,7 +407,7 @@ export function SessionPanel({
               disabled={busy}
               className="px-4 py-2.5 rounded-xl font-bold text-sm text-sky-200 bg-sky-500/15 hover:bg-sky-500/25 disabled:opacity-40 transition-colors"
             >
-              ↩️ Cancelar encerramento
+              {t('↩️ Cancel stop')}
             </button>
           ) : (
             <button
@@ -398,13 +415,12 @@ export function SessionPanel({
               disabled={busy}
               className="px-4 py-2.5 rounded-xl font-bold text-sm text-white/80 bg-white/10 hover:bg-white/20 disabled:opacity-40 transition-colors"
             >
-              🚪 Encerrar
+              {t('🚪 Stop')}
             </button>
           )}
         </div>
         <p className="text-white/30 text-[10px] mt-3">
-          Cada tique de 15 min custa {GATHER_TICK_STAMINA} ⚡ e o regen fica pausado enquanto trabalha.
-          Coletar não interrompe a sessão; encerrar deposita tudo e libera o herói.
+          {t('Each 15-min tick costs {cost} ⚡ and regen pauses while working. Collecting does not interrupt the session; stopping deposits everything and frees the hero.', { cost: GATHER_TICK_STAMINA })}
         </p>
       </div>
 

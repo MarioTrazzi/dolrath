@@ -112,4 +112,29 @@ export const GATHERING_PT: Record<string, string> = {
   '▶️ Scheduled stop cancelled — gathering continues normally.': '▶️ Encerramento agendado cancelado — a coleta continua normalmente.',
   '⚔️ {hero} set out for {field}.': '⚔️ {hero} partiu para {field}.',
   'Unrolling the kingdom map…': 'Desenrolando o mapa do reino…',
+
+  // Painel da sessão (GatheringPanel)
+  '🔒 Unavailable': '🔒 Indisponível',
+  '⛏️ Start gathering': '⛏️ Começar a coletar',
+  '💤 Stamina exhausted — collect the haul to finish.':
+    '💤 Stamina esgotada — colete o espólio para encerrar.',
+  'Waiting for inventory space...': 'Aguardando espaço no inventário...',
+  'Gathering for {time} · 1 tick yielded': 'Coletando há {time} · 1 tique rendido',
+  'Gathering for {time} · {n} ticks yielded': 'Coletando há {time} · {n} tiques rendidos',
+  'stopped': 'parado',
+  'next in': 'próximo em',
+  '🎒 Accumulated haul ({n} items)': '🎒 Espólio acumulado ({n} itens)',
+  '🎒 Accumulated haul (1 item)': '🎒 Espólio acumulado (1 item)',
+  'Nothing yet — the first tick yields within 15 minutes. You can close the page: gathering continues on its own.':
+    'Nada ainda — o primeiro tique rende em até 15 minutos. Pode fechar a página: a coleta continua sozinha.',
+  'Gathering': 'Coleta',
+  '↩️ Cancel stop': '↩️ Cancelar encerramento',
+  'Each 15-min tick costs {cost} ⚡ and regen pauses while working. Collecting does not interrupt the session; stopping deposits everything and frees the hero.':
+    'Cada tique de 15 min custa {cost} ⚡ e o regen fica pausado enquanto trabalha. Coletar não interrompe a sessão; encerrar deposita tudo e libera o herói.',
+  '🎒 Inventory full — gathering paused, no stamina spent. Free up inventory space to continue.':
+    '🎒 Inventário cheio — coleta pausada, sem gastar stamina. Abra espaço no inventário para continuar.',
+  '⏳ Stopping on its own at the end of this cycle ({time}) — no stamina spent on a new cycle.':
+    '⏳ Encerrando sozinho ao final deste ciclo ({time}) — sem gastar stamina num ciclo novo.',
+  'Stop now (losing the progress of the cycle in progress) or wait for the current cycle to finish — the last haul drops on its own and the hero is freed without spending stamina on a new cycle.':
+    'Você pode encerrar agora (perde o progresso do ciclo em curso) ou esperar o ciclo atual terminar — o último espólio cai sozinho e o herói é liberado sem gastar stamina num ciclo novo.',
 }

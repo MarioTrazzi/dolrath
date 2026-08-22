@@ -73,6 +73,14 @@ Abra **[`dashboard.html`](dashboard.html)** no navegador (duplo clique — funci
 
 Para atualizar os dados: rode o simulador de novo (o HTML lê `dashboard-data.js`).
 
+## Referências externas
+
+- [**Benchmark — Obelisk Hero ($HERO)**](BENCHMARK-OBELISK-HERO.md) — concorrente direto
+  (idle RPG de masmorra token-gated na Solana). Traz as constantes reais da economia deles
+  extraídas do cliente, a comparação lado a lado com o Dolrath e o que vale ou não adotar.
+  Leitura honesta do mercado incluída: o token é uma moeda de pump.fun com ~US$ 30k de
+  market cap — a referência que vale é o **desenho**, não o resultado.
+
 ## Mudar premissas
 
 Edite os objetos `SCENARIOS`/`DOL` no topo de `scripts/token-economy-sim.js` e rode de novo. Toda mudança de premissa deve ser commitada junto com o CSV regenerado — o histórico do git é o registro das revisões do modelo.

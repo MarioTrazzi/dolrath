@@ -1,4 +1,5 @@
 import toast from 'react-hot-toast';
+import { clientT, getClientLocale } from './i18n/client';
 
 // 💰 "Tela" de compra de GOLD on-chain: um card de toast com confirmação.
 // Aparece quando falta GOLD na mão para uma compra da loja/forja/alquimia.
@@ -7,22 +8,26 @@ import toast from 'react-hot-toast';
 // papel do market).
 export function confirmBuyGold(amountGold: number): Promise<boolean> {
   const amount = Math.max(1, Math.ceil(amountGold));
+  // Fora de componente: o locale vem do cookie, não de um hook.
+  const t = clientT();
+  const locale = getClientLocale();
   return new Promise((resolve) => {
     const finish = (id: string, value: boolean) => {
       toast.dismiss(id);
       resolve(value);
     };
     toast(
-      (t) => (
+      (toastItem) => (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 240 }}>
-          <div style={{ fontWeight: 700, color: '#fde68a' }}>💰 GOLD insuficiente na mão</div>
+          <div style={{ fontWeight: 700, color: '#fde68a' }}>{t('💰 Not enough GOLD on hand')}</div>
           <div style={{ fontSize: 13, lineHeight: 1.35, color: '#e5e7eb' }}>
-            Comprar <b>{amount.toLocaleString('pt-BR')}</b> GOLD on-chain pela carteira? O valor
-            é creditado na mão do personagem e a compra é concluída em seguida.
+            {t('Buy {amount} GOLD on-chain with the wallet? The amount is credited to the character and the purchase completes right after.', {
+              amount: amount.toLocaleString(locale === 'pt' ? 'pt-BR' : 'en-US'),
+            })}
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
             <button
-              onClick={() => finish(t.id, true)}
+              onClick={() => finish(toastItem.id, true)}
               style={{
                 flex: 1,
                 padding: '7px 10px',
@@ -34,10 +39,10 @@ export function confirmBuyGold(amountGold: number): Promise<boolean> {
                 cursor: 'pointer',
               }}
             >
-              Comprar on-chain
+              {t('Buy on-chain')}
             </button>
             <button
-              onClick={() => finish(t.id, false)}
+              onClick={() => finish(toastItem.id, false)}
               style={{
                 padding: '7px 12px',
                 borderRadius: 8,
@@ -48,7 +53,7 @@ export function confirmBuyGold(amountGold: number): Promise<boolean> {
                 cursor: 'pointer',
               }}
             >
-              Cancelar
+              {t('Cancel')}
             </button>
           </div>
         </div>

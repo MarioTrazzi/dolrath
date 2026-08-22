@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useT, useI18n } from '@/lib/i18n/I18nProvider';
+import { localizeItemName } from '@/lib/i18n/catalog';
 import { createPortal } from 'react-dom';
 import { Item } from '@/types/item';
 import { resolveImageUrl } from '@/lib/imageUrl';
@@ -31,6 +33,8 @@ export default function SellQuantityDialog({
   onConfirm,
   onClose,
 }: SellQuantityDialogProps) {
+  const t = useT();
+  const { locale } = useI18n();
   const [mounted, setMounted] = useState(false);
   const [qty, setQty] = useState(1);
 
@@ -86,14 +90,17 @@ export default function SellQuantityDialog({
             )}
           </div>
           <div className="min-w-0">
-            <h3 className="font-black text-white text-base truncate">{item.name}</h3>
-            <p className="text-xs text-white/60">Disponível: {maxQuantity}</p>
+            <h3 className="font-black text-white text-base truncate">{localizeItemName(item.name, locale)}</h3>
+            <p className="text-xs text-white/60">{t('Available: {n}', { n: maxQuantity })}</p>
           </div>
         </div>
 
         {/* Seleção de quantidade */}
         <div className="p-4 flex flex-col gap-3">
-          <p className="text-sm text-white/70">Vender quantos ao <span className="font-semibold text-white">ferreiro</span>?</p>
+          <p className="text-sm text-white/70">
+            {t('Sell how many to the ')}
+            <span className="font-semibold text-white">{t('blacksmith')}</span>?
+          </p>
 
           <div className="flex items-center gap-2">
             <button
@@ -134,7 +141,7 @@ export default function SellQuantityDialog({
           />
 
           <p className="text-xs text-white/50">
-            ⚠️ O item vendido é destruído — não dá pra desfazer.
+            {t('⚠️ The sold item is destroyed — this cannot be undone.')}
           </p>
         </div>
 
@@ -145,20 +152,20 @@ export default function SellQuantityDialog({
             className="w-full px-4 py-2.5 rounded-xl font-black text-sm text-white transition-all hover:scale-[1.02]"
             style={{ background: `linear-gradient(90deg, ${accent}cc, ${accent}77)` }}
           >
-            🔥 Vender {qty} por {qty * unitPrice}🪙
+            {t('🔥 Sell {qty} for {total}🪙', { qty, total: qty * unitPrice })}
           </button>
           <button
             onClick={() => confirm(maxQuantity)}
             className="w-full px-4 py-2.5 rounded-xl font-bold text-sm text-white/90 transition-all hover:scale-[1.02]"
             style={{ background: '#2f3842', border: '1px solid #46505c' }}
           >
-            📦 Vender tudo (x{maxQuantity}) por {maxQuantity * unitPrice}🪙
+            {t('📦 Sell all (x{n}) for {total}🪙', { n: maxQuantity, total: maxQuantity * unitPrice })}
           </button>
           <button
             onClick={onClose}
             className="w-full px-4 py-2 rounded-xl font-semibold text-sm text-white/60 hover:text-white/90 transition-colors"
           >
-            Cancelar
+            {t('Cancel')}
           </button>
         </div>
       </div>

@@ -79,4 +79,10 @@ export const CHARACTER_PT: Record<string, string> = {
   'Failed to delete NFT': 'Erro ao excluir NFT',
   'Previous': 'Anterior',
   'Next': 'Próximo',
+  'Choose your hero': 'Escolha seu herói',
+  'The active character is used in PvP, dungeons, the shop and the inventory.':
+    'O personagem ativo é usado em PvP, masmorras, loja e inventário.',
+  'You have no characters yet.': 'Você ainda não tem personagens.',
+  'New hero': 'Novo herói',
+  'Choose character': 'Escolher personagem',
 }

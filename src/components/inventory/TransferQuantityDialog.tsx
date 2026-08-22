@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useT, useI18n } from '@/lib/i18n/I18nProvider';
+import { localizeItemName } from '@/lib/i18n/catalog';
 import { createPortal } from 'react-dom';
 import { Item } from '@/types/item';
 import { resolveImageUrl } from '@/lib/imageUrl';
@@ -33,6 +35,8 @@ export default function TransferQuantityDialog({
   onConfirm,
   onClose,
 }: TransferQuantityDialogProps) {
+  const t = useT();
+  const { locale } = useI18n();
   const [mounted, setMounted] = useState(false);
   const [qty, setQty] = useState(1);
 
@@ -86,14 +90,17 @@ export default function TransferQuantityDialog({
             )}
           </div>
           <div className="min-w-0">
-            <h3 className="font-black text-white text-base truncate">{item.name}</h3>
-            <p className="text-xs text-white/60">Disponível: {maxQuantity}</p>
+            <h3 className="font-black text-white text-base truncate">{localizeItemName(item.name, locale)}</h3>
+            <p className="text-xs text-white/60">{t('Available: {n}', { n: maxQuantity })}</p>
           </div>
         </div>
 
         {/* Seleção de quantidade */}
         <div className="p-4 flex flex-col gap-3">
-          <p className="text-sm text-white/70">Quantos enviar para o <span className="font-semibold text-white">{destinationLabel}</span>?</p>
+          <p className="text-sm text-white/70">
+            {t('How many to send to the ')}
+            <span className="font-semibold text-white">{destinationLabel}</span>?
+          </p>
 
           <div className="flex items-center gap-2">
             <button
@@ -141,20 +148,20 @@ export default function TransferQuantityDialog({
             className="w-full px-4 py-2.5 rounded-xl font-black text-sm text-white transition-all hover:scale-[1.02]"
             style={{ background: `linear-gradient(90deg, ${destinationAccent}cc, ${destinationAccent}77)` }}
           >
-            Enviar {qty}
+            {t('Send {qty}', { qty })}
           </button>
           <button
             onClick={() => confirm(maxQuantity)}
             className="w-full px-4 py-2.5 rounded-xl font-bold text-sm text-white/90 transition-all hover:scale-[1.02]"
             style={{ background: '#2f3842', border: '1px solid #46505c' }}
           >
-            📦 Enviar tudo (x{maxQuantity})
+            {t('📦 Send all (x{n})', { n: maxQuantity })}
           </button>
           <button
             onClick={onClose}
             className="w-full px-4 py-2 rounded-xl font-semibold text-sm text-white/60 hover:text-white/90 transition-colors"
           >
-            Cancelar
+            {t('Cancel')}
           </button>
         </div>
       </div>

@@ -46,4 +46,14 @@ export const INVENTORY_PT: Record<string, string> = {
   'Search inventory': 'Buscar no inventário',
   '⚠️ You have more items than slots. Expand your inventory.':
     '⚠️ Você tem mais itens do que slots. Expanda o inventário.',
+  'Available: {n}': 'Disponível: {n}',
+  'Sell how many to the ': 'Vender quantos ao ',
+  'blacksmith': 'ferreiro',
+  '⚠️ The sold item is destroyed — this cannot be undone.':
+    '⚠️ O item vendido é destruído — não dá pra desfazer.',
+  '🔥 Sell {qty} for {total}🪙': '🔥 Vender {qty} por {total}🪙',
+  '📦 Sell all (x{n}) for {total}🪙': '📦 Vender tudo (x{n}) por {total}🪙',
+  'How many to send to the ': 'Quantos enviar para o ',
+  'Send {qty}': 'Enviar {qty}',
+  '📦 Send all (x{n})': '📦 Enviar tudo (x{n})',
 }

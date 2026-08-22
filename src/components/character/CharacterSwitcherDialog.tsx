@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { useT } from '@/lib/i18n/I18nProvider'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -110,6 +111,7 @@ function CharacterCard({
 }
 
 export function CharacterSwitcherDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const t = useT()
   const { characters, activeCharacterId, setActiveCharacterId, refresh } = useActiveCharacter()
   const { alertsByCharId, refresh: refreshAlerts } = useCharacterNotifications()
   const router = useRouter()
@@ -153,16 +155,18 @@ export function CharacterSwitcherDialog({ open, onClose }: { open: boolean; onCl
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
-            aria-label="Escolher personagem"
+            aria-label={t('Choose character')}
           >
             <div className="mb-5 flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-bold text-white">Escolha seu herói</h2>
-                <p className="text-sm text-textsec">O personagem ativo é usado em PvP, masmorras, loja e inventário.</p>
+                <h2 className="text-xl font-bold text-white">{t('Choose your hero')}</h2>
+                <p className="text-sm text-textsec">
+                  {t('The active character is used in PvP, dungeons, the shop and the inventory.')}
+                </p>
               </div>
               <button
                 onClick={onClose}
-                aria-label="Fechar"
+                aria-label={t('Close')}
                 className="rounded-lg p-2 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
               >
                 <X className="h-5 w-5" />
@@ -172,7 +176,7 @@ export function CharacterSwitcherDialog({ open, onClose }: { open: boolean; onCl
             {characters.length === 0 ? (
               <div className="flex flex-col items-center gap-4 py-10 text-center">
                 <div className="text-5xl">🧙</div>
-                <p className="text-textsec">Você ainda não tem personagens.</p>
+                <p className="text-textsec">{t('You have no characters yet.')}</p>
                 <Link
                   href="/character/create"
                   onClick={onClose}
@@ -199,7 +203,7 @@ export function CharacterSwitcherDialog({ open, onClose }: { open: boolean; onCl
                   className="flex w-40 shrink-0 snap-start flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-white/20 bg-white/5 text-textsec transition-colors hover:border-white/40 hover:text-white"
                 >
                   <Plus className="h-7 w-7" />
-                  <span className="text-sm font-semibold">Novo herói</span>
+                  <span className="text-sm font-semibold">{t('New hero')}</span>
                 </Link>
               </div>
             )}

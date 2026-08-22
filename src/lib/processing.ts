@@ -246,13 +246,14 @@ export function processingRecipesUsingInput(name: string): ProcessingRecipe[] {
   return PROCESSING_RECIPES.filter((r) => r.inputs.some((i) => i.name === name));
 }
 
+// Chave EN (i18n EN-as-key): a UI passa por t(); o dict pt/processing.ts traduz.
 export const PROCESSING_GROUP_LABEL: Record<ProcessingRecipe['group'], string> = {
-  smelt: 'Fundição',
-  wood: 'Madeira',
-  textile: 'Têxtil',
-  mill: 'Moagem',
-  still: 'Destilaria',
-  refine: 'Refino',
+  smelt: 'Smelting',
+  wood: 'Woodwork',
+  textile: 'Textile',
+  mill: 'Milling',
+  still: 'Distillery',
+  refine: 'Refining',
 };
 
 const PROCESSING_GROUP_ORDER: ProcessingRecipe['group'][] = [

@@ -31,4 +31,14 @@ export const COOKING_PT: Record<string, string> = {
   '✓ inputs complete': '✓ insumos completos',
   'missing inputs': 'faltam insumos',
   'no fail · +{n} XP': 'sem falha · +{n} XP',
+  'Batch fee:': 'Taxa do lote:',
+  'Batch fee: {cost} 🪙 — no GOLD in the wallet, we will top it up.':
+    'Taxa do lote: {cost} 🪙 — sem GOLD na carteira, vamos recarregar.',
+  '⏩ Skip ({revealed}/{total})': '⏩ Pular ({revealed}/{total})',
+  '🔒 Requires Cooking level {n}.': '🔒 Requer Culinária nível {n}.',
+  'Missing inputs for one dish.': 'Faltam insumos para um prato.',
+  '🍲 Cooking': '🍲 Cozinhando',
+  'Recipe Book': 'Livro de Receitas',
+  '+{n} to all attributes': '+{n} em todos os atributos',
+  '{buff} for {n} real min': '{buff} por {n} min reais',
 }

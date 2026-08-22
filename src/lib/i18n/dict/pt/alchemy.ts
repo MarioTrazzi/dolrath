@@ -39,4 +39,10 @@ export const ALCHEMY_PT: Record<string, string> = {
   '🔒 lv {n}': '🔒 nv {n}',
   '✓ ready': '✓ pronta',
   'missing ingredients': 'faltam ingredientes',
+  'Batch fee:': 'Taxa do lote:',
+  'Batch fee: {cost} 🪙 — no GOLD in the wallet, we will top it up.':
+    'Taxa do lote: {cost} 🪙 — sem GOLD na carteira, vamos recarregar.',
+  '⏩ Skip ({revealed}/{total})': '⏩ Pular ({revealed}/{total})',
+  '⚗ Transmuting': '⚗ Transmutando',
+  'fee {cost} 🪙': 'taxa {cost} 🪙',
 }

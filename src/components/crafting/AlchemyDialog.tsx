@@ -36,6 +36,8 @@ import { getCraftChance, getCraftMinLevel } from '@/lib/craftingProfession';
 import type { ProfessionLevelInfo } from '@/lib/professionSystem';
 import { ProfessionBar } from '@/components/gathering/GatheringPanel';
 import { CraftItemThumb as ItemThumb } from '@/components/store/CraftItemThumb';
+import { useT, useI18n } from '@/lib/i18n/I18nProvider';
+import { localizeItemName, localizeRarityLabel } from '@/lib/i18n/catalog';
 import {
   BdoDialogShell,
   DiamondSlot,
@@ -124,6 +126,8 @@ export default function AlchemyDialog({
   attemptOverride,
   onChanged,
 }: AlchemyDialogProps) {
+  const t = useT();
+  const { locale } = useI18n();
   const [inventory, setInventory] = useState<AlchemyInventoryItem[]>([]);
   const [loadingInv, setLoadingInv] = useState(false);
   const [levelInfo, setLevelInfo] = useState<ProfessionLevelInfo | null>(null);
@@ -368,7 +372,7 @@ export default function AlchemyDialog({
         }
 
         if (!res.ok) {
-          setError(json.error || 'Erro ao transmutar');
+          setError(json.error || t('Failed to transmute'));
           reveal.reset();
           setBusy(false);
           return;
@@ -382,7 +386,7 @@ export default function AlchemyDialog({
       // Uma unidade por vez: sem a sequência (contrato antigo) encena 1 bloco.
       reveal.start(data.units?.length ?? 1);
     } catch {
-      setError('Erro inesperado ao transmutar');
+      setError(t('Unexpected error while transmuting'));
       reveal.reset();
     }
     setBusy(false);
@@ -434,7 +438,7 @@ export default function AlchemyDialog({
     <div className="px-4 pb-4 pt-3">
       {matchedRecipe && unlocked && maxCraftable > 1 && (
         <div className="mb-2 flex items-center justify-center gap-2">
-          <span className="text-xs text-[#8a8a90]">Quantidade:</span>
+          <span className="text-xs text-[#8a8a90]">{t('Quantity:')}</span>
           <button
             type="button"
             onClick={() => setCraftQty((q) => Math.max(1, q - 1))}
@@ -470,34 +474,34 @@ export default function AlchemyDialog({
             className="text-xs font-semibold underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
             style={{ color: GOLD_BRIGHT }}
           >
-            máx {maxCraftable}
+            {t('max {n}', { n: maxCraftable })}
           </button>
         </div>
       )}
       {matchedRecipe && (
         unlocked && maxCraftable >= 1 && goldShort ? (
           <div className="mb-2 text-center text-xs font-semibold" style={{ color: GOLD_BRIGHT }}>
-            Taxa do lote: {totalGoldCost} 🪙 — sem GOLD na carteira, vamos recarregar.
+            {t('Batch fee: {cost} 🪙 — no GOLD in the wallet, we will top it up.', { cost: totalGoldCost })}
           </div>
         ) : unlocked && maxCraftable >= 1 ? (
           <div className="mb-2 text-center text-xs text-[#8a8a90]">
-            Taxa do lote: <span style={{ color: GOLD }}>{totalGoldCost} 🪙</span>
+            {t('Batch fee:')} <span style={{ color: GOLD }}>{totalGoldCost} 🪙</span>
           </div>
         ) : null
       )}
       {revealing ? (
         /* Encenação em curso: quem faz grind não pode ficar refém da animação. */
         <BevelButton onClick={reveal.skip}>
-          ⏩ Pular ({reveal.revealed}/{reveal.total})
+          {t('⏩ Skip ({revealed}/{total})', { revealed: reveal.revealed, total: reveal.total })}
         </BevelButton>
       ) : (
         <BevelButton
           onClick={handleTransmute}
           disabled={!matchedRecipe || !unlocked || maxCraftable < 1 || (!characterId && !attemptOverride)}
           busy={busy}
-          busyLabel="⚗ Transmutando..."
+          busyLabel={t('⚗ Transmuting...')}
         >
-          {craftQty > 1 ? `⚗ Transmutar ×${craftQty}` : '⚗ Transmutar'}
+          {craftQty > 1 ? t('⚗ Transmute ×{n}', { n: craftQty }) : t('⚗ Transmute')}
         </BevelButton>
       )}
       <div className="mt-2 flex items-center justify-between">
@@ -506,7 +510,7 @@ export default function AlchemyDialog({
           onClick={() => setRecipesOpen(true)}
           className="text-xs font-semibold text-[#9a9aa0] transition-colors hover:text-white"
         >
-          📖 Livro de Receitas
+          {t('📖 Recipe Book')}
         </button>
         <button
           type="button"
@@ -517,7 +521,7 @@ export default function AlchemyDialog({
           disabled={busy || revealing || (filled.length === 0 && !result)}
           className="text-xs font-semibold text-[#9a9aa0] transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
         >
-          Limpar
+          {t('Clear')}
         </button>
       </div>
     </div>
@@ -525,13 +529,13 @@ export default function AlchemyDialog({
 
   return (
     <>
-      <BdoDialogShell open={open} onClose={onClose} icon="⚗" title="Alquimia" footer={footer}>
+      <BdoDialogShell open={open} onClose={onClose} icon="⚗" title={t('Alchemy')} footer={footer}>
         {/* Nível da profissão (conta inteira, como a Fazenda) */}
         <div className="border-b border-black/60 bg-[#19191c] px-5 py-3">
           {levelInfo ? (
-            <ProfessionBar label="Alquimia" emoji="⚗️" info={levelInfo} />
+            <ProfessionBar label={t('Alchemy')} emoji="⚗️" info={levelInfo} />
           ) : (
-            <div className="text-xs text-[#8a8a90]">Consultando o caldeirão…</div>
+            <div className="text-xs text-[#8a8a90]">{t('Consulting the cauldron…')}</div>
           )}
         </div>
 
@@ -625,7 +629,7 @@ export default function AlchemyDialog({
                 <div className="text-center">
                   <div className="text-lg font-black text-red-400">🔒</div>
                   <div className="text-[10px] uppercase tracking-[0.14em] text-red-400">
-                    Alquimia nv {minLevel}
+                    {t('Alchemy lv {n}', { n: minLevel ?? 1 })}
                   </div>
                 </div>
               ) : chancePct != null ? (
@@ -633,7 +637,7 @@ export default function AlchemyDialog({
                   <span className={`text-2xl font-bold tabular-nums ${chanceColorClass(chance)}`}>
                     {chancePct}%
                   </span>
-                  <div className="text-[10px] uppercase tracking-[0.14em] text-[#77777d]">chance</div>
+                  <div className="text-[10px] uppercase tracking-[0.14em] text-[#77777d]">{t('chance')}</div>
                 </div>
               ) : null}
             </div>
@@ -655,7 +659,11 @@ export default function AlchemyDialog({
                     charging={phase === 'charging' && !!name}
                     glowColor={info ? RARITY_UI[info.rarity].glow : undefined}
                     onClick={() => removeSlot(idx)}
-                    title={name ? `${name} (clique para remover)` : 'Vértice vazio'}
+                    title={
+                      name
+                        ? t('{name} (click to remove)', { name: localizeItemName(name, locale) })
+                        : t('Empty vertex')
+                    }
                   >
                     {name ? (
                       <span className="block h-[62%] w-[62%] overflow-hidden">
@@ -681,7 +689,7 @@ export default function AlchemyDialog({
                 verdict={verdict}
                 verdictKey={chargeId * 1000 + reveal.tick}
                 glowColor={centerActive ? centerUi.glow : undefined}
-                title={centerName ?? 'Combinação ainda incompleta'}
+                title={centerName ? localizeItemName(centerName, locale) : t('Combination still incomplete')}
                 plate={phase === 'done' && liveSucceeded > 1 ? `×${liveSucceeded}` : null}
               >
                 {phase === 'charging' ? (
@@ -730,32 +738,34 @@ export default function AlchemyDialog({
         <div className="px-5 pb-2 text-center">
           {filled.length < 3 && !result ? (
             <p className="text-sm text-[#8a8a90]">
-              Vértices preenchidos: <span className="font-semibold text-white">{filled.length}/3</span>
+              {t('Vertices filled:')} <span className="font-semibold text-white">{filled.length}/3</span>
             </p>
           ) : matchedRecipe ? (
             <p className="text-sm">
               <span className={`font-bold ${RARITY_UI[matchedRecipe.rarity].text}`}>
-                {matchedRecipe.outputName}
+                {localizeItemName(matchedRecipe.outputName, locale)}
               </span>{' '}
-              <span style={{ color: GOLD }}>· taxa {matchedRecipe.goldCost} 🪙</span>
+              <span style={{ color: GOLD }}>
+                · {t('fee {cost} 🪙', { cost: matchedRecipe.goldCost })}
+              </span>
               {maxCraftable > 1 && (
-                <span className="text-[#77777d]"> · até {maxCraftable}×</span>
+                <span className="text-[#77777d]"> · {t('up to {n}×', { n: maxCraftable })}</span>
               )}
             </p>
           ) : filled.length === 3 ? (
-            <p className="text-sm text-red-300">Combinação desconhecida — consulte o livro de receitas.</p>
+            <p className="text-sm text-red-300">{t('Unknown combination — check the recipe book.')}</p>
           ) : null}
         </div>
 
         {/* Aviso de risco (obrigatório: a falha agora consome tudo) */}
         {matchedRecipe && unlocked && (
           <div className="px-5 pb-3 text-center text-[12.5px] leading-snug" style={{ color: WARN }}>
-            O fracasso consome os ingredientes e a taxa — nada é produzido.
+            {t('Failure consumes the ingredients and the fee — nothing is produced.')}
           </div>
         )}
         {matchedRecipe && !unlocked && (
           <div className="px-5 pb-3 text-center text-[12.5px] font-semibold text-red-400">
-            Requer Alquimia nível {minLevel} para esta receita.
+            {t('Requires Alchemy level {n} for this recipe.', { n: minLevel ?? 1 })}
           </div>
         )}
 
@@ -769,7 +779,7 @@ export default function AlchemyDialog({
                   transition={{ repeat: Infinity, duration: 0.7 }}
                   style={{ color: GOLD_BRIGHT }}
                 >
-                  ⚗ Transmutando
+                  {t('⚗ Transmuting')}
                   {revealing && reveal.total > 1 ? ` ${reveal.revealed}/${reveal.total}` : '...'}
                 </motion.span>
               )}
@@ -778,7 +788,14 @@ export default function AlchemyDialog({
                   style={verdict !== 'fail' ? { color: GOLD_BRIGHT } : undefined}
                   className={verdict === 'fail' ? 'text-red-400' : undefined}
                 >
-                  {verdict === 'success' ? '✨ SUCESSO!' : verdict === 'fail' ? '💥 FALHOU!' : `⚗️ ${result.succeeded} de ${result.attempted}`}
+                  {verdict === 'success'
+                    ? t('✨ SUCCESS!')
+                    : verdict === 'fail'
+                      ? t('💥 FAILED!')
+                      : t('⚗️ {succeeded} of {attempted}', {
+                          succeeded: result.succeeded,
+                          attempted: result.attempted,
+                        })}
                 </span>
               )}
             </div>
@@ -793,7 +810,7 @@ export default function AlchemyDialog({
                     animate={{ opacity: 1, x: 0 }}
                     className="flex items-center justify-between rounded-[3px] border border-black/50 bg-[#19191c] px-2 py-1 text-xs"
                   >
-                    <span className="truncate text-[#c9c9ce]">{centerName}</span>
+                    <span className="truncate text-[#c9c9ce]">{localizeItemName(centerName ?? '', locale)}</span>
                     <span className={`font-bold ${u.ok ? 'text-emerald-300' : 'text-red-400'}`}>
                       {u.ok ? '✓' : '✗'}
                     </span>
@@ -810,7 +827,7 @@ export default function AlchemyDialog({
               >
                 {result.message}
                 <div className="mt-0.5 text-xs font-normal" style={{ color: GOLD }}>
-                  +{result.xpGained} XP de Alquimia
+                  {t('+{n} Alchemy XP', { n: result.xpGained })}
                 </div>
               </motion.div>
             )}
@@ -828,13 +845,13 @@ export default function AlchemyDialog({
         {/* Paleta de ingredientes (clique para colocar num vértice) */}
         <div className="border-t border-black/60 bg-[#19191c] px-4 py-3">
           <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8a8a90]">
-            Seus ingredientes — clique para adicionar
+            {t('Your ingredients — click to add')}
           </div>
           {loadingInv && inventory.length === 0 ? (
-            <div className="py-3 text-center text-sm text-[#8a8a90]">Carregando ingredientes…</div>
+            <div className="py-3 text-center text-sm text-[#8a8a90]">{t('Loading ingredients…')}</div>
           ) : palette.length === 0 ? (
             <div className="py-3 text-center text-sm text-[#8a8a90]">
-              🎒 Nenhum ingrediente. Explore masmorras para coletar espólios.
+              {t('🎒 No ingredients. Explore dungeons to collect loot.')}
             </div>
           ) : (
             <div className="grid grid-cols-5 gap-2 sm:grid-cols-6">
@@ -847,7 +864,7 @@ export default function AlchemyDialog({
                     type="button"
                     onClick={() => placeIngredient(name)}
                     disabled={busy || left <= 0}
-                    title={`${name} — ${left} disponível`}
+                    title={t('{name} — {n} available', { name: localizeItemName(name, locale), n: left })}
                     className="relative aspect-square overflow-hidden rounded-[3px] border transition-all hover:border-[#8a6d3b] disabled:cursor-not-allowed disabled:opacity-40"
                     style={{
                       borderColor: '#3c3c41',
@@ -888,7 +905,7 @@ export default function AlchemyDialog({
               >
                 <div className="sticky top-0 flex items-center justify-between border-b border-black/70 bg-gradient-to-b from-[#2b2b2f] to-[#1a1a1d] px-4 py-2.5">
                   <h3 className="flex items-center gap-2 text-[15px] font-semibold tracking-wide text-[#dcdce0]">
-                    <span style={{ color: GOLD }}>📖</span> Receitas de Alquimia
+                    <span style={{ color: GOLD }}>📖</span> {t('Alchemy Recipes')}
                   </h3>
                   <button
                     onClick={() => {
@@ -902,8 +919,9 @@ export default function AlchemyDialog({
                 </div>
                 <div className="p-4">
                   <p className="mb-4 text-xs text-[#8a8a90]">
-                    Passe o mouse para ver os ingredientes (em vermelho os que faltam). Receitas prontas
-                    ficam acesas — clique para montar o triângulo. 🔒 = requer nível de Alquimia.
+                    {t(
+                      'Hover to see the ingredients (missing ones in red). Ready recipes light up — click to build the triangle. 🔒 = requires an Alchemy level.',
+                    )}
                   </p>
                   <div className="space-y-4">
                     {recipeGroups.map(({ rarity, recipes }) => {
@@ -914,15 +932,15 @@ export default function AlchemyDialog({
                         <div key={rarity}>
                           <div className="mb-2 flex items-center gap-2">
                             <label className={`block text-xs font-semibold ${RARITY_UI[rarity].text}`}>
-                              {RARITY_UI[rarity].label}s
+                              {localizeRarityLabel(RARITY_UI[rarity].label, locale)}s
                             </label>
                             {rUnlocked ? (
                               <span className={`text-[10px] font-bold tabular-nums ${chanceColorClass((rChance ?? 0) / 100)}`}>
-                                {rChance}% de chance
+                                {t('{n}% chance', { n: rChance ?? 0 })}
                               </span>
                             ) : (
                               <span className="text-[10px] font-bold text-red-400">
-                                🔒 Requer Alquimia nv {rMin}
+                                {t('🔒 Requires Alchemy lv {n}', { n: rMin })}
                               </span>
                             )}
                           </div>
@@ -958,14 +976,18 @@ export default function AlchemyDialog({
                                   </span>
                                   <span className="min-w-0">
                                     <span className={`block truncate text-[11px] font-bold leading-tight ${ui.text}`}>
-                                      {r.outputName}
+                                      {localizeItemName(r.outputName, locale)}
                                     </span>
                                     <span
                                       className={`block text-[10px] leading-tight ${
                                         !rUnlocked ? 'text-red-400' : ok ? 'text-emerald-300' : 'text-[#77777d]'
                                       }`}
                                     >
-                                      {!rUnlocked ? `🔒 nv ${rMin}` : ok ? '✓ pronta' : 'faltam ingredientes'}
+                                      {!rUnlocked
+                                        ? t('🔒 lv {n}', { n: rMin })
+                                        : ok
+                                          ? t('✓ ready')
+                                          : t('missing ingredients')}
                                     </span>
                                   </span>
                                 </button>
@@ -990,7 +1012,7 @@ export default function AlchemyDialog({
                 }}
               >
                 <p className={`text-xs font-black ${RARITY_UI[hoverRecipe.rarity].text}`}>
-                  {hoverRecipe.outputName}
+                  {localizeItemName(hoverRecipe.outputName, locale)}
                 </p>
                 <div className="mt-2 space-y-1">
                   {hoverRecipe.ingredients.map((ing) => {
@@ -1002,7 +1024,7 @@ export default function AlchemyDialog({
                           <span className="grid h-5 w-5 place-items-center overflow-hidden rounded">
                             <ItemThumb name={ing.name} emoji={info?.emoji ?? '•'} className="text-sm" />
                           </span>
-                          <span className="truncate text-[11px] text-white/75">{ing.name}</span>
+                          <span className="truncate text-[11px] text-white/75">{localizeItemName(ing.name, locale)}</span>
                         </span>
                         <span className={`shrink-0 text-[11px] font-bold ${enough ? 'text-emerald-300' : 'text-red-300'}`}>
                           {have(ing.name)}/{ing.quantity}
@@ -1012,7 +1034,7 @@ export default function AlchemyDialog({
                   })}
                 </div>
                 <p className="mt-2 text-[10px]" style={{ color: GOLD }}>
-                  taxa {hoverRecipe.goldCost} 🪙
+                  {t('fee {cost} 🪙', { cost: hoverRecipe.goldCost })}
                 </p>
               </div>
             )}

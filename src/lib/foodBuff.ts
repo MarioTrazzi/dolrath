@@ -19,6 +19,11 @@
 //
 // Módulo 100% puro (sem prisma) — usado no servidor e no cliente.
 
+import { makeT, type TFunction } from './i18n/t'
+
+// Rótulo em EN por padrão (a chave É o texto); a UI passa o t() do locale.
+const EN = makeT('en')
+
 export type FoodBuffStat = 'str' | 'agi' | 'int' | 'def' | 'all';
 
 /** Bônus normalizado por atributo distribuído. */
@@ -142,12 +147,12 @@ const ATTR_LABEL: Record<(typeof ATTR_KEYS)[number], string> = {
  * Rótulo curto do efeito: "+2 STR" · "+1 em todos os atributos" ·
  * "+4 STR, +2 AGI/INT/DEF" (refeição com ênfase agrupa por valor).
  */
-export function foodBuffLabel(buff: { attrs: FoodBuffAttrs }): string {
+export function foodBuffLabel(buff: { attrs: FoodBuffAttrs }, t: TFunction = EN): string {
   const entries = ATTR_KEYS.filter((k) => buff.attrs[k] > 0);
   if (entries.length === 0) return '';
   const first = buff.attrs[entries[0]];
   if (entries.length === 4 && entries.every((k) => buff.attrs[k] === first)) {
-    return `+${first} em todos os atributos`;
+    return t('+{n} to all attributes', { n: first });
   }
   // Agrupa atributos pelo mesmo valor, do maior pro menor: "+4 STR, +2 AGI/INT/DEF"
   const byValue = new Map<number, string[]>();
@@ -163,6 +168,9 @@ export function foodBuffLabel(buff: { attrs: FoodBuffAttrs }): string {
 }
 
 /** Descrição da spec do catálogo p/ a UI da cozinha: "+2 STR por 30 min reais". */
-export function foodBuffSpecLabel(spec: FoodBuffSpec): string {
-  return `${foodBuffLabel(spec)} por ${spec.durationMin} min reais`;
+export function foodBuffSpecLabel(spec: FoodBuffSpec, t: TFunction = EN): string {
+  return t('{buff} for {n} real min', {
+    buff: foodBuffLabel(spec, t),
+    n: spec.durationMin,
+  });
 }

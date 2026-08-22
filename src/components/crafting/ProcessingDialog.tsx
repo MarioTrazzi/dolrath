@@ -30,6 +30,8 @@ import { type Rarity } from '@/lib/itemCatalog';
 import type { ProfessionLevelInfo } from '@/lib/professionSystem';
 import { ProfessionBar } from '@/components/gathering/GatheringPanel';
 import { CraftItemThumb as ItemThumb } from '@/components/store/CraftItemThumb';
+import { useT, useI18n } from '@/lib/i18n/I18nProvider';
+import { localizeItemName, localizeItemDesc } from '@/lib/i18n/catalog';
 import {
   BdoDialogShell,
   BevelButton,
@@ -110,6 +112,8 @@ export default function ProcessingDialog({
   attemptOverride,
   onChanged,
 }: ProcessingDialogProps) {
+  const t = useT();
+  const { locale } = useI18n();
   const [inventory, setInventory] = useState<ProcessingInventoryItem[]>([]);
   const [loadingInv, setLoadingInv] = useState(false);
   const [levelInfo, setLevelInfo] = useState<ProfessionLevelInfo | null>(null);
@@ -288,7 +292,7 @@ export default function ProcessingDialog({
         }
 
         if (!res.ok) {
-          setError(json.error || 'Erro ao processar');
+          setError(json.error || t('Failed to process'));
           reveal.reset();
           setBusy(false);
           return;
@@ -301,7 +305,7 @@ export default function ProcessingDialog({
       // Uma unidade por vez: sem a sequência (contrato antigo) encena 1 bloco.
       reveal.start(data.units?.length ?? 1);
     } catch {
-      setError('Erro inesperado ao processar');
+      setError(t('Unexpected error while processing'));
       reveal.reset();
     }
     setBusy(false);
@@ -343,7 +347,7 @@ export default function ProcessingDialog({
     <div className="px-4 pb-4 pt-3">
       {unlocked && maxCraftable > 1 && (
         <div className="mb-2 flex items-center justify-center gap-2">
-          <span className="text-xs text-[#8a8a90]">Quantidade:</span>
+          <span className="text-xs text-[#8a8a90]">{t('Quantity:')}</span>
           <button
             type="button"
             onClick={() => setCraftQty((q) => Math.max(1, q - 1))}
@@ -379,7 +383,7 @@ export default function ProcessingDialog({
             className="text-xs font-semibold underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
             style={{ color: GOLD_BRIGHT }}
           >
-            máx {maxCraftable}
+            {t('max {n}', { n: maxCraftable })}
           </button>
         </div>
       )}
@@ -387,35 +391,35 @@ export default function ProcessingDialog({
       {/* Por que o botão está bloqueado / por que a taxa não cabe na carteira */}
       {!unlocked ? (
         <div className="mb-2 text-center text-xs font-semibold text-red-400">
-          🔒 Requer Processamento nível {recipe.minLevel}.
+          {t('🔒 Requires Processing level {n}.', { n: recipe.minLevel })}
         </div>
       ) : maxCraftable < 1 ? (
         <div className="mb-2 text-center text-xs font-semibold text-red-400">
-          Faltam insumos para uma unidade.
+          {t('Missing inputs for one unit.')}
         </div>
       ) : goldShort ? (
         <div className="mb-2 text-center text-xs font-semibold" style={{ color: GOLD_BRIGHT }}>
-          Taxa do lote: {totalGoldCost} 🪙 — sem GOLD na carteira, vamos recarregar.
+          {t('Batch fee: {cost} 🪙 — no GOLD in the wallet, we will top it up.', { cost: totalGoldCost })}
         </div>
       ) : (
         <div className="mb-2 text-center text-xs text-[#8a8a90]">
-          Taxa do lote: <span style={{ color: GOLD }}>{totalGoldCost} 🪙</span>
+          {t('Batch fee:')} <span style={{ color: GOLD }}>{totalGoldCost} 🪙</span>
         </div>
       )}
 
       {revealing ? (
         /* Encenação em curso: quem faz grind não pode ficar refém da animação. */
         <BevelButton onClick={reveal.skip}>
-          ⏩ Pular ({reveal.revealed}/{reveal.total})
+          {t('⏩ Skip ({revealed}/{total})', { revealed: reveal.revealed, total: reveal.total })}
         </BevelButton>
       ) : (
         <BevelButton
           onClick={handleProcess}
           disabled={!unlocked || maxCraftable < 1 || (!characterId && !attemptOverride)}
           busy={busy}
-          busyLabel="⚙ Processando..."
+          busyLabel={t('⚙ Processing...')}
         >
-          {craftQty > 1 ? `⚙ Processar ×${craftQty}` : '⚙ Processar'}
+          {craftQty > 1 ? t('⚙ Process ×{n}', { n: craftQty }) : t('⚙ Process')}
         </BevelButton>
       )}
       <div className="mt-2 text-center">
@@ -424,7 +428,7 @@ export default function ProcessingDialog({
           onClick={() => setBookOpen(true)}
           className="text-xs font-semibold text-[#9a9aa0] transition-colors hover:text-white"
         >
-          📖 Livro de Processamento — trocar receita
+          {t('📖 Processing Book — change recipe')}
         </button>
       </div>
     </div>
@@ -432,13 +436,13 @@ export default function ProcessingDialog({
 
   return (
     <>
-      <BdoDialogShell open={open} onClose={onClose} icon="⚙" title="Processamento" footer={footer}>
+      <BdoDialogShell open={open} onClose={onClose} icon="⚙" title={t('Processing')} footer={footer}>
         {/* Nível da profissão (conta inteira, como Forja/Alquimia) */}
         <div className="border-b border-black/60 bg-[#19191c] px-5 py-3">
           {levelInfo ? (
-            <ProfessionBar label="Processamento" emoji="⚙️" info={levelInfo} />
+            <ProfessionBar label={t('Processing')} emoji="⚙️" info={levelInfo} />
           ) : (
-            <div className="text-xs text-[#8a8a90]">Preparando a bancada…</div>
+            <div className="text-xs text-[#8a8a90]">{t('Preparing the bench…')}</div>
           )}
         </div>
 
@@ -448,9 +452,9 @@ export default function ProcessingDialog({
             <div className="mb-2 text-3xl" style={{ color: PROC_ACCENT }}>
               ⚙
             </div>
-            Escolha no livro o insumo que deseja beneficiar.
+            {t('Choose the input you want to process from the book.')}
             <div className="mt-4">
-              <BevelButton onClick={() => setBookOpen(true)}>📖 Livro de Processamento</BevelButton>
+              <BevelButton onClick={() => setBookOpen(true)}>{t('📖 Processing Book')}</BevelButton>
             </div>
           </div>
         ) : (
@@ -461,12 +465,12 @@ export default function ProcessingDialog({
                 phase={phase}
                 chargeId={chargeId * 1000 + reveal.tick}
                 materials={recipe.inputs.map((m) => ({
-                  name: m.name,
+                  name: localizeItemName(m.name, locale),
                   emoji: processingItemEmoji(m.name),
                   have: have(m.name),
                   need: m.quantity * craftQty,
                 }))}
-                outputName={recipe.outputName}
+                outputName={localizeItemName(recipe.outputName, locale)}
                 outputEmoji={processingItemEmoji(recipe.outputName)}
                 glowColor={centerUi?.glow}
                 working={reveal.phase === 'working' || revealing}
@@ -476,7 +480,7 @@ export default function ProcessingDialog({
                     <div className="text-center">
                       <div className="text-lg font-black text-red-400">🔒</div>
                       <div className="text-[10px] uppercase tracking-[0.14em] text-red-400">
-                        Proc. nv {recipe.minLevel}
+                        {t('Proc. lv {n}', { n: recipe.minLevel })}
                       </div>
                     </div>
                   ) : (
@@ -488,8 +492,8 @@ export default function ProcessingDialog({
                         style={{ color: yieldChance > 0 ? GOLD_BRIGHT : '#77777d' }}
                       >
                         {yieldChance > 0
-                          ? `rend. +${Math.round(yieldChance * 100)}%`
-                          : 'rend. fixo'}
+                          ? t('yield +{n}%', { n: Math.round(yieldChance * 100) })
+                          : t('fixed yield')}
                       </div>
                     </div>
                   )
@@ -500,19 +504,21 @@ export default function ProcessingDialog({
             {/* Nome + custo */}
             <div className="px-5 pb-2 text-center">
               <div className={`text-[15px] font-semibold leading-tight ${centerUi?.text ?? 'text-white'}`}>
-                {recipe.outputName}
+                {localizeItemName(recipe.outputName, locale)}
               </div>
               <p className="mt-0.5 text-sm">
-                <span style={{ color: GOLD }}>taxa {recipe.goldCost} 🪙</span>
-                <span className="text-[#77777d]"> · +{recipe.xp} XP</span>
-                {maxCraftable > 1 && <span className="text-[#77777d]"> · até {maxCraftable}×</span>}
+                <span style={{ color: GOLD }}>{t('fee {cost} 🪙', { cost: recipe.goldCost })}</span>
+                <span className="text-[#77777d]"> · {t('+{n} XP', { n: recipe.xp })}</span>
+                {maxCraftable > 1 && (
+                  <span className="text-[#77777d]"> · {t('up to {n}×', { n: maxCraftable })}</span>
+                )}
               </p>
             </div>
 
             {/* Descrição da saída (processado não tem stats de gear) */}
             {outputDescription && (
               <div className="border-y border-black/60 bg-[#19191c] px-5 py-2.5 text-center text-[12.5px] leading-snug text-[#c9c9ce]">
-                {outputDescription}
+                {localizeItemDesc(recipe.outputName, outputDescription, locale)}
               </div>
             )}
 
@@ -528,12 +534,12 @@ export default function ProcessingDialog({
                       transition={{ repeat: Infinity, duration: 0.7 }}
                       style={{ color: PROC_ACCENT_BRIGHT }}
                     >
-                      ⚙ Processando
+                      {t('⚙ Processing')}
                       {revealing && reveal.total > 1 ? ` ${reveal.revealed}/${reveal.total}` : '...'}
                     </motion.span>
                   )}
                   {reveal.phase === 'done' && result && (
-                    <span style={{ color: GOLD_BRIGHT }}>✨ PRONTO!</span>
+                    <span style={{ color: GOLD_BRIGHT }}>{t('✨ READY!')}</span>
                   )}
                 </div>
 
@@ -548,7 +554,7 @@ export default function ProcessingDialog({
                         className="flex items-center justify-between rounded-[3px] border border-black/50 bg-[#19191c] px-2 py-1 text-xs"
                       >
                         <span className="truncate text-[#c9c9ce]">
-                          {recipe.outputName}
+                          {localizeItemName(recipe.outputName, locale)}
                         </span>
                         <span className="font-bold" style={{ color: u.bonus ? GOLD_BRIGHT : '#9a9aa0' }}>
                           {u.bonus ? '×2 💎' : '×1'}
@@ -567,11 +573,11 @@ export default function ProcessingDialog({
                     {result.message}
                     {bonusCount > 0 && (
                       <div className="mt-0.5 text-xs font-bold" style={{ color: GOLD_BRIGHT }}>
-                        ✨ +{bonusCount} de rendimento extra (nv de Processamento)
+                        {t('✨ +{n} extra yield (Processing level)', { n: bonusCount })}
                       </div>
                     )}
                     <div className="mt-0.5 text-xs font-normal" style={{ color: GOLD }}>
-                      +{result.xpGained} XP de Processamento
+                      {t('+{n} Processing XP', { n: result.xpGained })}
                     </div>
                   </motion.div>
                 )}
@@ -602,7 +608,7 @@ export default function ProcessingDialog({
             >
               <div className="sticky top-0 z-10 flex items-center justify-between border-b border-black/70 bg-gradient-to-b from-[#2b2b2f] to-[#1a1a1d] px-4 py-2.5">
                 <h3 className="flex items-center gap-2 text-[15px] font-semibold tracking-wide text-[#dcdce0]">
-                  <span style={{ color: PROC_ACCENT }}>📖</span> Livro de Processamento
+                  <span style={{ color: PROC_ACCENT }}>📖</span> {t('Processing Book')}
                 </h3>
                 <button
                   onClick={() => setBookOpen(false)}
@@ -613,14 +619,15 @@ export default function ProcessingDialog({
               </div>
               <div className="p-4">
                 <p className="mb-4 text-xs text-[#8a8a90]">
-                  Clique numa receita para levá-la à bancada. Receitas com insumos completos ficam
-                  acesas. 🔒 = requer nível de Processamento. Beneficiar nunca falha.
+                  {t(
+                    'Click a recipe to bring it to the bench. Recipes with all inputs available light up. 🔒 = requires a Processing level. Processing never fails.',
+                  )}
                 </p>
                 <div className="space-y-4">
                   {groups.map(({ group, recipes }) => (
                     <div key={group}>
                       <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-[#9a9aa0]">
-                        {GROUP_EMOJI[group]} {PROCESSING_GROUP_LABEL[group]}
+                        {GROUP_EMOJI[group]} {t(PROCESSING_GROUP_LABEL[group])}
                       </label>
                       <div
                         className="grid"
@@ -653,7 +660,7 @@ export default function ProcessingDialog({
                               </span>
                               <span className="min-w-0">
                                 <span className={`block truncate text-[11px] font-bold leading-tight ${ui.text}`}>
-                                  {r.outputName}
+                                  {localizeItemName(r.outputName, locale)}
                                 </span>
                                 <span
                                   className={`block text-[10px] leading-tight ${
@@ -661,13 +668,13 @@ export default function ProcessingDialog({
                                   }`}
                                 >
                                   {!rUnlocked
-                                    ? `🔒 Proc. nv ${r.minLevel}`
+                                    ? t('🔒 Proc. lv {n}', { n: r.minLevel })
                                     : ok
-                                      ? '✓ insumos completos'
-                                      : 'faltam insumos'}
+                                      ? t('✓ all inputs available')
+                                      : t('missing inputs')}
                                 </span>
                                 <span className="block text-[10px] leading-tight text-[#77777d]">
-                                  sem falha · +{r.xp} XP
+                                  {t('no fail · +{n} XP', { n: r.xp })}
                                 </span>
                               </span>
                             </button>

@@ -9,6 +9,7 @@ export const FORGE_PT: Record<string, string> = {
   'Lighting the forge…': 'Acendendo a forja…',
   'Pick the piece you want to forge from the book.': 'Escolha no livro a peça que deseja forjar.',
   '📖 Forge Book': '📖 Livro da Forja',
+  'Forge Book': 'Livro da Forja',
   'Forge lv {n}': 'Forja nv {n}',
   'no fail': 'sem falha',
   'chance': 'chance',
@@ -33,4 +34,11 @@ export const FORGE_PT: Record<string, string> = {
   '✓ materials complete': '✓ materiais completos',
   'missing materials': 'faltam materiais',
   '{n}% chance': '{n}% de chance',
+  'Batch fee:': 'Taxa do lote:',
+  'Batch fee: {cost} 🪙 — no GOLD in the wallet, we will top it up.':
+    'Taxa do lote: {cost} 🪙 — sem GOLD na carteira, vamos recarregar.',
+  '⏩ Skip ({revealed}/{total})': '⏩ Pular ({revealed}/{total})',
+  '🔒 Requires Forge level {n}.': '🔒 Requer Forja nível {n}.',
+  'Missing materials for one piece.': 'Faltam materiais para uma peça.',
+  '⚒ Forging': '⚒ Forjando',
 }

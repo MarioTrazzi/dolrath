@@ -112,10 +112,11 @@ export function cookingRecipesUsingInput(name: string): CookingRecipe[] {
   return COOKING_RECIPES.filter((r) => r.inputs.some((i) => i.name === name));
 }
 
+// Chave EN (i18n EN-as-key): a UI passa por t(); o dict pt/cooking.ts traduz.
 export const COOKING_GROUP_LABEL: Record<CookingRecipe['group'], string> = {
-  oven: 'Forno',
-  pot: 'Panela',
-  fresh: 'Frescos',
+  oven: 'Oven',
+  pot: 'Pot',
+  fresh: 'Fresh',
 };
 
 const COOKING_GROUP_ORDER: CookingRecipe['group'][] = ['oven', 'pot', 'fresh'];

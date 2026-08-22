@@ -23,6 +23,7 @@ import {
   itemImagePath,
 } from '@/lib/itemCatalog'
 import type { ProfessionLevelInfo } from '@/lib/professionSystem'
+import { useT } from '@/lib/i18n/I18nProvider'
 
 // Paleta por campo (borda/brilho dos cards, como o accent das masmorras).
 export const FIELD_ACCENT: Record<GatherFieldId, string> = {
@@ -60,14 +61,15 @@ export function GatherItemThumb({ name, className = 'text-base' }: { name: strin
 
 /** Barra de XP de profissão (Coleta/Fazenda). */
 export function ProfessionBar({ label, emoji, info }: { label: string; emoji: string; info: ProfessionLevelInfo }) {
+  const t = useT()
   return (
     <div className="w-full">
       <div className="flex items-center justify-between text-xs mb-1">
         <span className="text-white font-bold">
-          {emoji} {label} <span className="text-amber-300">Nv. {info.level}</span>
+          {emoji} {label} <span className="text-amber-300">{t('Lv.')} {info.level}</span>
         </span>
         <span className="text-white/50">
-          {info.isMax ? 'MÁX' : `${info.xpIntoLevel}/${info.xpForNext} XP`}
+          {info.isMax ? t('MAX') : `${info.xpIntoLevel}/${info.xpForNext} XP`}
         </span>
       </div>
       <div className="h-2 rounded-full bg-white/10 overflow-hidden">

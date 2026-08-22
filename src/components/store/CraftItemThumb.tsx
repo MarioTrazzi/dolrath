@@ -196,12 +196,12 @@ export function CraftItemThumb({
               )}
             </div>
 
-            <h3 className="font-black text-base leading-tight text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">{name}</h3>
+            <h3 className="font-black text-base leading-tight text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">{displayName}</h3>
 
             <div className="flex items-center gap-1.5 mt-1 mb-1.5 flex-wrap">
               {ui && (
                 <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ color: ui.ring, background: ui.ring + '22' }}>
-                  {ui.label}
+                  {localizeRarityLabel(ui.label, locale)}
                 </span>
               )}
               {meta && (
@@ -211,8 +211,8 @@ export function CraftItemThumb({
               )}
             </div>
 
-            {meta?.description && (
-              <p className="text-xs text-white/60 leading-snug mb-2 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">{meta.description}</p>
+            {displayDesc && (
+              <p className="text-xs text-white/60 leading-snug mb-2 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">{displayDesc}</p>
             )}
 
             {stats.length > 0 && (

@@ -26,6 +26,8 @@ import {
   type CookingRecipe,
 } from '@/lib/cooking';
 import { foodBuffSpecLabel, parseFoodBuffSpec } from '@/lib/foodBuff';
+import { useT, useI18n } from '@/lib/i18n/I18nProvider';
+import { localizeItemName, localizeItemDesc } from '@/lib/i18n/catalog';
 import { type Rarity } from '@/lib/itemCatalog';
 import type { ProfessionLevelInfo } from '@/lib/professionSystem';
 import { ProfessionBar } from '@/components/gathering/GatheringPanel';
@@ -101,6 +103,8 @@ export default function CookingDialog({
   attemptOverride,
   onChanged,
 }: CookingDialogProps) {
+  const t = useT();
+  const { locale } = useI18n();
   const [inventory, setInventory] = useState<CookingInventoryItem[]>([]);
   const [loadingInv, setLoadingInv] = useState(false);
   const [levelInfo, setLevelInfo] = useState<ProfessionLevelInfo | null>(null);
@@ -274,7 +278,7 @@ export default function CookingDialog({
         }
 
         if (!res.ok) {
-          setError(json.error || 'Erro ao cozinhar');
+          setError(json.error || t('Failed to cook'));
           reveal.reset();
           setBusy(false);
           return;
@@ -287,7 +291,7 @@ export default function CookingDialog({
       // Uma unidade por vez: sem a sequência (contrato antigo) encena 1 bloco.
       reveal.start(data.units?.length ?? 1);
     } catch {
-      setError('Erro inesperado ao cozinhar');
+      setError(t('Unexpected error cooking'));
       reveal.reset();
     }
     setBusy(false);
@@ -306,9 +310,11 @@ export default function CookingDialog({
   // O que o prato faz ao COMER: buff por tempo real ou restauração fora de combate.
   const buffSpec = output ? parseFoodBuffSpec(output.stats) : null;
   const effectLabel = buffSpec
-    ? `🍽 Ao comer: ${foodBuffSpecLabel(buffSpec)}`
+    ? `${t('🍽 When eaten:')} ${foodBuffSpecLabel(buffSpec, t)}`
     : output && Number((output.stats as any)?.healAmount) > 0
-      ? `🍽 Ao comer: restaura ${Number((output.stats as any).healAmount)} HP fora de combate`
+      ? t('🍽 When eaten: restores {n} HP outside combat', {
+          n: Number((output.stats as any).healAmount),
+        })
       : null;
   const centerUi = recipe ? RARITY_UI[recipe.rarity] : null;
 
@@ -323,7 +329,7 @@ export default function CookingDialog({
     <div className="px-4 pb-4 pt-3">
       {unlocked && maxCraftable > 1 && (
         <div className="mb-2 flex items-center justify-center gap-2">
-          <span className="text-xs text-[#8a8a90]">Quantidade:</span>
+          <span className="text-xs text-[#8a8a90]">{t('Quantity:')}</span>
           <button
             type="button"
             onClick={() => setCraftQty((q) => Math.max(1, q - 1))}
@@ -359,40 +365,40 @@ export default function CookingDialog({
             className="text-xs font-semibold underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
             style={{ color: GOLD_BRIGHT }}
           >
-            máx {maxCraftable}
+            {t('max {n}', { n: maxCraftable })}
           </button>
         </div>
       )}
       {!unlocked ? (
         <div className="mb-2 text-center text-xs font-semibold text-red-400">
-          🔒 Requer Culinária nível {recipe.minLevel}.
+          {t('🔒 Requires Cooking level {n}.', { n: recipe.minLevel })}
         </div>
       ) : maxCraftable < 1 ? (
         <div className="mb-2 text-center text-xs font-semibold text-red-400">
-          Faltam insumos para um prato.
+          {t('Missing inputs for one dish.')}
         </div>
       ) : goldShort ? (
         <div className="mb-2 text-center text-xs font-semibold" style={{ color: GOLD_BRIGHT }}>
-          Taxa do lote: {totalGoldCost} 🪙 — sem GOLD na carteira, vamos recarregar.
+          {t('Batch fee: {cost} 🪙 — no GOLD in the wallet, we will top it up.', { cost: totalGoldCost })}
         </div>
       ) : (
         <div className="mb-2 text-center text-xs text-[#8a8a90]">
-          Taxa do lote: <span style={{ color: GOLD }}>{totalGoldCost} 🪙</span>
+          {t('Batch fee:')} <span style={{ color: GOLD }}>{totalGoldCost} 🪙</span>
         </div>
       )}
       {revealing ? (
         /* Encenação em curso: quem faz grind não pode ficar refém da animação. */
         <BevelButton onClick={reveal.skip}>
-          ⏩ Pular ({reveal.revealed}/{reveal.total})
+          {t('⏩ Skip ({revealed}/{total})', { revealed: reveal.revealed, total: reveal.total })}
         </BevelButton>
       ) : (
         <BevelButton
           onClick={handleCook}
           disabled={!unlocked || maxCraftable < 1 || (!characterId && !attemptOverride)}
           busy={busy}
-          busyLabel="🍳 Cozinhando..."
+          busyLabel={t('🍲 Cooking...')}
         >
-          {craftQty > 1 ? `🍳 Cozinhar ×${craftQty}` : '🍳 Cozinhar'}
+          {craftQty > 1 ? t('🍳 Cook ×{n}', { n: craftQty }) : t('🍳 Cook')}
         </BevelButton>
       )}
       <div className="mt-2 text-center">
@@ -401,7 +407,7 @@ export default function CookingDialog({
           onClick={() => setBookOpen(true)}
           className="text-xs font-semibold text-[#9a9aa0] transition-colors hover:text-white"
         >
-          📖 Livro de Receitas — trocar prato
+          {t('📖 Recipe Book — change dish')}
         </button>
       </div>
     </div>
@@ -409,13 +415,13 @@ export default function CookingDialog({
 
   return (
     <>
-      <BdoDialogShell open={open} onClose={onClose} icon="🍳" title="Culinária" footer={footer}>
+      <BdoDialogShell open={open} onClose={onClose} icon="🍳" title={t('Cooking')} footer={footer}>
         {/* Nível da profissão (conta inteira, como Forja/Alquimia/Processamento) */}
         <div className="border-b border-black/60 bg-[#19191c] px-5 py-3">
           {levelInfo ? (
-            <ProfessionBar label="Culinária" emoji="🍳" info={levelInfo} />
+            <ProfessionBar label={t('Cooking')} emoji="🍳" info={levelInfo} />
           ) : (
-            <div className="text-xs text-[#8a8a90]">Acendendo o fogão…</div>
+            <div className="text-xs text-[#8a8a90]">{t('Lighting the stove…')}</div>
           )}
         </div>
 
@@ -425,9 +431,9 @@ export default function CookingDialog({
             <div className="mb-2 text-3xl" style={{ color: COOK_ACCENT }}>
               🍲
             </div>
-            Escolha no livro o prato que deseja cozinhar.
+            {t('Pick the dish you want to cook from the book.')}
             <div className="mt-4">
-              <BevelButton onClick={() => setBookOpen(true)}>📖 Livro de Receitas</BevelButton>
+              <BevelButton onClick={() => setBookOpen(true)}>{t('📖 Recipe Book')}</BevelButton>
             </div>
           </div>
         ) : (
@@ -439,12 +445,12 @@ export default function CookingDialog({
                 working={reveal.phase === 'working' || revealing}
                 chargeId={chargeId * 1000 + reveal.tick}
                 materials={recipe.inputs.map((m) => ({
-                  name: m.name,
+                  name: localizeItemName(m.name, locale),
                   emoji: cookingItemEmoji(m.name),
                   have: have(m.name),
                   need: m.quantity * craftQty,
                 }))}
-                outputName={recipe.outputName}
+                outputName={localizeItemName(recipe.outputName, locale)}
                 outputEmoji={cookingItemEmoji(recipe.outputName)}
                 glowColor={centerUi?.glow}
                 plate={phase === 'done' && liveSucceeded > 1 ? `×${liveSucceeded}` : null}
@@ -453,7 +459,7 @@ export default function CookingDialog({
                     <div className="text-center">
                       <div className="text-lg font-black text-red-400">🔒</div>
                       <div className="text-[10px] uppercase tracking-[0.14em] text-red-400">
-                        Culin. nv {recipe.minLevel}
+                        {t('Cook. lv {n}', { n: recipe.minLevel })}
                       </div>
                     </div>
                   ) : (
@@ -461,7 +467,7 @@ export default function CookingDialog({
                       <span className="text-lg font-bold" style={{ color: COOK_ACCENT_BRIGHT }}>
                         ✓
                       </span>
-                      <div className="text-[10px] uppercase tracking-[0.14em] text-[#77777d]">sem falha</div>
+                      <div className="text-[10px] uppercase tracking-[0.14em] text-[#77777d]">{t('no fail')}</div>
                     </div>
                   )
                 }
@@ -471,19 +477,21 @@ export default function CookingDialog({
             {/* Nome + custo */}
             <div className="px-5 pb-2 text-center">
               <div className={`text-[15px] font-semibold leading-tight ${centerUi?.text ?? 'text-white'}`}>
-                {recipe.outputName}
+                {localizeItemName(recipe.outputName, locale)}
               </div>
               <p className="mt-0.5 text-sm">
-                <span style={{ color: GOLD }}>taxa {recipe.goldCost} 🪙</span>
-                <span className="text-[#77777d]"> · +{recipe.xp} XP</span>
-                {maxCraftable > 1 && <span className="text-[#77777d]"> · até {maxCraftable}×</span>}
+                <span style={{ color: GOLD }}>{t('fee {cost} 🪙', { cost: recipe.goldCost })}</span>
+                <span className="text-[#77777d]"> · {t('+{n} XP', { n: recipe.xp })}</span>
+                {maxCraftable > 1 && (
+                  <span className="text-[#77777d]"> · {t('up to {n}×', { n: maxCraftable })}</span>
+                )}
               </p>
             </div>
 
             {/* Descrição do prato + o que ele faz ao comer (buff por tempo real) */}
             {(outputDescription || effectLabel) && (
               <div className="border-y border-black/60 bg-[#19191c] px-5 py-2.5 text-center text-[12.5px] leading-snug text-[#c9c9ce]">
-                {outputDescription}
+                {localizeItemDesc(recipe.outputName, outputDescription, locale)}
                 {effectLabel && (
                   <div className="mt-1 font-semibold text-emerald-300">{effectLabel}</div>
                 )}
@@ -492,7 +500,7 @@ export default function CookingDialog({
 
             {!unlocked && (
               <div className="px-5 pb-1 pt-3 text-center text-[12.5px] font-semibold text-red-400">
-                Requer Culinária nível {recipe.minLevel} para esta receita.
+                {t('Requires Cooking level {n} for this recipe.', { n: recipe.minLevel })}
               </div>
             )}
 
@@ -506,12 +514,12 @@ export default function CookingDialog({
                       transition={{ repeat: Infinity, duration: 0.7 }}
                       style={{ color: COOK_ACCENT_BRIGHT }}
                     >
-                      🍲 Cozinhando
+                      {t('🍲 Cooking')}
                       {revealing && reveal.total > 1 ? ` ${reveal.revealed}/${reveal.total}` : '...'}
                     </motion.span>
                   )}
                   {reveal.phase === 'done' && result && (
-                    <span style={{ color: GOLD_BRIGHT }}>✨ PRONTO!</span>
+                    <span style={{ color: GOLD_BRIGHT }}>{t('✨ READY!')}</span>
                   )}
                 </div>
 
@@ -525,7 +533,7 @@ export default function CookingDialog({
                         animate={{ opacity: 1, x: 0 }}
                         className="flex items-center justify-between rounded-[3px] border border-black/50 bg-[#19191c] px-2 py-1 text-xs"
                       >
-                        <span className="truncate text-[#c9c9ce]">{recipe.outputName}</span>
+                        <span className="truncate text-[#c9c9ce]">{localizeItemName(recipe.outputName, locale)}</span>
                         <span className="font-bold text-emerald-300">✓</span>
                       </motion.div>
                     ))}
@@ -540,7 +548,7 @@ export default function CookingDialog({
                   >
                     {result.message}
                     <div className="mt-0.5 text-xs font-normal" style={{ color: GOLD }}>
-                      +{result.xpGained} XP de Culinária
+                      {t('+{n} Cooking XP', { n: result.xpGained })}
                     </div>
                   </motion.div>
                 )}
@@ -572,7 +580,7 @@ export default function CookingDialog({
             >
               <div className="sticky top-0 z-10 flex items-center justify-between border-b border-black/70 bg-gradient-to-b from-[#2b2b2f] to-[#1a1a1d] px-4 py-2.5">
                 <h3 className="flex items-center gap-2 text-[15px] font-semibold tracking-wide text-[#dcdce0]">
-                  <span style={{ color: COOK_ACCENT }}>📖</span> Livro de Receitas
+                  <span style={{ color: COOK_ACCENT }}>📖</span> {t('Recipe Book')}
                 </h3>
                 <button
                   onClick={() => setBookOpen(false)}
@@ -583,15 +591,15 @@ export default function CookingDialog({
               </div>
               <div className="p-4">
                 <p className="mb-4 text-xs text-[#8a8a90]">
-                  Clique num prato para levá-lo ao fogão. Receitas com insumos completos ficam
-                  acesas. 🔒 = requer nível de Culinária. Cozinhar nunca falha; o buff do prato
-                  vale por tempo REAL ao comer.
+                  {t(
+                    "Click a dish to bring it to the stove. Recipes with full inputs light up. 🔒 = requires Cooking level. Cooking never fails; the dish's buff runs on REAL time when eaten.",
+                  )}
                 </p>
                 <div className="space-y-4">
                   {groups.map(({ group, recipes }) => (
                     <div key={group}>
                       <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-[#9a9aa0]">
-                        {GROUP_EMOJI[group]} {COOKING_GROUP_LABEL[group]}
+                        {GROUP_EMOJI[group]} {t(COOKING_GROUP_LABEL[group])}
                       </label>
                       <div
                         className="grid"
@@ -626,7 +634,7 @@ export default function CookingDialog({
                               </span>
                               <span className="min-w-0">
                                 <span className={`block truncate text-[11px] font-bold leading-tight ${ui.text}`}>
-                                  {r.outputName}
+                                  {localizeItemName(r.outputName, locale)}
                                 </span>
                                 <span
                                   className={`block text-[10px] leading-tight ${
@@ -634,13 +642,13 @@ export default function CookingDialog({
                                   }`}
                                 >
                                   {!rUnlocked
-                                    ? `🔒 Culin. nv ${r.minLevel}`
+                                    ? t('🔒 Cook. lv {n}', { n: r.minLevel })
                                     : ok
-                                      ? '✓ insumos completos'
-                                      : 'faltam insumos'}
+                                      ? t('✓ inputs complete')
+                                      : t('missing inputs')}
                                 </span>
                                 <span className="block truncate text-[10px] leading-tight text-[#77777d]">
-                                  {spec ? foodBuffSpecLabel(spec) : `sem falha · +${r.xp} XP`}
+                                  {spec ? foodBuffSpecLabel(spec, t) : t('no fail · +{n} XP', { n: r.xp })}
                                 </span>
                               </span>
                             </button>

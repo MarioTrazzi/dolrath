@@ -381,4 +381,253 @@ export const DOC_PT: Record<string, string> = {
   'Modifiers:': 'Modificadores:',
   'Resists:': 'Resiste:',
   'Vulnerable:': 'Vulnerável:',
+
+  // PvP
+  'Game modes': 'Modos de jogo',
+  'PvP — Arena': 'PvP — Arena',
+  'Player-versus-player battles in real time (socket). Rewards guarantee daily progression and reward skill, not farming.':
+    'Batalhas jogador vs jogador em tempo real (socket). Recompensas garantem progressão diária e premiam skill, não farming.',
+  '🏆 Victory': '🏆 Vitória',
+  '50 XP · 15 GOLD base (+50% bonus)': '50 XP · 15 GOLD base (+50% bônus)',
+  '😔 Defeat': '😔 Derrota',
+  '25 XP · 8 GOLD (50% of a win)': '25 XP · 8 GOLD (50% da vitória)',
+  '💎 Participation': '💎 Participação',
+  '15 XP · 5 GOLD (flee/disconnect)': '15 XP · 5 GOLD (fuga/desconexão)',
+  'Scaling & bonuses': 'Escalonamento & bônus',
+  'XP +10%/level (max. 5×) · GOLD +8%/level': 'XP +10%/nível (máx. 5×) · GOLD +8%/nível',
+  'Level difference: ±15%/level · ': 'Diferença de nível: ±15%/nível · ',
+  'Underdog': 'Underdog',
+  ' +50% (beating someone 5+ levels above)': ' +50% (vencer 5+ níveis acima)',
+  'Anti-farm: −30% for beating someone 5+ levels below':
+    'Anti-farm: −30% ao vencer alguém 5+ níveis abaixo',
+  'Perfect win (without losing HP): +30% XP / +50% GOLD · Transformation kill: +20%':
+    'Vitória perfeita (sem perder HP): +30% XP / +50% GOLD · Transformation kill: +20%',
+  'Win combo / first of the day: ': 'Combo de vitórias / 1ª do dia: ',
+  'Stamina cost: basic ': 'Custo de stamina: básico ',
+  ' · ranked ': ' · ranqueado ',
+  ' · tournament ': ' · torneio ',
+
+  // PvE
+  'Four themed dungeons. You explore rooms rolling a ': 'Quatro masmorras temáticas. Você explora salas rolando um ',
+  ' per event; at the end, you face the boss. Monsters and rewards scale with level, room and difficulty.':
+    ' por evento; ao fim, enfrenta o boss. Monstros e recompensas escalam com nível, sala e dificuldade.',
+  'Dungeon': 'Masmorra',
+  'Difficulty': 'Dificuldade',
+  'Rooms': 'Salas',
+  'Boss': 'Boss',
+  'Event table (d20)': 'Tabela de eventos (d20)',
+  '☠️ Trap': '☠️ Armadilha',
+  ' — damage as % of max HP': ' — dano % do HP máximo',
+  '⚔️ Monster': '⚔️ Monstro',
+  ' — scaled turn-based battle': ' — batalha por turnos escalada',
+  '🍃 Nothing': '🍃 Nada',
+  ' — flavour, move along': ' — ambientação, segue em frente',
+  '💰 Gold': '💰 Ouro',
+  ' — random gold × level': ' — ouro aleatório × nível',
+  '🧪 Item': '🧪 Item',
+  ' — a themed item is drawn': ' — item temático sorteado',
+  '✨ Blessing': '✨ Bênção',
+  ' — restores HP/MP/STA and/or XP': ' — restaura HP/MP/STA e/ou XP',
+  'Monster scaling': 'Escalonamento de monstros',
+  'Weekly adventures': 'Aventuras semanais',
+  'A weekly content mode still to be designed (format, rewards and how the item catalog drop connects). The old dungeon system (rank F–S monsters) was removed.':
+    'Modo de conteúdo semanal ainda a ser projetado (formato, recompensas e como o drop do catálogo de itens se conecta). O antigo sistema de masmorras (monstros rank F–S) foi removido.',
+  'Stamina cost: simple ': 'Custo stamina: simples ',
+  ' · normal ': ' · normal ',
+  ' · hard ': ' · difícil ',
+  ' · raid ': ' · raid ',
+
+  // Itens
+  'Content': 'Conteúdo',
+  'The catalog is the single source of items, split by ': 'O catálogo é a fonte única de itens, dividido por ',
+  'how the item is obtained': 'como o item é obtido',
+  '. The shop (NPC) sells basic→intermediate to sustain the early/mid-game; everything ':
+    '. A loja (NPC) vende o básico→intermediário para sustentar o early/mid-game; tudo ',
+  'rare or above': 'raro ou acima',
+  ', accessories and the best consumables come from dungeons and adventures.':
+    ', acessórios e os melhores consumíveis vêm de masmorras e aventuras.',
+  'Tiers & origin': 'Tiers & origem',
+  'Superior': 'Superior',
+  ' → 🗝️ dungeon floor': ' → 🗝️ chão de masmorra',
+  ' → 👑 dungeon boss (exclusive)': ' → 👑 chefe de masmorra (exclusivo)',
+  ' → 👑 dungeon boss or 🗓️ weekly adventure': ' → 👑 chefe de masmorra ou 🗓️ aventura semanal',
+  'weight': 'peso',
+  'Builds & race restriction': 'Builds & restrição de raça',
+  'Each shop tier brings ': 'Cada tier da loja traz ',
+  '4 variants': '4 variantes',
+  ' of similar power but a different attribute spread — the player picks by build:':
+    ' de potência parecida, mas distribuição de atributos diferente — o jogador escolhe pela build:',
+  'Gear by ': 'Equipamento por ',
+  'CLASS': 'CLASSE',
+  ' (via ': ' (via ',
+  'Warrior': 'Guerreiro',
+  ' uses heavy/medium + sword/axe/shield; ': ' usa pesada/média + espada/machado/escudo; ',
+  'Rogue': 'Ladino',
+  ' light/medium + dagger/bow; ': ' leve/média + adaga/arco; ',
+  'Mage': 'Mago',
+  ' light + staff/orb; ': ' leve + cajado/orbe; ',
+  'Monk': 'Monge',
+  ' light/medium + gauntlet. Race still counts for stats, transformations and exclusive legendary items. The shop filters by race+class (':
+    ' leve/média + manopla. A raça segue valendo para stats, transformações e itens lendários exclusivos. A loja filtra por raça+classe (',
+  'One unique boss per Saturday (4-week rotation), each with exclusive named gear (Legendary and above) — the Black Desert model (Kzarka, Garmoth, Karanda…).':
+    'Um chefe único por sábado (rotação de 4 semanas), cada um com gear nomeado exclusivo (Lendário acima) — modelo Black Desert (Kzarka, Garmoth, Karanda…).',
+  '🧪 Consumables': '🧪 Consumíveis',
+  'The shop sells basics and intermediates; dungeons and adventures bring enhanced and unique versions.':
+    'Loja vende básicos e intermediários; masmorras e aventuras trazem versões aprimoradas e únicas.',
+  '🏪 Shop — basics & intermediates': '🏪 Loja — básicos & intermediários',
+  '🗝️ Dungeons & Adventures — enhanced & unique': '🗝️ Masmorras & Aventuras — aprimorados & únicos',
+
+  // Fórmulas (bloco monoespaçado) — a chave É o texto EN, como no resto.
+  'Create a character (pays DOL)\n   → earn XP/GOLD in PvE (dungeons) and PvP (arena)\n   → buy/drop/craft items\n   → enhance gear (BDO style)\n   → level up, distribute points, unlock transformations\n   → trade characters/items on the on-chain market':
+    'Criar personagem (paga DOL)\n   → ganhar XP/GOLD em PvE (masmorras) e PvP (arena)\n   → comprar/dropar/craftar itens\n   → aprimorar equipamento (estilo BDO)\n   → subir de nível, distribuir pontos, desbloquear transformações\n   → negociar personagens/itens no mercado on-chain',
+  '[1] Character (Character.gold)   ← dungeon, PvP, item sale\n        │  spent in the shop, forge, alchemy (OFF-chain sinks)\n        ▼\n[2] Account bank (User.goldBalance)   ← voluntary deposit\n        │  claim signed by the server (EIP-712), 0% fee\n        ▼\n[3] On-chain GOLD (ERC-20)   ← P2P item market, on-chain shop\n        └─ real burn: 2% of every market sale destroys supply':
+    '[1] Personagem (Character.gold)   ← masmorra, PvP, venda de item\n        │  gasta na loja, forja, alquimia (sinks OFF-chain)\n        ▼\n[2] Banco da conta (User.goldBalance)   ← depósito voluntário\n        │  claim assinado pelo servidor (EIP-712), 0% de taxa\n        ▼\n[3] GOLD on-chain (ERC-20)   ← mercado de itens P2P, loja on-chain\n        └─ queima real: 2% de cada venda no mercado destrói supply',
+  'crit  = AGI × 0.2   (% chance)\nspeed = AGI × 0.5\n\nmaxHP  = (100 + CON×2 + STR×1)   × Lm\nmaxMP  = (50  + INT×3 + AGI×0.5) × Lm\nmaxSTA = (80  + CON×2 + STR×0.5) × Lm\n\nLm (level mult.) = 1 + (level-1) × 0.1':
+    'crit  = AGI × 0.2   (% de chance)\nspeed = AGI × 0.5\n\nmaxHP  = (100 + CON×2 + STR×1)   × Lm\nmaxMP  = (50  + INT×3 + AGI×0.5) × Lm\nmaxSTA = (80  + CON×2 + STR×0.5) × Lm\n\nLm (mult. de nível) = 1 + (nível-1) × 0.1',
+  'damage = base + STR + (die+mod) + weapon_bonus\n\ncritical: only on the MAXIMUM roll of the die\n          AND passing the chance test (AGI×0.2%)\ncritical mult. = 1.5 + (crit/100)':
+    'dano = base + STR + (dado+mod) + bônus_arma\n\ncrítico: só quando rola o MÁXIMO do dado\n         E passa no teste de chance (AGI×0.2%)\nmult. crítico = 1.5 + (crit/100)',
+  'value = die + defender_speed\nhard  = 10 + attacker_speed × 0.3\nsuccess → damage = 0':
+    'valor   = dado + speed_defensor\ndifícil = 10 + speed_atacante × 0.3\nsucesso → dano = 0',
+  'value = die + RES + shield_bonus  (diff. 12)\nfull block    → damage × 0.2 (−80%)\npartial block → reduction = RES/100 (10%–80%)':
+    'valor = dado + RES + bônus_escudo  (dif. 12)\nbloqueio total  → dano × 0.2 (−80%)\nbloqueio parcial→ redução = RES/100 (10%–80%)',
+  'Lf = 1 + (level-1)×0.1 + (room-1)×0.05\nHP  = baseHP × difficulty × Lf\nATK = baseATK × diff × (1+(level-1)×0.08)\nDEF = baseDEF × diff × (1+(level-1)×0.06)\nboss: +2 levels, bigger reward':
+    'Lf = 1 + (nível-1)×0.1 + (sala-1)×0.05\nHP  = baseHP × dificuldade × Lf\nATK = baseATK × dif × (1+(nível-1)×0.08)\nDEF = baseDEF × dif × (1+(nível-1)×0.06)\nboss: +2 níveis, recompensa maior',
+  'XP_to_next(level) = baseXP × level^exp + level × mult\n  baseXP = 100   exp = 1.4   mult = 50   maxLevel = 100':
+    'XP_para_próximo(nível) = baseXP × nível^exp + nível × mult\n  baseXP = 100   exp = 1.4   mult = 50   maxLevel = 100',
+
+  // Aprimoramento
+  'Gear progression': 'Progressão de gear',
+  'Enhancement (Black Desert style)': 'Aprimoramento (estilo Black Desert)',
+  'Gear goes from ': 'Equipamentos sobem de ',
+  ' to ': ' a ',
+  ' and then to the roman tiers ': ' e depois para os tiers romanos ',
+  '. Failures have consequences and build up ': '. Falhas têm consequências e acumulam ',
+  'failstacks': 'failstacks',
+  'Weapons/Armour:': 'Armas/Armaduras:',
+  ' +1 to +': ' +1 a +',
+  ' guaranteed; from there on with risk. Failure at II–V ': ' garantido; daí em diante com risco. Falha em II–V ',
+  'drops 1 level': 'regride 1 nível',
+  '; before that it only loses durability.': '; antes disso só perde durabilidade.',
+  'Accessories:': 'Acessórios:',
+  ' jump from base straight to PRI consuming a copy; failure ': ' pulam de base direto para PRI consumindo uma cópia; falha ',
+  'DESTROYS': 'DESTRÓI',
+  ' the accessory.': ' o acessório.',
+  'Failstacks:': 'Failstacks:',
+  ' every failure raises the chance of the next; success resets it.': ' cada falha aumenta a chance da próxima; sucesso zera.',
+  'Materials: Black Stone (weapon/armour) and the Concentrated version for PRI+. Accessories use a copy of the item itself.':
+    'Materiais: Pedra Negra (arma/armadura) e versão Concentrada para PRI+. Acessórios usam cópia do próprio item.',
+  'Target': 'Alvo',
+  'Base chance (weapon/armour)': 'Chance base (arma/armadura)',
+  'Accessory': 'Acessório',
+  'Stats ×': 'Stats ×',
+  'Obtained in dungeons (fighting monsters / exploring) — not sold in the shop. 10 lesser stones forge 1 concentrated at the Forge Table. System details in the ':
+    'Obtidas em masmorras (luta com monstros / exploração) — não vendidas na loja. 10 pedras menores forjam 1 concentrada na Mesa de Forja. Detalhes do sistema na seção ',
+  ' section.': '.',
+
+  // Crafting
+  'Forge, Alchemy, ': 'Forja, Alquimia, ',
+  'Processing': 'Processamento',
+  ' and ': ' e ',
+  'Cooking': 'Culinária',
+  ' are ': ' são ',
+  'player professions': 'profissões do jogador',
+  ' with level and XP (the blacksmith NPC only sells and repairs; the alchemist only sells). The level belongs to ':
+    ' com nível e XP (o NPC ferreiro só vende e repara; a alquimista só vende). O nível é ',
+  'the whole account': 'da conta inteira',
+  ' (like the Farm: every craft from any hero adds up). The pipeline is a production chain: ':
+    ' (como a Fazenda: todo craft de qualquer herói soma). O pipeline é uma cadeia de produção: ',
+  'raw material': 'matéria-prima crua',
+  ' (gathering/farm/dungeon) → ': ' (coleta/fazenda/masmorra) → ',
+  '⚙️ Processing': '⚙️ Processamento',
+  ' (refines into bars, cloth, extracts…) → ': ' (beneficia em barras, tecidos, extratos…) → ',
+  '⚒️ Forge / ⚗️ Alchemy / 🍳 Cooking': '⚒️ Forja / ⚗️ Alquimia / 🍳 Culinária',
+  ' (uncommon pieces, potions and dishes). In the Forge and in Alchemy each craft rolls a ':
+    ' (peças incomuns, poções e pratos). Na Forja e na Alquimia cada craft rola uma ',
+  'success chance': 'chance de sucesso',
+  ' from the recipe rarity + your level — ': ' pela raridade da receita + seu nível — ',
+  'failure consumes the materials and the fee': 'a falha consome os materiais e a taxa',
+  ', but still gives reduced XP. Higher-rarity recipes ': ', mas ainda dá XP reduzido. Receitas de raridade maior ',
+  'unlock by level': 'destravam por nível',
+  ': common lv1, uncommon lv5, rare lv12, epic lv20.': ': comum nv1, incomum nv5, rara nv12, épica nv20.',
+  'level {n}': 'nível {n}',
+  '(+1%/level)': '(+1%/nível)',
+  'Result': 'Resultado',
+  'Bench': 'Bancada',
+  'Inputs': 'Insumos',
+  'Potion': 'Poção',
+  'Rarity': 'Raridade',
+  'Ingredients': 'Ingredientes',
+  'Dish': 'Prato',
+  'Station': 'Estação',
+  'Effect when eaten': 'Efeito ao comer',
+  '👑 Boss only': '👑 Só chefe',
+  '🗝️ Dungeon floor': '🗝️ Chão de masmorra',
+  '⚗️ Alchemy & Potions': '⚗️ Alquimia & Poções',
+  '🍳 Cooking (Kitchen)': '🍳 Culinária (Cozinha)',
+  'Cooking recipes': 'Receitas de culinária',
+
+  // Stamina / IA / rodapé
+  'Stamina limits activities per day (ethical monetisation, no pay-to-win). ':
+    'Stamina limita atividades por dia (monetização ética, sem pay-to-win). ',
+  'Passive regeneration:': 'Regeneração passiva:',
+  ' after ': ' após ',
+  '15 minutes without spending stamina': '15 minutos sem gastar stamina',
+  ', it comes back ': ', ela volta ',
+  '+2 every 15 seconds': '+2 a cada 15 segundos',
+  ' until full. Any spend restarts the 15-min wait. The value will still be tuned with a test battery of the spend per activity.':
+    ' até encher. Qualquer gasto reinicia a espera de 15 min. O valor ainda será afinado com uma bateria de testes do gasto por atividade.',
+  'PvP basic / ranked / tournament': 'PvP básico / ranqueado / torneio',
+  'Training · Exploration': 'Treino · Exploração',
+  'Crafting · Transformation': 'Crafting · Transformação',
+  'Progression by tier': 'Progressão por faixa',
+  'Intermediate (6–15)': 'Intermediário (6–15)',
+  'AI & Image Generation': 'IA & Geração de Imagens',
+  'An AI narrates the combat cinematically, comments on rolls and gives tactical advice. Today the narration uses pre-written responses (fallback).':
+    'Uma IA narra o combate de forma cinematográfica, comenta rolagens e dá conselhos táticos. Hoje a narração usa respostas pré-escritas (fallback).',
+  'Character image generation (Anthropic)': 'Geração de imagens de personagem (Anthropic)',
+  'Next step: migrate to our ': 'Próximo passo: migrar para uma ',
+  'own Anthropic key': 'chave Anthropic própria',
+  ' and generate character images in the ': ' e gerar imagens de personagem no ',
+  'same visual style': 'mesmo estilo visual',
+  ', adding only the traits the player chooses. It requires improving the prompt to guarantee style consistency across all characters.':
+    ', adicionando apenas as características que o player escolher. Requer melhorar o prompt para garantir consistência de estilo entre todos os personagens.',
+  'Combat narration — epic, max. 3 sentences.': 'Narração de combate — épica, máx. 3 frases.',
+  'Dice commentary — reacts to criticals, misses and high hits.':
+    'Comentário de dados — reage a críticos, falhas e acertos altos.',
+  'Tactical advice — analyses HP/MP/stamina and enemy weaknesses.':
+    'Conselho tático — analisa HP/MP/stamina e fraquezas do inimigo.',
+  '🔜 Next steps / under study': '🔜 Próximos passos / em estudo',
+  'ℹ️ By design': 'ℹ️ Por design',
+  'DOL vs GOLD:': 'DOL vs GOLD:',
+  ' they are two tokens with distinct purposes — ': ' são dois tokens distintos de propósito — ',
+  ' is the premium currency (creation/characters) and ': ' é a moeda premium (criação/personagens) e ',
+  ' is the main game currency (shop/items). It is not a bug.':
+    ' é a moeda principal do jogo (loja/itens). Não é um bug.',
+  'Documentation generated from the Dolrath source code.': 'Documentação gerada a partir do código-fonte de Dolrath.',
+  'Back to home': 'Voltar à home',
+  'Processing, Forge & Alchemy': 'Processamento, Forja & Alquimia',
+  'Unlocks': 'Destrava',
+  'Base chance': 'Chance base',
+  'Cap': 'Teto',
+  'XP (success / failure)': 'XP (sucesso / falha)',
+  '⚙️ Processing (Refining Bench)': '⚙️ Processamento (Bancada de Beneficiamento)',
+  'It refines raw material into processed inputs — the link between gathering/farm and the other benches. Like stone refining, it never fails (it is conversion, not fabrication): each recipe has fixed XP, a standard 2 raw → 1 processed ratio and unlocks by the recipe Processing level. The distillery also purifies Water → Pure Water (1:1; the well and gathering drop raw Water). The uncommon Forge recipes and the Alchemy potions require these inputs; Feed (milling) and Linen Bandage (textile) are made here too. So is basic stone refining: 10 Shards → 1 Black Stone (Weapon/Armour).':
+    'Beneficia matéria-prima crua em insumos processados — é o elo entre a coleta/fazenda e as outras bancadas. Como o refino de pedra, nunca falha (é conversão, não fabricação): cada receita tem XP fixo, ratio padrão 2 crus → 1 processado e destrava pelo nível de Processamento da receita. A destilaria também purifica Água → Água Pura (1:1; poço e coleta dropam Água crua). As receitas incomuns da Forja e as poções da Alquimia exigem esses insumos; a Ração (moagem) e a Bandagem de Linho (têxtil) também são feitas aqui. O refino básico de pedra também: 10 Estilhaços → 1 Pedra Negra (Arma/Armadura).',
+  'Processed inputs': 'Insumos processados',
+  'lv {n}': 'nv {n}',
+  '⚒️ Forge (Anvil)': '⚒️ Forja (Bigorna)',
+  'It forges common / uncommon pieces from materials: a common recipe uses raw material (leather, Heavy Iron, Ent Sap…) — the newcomer arrives from gathering and already forges; an uncommon recipe requires the PROCESSED input (Steel Bar, Cured Leather, Linen Cloth + Iron Bar). The Black Stone Shard ties every gear recipe together; basic refining (10 shards → 1 Black Stone) lives in Processing, and what is left in the Forge is the concentrated step: 10 Stones → 1 Concentrated (guaranteed conversion; Concentrated needs Forge lv10). The Memory Shard (boss only) repairs rare, epic and legendary pieces (+25 durability each) — and, since 2026-08-17, a level 0 copy in the bag also works, including on those.':
+    'Forja peças comuns / incomuns a partir de materiais: receita comum usa matéria-prima crua (couro, Ferro Pesado, Seiva de Ent…) — o novato chega da coleta e já forja; receita incomum exige o insumo PROCESSADO (Barra de Aço, Couro Curtido, Tecido de Linho + Barra de Ferro). O Estilhaço de Pedra Negra liga toda receita de gear; o refino básico (10 estilhaços → 1 Pedra Negra) fica no Processamento, e na Forja resta o degrau concentrado: 10 Pedras → 1 Concentrada (conversão garantida; Concentrada pede Forja nv10). O Estilhaço de Memória (só de chefe) repara peças raras, épicas e lendárias (+25 durabilidade cada) — e, desde 2026-08-17, uma cópia nível 0 na bolsa também serve, inclusive nelas.',
+  'Alchemy is potions only: they are transmuted at the Transmutation Triangle from processed extracts (Herbal Extract, Mana Essence, Root Extract — the Processing distillery) + gathering/dungeon ingredients.':
+    'A alquimia é só poções: elas são transmutadas no Triângulo de Transmutação a partir de extratos processados (Extrato Herbal, Essência de Mana, Extrato de Raiz — destilaria do Processamento) + ingredientes de coleta/masmorra.',
+  'Each attempt consumes the recipe inputs + a gold fee and rolls the chance of your Alchemy level.':
+    'Cada tentativa consome os insumos da receita + uma taxa em gold e rola a chance do seu nível de Alquimia.',
+  'Common / uncommon ingredients come from gathering and the dungeon floor; rare / epic only from bosses. Bread, Feed and Bandage left here: Feed/Bandage belong to Processing and Bread goes to Cooking.':
+    'Ingredientes comuns / incomuns vêm da coleta e do chão de masmorra; raros / épicos só de chefe. Pão, Ração e Bandagem saíram daqui: Ração/Bandagem são do Processamento e o Pão vai para a Culinária.',
+  'The fourth bench of the ecosystem: dishes that give attribute bonuses over REAL time (STR/AGI/INT/DEF for 15–30 minutes — weaker than a combat potion, but they last the whole farm; the Banquet gives +1 to everything). You eat from the inventory: one dish at a time (eating another replaces it) and the bonus goes straight into the dungeon combat attributes. Like Processing, cooking never fails — fixed XP per recipe, unlocked by the account Cooking level. The dishes use Flour from milling, Feed and farm/gathering inputs; Bread restores 20 HP outside combat.':
+    'A quarta bancada do ecossistema: pratos que dão bônus de atributo por tempo REAL (STR/AGI/INT/DEF por 15–30 minutos — mais fracos que poção de combate, porém duram o farm inteiro; o Banquete dá +1 em tudo). Come-se pelo inventário: um prato por vez (comer outro substitui) e o bônus entra direto nos atributos do combate da masmorra. Como o Processamento, cozinhar nunca falha — XP fixo por receita, destravada pelo nível de Culinária da conta. Os pratos usam a Farinha da moagem, a Ração e insumos da fazenda/coleta; o Pão restaura 20 HP fora de combate.',
+  'chance = base + (base/10) × FS\nsoftcap 70% → above that each FS is worth base/50\nhard cap = 90%\nup to +{n}: chance = 100% (safe)':
+    'chance = base + (base/10) × FS\nsoftcap 70% → acima disso cada FS vale base/50\nhardcap rígido = 90%\naté +{n}: chance = 100% (seguro)',
+  'Chance & failstacks': 'Chance & failstacks',
+  'Stamina': 'Stamina',
 }

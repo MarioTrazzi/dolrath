@@ -232,7 +232,7 @@ function consumableEffectToString(stats: Record<string, any>, t: TFunction): str
   if (stats.cure) parts.push(t('cures status'))
   return parts.join(' · ')
 }
-const MOD_PT: Record<string, string> = { strength: 'STR', defense: 'DEF', hp: 'HP', agility: 'AGI', intelligence: 'INT', attack: 'ATK', critical: 'CRIT' }
+const MOD_LABEL: Record<string, string> = { strength: 'STR', defense: 'DEF', hp: 'HP', agility: 'AGI', intelligence: 'INT', attack: 'ATK', critical: 'CRIT' }
 const TRANSF_RACE: Record<string, string> = { dragon: 'Draconian', wolf: 'Shapeshifter', bear: 'Shapeshifter', eagle: 'Shapeshifter' }
 
 function itemStatsToString(stats: Record<string, any>, t: TFunction, locale: Locale): string {
@@ -251,7 +251,7 @@ function bonusToString(b: Record<string, number | undefined>): string {
 }
 
 function modsToString(m: Record<string, number>): string {
-  return Object.entries(m).map(([k, v]) => `${MOD_PT[k] ?? k} ×${v}`).join(' · ')
+  return Object.entries(m).map(([k, v]) => `${MOD_LABEL[k] ?? k} ×${v}`).join(' · ')
 }
 
 function pct(x: number): string {
@@ -389,12 +389,7 @@ export default function DocPage() {
               </div>
               <Card>
                 <h3 className="font-semibold text-white">{t('Main loop')}</h3>
-                <Formula>{`Criar personagem (paga DOL)
-   → ganhar XP/GOLD em PvE (masmorras) e PvP (arena)
-   → comprar/dropar/craftar itens
-   → aprimorar equipamento (estilo BDO)
-   → subir de nível, distribuir pontos, desbloquear transformações
-   → negociar personagens/itens no mercado on-chain`}</Formula>
+                <Formula>{t('Create a character (pays DOL)\n   → earn XP/GOLD in PvE (dungeons) and PvP (arena)\n   → buy/drop/craft items\n   → enhance gear (BDO style)\n   → level up, distribute points, unlock transformations\n   → trade characters/items on the on-chain market')}</Formula>
               </Card>
             </Section>
 
@@ -453,14 +448,7 @@ export default function DocPage() {
 
               <h3 className="pt-2 text-lg font-semibold text-white">{t('GOLD flow — three layers')}</h3>
               <Card>
-                <Formula>{`[1] Personagem (Character.gold)   ← masmorra, PvP, venda de item
-        │  gasta na loja, forja, alquimia (sinks OFF-chain)
-        ▼
-[2] Banco da conta (User.goldBalance)   ← depósito voluntário
-        │  claim assinado pelo servidor (EIP-712), 0% de taxa
-        ▼
-[3] GOLD on-chain (ERC-20)   ← mercado de itens P2P, loja on-chain
-        └─ queima real: 2% de cada venda no mercado destrói supply`}</Formula>
+                <Formula>{t('[1] Character (Character.gold)   ← dungeon, PvP, item sale\n        │  spent in the shop, forge, alchemy (OFF-chain sinks)\n        ▼\n[2] Account bank (User.goldBalance)   ← voluntary deposit\n        │  claim signed by the server (EIP-712), 0% fee\n        ▼\n[3] On-chain GOLD (ERC-20)   ← P2P item market, on-chain shop\n        └─ real burn: 2% of every market sale destroys supply')}</Formula>
                 <p className="mt-2 text-xs">
                   {t('The sinks hit the balance ')}<strong className="text-white">{t('before')}</strong>
                   {t(' the claim: in practice only 20–40% of the GOLD earned becomes a token. The exit (claim) is not taxed; ')}
@@ -633,14 +621,7 @@ export default function DocPage() {
                 </Card>
                 <Card>
                   <h3 className="font-semibold text-white">{t('Derived stats')}</h3>
-                  <Formula>{`crit  = AGI × 0.2   (% de chance)
-speed = AGI × 0.5
-
-maxHP  = (100 + CON×2 + STR×1)   × Lm
-maxMP  = (50  + INT×3 + AGI×0.5) × Lm
-maxSTA = (80  + CON×2 + STR×0.5) × Lm
-
-Lm (mult. de nível) = 1 + (nível-1) × 0.1`}</Formula>
+                  <Formula>{t('crit  = AGI × 0.2   (% chance)\nspeed = AGI × 0.5\n\nmaxHP  = (100 + CON×2 + STR×1)   × Lm\nmaxMP  = (50  + INT×3 + AGI×0.5) × Lm\nmaxSTA = (80  + CON×2 + STR×0.5) × Lm\n\nLm (level mult.) = 1 + (level-1) × 0.1')}</Formula>
                 </Card>
               </div>
               <Card>
@@ -655,8 +636,7 @@ Lm (mult. de nível) = 1 + (nível-1) × 0.1`}</Formula>
             {/* Progressão */}
             <Section id="progression" kicker={t('System')} title={t('Progression & XP')}>
               <p>{t('A smooth exponential curve up to max level 100. Levelling up recalculates HP/MP/STA and grants points.')}</p>
-              <Card><Formula>{`XP_para_próximo(nível) = baseXP × nível^exp + nível × mult
-  baseXP = 100   exp = 1.4   mult = 50   maxLevel = 100`}</Formula></Card>
+              <Card><Formula>{t('XP_to_next(level) = baseXP × level^exp + level × mult\n  baseXP = 100   exp = 1.4   mult = 50   maxLevel = 100')}</Formula></Card>
               <Table
                 head={[t('Level'), t('XP to next')]}
                 rows={XP_SAMPLE.map((l) => [`${l} → ${l + 1}`, getXPForNextLevel(l).toLocaleString(locale === 'pt' ? 'pt-BR' : 'en-US')])}
@@ -674,20 +654,12 @@ Lm (mult. de nível) = 1 + (nível-1) × 0.1`}</Formula>
                 </Card>
                 <Card>
                   <h3 className="font-semibold text-white">{t('Damage formula')}</h3>
-                  <Formula>{`dano = base + STR + (dado+mod) + bônus_arma
-
-crítico: só quando rola o MÁXIMO do dado
-         E passa no teste de chance (AGI×0.2%)
-mult. crítico = 1.5 + (crit/100)`}</Formula>
+                  <Formula>{t('damage = base + STR + (die+mod) + weapon_bonus\n\ncritical: only on the MAXIMUM roll of the die\n          AND passing the chance test (AGI×0.2%)\ncritical mult. = 1.5 + (crit/100)')}</Formula>
                 </Card>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
-                <Card><h3 className="font-semibold text-white">{t('Dodge (SPEED)')}</h3><Formula>{`valor   = dado + speed_defensor
-difícil = 10 + speed_atacante × 0.3
-sucesso → dano = 0`}</Formula></Card>
-                <Card><h3 className="font-semibold text-white">{t('Block (RES)')}</h3><Formula>{`valor = dado + RES + bônus_escudo  (dif. 12)
-bloqueio total  → dano × 0.2 (−80%)
-bloqueio parcial→ redução = RES/100 (10%–80%)`}</Formula></Card>
+                <Card><h3 className="font-semibold text-white">{t('Dodge (SPEED)')}</h3><Formula>{t('value = die + defender_speed\nhard  = 10 + attacker_speed × 0.3\nsuccess → damage = 0')}</Formula></Card>
+                <Card><h3 className="font-semibold text-white">{t('Block (RES)')}</h3><Formula>{t('value = die + RES + shield_bonus  (diff. 12)\nfull block    → damage × 0.2 (−80%)\npartial block → reduction = RES/100 (10%–80%)')}</Formula></Card>
               </div>
               <p className="text-xs text-textsec">{t('Gear bonuses come in already scaled by the enhancement level. Source: ')}<Code>enhancedCombatSystem.ts</Code>.</p>
             </Section>
@@ -713,89 +685,93 @@ bloqueio parcial→ redução = RES/100 (10%–80%)`}</Formula></Card>
             </Section>
 
             {/* PvP */}
-            <Section id="pvp" kicker="Modos de jogo" title="PvP — Arena">
-              <p>Batalhas jogador vs jogador em tempo real (socket). Recompensas garantem progressão diária e premiam skill, não farming.</p>
+            <Section id="pvp" kicker={t('Game modes')} title={t('PvP — Arena')}>
+              <p>{t('Player-versus-player battles in real time (socket). Rewards guarantee daily progression and reward skill, not farming.')}</p>
               <div className="grid gap-4 sm:grid-cols-3">
-                <Card><h3 className="font-semibold text-white">🏆 Vitória</h3><p className="mt-1 text-sm">50 XP · 15 GOLD base (+50% bônus)</p></Card>
-                <Card><h3 className="font-semibold text-white">😔 Derrota</h3><p className="mt-1 text-sm">25 XP · 8 GOLD (50% da vitória)</p></Card>
-                <Card><h3 className="font-semibold text-white">💎 Participação</h3><p className="mt-1 text-sm">15 XP · 5 GOLD (fuga/desconexão)</p></Card>
+                <Card><h3 className="font-semibold text-white">{t('🏆 Victory')}</h3><p className="mt-1 text-sm">{t('50 XP · 15 GOLD base (+50% bonus)')}</p></Card>
+                <Card><h3 className="font-semibold text-white">{t('😔 Defeat')}</h3><p className="mt-1 text-sm">{t('25 XP · 8 GOLD (50% of a win)')}</p></Card>
+                <Card><h3 className="font-semibold text-white">{t('💎 Participation')}</h3><p className="mt-1 text-sm">{t('15 XP · 5 GOLD (flee/disconnect)')}</p></Card>
               </div>
               <Card>
-                <h3 className="font-semibold text-white">Escalonamento & bônus</h3>
+                <h3 className="font-semibold text-white">{t('Scaling & bonuses')}</h3>
                 <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
-                  <li>XP +10%/nível (máx. 5×) · GOLD +8%/nível</li>
-                  <li>Diferença de nível: ±15%/nível · <strong className="text-white">Underdog</strong> +50% (vencer 5+ níveis acima)</li>
-                  <li>Anti-farm: −30% ao vencer alguém 5+ níveis abaixo</li>
-                  <li>Vitória perfeita (sem perder HP): +30% XP / +50% GOLD · Transformation kill: +20%</li>
-                  <li>Combo de vitórias / 1ª do dia: <Todo /></li>
+                  <li>{t('XP +10%/level (max. 5×) · GOLD +8%/level')}</li>
+                  <li>{t('Level difference: ±15%/level · ')}<strong className="text-white">{t('Underdog')}</strong>{t(' +50% (beating someone 5+ levels above)')}</li>
+                  <li>{t('Anti-farm: −30% for beating someone 5+ levels below')}</li>
+                  <li>{t('Perfect win (without losing HP): +30% XP / +50% GOLD · Transformation kill: +20%')}</li>
+                  <li>{t('Win combo / first of the day: ')}<Todo /></li>
                 </ul>
               </Card>
-              <p className="text-xs text-textsec">Custo de stamina: básico {STAMINA_COSTS.pvp.basic} · ranqueado {STAMINA_COSTS.pvp.ranked} · torneio {STAMINA_COSTS.pvp.tournament}.</p>
+              <p className="text-xs text-textsec">{t('Stamina cost: basic ')}{STAMINA_COSTS.pvp.basic}{t(' · ranked ')}{STAMINA_COSTS.pvp.ranked}{t(' · tournament ')}{STAMINA_COSTS.pvp.tournament}.</p>
             </Section>
 
             {/* PvE */}
-            <Section id="pve" kicker="Modos de jogo" title="PvE & Masmorras">
-              <p>Quatro masmorras temáticas. Você explora salas rolando um <strong className="text-white">d20</strong> por evento; ao fim, enfrenta o boss. Monstros e recompensas escalam com nível, sala e dificuldade. <Tag>source: dungeonAdventures.ts</Tag></p>
+            <Section id="pve" kicker={t('Game modes')} title={t('PvE & Dungeons')}>
+              <p>{t('Four themed dungeons. You explore rooms rolling a ')}<strong className="text-white">d20</strong>{t(' per event; at the end, you face the boss. Monsters and rewards scale with level, room and difficulty.')} <Tag>source: dungeonAdventures.ts</Tag></p>
               <Table
-                head={['Masmorra', 'Dificuldade', 'Salas', 'Boss']}
+                head={[t('Dungeon'), t('Difficulty'), t('Rooms'), t('Boss')]}
                 rows={DUNGEON_LIST.map((d) => [
-                  <span key={d.id} className="font-semibold text-white">{d.emoji} {d.name}</span>,
+                  <span key={d.id} className="font-semibold text-white">{d.emoji} {pickName(d, locale)}</span>,
                   <span key="s">{'★'.repeat(d.difficultyStars)}<span className="text-white/20">{'★'.repeat(Math.max(0, 4 - d.difficultyStars))}</span> <span className="text-xs">(×{d.difficulty})</span></span>,
                   d.rooms,
-                  `${d.boss.name} — ${d.boss.title}`,
+                  `${pickName(d.boss, locale)} — ${d.boss.title}`,
                 ])}
               />
               <div className="grid gap-4 sm:grid-cols-2">
                 <Card>
-                  <h3 className="font-semibold text-white">Tabela de eventos (d20)</h3>
+                  <h3 className="font-semibold text-white">{t('Event table (d20)')}</h3>
                   <ul className="mt-2 space-y-1 text-sm">
-                    <li><span className="font-semibold text-white">☠️ Armadilha</span> — dano % do HP máximo</li>
-                    <li><span className="font-semibold text-white">⚔️ Monstro</span> — batalha por turnos escalada</li>
-                    <li><span className="font-semibold text-white">🍃 Nada</span> — ambientação, segue em frente</li>
-                    <li><span className="font-semibold text-white">💰 Ouro</span> — ouro aleatório × nível</li>
-                    <li><span className="font-semibold text-white">🧪 Item</span> — item temático sorteado</li>
-                    <li><span className="font-semibold text-white">✨ Bênção</span> — restaura HP/MP/STA e/ou XP</li>
+                    <li><span className="font-semibold text-white">{t('☠️ Trap')}</span>{t(' — damage as % of max HP')}</li>
+                    <li><span className="font-semibold text-white">{t('⚔️ Monster')}</span>{t(' — scaled turn-based battle')}</li>
+                    <li><span className="font-semibold text-white">{t('🍃 Nothing')}</span>{t(' — flavour, move along')}</li>
+                    <li><span className="font-semibold text-white">{t('💰 Gold')}</span>{t(' — random gold × level')}</li>
+                    <li><span className="font-semibold text-white">{t('🧪 Item')}</span>{t(' — a themed item is drawn')}</li>
+                    <li><span className="font-semibold text-white">{t('✨ Blessing')}</span>{t(' — restores HP/MP/STA and/or XP')}</li>
                   </ul>
                 </Card>
                 <Card>
-                  <h3 className="font-semibold text-white">Escalonamento de monstros</h3>
-                  <Formula>{`Lf = 1 + (nível-1)×0.1 + (sala-1)×0.05
-HP  = baseHP × dificuldade × Lf
-ATK = baseATK × dif × (1+(nível-1)×0.08)
-DEF = baseDEF × dif × (1+(nível-1)×0.06)
-boss: +2 níveis, recompensa maior`}</Formula>
+                  <h3 className="font-semibold text-white">{t('Monster scaling')}</h3>
+                  <Formula>{t('Lf = 1 + (level-1)×0.1 + (room-1)×0.05\nHP  = baseHP × difficulty × Lf\nATK = baseATK × diff × (1+(level-1)×0.08)\nDEF = baseDEF × diff × (1+(level-1)×0.06)\nboss: +2 levels, bigger reward')}</Formula>
                 </Card>
               </div>
               <Card>
-                <div className="flex items-center gap-2"><Todo /><h3 className="font-semibold text-white">Aventuras semanais</h3></div>
-                <p className="mt-2 text-sm">Modo de conteúdo semanal ainda a ser projetado (formato, recompensas e como o drop do catálogo de itens se conecta). O antigo sistema de masmorras (monstros rank F–S) foi removido.</p>
+                <div className="flex items-center gap-2"><Todo /><h3 className="font-semibold text-white">{t('Weekly adventures')}</h3></div>
+                <p className="mt-2 text-sm">{t('A weekly content mode still to be designed (format, rewards and how the item catalog drop connects). The old dungeon system (rank F–S monsters) was removed.')}</p>
               </Card>
-              <p className="text-xs text-textsec">Custo stamina: simples {STAMINA_COSTS.dungeon.simple} · normal {STAMINA_COSTS.dungeon.normal} · difícil {STAMINA_COSTS.dungeon.hard} · raid {STAMINA_COSTS.dungeon.raid}.</p>
+              <p className="text-xs text-textsec">{t('Stamina cost: simple ')}{STAMINA_COSTS.dungeon.simple}{t(' · normal ')}{STAMINA_COSTS.dungeon.normal}{t(' · hard ')}{STAMINA_COSTS.dungeon.hard}{t(' · raid ')}{STAMINA_COSTS.dungeon.raid}.</p>
             </Section>
 
             {/* Itens */}
-            <Section id="items" kicker="Conteúdo" title="Itens">
-              <p>O catálogo é a fonte única de itens, dividido por <strong className="text-white">como o item é obtido</strong>. A loja (NPC) vende o básico→intermediário para sustentar o early/mid-game; tudo <em>raro ou acima</em>, acessórios e os melhores consumíveis vêm de masmorras e aventuras. <Tag>source: itemCatalog.ts</Tag></p>
+            <Section id="items" kicker={t('Content')} title={t('Items')}>
+              <p>{t('The catalog is the single source of items, split by ')}<strong className="text-white">{t('how the item is obtained')}</strong>{t('. The shop (NPC) sells basic→intermediate to sustain the early/mid-game; everything ')}<em>{t('rare or above')}</em>{t(', accessories and the best consumables come from dungeons and adventures.')} <Tag>source: itemCatalog.ts</Tag></p>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Card>
-                  <h3 className="font-semibold text-white">Tiers & origem</h3>
+                  <h3 className="font-semibold text-white">{t('Tiers & origin')}</h3>
                   <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
-                    <li><Pill rarity="COMMON" /> e <Pill rarity="UNCOMMON" /> (<em>Superior</em>) → <strong className="text-white">🏪 Loja</strong></li>
-                    <li><Pill rarity="RARE" /> → 🗝️ chão de masmorra</li>
-                    <li><Pill rarity="EPIC" /> → 👑 chefe de masmorra (exclusivo)</li>
-                    <li><Pill rarity="LEGENDARY" /> → 👑 chefe de masmorra ou 🗓️ aventura semanal</li>
+                    <li><Pill rarity="COMMON" /> & <Pill rarity="UNCOMMON" /> (<em>{t('Superior')}</em>) → <strong className="text-white">{t('🏪 Shop')}</strong></li>
+                    <li><Pill rarity="RARE" />{t(' → 🗝️ dungeon floor')}</li>
+                    <li><Pill rarity="EPIC" />{t(' → 👑 dungeon boss (exclusive)')}</li>
+                    <li><Pill rarity="LEGENDARY" />{t(' → 👑 dungeon boss or 🗓️ weekly adventure')}</li>
                   </ul>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {RARITY_ORDER.map((rk) => <Tag key={rk}><Pill rarity={rk} /> peso {RARITY_DROP_WEIGHT[rk]}</Tag>)}
+                    {RARITY_ORDER.map((rk) => <Tag key={rk}><Pill rarity={rk} /> {t('weight')} {RARITY_DROP_WEIGHT[rk]}</Tag>)}
                   </div>
                 </Card>
                 <Card>
-                  <h3 className="font-semibold text-white">Builds & restrição de raça</h3>
-                  <p className="mt-2 text-sm">Cada tier da loja traz <strong className="text-white">4 variantes</strong> de potência parecida, mas distribuição de atributos diferente — o jogador escolhe pela build:</p>
+                  <h3 className="font-semibold text-white">{t('Builds & race restriction')}</h3>
+                  <p className="mt-2 text-sm">{t('Each shop tier brings ')}<strong className="text-white">{t('4 variants')}</strong>{t(' of similar power but a different attribute spread — the player picks by build:')}</p>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {Object.entries(BUILD_LABEL).map(([k, v]) => <Tag key={k}>{v}</Tag>)}
+                    {Object.entries(BUILD_LABEL).map(([k, v]) => <Tag key={k}>{t(v)}</Tag>)}
                   </div>
-                  <p className="mt-3 text-sm">Equipamento por <strong className="text-white">CLASSE</strong> (via <Code>canClassEquip</Code>): <strong className="text-white">Guerreiro</strong> usa pesada/média + espada/machado/escudo; <strong className="text-white">Ladino</strong> leve/média + adaga/arco; <strong className="text-white">Mago</strong> leve + cajado/orbe; <strong className="text-white">Monge</strong> leve/média + manopla. A raça segue valendo para stats, transformações e itens lendários exclusivos. A loja filtra por raça+classe (<Code>getShopItems(race, class)</Code>).</p>
+                  <p className="mt-3 text-sm">
+                    {t('Gear by ')}<strong className="text-white">{t('CLASS')}</strong>{t(' (via ')}<Code>canClassEquip</Code>):{' '}
+                    <strong className="text-white">{t('Warrior')}</strong>{t(' uses heavy/medium + sword/axe/shield; ')}
+                    <strong className="text-white">{t('Rogue')}</strong>{t(' light/medium + dagger/bow; ')}
+                    <strong className="text-white">{t('Mage')}</strong>{t(' light + staff/orb; ')}
+                    <strong className="text-white">{t('Monk')}</strong>
+                    {t(' light/medium + gauntlet. Race still counts for stats, transformations and exclusive legendary items. The shop filters by race+class (')}
+                    <Code>getShopItems(race, class)</Code>).
+                  </p>
                 </Card>
               </div>
 
@@ -814,7 +790,7 @@ boss: +2 níveis, recompensa maior`}</Formula>
                         <ItemArtCard
                           key={it.name} name={it.name} type={it.type} rarity={it.rarity}
                           level={it.level} goldPrice={it.goldPrice} statsText={itemStatsToString(it.stats, t, locale)}
-                          meta={it.build ? BUILD_LABEL[it.build] : undefined}
+                          meta={it.build ? t(BUILD_LABEL[it.build]) : undefined}
                         />
                       ))}
                     </ItemGallery>
@@ -845,14 +821,14 @@ boss: +2 níveis, recompensa maior`}</Formula>
 
               {/* 🗓️ Aventuras semanais — contexto dos chefes */}
               <h3 className="pt-4 text-lg font-semibold text-white">🗓️ Chefes das Aventuras Semanais</h3>
-              <p className="text-sm">Um chefe único por sábado (rotação de 4 semanas), cada um com gear nomeado exclusivo (Lendário acima) — modelo Black Desert (Kzarka, Garmoth, Karanda…).</p>
+              <p className="text-sm">{t('One unique boss per Saturday (4-week rotation), each with exclusive named gear (Legendary and above) — the Black Desert model (Kzarka, Garmoth, Karanda…).')}</p>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {ADVENTURE_BOSSES.map((b) => {
                   const drops = ITEM_CATALOG.filter((i) => i.adventureBoss === b.name)
                   return (
                     <Card key={b.name}>
                       <div className="flex items-center gap-2"><span className="text-2xl">{b.emoji}</span><div><h4 className="font-semibold text-white">{b.name}</h4><p className="text-xs text-textsec">{b.title}</p></div></div>
-                      <p className="mt-2 text-xs text-textsec">{b.theme} · {b.day} · Sábado</p>
+                      <p className="mt-2 text-xs text-textsec">{t(b.theme)} · {t(b.day)} · {t('Saturday')}</p>
                       <ul className="mt-2 space-y-1 text-xs">
                         {drops.map((d) => (
                           <li key={d.name} className="flex items-center justify-between gap-2">
@@ -866,22 +842,22 @@ boss: +2 níveis, recompensa maior`}</Formula>
               </div>
 
               {/* 🧪 Consumíveis */}
-              <h3 className="pt-4 text-lg font-semibold text-white">🧪 Consumíveis</h3>
-              <p className="text-sm">Loja vende básicos e intermediários; masmorras e aventuras trazem versões aprimoradas e únicas.</p>
+              <h3 className="pt-4 text-lg font-semibold text-white">{t('🧪 Consumables')}</h3>
+              <p className="text-sm">{t('The shop sells basics and intermediates; dungeons and adventures bring enhanced and unique versions.')}</p>
               {([
-                { label: '🏪 Loja — básicos & intermediários', filter: (c: typeof CONSUMABLE_CATALOG[number]) => c.source === 'shop' },
-                { label: '🗝️ Masmorras & Aventuras — aprimorados & únicos', filter: (c: typeof CONSUMABLE_CATALOG[number]) => c.source !== 'shop' },
+                { label: '🏪 Shop — basics & intermediates', filter: (c: typeof CONSUMABLE_CATALOG[number]) => c.source === 'shop' },
+                { label: '🗝️ Dungeons & Adventures — enhanced & unique', filter: (c: typeof CONSUMABLE_CATALOG[number]) => c.source !== 'shop' },
               ]).map((group) => {
                 const items = CONSUMABLE_CATALOG.filter(group.filter)
                 return (
                   <div key={group.label} className="space-y-3">
-                    <div className="pt-2 text-sm font-semibold text-white">{group.label} <span className="text-textsec">· {items.length}</span></div>
+                    <div className="pt-2 text-sm font-semibold text-white">{t(group.label)} <span className="text-textsec">· {items.length}</span></div>
                     <ItemGallery>
                       {items.map((c) => (
                         <ItemArtCard
                           key={c.name} name={c.name} type="CONSUMABLE" rarity={c.rarity as RarityKey}
                           level={c.level} goldPrice={c.goldPrice} statsText={consumableEffectToString(c.stats, t)}
-                          meta={c.adventureBoss ?? SOURCE_LABEL[c.source]}
+                          meta={c.adventureBoss ?? t(SOURCE_LABEL[c.source])}
                         />
                       ))}
                     </ItemGallery>
@@ -891,7 +867,7 @@ boss: +2 níveis, recompensa maior`}</Formula>
 
               {/* ⚒️ Pedras de aprimoramento */}
               <h3 className="pt-4 text-lg font-semibold text-white">⚒️ Pedras de Aprimoramento</h3>
-              <p className="text-sm">Obtidas em masmorras (luta com monstros / exploração) — não vendidas na loja. 10 pedras menores forjam 1 concentrada na Mesa de Forja. Detalhes do sistema na seção <a href="#enhancement" className="text-primary hover:underline">Aprimoramento</a>.</p>
+              <p className="text-sm">{t('Obtained in dungeons (fighting monsters / exploring) — not sold in the shop. 10 lesser stones forge 1 concentrated at the Forge Table. System details in the ')}<a href="#enhancement" className="text-primary hover:underline">{t('Enhancement')}</a>{t(' section.')}</p>
               <ItemGallery>
                 {ENHANCEMENT_STONES.map((s) => (
                   <ItemArtCard key={s.name} name={s.name} type="ENHANCEMENT_STONE" rarity={s.rarity} meta={`🗝️ Masmorra · ${s.use}`} />
@@ -900,28 +876,25 @@ boss: +2 níveis, recompensa maior`}</Formula>
             </Section>
 
             {/* Aprimoramento */}
-            <Section id="enhancement" kicker="Progressão de gear" title="Aprimoramento (estilo Black Desert)">
-              <p>Equipamentos sobem de <Code>+0</Code> a <Code>+15</Code> e depois para os tiers romanos <Code>I (PRI)</Code> → <Code>V (PEN)</Code>. Falhas têm consequências e acumulam <em>failstacks</em>. <Tag>source: enhancementSystem.ts</Tag></p>
+            <Section id="enhancement" kicker={t('Gear progression')} title={t('Enhancement (Black Desert style)')}>
+              <p>{t('Gear goes from ')}<Code>+0</Code>{t(' to ')}<Code>+15</Code>{t(' and then to the roman tiers ')}<Code>I (PRI)</Code> → <Code>V (PEN)</Code>{t('. Failures have consequences and build up ')}<em>{t('failstacks')}</em>. <Tag>source: enhancementSystem.ts</Tag></p>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Card>
                   <h3 className="font-semibold text-white">Regras por categoria</h3>
                   <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
-                    <li><strong className="text-white">Armas/Armaduras:</strong> +1 a +{SAFE_ENHANCE_MAX} garantido; daí em diante com risco. Falha em II–V <span className="text-orange-300">regride 1 nível</span>; antes disso só perde durabilidade.</li>
-                    <li><strong className="text-white">Acessórios:</strong> pulam de base direto para PRI consumindo uma cópia; falha <span className="text-red-400">DESTRÓI</span> o acessório.</li>
-                    <li><strong className="text-white">Failstacks:</strong> cada falha aumenta a chance da próxima; sucesso zera.</li>
+                    <li><strong className="text-white">{t('Weapons/Armour:')}</strong>{t(' +1 to +')}{SAFE_ENHANCE_MAX}{t(' guaranteed; from there on with risk. Failure at II–V ')}<span className="text-orange-300">{t('drops 1 level')}</span>{t('; before that it only loses durability.')}</li>
+                    <li><strong className="text-white">{t('Accessories:')}</strong>{t(' jump from base straight to PRI consuming a copy; failure ')}<span className="text-red-400">{t('DESTROYS')}</span>{t(' the accessory.')}</li>
+                    <li><strong className="text-white">{t('Failstacks:')}</strong>{t(' every failure raises the chance of the next; success resets it.')}</li>
                   </ul>
                 </Card>
                 <Card>
-                  <h3 className="font-semibold text-white">Chance & failstacks</h3>
-                  <Formula>{`chance = base + (base/10) × FS
-softcap 70% → acima disso cada FS vale base/50
-hardcap rígido = 90%
-até +${SAFE_ENHANCE_MAX}: chance = 100% (seguro)`}</Formula>
-                  <p className="mt-2 text-xs">Materiais: Pedra Negra (arma/armadura) e versão Concentrada para PRI+. Acessórios usam cópia do próprio item.</p>
+                  <h3 className="font-semibold text-white">{t('Chance & failstacks')}</h3>
+                  <Formula>{t('chance = base + (base/10) × FS\nsoftcap 70% → above that each FS is worth base/50\nhard cap = 90%\nup to +{n}: chance = 100% (safe)', { n: SAFE_ENHANCE_MAX })}</Formula>
+                  <p className="mt-2 text-xs">{t('Materials: Black Stone (weapon/armour) and the Concentrated version for PRI+. Accessories use a copy of the item itself.')}</p>
                 </Card>
               </div>
               <Table
-                head={['Alvo', 'Chance base (arma/armadura)', 'Acessório', 'Stats ×']}
+                head={[t('Target'), t('Base chance (weapon/armour)'), t('Accessory'), t('Stats ×')]}
                 rows={ENHANCE_TARGETS.map((e) => [
                   e.label,
                   pct(getBaseChance('WEAPON', e.t)),
@@ -932,27 +905,27 @@ até +${SAFE_ENHANCE_MAX}: chance = 100% (seguro)`}</Formula>
             </Section>
 
             {/* Crafting */}
-            <Section id="crafting" kicker="Economia" title="Processamento, Forja & Alquimia">
-              <p>Forja, Alquimia, <strong className="text-white">Processamento</strong> e <strong className="text-white">Culinária</strong> são <strong className="text-white">profissões do jogador</strong> com nível e XP (o NPC ferreiro só vende e repara; a alquimista só vende). O nível é <strong className="text-white">da conta inteira</strong> (como a Fazenda: todo craft de qualquer herói soma). O pipeline é uma cadeia de produção: <strong className="text-white">matéria-prima crua</strong> (coleta/fazenda/masmorra) → <strong className="text-white">⚙️ Processamento</strong> (beneficia em barras, tecidos, extratos…) → <strong className="text-white">⚒️ Forja / ⚗️ Alquimia / 🍳 Culinária</strong> (peças incomuns, poções e pratos). Na Forja e na Alquimia cada craft rola uma <strong className="text-white">chance de sucesso</strong> pela raridade da receita + seu nível — <strong className="text-orange-300">a falha consome os materiais e a taxa</strong>, mas ainda dá XP reduzido. Receitas de raridade maior <strong className="text-white">destravam por nível</strong>: comum nv1, incomum nv5, rara nv12, épica nv20. <Tag tone="ok">fonte: craftingProfession.ts · processing.ts · forge.ts · alchemy.ts · cooking.ts</Tag></p>
+            <Section id="crafting" kicker={t('Economy')} title={t('Processing, Forge & Alchemy')}>
+              <p>{t('Forge, Alchemy, ')}<strong className="text-white">{t('Processing')}</strong>{t(' and ')}<strong className="text-white">{t('Cooking')}</strong>{t(' are ')}<strong className="text-white">{t('player professions')}</strong>{t(' with level and XP (the blacksmith NPC only sells and repairs; the alchemist only sells). The level belongs to ')}<strong className="text-white">{t('the whole account')}</strong>{t(' (like the Farm: every craft from any hero adds up). The pipeline is a production chain: ')}<strong className="text-white">{t('raw material')}</strong>{t(' (gathering/farm/dungeon) → ')}<strong className="text-white">{t('⚙️ Processing')}</strong>{t(' (refines into bars, cloth, extracts…) → ')}<strong className="text-white">{t('⚒️ Forge / ⚗️ Alchemy / 🍳 Cooking')}</strong>{t(' (uncommon pieces, potions and dishes). In the Forge and in Alchemy each craft rolls a ')}<strong className="text-white">{t('success chance')}</strong>{t(' from the recipe rarity + your level — ')}<strong className="text-orange-300">{t('failure consumes the materials and the fee')}</strong>{t(', but still gives reduced XP. Higher-rarity recipes ')}<strong className="text-white">{t('unlock by level')}</strong>{t(': common lv1, uncommon lv5, rare lv12, epic lv20.')} <Tag tone="ok">source: craftingProfession.ts · processing.ts · forge.ts · alchemy.ts · cooking.ts</Tag></p>
 
               <Table
-                head={['Raridade', 'Destrava', 'Chance base', 'Teto', 'XP (sucesso / falha)']}
+                head={[t('Rarity'), t('Unlocks'), t('Base chance'), t('Cap'), t('XP (success / failure)')]}
                 rows={(['COMMON', 'UNCOMMON', 'RARE', 'EPIC'] as const).map((r) => [
                   <Pill key="p" rarity={r} />,
-                  <span key="l" className="text-white">nível {CRAFT_MIN_LEVEL[r]}</span>,
-                  <span key="b">{Math.round(CRAFT_BASE_CHANCE[r] * 100)}% <span className="text-xs text-textsec">(+1%/nível)</span></span>,
+                  <span key="l" className="text-white">{t('level {n}', { n: CRAFT_MIN_LEVEL[r] })}</span>,
+                  <span key="b">{Math.round(CRAFT_BASE_CHANCE[r] * 100)}% <span className="text-xs text-textsec">{t('(+1%/level)')}</span></span>,
                   <span key="t">{Math.round(Math.min(0.95, CRAFT_BASE_CHANCE[r] + 0.01 * (50 - CRAFT_MIN_LEVEL[r])) * 100)}%</span>,
                   <span key="x" className="text-amber-300">{CRAFT_XP[r]} / {Math.round(CRAFT_XP[r] * 0.4)} XP</span>,
                 ])}
               />
 
               {/* ⚙️ Processamento (fonte: processing.ts) */}
-              <h3 className="pt-2 text-lg font-semibold text-white">⚙️ Processamento (Bancada de Beneficiamento)</h3>
+              <h3 className="pt-2 text-lg font-semibold text-white">{t('⚙️ Processing (Refining Bench)')}</h3>
               <p className="text-sm">
-                Beneficia matéria-prima crua em <strong className="text-white">insumos processados</strong> — é o elo entre a coleta/fazenda e as outras bancadas. Como o refino de pedra, <strong className="text-white">nunca falha</strong> (é conversão, não fabricação): cada receita tem <strong className="text-white">XP fixo</strong>, ratio padrão <strong className="text-white">2 crus → 1 processado</strong> e destrava pelo <strong className="text-white">nível de Processamento</strong> da receita. A destilaria também <strong className="text-white">purifica Água → Água Pura</strong> (1:1; poço e coleta droparm Água crua). As receitas <Pill rarity="UNCOMMON" /> da Forja e as poções da Alquimia exigem esses insumos; a <strong className="text-white">Ração</strong> (moagem) e a <strong className="text-white">Bandagem de Linho</strong> (têxtil) também são feitas aqui. O <strong className="text-white">refino básico de pedra</strong> também: <strong className="text-white">10 Estilhaços → 1 Pedra Negra</strong> (Arma/Armadura).
+                {t('It refines raw material into processed inputs — the link between gathering/farm and the other benches. Like stone refining, it never fails (it is conversion, not fabrication): each recipe has fixed XP, a standard 2 raw → 1 processed ratio and unlocks by the recipe Processing level. The distillery also purifies Water → Pure Water (1:1; the well and gathering drop raw Water). The uncommon Forge recipes and the Alchemy potions require these inputs; Feed (milling) and Linen Bandage (textile) are made here too. So is basic stone refining: 10 Shards → 1 Black Stone (Weapon/Armour).')}
               </p>
 
-              <h4 className="pt-2 text-sm font-semibold text-textsec uppercase tracking-wide">Insumos processados</h4>
+              <h4 className="pt-2 text-sm font-semibold text-textsec uppercase tracking-wide">{t('Processed inputs')}</h4>
               <ItemGallery>
                 {[...PROCESSED_CATALOG]
                   .sort((a, b) => RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity))
@@ -966,11 +939,11 @@ até +${SAFE_ENHANCE_MAX}: chance = 100% (seguro)`}</Formula>
 
               <h4 className="pt-2 text-sm font-semibold text-textsec uppercase tracking-wide">Receitas de processamento</h4>
               <Table
-                head={['Resultado', 'Bancada', 'Insumos', 'Nível', 'XP', 'Taxa']}
+                head={[t('Result'), t('Bench'), t('Inputs'), t('Level'), 'XP', t('Fee')]}
                 rows={PROCESSING_RECIPES.map((r) => [
                   <span key={r.id} className={`font-semibold ${RARITY[r.rarity].text}`}>⚙️ {r.outputName}</span>,
-                  <span key="g" className="text-xs">{PROCESSING_GROUP_LABEL[r.group]}</span>,
-                  <span key="m" className="text-xs">{r.inputs.map((m) => `${m.quantity}× ${m.name}`).join(' · ')}</span>,
+                  <span key="g" className="text-xs">{t(PROCESSING_GROUP_LABEL[r.group])}</span>,
+                  <span key="m" className="text-xs">{r.inputs.map((m) => `${m.quantity}× ${localizeItemName(m.name, locale)}`).join(' · ')}</span>,
                   <span key="l" className="text-white">nv {r.minLevel}</span>,
                   <span key="x" className="text-amber-300">+{r.xp}</span>,
                   <span key="c" className="text-amber-300">{r.goldCost} 🪙</span>,
@@ -980,7 +953,7 @@ até +${SAFE_ENHANCE_MAX}: chance = 100% (seguro)`}</Formula>
               {/* ⚒️ Forja (fonte: forge.ts) */}
               <h3 className="pt-4 text-lg font-semibold text-white">⚒️ Forja (Ferreiro)</h3>
               <p className="text-sm">
-                Forja peças <Pill rarity="COMMON" /> / <Pill rarity="UNCOMMON" /> a partir de materiais: receita <strong className="text-white">comum usa matéria-prima crua</strong> (couro, Ferro Pesado, Seiva de Ent…) — o novato chega da coleta e já forja; receita <strong className="text-white">incomum exige o insumo PROCESSADO</strong> (Barra de Aço, Couro Curtido, Tecido de Linho + Barra de Ferro). O <strong className="text-white">Estilhaço de Pedra Negra</strong> liga toda receita de gear; o refino básico (<strong className="text-white">10 estilhaços → 1 Pedra Negra</strong>) fica no Processamento, e na Forja resta o degrau concentrado: <strong className="text-white">10 Pedras → 1 Concentrada</strong> (conversão garantida; Concentrada pede Forja nv10). O <strong className="text-white">Estilhaço de Memória</strong> (só de chefe) repara peças raras, épicas e lendárias (+25 durabilidade cada) — e, desde 2026-08-17, uma <strong className="text-white">cópia nível 0</strong> na bolsa também serve, inclusive nelas.
+                {t('It forges common / uncommon pieces from materials: a common recipe uses raw material (leather, Heavy Iron, Ent Sap…) — the newcomer arrives from gathering and already forges; an uncommon recipe requires the PROCESSED input (Steel Bar, Cured Leather, Linen Cloth + Iron Bar). The Black Stone Shard ties every gear recipe together; basic refining (10 shards → 1 Black Stone) lives in Processing, and what is left in the Forge is the concentrated step: 10 Stones → 1 Concentrated (guaranteed conversion; Concentrated needs Forge lv10). The Memory Shard (boss only) repairs rare, epic and legendary pieces (+25 durability each) — and, since 2026-08-17, a level 0 copy in the bag also works, including on those.')}
               </p>
 
               <h4 className="pt-2 text-sm font-semibold text-textsec uppercase tracking-wide">Materiais de forja</h4>
@@ -990,7 +963,7 @@ até +${SAFE_ENHANCE_MAX}: chance = 100% (seguro)`}</Formula>
                   .map((m) => (
                     <ItemArtCard
                       key={m.name} name={m.name} type="Material" rarity={m.rarity}
-                      meta={m.source === 'dungeon_boss' ? '👑 Só chefe' : '🗝️ Masmorra'}
+                      meta={m.source === 'dungeon_boss' ? t('👑 Boss only') : t('🗝️ Dungeon')}
                     />
                   ))}
               </ItemGallery>
@@ -1003,17 +976,17 @@ até +${SAFE_ENHANCE_MAX}: chance = 100% (seguro)`}</Formula>
                     {r.kind === 'stone' ? '🪨' : '⚒️'} {r.outputName}
                   </span>,
                   <Pill key="r" rarity={r.rarity} />,
-                  <span key="m" className="text-xs">{r.materials.map((m) => `${m.quantity}× ${m.name}`).join(' · ')}</span>,
+                  <span key="m" className="text-xs">{r.materials.map((m) => `${m.quantity}× ${localizeItemName(m.name, locale)}`).join(' · ')}</span>,
                   <span key="c" className="text-amber-300">{r.goldCost} 🪙</span>,
                 ])}
               />
 
               {/* ⚗️ Alquimia & Poções — livro de receitas (fonte: alchemy.ts) */}
-              <h3 className="pt-4 text-lg font-semibold text-white">⚗️ Alquimia &amp; Poções</h3>
+              <h3 className="pt-4 text-lg font-semibold text-white">{t('⚗️ Alchemy & Potions')}</h3>
               <p className="text-sm">
-                A alquimia é <strong className="text-white">só poções</strong>: elas são transmutadas no <strong className="text-white">Triângulo de Transmutação</strong> a partir de <strong className="text-white">extratos processados</strong> (Extrato Herbal, Essência de Mana, Extrato de Raiz — destilaria do Processamento) + ingredientes de coleta/masmorra.
-                Cada tentativa consome os insumos da receita + uma <strong className="text-white">taxa em gold</strong> e rola a chance do seu nível de Alquimia.
-                Ingredientes <Pill rarity="COMMON" /> / <Pill rarity="UNCOMMON" /> vêm da coleta e do chão de masmorra; <Pill rarity="RARE" /> / <Pill rarity="EPIC" /> só de <strong className="text-white">chefe</strong>. Pão, Ração e Bandagem saíram daqui: Ração/Bandagem são do Processamento e o Pão vai para a <strong className="text-white">Culinária</strong>.
+                {t('Alchemy is potions only: they are transmuted at the Transmutation Triangle from processed extracts (Herbal Extract, Mana Essence, Root Extract — the Processing distillery) + gathering/dungeon ingredients.')}
+                {t('Each attempt consumes the recipe inputs + a gold fee and rolls the chance of your Alchemy level.')}
+                {t('Common / uncommon ingredients come from gathering and the dungeon floor; rare / epic only from bosses. Bread, Feed and Bandage left here: Feed/Bandage belong to Processing and Bread goes to Cooking.')}
                 <Tag tone="ok"> fonte: alchemy.ts</Tag>
               </p>
 
@@ -1024,30 +997,30 @@ até +${SAFE_ENHANCE_MAX}: chance = 100% (seguro)`}</Formula>
                   .map((ing) => (
                     <ItemArtCard
                       key={ing.name} name={ing.name} type="Ingrediente" rarity={ing.rarity}
-                      meta={ing.source === 'dungeon_boss' ? '👑 Chefe' : '🗝️ Chão de masmorra'}
+                      meta={ing.source === 'dungeon_boss' ? t('👑 Boss') : t('🗝️ Dungeon floor')}
                     />
                   ))}
               </ItemGallery>
 
               <h4 className="pt-2 text-sm font-semibold text-textsec uppercase tracking-wide">Receitas</h4>
               <Table
-                head={['Poção', 'Raridade', 'Ingredientes', 'Taxa']}
+                head={[t('Potion'), t('Rarity'), t('Ingredients'), t('Fee')]}
                 rows={[...POTION_RECIPES]
                   .sort((a, b) => RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity))
                   .map((r) => [
                     <span key={r.id} className={`font-semibold ${RARITY[r.rarity].text}`}>🧪 {r.outputName}</span>,
                     <Pill key="r" rarity={r.rarity} />,
                     <span key="i" className="text-xs">
-                      {r.ingredients.map((ing) => `${(getIngredientByName(ing.name) ?? getProcessedByName(ing.name))?.emoji ?? ''} ${ing.quantity}× ${ing.name}`).join(' · ')}
+                      {r.ingredients.map((ing) => `${(getIngredientByName(ing.name) ?? getProcessedByName(ing.name))?.emoji ?? ''} ${ing.quantity}× ${localizeItemName(ing.name, locale)}`).join(' · ')}
                     </span>,
                     <span key="c" className="text-amber-300">{r.goldCost} 🪙</span>,
                   ])}
               />
 
               {/* 🍳 Culinária (fonte: cooking.ts · foodBuff.ts) */}
-              <h3 className="pt-4 text-lg font-semibold text-white">🍳 Culinária (Cozinha)</h3>
+              <h3 className="pt-4 text-lg font-semibold text-white">{t('🍳 Cooking (Kitchen)')}</h3>
               <p className="text-sm">
-                A quarta bancada do ecossistema: pratos que dão <strong className="text-white">bônus de atributo por tempo REAL</strong> (STR/AGI/INT/DEF por 15–30 minutos — mais fracos que poção de combate, porém duram o farm inteiro; o <strong className="text-white">Banquete</strong> dá +1 em tudo). Come-se pelo inventário: <strong className="text-white">um prato por vez</strong> (comer outro substitui) e o bônus entra direto nos atributos do combate da masmorra. Como o Processamento, cozinhar <strong className="text-white">nunca falha</strong> — XP fixo por receita, destravada pelo <strong className="text-white">nível de Culinária</strong> da conta. Os pratos usam a <strong className="text-white">Farinha</strong> da moagem, a <strong className="text-white">Ração</strong> e insumos da fazenda/coleta; o <strong className="text-white">Pão</strong> restaura 20 HP fora de combate. <Tag tone="ok">fonte: cooking.ts · foodBuff.ts</Tag>
+                {t('The fourth bench of the ecosystem: dishes that give attribute bonuses over REAL time (STR/AGI/INT/DEF for 15–30 minutes — weaker than a combat potion, but they last the whole farm; the Banquet gives +1 to everything). You eat from the inventory: one dish at a time (eating another replaces it) and the bonus goes straight into the dungeon combat attributes. Like Processing, cooking never fails — fixed XP per recipe, unlocked by the account Cooking level. The dishes use Flour from milling, Feed and farm/gathering inputs; Bread restores 20 HP outside combat.')} <Tag tone="ok">fonte: cooking.ts · foodBuff.ts</Tag>
               </p>
               <ItemGallery>
                 {[...FOOD_CATALOG]
@@ -1060,9 +1033,9 @@ até +${SAFE_ENHANCE_MAX}: chance = 100% (seguro)`}</Formula>
                   ))}
               </ItemGallery>
 
-              <h4 className="pt-2 text-sm font-semibold text-textsec uppercase tracking-wide">Receitas de culinária</h4>
+              <h4 className="pt-2 text-sm font-semibold text-textsec uppercase tracking-wide">{t('Cooking recipes')}</h4>
               <Table
-                head={['Prato', 'Estação', 'Insumos', 'Efeito ao comer', 'Nível', 'XP', 'Taxa']}
+                head={[t('Dish'), t('Station'), t('Inputs'), t('Effect when eaten'), t('Level'), 'XP', t('Fee')]}
                 rows={COOKING_RECIPES.map((r) => {
                   const food = FOOD_CATALOG.find((f) => f.name === r.outputName)
                   const fb = parseFoodBuffSpec(food?.stats)
@@ -1072,7 +1045,7 @@ até +${SAFE_ENHANCE_MAX}: chance = 100% (seguro)`}</Formula>
                   return [
                     <span key={r.id} className={`font-semibold ${RARITY[r.rarity].text}`}>🍳 {r.outputName}</span>,
                     <span key="g" className="text-xs">{COOKING_GROUP_LABEL[r.group]}</span>,
-                    <span key="m" className="text-xs">{r.inputs.map((m) => `${m.quantity}× ${m.name}`).join(' · ')}</span>,
+                    <span key="m" className="text-xs">{r.inputs.map((m) => `${m.quantity}× ${localizeItemName(m.name, locale)}`).join(' · ')}</span>,
                     <span key="e" className="text-xs text-emerald-300">{effect}</span>,
                     <span key="l" className="text-white">nv {r.minLevel}</span>,
                     <span key="x" className="text-amber-300">+{r.xp}</span>,
@@ -1084,27 +1057,27 @@ até +${SAFE_ENHANCE_MAX}: chance = 100% (seguro)`}</Formula>
 
             {/* Stamina */}
             <Section id="stamina" kicker="Economia de tempo" title="Stamina">
-              <p>Stamina limita atividades por dia (monetização ética, sem pay-to-win). <strong className="text-white">Regeneração passiva:</strong> após <strong className="text-white">15 minutos sem gastar stamina</strong>, ela volta <strong className="text-white">+2 a cada 15 segundos</strong> até encher. Qualquer gasto reinicia a espera de 15 min. O valor ainda será afinado com uma bateria de testes do gasto por atividade.</p>
+              <p>{t('Stamina limits activities per day (ethical monetisation, no pay-to-win). ')}<strong className="text-white">{t('Passive regeneration:')}</strong>{t(' after ')}<strong className="text-white">{t('15 minutes without spending stamina')}</strong>{t(', it comes back ')}<strong className="text-white">{t('+2 every 15 seconds')}</strong>{t(' until full. Any spend restarts the 15-min wait. The value will still be tuned with a test battery of the spend per activity.')}</p>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Card>
                   <h3 className="font-semibold text-white">Custos por atividade</h3>
                   <Table
                     head={['Atividade', 'Custo']}
                     rows={[
-                      ['PvP básico / ranqueado / torneio', `${STAMINA_COSTS.pvp.basic} / ${STAMINA_COSTS.pvp.ranked} / ${STAMINA_COSTS.pvp.tournament}`],
+                      [t('PvP basic / ranked / tournament'), `${STAMINA_COSTS.pvp.basic} / ${STAMINA_COSTS.pvp.ranked} / ${STAMINA_COSTS.pvp.tournament}`],
                       ['Masmorra simples → raid', `${STAMINA_COSTS.dungeon.simple} / ${STAMINA_COSTS.dungeon.normal} / ${STAMINA_COSTS.dungeon.hard} / ${STAMINA_COSTS.dungeon.raid}`],
-                      ['Treino · Exploração', `${STAMINA_COSTS.activities.training} · ${STAMINA_COSTS.activities.exploration}`],
-                      ['Crafting · Transformação', `${STAMINA_COSTS.activities.crafting} · ${STAMINA_COSTS.activities.transformation}`],
+                      [t('Training · Exploration'), `${STAMINA_COSTS.activities.training} · ${STAMINA_COSTS.activities.exploration}`],
+                      [t('Crafting · Transformation'), `${STAMINA_COSTS.activities.crafting} · ${STAMINA_COSTS.activities.transformation}`],
                     ]}
                   />
                 </Card>
                 <Card>
-                  <h3 className="font-semibold text-white">Progressão por faixa</h3>
+                  <h3 className="font-semibold text-white">{t('Progression by tier')}</h3>
                   <Table
                     head={['Faixa', 'Base', 'Atividades/dia']}
                     rows={[
                       ['Novato (1–5)', STAMINA_PROGRESSION.beginner.baseStamina, STAMINA_PROGRESSION.beginner.activitiesPerDay],
-                      ['Intermediário (6–15)', STAMINA_PROGRESSION.intermediate.baseStamina, STAMINA_PROGRESSION.intermediate.activitiesPerDay],
+                      [t('Intermediate (6–15)'), STAMINA_PROGRESSION.intermediate.baseStamina, STAMINA_PROGRESSION.intermediate.activitiesPerDay],
                       ['Veterano (16+)', STAMINA_PROGRESSION.veteran.baseStamina, STAMINA_PROGRESSION.veteran.activitiesPerDay],
                     ]}
                   />
@@ -1113,20 +1086,20 @@ até +${SAFE_ENHANCE_MAX}: chance = 100% (seguro)`}</Formula>
             </Section>
 
             {/* IA */}
-            <Section id="ai" kicker="Sistema" title="IA & Geração de Imagens">
-              <p>Uma IA narra o combate de forma cinematográfica, comenta rolagens e dá conselhos táticos. Hoje a narração usa respostas pré-escritas (fallback). <Tag>source: aiJudge.ts</Tag></p>
+            <Section id="ai" kicker={t('System')} title={t('AI & Image Generation')}>
+              <p>{t('An AI narrates the combat cinematically, comments on rolls and gives tactical advice. Today the narration uses pre-written responses (fallback).')} <Tag>source: aiJudge.ts</Tag></p>
               <Card>
-                <div className="flex items-center gap-2"><Todo /><h3 className="font-semibold text-white">Geração de imagens de personagem (Anthropic)</h3></div>
+                <div className="flex items-center gap-2"><Todo /><h3 className="font-semibold text-white">{t('Character image generation (Anthropic)')}</h3></div>
                 <p className="mt-2 text-sm">
-                  Próximo passo: migrar para uma <strong className="text-white">chave Anthropic própria</strong> e gerar imagens de personagem
-                  no <strong className="text-white">mesmo estilo visual</strong>, adicionando apenas as características que o player escolher.
-                  Requer melhorar o prompt para garantir consistência de estilo entre todos os personagens.
+                  {t('Next step: migrate to our ')}<strong className="text-white">{t('own Anthropic key')}</strong>
+                  {t(' and generate character images in the ')}<strong className="text-white">{t('same visual style')}</strong>
+                  {t(', adding only the traits the player chooses. It requires improving the prompt to guarantee style consistency across all characters.')}
                 </p>
               </Card>
               <ul className="list-disc space-y-1 pl-5 text-sm">
-                <li>Narração de combate — épica, máx. 3 frases.</li>
-                <li>Comentário de dados — reage a críticos, falhas e acertos altos.</li>
-                <li>Conselho tático — analisa HP/MP/stamina e fraquezas do inimigo.</li>
+                <li>{t('Combat narration — epic, max. 3 sentences.')}</li>
+                <li>{t('Dice commentary — reacts to criticals, misses and high hits.')}</li>
+                <li>{t('Tactical advice — analyses HP/MP/stamina and enemy weaknesses.')}</li>
               </ul>
             </Section>
 
@@ -1138,27 +1111,27 @@ até +${SAFE_ENHANCE_MAX}: chance = 100% (seguro)`}</Formula>
                   {RESOLVED.map((r) => <li key={r}>{t(r)}</li>)}
                 </ul>
               </Card>
-              <h3 className="pt-2 text-lg font-semibold text-white">🔜 Próximos passos / em estudo</h3>
+              <h3 className="pt-2 text-lg font-semibold text-white">{t('🔜 Next steps / under study')}</h3>
               <div className="space-y-3">
                 {ROADMAP.map((n) => (
                   <Card key={n.title}>
                     <div className="flex items-start gap-3">
                       <Todo />
-                      <div><h4 className="font-semibold text-white">{n.title}</h4><p className="mt-1 text-sm">{n.body}</p></div>
+                      <div><h4 className="font-semibold text-white">{t(n.title)}</h4><p className="mt-1 text-sm">{t(n.body)}</p></div>
                     </div>
                   </Card>
                 ))}
               </div>
-              <h3 className="pt-2 text-lg font-semibold text-white">ℹ️ Por design</h3>
+              <h3 className="pt-2 text-lg font-semibold text-white">{t('ℹ️ By design')}</h3>
               <Card>
-                <p className="text-sm"><strong className="text-white">DOL vs GOLD:</strong> são dois tokens distintos de propósito — <Tag tone="dol">DOL</Tag> é a moeda premium (criação/personagens) e <Tag tone="gold">GOLD</Tag> é a moeda principal do jogo (loja/itens). Não é um bug.</p>
+                <p className="text-sm"><strong className="text-white">{t('DOL vs GOLD:')}</strong>{t(' they are two tokens with distinct purposes — ')}<Tag tone="dol">DOL</Tag>{t(' is the premium currency (creation/characters) and ')}<Tag tone="gold">GOLD</Tag>{t(' is the main game currency (shop/items). It is not a bug.')}</p>
               </Card>
             </Section>
 
             <div className="border-t border-white/5 pt-8 text-center">
               <p className="text-sm text-textsec">
-                Documentação gerada a partir do código-fonte de Dolrath.{' '}
-                <Link href="/" className="text-primary hover:underline">Voltar à home</Link>
+                {t('Documentation generated from the Dolrath source code.')}{' '}
+                <Link href="/" className="text-primary hover:underline">{t('Back to home')}</Link>
               </p>
             </div>
           </main>

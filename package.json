@@ -59,6 +59,7 @@
     "sim:season": "node scripts/season-pool-sim.js",
     "sim:pvp-bands": "node scripts/pvp-band-balance-sim.js",
     "check:i18n": "TS_NODE_TRANSPILE_ONLY=1 ts-node --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\",\"esModuleInterop\":true,\"jsx\":\"react-jsx\"}' -r tsconfig-paths/register scripts/check-i18n-catalog.ts",
+    "check:i18n-keys": "TS_NODE_TRANSPILE_ONLY=1 ts-node --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\",\"esModuleInterop\":true,\"jsx\":\"react-jsx\",\"target\":\"es2020\",\"downlevelIteration\":true}' -r tsconfig-paths/register scripts/check-i18n-keys.ts",
     "bot:fleet:seed": "TS_NODE_TRANSPILE_ONLY=1 ts-node --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\",\"esModuleInterop\":true,\"jsx\":\"react-jsx\"}' -r tsconfig-paths/register scripts/bot-fleet-seed.ts",
     "bot:fleet:run": "node scripts/bot-fleet-runner.js",
     "bot:fleet:report": "node scripts/bot-fleet-report.js",

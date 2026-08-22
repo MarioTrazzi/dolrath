@@ -12,7 +12,7 @@ export const DUNGEONSMAP_PT: Record<string, string> = {
   'No character found': 'Nenhum personagem encontrado',
   'Create a character first to explore the dungeons.': 'Crie um personagem primeiro para explorar as masmorras.',
   'You leveled up!': 'Você subiu de nível!',
-  '{n} points to distribute': '{n} pontos a distribuir',
+  '{n} points to distribute': '{n} pontos para distribuir',
   '{n} point to distribute': '{n} ponto a distribuir',
   'See your new attributes': 'Veja seus novos atributos',
   'Character is dead': 'Personagem morto',

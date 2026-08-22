@@ -15,6 +15,11 @@ import { REPAIRBENCH_PT } from './repairbench'
 import { SHOP_PT } from './shop'
 import { ENHANCEMENT_PT } from './enhancement'
 import { RANKING_PT } from './ranking'
+import { FORGE_PT } from './forge'
+import { COOKING_PT } from './cooking'
+import { ALCHEMY_PT } from './alchemy'
+import { PROCESSING_PT } from './processing'
+import { DUNGEONSMAP_PT } from './dungeonsmap'
 
 export const PT_DICT: Record<string, string> = {
   ...COMMON_PT,
@@ -32,4 +37,9 @@ export const PT_DICT: Record<string, string> = {
   ...SHOP_PT,
   ...ENHANCEMENT_PT,
   ...RANKING_PT,
+  ...FORGE_PT,
+  ...COOKING_PT,
+  ...ALCHEMY_PT,
+  ...PROCESSING_PT,
+  ...DUNGEONSMAP_PT,
 }

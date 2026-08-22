@@ -22,6 +22,13 @@ export const DASHBOARD_PT: Record<string, string> = {
   'Refresh': 'Atualizar',
   'No NFTs found in your wallet.': 'Nenhuma NFT encontrada na sua carteira.',
 
+  // 🔔 Selo de avisos pendentes no card do personagem
+  'Pending for this hero:': 'Pendente neste herói:',
+  '🗺️ {n} quest reward(s) to claim': '🗺️ {n} recompensa(s) de missão para resgatar',
+  '✨ {n} point(s) to spend': '✨ {n} ponto(s) para distribuir',
+  '💤 Gathering haul awaiting collection': '💤 Espólio de coleta aguardando recolhimento',
+  '🎒 Inventory full — gathering paused': '🎒 Inventário cheio — coleta pausada',
+
   '⛏️ Gathering': '⛏️ Coletando',
   'field': 'campo',
   'Inventory full — gathering paused at {field} without spending stamina':

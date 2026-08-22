@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import { Plus, Minus } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { refreshCharacterAlerts } from '@/hooks/useCharacterNotifications'
 
 interface AttributeDistributionProps {
   characterId: string
@@ -119,6 +120,8 @@ export default function AttributeDistributionPanel({
         toast.success(result.message || 'Pontos distribuídos com sucesso!')
         setPendingPoints({ str: 0, agi: 0, int: 0, def: 0 })
         onPointsDistributed()
+        // Gastou os pontos: o selo de pendências do card do herói acompanha.
+        refreshCharacterAlerts()
       } else {
         const msg = String(result?.error || `Erro ao distribuir pontos (HTTP ${response.status})`)
         toast.error(msg)

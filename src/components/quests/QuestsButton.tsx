@@ -9,6 +9,7 @@ import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvid
 import QuestsBoard from '@/components/quests/QuestsBoard'
 import { BdoDialogShell, BEVEL_COLOR_BTN_CLASS, BEVEL_VARIANTS, GOLD } from '@/components/crafting/bdoTheme'
 import { useI18n } from '@/lib/i18n/I18nProvider'
+import { refreshCharacterAlerts } from '@/hooks/useCharacterNotifications'
 
 export default function QuestsButton() {
   const { data: session } = useSession()
@@ -64,7 +65,11 @@ export default function QuestsButton() {
 
       <BdoDialogShell
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={() => {
+          setOpen(false)
+          // Resgatou algo aqui dentro? O selo do card do herói tem de saber.
+          refreshCharacterAlerts()
+        }}
         icon="🗺️"
         title={t('Quests')}
         maxWidthClass="max-w-2xl"

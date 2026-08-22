@@ -13,6 +13,8 @@ import KeepBackdrop from '@/components/dashboard/KeepBackdrop';
 import QuestsButton from '@/components/quests/QuestsButton';
 import CreationCardBackdrop from '@/components/character/CreationCardBackdrop';
 import { CharacterStatChips, computePower } from '@/components/character/CharacterStatChips';
+import CharacterAlertBadge, { CharacterAlertChips } from '@/components/character/CharacterAlertBadge';
+import { useCharacterNotifications } from '@/hooks/useCharacterNotifications';
 import { getBlendedVisual } from '@/lib/creationVisuals';
 import { getProfessionLevel } from '@/lib/professionSystem';
 import { getGatherField } from '@/lib/gathering';
@@ -69,6 +71,10 @@ export default function DashboardPage() {
   const [goldOnchain, setGoldOnchain] = useState<string | null>(null);
   // Ativar o herói antes de abrir a ficha (mesmo comportamento da navbar).
   const { setActiveCharacterId } = useActiveCharacter();
+  // 🔔 Avisos pendentes POR personagem (missão resgatável, ponto por gastar,
+  // coleta parada) — o selo dourado no card do herói, irmão do ponto do botão
+  // de Missões. Uma chamada só para a conta inteira.
+  const { alertsByCharId, refresh: refreshAlerts } = useCharacterNotifications();
   const [isLinkingWallet, setIsLinkingWallet] = useState<boolean>(false);
   const [walletLinkError, setWalletLinkError] = useState<string>('');
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; item?: any; input: string }>({ open: false, item: null, input: '' });
@@ -294,6 +300,9 @@ export default function DashboardPage() {
         if (byToken[tokenId]) byCharId[String(c.id)] = byToken[tokenId];
       }
       setNftMetaByCharacterId(byCharId);
+      // Toda recarga de personagens (XP, sync de nível, exclusão) pode mudar o
+      // que está pendente — o selo do card acompanha.
+      void refreshAlerts();
     } finally {
       setLoadingCharacter(false);
     }
@@ -550,6 +559,7 @@ export default function DashboardPage() {
                 const farmLevel = charRow ? getProfessionLevel(charRow.farmXp ?? 0) : 1;
                 const gatherInfo = characterId ? gatheringByCharId[characterId] : undefined;
                 const invFull = !!gatherInfo?.inventoryFull;
+                const alerts = characterId ? alertsByCharId[characterId] : undefined;
 
                 return (
                   <motion.div
@@ -575,8 +585,11 @@ export default function DashboardPage() {
                     />
 
                     <div className="relative p-4 flex items-start gap-4">
+                      {/* 🔔 Selo de pendências no canto do retrato: some sozinho quando não há nada esperando. */}
+                      <div className="relative flex-shrink-0">
+                        <CharacterAlertBadge alerts={alerts} className="absolute -right-1.5 -top-1.5" />
                       <div
-                        className="w-14 h-14 rounded-[3px] overflow-hidden border-2 flex-shrink-0 drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]"
+                        className="w-14 h-14 rounded-[3px] overflow-hidden border-2 drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]"
                         style={{ borderColor: isSelected ? FRAME : '#46464c', background: '#141210' }}
                       >
                         {meta?.image ? (
@@ -596,6 +609,7 @@ export default function DashboardPage() {
                             {visual.raceVisual.emoji}
                           </div>
                         )}
+                        </div>
                       </div>
 
                       <div className="flex-1 min-w-0">
@@ -603,6 +617,7 @@ export default function DashboardPage() {
                           {displayName}
                         </div>
                         <div className="flex flex-wrap gap-1.5 mt-1.5">
+                          <CharacterAlertChips alerts={alerts} />
                           {displayRace && (
                             <span
                               className="px-2 py-0.5 text-[11px] font-semibold rounded-[3px] text-[#dcdce0] border"

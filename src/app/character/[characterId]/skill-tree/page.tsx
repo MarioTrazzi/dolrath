@@ -22,6 +22,7 @@ import { getBlendedVisual } from '@/lib/creationVisuals';
 import CreationCardBackdrop from '@/components/character/CreationCardBackdrop';
 import { getWalletTxErrorMessage } from '@/lib/walletErrors';
 import { useT } from '@/lib/i18n/I18nProvider';
+import { refreshCharacterAlerts } from '@/hooks/useCharacterNotifications';
 
 const GOLD = '#c9a25f';
 const GOLD_BRIGHT = '#e7c682';
@@ -76,6 +77,8 @@ export default function SkillTreePage() {
       if (response.ok && result?.success) {
         toast.success(t('Learned "{name}"!', { name: result.node?.name || t('skill') }));
         setCharacter(result.character);
+        // Gastou o ponto: o selo de pendências do card do herói acompanha.
+        refreshCharacterAlerts();
       } else {
         toast.error(String(result?.error || t('Failed to learn skill (HTTP {status})', { status: response.status })));
       }

@@ -8,6 +8,8 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { X, Plus, Check, Heart, Sparkles, Zap, Layers } from 'lucide-react'
 import { resolveImageUrl } from '@/lib/imageUrl'
 import { useActiveCharacter, ActiveCharacter } from '@/components/providers/ActiveCharacterProvider'
+import CharacterAlertBadge from '@/components/character/CharacterAlertBadge'
+import { useCharacterNotifications, type CharacterAlerts } from '@/hooks/useCharacterNotifications'
 
 // 🎴 Diálogo de troca de herói: abre pela foto-avatar na navbar. Mostra todos os
 // personagens lado a lado (rolagem horizontal estilo carrossel) com foto, nível,
@@ -31,10 +33,12 @@ function StatBar({ icon, value, max, color }: { icon: React.ReactNode; value: nu
 function CharacterCard({
   character,
   active,
+  alerts,
   onSelect,
 }: {
   character: ActiveCharacter
   active: boolean
+  alerts?: CharacterAlerts | null
   onSelect: () => void
 }) {
   const avatarUrl = resolveImageUrl(character.avatar ?? null)
@@ -56,6 +60,9 @@ function CharacterCard({
           <Check className="h-3 w-3" /> Ativo
         </span>
       )}
+
+      {/* 🔔 Pendências do herói (missão, ponto, coleta parada) — o mesmo selo do card do dashboard. */}
+      <CharacterAlertBadge alerts={alerts} className="absolute left-3 top-3" />
 
       <div className="relative mx-auto mb-3 aspect-square w-full overflow-hidden rounded-xl bg-indigo-500/15 ring-1 ring-white/10">
         {avatarUrl ? (
@@ -104,6 +111,7 @@ function CharacterCard({
 
 export function CharacterSwitcherDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { characters, activeCharacterId, setActiveCharacterId, refresh } = useActiveCharacter()
+  const { alertsByCharId, refresh: refreshAlerts } = useCharacterNotifications()
   const router = useRouter()
 
   // O snapshot dos personagens só é buscado na montagem / criação / volta de run.
@@ -112,8 +120,11 @@ export function CharacterSwitcherDialog({ open, onClose }: { open: boolean; onCl
   // gastado. Recarregar ao abrir garante que HP/MP/Stamina/Failstacks reflitam o
   // banco na hora. (O regen passivo de stamina segue subindo sozinho via tick.)
   useEffect(() => {
-    if (open) refresh()
-  }, [open, refresh])
+    if (open) {
+      refresh()
+      refreshAlerts()
+    }
+  }, [open, refresh, refreshAlerts])
 
   const handleSelect = (id: string) => {
     setActiveCharacterId(id)
@@ -177,6 +188,7 @@ export function CharacterSwitcherDialog({ open, onClose }: { open: boolean; onCl
                     key={c.id}
                     character={c}
                     active={c.id === activeCharacterId}
+                    alerts={alertsByCharId[c.id]}
                     onSelect={() => handleSelect(c.id)}
                   />
                 ))}

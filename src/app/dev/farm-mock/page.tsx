@@ -153,33 +153,44 @@ export default function FarmMockPage() {
               skippedNoStamina: ready.length - toHarvest.length,
             }
           }}
-          onWellCollect={async (): Promise<WellCollectResultVM> => {
+          onWellCollect={async (all?: boolean): Promise<WellCollectResultVM> => {
             if (vm.well.pending <= 0) throw new Error('O poço ainda não acumulou água.')
             if (vm.stamina < WELL_COLLECT_STAMINA) throw new Error(`Stamina insuficiente (a ação custa ${WELL_COLLECT_STAMINA}).`)
 
-            const bonuses: WellCollectResultVM['bonuses'] = []
-            let xpGained = WELL.farmXpPerCollect
-            if (Math.random() * 100 < wellShardChance(vm.farm.level)) {
-              bonuses.push({ name: rollFarmStoneShard(), kind: 'shard' })
-              xpGained += WELL_SHARD_BONUS_XP
-            }
-            if (Math.random() * 100 < wellStoneChance(vm.farm.level)) {
-              bonuses.push({ name: rollWellBlackStone(), kind: 'stone' })
-              xpGained += WELL_STONE_BONUS_XP
+            // Mesmo corte do servidor: `all` esvazia o poço até a stamina acabar.
+            const affordable = Math.floor(vm.stamina / WELL_COLLECT_STAMINA)
+            const pulls = Math.min(all === true ? vm.well.pending : 1, affordable)
+
+            const results: NonNullable<WellCollectResultVM['results']> = []
+            let xpGained = 0
+            for (let i = 0; i < pulls; i++) {
+              const bonuses: WellCollectResultVM['bonuses'] = []
+              xpGained += WELL.farmXpPerCollect
+              if (Math.random() * 100 < wellShardChance(vm.farm.level)) {
+                bonuses.push({ name: rollFarmStoneShard(), kind: 'shard' })
+                xpGained += WELL_SHARD_BONUS_XP
+              }
+              if (Math.random() * 100 < wellStoneChance(vm.farm.level)) {
+                bonuses.push({ name: rollWellBlackStone(), kind: 'stone' })
+                xpGained += WELL_STONE_BONUS_XP
+              }
+              results.push({ qty: 1, bonuses })
             }
 
-            const pendingLeft = Math.max(0, vm.well.pending - 1)
+            const bonuses = results.flatMap((r) => r.bonuses)
+            const pendingLeft = Math.max(0, vm.well.pending - pulls)
             setVm((prev) => ({
               ...prev,
-              stamina: prev.stamina - WELL_COLLECT_STAMINA,
+              stamina: prev.stamina - pulls * WELL_COLLECT_STAMINA,
               well: { ...prev.well, pending: pendingLeft },
             }))
             const bonusLabel = bonuses.length > 0 ? ` + ${bonuses.map((b) => b.name).join(', ')}` : ''
-            push(`💧 Coletou 1× ${WELL.outputName}${bonusLabel} (+${xpGained} XP) · ${pendingLeft}/${WELL.cap}`)
+            push(`💧 Coletou ${pulls}× ${WELL.outputName}${bonusLabel} (+${xpGained} XP) · ${pendingLeft}/${WELL.cap}`)
             return {
               outputName: WELL.outputName,
-              qty: 1,
+              qty: pulls,
               bonuses,
+              results,
               xpGained,
               pendingLeft,
             }

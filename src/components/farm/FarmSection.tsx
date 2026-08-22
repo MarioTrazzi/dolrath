@@ -131,7 +131,7 @@ export default function FarmSection({ onBack }: { onBack?: () => void }) {
     }
   }, [activeCharacterId, refresh])
 
-  const wellCollect = useCallback(async (): Promise<WellCollectResultVM> => {
+  const wellCollect = useCallback(async (all?: boolean): Promise<WellCollectResultVM> => {
     if (!activeCharacterId) throw new Error('Escolha um personagem ativo na navbar.')
     setBusy(true)
     setNotice(null)
@@ -139,7 +139,7 @@ export default function FarmSection({ onBack }: { onBack?: () => void }) {
       const res = await fetch('/api/farm/well-collect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ characterId: activeCharacterId }),
+        body: JSON.stringify({ characterId: activeCharacterId, all: all === true }),
       })
       const data = await res.json().catch(() => null)
       if (!res.ok) {
@@ -169,8 +169,12 @@ export default function FarmSection({ onBack }: { onBack?: () => void }) {
         outputName: data.outputName,
         qty: data.qty ?? 1,
         bonuses,
+        // Sequência balde a balde (contrato novo); sem ela a dialog encena 1.
+        results: Array.isArray(data.results) ? data.results : undefined,
         xpGained: data.xpGained ?? 0,
         pendingLeft,
+        skippedNoStamina: data.skippedNoStamina ?? 0,
+        skippedNoSpace: data.skippedNoSpace ?? 0,
       }
     } finally {
       setBusy(false)

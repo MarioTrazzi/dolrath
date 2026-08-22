@@ -19,6 +19,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { CROPS, cropGrowSeconds, cropYieldRange, FARM_HARVEST_STAMINA, WELL, WELL_COLLECT_STAMINA, type CropDef } from '@/lib/farming'
 import { farmPlotUnlockLevel, FARM_TOTAL_PLOTS, type ProfessionLevelInfo } from '@/lib/professionSystem'
 import { GatherItemThumb, ProfessionBar } from '@/components/gathering/GatheringPanel'
+import { useBatchReveal } from '@/hooks/useBatchReveal'
 
 export interface FarmPlotVM {
   slotIndex: number
@@ -69,10 +70,20 @@ export interface HarvestResultVM {
 
 export interface WellCollectResultVM {
   outputName: string
+  /** Total de baldes puxados (o agregado do lote). */
   qty: number
+  /** Todos os bônus do lote, achatados — é o que o resumo final lista. */
   bonuses: { name: string; kind: 'shard' | 'stone' }[]
+  /**
+   * Um item por BALDE puxado, na ordem processada — a UI encena nessa
+   * sequência (molde de `HarvestResultVM.results`). Ausente = contrato antigo.
+   */
+  results?: { qty: number; bonuses: { name: string; kind: 'shard' | 'stone' }[] }[]
   xpGained: number
   pendingLeft: number
+  /** Baldes que ficaram para trás (stamina/inventário não cobriram). */
+  skippedNoStamina?: number
+  skippedNoSpace?: number
 }
 
 const FLAVOR = [
@@ -86,7 +97,7 @@ const FLAVOR = [
 /** Duração da animação de colheita de CADA canteiro (a "working" pausa esse tempo por item). */
 const HARVEST_ITEM_ANIM_MS = 3000
 
-/** Tempo da animação do balde subindo no poço. */
+/** Tempo da animação do balde subindo no poço (um balde). */
 const WELL_BUCKET_ANIM_MS = 2200
 
 const WELL_FLAVOR = [
@@ -255,7 +266,9 @@ function HarvestDialog({
       const res = await onHarvest()
       setResult(res)
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : t('Failed to harvest'))
+      // (`t` não existe neste componente — a chamada antiga estourava
+      // ReferenceError justo no caminho de erro da colheita.)
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to harvest')
       setPhase('error')
     }
   }
@@ -525,7 +538,7 @@ function WellCollectDialog({
   wellShardChancePct: number
   wellStoneChancePct: number
   busy?: boolean
-  onCollect: () => Promise<WellCollectResultVM>
+  onCollect: (all?: boolean) => Promise<WellCollectResultVM>
   onClose: () => void
 }) {
   const [phase, setPhase] = useState<'confirm' | 'working' | 'done' | 'error'>('confirm')
@@ -536,6 +549,14 @@ function WellCollectDialog({
   const [localPending, setLocalPending] = useState(pending)
   const [localStamina, setLocalStamina] = useState(stamina)
 
+  // O lote sobe UM BALDE POR VEZ: o servidor puxa tudo numa transação só e
+  // devolve `results[]`; aqui a corda trabalha balde a balde. [[useBatchReveal]]
+  const reveal = useBatchReveal({
+    maxTickMs: WELL_BUCKET_ANIM_MS,
+    onFinish: () => setPhase('done'),
+  })
+  const revealing = reveal.phase === 'revealing'
+
   useEffect(() => {
     if (phase === 'confirm' || phase === 'done') {
       setLocalPending(pending)
@@ -544,35 +565,40 @@ function WellCollectDialog({
   }, [pending, stamina, phase])
 
   const canPull = localPending > 0 && localStamina >= WELL_COLLECT_STAMINA
+  /** Quantos baldes a stamina cobre — o "Coletar tudo" nunca promete mais que isso. */
+  const affordable = Math.floor(localStamina / WELL_COLLECT_STAMINA)
+  const drainCount = Math.min(localPending, affordable)
 
-  const start = async () => {
+  const start = async (all = false) => {
     if (localPending <= 0 || localStamina < WELL_COLLECT_STAMINA) return
     setPhase('working')
     setResult(null)
     setErrorMsg(null)
-    const startedAt = Date.now()
+    reveal.begin()
     try {
-      const res = await onCollect()
-      const elapsed = Date.now() - startedAt
-      const wait = Math.max(0, WELL_BUCKET_ANIM_MS - elapsed)
-      await new Promise((r) => setTimeout(r, wait))
-      setLocalPending(res.pendingLeft)
-      setLocalStamina((s) => Math.max(0, s - WELL_COLLECT_STAMINA))
+      const res = await onCollect(all)
       setResult(res)
-      setPhase('done')
+      setLocalPending(res.pendingLeft)
+      setLocalStamina((s) => Math.max(0, s - res.qty * WELL_COLLECT_STAMINA))
+      // Sem a sequência (contrato antigo) encena um balde só.
+      reveal.start(res.results?.length ?? Math.max(1, res.qty))
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Erro ao coletar')
+      reveal.reset()
       setPhase('error')
     }
   }
 
+  // Flavor rotativo só ENQUANTO espera o servidor (na encenação o contador manda).
   useEffect(() => {
-    if (phase !== 'working') return
+    if (phase !== 'working' || revealing) return
     const id = setInterval(() => setFlavorIdx((i) => (i + 1) % WELL_FLAVOR.length), 700)
     return () => clearInterval(id)
-  }, [phase])
+  }, [phase, revealing])
 
   const canPullAgain = (result?.pendingLeft ?? localPending) > 0 && localStamina >= WELL_COLLECT_STAMINA
+  /** Baldes já revelados, mais novo em cima. */
+  const revealTail = (result?.results ?? []).slice(0, reveal.revealed).slice(-5).reverse()
 
   return (
     <motion.div
@@ -606,13 +632,28 @@ function WellCollectDialog({
                 Deixar
               </button>
               <button
-                onClick={() => void start()}
+                onClick={() => void start(false)}
                 disabled={busy || !canPull}
                 className="flex-1 rounded-lg text-white text-sm font-black py-3 transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-sky-600 hover:bg-sky-500"
               >
                 Puxar · −{WELL_COLLECT_STAMINA}⚡
               </button>
             </div>
+            {/* Esvaziar o poço: um balde por vez, até secar. */}
+            {canPull && drainCount > 1 && (
+              <button
+                onClick={() => void start(true)}
+                disabled={busy}
+                className="w-full mt-2 rounded-lg border border-sky-400/40 bg-sky-500/10 hover:bg-sky-500/20 text-sky-100 text-sm font-black py-3 transition-all disabled:opacity-40"
+              >
+                Coletar tudo ({drainCount}) · −{drainCount * WELL_COLLECT_STAMINA}⚡
+              </button>
+            )}
+            {canPull && drainCount < localPending && (
+              <div className="text-amber-300/80 text-[11px] mt-2">
+                ⚡ Sua stamina cobre {drainCount} de {localPending} baldes.
+              </div>
+            )}
             {!canPull && (
               <div className="text-red-400 text-[11px] mt-2">
                 {localPending <= 0 ? 'O poço ainda não acumulou água.' : '⚡ Stamina insuficiente.'}
@@ -623,22 +664,64 @@ function WellCollectDialog({
 
         {phase === 'working' && (
           <div className="text-center py-1">
-            <WellBucketRig phase="working" key={`bucket-${localPending}`} />
-            <h2 className="text-white font-black text-base mb-1">Subindo o balde…</h2>
-            <AnimatePresence mode="wait">
-              <motion.p key={flavorIdx} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="text-white/45 text-xs mb-3 h-4">
-                {WELL_FLAVOR[flavorIdx]}
-              </motion.p>
-            </AnimatePresence>
+            {/* A `key` por tique refaz a subida do balde a cada unidade. */}
+            <WellBucketRig phase="working" key={`bucket-${reveal.tick}`} />
+            <h2 className="text-white font-black text-base mb-1">
+              Subindo o balde
+              {revealing && reveal.total > 1 ? ` ${reveal.revealed}/${reveal.total}` : '…'}
+            </h2>
+            {revealing ? (
+              <p className="text-white/45 text-xs mb-3 h-4">
+                {reveal.total > 1 ? 'Um balde por vez, até secar…' : WELL_FLAVOR[0]}
+              </p>
+            ) : (
+              <AnimatePresence mode="wait">
+                <motion.p key={flavorIdx} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="text-white/45 text-xs mb-3 h-4">
+                  {WELL_FLAVOR[flavorIdx]}
+                </motion.p>
+              </AnimatePresence>
+            )}
             <div className="h-2 rounded-full bg-black/60 border border-white/10 overflow-hidden mb-2">
               <motion.div
-                key={`bar-${localPending}-${flavorIdx === 0 ? 'a' : 'b'}`}
+                key={`bar-${reveal.tick}-${flavorIdx === 0 ? 'a' : 'b'}`}
                 initial={{ width: '0%' }} animate={{ width: '100%' }}
-                transition={{ duration: WELL_BUCKET_ANIM_MS / 1000, ease: 'linear' }}
+                transition={{
+                  duration: (revealing ? reveal.cadence.delay : WELL_BUCKET_ANIM_MS) / 1000,
+                  ease: 'linear',
+                }}
                 className="h-full rounded-full bg-gradient-to-r from-sky-500 to-cyan-300"
               />
             </div>
-            <div className="text-white/30 text-[10px]">não feche — a coleta está em andamento</div>
+
+            {/* A fila de baldes que já subiram */}
+            {revealing && revealTail.length > 0 && (
+              <div className="flex flex-col gap-1 mb-2 text-left">
+                {revealTail.map((r, i) => (
+                  <motion.div
+                    key={`pull-${reveal.revealed - i}`}
+                    initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+                    className="flex items-center justify-between rounded-lg border border-sky-400/25 bg-sky-950/30 px-3 py-1.5 text-[11px]"
+                  >
+                    <span className="text-sky-100">💧 {result?.outputName}</span>
+                    <span className="font-bold text-white">
+                      ×{r.qty}
+                      {r.bonuses.map((b) => (b.kind === 'stone' ? ' 💎' : ' 🔸')).join('')}
+                    </span>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+
+            {revealing && reveal.total > 1 ? (
+              <button
+                onClick={reveal.skip}
+                className="w-full rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 text-white/70 text-xs font-bold py-2 transition-all"
+              >
+                ⏩ Pular ({reveal.revealed}/{reveal.total})
+              </button>
+            ) : (
+              <div className="text-white/30 text-[10px]">não feche — a coleta está em andamento</div>
+            )}
           </div>
         )}
 
@@ -693,11 +776,13 @@ function WellCollectDialog({
               </button>
               {canPullAgain ? (
                 <button
-                  onClick={() => void start()}
+                  onClick={() => void start(drainCount > 1)}
                   disabled={busy}
                   className="flex-1 rounded-lg text-white text-sm font-black py-3 transition-all disabled:opacity-40 bg-sky-600 hover:bg-sky-500"
                 >
-                  Puxar mais · −{WELL_COLLECT_STAMINA}⚡
+                  {drainCount > 1
+                    ? `Coletar tudo (${drainCount}) · −${drainCount * WELL_COLLECT_STAMINA}⚡`
+                    : `Puxar mais · −${WELL_COLLECT_STAMINA}⚡`}
                 </button>
               ) : (
                 <button
@@ -728,7 +813,7 @@ function WellCollectDialog({
               </button>
               {canPull && (
                 <button
-                  onClick={() => void start()}
+                  onClick={() => void start(false)}
                   disabled={busy}
                   className="flex-1 rounded-lg text-white text-sm font-black py-3 transition-all disabled:opacity-40 bg-sky-600 hover:bg-sky-500"
                 >
@@ -755,7 +840,7 @@ export function FarmBoard({
   onPlant: (slotIndex: number, cropId: string) => void
   /** Sem slotIndex: colhe TODOS os canteiros prontos. Com 101: colhe o cercado. */
   onHarvest: (slotIndex?: number) => Promise<HarvestResultVM>
-  onWellCollect: () => Promise<WellCollectResultVM>
+  onWellCollect: (all?: boolean) => Promise<WellCollectResultVM>
   onPenFeed: () => void
 }) {
   const cropList = useMemo(() => Object.values(CROPS) as CropDef[], [])

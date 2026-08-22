@@ -13,6 +13,11 @@
 // ============================================================
 
 import { useEffect, useMemo, useState } from 'react'
+import { useT, useI18n } from '@/lib/i18n/I18nProvider'
+import { localizeItemName, localizeItemDesc, localizeRarityLabel, localizeSpecialEffect } from '@/lib/i18n/catalog'
+import type { TFunction } from '@/lib/i18n/t'
+import type { Locale } from '@/lib/i18n/config'
+import { pickName } from '@/lib/i18n/names'
 import Link from 'next/link'
 
 import { races as RACES_SRC, pointSystem } from '@/lib/characterCreationData'
@@ -35,6 +40,7 @@ import { STAMINA_COSTS, STAMINA_PROGRESSION } from '@/lib/staminaSystem'
 type RarityKey = 'COMMON' | 'UNCOMMON' | 'RARE' | 'EPIC' | 'LEGENDARY'
 
 const RARITY: Record<RarityKey, { label: string; text: string; ring: string; bg: string }> = {
+  // `label` em PT: é a mesma fonte de localizeRarityLabel (catalog.ts).
   COMMON: { label: 'Comum', text: 'text-zinc-300', ring: 'ring-zinc-500/40', bg: 'bg-zinc-500/10' },
   UNCOMMON: { label: 'Incomum', text: 'text-emerald-300', ring: 'ring-emerald-500/40', bg: 'bg-emerald-500/10' },
   RARE: { label: 'Raro', text: 'text-sky-300', ring: 'ring-sky-500/40', bg: 'bg-sky-500/10' },
@@ -44,10 +50,11 @@ const RARITY: Record<RarityKey, { label: string; text: string; ring: string; bg:
 const RARITY_ORDER: RarityKey[] = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY']
 
 function Pill({ rarity }: { rarity: RarityKey }) {
+  const { locale } = useI18n()
   const r = RARITY[rarity]
   return (
     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ${r.text} ${r.ring} ${r.bg}`}>
-      {r.label}
+      {localizeRarityLabel(r.label, locale)}
     </span>
   )
 }
@@ -110,21 +117,25 @@ function Table({ head, rows }: { head: string[]; rows: React.ReactNode[][] }) {
 }
 
 function Todo() {
-  return <Tag tone="todo">🔜 TODO</Tag>
+  const t = useT()
+  return <Tag tone="todo">{t('🔜 TODO')}</Tag>
 }
 
 function Live() {
-  return <Tag tone="ok">✅ AO VIVO</Tag>
+  const t = useT()
+  return <Tag tone="ok">{t('✅ LIVE')}</Tag>
 }
 
 function Soon() {
-  return <Tag tone="todo">🔜 EM BREVE</Tag>
+  const t = useT()
+  return <Tag tone="todo">{t('🔜 COMING SOON')}</Tag>
 }
 
 // Contrato pronto e testado, deploy agendado para a Fase 2 do lançamento
 // (dentro da temporada 1). Distinto de EM BREVE, que é desenho sem código.
 function Phase2() {
-  return <Tag tone="todo">🛠️ FASE 2</Tag>
+  const t = useT()
+  return <Tag tone="todo">{t('🛠️ PHASE 2')}</Tag>
 }
 
 // Card visual de item (mesmo tamanho dos cards da /store) com a imagem gerada.
@@ -177,55 +188,61 @@ function ItemGallery({ children }: { children: React.ReactNode }) {
 // ---------------- Derivações a partir das fontes ----------------
 
 const RACE_EMOJI: Record<string, string> = { draconiano: '🐉', metamorfo: '🐺', humano: '⚔️', elfo: '🧝' }
-const WEAPON_PT: Record<string, string> = { sword: 'Espada', dagger: 'Adaga', staff: 'Cajado', bow: 'Arco', mace: 'Maça', spear: 'Lança', fists: 'Punhos' }
+// Chaves EN (i18n EN-as-key): quem exibe passa por t().
+const WEAPON_LABEL: Record<string, string> = { sword: 'Sword', dagger: 'Dagger', staff: 'Staff', bow: 'Bow', mace: 'Mace', spear: 'Spear', fists: 'Fists' }
 const BONUS_PT: Record<string, string> = { strength: 'STR', dexterity: 'DEX', intelligence: 'INT', constitution: 'CON' }
-const STAT_SHORT: Record<string, string> = { str: 'str', agi: 'agi', int: 'int', def: 'def', res: 'res', hp: 'hp', mp: 'mp', stamina: 'stm', bonusDamage: 'dano', bonusDefense: 'defesa', bonusSpeed: 'vel' }
-const SOURCE_LABEL: Record<string, string> = { shop: '🏪 Loja', dungeon: '🗝️ Masmorra', dungeon_boss: '👑 Chefe', adventure_boss: '🗓️ Aventura' }
-const BUILD_LABEL: Record<string, string> = { brute: '💪 Força', agile: '🏹 Agilidade', arcane: '🔮 Arcano', guardian: '🛡️ Guardião' }
-const DUNGEON_PT: Record<string, string> = { floresta: 'Floresta Sombria', caverna: 'Caverna de Cristal', pantano: 'Pântano Maldito', ruinas: 'Ruínas Arcanas' }
+const STAT_SHORT: Record<string, string> = { str: 'str', agi: 'agi', int: 'int', def: 'def', res: 'res', hp: 'hp', mp: 'mp', stamina: 'stm', bonusDamage: 'damage', bonusDefense: 'defense', bonusSpeed: 'speed' }
+const SOURCE_LABEL: Record<string, string> = { shop: '🏪 Shop', dungeon: '🗝️ Dungeon', dungeon_boss: '👑 Boss', adventure_boss: '🗓️ Adventure' }
+const BUILD_LABEL: Record<string, string> = { brute: '💪 Strength', agile: '🏹 Agility', arcane: '🔮 Arcane', guardian: '🛡️ Guardian' }
+// Nome PT das masmorras = chave de dungeonAdventures; o display sai de pickName.
+const DUNGEON_NAME_PT: Record<string, string> = { floresta: 'Floresta Sombria', caverna: 'Caverna de Cristal', pantano: 'Pântano Maldito', ruinas: 'Ruínas Arcanas' }
 const ENHANCEMENT_STONES = [
-  { name: 'Pedra Negra (Arma)', rarity: 'UNCOMMON' as RarityKey, use: '+1 a +15 · armas/escudos' },
-  { name: 'Pedra Negra (Armadura)', rarity: 'UNCOMMON' as RarityKey, use: '+1 a +15 · armaduras' },
-  { name: 'Pedra Negra Mágica Concentrada (Arma)', rarity: 'EPIC' as RarityKey, use: 'I–V (PRI–PEN) · armas/escudos' },
-  { name: 'Pedra Negra Mágica Concentrada (Armadura)', rarity: 'EPIC' as RarityKey, use: 'I–V (PRI–PEN) · armaduras' },
+  // `name` PT = chave do catálogo; `use` é chave EN passada por t().
+  { name: 'Pedra Negra (Arma)', rarity: 'UNCOMMON' as RarityKey, use: '+1 to +15 · weapons/shields' },
+  { name: 'Pedra Negra (Armadura)', rarity: 'UNCOMMON' as RarityKey, use: '+1 to +15 · armour' },
+  { name: 'Pedra Negra Mágica Concentrada (Arma)', rarity: 'EPIC' as RarityKey, use: 'I–V (PRI–PEN) · weapons/shields' },
+  { name: 'Pedra Negra Mágica Concentrada (Armadura)', rarity: 'EPIC' as RarityKey, use: 'I–V (PRI–PEN) · armour' },
 ]
 const ADVENTURE_BOSSES = [
-  { day: 'Semana 1', emoji: '🔥', name: 'Krax-thar', title: 'o Devorador de Mundos', theme: 'Dragão ígneo' },
-  { day: 'Semana 2', emoji: '🕷️', name: "Vol'theris", title: 'a Tecelã do Vazio', theme: 'Aranha do vazio' },
-  { day: 'Semana 3', emoji: '🗿', name: 'Gorthak', title: 'o Colosso de Adamantite', theme: 'Golem titânico' },
-  { day: 'Semana 4', emoji: '✨', name: 'Sylariel', title: 'a Rainha Celeste', theme: 'Elfa caída' },
+  { day: 'Week 1', emoji: '🔥', name: 'Krax-thar', title: 'the World Devourer', theme: 'Fiery dragon' },
+  { day: 'Week 2', emoji: '🕷️', name: "Vol'theris", title: 'the Weaver of the Void', theme: 'Void spider' },
+  { day: 'Week 3', emoji: '🗿', name: 'Gorthak', title: 'the Colossus of Adamantite', theme: 'Titanic golem' },
+  { day: 'Week 4', emoji: '✨', name: 'Sylariel', title: 'the Celestial Queen', theme: 'Fallen elf' },
 ]
 
-function dungeonAndRace(it: CatalogItem): React.ReactNode {
+function DungeonAndRace({ it }: { it: CatalogItem }): React.ReactNode {
+  const { locale } = useI18n()
   const where = it.adventureBoss
     ? it.adventureBoss
-    : it.dungeons.map((d) => DUNGEON_PT[d] ?? d).join(', ') || '—'
+    : it.dungeons.map((d) => localizeItemName(DUNGEON_NAME_PT[d] ?? d, locale)).join(', ') || '—'
   return <span className="text-xs">{where}{it.raceRestriction ? <> · <Tag tone="warn">{it.raceRestriction}</Tag></> : null}</span>
 }
 
-function consumableEffectToString(stats: Record<string, any>): string {
+function consumableEffectToString(stats: Record<string, any>, t: TFunction): string {
   const parts: string[] = []
-  if (stats.healAmount) parts.push(stats.healAmount >= 9999 ? 'HP total' : `+${stats.healAmount} HP`)
-  if (stats.manaAmount) parts.push(stats.manaAmount >= 9999 ? 'MP total' : `+${stats.manaAmount} MP`)
+  if (stats.healAmount) parts.push(stats.healAmount >= 9999 ? t('full HP') : `+${stats.healAmount} HP`)
+  if (stats.manaAmount) parts.push(stats.manaAmount >= 9999 ? t('full MP') : `+${stats.manaAmount} MP`)
   if (stats.staminaAmount) parts.push(`+${stats.staminaAmount} stm`)
   if (stats.attackBonus) parts.push(`+${stats.attackBonus} ATK`)
   if (stats.defenseBonus) parts.push(`+${stats.defenseBonus} DEF`)
-  if (stats.dodgeBonus) parts.push(`+${stats.dodgeBonus}% esquiva`)
-  if (stats.shieldAmount) parts.push(`escudo ${stats.shieldAmount}`)
-  if (stats.reviveHpPercent) parts.push(`revive ${stats.reviveHpPercent}%`)
-  if (stats.duration) parts.push(`${stats.duration} turnos`)
-  if (stats.cure) parts.push('cura status')
+  if (stats.dodgeBonus) parts.push(`+${stats.dodgeBonus}% ${t('dodge')}`)
+  if (stats.shieldAmount) parts.push(t('shield {n}', { n: stats.shieldAmount }))
+  if (stats.reviveHpPercent) parts.push(t('revive {n}%', { n: stats.reviveHpPercent }))
+  if (stats.duration) parts.push(t('{n} turns', { n: stats.duration }))
+  if (stats.cure) parts.push(t('cures status'))
   return parts.join(' · ')
 }
 const MOD_PT: Record<string, string> = { strength: 'STR', defense: 'DEF', hp: 'HP', agility: 'AGI', intelligence: 'INT', attack: 'ATK', critical: 'CRIT' }
-const TRANSF_RACE: Record<string, string> = { dragon: 'Draconiano', wolf: 'Metamorfo', bear: 'Metamorfo', eagle: 'Metamorfo' }
+const TRANSF_RACE: Record<string, string> = { dragon: 'Draconian', wolf: 'Shapeshifter', bear: 'Shapeshifter', eagle: 'Shapeshifter' }
 
-function itemStatsToString(stats: Record<string, any>): string {
+function itemStatsToString(stats: Record<string, any>, t: TFunction, locale: Locale): string {
   const parts: string[] = []
   for (const [k, v] of Object.entries(stats)) {
-    if (typeof v === 'number') parts.push(`${STAT_SHORT[k] ?? k}+${v}`)
+    if (typeof v === 'number') parts.push(`${t(STAT_SHORT[k] ?? k)}+${v}`)
   }
-  if (typeof stats.specialEffect === 'string') parts.push(`✦ ${stats.specialEffect}`)
+  if (typeof stats.specialEffect === 'string') {
+    parts.push(`✦ ${localizeSpecialEffect(stats.specialEffect, locale)}`)
+  }
   return parts.join(' · ')
 }
 
@@ -241,23 +258,24 @@ function pct(x: number): string {
   return x > 0 ? `${(x * 100).toFixed(x < 0.1 ? 1 : 0)}%` : '—'
 }
 
+// `label` em chave EN (i18n EN-as-key): quem renderiza passa por t().
 const NAV = [
-  { id: 'overview', label: 'Visão Geral' },
+  { id: 'overview', label: 'Overview' },
   { id: 'tokenomics', label: 'Tokenomics' },
-  { id: 'races', label: 'Raças' },
+  { id: 'races', label: 'Races' },
   { id: 'classes', label: 'Classes' },
-  { id: 'attributes', label: 'Atributos & Stats' },
-  { id: 'progression', label: 'Progressão & XP' },
-  { id: 'combat', label: 'Combate' },
-  { id: 'transformations', label: 'Transformações' },
+  { id: 'attributes', label: 'Attributes & Stats' },
+  { id: 'progression', label: 'Progression & XP' },
+  { id: 'combat', label: 'Combat' },
+  { id: 'transformations', label: 'Transformations' },
   { id: 'pvp', label: 'PvP' },
-  { id: 'pve', label: 'PvE & Masmorras' },
-  { id: 'items', label: 'Itens' },
-  { id: 'enhancement', label: 'Aprimoramento' },
-  { id: 'crafting', label: 'Materiais & Crafting' },
+  { id: 'pve', label: 'PvE & Dungeons' },
+  { id: 'items', label: 'Items' },
+  { id: 'enhancement', label: 'Enhancement' },
+  { id: 'crafting', label: 'Materials & Crafting' },
   { id: 'stamina', label: 'Stamina' },
-  { id: 'ai', label: 'IA & Imagens' },
-  { id: 'structure', label: 'Notas & Roadmap' },
+  { id: 'ai', label: 'AI & Images' },
+  { id: 'structure', label: 'Notes & Roadmap' },
 ]
 
 const ENHANCE_TARGETS = [
@@ -267,27 +285,29 @@ const ENHANCE_TARGETS = [
 const XP_SAMPLE = [1, 4, 9, 19, 49]
 
 const RESOLVED = [
-  'Tokenomics v2 nos contratos: DOL com supply fixo de 1B (sem mint), GOLD queimável e taxa de mercado com queima real (4% itens / 5% personagens).',
-  'Dashboard de tokenomics publicado em /tokenomics/dashboard.html (projeção de 120 meses, 3 cenários).',
-  'Sistema antigo de masmorras (monstros rank F–S) removido — restam só os MATERIAIS em dungeonData.ts.',
-  'Pontos por nível padronizados em 1/nível (pointSystem.leveling alinhado ao characterLevelSystem).',
-  'Atributo wisdom removido de types/game.ts, gameData.ts e characterFactory.ts (simplificação).',
-  'Doc agora importa direto das fontes puras — edições de balanceamento refletem aqui automaticamente.',
-  'Doc tornado público e exibido na landing.',
+  'Tokenomics v2 in the contracts: DOL with a fixed 1B supply (no mint), burnable GOLD and a market fee with real burn (4% items / 5% characters).',
+  'Tokenomics dashboard published at /tokenomics/dashboard.html (120-month projection, 3 scenarios).',
+  'The old dungeon system (rank F–S monsters) was removed — only the MATERIALS in dungeonData.ts remain.',
+  'Points per level standardised at 1/level (pointSystem.leveling aligned with characterLevelSystem).',
+  'The wisdom attribute was removed from types/game.ts, gameData.ts and characterFactory.ts (simplification).',
+  'The doc now imports straight from the pure sources — balancing edits are reflected here automatically.',
+  'The doc was made public and shown on the landing page.',
 ]
 
 const ROADMAP = [
-  { title: 'Deploy dos contratos v2 (Amoy → mainnet)', body: 'DolToken v2 (1B fixo), GOLD queimável e os dois mercados com taxa já estão prontos e testados no repositório. Falta redeployar na Amoy (novos endereços nas envs) e, na sequência do go-live econômico, na mainnet Polygon.' },
-  { title: 'Aventuras semanais (PvE) — implementação', body: 'Gear dos 4 chefes semanais já catalogado (Krax-thar, Vol\'theris, Gorthak, Sylariel). Falta implementar o modo em si: rotação por sábado (semana 1–4), encontro do chefe e a tabela de drop exclusiva (source adventure_boss).' },
-  { title: 'Alinhar fonte de stats no servidor', body: 'A criação usa characterCreationData.ts (mais nova, rebalanceada), mas o servidor (api/character/route.ts) ainda computa stats por gameData.ts. Consolidar numa fonte única após a bateria de testes.' },
-  { title: 'Afinar custos de stamina', body: 'Regen passivo implementado (+2/15s após 15 min sem gastar). Falta a bateria de testes para medir se o gasto por atividade está alto ou baixo e calibrar os custos.' },
-  { title: 'IA: geração de imagens (Anthropic)', body: 'Migrar para chave Anthropic própria e gerar imagens de personagem no MESMO estilo, adicionando apenas as características que o player escolher. Melhorar o prompt para consistência.' },
-  { title: 'Recompensas PvP pendentes', body: 'Implementar win streak, primeira vitória do dia, persistência em banco e UI de recompensas (hoje marcados como TODO).' },
+  { title: 'Deploy of the v2 contracts (Amoy → mainnet)', body: 'DolToken v2 (fixed 1B), burnable GOLD and both markets with a fee are ready and tested in the repository. What is left is redeploying on Amoy (new addresses in the envs) and, right after the economic go-live, on Polygon mainnet.' },
+  { title: 'Weekly adventures (PvE) — implementation', body: "The gear of the 4 weekly bosses is already catalogued (Krax-thar, Vol'theris, Gorthak, Sylariel). What is left is the mode itself: rotation by Saturday (week 1–4), the boss encounter and the exclusive drop table (source adventure_boss)." },
+  { title: 'Align the stat source on the server', body: 'Creation uses characterCreationData.ts (newer, rebalanced), but the server (api/character/route.ts) still computes stats from gameData.ts. Consolidate into a single source after the test battery.' },
+  { title: 'Tune the stamina costs', body: 'Passive regen is implemented (+2/15s after 15 min without spending). What is left is the test battery to measure whether the spend per activity is high or low and calibrate the costs.' },
+  { title: 'AI: image generation (Anthropic)', body: 'Migrate to our own Anthropic key and generate character images in the SAME style, adding only the traits the player chooses. Improve the prompt for consistency.' },
+  { title: 'Pending PvP rewards', body: 'Implement win streak, first win of the day, database persistence and the rewards UI (marked TODO today).' },
 ]
 
 // ---------------- Página ----------------
 
 export default function DocPage() {
+  const t = useT()
+  const { locale } = useI18n()
   const [active, setActive] = useState('overview')
 
   useEffect(() => {
@@ -315,19 +335,18 @@ export default function DocPage() {
       <div className="mx-auto max-w-7xl px-4 pt-28 pb-24 sm:px-6">
         {/* Hero */}
         <header className="mb-10">
-          <Tag tone="default">📖 Documentação oficial · v1.0 · pública</Tag>
+          <Tag tone="default">{t('📖 Official documentation · v1.0 · public')}</Tag>
           <h1 className="mt-3 text-4xl font-extrabold tracking-tight text-white sm:text-5xl">
             Dolrath <span className="text-primary">Game Docs</span>
           </h1>
           <p className="mt-4 max-w-2xl text-lg text-textsec">
-            Referência completa do RPG tokenizado de Dolrath. Os números aqui são lidos diretamente do
-            código-fonte do jogo — esta página é um espelho vivo do balanceamento atual.
+            {t('Complete reference for the tokenized RPG of Dolrath. The numbers here are read straight from the game source — this page is a living mirror of the current balancing.')}
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
-            <Tag tone="ok">Atualizado {lastUpdated}</Tag>
-            <Tag>Next.js 14 · Prisma · Login por carteira (SIWE)</Tag>
-            <Tag>Polygon (Amoy/Mainnet)</Tag>
-            <Tag tone="ok">Fonte: dados importados do código</Tag>
+            <Tag tone="ok">{t('Updated {date}', { date: lastUpdated })}</Tag>
+            <Tag>{t('Next.js 14 · Prisma · Wallet login (SIWE)')}</Tag>
+            <Tag>{t('Polygon (Amoy/Mainnet)')}</Tag>
+            <Tag tone="ok">{t('Source: data imported from the code')}</Tag>
           </div>
         </header>
 
@@ -335,7 +354,7 @@ export default function DocPage() {
           {/* Sidebar */}
           <aside className="hidden lg:block">
             <nav className="sticky top-28 max-h-[calc(100vh-8rem)] overflow-y-auto rounded-2xl border border-white/10 bg-surface/40 p-3 backdrop-blur-xl">
-              <div className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-widest text-textsec">Conteúdo</div>
+              <div className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-widest text-textsec">{t('Contents')}</div>
               <ul className="space-y-0.5">
                 {NAV.map((item) => (
                   <li key={item.id}>
@@ -345,7 +364,7 @@ export default function DocPage() {
                         active === item.id ? 'bg-primary/15 font-semibold text-primary' : 'text-textsec hover:bg-white/5 hover:text-white'
                       }`}
                     >
-                      {item.label}
+                      {t(item.label)}
                     </a>
                   </li>
                 ))}
@@ -356,19 +375,20 @@ export default function DocPage() {
           {/* Content */}
           <main className="min-w-0 space-y-12">
             {/* Visão Geral */}
-            <Section id="overview" kicker="Introdução" title="Visão Geral">
+            <Section id="overview" kicker={t('Introduction')} title={t('Overview')}>
               <p>
-                <strong className="text-white">Dolrath</strong> é um RPG de combate por turnos inspirado em
-                <em> Solo Leveling</em>, onde personagens, itens e moeda são <strong className="text-white">tokenizados on-chain</strong>.
-                Uma IA narra o combate, e a progressão acontece em PvP (tempo real via socket) e PvE (masmorras com eventos de d20).
+                <strong className="text-white">Dolrath</strong>{t(' is a turn-based combat RPG inspired by')}
+                <em> Solo Leveling</em>{t(', where characters, items and currency are ')}
+                <strong className="text-white">{t('tokenized on-chain')}</strong>
+                {t('. An AI narrates the combat, and progression happens in PvP (real time over socket) and PvE (dungeons with d20 events).')}
               </p>
               <div className="grid gap-4 sm:grid-cols-3">
-                <Card><div className="text-2xl">🧬</div><h3 className="mt-2 font-semibold text-white">Personagem = NFT</h3><p className="mt-1 text-sm">Criados pagando DOL, mintáveis como ERC-721 e negociáveis num mercado on-chain.</p></Card>
-                <Card><div className="text-2xl">⚔️</div><h3 className="mt-2 font-semibold text-white">Combate tático</h3><p className="mt-1 text-sm">Dados (d6–d20), crítico por AGI, esquiva por SPEED e bloqueio por RES.</p></Card>
-                <Card><div className="text-2xl">💰</div><h3 className="mt-2 font-semibold text-white">Economia dupla</h3><p className="mt-1 text-sm">GOLD (elástico, ganho jogando) para itens e crafting; DOL (supply fixo de 1B) para criação, personagens, staking e governança.</p></Card>
+                <Card><div className="text-2xl">🧬</div><h3 className="mt-2 font-semibold text-white">{t('Character = NFT')}</h3><p className="mt-1 text-sm">{t('Created by paying DOL, mintable as ERC-721 and tradable on an on-chain market.')}</p></Card>
+                <Card><div className="text-2xl">⚔️</div><h3 className="mt-2 font-semibold text-white">{t('Tactical combat')}</h3><p className="mt-1 text-sm">{t('Dice (d6–d20), critical from AGI, dodge from SPEED and block from RES.')}</p></Card>
+                <Card><div className="text-2xl">💰</div><h3 className="mt-2 font-semibold text-white">{t('Dual economy')}</h3><p className="mt-1 text-sm">{t('GOLD (elastic, earned by playing) for items and crafting; DOL (fixed 1B supply) for creation, characters, staking and governance.')}</p></Card>
               </div>
               <Card>
-                <h3 className="font-semibold text-white">Loop principal</h3>
+                <h3 className="font-semibold text-white">{t('Main loop')}</h3>
                 <Formula>{`Criar personagem (paga DOL)
    → ganhar XP/GOLD em PvE (masmorras) e PvP (arena)
    → comprar/dropar/craftar itens
@@ -379,25 +399,26 @@ export default function DocPage() {
             </Section>
 
             {/* Tokenomics */}
-            <Section id="tokenomics" kicker="Economia" title="Tokenomics">
+            <Section id="tokenomics" kicker={t('Economy')} title={t('Tokenomics')}>
               <p>
-                Economia <strong className="text-white">dual-token</strong> em Polygon: <Tag tone="dol">DOL</Tag> é o ativo de longo prazo
-                (supply fixo, governança, staking) e <Tag tone="gold">GOLD</Tag> é a moeda elástica do gameplay, ganha jogando e
-                gasta em loja, forja, alquimia e mercado de itens. Separar as duas protege o valor do DOL da pressão de venda
-                do grind — a lição dos play-to-earn que morreram inflacionando o token principal.
+                {t('Economy ')}<strong className="text-white">{t('dual-token')}</strong>{t(' on Polygon: ')}
+                <Tag tone="dol">DOL</Tag>{t(' is the long-term asset (fixed supply, governance, staking) and ')}
+                <Tag tone="gold">GOLD</Tag>
+                {t(' is the elastic gameplay currency, earned by playing and spent in the shop, forge, alchemy and item market. Separating the two protects the value of DOL from the sell pressure of the grind — the lesson of the play-to-earn games that died inflating their main token.')}
               </p>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Card>
-                  <div className="flex items-center justify-between"><h3 className="font-semibold text-white">DOL — ativo de longo prazo</h3><Tag tone="dol">DOL</Tag></div>
+                  <div className="flex items-center justify-between"><h3 className="font-semibold text-white">{t('DOL — long-term asset')}</h3><Tag tone="dol">DOL</Tag></div>
                   <p className="mt-2 text-sm">
-                    ERC-20 <Code>DolToken.sol</Code> — <strong className="text-white">supply fixo de 1.000.000.000</strong>, cunhado
-                    uma única vez no deploy. <strong className="text-white">Não existe função de mint</strong>: o supply só pode
-                    diminuir (queimas). Nome on-chain: <Code>Dolrath</Code>.
+                    ERC-20 <Code>DolToken.sol</Code>{t(' — ')}
+                    <strong className="text-white">{t('fixed supply of 1,000,000,000')}</strong>
+                    {t(', minted once at deploy. ')}
+                    <strong className="text-white">{t('There is no mint function')}</strong>
+                    {t(': the supply can only go down (burns). On-chain name: ')}<Code>Dolrath</Code>.
                   </p>
                   <p className="mt-2 text-sm">
-                    <strong className="text-white">DOL não é pareado ao dólar.</strong> Não é stablecoin, não tem
-                    lastro, não é resgatável e o estúdio não recompra. Quem paga em dólar é o jogador comprando o
-                    herói — e esse dólar é receita, não vira prêmio para ninguém.
+                    <strong className="text-white">{t('DOL is not pegged to the dollar.')}</strong>
+                    {t(' It is not a stablecoin, has no backing, is not redeemable and the studio does not buy it back. The one paying in dollars is the player buying the hero — and that dollar is revenue, it does not become a prize for anyone.')}
                   </p>
                   <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
                     <li>
@@ -580,7 +601,7 @@ export default function DocPage() {
                   <span key={c.id} className="font-semibold text-white">{c.name}</span>,
                   c.description,
                   <span key="b" className="font-game text-emerald-300">{bonusToString(c.bonuses as any)}</span>,
-                  c.availableWeapons.map((w) => WEAPON_PT[w] ?? w).join(', '),
+                  c.availableWeapons.map((w) => t(WEAPON_LABEL[w] ?? w)).join(', '),
                   c.abilities.join(' · '),
                 ])}
               />
@@ -664,17 +685,17 @@ bloqueio parcial→ redução = RES/100 (10%–80%)`}</Formula></Card>
             <Section id="transformations" kicker="Mecânicas" title="Transformações">
               <p>Habilidades limitadas que alteram stats temporariamente e liberam skills exclusivas. Custam MP + Stamina, com duração e cooldown em turnos. <Tag>fonte: transformationSystem.ts</Tag></p>
               <div className="grid gap-4 sm:grid-cols-2">
-                {transformations.map(([key, t]) => (
+                {transformations.map(([key, cfg]) => (
                   <Card key={key}>
-                    <div className="flex items-center justify-between"><h3 className="font-semibold text-white">{t.name}</h3><Tag>{TRANSF_RACE[key] ?? '—'}</Tag></div>
+                    <div className="flex items-center justify-between"><h3 className="font-semibold text-white">{cfg.name}</h3><Tag>{TRANSF_RACE[key] ?? '—'}</Tag></div>
                     <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                      <Tag>⏱️ {t.duration} turnos</Tag>
-                      <Tag>♻️ CD {t.cooldown}</Tag>
-                      <Tag tone="warn">{t.cost.mp} MP · {t.cost.stamina} STA</Tag>
+                      <Tag>⏱️ {cfg.duration} turnos</Tag>
+                      <Tag>♻️ CD {cfg.cooldown}</Tag>
+                      <Tag tone="warn">{cfg.cost.mp} MP · {cfg.cost.stamina} STA</Tag>
                     </div>
-                    <p className="mt-3 text-xs"><span className="font-semibold text-white">Modificadores:</span> <span className="font-game text-emerald-300">{modsToString(t.statModifiers as any)}</span></p>
-                    <p className="mt-2 text-xs"><span className="font-semibold text-white">Skills:</span> {t.specialAbilities.map((s) => s.name).join(' · ')}</p>
-                    <p className="mt-2 text-xs"><span className="font-semibold text-emerald-300">Resiste:</span> {t.resistances.join(', ')} · <span className="font-semibold text-orange-300">Vulnerável:</span> {t.vulnerabilities.join(', ')}</p>
+                    <p className="mt-3 text-xs"><span className="font-semibold text-white">Modificadores:</span> <span className="font-game text-emerald-300">{modsToString(cfg.statModifiers as any)}</span></p>
+                    <p className="mt-2 text-xs"><span className="font-semibold text-white">Skills:</span> {cfg.specialAbilities.map((s) => s.name).join(' · ')}</p>
+                    <p className="mt-2 text-xs"><span className="font-semibold text-emerald-300">Resiste:</span> {cfg.resistances.join(', ')} · <span className="font-semibold text-orange-300">Vulnerável:</span> {cfg.vulnerabilities.join(', ')}</p>
                   </Card>
                 ))}
               </div>
@@ -781,7 +802,7 @@ boss: +2 níveis, recompensa maior`}</Formula>
                       {items.map((it) => (
                         <ItemArtCard
                           key={it.name} name={it.name} type={it.type} rarity={it.rarity}
-                          level={it.level} goldPrice={it.goldPrice} statsText={itemStatsToString(it.stats)}
+                          level={it.level} goldPrice={it.goldPrice} statsText={itemStatsToString(it.stats, t, locale)}
                           meta={it.build ? BUILD_LABEL[it.build] : undefined}
                         />
                       ))}
@@ -802,8 +823,8 @@ boss: +2 níveis, recompensa maior`}</Formula>
                       {items.map((it) => (
                         <ItemArtCard
                           key={it.name} name={it.name} type={it.type} rarity={it.rarity}
-                          level={it.level} goldPrice={it.goldPrice} statsText={itemStatsToString(it.stats)}
-                          meta={<><span>{SOURCE_LABEL[it.source]}</span> · {dungeonAndRace(it)}</>}
+                          level={it.level} goldPrice={it.goldPrice} statsText={itemStatsToString(it.stats, t, locale)}
+                          meta={<><span>{t(SOURCE_LABEL[it.source])}</span> · <DungeonAndRace it={it} /></>}
                         />
                       ))}
                     </ItemGallery>
@@ -848,7 +869,7 @@ boss: +2 níveis, recompensa maior`}</Formula>
                       {items.map((c) => (
                         <ItemArtCard
                           key={c.name} name={c.name} type="CONSUMABLE" rarity={c.rarity as RarityKey}
-                          level={c.level} goldPrice={c.goldPrice} statsText={consumableEffectToString(c.stats)}
+                          level={c.level} goldPrice={c.goldPrice} statsText={consumableEffectToString(c.stats, t)}
                           meta={c.adventureBoss ?? SOURCE_LABEL[c.source]}
                         />
                       ))}
@@ -1103,7 +1124,7 @@ até +${SAFE_ENHANCE_MAX}: chance = 100% (seguro)`}</Formula>
               <h3 className="text-lg font-semibold text-white">✅ Resolvido nesta rodada</h3>
               <Card>
                 <ul className="list-disc space-y-1.5 pl-5 text-sm">
-                  {RESOLVED.map((r) => <li key={r}>{r}</li>)}
+                  {RESOLVED.map((r) => <li key={r}>{t(r)}</li>)}
                 </ul>
               </Card>
               <h3 className="pt-2 text-lg font-semibold text-white">🔜 Próximos passos / em estudo</h3>

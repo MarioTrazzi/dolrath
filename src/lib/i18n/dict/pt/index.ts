@@ -28,6 +28,7 @@ import { MARKET_PT } from './market'
 import { CREATION_PT } from './creation'
 import { WALLET_PT } from './wallet'
 import { API_PT } from './api'
+import { DOC_PT } from './doc'
 
 export const PT_DICT: Record<string, string> = {
   ...COMMON_PT,
@@ -58,4 +59,5 @@ export const PT_DICT: Record<string, string> = {
   ...CREATION_PT,
   ...WALLET_PT,
   ...API_PT,
+  ...DOC_PT,
 }

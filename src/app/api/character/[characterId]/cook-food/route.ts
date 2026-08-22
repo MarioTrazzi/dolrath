@@ -1,6 +1,8 @@
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
+import { getTFromRequest, getLocaleFromRequest } from '@/lib/i18n/server'
+import { localizeItemName, catalogNameEn } from '@/lib/i18n/catalog'
 import { ConsumableSubtype } from '@prisma/client'
 import {
   COOKING_RECIPES,
@@ -23,9 +25,10 @@ import { getProfessionLevel, getProfessionLevelInfo } from '@/lib/professionSyst
 
 // GET — nível de Culinária da conta + gating de cada receita (para a UI).
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { characterId: string } }
 ) {
+  const t = getTFromRequest(request)
   try {
     const session = await auth()
     if (!session?.user?.id) {
@@ -36,7 +39,7 @@ export async function GET(
       select: { id: true },
     })
     if (!character) {
-      return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+      return NextResponse.json({ error: t('Character not found') }, { status: 404 })
     }
 
     const xp = await getUserCookXp(session.user.id)
@@ -51,7 +54,7 @@ export async function GET(
     return NextResponse.json({ xp, levelInfo, recipes })
   } catch (error) {
     console.error('Error loading cooking info:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return NextResponse.json({ error: t('Internal server error') }, { status: 500 })
   }
 }
 
@@ -59,6 +62,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { characterId: string } }
 ) {
+  const t = getTFromRequest(request)
   try {
     const session = await auth()
     if (!session?.user?.id) {
@@ -69,33 +73,33 @@ export async function POST(
     const body = await request.json()
     const recipeId: string | undefined = body?.recipeId
     if (!recipeId) {
-      return NextResponse.json({ error: 'recipeId é obrigatório' }, { status: 400 })
+      return NextResponse.json({ error: t('recipeId is required') }, { status: 400 })
     }
     const rawQuantity = Number(body?.quantity ?? 1)
     const quantity = Number.isFinite(rawQuantity) ? Math.min(99, Math.max(1, Math.floor(rawQuantity))) : 1
 
     const recipe = getCookingRecipeById(recipeId)
     if (!recipe) {
-      return NextResponse.json({ error: 'Receita não encontrada' }, { status: 404 })
+      return NextResponse.json({ error: t('Recipe not found') }, { status: 404 })
     }
 
     const food = getCookingOutput(recipe)
     if (!food) {
-      return NextResponse.json({ error: 'Prato da receita não existe no catálogo' }, { status: 500 })
+      return NextResponse.json({ error: t('The recipe dish does not exist in the catalog') }, { status: 500 })
     }
 
     const character = await prisma.character.findFirst({
       where: { id: params.characterId, userId },
     })
     if (!character) {
-      return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+      return NextResponse.json({ error: t('Character not found') }, { status: 404 })
     }
 
     // Nível de Culinária da CONTA + gating da receita (o client nunca manda nível).
     const xpBefore = await getUserCookXp(userId)
     const level = getProfessionLevel(xpBefore)
     if (level < recipe.minLevel) {
-      return NextResponse.json({ error: `Requer Culinária nível ${recipe.minLevel}.` }, { status: 400 })
+      return NextResponse.json({ error: t('Requires Cooking level {n}.', { n: recipe.minLevel }) }, { status: 400 })
     }
 
     // Sem RNG: cozinhar é conversão determinística (modelo do processamento) —
@@ -220,7 +224,8 @@ export async function POST(
       await addHistoryEntry({
         characterId: character.id,
         activityType: 'ITEM_GAINED',
-        description: `🍳 Cozinhou ${roll.attempted > 1 ? `${roll.attempted}× ` : ''}${recipe.outputName} (−${totalGoldCost} gold).`,
+        // Histórico gravado no banco: EN canônico (como o metadata da NFT).
+        description: `🍳 Cooked ${roll.attempted > 1 ? `${roll.attempted}× ` : ''}${catalogNameEn(recipe.outputName)} (−${totalGoldCost} gold).`,
         itemId: result.outputItemId ?? undefined,
         goldAmount: -totalGoldCost,
       })
@@ -249,7 +254,14 @@ export async function POST(
       characterGold: result.characterGold,
       outputName: recipe.outputName,
       rarity: recipe.rarity,
-      message: `🍳 ${roll.attempted > 1 ? `${roll.attempted}× ` : ''}${recipe.outputName} cozinhado${roll.attempted > 1 ? 's' : ''} com sucesso!`,
+      message: roll.attempted > 1
+        ? t('🍳 {n}× {name} cooked successfully!', {
+            n: roll.attempted,
+            name: localizeItemName(recipe.outputName, getLocaleFromRequest(request)),
+          })
+        : t('🍳 {name} cooked successfully!', {
+            name: localizeItemName(recipe.outputName, getLocaleFromRequest(request)),
+          }),
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Erro interno do servidor'

@@ -1,6 +1,8 @@
 import { requireApiActor } from '@/lib/botFleetAuth'
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
+import { getTFromRequest, getLocaleFromRequest } from '@/lib/i18n/server'
+import { localizeItemName, catalogNameEn } from '@/lib/i18n/catalog'
 import { ConsumableSubtype } from '@prisma/client'
 import {
   PROCESSING_BATCH_MAX,
@@ -34,6 +36,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { characterId: string } }
 ) {
+  const t = getTFromRequest(request)
   try {
     const resolved = await requireApiActor(request, params.characterId)
     if ('error' in resolved) return resolved.error
@@ -43,7 +46,7 @@ export async function GET(
       select: { id: true },
     })
     if (!character) {
-      return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+      return NextResponse.json({ error: t('Character not found') }, { status: 404 })
     }
 
     const xp = await getUserProcessXp(userId)
@@ -59,7 +62,7 @@ export async function GET(
     return NextResponse.json({ xp, levelInfo, recipes })
   } catch (error) {
     console.error('Error loading processing info:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return NextResponse.json({ error: t('Internal server error') }, { status: 500 })
   }
 }
 
@@ -67,6 +70,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { characterId: string } }
 ) {
+  const t = getTFromRequest(request)
   try {
     const resolved = await requireApiActor(request, params.characterId)
     if ('error' in resolved) return resolved.error
@@ -75,7 +79,7 @@ export async function POST(
     const body = await request.json()
     const recipeId: string | undefined = body?.recipeId
     if (!recipeId) {
-      return NextResponse.json({ error: 'recipeId é obrigatório' }, { status: 400 })
+      return NextResponse.json({ error: t('recipeId is required') }, { status: 400 })
     }
     const rawQuantity = Number(body?.quantity ?? 1)
     const quantity = Number.isFinite(rawQuantity)
@@ -84,27 +88,27 @@ export async function POST(
 
     const recipe = getProcessingRecipeById(recipeId)
     if (!recipe) {
-      return NextResponse.json({ error: 'Receita não encontrada' }, { status: 404 })
+      return NextResponse.json({ error: t('Recipe not found') }, { status: 404 })
     }
 
     // Valida a saída (processado, consumível, pedra ou ingrediente — Água Pura).
     const output = getProcessingOutput(recipe)
     if (!output.processed && !output.consumable && !output.stone && !output.ingredient) {
-      return NextResponse.json({ error: 'Saída da receita não existe no catálogo' }, { status: 500 })
+      return NextResponse.json({ error: t('The recipe output does not exist in the catalog') }, { status: 500 })
     }
 
     const character = await prisma.character.findFirst({
       where: { id: params.characterId, userId },
     })
     if (!character) {
-      return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+      return NextResponse.json({ error: t('Character not found') }, { status: 404 })
     }
 
     // Nível de Processamento da CONTA + gating da receita (o client nunca manda nível).
     const xpBefore = await getUserProcessXp(userId)
     const level = getProfessionLevel(xpBefore)
     if (level < recipe.minLevel) {
-      return NextResponse.json({ error: `Requer Processamento nível ${recipe.minLevel}.` }, { status: 400 })
+      return NextResponse.json({ error: t('Requires Processing level {n}.', { n: recipe.minLevel }) }, { status: 400 })
     }
 
     // Sem falha (toda unidade passa), mas COM rendimento: cada unidade rola
@@ -278,7 +282,8 @@ export async function POST(
       await addHistoryEntry({
         characterId: character.id,
         activityType: 'ITEM_GAINED',
-        description: `⚙️ Processou ${roll.produced > 1 ? `${roll.produced}× ` : ''}${recipe.outputName}${bonusSuffix} (−${totalGoldCost} gold).`,
+        // Histórico gravado no banco: EN canônico (como o metadata da NFT).
+        description: `⚙️ Processed ${roll.produced > 1 ? `${roll.produced}× ` : ''}${catalogNameEn(recipe.outputName)}${bonusSuffix} (−${totalGoldCost} gold).`,
         itemId: result.outputItemId ?? undefined,
         goldAmount: -totalGoldCost,
       })
@@ -312,7 +317,14 @@ export async function POST(
       characterGold: result.characterGold,
       outputName: recipe.outputName,
       rarity: recipe.rarity,
-      message: `⚙️ ${roll.produced > 1 ? `${roll.produced}× ` : ''}${recipe.outputName} processado${roll.produced > 1 ? 's' : ''} com sucesso!`,
+      message: roll.produced > 1
+        ? t('⚙️ {n}× {name} processed successfully!', {
+            n: roll.produced,
+            name: localizeItemName(recipe.outputName, getLocaleFromRequest(request)),
+          })
+        : t('⚙️ {name} processed successfully!', {
+            name: localizeItemName(recipe.outputName, getLocaleFromRequest(request)),
+          }),
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Erro interno do servidor'

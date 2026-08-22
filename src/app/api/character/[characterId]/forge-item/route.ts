@@ -1,6 +1,8 @@
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
+import { getTFromRequest, getLocaleFromRequest } from '@/lib/i18n/server'
+import { localizeItemName, catalogNameEn } from '@/lib/i18n/catalog'
 import { ItemType } from '@prisma/client'
 import { FORGE_RECIPES, getForgeRecipeById, getForgeOutputCatalogItem } from '@/lib/forge'
 import { itemImagePath } from '@/lib/itemCatalog'
@@ -39,9 +41,10 @@ function forgeRecipeInfo(recipe: (typeof FORGE_RECIPES)[number], level: number) 
 
 // GET — nível de Forja da conta + chance/gating de cada receita (para a UI).
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { characterId: string } }
 ) {
+  const t = getTFromRequest(request)
   try {
     const session = await auth()
     if (!session?.user?.id) {
@@ -52,7 +55,7 @@ export async function GET(
       select: { id: true },
     })
     if (!character) {
-      return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+      return NextResponse.json({ error: t('Character not found') }, { status: 404 })
     }
 
     const xp = await getUserForgeXp(session.user.id)
@@ -64,7 +67,7 @@ export async function GET(
     return NextResponse.json({ xp, levelInfo, recipes })
   } catch (error) {
     console.error('Error loading forge info:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return NextResponse.json({ error: t('Internal server error') }, { status: 500 })
   }
 }
 
@@ -72,6 +75,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { characterId: string } }
 ) {
+  const t = getTFromRequest(request)
   try {
     const session = await auth()
     if (!session?.user?.id) {
@@ -82,30 +86,30 @@ export async function POST(
     const body = await request.json()
     const recipeId: string | undefined = body?.recipeId
     if (!recipeId) {
-      return NextResponse.json({ error: 'recipeId é obrigatório' }, { status: 400 })
+      return NextResponse.json({ error: t('recipeId is required') }, { status: 400 })
     }
     const rawQuantity = Number(body?.quantity ?? 1)
     const quantity = Number.isFinite(rawQuantity) ? Math.min(99, Math.max(1, Math.floor(rawQuantity))) : 1
 
     const recipe = getForgeRecipeById(recipeId)
     if (!recipe) {
-      return NextResponse.json({ error: 'Receita não encontrada' }, { status: 404 })
+      return NextResponse.json({ error: t('Recipe not found') }, { status: 404 })
     }
 
     // Valida que a saída existe (gear → catálogo; stone → STONE_META).
     const catalogItem = getForgeOutputCatalogItem(recipe)
     if (recipe.kind === 'gear' && !catalogItem) {
-      return NextResponse.json({ error: 'Peça da receita não existe no catálogo' }, { status: 500 })
+      return NextResponse.json({ error: t('The recipe piece does not exist in the catalog') }, { status: 500 })
     }
     if (recipe.kind === 'stone' && !STONE_META[recipe.outputName]) {
-      return NextResponse.json({ error: 'Pedra da receita desconhecida' }, { status: 500 })
+      return NextResponse.json({ error: t('The recipe stone is unknown') }, { status: 500 })
     }
 
     const character = await prisma.character.findFirst({
       where: { id: params.characterId, userId },
     })
     if (!character) {
-      return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+      return NextResponse.json({ error: t('Character not found') }, { status: 404 })
     }
 
     // Nível de Forja da CONTA + gating da receita (o client nunca manda nível/chance).
@@ -113,7 +117,7 @@ export async function POST(
     const level = getProfessionLevel(xpBefore)
     const { minLevel } = forgeRecipeInfo(recipe, level)
     if (level < minLevel) {
-      return NextResponse.json({ error: `Requer Forja nível ${minLevel}.` }, { status: 400 })
+      return NextResponse.json({ error: t('Requires Forge level {n}.', { n: minLevel }) }, { status: 400 })
     }
 
     // RNG FORA da transação — retry de transação não pode re-rolar o resultado.
@@ -280,9 +284,10 @@ export async function POST(
       await addHistoryEntry({
         characterId: character.id,
         activityType: 'ITEM_GAINED',
+        // Histórico gravado no banco: EN canônico (como o metadata da NFT).
         description: roll.succeeded > 0
-          ? `⚒️ Forjou${scoreLabel ? ` ${scoreLabel}` : ''} ${recipe.outputName} (−${totalGoldCost} gold).`
-          : `⚒️ Forja de ${recipe.outputName} falhou — materiais e taxa perdidos (−${totalGoldCost} gold).`,
+          ? `⚒️ Forged${scoreLabel ? ` ${scoreLabel}` : ''} ${catalogNameEn(recipe.outputName)} (−${totalGoldCost} gold).`
+          : `⚒️ Forging of ${catalogNameEn(recipe.outputName)} failed — materials and fee lost (−${totalGoldCost} gold).`,
         itemId: result.outputItemId ?? undefined,
         goldAmount: -totalGoldCost,
       })
@@ -298,11 +303,18 @@ export async function POST(
     // levelInfo pós-crédito (a UI anima a barra de XP com isto).
     const levelInfo = getProfessionLevelInfo(xpBefore + roll.xpGained)
 
+    const outName = localizeItemName(recipe.outputName, getLocaleFromRequest(request))
     const message = roll.failed === 0
-      ? `⚒️ ${roll.attempted > 1 ? `${roll.attempted}× ` : ''}${recipe.outputName} forjado${roll.attempted > 1 ? 's' : ''} com sucesso!`
+      ? roll.attempted > 1
+        ? t('⚒️ {n}× {name} forged successfully!', { n: roll.attempted, name: outName })
+        : t('⚒️ {name} forged successfully!', { name: outName })
       : roll.succeeded === 0
-        ? `💥 A forja falhou${roll.attempted > 1 ? ` ${roll.attempted}×` : ''} — os materiais se perderam no fogo.`
-        : `⚒️ ${roll.succeeded} de ${roll.attempted} ${recipe.outputName} sobreviveram à forja.`
+        ? roll.attempted > 1
+          ? t('💥 The forge failed {n}× — the materials were lost in the fire.', { n: roll.attempted })
+          : t('💥 The forge failed — the materials were lost in the fire.')
+        : t('⚒️ {ok} of {total} {name} survived the forge.', {
+            ok: roll.succeeded, total: roll.attempted, name: outName,
+          })
 
     return NextResponse.json({
       success: true,

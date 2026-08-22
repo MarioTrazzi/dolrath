@@ -1,6 +1,8 @@
 import { requireApiActor } from '@/lib/botFleetAuth'
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
+import { getTFromRequest, getLocaleFromRequest } from '@/lib/i18n/server'
+import { localizeItemName, catalogNameEn } from '@/lib/i18n/catalog'
 import { ConsumableSubtype } from '@prisma/client'
 import { getConsumableByName, isIngredientItem, isMaterialItem, isProcessedItem } from '@/lib/itemCatalog'
 import { POTION_RECIPES, getRecipeById } from '@/lib/alchemy'
@@ -23,6 +25,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { characterId: string } }
 ) {
+  const t = getTFromRequest(request)
   try {
     const resolved = await requireApiActor(request, params.characterId)
     if ('error' in resolved) return resolved.error
@@ -32,7 +35,7 @@ export async function GET(
       select: { id: true },
     })
     if (!character) {
-      return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+      return NextResponse.json({ error: t('Character not found') }, { status: 404 })
     }
 
     const xp = await getUserAlchemyXp(userId)
@@ -49,7 +52,7 @@ export async function GET(
     return NextResponse.json({ xp, levelInfo, recipes })
   } catch (error) {
     console.error('Error loading alchemy info:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return NextResponse.json({ error: t('Internal server error') }, { status: 500 })
   }
 }
 
@@ -57,6 +60,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { characterId: string } }
 ) {
+  const t = getTFromRequest(request)
   try {
     const resolved = await requireApiActor(request, params.characterId)
     if ('error' in resolved) return resolved.error
@@ -65,7 +69,7 @@ export async function POST(
     const body = await request.json()
     const recipeId: string | undefined = body?.recipeId
     if (!recipeId) {
-      return NextResponse.json({ error: 'recipeId é obrigatório' }, { status: 400 })
+      return NextResponse.json({ error: t('recipeId is required') }, { status: 400 })
     }
     // Fabricação em lote: qtd de tentativas de uma vez (gasta gold×qty e
     // ingredientes×qty — as falhas também consomem). Padrão 1; teto de 99.
@@ -74,19 +78,19 @@ export async function POST(
 
     const recipe = getRecipeById(recipeId)
     if (!recipe) {
-      return NextResponse.json({ error: 'Receita não encontrada' }, { status: 404 })
+      return NextResponse.json({ error: t('Recipe not found') }, { status: 404 })
     }
 
     const potion = getConsumableByName(recipe.outputName)
     if (!potion) {
-      return NextResponse.json({ error: 'Poção da receita não existe no catálogo' }, { status: 500 })
+      return NextResponse.json({ error: t('The recipe potion does not exist in the catalog') }, { status: 500 })
     }
 
     const character = await prisma.character.findFirst({
       where: { id: params.characterId, userId },
     })
     if (!character) {
-      return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+      return NextResponse.json({ error: t('Character not found') }, { status: 404 })
     }
 
     // Nível de Alquimia da CONTA + gating da receita (o client nunca manda nível/chance).
@@ -94,7 +98,7 @@ export async function POST(
     const level = getProfessionLevel(xpBefore)
     const minLevel = getCraftMinLevel(recipe.rarity)
     if (level < minLevel) {
-      return NextResponse.json({ error: `Requer Alquimia nível ${minLevel}.` }, { status: 400 })
+      return NextResponse.json({ error: t('Requires Alchemy level {n}.', { n: minLevel }) }, { status: 400 })
     }
 
     // RNG FORA da transação — retry de transação não pode re-rolar o resultado.
@@ -224,8 +228,9 @@ export async function POST(
         characterId: character.id,
         activityType: 'ITEM_GAINED',
         description: roll.succeeded > 0
-          ? `⚗️ Craftou ${roll.succeeded}× ${recipe.outputName}${roll.failed > 0 ? ` (${roll.failed} falha${roll.failed === 1 ? '' : 's'})` : ''} (−${totalGoldCost} gold).`
-          : `⚗️ Transmutação de ${recipe.outputName} falhou — ingredientes e taxa perdidos (−${totalGoldCost} gold).`,
+          // Histórico gravado no banco: EN canônico (como o metadata da NFT).
+          ? `⚗️ Crafted ${roll.succeeded}× ${catalogNameEn(recipe.outputName)}${roll.failed > 0 ? ` (${roll.failed} fail${roll.failed === 1 ? '' : 's'})` : ''} (−${totalGoldCost} gold).`
+          : `⚗️ Transmutation of ${catalogNameEn(recipe.outputName)} failed — ingredients and fee lost (−${totalGoldCost} gold).`,
         itemId: result.potionItemId ?? undefined,
         goldAmount: -totalGoldCost,
       })
@@ -241,13 +246,18 @@ export async function POST(
     // levelInfo pós-crédito (a UI anima a barra de XP com isto).
     const levelInfo = getProfessionLevelInfo(xpBefore + roll.xpGained)
 
+    const outName = localizeItemName(recipe.outputName, getLocaleFromRequest(request))
     const message = roll.failed === 0
       ? roll.attempted > 1
-        ? `⚗️ ${roll.attempted}× ${recipe.outputName} criadas com sucesso!`
-        : `⚗️ ${recipe.outputName} criada com sucesso!`
+        ? t('⚗️ {n}× {name} created successfully!', { n: roll.attempted, name: outName })
+        : t('⚗️ {name} created successfully!', { name: outName })
       : roll.succeeded === 0
-        ? `💥 A transmutação falhou${roll.attempted > 1 ? ` ${roll.attempted}×` : ''} — os ingredientes se perderam.`
-        : `⚗️ ${roll.succeeded} de ${roll.attempted} ${recipe.outputName} sobreviveram ao caldeirão.`
+        ? roll.attempted > 1
+          ? t('💥 The transmutation failed {n}× — the ingredients were lost.', { n: roll.attempted })
+          : t('💥 The transmutation failed — the ingredients were lost.')
+        : t('⚗️ {ok} of {total} {name} survived the cauldron.', {
+            ok: roll.succeeded, total: roll.attempted, name: outName,
+          })
 
     return NextResponse.json({
       success: true,

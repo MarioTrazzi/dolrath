@@ -1,0 +1,121 @@
+// Fazenda (FarmBoard/FarmSection) — canteiros, poço e cercado.
+export const FARM_PT: Record<string, string> = {
+  // Sabor da colheita
+  'Loosening the soil around it…': 'Afrouxando a terra ao redor…',
+  'Cutting the stalks with the scythe…': 'Cortando os talos com a foice…',
+  'Shaking the root loose from the soil…': 'Sacudindo a raiz para soltar o solo…',
+  'Sorting the good from the chaff…': 'Separando o que prestou da palha…',
+  'Packing it all in the basket…': 'Guardando tudo no cesto…',
+
+  // Sabor do poço
+  'Lowering the bucket into the well…': 'Abaixando o balde no poço…',
+  'The rope tightens in the dark water…': 'A corda estica na água escura…',
+  'Hauling the full bucket up…': 'Puxando o balde cheio…',
+  'Water drips down the sides…': 'A água pinga pelas laterais…',
+  'One bucket at a time, until it runs dry…': 'Um balde por vez, até secar…',
+
+  // Dialog de colheita
+  '{n}× plot · yields {range} each': '{n}× canteiro · rende {range} cada',
+  'Harvesting everything costs': 'Colher tudo custa',
+  '−{n}⚡ per plot': '−{n}⚡ por canteiro',
+  ' — your stamina covers ': ' — sua stamina cobre ',
+  '{have} of {total}': '{have} de {total}',
+  ' (the rest stays planted)': ' (o resto fica plantado)',
+  '💎 Black Stone Shard chance per plot:': '💎 Chance de Estilhaço de Pedra Negra por canteiro:',
+  'Leave planted': 'Deixar plantadas',
+  'Harvest {n} · −{cost}⚡': 'Colher {n} · −{cost}⚡',
+  'Harvest · −{cost}⚡': 'Colher · −{cost}⚡',
+  '⚡ Not enough stamina.': '⚡ Stamina insuficiente.',
+  'Harvesting the plots…': 'Colhendo os canteiros…',
+  'do not close — the harvest is in progress': 'não feche — a colheita está em andamento',
+  'Harvest complete!': 'Colheita concluída!',
+  '{n} plot · +{xp} XP': '{n} canteiro · +{xp} XP',
+  '{n} plots · +{xp} XP': '{n} canteiros · +{xp} XP',
+  'Farm': 'Fazenda',
+  '⚡ 1 plot stayed planted (out of stamina).': '⚡ 1 canteiro ficou plantado (stamina acabou).',
+  '⚡ {n} plots stayed planted (out of stamina).': '⚡ {n} canteiros ficaram plantados (stamina acabou).',
+  '🎒 1 plot stayed planted (inventory full).': '🎒 1 canteiro ficou plantado (inventário cheio).',
+  '🎒 {n} plots stayed planted (inventory full).': '🎒 {n} canteiros ficaram plantados (inventário cheio).',
+  'Store in the inventory': 'Guardar no inventário',
+  'Could not harvest': 'Não deu para colher',
+
+  // Dialog do poço
+  'Draw water from the well': 'Puxar água do poço',
+  ' accumulated': ' acumulada',
+  ' accumulated (plural)': ' acumuladas',
+  ' · each pull takes ': ' · cada pull tira ',
+  ' for ': ' por ',
+  '🔸 Shard chance:': '🔸 Chance de Estilhaço:',
+  '💎 Black Stone chance:': '💎 Chance de Pedra Negra:',
+  'Leave it': 'Deixar',
+  'Pull · −{cost}⚡': 'Puxar · −{cost}⚡',
+  'Collect all ({n}) · −{cost}⚡': 'Coletar tudo ({n}) · −{cost}⚡',
+  '⚡ Your stamina covers {have} of {total} buckets.': '⚡ Sua stamina cobre {have} de {total} baldes.',
+  'The well has not gathered water yet.': 'O poço ainda não acumulou água.',
+  'Hauling the bucket': 'Subindo o balde',
+  '⏩ Skip ({revealed}/{total})': '⏩ Pular ({revealed}/{total})',
+  'do not close — the collection is in progress': 'não feche — a coleta está em andamento',
+  'Water collected!': 'Água coletada!',
+  '+{xp} XP': '+{xp} XP',
+  ' · well ': ' · poço ',
+  'Pull more · −{cost}⚡': 'Puxar mais · −{cost}⚡',
+  'Store': 'Guardar',
+  'Well empty — come back later.': 'Poço vazio — volte depois.',
+  '⚡ Not enough stamina for another pull.': '⚡ Stamina insuficiente para outro pull.',
+  'Could not collect': 'Não deu para coletar',
+  'Try again': 'Tentar de novo',
+
+  // Tabuleiro
+  '🎒 Inventory full — harvests and collections will fail. Free up inventory space to continue.':
+    '🎒 Inventário cheio — colheitas e coletas vão falhar. Abra espaço no inventário para continuar.',
+  'Stamina': 'Stamina',
+  '💎 Black Stone Shard chance': '💎 Chance de Estilhaço de Pedra Negra',
+  'Seed in hand': 'Semente na mão',
+  'tap an empty slot to plant (free · +XP for planting)':
+    'toque num slot vazio para plantar (grátis · +XP pra quem planta)',
+  'Plot': 'Canteiro',
+  '🧺 {n} ready to harvest': '🧺 {n} pronta p/ colher',
+  '🧺 {n} ready to harvest (plural)': '🧺 {n} prontas p/ colher',
+  'Well': 'Poço',
+  '1 {item} every {min} min (cap {cap}) · −{cost}⚡/pull':
+    '1 {item} a cada {min} min (teto {cap}) · −{cost}⚡/pull',
+  '🪣 Collect water': '🪣 Coletar água',
+  'Pen': 'Cercado',
+  '1 {feed} → {n}× {output}': '1 {feed} → {n}× {output}',
+  '🥣 {n} feed': '🥣 {n} ração',
+  '🔒 Lv. {n}': '🔒 Nv. {n}',
+  'Unlocks at Farm level {n}': 'Destrava no nível {n} de Fazenda',
+  'Process Feed at the bench (2 Wheat + 1 Pure Water)': 'Processe Ração na bancada (2 Trigo + 1 Água Pura)',
+  '🥣 Feed (1 {feed})': '🥣 Alimentar (1 {feed})',
+  '🧺 Harvest {n}× {output}': '🧺 Colher {n}× {output}',
+  'Lv.{n}': 'Nv.{n}',
+  'Plant in slot {n}': 'Plantar no slot {n}',
+  'Harvest {name}': 'Colher {name}',
+  'Harvest': 'Colher',
+
+  // FarmSection
+  'The Farm reached Level {n}!': 'A Fazenda subiu para o Nível {n}!',
+  'Choose an active character in the navbar.': 'Escolha um personagem ativo na navbar.',
+  'Failed to harvest': 'Erro ao colher',
+  'Failed to collect': 'Erro ao coletar',
+  'Loading the farm...': 'Carregando a fazenda...',
+
+  // Página da Fazenda (FarmSection)
+  '🌾 The Farm reached Level {n}!': '🌾 A Fazenda subiu para o Nível {n}!',
+  'Failed to perform the action': 'Erro ao executar a ação',
+  '🫘 Planted! +{xp} Farm XP': '🫘 Plantado! +{xp} XP de Fazenda',
+  '💧 Collected {qty}× {name}{bonus} · well {left}/{cap}':
+    '💧 Coletou {qty}× {name}{bonus} · poço {left}/{cap}',
+  '🌾 Farm': '🌾 Fazenda',
+  'The farm is shared by all your heroes: anyone plants for free (and earns Farm XP), and whoever harvests spends 1⚡ per plot and keeps the items and the XP. Growing costs nothing — the farm works for you.':
+    'A fazenda é uma só para todos os seus heróis: qualquer um planta de graça (e leva um XP de Fazenda), e quem colhe gasta 1⚡ por canteiro e fica com os itens e o XP. Crescer não gasta nada — a fazenda trabalha por você.',
+  'Managing with ': 'Gerenciando com ',
+  ' — switch the active hero in the top bar.': ' — troque o herói ativo na barra do topo.',
+  'Create a character first to farm.': 'Crie um personagem primeiro para cultivar.',
+  '🫘 Out of seeds? They only drop while gathering at the ': '🫘 Sem sementes? Elas só caem coletando nos ',
+  'Herb Fields': 'Campos de Ervas',
+  '💧 Well/gathering water becomes Pure Water at the Processing Bench (1:1).':
+    '💧 Água do poço/coleta vira Água Pura na Bancada de Processamento (1:1).',
+  '🥣 Feed is processed at the bench (2 Wheat + 1 Pure Water).':
+    '🥣 A Ração é processada na bancada (2 Trigo + 1 Água Pura).',
+}

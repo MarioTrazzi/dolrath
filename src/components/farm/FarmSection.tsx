@@ -13,12 +13,16 @@
 // entrada. `onBack` volta pro mapa.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useT, useI18n } from '@/lib/i18n/I18nProvider'
+import { localizeItemName } from '@/lib/i18n/catalog'
 import { motion } from 'framer-motion'
 import { FarmBoard, type FarmVM, type HarvestResultVM, type WellCollectResultVM } from '@/components/farm/FarmBoard'
 import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider'
 import { WELL } from '@/lib/farming'
 
 export default function FarmSection({ onBack }: { onBack?: () => void }) {
+  const t = useT()
+  const { locale } = useI18n()
   const { activeCharacter, activeCharacterId, loading } = useActiveCharacter()
 
   const [vm, setVm] = useState<FarmVM | null>(null)
@@ -37,7 +41,7 @@ export default function FarmSection({ onBack }: { onBack?: () => void }) {
       // do levelUpAlert das masmorras, aqui para o XP de profissão da conta).
       const lvl = data.farm?.level ?? 1
       if (lastFarmLevelRef.current != null && lvl > lastFarmLevelRef.current) {
-        setLevelUpBanner(`🌾 A Fazenda subiu para o Nível ${lvl}!`)
+        setLevelUpBanner(t('🌾 The Farm reached Level {n}!', { n: lvl }))
         setTimeout(() => setLevelUpBanner(null), 6000)
       }
       lastFarmLevelRef.current = lvl
@@ -88,9 +92,9 @@ export default function FarmSection({ onBack }: { onBack?: () => void }) {
       })
       const data = await res.json().catch(() => null)
       if (!res.ok) {
-        setNotice(`❌ ${data?.error ?? 'Erro ao executar a ação'}`)
+        setNotice(`❌ ${data?.error ?? t('Failed to perform the action')}`)
       } else if (path === 'plant' && data?.xpGained) {
-        setNotice(`🫘 Plantado! +${data.xpGained} XP de Fazenda`)
+        setNotice(t('🫘 Planted! +{xp} Farm XP', { xp: data.xpGained }))
       }
       await refresh(activeCharacterId)
     } finally {
@@ -103,7 +107,7 @@ export default function FarmSection({ onBack }: { onBack?: () => void }) {
   // `act` genérico acima (fire-and-forget) e devolve (ou lança) a resposta.
   // Sem slotIndex colhe TODOS os canteiros prontos; 101 colhe o cercado.
   const harvest = useCallback(async (slotIndex?: number): Promise<HarvestResultVM> => {
-    if (!activeCharacterId) throw new Error('Escolha um personagem ativo na navbar.')
+    if (!activeCharacterId) throw new Error(t('Choose an active character in the navbar.'))
     setBusy(true)
     setNotice(null)
     try {
@@ -114,7 +118,7 @@ export default function FarmSection({ onBack }: { onBack?: () => void }) {
       })
       const data = await res.json().catch(() => null)
       if (!res.ok) {
-        const message: string = data?.error ?? 'Erro ao colher'
+        const message: string = data?.error ?? t('Failed to harvest')
         setNotice(`❌ ${message}`)
         throw new Error(message)
       }
@@ -132,7 +136,7 @@ export default function FarmSection({ onBack }: { onBack?: () => void }) {
   }, [activeCharacterId, refresh])
 
   const wellCollect = useCallback(async (all?: boolean): Promise<WellCollectResultVM> => {
-    if (!activeCharacterId) throw new Error('Escolha um personagem ativo na navbar.')
+    if (!activeCharacterId) throw new Error(t('Choose an active character in the navbar.'))
     setBusy(true)
     setNotice(null)
     try {
@@ -162,9 +166,17 @@ export default function FarmSection({ onBack }: { onBack?: () => void }) {
       await refresh(activeCharacterId)
       const bonuses = Array.isArray(data.bonuses) ? data.bonuses : []
       const bonusLabel = bonuses.length > 0
-        ? ` + ${bonuses.map((b: { name: string }) => b.name).join(', ')}`
+        ? ` + ${bonuses.map((b: { name: string }) => localizeItemName(b.name, locale)).join(', ')}`
         : ''
-      setNotice(`💧 Coletou ${data.qty}× ${data.outputName}${bonusLabel} · poço ${pendingLeft}/${WELL.cap}`)
+      setNotice(
+        t('💧 Collected {qty}× {name}{bonus} · well {left}/{cap}', {
+          qty: data.qty,
+          name: localizeItemName(data.outputName, locale),
+          bonus: bonusLabel,
+          left: pendingLeft,
+          cap: WELL.cap,
+        }),
+      )
       return {
         outputName: data.outputName,
         qty: data.qty ?? 1,
@@ -213,15 +225,16 @@ export default function FarmSection({ onBack }: { onBack?: () => void }) {
             className="text-3xl sm:text-4xl font-black text-[#ece7da] mb-2"
             style={{ letterSpacing: '0.5px' }}
           >
-            🌾 Fazenda
+            {t('🌾 Farm')}
           </motion.h1>
           <p className="text-[#8a8a90] text-sm max-w-2xl mx-auto">
-            A fazenda é uma só para todos os seus heróis: qualquer um planta de graça (e leva um XP de Fazenda),
-            e quem colhe gasta 1⚡ por canteiro e fica com os itens e o XP. Crescer não gasta nada — a fazenda trabalha por você.
+            {t('The farm is shared by all your heroes: anyone plants for free (and earns Farm XP), and whoever harvests spends 1⚡ per plot and keeps the items and the XP. Growing costs nothing — the farm works for you.')}
           </p>
           {activeCharacter && (
             <p className="text-[#77777d] text-xs mt-2">
-              Gerenciando com <span className="font-bold" style={{ color: '#e7c682' }}>{activeCharacter.name}</span> — troque o herói ativo na barra do topo.
+              {t('Managing with ')}
+              <span className="font-bold" style={{ color: '#e7c682' }}>{activeCharacter.name}</span>
+              {t(' — switch the active hero in the top bar.')}
             </p>
           )}
         </div>
@@ -252,7 +265,7 @@ export default function FarmSection({ onBack }: { onBack?: () => void }) {
         )}
 
         {!activeCharacterId && !loading && (
-          <div className="text-white/50 text-sm px-2 py-10 text-center">Crie um personagem primeiro para cultivar.</div>
+          <div className="text-white/50 text-sm px-2 py-10 text-center">{t('Create a character first to farm.')}</div>
         )}
 
         {activeCharacterId && vm && (
@@ -267,18 +280,18 @@ export default function FarmSection({ onBack }: { onBack?: () => void }) {
         )}
 
         {activeCharacterId && !vm && (
-          <div className="text-center text-white/40 text-sm py-10">Carregando a fazenda...</div>
+          <div className="text-center text-white/40 text-sm py-10">{t('Loading the farm...')}</div>
         )}
 
         <p className="text-center text-white/30 text-[11px] mt-6 max-w-2xl mx-auto">
-          🫘 Sem sementes? Elas só caem coletando nos{' '}
+          {t('🫘 Out of seeds? They only drop while gathering at the ')}
           {onBack ? (
-            <button type="button" onClick={onBack} className="underline">Campos de Ervas</button>
+            <button type="button" onClick={onBack} className="underline">{t('Herb Fields')}</button>
           ) : (
-            <a href="/gathering" className="underline">Campos de Ervas</a>
-          )}.
-          💧 Água do poço/coleta vira Água Pura na Bancada de Processamento (1:1).
-          🥣 A Ração é processada na bancada (2 Trigo + 1 Água Pura).
+            <a href="/gathering" className="underline">{t('Herb Fields')}</a>
+          )}.{' '}
+          {t('💧 Well/gathering water becomes Pure Water at the Processing Bench (1:1).')}{' '}
+          {t('🥣 Feed is processed at the bench (2 Wheat + 1 Pure Water).')}
         </p>
       </div>
     </div>

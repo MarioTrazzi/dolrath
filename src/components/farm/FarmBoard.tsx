@@ -15,6 +15,8 @@
 // o personagem ativo (que leva itens e XP).
 
 import { useEffect, useMemo, useState } from 'react'
+import { useT, useI18n } from '@/lib/i18n/I18nProvider'
+import { localizeItemName } from '@/lib/i18n/catalog'
 import { motion, AnimatePresence } from 'framer-motion'
 import { CROPS, cropGrowSeconds, cropYieldRange, FARM_HARVEST_STAMINA, WELL, WELL_COLLECT_STAMINA, type CropDef } from '@/lib/farming'
 import { farmPlotUnlockLevel, FARM_TOTAL_PLOTS, type ProfessionLevelInfo } from '@/lib/professionSystem'
@@ -86,12 +88,13 @@ export interface WellCollectResultVM {
   skippedNoSpace?: number
 }
 
+// Chaves EN (i18n EN-as-key): a UI passa cada uma por t().
 const FLAVOR = [
-  'Afrouxando a terra ao redor…',
-  'Cortando os talos com a foice…',
-  'Sacudindo a raiz para soltar o solo…',
-  'Separando o que prestou da palha…',
-  'Guardando tudo no cesto…',
+  'Loosening the soil around it…',
+  'Cutting the stalks with the scythe…',
+  'Shaking the root loose from the soil…',
+  'Sorting the good from the chaff…',
+  'Packing it all in the basket…',
 ]
 
 /** Duração da animação de colheita de CADA canteiro (a "working" pausa esse tempo por item). */
@@ -101,10 +104,10 @@ const HARVEST_ITEM_ANIM_MS = 3000
 const WELL_BUCKET_ANIM_MS = 2200
 
 const WELL_FLAVOR = [
-  'Abaixando o balde no poço…',
-  'A corda estica na água escura…',
-  'Puxando o balde cheio…',
-  'A água pinga pelas laterais…',
+  'Lowering the bucket into the well…',
+  'The rope tightens in the dark water…',
+  'Hauling the full bucket up…',
+  'Water drips down the sides…',
 ]
 
 function cropByOutputName(outputName: string): CropDef | undefined {
@@ -158,11 +161,13 @@ function PlotCell({
   onPlant: (slotIndex: number) => void
   onOpenHarvest: (slotIndex: number) => void
 }) {
+  const t = useT()
+  const { locale } = useI18n()
   if (!unlocked) {
     return (
       <div className="relative aspect-square rounded-xl border border-white/5 bg-black/50 flex flex-col items-center justify-center gap-0.5 select-none">
         <span className="text-white/20 text-base">🔒</span>
-        <span className="text-white/25 text-[9px] font-bold">Nv.{unlockLevel}</span>
+        <span className="text-white/25 text-[9px] font-bold">{t('Lv.{n}', { n: unlockLevel })}</span>
       </div>
     )
   }
@@ -175,7 +180,7 @@ function PlotCell({
       <button
         onClick={() => onPlant(slotIndex)}
         disabled={busy}
-        aria-label={`Plantar no slot ${slotIndex + 1}`}
+        aria-label={t('Plant in slot {n}', { n: slotIndex + 1 })}
         className="relative aspect-square rounded-xl border border-dashed border-white/15 bg-black/30 hover:bg-white/5 hover:border-white/30 disabled:opacity-40 transition-all flex items-center justify-center min-h-[44px]"
       >
         <span className="text-white/25 text-xl font-light">+</span>
@@ -205,14 +210,14 @@ function PlotCell({
       onClick={() => onOpenHarvest(slotIndex)}
       whileTap={{ scale: 0.92 }}
       disabled={busy}
-      aria-label={`Colher ${crop.outputName}`}
+      aria-label={t('Harvest {name}', { name: localizeItemName(crop.outputName, locale) })}
       className="relative aspect-square rounded-xl border flex flex-col items-center justify-center gap-0.5 min-h-[44px] plot-ready disabled:opacity-60"
       style={{ borderColor: 'rgba(52,211,153,0.65)', background: 'radial-gradient(circle at 50% 35%, rgba(52,211,153,0.16), #1b1b2f 75%)', '--pr': 'rgba(52,211,153,0.35)' } as React.CSSProperties}
     >
       <motion.span animate={{ y: [0, -2, 0] }} transition={{ repeat: Infinity, duration: 1.6 }} className="text-2xl">
         {crop.emoji}
       </motion.span>
-      <span className="text-[9px] font-black uppercase tracking-wide text-emerald-300">Colher</span>
+      <span className="text-[9px] font-black uppercase tracking-wide text-emerald-300">{t('Harvest')}</span>
     </motion.button>
   )
 }
@@ -232,6 +237,8 @@ function HarvestDialog({
   onHarvest: () => Promise<HarvestResultVM>
   onClose: () => void
 }) {
+  const t = useT()
+  const { locale } = useI18n()
   const [phase, setPhase] = useState<'confirm' | 'working' | 'done' | 'error'>('confirm')
   const [flavorIdx, setFlavorIdx] = useState(0)
   const [result, setResult] = useState<HarvestResultVM | null>(null)
@@ -316,36 +323,48 @@ function HarvestDialog({
                 const range = cropYieldRange(crop, farmLevel)
                 return (
                   <div key={crop.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-xs">
-                    <span className="text-white/85">{crop.emoji} {crop.outputName}</span>
+                    <span className="text-white/85">{crop.emoji} {localizeItemName(crop.outputName, locale)}</span>
                     <span className="text-white/50">
-                      {count}× canteiro · rende {range.min === range.max ? range.min : `${range.min}–${range.max}`} cada
+                      {t('{n}× plot · yields {range} each', {
+                        n: count,
+                        range: range.min === range.max ? range.min : `${range.min}–${range.max}`,
+                      })}
                     </span>
                   </div>
                 )
               })}
             </div>
             <p className="text-white/50 text-xs mb-3">
-              Colher tudo custa <span className="font-bold text-white/80">−{FARM_HARVEST_STAMINA}⚡ por canteiro</span>
+              {t('Harvesting everything costs')}{' '}
+              <span className="font-bold text-white/80">{t('−{n}⚡ per plot', { n: FARM_HARVEST_STAMINA })}</span>
               {harvestable < readyCount && harvestable > 0 && (
-                <> — sua stamina cobre <span className="font-bold text-amber-300">{harvestable} de {readyCount}</span> (o resto fica plantado)</>
+                <>
+                  {t(' — your stamina covers ')}
+                  <span className="font-bold text-amber-300">
+                    {t('{have} of {total}', { have: harvestable, total: readyCount })}
+                  </span>
+                  {t(' (the rest stays planted)')}
+                </>
               )}
             </p>
             <div className="rounded-xl border border-fuchsia-400/25 bg-fuchsia-500/10 px-3 py-2 mb-4 text-[11px] text-fuchsia-200/90">
-              💎 Chance de Estilhaço de Pedra Negra por canteiro: <span className="font-bold">{stoneChance}%</span>
+              {t('💎 Black Stone Shard chance per plot:')} <span className="font-bold">{stoneChance}%</span>
             </div>
             <div className="flex gap-2">
               <button onClick={onClose} className="flex-1 rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 text-white/70 text-sm font-bold py-3 transition-all">
-                Deixar plantadas
+                {t('Leave planted')}
               </button>
               <button
                 onClick={start}
                 disabled={busy || harvestable <= 0}
                 className="flex-1 rounded-lg text-white text-sm font-black py-3 transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-emerald-600 hover:bg-emerald-500"
               >
-                Colher {harvestable > 0 ? harvestable : ''} · −{cost}⚡
+                {harvestable > 0
+                  ? t('Harvest {n} · −{cost}⚡', { n: harvestable, cost })
+                  : t('Harvest · −{cost}⚡', { cost })}
               </button>
             </div>
-            {harvestable <= 0 && <div className="text-red-400 text-[11px] mt-2">⚡ Stamina insuficiente.</div>}
+            {harvestable <= 0 && <div className="text-red-400 text-[11px] mt-2">{t('⚡ Not enough stamina.')}</div>}
           </div>
         )}
 
@@ -354,13 +373,13 @@ function HarvestDialog({
             <motion.div animate={{ rotate: [0, -8, 8, 0] }} transition={{ repeat: Infinity, duration: 0.9 }} className="text-4xl mb-3">
               {readyCrops[0]?.crop.emoji ?? '🌾'}
             </motion.div>
-            <h2 className="text-white font-black text-base mb-1">Colhendo os canteiros…</h2>
+            <h2 className="text-white font-black text-base mb-1">{t('Harvesting the plots…')}</h2>
             <AnimatePresence mode="wait">
               <motion.p key={flavorIdx} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="text-white/45 text-xs mb-4 h-4">
-                {FLAVOR[flavorIdx]}
+                {t(FLAVOR[flavorIdx])}
               </motion.p>
             </AnimatePresence>
-            <div className="text-white/30 text-[10px] mt-2">não feche — a colheita está em andamento</div>
+            <div className="text-white/30 text-[10px] mt-2">{t('do not close — the harvest is in progress')}</div>
           </div>
         )}
 
@@ -382,7 +401,7 @@ function HarvestDialog({
                   </h2>
                   <AnimatePresence mode="wait">
                     <motion.p key={`${currentIdx}-${flavorIdx}`} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="text-white/45 text-xs mb-3 h-4">
-                      {FLAVOR[flavorIdx]}
+                      {t(FLAVOR[flavorIdx])}
                     </motion.p>
                   </AnimatePresence>
                   <div className="h-2 rounded-full bg-black/60 border border-white/10 overflow-hidden mb-4">
@@ -411,7 +430,7 @@ function HarvestDialog({
                   })}
                 </div>
               )}
-              <div className="text-white/30 text-[10px] mt-2">não feche — a colheita está em andamento</div>
+              <div className="text-white/30 text-[10px] mt-2">{t('do not close — the harvest is in progress')}</div>
             </div>
           )
         })()}
@@ -426,13 +445,13 @@ function HarvestDialog({
             <motion.div initial={{ scale: 0.6 }} animate={{ scale: 1 }} transition={{ type: 'spring', damping: 12 }} className="text-4xl mb-2">
               🧺
             </motion.div>
-            <h2 className="text-white font-black text-lg mb-4">Colheita concluída!</h2>
+            <h2 className="text-white font-black text-lg mb-4">{t('Harvest complete!')}</h2>
             <div className="flex flex-col gap-2 mb-4">
               {aggregatedItems.map((item, i) => {
                 const itemCrop = cropByOutputName(item.outputName)
                 return (
                   <motion.div key={item.outputName} initial={{ opacity: 0, x: -14 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 + i * 0.12 }} className="flex items-center justify-between rounded-xl border border-white/10 bg-black/40 px-4 py-3">
-                    <span className="text-sm text-white/85">{itemCrop?.emoji ?? '🌾'} {item.outputName}</span>
+                    <span className="text-sm text-white/85">{itemCrop?.emoji ?? '🌾'} {localizeItemName(item.outputName, locale)}</span>
                     <span className="font-bold text-white">×{item.qty}</span>
                   </motion.div>
                 )
@@ -444,23 +463,41 @@ function HarvestDialog({
                   className="relative flex items-center justify-between rounded-xl border border-fuchsia-400/60 px-4 py-3 overflow-hidden"
                   style={{ background: 'linear-gradient(120deg, rgba(217,70,239,0.18), rgba(139,92,246,0.14))' }}
                 >
-                  <span className="text-sm font-bold text-fuchsia-200">💎 {stoneName}</span>
+                  <span className="text-sm font-bold text-fuchsia-200">💎 {localizeItemName(stoneName, locale)}</span>
                   <span className="font-bold text-fuchsia-100">×1</span>
                   <span className="stone-shine absolute inset-0 pointer-events-none"></span>
                 </motion.div>
               ))}
               <motion.div initial={{ opacity: 0, x: -14 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 }} className="text-[11px] text-white/45">
-                {result.harvested} canteiro{result.harvested > 1 ? 's' : ''} · +<span className="text-amber-300 font-bold">{result.xpGained} XP</span> de Fazenda
+                {t(result.harvested > 1 ? '{n} plots · +{xp} XP' : '{n} plot · +{xp} XP', {
+                  n: result.harvested,
+                  xp: result.xpGained,
+                })}{' '}
+                {t('Farm')}
               </motion.div>
               {(result.skippedNoStamina ?? 0) > 0 && (
-                <div className="text-[11px] text-amber-300/80">⚡ {result.skippedNoStamina} canteiro{result.skippedNoStamina! > 1 ? 's ficaram' : ' ficou'} plantado{result.skippedNoStamina! > 1 ? 's' : ''} (stamina acabou).</div>
+                <div className="text-[11px] text-amber-300/80">
+                  {t(
+                    result.skippedNoStamina! > 1
+                      ? '⚡ {n} plots stayed planted (out of stamina).'
+                      : '⚡ 1 plot stayed planted (out of stamina).',
+                    { n: result.skippedNoStamina! },
+                  )}
+                </div>
               )}
               {(result.skippedNoSpace ?? 0) > 0 && (
-                <div className="text-[11px] text-amber-300/80">🎒 {result.skippedNoSpace} canteiro{result.skippedNoSpace! > 1 ? 's ficaram' : ' ficou'} plantado{result.skippedNoSpace! > 1 ? 's' : ''} (inventário cheio).</div>
+                <div className="text-[11px] text-amber-300/80">
+                  {t(
+                    result.skippedNoSpace! > 1
+                      ? '🎒 {n} plots stayed planted (inventory full).'
+                      : '🎒 1 plot stayed planted (inventory full).',
+                    { n: result.skippedNoSpace! },
+                  )}
+                </div>
               )}
             </div>
             <button onClick={onClose} className="w-full rounded-lg text-white text-sm font-black py-3 transition-all bg-emerald-600 hover:bg-emerald-500">
-              Guardar no inventário
+              {t('Store in the inventory')}
             </button>
           </div>
           )
@@ -469,7 +506,7 @@ function HarvestDialog({
         {phase === 'error' && (
           <div className="text-center">
             <div className="text-4xl mb-2">⚠️</div>
-            <h2 className="text-white font-black text-base mb-2">Não deu para colher</h2>
+            <h2 className="text-white font-black text-base mb-2">{t('Could not harvest')}</h2>
             <p className="text-white/60 text-xs mb-4">{errorMsg}</p>
             <button onClick={onClose} className="w-full rounded-lg text-white text-sm font-black py-3 transition-all bg-white/10 hover:bg-white/20">
               Fechar
@@ -541,6 +578,8 @@ function WellCollectDialog({
   onCollect: (all?: boolean) => Promise<WellCollectResultVM>
   onClose: () => void
 }) {
+  const t = useT()
+  const { locale } = useI18n()
   const [phase, setPhase] = useState<'confirm' | 'working' | 'done' | 'error'>('confirm')
   const [flavorIdx, setFlavorIdx] = useState(0)
   const [result, setResult] = useState<WellCollectResultVM | null>(null)
@@ -615,28 +654,31 @@ function WellCollectDialog({
         {phase === 'confirm' && (
           <div className="text-center">
             <div className="text-4xl mb-2">🪣</div>
-            <h2 className="text-white font-black text-lg mb-1">Puxar água do poço</h2>
+            <h2 className="text-white font-black text-lg mb-1">{t('Draw water from the well')}</h2>
             <p className="text-white/50 text-xs mb-3">
-              <span className="text-sky-300 font-bold">{localPending}</span>/{WELL.cap} acumulada{localPending !== 1 ? 's' : ''}
-              {' '}· cada pull tira <span className="text-sky-300 font-bold">1× {WELL.outputName}</span>
-              {' '}por <span className="font-bold text-white/80">−{WELL_COLLECT_STAMINA}⚡</span>
+              <span className="text-sky-300 font-bold">{localPending}</span>/{WELL.cap}
+              {localPending !== 1 ? t(' accumulated (plural)') : t(' accumulated')}
+              {t(' · each pull takes ')}
+              <span className="text-sky-300 font-bold">1× {localizeItemName(WELL.outputName, locale)}</span>
+              {t(' for ')}
+              <span className="font-bold text-white/80">−{WELL_COLLECT_STAMINA}⚡</span>
             </p>
             <div className="rounded-xl border border-fuchsia-400/25 bg-fuchsia-500/10 px-3 py-2 mb-2 text-[11px] text-fuchsia-200/90 text-left">
-              🔸 Chance de Estilhaço: <span className="font-bold">{wellShardChancePct}%</span>
+              {t('🔸 Shard chance:')} <span className="font-bold">{wellShardChancePct}%</span>
             </div>
             <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 mb-4 text-[11px] text-amber-100/90 text-left">
-              💎 Chance de Pedra Negra: <span className="font-bold">{wellStoneChancePct}%</span>
+              {t('💎 Black Stone chance:')} <span className="font-bold">{wellStoneChancePct}%</span>
             </div>
             <div className="flex gap-2">
               <button onClick={onClose} className="flex-1 rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 text-white/70 text-sm font-bold py-3 transition-all">
-                Deixar
+                {t('Leave it')}
               </button>
               <button
                 onClick={() => void start(false)}
                 disabled={busy || !canPull}
                 className="flex-1 rounded-lg text-white text-sm font-black py-3 transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-sky-600 hover:bg-sky-500"
               >
-                Puxar · −{WELL_COLLECT_STAMINA}⚡
+                {t('Pull · −{cost}⚡', { cost: WELL_COLLECT_STAMINA })}
               </button>
             </div>
             {/* Esvaziar o poço: um balde por vez, até secar. */}
@@ -646,17 +688,17 @@ function WellCollectDialog({
                 disabled={busy}
                 className="w-full mt-2 rounded-lg border border-sky-400/40 bg-sky-500/10 hover:bg-sky-500/20 text-sky-100 text-sm font-black py-3 transition-all disabled:opacity-40"
               >
-                Coletar tudo ({drainCount}) · −{drainCount * WELL_COLLECT_STAMINA}⚡
+                {t('Collect all ({n}) · −{cost}⚡', { n: drainCount, cost: drainCount * WELL_COLLECT_STAMINA })}
               </button>
             )}
             {canPull && drainCount < localPending && (
               <div className="text-amber-300/80 text-[11px] mt-2">
-                ⚡ Sua stamina cobre {drainCount} de {localPending} baldes.
+                {t('⚡ Your stamina covers {have} of {total} buckets.', { have: drainCount, total: localPending })}
               </div>
             )}
             {!canPull && (
               <div className="text-red-400 text-[11px] mt-2">
-                {localPending <= 0 ? 'O poço ainda não acumulou água.' : '⚡ Stamina insuficiente.'}
+                {localPending <= 0 ? t('The well has not gathered water yet.') : t('⚡ Not enough stamina.')}
               </div>
             )}
           </div>
@@ -667,17 +709,17 @@ function WellCollectDialog({
             {/* A `key` por tique refaz a subida do balde a cada unidade. */}
             <WellBucketRig phase="working" key={`bucket-${reveal.tick}`} />
             <h2 className="text-white font-black text-base mb-1">
-              Subindo o balde
+              {t('Hauling the bucket')}
               {revealing && reveal.total > 1 ? ` ${reveal.revealed}/${reveal.total}` : '…'}
             </h2>
             {revealing ? (
               <p className="text-white/45 text-xs mb-3 h-4">
-                {reveal.total > 1 ? 'Um balde por vez, até secar…' : WELL_FLAVOR[0]}
+                {reveal.total > 1 ? t('One bucket at a time, until it runs dry…') : t(WELL_FLAVOR[0])}
               </p>
             ) : (
               <AnimatePresence mode="wait">
                 <motion.p key={flavorIdx} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="text-white/45 text-xs mb-3 h-4">
-                  {WELL_FLAVOR[flavorIdx]}
+                  {t(WELL_FLAVOR[flavorIdx])}
                 </motion.p>
               </AnimatePresence>
             )}
@@ -702,7 +744,7 @@ function WellCollectDialog({
                     initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
                     className="flex items-center justify-between rounded-lg border border-sky-400/25 bg-sky-950/30 px-3 py-1.5 text-[11px]"
                   >
-                    <span className="text-sky-100">💧 {result?.outputName}</span>
+                    <span className="text-sky-100">💧 {localizeItemName(result?.outputName ?? '', locale)}</span>
                     <span className="font-bold text-white">
                       ×{r.qty}
                       {r.bonuses.map((b) => (b.kind === 'stone' ? ' 💎' : ' 🔸')).join('')}
@@ -717,10 +759,10 @@ function WellCollectDialog({
                 onClick={reveal.skip}
                 className="w-full rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 text-white/70 text-xs font-bold py-2 transition-all"
               >
-                ⏩ Pular ({reveal.revealed}/{reveal.total})
+                {t('⏩ Skip ({revealed}/{total})', { revealed: reveal.revealed, total: reveal.total })}
               </button>
             ) : (
-              <div className="text-white/30 text-[10px]">não feche — a coleta está em andamento</div>
+              <div className="text-white/30 text-[10px]">{t('do not close — the collection is in progress')}</div>
             )}
           </div>
         )}
@@ -728,14 +770,14 @@ function WellCollectDialog({
         {phase === 'done' && result && (
           <div className="text-center">
             <WellBucketRig phase="done" />
-            <h2 className="text-white font-black text-lg mb-4">Água coletada!</h2>
+            <h2 className="text-white font-black text-lg mb-4">{t('Water collected!')}</h2>
             <div className="flex flex-col gap-2 mb-4">
               <motion.div
                 key={`water-${result.pendingLeft}-${result.xpGained}`}
                 initial={{ opacity: 0, x: -14 }} animate={{ opacity: 1, x: 0 }}
                 className="flex items-center justify-between rounded-xl border border-sky-400/40 bg-sky-950/40 px-4 py-3"
               >
-                <span className="text-sm text-sky-100">💧 {result.outputName}</span>
+                <span className="text-sm text-sky-100">💧 {localizeItemName(result.outputName, locale)}</span>
                 <span className="font-bold text-white">×{result.qty}</span>
               </motion.div>
               {result.bonuses.map((b, i) => {
@@ -758,7 +800,7 @@ function WellCollectDialog({
                     }}
                   >
                     <span className={`text-sm font-bold ${isStone ? 'text-amber-100' : 'text-fuchsia-200'}`}>
-                      {isStone ? '💎' : '🔸'} {b.name}
+                      {isStone ? '💎' : '🔸'} {localizeItemName(b.name, locale)}
                     </span>
                     <span className={`font-bold ${isStone ? 'text-amber-50' : 'text-fuchsia-100'}`}>×1</span>
                     <span className="stone-shine absolute inset-0 pointer-events-none" />
@@ -766,8 +808,9 @@ function WellCollectDialog({
                 )
               })}
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-[11px] text-white/45">
-                +<span className="text-amber-300 font-bold">{result.xpGained} XP</span> de Fazenda
-                {' '}· poço <span className="text-sky-300 font-bold">{result.pendingLeft}</span>/{WELL.cap}
+                {t('+{xp} XP', { xp: result.xpGained })} {t('Farm')}
+                {t(' · well ')}
+                <span className="text-sky-300 font-bold">{result.pendingLeft}</span>/{WELL.cap}
               </motion.div>
             </div>
             <div className="flex gap-2">
@@ -781,23 +824,23 @@ function WellCollectDialog({
                   className="flex-1 rounded-lg text-white text-sm font-black py-3 transition-all disabled:opacity-40 bg-sky-600 hover:bg-sky-500"
                 >
                   {drainCount > 1
-                    ? `Coletar tudo (${drainCount}) · −${drainCount * WELL_COLLECT_STAMINA}⚡`
-                    : `Puxar mais · −${WELL_COLLECT_STAMINA}⚡`}
+                    ? t('Collect all ({n}) · −{cost}⚡', { n: drainCount, cost: drainCount * WELL_COLLECT_STAMINA })
+                    : t('Pull more · −{cost}⚡', { cost: WELL_COLLECT_STAMINA })}
                 </button>
               ) : (
                 <button
                   onClick={onClose}
                   className="flex-1 rounded-lg text-white text-sm font-black py-3 transition-all bg-sky-600 hover:bg-sky-500"
                 >
-                  Guardar
+                  {t('Store')}
                 </button>
               )}
             </div>
             {!canPullAgain && result.pendingLeft <= 0 && (
-              <div className="text-white/40 text-[11px] mt-2">Poço vazio — volte depois.</div>
+              <div className="text-white/40 text-[11px] mt-2">{t('Well empty — come back later.')}</div>
             )}
             {!canPullAgain && result.pendingLeft > 0 && localStamina < WELL_COLLECT_STAMINA && (
-              <div className="text-red-400 text-[11px] mt-2">⚡ Stamina insuficiente para outro pull.</div>
+              <div className="text-red-400 text-[11px] mt-2">{t('⚡ Not enough stamina for another pull.')}</div>
             )}
           </div>
         )}
@@ -805,7 +848,7 @@ function WellCollectDialog({
         {phase === 'error' && (
           <div className="text-center">
             <div className="text-4xl mb-2">⚠️</div>
-            <h2 className="text-white font-black text-base mb-2">Não deu para coletar</h2>
+            <h2 className="text-white font-black text-base mb-2">{t('Could not collect')}</h2>
             <p className="text-white/60 text-xs mb-4">{errorMsg}</p>
             <div className="flex gap-2">
               <button onClick={onClose} className="flex-1 rounded-lg text-white text-sm font-black py-3 transition-all bg-white/10 hover:bg-white/20">
@@ -817,7 +860,7 @@ function WellCollectDialog({
                   disabled={busy}
                   className="flex-1 rounded-lg text-white text-sm font-black py-3 transition-all disabled:opacity-40 bg-sky-600 hover:bg-sky-500"
                 >
-                  Tentar de novo
+                  {t('Try again')}
                 </button>
               )}
             </div>
@@ -843,6 +886,8 @@ export function FarmBoard({
   onWellCollect: (all?: boolean) => Promise<WellCollectResultVM>
   onPenFeed: () => void
 }) {
+  const t = useT()
+  const { locale } = useI18n()
   const cropList = useMemo(() => Object.values(CROPS) as CropDef[], [])
   const [selectedCrop, setSelectedCrop] = useState<string>(cropList[0]?.id ?? 'trigo')
   const [harvestDialogOpen, setHarvestDialogOpen] = useState(false)
@@ -859,24 +904,24 @@ export function FarmBoard({
     <div className="space-y-5">
       {vm.inventoryFull && (
         <div className="max-w-md mx-auto rounded-xl border border-amber-500/50 bg-amber-950/40 px-3 py-2.5 text-amber-200 text-xs font-bold text-center">
-          🎒 Inventário cheio — colheitas e coletas vão falhar. Abra espaço no inventário para continuar.
+          {t('🎒 Inventory full — harvests and collections will fail. Free up inventory space to continue.')}
         </div>
       )}
 
       {/* Nível de Fazenda + Stamina + chance de pedra */}
       <div className="max-w-md mx-auto flex flex-col gap-2.5 glass-card px-4 py-3">
-        <ProfessionBar label="Fazenda" emoji="🌾" info={vm.farm} />
-        <BarRow icon="⚡" label="Stamina" value={vm.stamina} max={vm.maxStamina} color="var(--warning)"
+        <ProfessionBar label={t('Farm')} emoji="🌾" info={vm.farm} />
+        <BarRow icon="⚡" label={t('Stamina')} value={vm.stamina} max={vm.maxStamina} color="var(--warning)"
           right={<span className="text-[11px] text-white/50">{vm.stamina}/{vm.maxStamina}</span>} />
         <div className="flex items-center justify-between text-[11px]">
-          <span className="text-white/40">💎 Chance de Estilhaço de Pedra Negra</span>
+          <span className="text-white/40">{t('💎 Black Stone Shard chance')}</span>
           <span className="font-bold text-fuchsia-300">{vm.stoneChance}%</span>
         </div>
       </div>
 
       {/* Semente na mão */}
       <div className="max-w-md mx-auto">
-        <div className="text-[11px] uppercase tracking-widest text-white/40 mb-2 font-bold">Semente na mão</div>
+        <div className="text-[11px] uppercase tracking-widest text-white/40 mb-2 font-bold">{t('Seed in hand')}</div>
         <div className="grid grid-cols-3 gap-2">
           {cropList.map((crop) => {
             const sel = selectedCrop === crop.id
@@ -892,23 +937,25 @@ export function FarmBoard({
                 <span className="w-6 h-6 rounded bg-black/40 border border-white/10 flex items-center justify-center text-sm overflow-hidden mb-1">
                   <GatherItemThumb name={crop.seedName} />
                 </span>
-                <div className="text-white text-[11px] font-bold leading-tight">{crop.outputName}</div>
+                <div className="text-white text-[11px] font-bold leading-tight">{localizeItemName(crop.outputName, locale)}</div>
                 <div className="text-white/40 text-[10px]">🫘 {count} · ⏱ {Math.round(cropGrowSeconds(crop, farmLevel) / 3600)}h</div>
               </button>
             )
           })}
         </div>
         <div className="text-white/35 text-[10px] mt-1.5">
-          toque num slot vazio para plantar (grátis · +XP pra quem planta)
+          {t('tap an empty slot to plant (free · +XP for planting)')}
         </div>
       </div>
 
       {/* Canteiro único */}
       <div className="max-w-md mx-auto glass-card p-3">
         <div className="flex items-center justify-between mb-2 px-1">
-          <div className="text-[11px] uppercase tracking-widest text-white/40 font-bold">Canteiro</div>
+          <div className="text-[11px] uppercase tracking-widest text-white/40 font-bold">{t('Plot')}</div>
           {readyCount > 0 && (
-            <span className="text-[11px] font-bold text-emerald-300">🧺 {readyCount} pronta{readyCount > 1 ? 's' : ''} p/ colher</span>
+            <span className="text-[11px] font-bold text-emerald-300">
+              {t(readyCount > 1 ? '🧺 {n} ready to harvest (plural)' : '🧺 {n} ready to harvest', { n: readyCount })}
+            </span>
           )}
         </div>
         <div className="grid grid-cols-4 gap-2">
@@ -935,9 +982,14 @@ export function FarmBoard({
           <div className="flex items-start justify-between">
             <div>
               <div className="text-3xl mb-1">💧</div>
-              <div className="text-white font-black text-sm">Poço</div>
+              <div className="text-white font-black text-sm">{t('Well')}</div>
               <div className="text-white/50 text-[11px]">
-                1 {WELL.outputName} a cada {Math.round(vm.well.intervalSeconds / 60)} min (teto {vm.well.cap}) · −{wellCost}⚡/pull
+                {t('1 {item} every {min} min (cap {cap}) · −{cost}⚡/pull', {
+                  item: localizeItemName(WELL.outputName, locale),
+                  min: Math.round(vm.well.intervalSeconds / 60),
+                  cap: vm.well.cap,
+                  cost: wellCost,
+                })}
               </div>
             </div>
             <div className="text-right">
@@ -949,7 +1001,7 @@ export function FarmBoard({
             disabled={busy || vm.well.pending <= 0}
             className="mt-3 w-full text-xs font-black text-white bg-sky-600 hover:bg-sky-500 rounded-lg px-3 py-2 disabled:opacity-40 transition-colors"
           >
-            🪣 Coletar água
+            {t('🪣 Collect water')}
           </button>
         </div>
 
@@ -958,25 +1010,31 @@ export function FarmBoard({
           <div className="flex items-start justify-between">
             <div>
               <div className="text-3xl mb-1">🐄</div>
-              <div className="text-white font-black text-sm">Cercado</div>
+              <div className="text-white font-black text-sm">{t('Pen')}</div>
               <div className="text-white/50 text-[11px]">
-                1 {vm.pen.feedName} → {vm.pen.yield}× {vm.pen.outputName}
+                {t('1 {feed} → {n}× {output}', {
+                  feed: localizeItemName(vm.pen.feedName, locale),
+                  n: vm.pen.yield,
+                  output: localizeItemName(vm.pen.outputName, locale),
+                })}
               </div>
             </div>
             <div className="text-right text-[11px] text-white/60">
-              {vm.pen.unlocked ? `🥣 ${feedCount} ração` : `🔒 Nv. ${vm.pen.minLevel}`}
+              {vm.pen.unlocked
+                ? t('🥣 {n} feed', { n: feedCount })
+                : t('🔒 Lv. {n}', { n: vm.pen.minLevel })}
             </div>
           </div>
           {!vm.pen.unlocked ? (
-            <div className="mt-3 text-center text-white/40 text-[11px]">Destrava no nível {vm.pen.minLevel} de Fazenda</div>
+            <div className="mt-3 text-center text-white/40 text-[11px]">{t('Unlocks at Farm level {n}', { n: vm.pen.minLevel })}</div>
           ) : vm.pen.state === 'empty' ? (
             <button
               onClick={onPenFeed}
               disabled={busy || feedCount <= 0}
-              title={feedCount <= 0 ? 'Processe Ração na bancada (2 Trigo + 1 Água Pura)' : undefined}
+              title={feedCount <= 0 ? t('Process Feed at the bench (2 Wheat + 1 Pure Water)') : undefined}
               className="mt-3 w-full text-xs font-black text-white bg-orange-600 hover:bg-orange-500 rounded-lg px-3 py-2 disabled:opacity-40 transition-colors"
             >
-              🥣 Alimentar (1 {vm.pen.feedName})
+              {t('🥣 Feed (1 {feed})', { feed: localizeItemName(vm.pen.feedName, locale) })}
             </button>
           ) : vm.pen.state === 'growing' ? (
             <div className="mt-3 text-center text-amber-300/90 text-xs font-bold">⏳ {fmtCountdown(vm.pen.secondsLeft)}</div>
@@ -986,7 +1044,10 @@ export function FarmBoard({
               disabled={busy}
               className="mt-3 w-full text-xs font-black text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg px-3 py-2 disabled:opacity-40 transition-colors"
             >
-              🧺 Colher {vm.pen.yield}× {vm.pen.outputName}
+              {t('🧺 Harvest {n}× {output}', {
+                n: vm.pen.yield,
+                output: localizeItemName(vm.pen.outputName, locale),
+              })}
             </button>
           )}
         </div>

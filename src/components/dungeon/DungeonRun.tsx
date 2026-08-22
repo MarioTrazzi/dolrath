@@ -9,7 +9,9 @@ import DungeonBackdrop from '@/components/dungeon/DungeonBackdrop'
 import { buildTrailPoints, NarrationDialog, DiceOverlay } from '@/components/dungeon/DungeonMap'
 import WalkScene, { WALK_SCROLL_MS, type WalkMode, type WalkTrailMark } from '@/components/dungeon/WalkScene'
 import DungeonScene from '@/components/dungeon/scene/DungeonScene'
-import { useT } from '@/lib/i18n/I18nProvider'
+import { useT, useI18n } from '@/lib/i18n/I18nProvider'
+import { pickName } from '@/lib/i18n/names'
+import { localizeItemName } from '@/lib/i18n/catalog'
 import { useIdleScheduler } from '@/hooks/useIdleScheduler'
 import { generateSceneMap } from '@/lib/dungeonScene/generateMap'
 import { dungeonSceneEnabled } from '@/lib/dungeonScene/enabled'
@@ -211,23 +213,24 @@ const BOSS_STEP_COST = 6  // aproximar-se do covil
 const MINOR_MONSTER_CHANCE = 0.4
 
 // Falas de transição do Mestre entre as salas (genéricas, tom de RPG)
+// Chaves EN (i18n EN-as-key): a UI passa cada uma por t().
 const TRANSITIONS = [
-  'Você respira fundo e segue trilha adentro.',
-  'A vereda serpenteia entre raízes e sombras...',
-  'Mais fundo na masmorra, o ar fica denso e frio.',
-  'Galhos rangem acima; você avança com a lâmina à mão.',
-  'A névoa se abre por um instante, revelando o caminho.',
+  'You take a deep breath and head down the trail.',
+  'The path winds between roots and shadows...',
+  'Deeper into the dungeon, the air grows dense and cold.',
+  'Branches creak above; you press on with blade in hand.',
+  'The mist parts for a moment, revealing the way.',
 ]
 
 // Dicas do rodapé — uma é sorteada no início da run e some após ~30s. Empurram o
 // jogador pro loop de preparo (alquimista, ferreiro, aprimoramento) e relembram mecânicas.
 const TIPS: { icon: string; text: string }[] = [
-  { icon: '🧪', text: 'Não esqueça de passar na Alquimista e levar algumas poções para a aventura.' },
-  { icon: '⚒️', text: 'Compre suas armaduras no Ferreiro e aprimore-as para buscar recompensas maiores nos bosses das masmorras.' },
-  { icon: '⚡', text: 'A stamina se restaura sozinha: +2 a cada 15 min, após 15 min sem gastar.' },
-  { icon: '💊', text: 'A run joga sozinha — use o botão de poções para ligar ou desligar o uso automático de HP/MP entre os nós.' },
-  { icon: '✨', text: 'Salas principais (⚔️) têm monstro garantido e o melhor espólio — os bosses guardam os itens raros.' },
-  { icon: '🎒', text: 'Com o freio da mochila ligado, a run encerra sozinha quando o inventário enche — nada de queimar stamina por espólio que se perde.' },
+  { icon: '🧪', text: 'Do not forget to stop by the Alchemist and take some potions on the adventure.' },
+  { icon: '⚒️', text: 'Buy your armour at the Blacksmith and enhance it to chase bigger rewards from the dungeon bosses.' },
+  { icon: '⚡', text: 'Stamina restores on its own: +2 every 15 min, after 15 min without spending.' },
+  { icon: '💊', text: 'The run plays itself — use the potion button to turn automatic HP/MP use between nodes on or off.' },
+  { icon: '✨', text: 'Main rooms (⚔️) have a guaranteed monster and the best loot — the bosses guard the rare items.' },
+  { icon: '🎒', text: 'With the backpack brake on, the run ends by itself when the inventory fills — no burning stamina for loot that gets lost.' },
 ]
 
 const MONSTER_ID = 'dungeon-monster'
@@ -546,9 +549,10 @@ function computeMonsterOutcome(
 }
 
 // Lore do log: esquiva ou "defesa" (bloqueio passivo também narra como defesa).
+/** Chave EN do verbo de defesa — quem exibe passa por t(). */
 function defenseVerb(blocked?: boolean): string {
-  if (blocked) return 'bloqueou'
-  return Math.random() < 0.3 ? 'defendeu' : 'esquivou'
+  if (blocked) return 'blocked'
+  return Math.random() < 0.3 ? 'defended' : 'dodged'
 }
 
 /** Largura máxima da arena de combate na tela grande. */
@@ -690,6 +694,7 @@ export default function DungeonRun({
   // i18n: `t` era usado em tickPlayerTurn sem existir no escopo — quando a
   // transformação acabava em combate, o ReferenceError derrubava a run inteira.
   const t = useT()
+  const { locale } = useI18n()
   // 🃏 Modo carta. Sem a prop, quem manda é `?cards=1` na URL — lido só no efeito para
   // não divergir do HTML do servidor (a primeira pintura é sempre o menu de hoje).
   const [urlCards, setUrlCards] = useState(false)
@@ -1395,7 +1400,7 @@ export default function DungeonRun({
     setStopAfterFight(true)
     autoFarmRef.current = false
     setAutoFarm(false)
-    showBanner('🎒', 'Mochila cheia — a run encerra aqui para não perder mais espólio.', 4200, { sticky: true })
+    showBanner('🎒', t('🎒 Backpack full — the run ends here so no more loot is lost.'), 4200, { sticky: true })
   }, [showBanner])
 
   // Abre a sessão no servidor (uma vez). O servidor valida posse + gating e
@@ -1415,10 +1420,10 @@ export default function DungeonRun({
         if (!res.ok) {
           // Herói já rodando em outra aba/janela: bloqueia com tela dedicada.
           if (data?.code === 'HERO_IN_USE') {
-            setBlocked(data?.error || 'Este herói já está em uma masmorra em outra aba.')
+            setBlocked(data?.error || t('This hero is already in a dungeon in another tab.'))
             return
           }
-          showBanner('🚫', data?.error || 'Não foi possível entrar na masmorra')
+          showBanner('🚫', data?.error || t('Could not enter the dungeon'))
           return
         }
         runIdRef.current = data.runId
@@ -1440,11 +1445,11 @@ export default function DungeonRun({
             // a run ainda paga um nó que não podia guardar nada.
             maybeStopForFullBag()
           } else {
-            later(() => showBanner('🎒', 'Inventário cheio — itens encontrados não serão coletados. Abra espaço e saia para farmar de novo.', 3600, { sticky: true }), 400)
+            later(() => showBanner('🎒', t('🎒 Inventory full — items found will not be collected. Free up space and leave to farm again.'), 3600, { sticky: true }), 400)
           }
         }
       } catch {
-        showBanner('⚠️', 'Sem conexão com o servidor')
+        showBanner('⚠️', t('No connection to the server'))
       }
     })()
   }, [character.id, dungeon.id, showBanner, later, maybeStopForFullBag])
@@ -1502,13 +1507,13 @@ export default function DungeonRun({
       // 🔧 Manutenção: o drop caiu porque uma peça EQUIPADA está gasta. Sem dizer
       // isso, o jogador vê "mais um material" e não liga o espólio ao conserto.
       const maintTag = d.reason === 'spare'
-        ? ' 🔧 (reposição)'
+        ? t(' 🔧 (replacement)')
         : d.reason === 'maintenance' && d.forItem
         ? ` 🔧 (repara ${d.forItem})`
         : ''
       const label = (d.enhancement ? `${d.name} +${d.enhancement}` : d.name) + maintTag
       if (skippedNames.has(d.name)) {
-        pushLog(`🚫 Inventário cheio — ${label} foi perdido!`)
+        pushLog(t('🚫 Inventory full — {label} was lost!', { label }))
         continue
       }
       setTotals(prev => ({ ...prev, items: [...prev.items, { name: d.name, emoji: d.emoji, label }] }))
@@ -1517,7 +1522,7 @@ export default function DungeonRun({
       if (isHighlightDrop(d)) pushItemFloat(d.name, d.emoji, d.rarity)
     }
     if (skippedDrops && skippedDrops.length > 0) {
-      showBanner('🎒', 'Inventário cheio! Alguns itens não foram coletados.', 3600, { sticky: true })
+      showBanner('🎒', t('🎒 Inventory full! Some items were not collected.'), 3600, { sticky: true })
     }
   }, [pushFloat, pushItemFloat, pushLog, showBanner])
 
@@ -1598,7 +1603,7 @@ export default function DungeonRun({
   useEffect(() => {
     if (!runReady || !restorePaid || restorePaid <= 0) return
     pushLog(`⚗️ A Alquimista restaurou sua vida e mana por ${restorePaid} 🪙 antes desta run.`)
-    showBanner('⚗️', `Restauração paga: ${restorePaid} 🪙`, 2600)
+    showBanner('⚗️', t('Paid restoration: {gold} 🪙', { gold: restorePaid }), 2600)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runReady])
   // Transformação = buff simétrico por cima dos levers-base (×TRANSFORM_SCALE).
@@ -1739,7 +1744,7 @@ export default function DungeonRun({
       setHp(effMaxHp)
       setMp(character.maxMp)
       pushFloat('HP/MP cheios! ⛲', '#34d399')
-      pushLog('⛲ Você encontra uma fonte revitalizadora — HP e MP restaurados!')
+      pushLog(t('⛲ You find a reviving spring — HP and MP restored!'))
       return { def: { kind: 'blessing', min: 0, max: 0, icon: '⛲', title: '', description: '' } }
     }
 
@@ -1756,9 +1761,9 @@ export default function DungeonRun({
     const flavor = !anyDrop
       ? dungeon.ambience[Math.floor(Math.random() * dungeon.ambience.length)]
       : tier === 'high'
-        ? 'A sorte sorri: você vasculha e encontra algo valioso.'
+        ? t('Luck smiles: you rummage around and find something valuable.')
         : tier === 'mid'
-          ? 'Entre folhas e pedras, você recolhe o que dá.'
+          ? t('Among leaves and stones, you gather what you can.')
           : 'Pouca coisa — mas nada se perde.'
     pushLog(flavor)
     const revealKind: DungeonEventKind = hasGear ? 'item' : anyDrop ? 'gold' : 'nothing'
@@ -1846,8 +1851,8 @@ export default function DungeonRun({
       // o /start já reclama por conta própria).
       if (outcome.status === 0 && !runIdRef.current) return
       if (outcome.status === 400) showBanner('😮‍💨', `${outcome.data?.error || 'Stamina insuficiente'} — ela volta +2 a cada 15 min ocioso`)
-      else if (outcome.status === 0) showBanner('⚠️', 'Sem conexão com o servidor')
-      else showBanner('⚠️', outcome.data?.error || 'Falha ao avançar')
+      else if (outcome.status === 0) showBanner('⚠️', t('No connection to the server'))
+      else showBanner('⚠️', outcome.data?.error || t('Failed to advance'))
       return
     }
     const data = outcome.data
@@ -1870,7 +1875,7 @@ export default function DungeonRun({
         killDropsRef.current = data.killDrops ?? {}
         nodeLootRef.current = data.nodeLoot ?? null
         showNarration('A trilha desemboca no covil. O ar treme... algo antigo se ergue.')
-        pushLog(`👑 Você chegou ao covil de ${dungeon.boss.name}...`)
+        pushLog(t('👑 You reach the lair of {name}...', { name: pickName(dungeon.boss, locale) }))
         group = serverPackRef.current ?? (data.monster ? [data.monster] : [])
         setWalkTrailMarks(prev => {
           const aged = prev.map(m => ({ ...m, age: m.age + 1 })).filter(m => m.age < 5)
@@ -1998,12 +2003,12 @@ export default function DungeonRun({
       if (!res.ok) {
         setExploreRolling(false)
         if (res.status === 400) showBanner('😮‍💨', `${data?.error || 'Stamina insuficiente'} — ela volta +2 a cada 15 min ocioso`)
-        else showBanner('⚠️', data?.error || 'Falha ao avançar')
+        else showBanner('⚠️', data?.error || t('Failed to advance'))
         return
       }
     } catch {
       setExploreRolling(false)
-      showBanner('⚠️', 'Sem conexão com o servidor')
+      showBanner('⚠️', t('No connection to the server'))
       return
     }
 
@@ -2021,7 +2026,7 @@ export default function DungeonRun({
         killDropsRef.current = data.killDrops ?? {}
         nodeLootRef.current = data.nodeLoot ?? null
         showNarration('A trilha desemboca no covil. O ar treme... algo antigo se ergue.')
-        pushLog(`👑 Você chegou ao covil de ${dungeon.boss.name}...`)
+        pushLog(t('👑 You reach the lair of {name}...', { name: pickName(dungeon.boss, locale) }))
         group = serverPackRef.current ?? (data.monster ? [data.monster] : [])
       } else {
         const resolved = applyServerEvent(data, dest)
@@ -2045,9 +2050,9 @@ export default function DungeonRun({
   // `setTokenIdx(dest)` mais recente.
   const narrateArrivalAt = (idx: number) => {
     if (idx === LAST - 1) {
-      showNarration('A trilha termina adiante. Você sente um olhar antigo cravado em você...')
+      showNarration(t('The trail ends ahead. You feel an ancient gaze fixed on you...'))
     } else if (idx !== LAST) {
-      showNarration(TRANSITIONS[idx % TRANSITIONS.length])
+      showNarration(t(TRANSITIONS[idx % TRANSITIONS.length]))
     }
   }
 
@@ -2106,8 +2111,15 @@ export default function DungeonRun({
     setStage('initiative')
     pushLog(
       list.length > 1
-        ? `⚔️ Combate contra ${list.length} inimigos começou! (foco: ${active.emoji} ${active.name})`
-        : `⚔️ Combate contra ${active.emoji} ${active.name} começou!`
+        ? t('⚔️ Combat against {n} enemies has begun! (focus: {emoji} {name})', {
+            n: list.length,
+            emoji: active.emoji,
+            name: pickName(active, locale),
+          })
+        : t('⚔️ Combat against {emoji} {name} has begun!', {
+            emoji: active.emoji,
+            name: pickName(active, locale),
+          })
     )
   }
 
@@ -2142,7 +2154,7 @@ export default function DungeonRun({
     setMonster(next)
     monsterRef.current = next
     setFocusEnemyId(next.id)
-    pushLog(`🎯 Você foca ${next.emoji} ${next.name}.`)
+    pushLog(t('🎯 You focus {emoji} {name}.', { emoji: next.emoji, name: pickName(next, locale) }))
   }
 
   // ---------- Transformação (custa só MP; stamina é o orçamento diário) ----------
@@ -2150,7 +2162,7 @@ export default function DungeonRun({
     const cfg = TRANSFORMATION_CONFIG[type]
     if (!cfg || transform) return
     if (transformedThisFightRef.current) {
-      showBanner('🔒', 'Você já se transformou nesta luta!')
+      showBanner('🔒', t('You have already transformed in this fight!'))
       return
     }
     if (mp < cfg.cost.mp) {
@@ -2166,7 +2178,7 @@ export default function DungeonRun({
     // transformationType do FighterView, que já terá virado no próximo render).
     later(() => pushBattleEvent({ kind: 'transform', actorId: character.id }), 50)
     showBanner('✨', `${cfg.name} ativada! (${cfg.duration} turnos)`, 2800)
-    pushLog(`✨ Você assumiu a ${cfg.name}!`)
+    pushLog(t('✨ You took on the {name}!', { name: cfg.name }))
   }
 
   // Avança os contadores de transformação ao fim de cada turno ofensivo do jogador
@@ -2203,7 +2215,7 @@ export default function DungeonRun({
       const lost = hpRef.current - nh
       if (lost > 0) {
         pushFloat(`-${lost} ☠️`, '#7c3aed')
-        pushLog(`☠️ Você sofre ${lost} de dano contínuo (${dotLabels.join(' + ')})`)
+        pushLog(t('☠️ You take {n} continuous damage ({labels})', { n: lost, labels: dotLabels.join(' + ') }))
         setHp(prev => Math.max(1, prev - dot))
         // Anima o card a cada tique do DoT (veneno/sangramento) — antes o dano
         // acontecia sem nenhum efeito visível. Prioriza o veneno quando os dois
@@ -2257,8 +2269,11 @@ export default function DungeonRun({
       showBanner(
         playerFirst ? '⚡' : '😈',
         playerFirst
-          ? `Você começa! · Sorte ${mine.total}`
-          : `${monsterRef.current?.name} começa! · Sorte ${mine.total}`,
+          ? t('You go first! · Luck {n}', { n: mine.total })
+          : t('{name} goes first! · Luck {n}', {
+              name: monsterRef.current ? pickName(monsterRef.current, locale) : '',
+              n: mine.total,
+            }),
       )
       setDiceResults({})
       later(() => {
@@ -2281,7 +2296,7 @@ export default function DungeonRun({
   // ---------- Turno do jogador (Especial exige transformação, igual ao PvP) ----------
   const choosePlayerAttack = (kind: AttackKind) => {
     if (ATTACKS[kind].requiresTransform && !transform) {
-      showBanner('🔒', 'O Especial só pode ser usado transformado!')
+      showBanner('🔒', t('The Special can only be used while transformed!'))
       return
     }
     if (kind === 'weapon' && !unlocks.classAttack) {
@@ -2290,7 +2305,7 @@ export default function DungeonRun({
         choosePlayerAttack('basic')
         return
       }
-      showBanner('🔒', 'Aprenda o Ataque de Classe na árvore de habilidades!')
+      showBanner('🔒', t('Learn the Class Attack on the skill tree!'))
       return
     }
     const atkMp = kind === 'weapon' ? effWeaponMp : ATTACKS[kind].mp
@@ -2357,9 +2372,20 @@ export default function DungeonRun({
 
     // Log: UMA linha por golpe — só o jogador rola (dado-como-plus: a rolagem
     // multiplica o dano; o monstro esquiva por % pura, sem dado).
-    if (!outcome.hit) pushLog(`💨 d${outcome.sides}=${outcome.atkRoll} — ${m.name} ${defenseVerb()}! (evasão ${Math.round(mLev.evade * 100)}%)`)
-    else if (outcome.crit) pushLog(`💥 d${outcome.sides}=${outcome.atkRoll} CRÍTICO! ${outDmg} de dano em ${m.name}`)
-    else pushLog(`${atkDef.icon} d${outcome.sides}=${outcome.atkRoll} → ${outDmg} de dano em ${m.name}`)
+    if (!outcome.hit)
+      pushLog(t('💨 d{sides}={roll} — {name} {verb}! (evasion {pct}%)', {
+        sides: outcome.sides, roll: outcome.atkRoll, name: pickName(m, locale),
+        verb: t(defenseVerb()), pct: Math.round(mLev.evade * 100),
+      }))
+    else if (outcome.crit)
+      pushLog(t('💥 d{sides}={roll} CRITICAL! {dmg} damage to {name}', {
+        sides: outcome.sides, roll: outcome.atkRoll, dmg: outDmg, name: pickName(m, locale),
+      }))
+    else
+      pushLog(t('{icon} d{sides}={roll} → {dmg} damage to {name}', {
+        icon: atkDef.icon, sides: outcome.sides, roll: outcome.atkRoll,
+        dmg: outDmg, name: pickName(m, locale),
+      }))
 
     const newHp = Math.max(0, m.hp - outDmg)
     // Sincroniza o HP no alvo ativo E na entrada do pacote (roster mostra a barra certa).
@@ -2407,11 +2433,11 @@ export default function DungeonRun({
     const m = monsterRef.current
     if (!m || stage !== 'playerSelect' || !transformRef.current) return
     if (def.id === 'stunning_blow' && !unlocks.stunningBlow) {
-      showBanner('🔒', 'Aprenda o Golpe Atordoante na árvore de habilidades!')
+      showBanner('🔒', t('Learn the Stunning Blow on the skill tree!'))
       return
     }
     if (def.kind === 'util' && !unlocks.formBuff) {
-      showBanner('🔒', 'Aprenda o buff da forma na árvore de habilidades!')
+      showBanner('🔒', t('Learn the form buff on the skill tree!'))
       return
     }
     const fx = combatFxRef.current
@@ -2472,10 +2498,10 @@ export default function DungeonRun({
     if (def.immobilizeRoll && hit.maxRoll >= def.immobilizeRoll) {
       // 👑 Chefe resiste ao atordoamento — o gate de progressão do boss fica intocado.
       if (m.isBoss) {
-        pushLog(`👑 ${m.name} RESISTE ao atordoamento! (rolou ${hit.maxRoll})`)
+        pushLog(t('👑 {name} RESISTS the stun! (rolled {roll})', { name: pickName(m, locale), roll: hit.maxRoll }))
       } else {
         mfx.immobilizeTurns = 1
-        pushLog(`🌟 ${m.name} foi IMOBILIZADO! (rolou ${hit.maxRoll})`)
+        pushLog(t('🌟 {name} was IMMOBILISED! (rolled {roll})', { name: pickName(m, locale), roll: hit.maxRoll }))
         later(() => pushBattleEvent({ kind: 'status', actorId: m.id, action: 'stun' }), STATUS_FX_DELAY)
       }
     }
@@ -2483,7 +2509,10 @@ export default function DungeonRun({
     // action = id da habilidade (dragon_breath, super_nova...) → animação própria na arena
     pushBattleEvent({ kind: 'resolve', attackerId: character.id, defenderId: m.id, action: def.id, defenseAction: 'none', hit: true, damage: dmg, isCritical: hit.crit })
     const shown = specialName(def)
-    pushLog(`${shown} (d${def.die ?? 20}=${roll}): ${dmg} de dano${hit.crit ? ' CRÍTICO' : ''} em ${m.name}`)
+    pushLog(t('{label} (d{die}={roll}): {dmg} damage{crit} to {name}', {
+      label: shown, die: def.die ?? 20, roll, dmg,
+      crit: hit.crit ? t(' CRITICAL') : '', name: pickName(m, locale),
+    }))
     showBanner('💥', shown)
     later(() => {
       setMonster(prev => (prev && prev.id === m.id ? { ...prev, hp: newHp } : prev))
@@ -2510,7 +2539,7 @@ export default function DungeonRun({
       mfx.dots = mfx.dots.filter(d => d.turns > 0)
       const nh = Math.max(1, m.hp - total)
       if (total > 0) {
-        pushLog(`☠️ ${m.name} sofre ${m.hp - nh} de dano contínuo`)
+        pushLog(t('☠️ {name} takes {n} continuous damage', { name: pickName(m, locale), n: m.hp - nh }))
         m.hp = nh
         setMonster(prev => (prev && prev.id === m.id ? { ...prev, hp: nh } : prev))
         setPack(prev => prev.map(x => (x.id === m.id ? { ...x, hp: nh } : x)))
@@ -2531,7 +2560,7 @@ export default function DungeonRun({
       if (!cand) continue
       // 🤗 Abraço do Urso: inimigo imobilizado perde o turno
       const mfx = monsterFxRef.current[cand.id]
-      if (mfx && mfx.immobilizeTurns > 0) { mfx.immobilizeTurns--; pushLog(`🚫 ${cand.name} está imobilizado e perde o turno!`); continue }
+      if (mfx && mfx.immobilizeTurns > 0) { mfx.immobilizeTurns--; pushLog(t('🚫 {name} is immobilised and loses the turn!', { name: pickName(cand, locale) })); continue }
       next = cand; break
     }
     if (!next) { backToPlayerTurn(); return }
@@ -2550,7 +2579,7 @@ export default function DungeonRun({
     setFocusEnemyId(monsterRef.current?.id ?? null)
     if (combatFxRef.current.stunTurns > 0) {
       setCombatFx(prev => ({ ...prev, stunTurns: prev.stunTurns - 1 }))
-      pushLog('🌿 Você está preso pelas raízes e perde o turno!')
+      pushLog(t('🌿 You are held by the roots and lose the turn!'))
       showBanner('🌿', 'Imobilizado!')
       pushBattleEvent({ kind: 'status', actorId: character.id, action: 'stun' })
       later(() => startEnemyPhase(), 1400)
@@ -2580,7 +2609,13 @@ export default function DungeonRun({
     pendingMonsterEffectRef.current = proc ? special! : null
     // Rótulo do golpe pela ÓTICA do monstro (o ATTACKS.label é o nome dos botões do jogador).
     const foeLabel = proc ? special!.name : (kind === 'basic' ? 'Golpe' : kind === 'special' ? 'Golpe Especial' : 'Golpe Forte')
-    showBanner(m.emoji, proc ? `${m.name} usa ${foeLabel}!` : `${m.name} desfere um ${foeLabel}!`, 1800)
+    showBanner(
+      m.emoji,
+      proc
+        ? t('{name} uses {move}!', { name: pickName(m, locale), move: foeLabel })
+        : t('{name} unleashes a {move}!', { name: pickName(m, locale), move: foeLabel }),
+      1800,
+    )
     // O monstro ataca AUTOMÁTICO (sem clique/dado do jogador): resolve sozinho e segue pro
     // próximo da fila. A reação do jogador é uma defesa OCULTA (calculada, não rolada).
     setStage('busy')
@@ -2594,7 +2629,7 @@ export default function DungeonRun({
     const isBuff = c.atk > 0 || c.def > 0 || c.dodge > 0
     // 🪶 Poção de Reviver: nunca se usa manualmente — é consumida sozinha ao cair.
     if (c.revive > 0) {
-      showBanner('🪶', 'Guardada: age sozinha se você cair em combate')
+      showBanner('🪶', t('Saved: acts on its own if you fall in combat'))
       return
     }
     /**
@@ -2635,17 +2670,17 @@ export default function DungeonRun({
     const hpFull = hpRef.current >= effMaxHp
     const mpFull = mp >= character.maxMp
     if ((c.hp > 0 && c.mp === 0 && hpFull) || (c.mp > 0 && c.hp === 0 && mpFull)) {
-      showBanner('✋', 'Recurso já está cheio')
+      showBanner('✋', t('Resource is already full'))
       return
     }
     // 🧉 Antídoto: só consome se houver veneno pra curar (não desperdiça o item à toa).
     if (c.cure === 'poison' && !combatFxRef.current.poisoned) {
-      showBanner('✋', 'Você não está envenenado')
+      showBanner('✋', t('You are not poisoned'))
       return
     }
     // 🩹 Bandagem de Linho: idem para o sangramento.
     if (c.cure === 'bleed' && !combatFxRef.current.bleeding) {
-      showBanner('✋', 'Você não está sangrando')
+      showBanner('✋', t('You are not bleeding'))
       return
     }
     // Buffs mapeados nos combatFx que as habilidades de forma já usam. O +1 nos turnos
@@ -2752,18 +2787,20 @@ export default function DungeonRun({
     // rolagem oculta máxima (esquiva total garantida), que merece destaque.
     if (!outcome.hit) {
       pushLog(outcome.defRoll >= outcome.sides
-        ? `✨ ESQUIVA TOTAL! Você evitou o golpe de ${m.name} (rolagem máxima)`
-        : `💨 Você ${defenseVerb()} o golpe de ${m.name}! (0 de dano)`)
+        ? t('✨ TOTAL DODGE! You avoided the blow from {name} (max roll)', { name: pickName(m, locale) })
+        : t('💨 You {verb} the blow from {name}! (0 damage)', {
+            verb: t(defenseVerb()), name: pickName(m, locale),
+          }))
     } else if (outcome.blocked) {
-      pushLog(`🛡️ Você bloqueou o golpe de ${m.name}! Sofreu ${inDmg} (armadura reforçada)`)
+      pushLog(t('🛡️ You blocked the blow from {name}! Took {dmg} (reinforced armour)', { name: pickName(m, locale), dmg: inDmg }))
     } else {
-      pushLog(`🩸 ${m.name} causou ${inDmg} de dano em você`)
+      pushLog(t('🩸 {name} dealt {dmg} damage to you', { name: pickName(m, locale), dmg: inDmg }))
     }
     if (!outcome.hit && dfx.counterNext) {
       const counter = Math.max(1, Math.round((outcome.damage || monsterPowerFor(m, kind)) * 0.5))
       const mfx = (monsterFxRef.current[m.id] ||= { dots: [], immobilizeTurns: 0 })
       const mhp = Math.max(0, m.hp - counter)
-      pushLog(`↩️ Contra-ataque! ${counter} de dano em ${m.name}`)
+      pushLog(t('↩️ Counter-attack! {dmg} damage to {name}', { dmg: counter, name: pickName(m, locale) }))
       later(() => { setMonster(prev => (prev && prev.id === m.id ? { ...prev, hp: mhp } : prev)); setPack(prev => prev.map(x => (x.id === m.id ? { ...x, hp: mhp } : x))); packRef.current = packRef.current.map(x => (x.id === m.id ? { ...x, hp: mhp } : x)) }, 400)
       void mfx
       setCombatFx(prev => ({ ...prev, counterNext: false }))
@@ -2787,7 +2824,7 @@ export default function DungeonRun({
         }).catch(() => {})
         later(() => {
           setHp(back)
-          showBanner('🪶', `${reviver.name}! Você volta à luta com ${back} HP`, 2600)
+          showBanner('🪶', t('{name}! You are back in the fight with {hp} HP', { name: localizeItemName(reviver.name, locale), hp: back }), 2600)
           pushLog(`🪶 ${reviver.name} te trouxe de volta (${back} HP)!`)
           pushFloat(`+${back} 🪶`, '#fbbf24')
         }, 1000)
@@ -2809,16 +2846,16 @@ export default function DungeonRun({
       if (proc.effect === 'poison' && !dfx.poisoned) {
         setCombatFx(prev => ({ ...prev, poisoned: true, poisonDmg: proc.poisonDmg ?? 4 }))
         later(() => pushBattleEvent({ kind: 'status', actorId: character.id, action: 'poison' }), STATUS_FX_DELAY)
-        pushLog(`☠️ ${proc.name} te envenenou! Perde ${proc.poisonDmg ?? 4} HP por turno até usar um Antídoto.`)
+        pushLog(t('☠️ {name} poisoned you! You lose {dmg} HP per turn until you use an Antidote.', { name: pickName(proc, locale), dmg: proc.poisonDmg ?? 4 }))
         showBanner('☠️', 'Envenenado!')
       } else if (proc.effect === 'bleed' && !dfx.bleeding) {
         setCombatFx(prev => ({ ...prev, bleeding: true, bleedFrac: proc.bleedFrac ?? 0.04 }))
         later(() => pushBattleEvent({ kind: 'status', actorId: character.id, action: 'bleed' }), STATUS_FX_DELAY)
-        pushLog(`🩸 ${proc.name} abriu um corte! Você está sangrando até usar uma Bandagem de Linho.`)
+        pushLog(t('🩸 {name} opened a cut! You are bleeding until you use a Linen Bandage.', { name: pickName(proc, locale) }))
       } else if (proc.effect === 'stun') {
         setCombatFx(prev => ({ ...prev, stunTurns: prev.stunTurns + (proc.stunTurns ?? 1) }))
         later(() => pushBattleEvent({ kind: 'status', actorId: character.id, action: 'stun' }), STATUS_FX_DELAY)
-        pushLog(`💫 ${proc.name} te atordoou! Você perde o próximo turno.`)
+        pushLog(t('💫 {name} stunned you! You lose the next turn.', { name: pickName(proc, locale) }))
       } else if (proc.effect === 'damage') {
         pushLog(`💥 ${proc.name}! Um golpe brutal.`)
       }
@@ -2853,11 +2890,11 @@ export default function DungeonRun({
       const after = Math.max(0, before - (eq.slot === 'WEAPON' ? weaponWear : gearWear))
       if (after === before) return eq
       if (after === 0) {
-        pushLog(`💔 ${eq.item?.name ?? 'Equipamento'} QUEBROU! Sem bônus até reparar no ferreiro.`)
+        pushLog(t('💔 {name} BROKE! No bonus until repaired at the blacksmith.', { name: eq.item?.name ? localizeItemName(eq.item.name, locale) : t('Equipment') }))
         showBanner('💔', `${eq.item?.name ?? 'Equipamento'} quebrou!`, 2600)
       } else if (isLowDurability({ durability: after }) && !wearWarnedRef.current.has(eq.slot)) {
         wearWarnedRef.current.add(eq.slot)
-        pushLog(`⚠️ ${eq.item?.name ?? 'Equipamento'} está quase quebrando (${after}/${eq.maxDurability}).`)
+        pushLog(t('⚠️ {name} is almost broken ({cur}/{max}).', { name: eq.item?.name ? localizeItemName(eq.item.name, locale) : t('Equipment'), cur: after, max: eq.maxDurability }))
       }
       return { ...eq, durability: after }
     }))
@@ -2876,8 +2913,8 @@ export default function DungeonRun({
       setHp(effMaxHp)
       setMp(character.maxMp)
       setLevelUpFlash(reachedLevel)
-      showBanner('⭐', `Nível ${reachedLevel}! HP e MP restaurados`, 3200)
-      pushLog('🎉 Você SUBIU DE NÍVEL! HP e MP restaurados por completo.')
+      showBanner('⭐', t('Level {n}! HP and MP restored', { n: reachedLevel }), 3200)
+      pushLog(t('🎉 You LEVELED UP! HP and MP fully restored.'))
       later(() => setLevelUpFlash(null), 2600)
     }, 1500)
   }
@@ -2944,10 +2981,10 @@ export default function DungeonRun({
       encounterXpRef.current += m.xpReward
       encounterKillGoldRef.current += m.goldReward
       setTotals(prev => ({ ...prev, gold: prev.gold + m.goldReward, xp: prev.xp + m.xpReward, kills: prev.kills + 1 }))
-      pushLog(`🏆 Você derrotou ${m.emoji} ${m.name}! +${m.goldReward} 💰 +${m.xpReward} XP`)
+      pushLog(t('🏆 You defeated {emoji} {name}! +{gold} 💰 +{xp} XP', { emoji: m.emoji, name: pickName(m, locale), gold: m.goldReward, xp: m.xpReward }))
       checkLocalLevelUp()
       const next = weakestOf(remaining)
-      showBanner('🗡️', `${m.name} caiu! Restam ${remaining.length}.`, 1800)
+      showBanner('🗡️', t('{name} fell! {n} remaining.', { name: pickName(m, locale), n: remaining.length }), 1800)
       if (next) { setMonster(next); monsterRef.current = next }
       later(() => {
         setDiceResults({})
@@ -2978,7 +3015,7 @@ export default function DungeonRun({
     encounterKillGoldRef.current += killGold
 
     setTotals(prev => ({ ...prev, gold: prev.gold + killGold, xp: prev.xp + xp, kills: prev.kills + 1 }))
-    pushLog(`🏆 Você derrotou ${m.emoji} ${m.name}! +${killGold} 💰 +${xp} XP`)
+    pushLog(t('🏆 You defeated {emoji} {name}! +{gold} 💰 +{xp} XP', { emoji: m.emoji, name: pickName(m, locale), gold: killGold, xp }))
 
     // ⚔️ Desgaste do gear: fórmula determinística (wearFor), a MESMA que o
     // servidor aplica no /finish — dá pra prever sem perguntar. Importa prever:
@@ -3015,7 +3052,7 @@ export default function DungeonRun({
       markNodeCleared(tokenIdxRef.current)
       setPhase('explore')
       if (m.isBoss) {
-        showBanner('👑', `${dungeon.name} conquistada!`, 2400)
+        showBanner('👑', t('👑 {name} conquered!', { name: pickName(dungeon, locale) }), 2400)
         finishRun(true)
       } else if (stopAfterFightRef.current) {
         // ⏳ Pedido durante a luta: encerra AQUI, antes de a narração soltar o
@@ -3023,8 +3060,8 @@ export default function DungeonRun({
         finishRun(false)
       } else {
         showNarration(nextIsBoss
-          ? 'A trilha termina adiante. Você sente um olhar antigo cravado em você...'
-          : TRANSITIONS[tokenIdx % TRANSITIONS.length])
+          ? t('The trail ends ahead. You feel an ancient gaze fixed on you...')
+          : t(TRANSITIONS[tokenIdx % TRANSITIONS.length]))
       }
     }, 2800)
   }
@@ -3051,7 +3088,7 @@ export default function DungeonRun({
       const res = await fetch(`/api/character/${character.id}/restore`, { method: 'POST' })
       const data = await res.json().catch(() => null)
       if (!res.ok) {
-        showBanner('⚗️', data?.error || 'A Alquimista não pôde restaurar você — farm encerrado.', 4200, { sticky: true })
+        showBanner('⚗️', data?.error || t('The Alchemist could not restore you — farming stopped.'), 4200, { sticky: true })
         // Falta de ouro tem tratamento PRÓPRIO no mapa (aviso + botão de pagar);
         // qualquer outra falha volta em silêncio, sem acusar bolso vazio.
         // Mesmo formato de `lib/buyGold` ("…insuficiente… precisa de N 🪙"), lido
@@ -3064,11 +3101,11 @@ export default function DungeonRun({
       if (data?.restored && data.cost > 0) {
         pushLog(`⚗️ A Alquimista restaurou sua vida e mana por ${data.cost} 🪙.`)
       } else if (data?.restored) {
-        pushLog(`⚗️ A Alquimista restaurou sua vida e mana — cortesia até o nível ${FREE_RESTORE_MAX_LEVEL}.`)
+        pushLog(t('⚗️ The Alchemist restored your health and mana — free up to level {n}.', { n: FREE_RESTORE_MAX_LEVEL }))
       }
       return { ok: true, cost: data?.cost ?? 0, gold: typeof data?.characterGold === 'number' ? data.characterGold : undefined }
     } catch {
-      showBanner('⚗️', 'Sem conexão com a Alquimista — farm encerrado.', 4200, { sticky: true })
+      showBanner('⚗️', t('No connection to the Alchemist — farming stopped.'), 4200, { sticky: true })
       return { ok: false, cost: 0 }
     }
   }
@@ -3153,20 +3190,20 @@ export default function DungeonRun({
       // lê logo depois do await do /finish, antes de o React ter recomposto.
       staminaRef.current = data.stamina
       setStamina(data.stamina)
-      if (back > 0) pushLog(`⚡ ${back} de stamina devolvida — o nó não chegou a ser jogado.`)
+      if (back > 0) pushLog(t('⚡ {n} stamina refunded — the node was never played.', { n: back }))
     }
     const gold = data.gold ?? 0
     const optimisticGold = totalsRef.current.gold
     if (gold < optimisticGold) {
-      pushLog(`💰 Teto diário de ouro atingido: a run rendeu ${gold} 💰 (de ${optimisticGold}).`)
+      pushLog(t('💰 Daily gold cap reached: the run yielded {gold} 💰 (out of {optimistic}).', { gold, optimistic: optimisticGold }))
       setTotals(prev => ({ ...prev, gold }))
     }
     const skipped = data.skippedDrops ?? []
     if (skipped.length > 0) {
       const names = new Set(skipped.map(d => d.name))
       setTotals(prev => ({ ...prev, items: prev.items.filter(i => !names.has(i.name)) }))
-      for (const d of skipped) pushLog(`🚫 Inventário cheio — ${d.name} foi perdido!`)
-      showBanner('🎒', `${skipped.length} item(ns) perdido(s): inventário cheio.`, 3600, { sticky: true })
+      for (const d of skipped) pushLog(t('🚫 Inventory full — {name} was lost!', { name: localizeItemName(d.name, locale) }))
+      showBanner('🎒', t('{n} item(s) lost: inventory full.', { n: skipped.length }), 3600, { sticky: true })
     }
     // Nível: o /finish é quem decide de verdade. Reconcilia nos DOIS sentidos —
     // sem isto, uma previsão local otimista (checkLocalLevelUp, calculada sobre um
@@ -3223,7 +3260,7 @@ export default function DungeonRun({
       // tentativa (o botão de sair, ou o /start seguinte drenando a run órfã).
       pendingResolveRef.current = resolve ?? null
       finishSentRef.current = false
-      showBanner('⚠️', 'Não deu para encerrar a run — o espólio será creditado na próxima entrada.', 4200, { sticky: true })
+      showBanner('⚠️', t('Could not finish the run — the loot will be credited on your next entry.'), 4200, { sticky: true })
     }
     // Tenta até 3x com backoff. Sem isso, o auto-pilot (que espera esta promessa
     // antes de reabrir a run) achava que encerrou e já batia um /start novo — a run
@@ -3298,8 +3335,8 @@ export default function DungeonRun({
     if (combatEnded) return
     setCombatEnded(true)
     closeRunOnServer('retreat')
-    pushLog('🏃 Você recua em segurança, levando o que conquistou.')
-    showBanner('🏃', 'Recuo seguro — XP e espólio dos abates preservados.', 2600)
+    pushLog(t('🏃 You retreat safely, keeping what you won.'))
+    showBanner('🏃', t('Safe retreat — XP and loot from the kills preserved.'), 2600)
     later(() => {
       setMonster(null)
       setPack([])
@@ -3352,14 +3389,14 @@ export default function DungeonRun({
     setStopAfterFight(true)
     setStopCaughtPaidStep(false)
     setExitConfirm(false)
-    showBanner('⏳', 'A run encerra ao fim desta luta — sem gastar stamina num nó novo.', 3000)
+    showBanner('⏳', t('The run ends after this fight — no stamina spent on a new node.'), 3000)
   }
 
   const finishRun = async (bossDefeated: boolean) => {
     setPhase('summary')
     closeRunOnServer(bossDefeated ? 'boss' : 'retreat')
     if (bossDefeated) {
-      pushLog(`👑 ${dungeon.name} conquistada!`)
+      pushLog(t('👑 {name} conquered!', { name: pickName(dungeon, locale) }))
       // Farm automático: boss vencido também reinicia a run (farm contínuo até a stamina acabar).
       if (autoFarm) {
         later(() => {
@@ -3418,8 +3455,7 @@ export default function DungeonRun({
           run só queimaria stamina (e o ouro da Alquimista) por espólio nenhum. */}
       {bagFullStop && (
         <div className="mb-1 rounded-lg border border-amber-300/30 bg-amber-500/10 px-3 py-1.5 text-[10px] leading-tight text-amber-100/85 max-w-[17rem]">
-          🎒 A mochila encheu — a run parou aqui e o farm automático foi desligado.
-          Libere espaço (ou compre slots) antes de voltar.
+          {t('🎒 The backpack filled up — the run stopped here and auto farm was turned off. Free up space (or buy slots) before coming back.')}
         </div>
       )}
       <button
@@ -3430,14 +3466,14 @@ export default function DungeonRun({
             : 'border-stone-600/60 bg-stone-800/60 text-stone-300 hover:bg-stone-700/60'
         }`}
       >
-        {autoFarm ? '🤖 Farm automático: LIGADO' : '🤖 Farm automático: DESLIGADO'}
+        {autoFarm ? t('🤖 Auto farm: ON') : t('🤖 Auto farm: OFF')}
       </button>
       <div className="text-[10px] leading-tight text-white/45 max-w-[16rem]">
         {autoFarm
           ? charLevel > FREE_RESTORE_MAX_LEVEL
             ? 'Refaz a run sozinho e paga a Alquimista para restaurar vida e mana entre elas.'
-            : `Refaz a run sozinho. A restauração é gratuita até o nível ${FREE_RESTORE_MAX_LEVEL}.`
-          : 'Você refaz a run na mão, com a vida e a mana que sobraram.'}
+            : t('Redoes the run on its own. Restoration is free up to level {n}.', { n: FREE_RESTORE_MAX_LEVEL })
+          : t('You redo the run by hand, with the health and mana you have left.')}
       </div>
       {/* 💸 O preço da conveniência com NÚMERO: a cobrança acontece no instante em
           que esta tela sai de cena, então sem isto o ouro sumia sem explicação. */}
@@ -3451,7 +3487,7 @@ export default function DungeonRun({
         >
           {cantAffordRestore
             ? `⚗️ Faltam ${nextRestore.cost - (heroGold ?? 0)} 🪙 para a Alquimista restaurar vida e mana (${nextRestore.cost} 🪙). Sem isso o farm para e volta ao mapa.`
-            : `⚗️ A Alquimista vai cobrar ~${nextRestore.cost} 🪙 para você entrar inteiro na próxima run.`}
+            : t('⚗️ The Alchemist will charge ~{cost} 🪙 for you to start the next run whole.', { cost: nextRestore.cost })}
         </div>
       )}
     </div>
@@ -3468,7 +3504,7 @@ export default function DungeonRun({
   const savingPill = showSaving && !leaving && (
     <div className="mb-3 flex justify-center">
       <span className="inline-flex items-center rounded-full border border-amber-300/40 bg-black/75 px-3 py-1 text-[10px] font-bold text-amber-200 backdrop-blur-sm animate-pulse">
-        ⏳ Salvando o espólio no servidor...
+        {t('⏳ Saving the loot on the server...')}
       </span>
     </div>
   )
@@ -3482,8 +3518,8 @@ export default function DungeonRun({
       // Empate favorece o jogador (mesmo critério do handleInitiativeRoll: mine >= theirs).
       const resultBanner = panelResult && theirs
         ? panelResult.total >= theirs.total
-          ? `Você começa! · Sorte ${panelResult.total}`
-          : `${foe?.name} começa! · Sorte ${panelResult.total}`
+          ? t('You go first! · Luck {n}', { n: panelResult.total })
+          : t('{name} goes first! · Luck {n}', { name: foe ? pickName(foe, locale) : '', n: panelResult.total })
         : null
       return {
         visible: true,
@@ -3800,7 +3836,7 @@ export default function DungeonRun({
     if (potion) return fire(() => useConsumable(potion), 450)
 
     if (stamina < stepCost(tokenIdx + 1)) {
-      showBanner('😮‍💨', 'Stamina insuficiente para o próximo passo — ela volta +2 a cada 15 min ocioso.', 3200)
+      showBanner('😮‍💨', t('😮‍💨 Not enough stamina for the next step — it comes back +2 every 15 idle min.'), 3200)
       return
     }
     return fire(advance, 800)
@@ -3839,7 +3875,7 @@ export default function DungeonRun({
       // Parada segura, e o aviso sai UMA vez (o efeito re-roda a cada dep).
       if (!autoWalkWarnedRef.current) {
         autoWalkWarnedRef.current = true
-        showBanner('😮‍💨', 'Stamina insuficiente para o próximo passo — ela volta +2 a cada 15 min ocioso.', 4000)
+        showBanner('😮‍💨', t('😮‍💨 Not enough stamina for the next step — it comes back +2 every 15 idle min.'), 4000)
       }
       return
     }
@@ -3926,7 +3962,7 @@ export default function DungeonRun({
             }}
           >
             <div className="text-5xl mb-3">🔒</div>
-            <h3 className="text-xl font-black text-white mb-2">Herói em uso</h3>
+            <h3 className="text-xl font-black text-white mb-2">{t('Hero in use')}</h3>
             <p className="text-sm text-textsec leading-snug mb-5">{blocked}</p>
             <button
               onClick={() => onExit({ ...exitPools(), stamina })}
@@ -4061,11 +4097,11 @@ export default function DungeonRun({
                 ⭐
               </motion.div>
               <div className="text-yellow-200 font-black text-3xl sm:text-5xl tracking-wide drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)]">
-                SUBIU DE NÍVEL!
+                {t('LEVELED UP!')}
               </div>
               {levelUpFlash > 0 && (
                 <div className="text-amber-300 font-black text-xl sm:text-2xl mt-1 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
-                  Nível {levelUpFlash}
+                  {t('Level {n}', { n: levelUpFlash })}
                 </div>
               )}
               <div className="text-emerald-200 font-bold text-sm sm:text-base mt-2 drop-shadow-[0_1px_6px_rgba(0,0,0,0.9)]">
@@ -4087,7 +4123,7 @@ export default function DungeonRun({
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-xl sm:text-2xl">{dungeon.emoji}</span>
             <div className="min-w-0">
-              <h2 className="text-white font-black text-sm sm:text-base truncate">{dungeon.name}</h2>
+              <h2 className="text-white font-black text-sm sm:text-base truncate">{pickName(dungeon, locale)}</h2>
               <div className="flex items-center gap-1">
                 {Array.from({ length: dungeon.rooms }).map((_, i) => {
                   const done = i + 1 <= mainsDone
@@ -4124,7 +4160,9 @@ export default function DungeonRun({
               <div title="Ouro farmado nesta masmorra">💰 {totals.gold}</div>
               {/* XP: a do personagem (já somada à da run) sobre a do próximo nível —
                   mostra quanto falta p/ subir. Ex.: 1452/3000 XP. */}
-              <div title={`Progresso de XP para o próximo nível${totals.xp > 0 ? ` (+${totals.xp} nesta run)` : ''}`}>
+              <div title={totals.xp > 0
+                ? t('XP progress to the next level (+{n} this run)', { n: totals.xp })
+                : t('XP progress to the next level')}>
                 ⭐ {(character.experience ?? 0) + totals.xp}
                 {character.nextLevelExperience ? `/${character.nextLevelExperience}` : ''} XP
                 {totals.xp > 0 && <span className="text-purple-300"> +{totals.xp}</span>}
@@ -4134,7 +4172,7 @@ export default function DungeonRun({
               <button
                 onClick={requestStop}
                 className="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-bold transition-colors"
-                title={phase === 'combat' ? 'Abandonar a batalha e sair (mantém recompensas)' : 'Sair da masmorra (mantém recompensas)'}
+                title={phase === 'combat' ? t('Abandon the battle and leave (keeps rewards)') : t('Leave the dungeon (keeps rewards)')}
               >
                 🚪 {phase === 'combat' ? 'Fugir' : 'Sair'}
               </button>
@@ -4159,8 +4197,8 @@ export default function DungeonRun({
           <div className="absolute top-1.5 inset-x-0 z-30 flex justify-center pointer-events-none px-3">
             <div className="rounded-full border border-amber-300/40 bg-black/75 px-3 py-1 text-[10px] font-bold text-amber-200 backdrop-blur-sm">
               {bagFullStop
-                ? '🎒 Mochila cheia — encerrando sem gastar stamina num nó novo'
-                : '⏳ Encerrando ao fim desta luta — sem gastar stamina num nó novo'}
+                ? t('🎒 Backpack full — ending without spending stamina on a new node')
+                : t('⏳ Ending after this fight — no stamina spent on a new node')}
             </div>
           </div>
         )}
@@ -4282,14 +4320,14 @@ export default function DungeonRun({
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-3">
-                <h3 className="font-black text-white text-lg">🧪 Consumíveis</h3>
+                <h3 className="font-black text-white text-lg">{t('🧪 Consumables')}</h3>
                 <div className="flex gap-3 text-xs font-combat">
                   <span className="text-emerald-400">❤️ {Math.round(hp)}/{effMaxHp}</span>
                   <span className="text-blue-400">🔮 {mp}/{character.maxMp}</span>
                 </div>
               </div>
               {consumables.length === 0 ? (
-                <p className="text-textsec text-sm text-center py-6">Nenhum consumível restaurador no inventário.</p>
+                <p className="text-textsec text-sm text-center py-6">{t('No restoring consumable in the inventory.')}</p>
               ) : (
                 <div className="space-y-2 max-h-72 overflow-y-auto">
                   {consumables.map(c => {
@@ -4314,7 +4352,7 @@ export default function DungeonRun({
                           </span>
                           <div className="min-w-0">
                             <div className="text-white text-sm font-bold truncate">
-                              {c.name} <span className="text-textsec font-normal">×{c.qty}</span>
+                              {localizeItemName(c.name, locale)} <span className="text-textsec font-normal">×{c.qty}</span>
                             </div>
                             <div className="text-textsec text-[11px]">
                               {c.hp > 0 ? `+${c.hp} ❤️` : ''}{c.hp > 0 && c.mp > 0 ? ' • ' : ''}{c.mp > 0 ? `+${c.mp} 🔮` : ''}
@@ -4383,10 +4421,10 @@ export default function DungeonRun({
                   {phase === 'combat' ? 'Fugir da batalha?' : 'Sair da masmorra?'}
                 </h3>
                 <p className="text-xs text-textsec leading-snug mb-4">
-                  A run está pausada. Tudo que você já ganhou está salvo — a stamina se restaura sozinha (+2 a cada 15 min ocioso).
+                  {t('The run is paused. Everything you have earned is saved — stamina restores on its own (+2 every 15 idle min).')}
                   {stopCaughtPaidStep && (
                     <span className="block mt-1 text-amber-200/90">
-                      ⚡ O passo em curso já foi cobrado — como você não vai jogar esse nó, a stamina volta ao sair.
+                      {t('⚡ The step in progress was already charged — since you will not play that node, the stamina comes back when you leave.')}
                     </span>
                   )}
                 </p>
@@ -4399,7 +4437,9 @@ export default function DungeonRun({
                     <span className="text-red-300">⚔️ {totals.kills}</span>
                   </div>
                   <div className="text-[10px] uppercase tracking-wider text-textsec/70 font-bold mb-1.5">
-                    Espólio coletado {totals.items.length > 0 ? `(${totals.items.length})` : ''}
+                    {totals.items.length > 0
+                      ? t('Loot collected ({n})', { n: totals.items.length })
+                      : t('Loot collected')}
                   </div>
                   {totals.items.length === 0 ? (
                     <p className="text-textsec/70 text-xs py-2 text-center">Nenhum item coletado ainda.</p>
@@ -4491,14 +4531,14 @@ export default function DungeonRun({
                   transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
                 />
                 <h3 className="text-base font-black text-white mb-1">
-                  {leaving === 'rerun' ? 'Preparando a próxima run...' : 'Salvando o espólio da run...'}
+                  {leaving === 'rerun' ? t('Preparing the next run...') : t('Saving the run loot...')}
                 </h3>
                 <p className="text-[11px] leading-snug text-textsec">
-                  Creditando ouro, XP e itens no seu herói.
+                  {t('Crediting gold, XP and items to your hero.')}
                 </p>
                 {leavingSlow && (
                   <p className="mt-2 text-[11px] leading-snug text-amber-200/90">
-                    Está demorando mais que o normal — não feche a aba, nada foi perdido.
+                    {t('Taking longer than usual — do not close the tab, nothing was lost.')}
                   </p>
                 )}
               </div>
@@ -4590,7 +4630,7 @@ export default function DungeonRun({
                           <span className="shrink-0 text-base leading-none">{TIPS[tipIdx].icon}</span>
                           <span className="text-[11px] leading-snug text-amber-100/80">
                             <span className="font-bold text-amber-200/90">Dica: </span>
-                            {TIPS[tipIdx].text}
+                            {t(TIPS[tipIdx].text)}
                           </span>
                         </div>
                       </motion.div>
@@ -4603,14 +4643,14 @@ export default function DungeonRun({
                       onClick={requestStop}
                       /* Sem `disabled` de propósito: parar a run é justamente o
                          que se quer PODER fazer no meio da caminhada. */
-                      title="Sair da masmorra (mantém recompensas)"
+                      title={t('Leave the dungeon (keeps rewards)')}
                       className="shrink-0 w-11 h-11 grid place-items-center rounded-xl border border-white/10 bg-black/50 backdrop-blur-xl text-textsec hover:text-white hover:border-white/25 transition-colors active:scale-95"
                     >
                       🚪
                     </button>
                     <button
                       onClick={() => setAutoConsumables(v => !v)}
-                      title={autoConsumables ? 'Poções automáticas ON — clique para desligar' : 'Poções automáticas OFF — clique para ligar'}
+                      title={autoConsumables ? t('Automatic potions ON — click to turn off') : t('Automatic potions OFF — click to turn on')}
                       className={`shrink-0 w-11 h-11 grid place-items-center rounded-xl border transition-colors active:scale-95 relative ${
                         autoConsumables
                           ? 'bg-emerald-600/85 border-emerald-300/60 text-white'
@@ -4624,7 +4664,7 @@ export default function DungeonRun({
                       onClick={() => setStopWhenFull(v => !v)}
                       title={stopWhenFull
                         ? 'Encerrar a run quando a mochila encher — clique para desligar'
-                        : 'A run segue mesmo de mochila cheia (o espólio se perde) — clique para ligar o freio'}
+                        : t('The run continues even with a full backpack (the loot is lost) — click to turn the brake on')}
                       className={`shrink-0 w-11 h-11 grid place-items-center rounded-xl border transition-colors active:scale-95 relative ${
                         stopWhenFull
                           ? 'bg-amber-600/85 border-amber-300/60 text-white'
@@ -4637,7 +4677,7 @@ export default function DungeonRun({
                     <button
                       onClick={() => { loadConsumables(); setShowItems(true) }}
                       disabled={exploreRolling || walkBusy}
-                      title="Usar consumível (HP/MP)"
+                      title={t('Use consumable (HP/MP)')}
                       className="shrink-0 w-11 h-11 grid place-items-center rounded-xl border border-white/10 bg-black/50 backdrop-blur-xl text-textsec hover:text-white hover:border-white/25 transition-colors active:scale-95 disabled:opacity-40 relative"
                     >
                       🧪
@@ -4678,7 +4718,7 @@ export default function DungeonRun({
                               : nextMainNode
                                 ? `⚔️ Sala ${trailPoints[tokenIdx + 1]?.tier}`
                                 : useScene
-                                  ? '⏩ Avançar agora'
+                                  ? t('⏩ Advance now')
                                   : 'Seguir a trilha'}
                     </button>
                   </div>
@@ -4739,7 +4779,7 @@ export default function DungeonRun({
               key: 'basic',
               label: ATTACKS.basic.label,
               locked: mp < ATTACKS.basic.mp,
-              sub: `d${PVE_DIE.basic} • grátis`,
+              sub: t('d{n} • free', { n: PVE_DIE.basic }),
               onPick: () => choosePlayerAttack('basic'),
             },
             ...(unlocks.classAttack
@@ -4774,8 +4814,8 @@ export default function DungeonRun({
                   emoji: ATTACKS.basic.icon,
                   tone: 'basic',
                   die: PVE_DIE.basic,
-                  costLabel: 'grátis',
-                  effectLine: 'Ataque livre — não gasta MP.',
+                  costLabel: t('free'),
+                  effectLine: t('Free attack — costs no MP.'),
                   locked: mp < ATTACKS.basic.mp,
                   onPlay: () => choosePlayerAttack('basic'),
                 },
@@ -4832,10 +4872,10 @@ export default function DungeonRun({
                       used: transformedThisFight && !transform,
                       disabled: transformDisabled,
                       title: transformedThisFight
-                        ? 'Transformação já usada nesta luta (1× por luta)'
+                        ? t('Transformation already used in this fight (1× per fight)')
                         : singleForm
                           ? `${singleForm.cost.mp} MP • ${singleForm.duration} turnos`
-                          : `${transformForms.length} formas disponíveis`,
+                          : t('{n} forms available', { n: transformForms.length }),
                       buttonLabel: transformedThisFight ? 'Transf. usada' : 'Transformar',
                       costHint: !transformedThisFight
                         ? (singleForm ? `${singleForm.cost.mp}MP` : `${transformForms.length} formas`)
@@ -4864,7 +4904,7 @@ export default function DungeonRun({
                   <button
                     type="button"
                     onClick={handleRetreat}
-                    title="Recuar em segurança — você mantém o XP e o espólio dos inimigos já derrotados."
+                    title={t('Retreat safely — you keep the XP and the loot from the enemies already defeated.')}
                     className="px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white whitespace-nowrap transition-all shadow-lg bg-gradient-to-r from-slate-600 to-slate-500 hover:scale-105"
                   >
                     Recuar
@@ -4877,7 +4917,7 @@ export default function DungeonRun({
                     <button
                       type="button"
                       onClick={() => setAutoCombat(v => !v)}
-                      title={autoCombat ? 'Desligar o piloto do combate — escolha alvo e ataque na mão' : 'Ligar o piloto do combate — joga os turnos por você'}
+                      title={autoCombat ? t('Turn off the combat pilot — pick target and attack by hand') : t('Turn on the combat pilot — plays the turns for you')}
                       className={`px-3 py-1.5 rounded-full text-[10px] font-black border transition-colors ${
                         autoCombat
                           ? 'bg-blue-600/90 border-blue-300/60 text-white shadow-lg shadow-blue-900/50'
@@ -4889,7 +4929,7 @@ export default function DungeonRun({
                     <button
                       type="button"
                       onClick={() => setAutoConsumables(v => !v)}
-                      title={autoConsumables ? 'Poções automáticas ON — clique para desligar' : 'Poções automáticas OFF — clique para ligar'}
+                      title={autoConsumables ? t('Automatic potions ON — click to turn off') : t('Automatic potions OFF — click to turn on')}
                       className={`px-3 py-1.5 rounded-full text-[10px] font-black border transition-colors ${
                         autoConsumables
                           ? 'bg-emerald-600/85 border-emerald-300/60 text-white'
@@ -4903,7 +4943,7 @@ export default function DungeonRun({
                       onClick={() => setStopWhenFull(v => !v)}
                       title={stopWhenFull
                         ? 'Encerrar a run quando a mochila encher — clique para desligar'
-                        : 'A run segue mesmo de mochila cheia (o espólio se perde) — clique para ligar o freio'}
+                        : t('The run continues even with a full backpack (the loot is lost) — click to turn the brake on')}
                       className={`px-3 py-1.5 rounded-full text-[10px] font-black border transition-colors ${
                         stopWhenFull
                           ? 'bg-amber-600/85 border-amber-300/60 text-white'
@@ -4918,14 +4958,14 @@ export default function DungeonRun({
               statusContent={
                 combatEnded ? (
                   <div className="text-white/70 text-sm font-bold animate-pulse">
-                    {winnerId === character.id ? '🏆 Vitória! Coletando recompensas...' : '💀 Derrotado...'}
+                    {winnerId === character.id ? t('🏆 Victory! Collecting rewards...') : t('💀 Defeated...')}
                   </div>
                 ) : stage === 'initiative' || stage === 'playerRoll' ? (
                   <div className="text-white/60 text-xs sm:text-sm font-bold">
                     🎲 {hasRolled ? 'Rolando...' : 'Clique no dado na arena para rolar!'}
                   </div>
                 ) : (
-                  <div className="text-white/50 text-xs sm:text-sm font-bold animate-pulse">⚔️ Resolvendo ação...</div>
+                  <div className="text-white/50 text-xs sm:text-sm font-bold animate-pulse">{t('⚔️ Resolving action...')}</div>
                 )
               }
               aboveLog={
@@ -5005,8 +5045,8 @@ export default function DungeonRun({
               >
                 🏆
               </motion.div>
-              <h3 className="text-white font-black text-2xl mb-1">{dungeon.name}</h3>
-              <p className="text-white/60 text-xs mb-5">Expedição concluída!</p>
+              <h3 className="text-white font-black text-2xl mb-1">{pickName(dungeon, locale)}</h3>
+              <p className="text-white/60 text-xs mb-5">{t('Expedition complete!')}</p>
 
               <div className="grid grid-cols-3 gap-2 mb-4">
                 <div className="bg-white/5 border border-white/15 rounded-xl py-2.5">
@@ -5019,7 +5059,7 @@ export default function DungeonRun({
                 </div>
                 <div className="bg-white/5 border border-white/15 rounded-xl py-2.5">
                   <div className="text-red-300 font-black text-lg">{totals.kills}</div>
-                  <div className="text-white/50 text-[10px]">⚔️ Vitórias</div>
+                  <div className="text-white/50 text-[10px]">{t('⚔️ Victories')}</div>
                 </div>
               </div>
 
@@ -5058,8 +5098,8 @@ export default function DungeonRun({
                   animate={{ scale: 1 }}
                   className="mb-4 rounded-xl border border-yellow-500/40 bg-yellow-500/10 px-3 py-2"
                 >
-                  <div className="text-yellow-300 font-black text-sm">🎉 Você subiu de nível!</div>
-                  <div className="text-yellow-200/80 text-[11px]">Há pontos de atributo esperando para serem distribuídos.</div>
+                  <div className="text-yellow-300 font-black text-sm">{t('🎉 You leveled up!')}</div>
+                  <div className="text-yellow-200/80 text-[11px]">{t('There are attribute points waiting to be distributed.')}</div>
                 </motion.div>
               )}
 
@@ -5104,13 +5144,13 @@ export default function DungeonRun({
               className="text-center bg-black/85 backdrop-blur-md border-2 border-red-900 rounded-3xl px-8 sm:px-12 py-8 max-w-md shadow-2xl shadow-red-950/60"
             >
               <div className="text-6xl mb-3">💀</div>
-              <h3 className="text-red-400 font-black text-2xl mb-2">Você caiu...</h3>
+              <h3 className="text-red-400 font-black text-2xl mb-2">{t('You have fallen...')}</h3>
               <p className="text-white/60 text-xs mb-4">
-                Todo o XP, ouro e itens ganhos ficam guardados. Mas você sai daqui ferido:
+                {t('All the XP, gold and items earned are kept. But you leave here wounded:')}
                 {charLevel > FREE_RESTORE_MAX_LEVEL
-                  ? ' a Alquimista restaura vida e mana por um punhado de ouro — ou use suas poções.'
-                  : ` a Alquimista restaura vida e mana de graça até o nível ${FREE_RESTORE_MAX_LEVEL}.`}
-                {' '}A stamina se restaura sozinha (+2 a cada 15 min, após 15 min sem gastar).
+                  ? t(' the Alchemist restores health and mana for a handful of gold — or use your potions.')
+                  : t(' the Alchemist restores health and mana for free up to level {n}.', { n: FREE_RESTORE_MAX_LEVEL })}
+                {t(' Stamina restores on its own (+2 every 15 min, after 15 min without spending).')}
               </p>
               <div className="text-white/70 text-xs mb-5">
                 💰 {totals.gold} ouro • ⭐ {totals.xp} XP • 📦 {totals.items.length} itens — tudo salvo

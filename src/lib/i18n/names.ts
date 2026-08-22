@@ -15,3 +15,17 @@ export function pickTitle(
 ): string {
   return locale === 'en' && entry.titleEn ? entry.titleEn : entry.title
 }
+
+export function pickTagline(
+  entry: { tagline: string; taglineEn?: string },
+  locale: Locale
+): string {
+  return locale === 'en' && entry.taglineEn ? entry.taglineEn : entry.tagline
+}
+
+export function pickDescription(
+  entry: { description: string; descriptionEn?: string },
+  locale: Locale
+): string {
+  return locale === 'en' && entry.descriptionEn ? entry.descriptionEn : entry.description
+}

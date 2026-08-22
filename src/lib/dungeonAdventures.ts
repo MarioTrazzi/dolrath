@@ -84,7 +84,9 @@ export interface DungeonDef {
   nameEn?: string
   emoji: string
   tagline: string
+  taglineEn?: string
   description: string
+  descriptionEn?: string
   /** Salas PRINCIPAIS (monstro garantido + loot melhor) antes do boss */
   rooms: number
   /** Nós menores entre cada sala principal (chance reduzida de monstro, mais fracos) */
@@ -120,8 +122,11 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     nameEn: 'Gloomwood Forest',
     emoji: '🌲',
     tagline: 'Trilhas vivas sob a luz da lua',
+    taglineEn: 'Living trails under the moonlight',
     description:
       'Uma mata ancestral onde as árvores sussurram e vagalumes guiam — ou enganam — os viajantes. Fontes élficas escondidas curam quem as encontra.',
+    descriptionEn:
+      'An ancient wood where the trees whisper and fireflies guide — or mislead — travellers. Hidden elven springs heal those who find them.',
     rooms: 3,
     minorNodes: 2,
     levelReq: 1,
@@ -186,8 +191,11 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     nameEn: 'Crystal Cavern',
     emoji: '💎',
     tagline: 'Túneis que brilham no escuro',
+    taglineEn: 'Tunnels that glow in the dark',
     description:
       'Galerias profundas onde cristais pulsam com luz própria. Veios de ouro atraem mineradores — e as criaturas que os devoraram.',
+    descriptionEn:
+      'Deep galleries where crystals pulse with their own light. Veins of gold draw miners — and the creatures that devoured them.',
     rooms: 4,
     minorNodes: 2,
     levelReq: 10,
@@ -252,8 +260,11 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     nameEn: 'Cursed Swamp',
     emoji: '🐊',
     tagline: 'Névoa, lodo e luzes que mentem',
+    taglineEn: 'Mist, mire and lights that lie',
     description:
       'Um lamaçal coberto de névoa onde fogos-fátuos dançam sobre tesouros afundados. Cada passo pode ser o último — ou o mais rico.',
+    descriptionEn:
+      'A fog-covered mire where will-o-the-wisps dance above sunken treasure. Every step could be your last — or your richest.',
     rooms: 4,
     minorNodes: 3,
     levelReq: 25,
@@ -317,8 +328,11 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     nameEn: 'Arcane Ruins',
     emoji: '🏛️',
     tagline: 'Um império morto que ainda sonha',
+    taglineEn: 'A dead empire that still dreams',
     description:
       'Colunas partidas e altares cobertos de runas guardam o saber de um império extinto. Os mortos patrulham os corredores — e odeiam visitas.',
+    descriptionEn:
+      'Broken columns and rune-covered altars guard the lore of a vanished empire. The dead patrol the halls — and hate visitors.',
     rooms: 5,
     minorNodes: 3,
     levelReq: 40,

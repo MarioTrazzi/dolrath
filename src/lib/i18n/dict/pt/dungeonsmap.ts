@@ -41,4 +41,32 @@ export const DUNGEONSMAP_PT: Record<string, string> = {
     '❤️🔮 HP e MP voltam ao cheio entre runs. Você nunca perde XP, ouro ou itens ao morrer ou sair: cada tentativa te deixa mais forte.',
   'Main rooms (⚔️) have a guaranteed monster and better loot; the minor nodes between them are easier.':
     'Salas principais (⚔️) têm monstro garantido e melhor espólio; os nós menores entre elas são mais fáceis.',
+  'Could not restore.': 'Não foi possível restaurar.',
+  'Could not reach the Alchemist.': 'Não foi possível falar com a Alquimista.',
+  '🤖 Auto farm stopped — no gold for the Alchemist':
+    '🤖 Farm automático parado — sem gold para a Alquimista',
+  '🩸 You are gravely wounded': '🩸 Você está gravemente ferido',
+  '⚗️ Health or mana incomplete': '⚗️ Vida ou mana incompletas',
+  'The run ended and you had no gold to restore health and mana':
+    'A run terminou e você não tinha ouro para restaurar vida e mana',
+  ' (you were {missing} 🪙 short of {total} 🪙)': ' (faltavam {missing} 🪙 dos {total} 🪙)',
+  'Get gold — selling loot, gathering or in the arena — and click Restore to farm again.':
+    'Consiga ouro — vendendo espólio, na coleta ou na arena — e clique em Restaurar para voltar a farmar.',
+  'Health and mana do not recover on their own between runs — use potions or the Alchemist.':
+    'Vida e mana não se recuperam sozinhas entre as runs — use poções ou a Alquimista.',
+  ' Free restoration up to level {n}.': ' Restauração gratuita até o nível {n}.',
+  'Restoring…': 'Restaurando…',
+  '⚗️ Already whole': '⚗️ Já está inteiro',
+  '⚗️ Restore (free)': '⚗️ Restaurar (grátis)',
+  '⚗️ Restore ({cost} 🪙)': '⚗️ Restaurar ({cost} 🪙)',
+  '🔒 Hero in use in another tab': '🔒 Herói em uso em outra aba',
+  '⛏️ Hero gathering': '⛏️ Herói em coleta',
+  'Lv.{n}': 'Nv.{n}',
+  '💀 DEAD': '💀 MORTO',
+  'Lv. {n}+ rec.': 'Nv. {n}+ recom.',
+  'Tier': 'Tier',
+  'Tier {roman}': 'Tier {roman}',
+  'Tier {roman} — drops Concentrated Stone': 'Tier {roman} — dropa Pedra Concentrada',
+  '💎 Concentrated': '💎 Concentrada',
+  '{n} points to distribute ': '{n} pontos para distribuir ',
 }

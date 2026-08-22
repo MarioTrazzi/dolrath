@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
+import { useT, useI18n } from '@/lib/i18n/I18nProvider'
+import { pickName, pickTagline, pickDescription } from '@/lib/i18n/names'
 import DungeonRun, { DungeonCharacter } from '@/components/dungeon/DungeonRun'
 import DungeonBackdrop from '@/components/dungeon/DungeonBackdrop'
 import { DUNGEON_LIST, DungeonDef, monsterImagePath, MAX_DUNGEON_TIER, CONCENTRATED_MIN_TIER } from '@/lib/dungeonAdventures'
@@ -36,6 +38,8 @@ function BeastThumb({ name, image, emoji }: { name: string; image?: string; emoj
 }
 
 export default function DungeonsPage() {
+  const t = useT()
+  const { locale } = useI18n()
   const { data: session } = useSession()
   const router = useRouter()
   // Herói ATIVO global (navbar): a masmorra usa sempre o personagem selecionado.
@@ -212,7 +216,11 @@ export default function DungeonsPage() {
       const sessions: { characterId: string; status: string }[] = data?.sessions ?? []
       const busy = sessions.some((s) => s.characterId === hero.id && s.status === 'active')
       if (busy) {
-        setGatheringWarning(`${hero.name} está numa sessão de coleta. Encerre a coleta antes de entrar na masmorra.`)
+        setGatheringWarning(
+          t('{name} is in a gathering session. End gathering before entering the dungeon.', {
+            name: hero.name,
+          }),
+        )
         return
       }
       setActiveDungeon(dungeon)
@@ -277,7 +285,7 @@ export default function DungeonsPage() {
         }
       }
       if (!res.ok) {
-        setError(data?.error || 'Não foi possível restaurar.')
+        setError(data?.error || t('Could not restore.'))
         return
       }
       setRestoreBlocked(null)
@@ -286,7 +294,7 @@ export default function DungeonsPage() {
       setCharacters(prev => prev.map(c => (c.id === hero.id ? { ...c, ...patch } : c)))
       refreshActiveCharacter() // o ouro gasto aparece na navbar na hora
     } catch {
-      setError('Não foi possível falar com a Alquimista.')
+      setError(t('Could not reach the Alchemist.'))
     } finally {
       setRestoring(false)
     }
@@ -352,7 +360,7 @@ export default function DungeonsPage() {
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-textsec">Abrindo o mapa das masmorras...</p>
+          <p className="text-textsec">{t('Opening the dungeon map...')}</p>
         </div>
       </div>
     )
@@ -389,10 +397,12 @@ export default function DungeonsPage() {
             className="text-3xl sm:text-4xl font-black text-[#ece7da] mb-2"
             style={{ letterSpacing: '0.5px' }}
           >
-            ⚔️ Masmorras de Dolrath
+            ⚔️ {t('Dungeons of Dolrath')}
           </motion.h1>
           <p className="text-[#8a8a90] text-sm">
-            Quatro terras perigosas, um boss em cada uma. Explore com o d20, lute na arena e volte rico — ou não volte.
+            {t(
+              "Four dangerous lands, one boss in each. Explore with the d20, fight in the arena, and come back rich — or don't come back.",
+            )}
           </p>
         </div>
 
@@ -405,7 +415,10 @@ export default function DungeonsPage() {
                 className="px-4 py-2.5 rounded-[3px] border border-[#46464c] text-sm font-bold text-[#ece7da]"
                 style={{ background: PANEL_BG }}
               >
-                {selectedCharacter.name} <span style={{ color: GOLD_BRIGHT }}>(Nv.{selectedCharacter.level})</span>
+                {selectedCharacter.name}{' '}
+                <span style={{ color: GOLD_BRIGHT }}>
+                  ({t('Lv.{n}', { n: selectedCharacter.level })})
+                </span>
                 <span className="text-[#8a8a90] capitalize"> — {selectedCharacter.race} {selectedCharacter.class}</span>
               </div>
               {selectedCharacter && (
@@ -420,15 +433,15 @@ export default function DungeonsPage() {
                     <span>⭐ {(selectedCharacter as any).experience}/{(selectedCharacter as any).nextLevelExperience ?? '?'} XP</span>
                   )}
                   {(selectedCharacter as any).isAlive === false && (
-                    <span className="text-red-400 font-bold">💀 MORTO</span>
+                    <span className="text-red-400 font-bold">{t('💀 DEAD')}</span>
                   )}
                 </div>
               )}
             </>
           ) : (
             <div className="rounded-[3px] border px-6 py-4 text-center" style={{ borderColor: '#8a6d3b', background: 'linear-gradient(180deg, rgba(58,51,37,0.85), rgba(36,31,22,0.85))' }}>
-              <p className="font-bold text-sm mb-1" style={{ color: GOLD_BRIGHT }}>Nenhum personagem encontrado</p>
-              <p className="text-xs text-[#8a8a90]">Crie um personagem primeiro para explorar as masmorras.</p>
+              <p className="font-bold text-sm mb-1" style={{ color: GOLD_BRIGHT }}>{t('No character found')}</p>
+              <p className="text-xs text-[#8a8a90]">{t('Create a character first to explore the dungeons.')}</p>
             </div>
           )}
         </div>
@@ -454,10 +467,13 @@ export default function DungeonsPage() {
               ⭐
             </motion.span>
             <span className="font-black text-sm sm:text-base" style={{ color: GOLD_BRIGHT }}>
-              Você subiu de nível!{' '}
+              {t('You leveled up!')}{' '}
               {levelUpAlert.points > 0
-                ? `${levelUpAlert.points} ponto${levelUpAlert.points > 1 ? 's' : ''} a distribuir`
-                : 'Veja seus novos atributos'}
+                ? t(
+                    levelUpAlert.points > 1 ? '{n} points to distribute' : '{n} point to distribute',
+                    { n: levelUpAlert.points },
+                  )
+                : t('See your new attributes')}
             </span>
             <span className="font-black text-base group-hover:translate-x-1 transition-transform" style={{ color: GOLD }}>→</span>
           </motion.button>
@@ -492,20 +508,28 @@ export default function DungeonsPage() {
               <div className="text-xs">
                 <p className="font-bold text-sm" style={{ color: blocked || hurt ? '#e07a7a' : GOLD_BRIGHT }}>
                   {blocked
-                    ? '🤖 Farm automático parado — sem gold para a Alquimista'
-                    : hurt ? '🩸 Você está gravemente ferido' : '⚗️ Vida ou mana incompletas'}
+                    ? t('🤖 Auto farm stopped — no gold for the Alchemist')
+                    : hurt
+                      ? t('🩸 You are gravely wounded')
+                      : t('⚗️ Health or mana incomplete')}
                 </p>
                 <p className="text-[#8a8a90]">
                   {blocked ? (
                     <>
-                      A run terminou e você não tinha ouro para restaurar vida e mana
-                      {restoreBlocked ? ` (faltavam ${Math.max(0, restoreBlocked - (selectedCharacter.gold ?? 0))} 🪙 dos ${restoreBlocked} 🪙)` : ''}.
-                      Consiga ouro — vendendo espólio, na coleta ou na arena — e clique em Restaurar para voltar a farmar.
+                      {t('The run ended and you had no gold to restore health and mana')}
+                      {restoreBlocked
+                        ? t(' (you were {missing} 🪙 short of {total} 🪙)', {
+                            missing: Math.max(0, restoreBlocked - (selectedCharacter.gold ?? 0)),
+                            total: restoreBlocked,
+                          })
+                        : ''}
+                      .{' '}
+                      {t('Get gold — selling loot, gathering or in the arena — and click Restore to farm again.')}
                     </>
                   ) : (
                     <>
-                      Vida e mana não se recuperam sozinhas entre as runs — use poções ou a Alquimista.
-                      {free && ` Restauração gratuita até o nível ${FREE_RESTORE_MAX_LEVEL}.`}
+                      {t('Health and mana do not recover on their own between runs — use potions or the Alchemist.')}
+                      {free && t(' Free restoration up to level {n}.', { n: FREE_RESTORE_MAX_LEVEL })}
                     </>
                   )}
                 </p>
@@ -516,7 +540,13 @@ export default function DungeonsPage() {
                 className="shrink-0 px-5 py-2.5 rounded-[3px] font-black text-sm text-[#100d06] transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-60"
                 style={{ background: `linear-gradient(180deg, ${GOLD_BRIGHT}, ${GOLD})` }}
               >
-                {restoring ? 'Restaurando…' : alreadyFull ? '⚗️ Já está inteiro' : free ? '⚗️ Restaurar (grátis)' : `⚗️ Restaurar (${cost} 🪙)`}
+                {restoring
+                  ? t('Restoring…')
+                  : alreadyFull
+                    ? t('⚗️ Already whole')
+                    : free
+                      ? t('⚗️ Restore (free)')
+                      : t('⚗️ Restore ({cost} 🪙)', { cost })}
               </button>
             </div>
           )
@@ -524,16 +554,19 @@ export default function DungeonsPage() {
 
         {heroInUse && (
           <div className="rounded-[3px] border p-4 mb-6 text-center" style={{ borderColor: 'rgba(224,154,58,0.5)', background: 'rgba(58,45,22,0.5)' }}>
-            <p className="font-bold text-sm" style={{ color: '#e09a3a' }}>🔒 Herói em uso em outra aba</p>
+            <p className="font-bold text-sm" style={{ color: '#e09a3a' }}>{t('🔒 Hero in use in another tab')}</p>
             <p className="text-xs text-[#8a8a90]">
-              {lockedCharacterName ?? 'Outro personagem'} já está numa masmorra em outra aba/janela. Só dá pra explorar com um herói por vez — saia daquela sessão para liberá-lo (libera sozinho ~1 min após fechar).
+              {t(
+                '{name} is already in a dungeon in another tab/window. You can only explore with one hero at a time — leave that session to free it up (frees itself ~1 min after closing).',
+                { name: lockedCharacterName ?? t('Another character') },
+              )}
             </p>
           </div>
         )}
 
         {gatheringWarning && (
           <div className="rounded-[3px] border p-4 mb-6 text-center" style={{ borderColor: 'rgba(224,154,58,0.5)', background: 'rgba(58,45,22,0.5)' }}>
-            <p className="font-bold text-sm" style={{ color: '#e09a3a' }}>⛏️ Herói em coleta</p>
+            <p className="font-bold text-sm" style={{ color: '#e09a3a' }}>{t('⛏️ Hero gathering')}</p>
             <p className="text-xs text-[#8a8a90]">{gatheringWarning}</p>
           </div>
         )}
@@ -564,10 +597,10 @@ export default function DungeonsPage() {
                   <div>
                     <div className="text-4xl mb-2 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]">{dungeon.emoji}</div>
                     <h2 className="text-white font-black text-xl sm:text-2xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
-                      {dungeon.name}
+                      {pickName(dungeon, locale)}
                     </h2>
                     <p className="text-white/70 text-xs italic drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
-                      {dungeon.tagline}
+                      {pickTagline(dungeon, locale)}
                     </p>
                   </div>
                   <div className="text-right flex-shrink-0">
@@ -576,35 +609,38 @@ export default function DungeonsPage() {
                       <span className="text-white/25">{'★'.repeat(4 - dungeon.difficultyStars)}</span>
                     </div>
                     <div className="text-white/60 text-[10px] mt-0.5">
-                      {dungeon.rooms} salas + 👑
+                      {t('{n} rooms + 👑', { n: dungeon.rooms })}
                     </div>
-                    <div className="text-[10px] mt-0.5 font-bold text-white/50" title="Nível recomendado — a masmorra é acessível em qualquer nível, mas o boss exige estar por perto.">
-                      Nv. {dungeon.levelReq}+ recom.
+                    <div className="text-[10px] mt-0.5 font-bold text-white/50" title={t('Recommended level — the dungeon is accessible at any level, but the boss requires being close to it.')}>
+                      {t('Lv. {n}+ rec.', { n: dungeon.levelReq })}
                     </div>
                   </div>
                 </div>
 
                 <p className="text-white/60 text-xs mt-3 mb-3 max-w-md drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
-                  {dungeon.description}
+                  {pickDescription(dungeon, locale)}
                 </p>
 
                 {/* 🏆 Abas de Tier: desbloqueadas ≤ maxTier; escolher define a dificuldade da run. */}
                 <div className="flex items-center flex-wrap gap-1.5 mb-3">
-                  <span className="text-[10px] font-bold text-white/50 uppercase tracking-wide mr-0.5">Tier</span>
+                  <span className="text-[10px] font-bold text-white/50 uppercase tracking-wide mr-0.5">{t('Tier')}</span>
                   {Array.from({ length: MAX_DUNGEON_TIER }).map((_, i) => {
-                    const t = i + 1
+                    // `tierN`, não `t`: `t` é a função de tradução do escopo de cima.
+                    const tierN = i + 1
                     const maxT = tierProgress[dungeon.id] ?? 1
-                    const unlocked = t <= maxT
-                    const chosen = (selectedTier[dungeon.id] ?? maxT) === t
+                    const unlocked = tierN <= maxT
+                    const chosen = (selectedTier[dungeon.id] ?? maxT) === tierN
                     return (
                       <button
-                        key={t}
+                        key={tierN}
                         disabled={!unlocked}
-                        onClick={() => setSelectedTier((p) => ({ ...p, [dungeon.id]: t }))}
+                        onClick={() => setSelectedTier((p) => ({ ...p, [dungeon.id]: tierN }))}
                         title={
                           unlocked
-                            ? `Tier ${ROMAN[i]}${t >= CONCENTRATED_MIN_TIER ? ' — dropa Pedra Concentrada' : ''}`
-                            : `Vença o boss no Tier ${ROMAN[maxT - 1]} para desbloquear`
+                            ? tierN >= CONCENTRATED_MIN_TIER
+                              ? t('Tier {roman} — drops Concentrated Stone', { roman: ROMAN[i] })
+                              : t('Tier {roman}', { roman: ROMAN[i] })
+                            : t('Beat the boss on Tier {tier} to unlock', { tier: ROMAN[maxT - 1] })
                         }
                         className={`min-w-[26px] h-6 px-1.5 rounded-[3px] text-[11px] font-black border transition-all ${
                           chosen
@@ -619,7 +655,7 @@ export default function DungeonsPage() {
                     )
                   })}
                   {((selectedTier[dungeon.id] ?? tierProgress[dungeon.id] ?? 1) >= CONCENTRATED_MIN_TIER) && (
-                    <span className="text-[10px] text-amber-300/90 ml-1">💎 Concentrada</span>
+                    <span className="text-[10px] text-amber-300/90 ml-1">{t('💎 Concentrated')}</span>
                   )}
                 </div>
 
@@ -629,7 +665,7 @@ export default function DungeonsPage() {
                     {dungeon.monsters.map(m => (
                       <span
                         key={m.name}
-                        title={m.name}
+                        title={pickName(m, locale)}
                         className="w-12 h-12 rounded-[3px] border border-[#3c3c41] flex items-center justify-center text-xl overflow-hidden"
                         style={{ background: 'linear-gradient(160deg, #232327, #101013)' }}
                       >
@@ -637,7 +673,7 @@ export default function DungeonsPage() {
                       </span>
                     ))}
                     <span
-                      title={`Boss: ${dungeon.boss.name}`}
+                      title={`${t('Boss:')} ${pickName(dungeon.boss, locale)}`}
                       className="w-14 h-14 rounded-[3px] border flex items-center justify-center text-2xl overflow-hidden"
                       style={{ borderColor: BORDER_GOLD, background: 'linear-gradient(160deg, #2c2620, #141210)', boxShadow: '0 0 8px rgba(201,162,95,0.3)' }}
                     >
@@ -654,7 +690,10 @@ export default function DungeonsPage() {
                         onClick={() => enter && handleEnterClick(dungeon)}
                         disabled={!enter}
                         title={
-                          heroInUse ? `${lockedCharacterName ?? 'Outro personagem'} já está em uma masmorra em outra aba ou janela. Só um herói por vez.`
+                          heroInUse
+                            ? t('{name} is already in a dungeon in another tab or window. Only one hero at a time.', {
+                                name: lockedCharacterName ?? t('Another character'),
+                              })
                           : undefined
                         }
                         className={`px-5 py-2.5 rounded-[3px] border font-semibold tracking-wide text-sm transition-all ${
@@ -667,7 +706,7 @@ export default function DungeonsPage() {
                           boxShadow: `inset 0 1px 0 ${dungeon.accent}44, 0 0 14px ${dungeon.accentSoft}`,
                         }}
                       >
-                        {heroInUse ? '🔒 Em outra aba' : entering ? '⏳ Verificando...' : '🚪 Entrar'}
+                        {heroInUse ? t('🔒 In another tab') : entering ? t('⏳ Checking...') : t('🚪 Enter')}
                       </button>
                     )
                   })()}
@@ -678,9 +717,15 @@ export default function DungeonsPage() {
         </div>
 
         <p className="text-center text-white/30 text-[11px] mt-6 max-w-2xl mx-auto">
-          ⚡ A stamina é seu orçamento de runs e só é gasta avançando na trilha — o combate não a consome. Ela se restaura sozinha: +2 a cada 15 min, após 15 min sem gastar.
-          ❤️🔮 HP e MP voltam ao cheio entre runs. Você nunca perde XP, ouro ou itens ao morrer ou sair: cada tentativa te deixa mais forte.
-          Salas principais (⚔️) têm monstro garantido e melhor espólio; os nós menores entre elas são mais fáceis.
+          {t(
+            "⚡ Stamina is your run budget and is only spent moving along the trail — combat doesn't consume it. It restores on its own: +2 every 15 min, after 15 min without spending.",
+          )}{' '}
+          {t(
+            '❤️🔮 HP and MP return to full between runs. You never lose XP, gold, or items on death or exit: every attempt makes you stronger.',
+          )}{' '}
+          {t(
+            'Main rooms (⚔️) have a guaranteed monster and better loot; the minor nodes between them are easier.',
+          )}
         </p>
       </div>
     </div>

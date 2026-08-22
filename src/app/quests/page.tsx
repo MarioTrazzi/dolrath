@@ -4,11 +4,13 @@
 // continua de pé (links antigos, deep-link do ponto dourado) montando o mesmo
 // painel.
 import { useEffect } from 'react'
+import { useT } from '@/lib/i18n/I18nProvider'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import QuestsBoard from '@/components/quests/QuestsBoard'
 
 export default function QuestsPage() {
+  const t = useT()
   const { status } = useSession()
   const router = useRouter()
 
@@ -17,13 +19,13 @@ export default function QuestsPage() {
   }, [status, router])
 
   if (status === 'loading') {
-    return <div className="min-h-[60dvh] grid place-items-center text-[#8a8a90]">Carregando missões…</div>
+    return <div className="min-h-[60dvh] grid place-items-center text-[#8a8a90]">{t('Loading quests…')}</div>
   }
 
   return (
     <div className="min-h-[100dvh] p-4 sm:p-6" style={{ fontFamily: "'Barlow', sans-serif" }}>
       <div className="mx-auto max-w-3xl space-y-6">
-        <h1 className="text-2xl font-bold tracking-wide text-[#dcdce0]">🗺️ Missões</h1>
+        <h1 className="text-2xl font-bold tracking-wide text-[#dcdce0]">{t('🗺️ Quests')}</h1>
         <QuestsBoard />
       </div>
     </div>

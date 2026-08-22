@@ -11,6 +11,8 @@ import toast from 'react-hot-toast'
 import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider'
 import { QuestCard, type QuestView } from '@/components/quests/QuestCard'
 import { GOLD, GOLD_BRIGHT, BEVEL_COLOR_BTN_CLASS, BEVEL_VARIANTS, BdoWindow } from '@/components/crafting/bdoTheme'
+import { useT, useI18n } from '@/lib/i18n/I18nProvider'
+import { localizeItemName } from '@/lib/i18n/catalog'
 
 interface QuestsResponse {
   tutorial: { current: QuestView | null; completedCount: number; total: number; done: boolean }
@@ -20,6 +22,8 @@ interface QuestsResponse {
 }
 
 export default function QuestsBoard({ onSummary }: { onSummary?: (claimableCount: number) => void } = {}) {
+  const t = useT()
+  const { locale } = useI18n()
   const { data: session } = useSession()
   const { activeCharacterId, refresh: refreshActiveCharacter, loading: characterLoading } = useActiveCharacter()
 
@@ -31,13 +35,13 @@ export default function QuestsBoard({ onSummary }: { onSummary?: (claimableCount
     if (!activeCharacterId) return
     try {
       const res = await fetch(`/api/quests?characterId=${activeCharacterId}`)
-      if (!res.ok) throw new Error('Erro ao carregar missões')
+      if (!res.ok) throw new Error(t('Failed to load quests'))
       const body: QuestsResponse = await res.json()
       setData(body)
       onSummary?.(Number(body?.claimableCount) || 0)
     } catch (e) {
       console.error(e)
-      toast.error('Erro ao carregar missões')
+      toast.error(t('Failed to load quests'))
     } finally {
       setIsLoading(false)
     }
@@ -57,18 +61,20 @@ export default function QuestsBoard({ onSummary }: { onSummary?: (claimableCount
         body: JSON.stringify({ characterId: activeCharacterId, questId }),
       })
       const body = await res.json()
-      if (!res.ok) throw new Error(body?.error || 'Erro ao resgatar missão')
+      if (!res.ok) throw new Error(body?.error || t('Failed to claim quest'))
       const parts = [
         body.granted.gold > 0 ? `+${body.granted.gold} 🪙` : null,
         body.granted.xp > 0 ? `+${body.granted.xp} XP` : null,
-        ...(body.granted.items ?? []).map((it: { name: string; qty: number }) => `${it.qty}× ${it.name}`),
+        ...(body.granted.items ?? []).map(
+          (it: { name: string; qty: number }) => `${it.qty}× ${localizeItemName(it.name, locale)}`,
+        ),
       ].filter(Boolean)
-      toast.success(`Missão resgatada! ${parts.join(', ')}`)
-      if (body.leveledUp) toast.success(`⬆️ Subiu para o nível ${body.newLevel}!`)
+      toast.success(t('Quest claimed! {rewards}', { rewards: parts.join(', ') }))
+      if (body.leveledUp) toast.success(t('⬆️ You reached level {n}!', { n: body.newLevel }))
       refreshActiveCharacter() // ouro/XP na navbar
       await fetchQuests()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao resgatar missão')
+      toast.error(e instanceof Error ? e.message : t('Failed to claim quest'))
     } finally {
       setClaimingId(null)
     }
@@ -80,24 +86,31 @@ export default function QuestsBoard({ onSummary }: { onSummary?: (claimableCount
     try {
       const res = await fetch('/api/quests/daily-login', { method: 'POST' })
       const body = await res.json()
-      if (!res.ok) throw new Error(body?.error || 'Erro ao resgatar recompensa diária')
-      toast.success(`+${body.gold} 🪙 no banco! Sequência: ${body.streak} dia${body.streak > 1 ? 's' : ''} 🔥`)
+      if (!res.ok) throw new Error(body?.error || t('Failed to claim the daily reward'))
+      toast.success(
+        t(
+          body.streak > 1
+            ? '+{gold} 🪙 in the bank! Streak: {n} days 🔥'
+            : '+{gold} 🪙 in the bank! Streak: {n} day 🔥',
+          { gold: body.gold, n: body.streak },
+        ),
+      )
       await fetchQuests()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao resgatar recompensa diária')
+      toast.error(e instanceof Error ? e.message : t('Failed to claim the daily reward'))
     } finally {
       setClaimingId(null)
     }
   }
 
   if (characterLoading || (activeCharacterId && isLoading)) {
-    return <div className="py-10 text-center text-sm text-[#8a8a90]">Carregando missões…</div>
+    return <div className="py-10 text-center text-sm text-[#8a8a90]">{t('Loading quests…')}</div>
   }
 
   if (!activeCharacterId) {
     return (
       <div className="py-10 text-center">
-        <p className="text-lg text-[#dcdce0]">Você ainda não tem um herói.</p>
+        <p className="text-lg text-[#dcdce0]">{t('You do not have a hero yet.')}</p>
         <Link href="/character/create" className="mt-3 inline-block font-semibold" style={{ color: GOLD }}>
           Criar personagem →
         </Link>
@@ -112,22 +125,29 @@ export default function QuestsBoard({ onSummary }: { onSummary?: (claimableCount
   return (
     <div className="space-y-6" style={{ fontFamily: "'Barlow', sans-serif" }}>
       {/* 🎁 Login diário (recompensa da CONTA → banco) */}
-      <BdoWindow icon="🎁" title="Recompensa Diária" bodyClassName="p-4">
+      <BdoWindow icon="🎁" title={t('Daily Reward')} bodyClassName="p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm text-[#8a8a90]">
-              Sequência: <span className="font-semibold" style={{ color: GOLD_BRIGHT }}>{dailyLogin.streak} dia{dailyLogin.streak > 1 ? 's' : ''} 🔥</span>
+              {t('Streak: ')}
+              <span className="font-semibold" style={{ color: GOLD_BRIGHT }}>
+                {t(dailyLogin.streak > 1 ? '{n} days 🔥' : '{n} day 🔥', { n: dailyLogin.streak })}
+              </span>
             </p>
             <p className="mt-1 text-sm text-[#8a8a90]">
               {dailyLogin.claimedToday
-                ? `Recompensa de hoje resgatada — volte amanhã (+${dailyLogin.nextGold} 🪙).`
+                ? t("Today's reward claimed — come back tomorrow (+{gold} 🪙).", { gold: dailyLogin.nextGold })
                 : (
-                  <>Resgate de hoje: <span className="font-semibold text-yellow-300">🪙 {dailyLogin.nextGold}</span> direto no banco da conta.</>
+                  <>
+                    {t("Today's claim: ")}
+                    <span className="font-semibold text-yellow-300">🪙 {dailyLogin.nextGold}</span>
+                    {t(' straight into the account bank.')}
+                  </>
                 )}
             </p>
           </div>
           {dailyLogin.claimedToday ? (
-            <span className="text-sm font-semibold text-emerald-400">Resgatada ✓</span>
+            <span className="text-sm font-semibold text-emerald-400">{t('Claimed ✓')}</span>
           ) : (
             <button
               onClick={claimDailyLogin}
@@ -135,7 +155,7 @@ export default function QuestsBoard({ onSummary }: { onSummary?: (claimableCount
               className={`${BEVEL_COLOR_BTN_CLASS} px-5 py-2 text-sm ${claimingId === 'daily-login' ? 'cursor-wait opacity-60' : ''}`}
               style={BEVEL_VARIANTS.gold}
             >
-              {claimingId === 'daily-login' ? 'Resgatando…' : 'Resgatar'}
+              {claimingId === 'daily-login' ? t('Claiming…') : t('Claim')}
             </button>
           )}
         </div>
@@ -144,12 +164,12 @@ export default function QuestsBoard({ onSummary }: { onSummary?: (claimableCount
       {/* 🧭 Cadeia tutorial — um passo por vez */}
       <BdoWindow
         icon="🧭"
-        title="A Jornada do Herói"
+        title={t("The Hero's Journey")}
         right={<span className="text-sm font-semibold tabular-nums" style={{ color: GOLD }}>{tutorial.completedCount}/{tutorial.total}</span>}
         bodyClassName="p-4"
       >
         {tutorial.done ? (
-          <p className="text-sm font-semibold text-emerald-400">Jornada concluída ✅ — Dolrath reconhece um veterano.</p>
+          <p className="text-sm font-semibold text-emerald-400">{t('Journey complete ✅ — Dolrath recognises a veteran.')}</p>
         ) : tutorial.current ? (
           <QuestCard
             quest={tutorial.current}
@@ -161,7 +181,7 @@ export default function QuestsBoard({ onSummary }: { onSummary?: (claimableCount
       </BdoWindow>
 
       {/* 📅 Diárias */}
-      <BdoWindow icon="📅" title="Missões Diárias" right={<span className="text-xs text-[#8a8a90]">renovam à meia-noite UTC</span>} bodyClassName="space-y-3 p-4">
+      <BdoWindow icon="📅" title={t('Daily Quests')} right={<span className="text-xs text-[#8a8a90]">{t('reset at midnight UTC')}</span>} bodyClassName="space-y-3 p-4">
         {dailies.map((q) => (
           <QuestCard key={q.id} quest={q} onClaim={claimQuest} claiming={claimingId === q.id} />
         ))}

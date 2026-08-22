@@ -56,4 +56,56 @@ export const INVENTORY_PT: Record<string, string> = {
   'How many to send to the ': 'Quantos enviar para o ',
   'Send {qty}': 'Enviar {qty}',
   '📦 Send all (x{n})': '📦 Enviar tudo (x{n})',
+
+  // Cofre da conta (BankPanel)
+  'Enter a valid amount.': 'Informe uma quantia válida.',
+  'Connection error.': 'Erro de conexão.',
+  'Failed to move the gold': 'Falha ao mover o ouro',
+  '⛓️ Confirm the claim in MetaMask to receive the GOLD on-chain…':
+    '⛓️ Confirme o claim na MetaMask para receber o GOLD on-chain…',
+  '⛓️ {n} GOLD claimed on-chain!': '⛓️ {n} GOLD reivindicado on-chain!',
+  'On-chain claim failed': 'Falha no claim on-chain',
+  '🏦 The gold stayed reserved in the bank — try claiming again in a few minutes.':
+    '🏦 O ouro ficou reservado no banco — tente reivindicar de novo em alguns minutos.',
+  'Failed to deposit': 'Falha ao depositar',
+  'Failed to withdraw': 'Falha ao sacar',
+  'Done!': 'Pronto!',
+  'Account Vault': 'Cofre da Conta',
+  'Deposit': 'Depositar',
+  ' stores the hero gold in the account vault and ': ' guarda o ouro do herói no cofre da conta e ',
+  'Withdraw': 'Sacar',
+  ' returns it to ': ' devolve pro bolso de ',
+  'any': 'qualquer',
+  ' character of yours — this is how you pass gold from one hero to another (no gas, instantly).':
+    ' personagem seu — é assim que você passa ouro de um herói para outro (sem gas, na hora).',
+  'Claim': 'Reivindicar',
+  ' turns the hero gold into ': ' transforma o ouro do herói em token ',
+  'GOLD on-chain': 'GOLD on-chain',
+  ' in your wallet — this is how you cash out what you earned in dungeons and PvP (you sign the transaction and pay the gas). The gold in the hero hand is for ':
+    ' na sua carteira — é assim que você saca o que ganhou nas masmorras e no PvP (você assina a transação e paga o gas). O ouro na mão do herói serve para ',
+  'buying': 'comprar',
+  ' at the blacksmith/alchemist.': ' no ferreiro/alquimista.',
+  '⚠️ Link your wallet in the panel to claim GOLD on-chain.':
+    '⚠️ Vincule sua carteira no painel para reivindicar GOLD on-chain.',
+  'Claiming is a transaction on {chain} — you need a bit of ':
+    'Reivindicar é uma transação na {chain} — você precisa de um pouco de',
+  'POL': 'POL',
+  ' in the wallet for the network fee (gas). ': ' na carteira para a taxa de rede (gas). ',
+  'You buy POL on any exchange and send it to your wallet.':
+    'Você compra POL em qualquer corretora e envia para sua carteira.',
+  'Get test POL from the official Polygon faucet.': 'Pegue POL de teste no faucet oficial da Polygon.',
+  ' 🪙 in the vault — shared by all your characters': ' 🪙 no cofre — compartilhado por todos os seus personagens',
+  '⛓️ Claim vault balance': '⛓️ Reivindicar saldo do cofre',
+  'No character.': 'Nenhum personagem.',
+  '{n} 🪙 on hand': '{n} 🪙 na mão',
+  'amount': 'quantia',
+  'Character → account vault (another hero can withdraw later)':
+    'Personagem → cofre da conta (outro herói pode sacar depois)',
+  '↑ Deposit': '↑ Depositar',
+  'Account vault → character (enables buying at the blacksmith/alchemist)':
+    'Cofre da conta → personagem (habilita compras no ferreiro/alquimista)',
+  '↓ Withdraw': '↓ Sacar',
+  'Character → GOLD on-chain in your wallet (signature + gas)':
+    'Personagem → GOLD on-chain na sua carteira (assinatura + gas)',
+  '⛓️ Claim GOLD': '⛓️ Reivindicar GOLD',
 }

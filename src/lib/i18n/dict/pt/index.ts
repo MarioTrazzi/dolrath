@@ -21,6 +21,7 @@ import { ALCHEMY_PT } from './alchemy'
 import { PROCESSING_PT } from './processing'
 import { DUNGEONSMAP_PT } from './dungeonsmap'
 import { FARM_PT } from './farm'
+import { QUESTS_PT } from './quests'
 
 export const PT_DICT: Record<string, string> = {
   ...COMMON_PT,
@@ -44,4 +45,5 @@ export const PT_DICT: Record<string, string> = {
   ...PROCESSING_PT,
   ...DUNGEONSMAP_PT,
   ...FARM_PT,
+  ...QUESTS_PT,
 }

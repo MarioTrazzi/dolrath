@@ -5,6 +5,8 @@
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { GOLD, GOLD_BRIGHT, BORDER_GOLD, BEVEL_COLOR_BTN_CLASS, BEVEL_VARIANTS } from '@/components/crafting/bdoTheme'
+import { useT, useI18n } from '@/lib/i18n/I18nProvider'
+import { localizeItemName } from '@/lib/i18n/catalog'
 
 export interface QuestView {
   id: string
@@ -31,6 +33,8 @@ export function QuestCard({
   claiming: boolean
   highlight?: boolean
 }) {
+  const t = useT()
+  const { locale } = useI18n()
   const pct = Math.min(100, Math.round((quest.progress / quest.objective.count) * 100))
 
   return (
@@ -49,8 +53,8 @@ export function QuestCard({
       <div className="flex items-start gap-3">
         <span className="text-2xl leading-none" aria-hidden="true">{quest.icon}</span>
         <div className="min-w-0 flex-1">
-          <p className="font-semibold text-[#dcdce0]">{quest.title}</p>
-          <p className="mt-0.5 text-sm text-[#8a8a90]">{quest.description}</p>
+          <p className="font-semibold text-[#dcdce0]">{t(quest.title)}</p>
+          <p className="mt-0.5 text-sm text-[#8a8a90]">{t(quest.description)}</p>
         </div>
         <span className="shrink-0 text-sm font-semibold tabular-nums" style={{ color: quest.claimable ? GOLD_BRIGHT : '#8a8a90' }}>
           {quest.progress}/{quest.objective.count}
@@ -83,13 +87,13 @@ export function QuestCard({
           )}
           {(quest.rewards.items ?? []).map((it) => (
             <span key={it.name} className="rounded-[3px] border border-fuchsia-500/30 bg-fuchsia-500/10 px-1.5 py-0.5 text-fuchsia-300">
-              {it.qty}× {it.name}
+              {it.qty}× {localizeItemName(it.name, locale)}
             </span>
           ))}
         </div>
 
         {quest.claimed ? (
-          <span className="shrink-0 text-sm font-semibold text-emerald-400">Resgatada ✓</span>
+          <span className="shrink-0 text-sm font-semibold text-emerald-400">{t('Claimed ✓')}</span>
         ) : quest.claimable ? (
           <button
             onClick={() => onClaim(quest.id)}
@@ -97,7 +101,7 @@ export function QuestCard({
             className={`${BEVEL_COLOR_BTN_CLASS} shrink-0 px-4 py-1.5 text-sm ${claiming ? 'cursor-wait opacity-60' : ''}`}
             style={BEVEL_VARIANTS.gold}
           >
-            {claiming ? 'Resgatando…' : 'Resgatar'}
+            {claiming ? t('Claiming…') : t('Claim')}
           </button>
         ) : quest.href ? (
           <Link
@@ -105,7 +109,7 @@ export function QuestCard({
             className="shrink-0 text-sm font-semibold transition-colors hover:brightness-125"
             style={{ color: GOLD }}
           >
-            Ir para →
+            {t('Go to →')}
           </Link>
         ) : null}
       </div>

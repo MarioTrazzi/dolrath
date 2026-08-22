@@ -12,6 +12,7 @@
 // (lib/foodBuff.ts) — o efeito acontece ao COMER, não ao cozinhar.
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useBatchReveal } from '@/hooks/useBatchReveal';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import { buyGoldOnChain, parseNeededGold, isInsufficientGold } from '@/lib/buyGold';
@@ -56,6 +57,11 @@ export interface CookingCraftResult {
   succeeded: number;
   failed: number;
   chance: number;
+  /**
+   * Sequência por unidade, na ordem em que o servidor rolou. É o que o fogão
+   * encena um por vez. Ausente = contrato antigo (um bloco só).
+   */
+  units?: { ok: boolean }[];
   xpGained: number;
   levelInfo: ProfessionLevelInfo;
   characterGold: number | null;
@@ -101,7 +107,6 @@ export default function CookingDialog({
   const [recipe, setRecipe] = useState<CookingRecipe | null>(null);
   const [craftQty, setCraftQty] = useState(1);
   const [busy, setBusy] = useState(false);
-  const [phase, setPhase] = useState<'idle' | 'charging' | 'done'>('idle');
   const [chargeId, setChargeId] = useState(0);
   const [result, setResult] = useState<CookingCraftResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -142,13 +147,26 @@ export default function CookingDialog({
     }
   }, [characterId, fetchInfoOverride]);
 
+  // Encenação do lote: o servidor devolve a sequência por unidade e o fogão
+  // serve UM PRATO POR VEZ. O inventário/`onChanged` só recarregam no fim —
+  // senão o insumo some da tela no meio da animação. [[useBatchReveal]]
+  const reveal = useBatchReveal({
+    maxTickMs: CHARGE_MS,
+    onFinish: () => {
+      fetchInventory();
+      onChanged?.();
+    },
+  });
+  const phase: 'idle' | 'charging' | 'done' =
+    reveal.phase === 'idle' ? 'idle' : reveal.phase === 'working' ? 'charging' : 'done';
+
   // Reset SÓ na abertura (callbacks mudam de identidade a cada render do pai).
   useEffect(() => {
     if (!open) return;
     setRecipe(null);
     setResult(null);
     setError(null);
-    setPhase('idle');
+    reveal.reset();
     setCraftQty(1);
     pickedFromLinkRef.current = false;
     fetchInfo();
@@ -194,7 +212,7 @@ export default function CookingDialog({
   const loadRecipe = (r: CookingRecipe) => {
     setRecipe(r);
     setResult(null);
-    setPhase('idle');
+    reveal.reset();
     setBookOpen(false);
   };
 
@@ -219,8 +237,7 @@ export default function CookingDialog({
     setResult(null);
     setError(null);
     setChargeId((c) => c + 1);
-    setPhase('charging');
-    const minDelay = new Promise((resolve) => setTimeout(resolve, CHARGE_MS));
+    reveal.begin();
 
     try {
       let data: CookingCraftResult;
@@ -241,13 +258,13 @@ export default function CookingDialog({
         if (!res.ok && isInsufficientGold(json.error)) {
           const needed = parseNeededGold(json.error);
           if (!needed || !(await confirmBuyGold(needed))) {
-            setPhase('idle');
+            reveal.reset();
             setBusy(false);
             return;
           }
           const credited = await buyGoldOnChain({ characterId: characterId!, amountGold: needed });
           if (!credited) {
-            setPhase('idle');
+            reveal.reset();
             setBusy(false);
             return;
           }
@@ -257,27 +274,32 @@ export default function CookingDialog({
         }
 
         if (!res.ok) {
-          await minDelay;
           setError(json.error || 'Erro ao cozinhar');
-          setPhase('idle');
+          reveal.reset();
           setBusy(false);
           return;
         }
         data = json;
       }
 
-      await minDelay;
       setResult(data);
-      setPhase('done');
       if (data.levelInfo) setLevelInfo(data.levelInfo);
-      fetchInventory();
-      onChanged?.();
+      // Uma unidade por vez: sem a sequência (contrato antigo) encena 1 bloco.
+      reveal.start(data.units?.length ?? 1);
     } catch {
       setError('Erro inesperado ao cozinhar');
-      setPhase('idle');
+      reveal.reset();
     }
     setBusy(false);
   };
+
+  // Encenação unidade a unidade: o que já foi REVELADO na tela. O agregado do
+  // `result` continua sendo a verdade do que o banco creditou.
+  const revealing = reveal.phase === 'revealing';
+  const revealedUnits = result?.units ? result.units.slice(0, reveal.revealed) : [];
+  const liveSucceeded = revealing ? revealedUnits.length : (result?.succeeded ?? 0);
+  /** Últimos revelados, mais novo em cima (lote grande não vira lista infinita). */
+  const revealTail = revealedUnits.slice(-6).reverse();
 
   const output = recipe ? getCookingOutput(recipe) : null;
   const outputDescription = output?.description ?? null;
@@ -305,7 +327,7 @@ export default function CookingDialog({
           <button
             type="button"
             onClick={() => setCraftQty((q) => Math.max(1, q - 1))}
-            disabled={busy || craftQty <= 1}
+            disabled={busy || revealing || craftQty <= 1}
             className="grid h-7 w-7 place-items-center rounded-[3px] border border-[#46464c] bg-[#232327] text-sm font-bold text-white transition-colors hover:border-[#8a6d3b] disabled:cursor-not-allowed disabled:opacity-30"
           >
             −
@@ -325,7 +347,7 @@ export default function CookingDialog({
           <button
             type="button"
             onClick={() => setCraftQty((q) => Math.min(maxCraftable, q + 1))}
-            disabled={busy || craftQty >= maxCraftable}
+            disabled={busy || revealing || craftQty >= maxCraftable}
             className="grid h-7 w-7 place-items-center rounded-[3px] border border-[#46464c] bg-[#232327] text-sm font-bold text-white transition-colors hover:border-[#8a6d3b] disabled:cursor-not-allowed disabled:opacity-30"
           >
             +
@@ -333,7 +355,7 @@ export default function CookingDialog({
           <button
             type="button"
             onClick={() => setCraftQty(maxCraftable)}
-            disabled={busy || craftQty === maxCraftable}
+            disabled={busy || revealing || craftQty === maxCraftable}
             className="text-xs font-semibold underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
             style={{ color: GOLD_BRIGHT }}
           >
@@ -358,14 +380,21 @@ export default function CookingDialog({
           Taxa do lote: <span style={{ color: GOLD }}>{totalGoldCost} 🪙</span>
         </div>
       )}
-      <BevelButton
-        onClick={handleCook}
-        disabled={!unlocked || maxCraftable < 1 || (!characterId && !attemptOverride)}
-        busy={busy}
-        busyLabel="🍳 Cozinhando..."
-      >
-        {craftQty > 1 ? `🍳 Cozinhar ×${craftQty}` : '🍳 Cozinhar'}
-      </BevelButton>
+      {revealing ? (
+        /* Encenação em curso: quem faz grind não pode ficar refém da animação. */
+        <BevelButton onClick={reveal.skip}>
+          ⏩ Pular ({reveal.revealed}/{reveal.total})
+        </BevelButton>
+      ) : (
+        <BevelButton
+          onClick={handleCook}
+          disabled={!unlocked || maxCraftable < 1 || (!characterId && !attemptOverride)}
+          busy={busy}
+          busyLabel="🍳 Cozinhando..."
+        >
+          {craftQty > 1 ? `🍳 Cozinhar ×${craftQty}` : '🍳 Cozinhar'}
+        </BevelButton>
+      )}
       <div className="mt-2 text-center">
         <button
           type="button"
@@ -407,7 +436,8 @@ export default function CookingDialog({
             <div className="relative px-5 pb-1 pt-4">
               <StoveRig
                 phase={phase}
-                chargeId={chargeId}
+                working={reveal.phase === 'working' || revealing}
+                chargeId={chargeId * 1000 + reveal.tick}
                 materials={recipe.inputs.map((m) => ({
                   name: m.name,
                   emoji: cookingItemEmoji(m.name),
@@ -417,9 +447,7 @@ export default function CookingDialog({
                 outputName={recipe.outputName}
                 outputEmoji={cookingItemEmoji(recipe.outputName)}
                 glowColor={centerUi?.glow}
-                plate={
-                  phase === 'done' && result && result.succeeded > 1 ? `×${result.succeeded}` : null
-                }
+                plate={phase === 'done' && liveSucceeded > 1 ? `×${liveSucceeded}` : null}
                 statusNode={
                   !unlocked ? (
                     <div className="text-center">
@@ -472,20 +500,39 @@ export default function CookingDialog({
             {phase !== 'idle' && (
               <div className="px-5 pb-1 pt-2">
                 <div className="text-center text-sm font-semibold">
-                  {phase === 'charging' && (
+                  {(reveal.phase === 'working' || revealing) && (
                     <motion.span
                       animate={{ opacity: [0.5, 1, 0.5] }}
                       transition={{ repeat: Infinity, duration: 0.7 }}
                       style={{ color: COOK_ACCENT_BRIGHT }}
                     >
-                      🍲 Cozinhando...
+                      🍲 Cozinhando
+                      {revealing && reveal.total > 1 ? ` ${reveal.revealed}/${reveal.total}` : '...'}
                     </motion.span>
                   )}
-                  {phase === 'done' && result && (
+                  {reveal.phase === 'done' && result && (
                     <span style={{ color: GOLD_BRIGHT }}>✨ PRONTO!</span>
                   )}
                 </div>
-                {phase === 'done' && result && (
+
+                {/* A fila saindo do fogão — uma linha por prato revelado */}
+                {revealing && (
+                  <div className="mx-auto mt-2 w-full max-w-[260px] space-y-1">
+                    {revealTail.map((_, i) => (
+                      <motion.div
+                        key={`unit-${reveal.revealed - i}`}
+                        initial={{ opacity: 0, x: -8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="flex items-center justify-between rounded-[3px] border border-black/50 bg-[#19191c] px-2 py-1 text-xs"
+                      >
+                        <span className="truncate text-[#c9c9ce]">{recipe.outputName}</span>
+                        <span className="font-bold text-emerald-300">✓</span>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+
+                {reveal.phase === 'done' && result && (
                   <motion.div
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}

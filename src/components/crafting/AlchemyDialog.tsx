@@ -11,6 +11,7 @@
 // de Alquimia da CONTA (craftingProfession.ts; o servidor recalcula tudo).
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useBatchReveal } from '@/hooks/useBatchReveal';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import { buyGoldOnChain, parseNeededGold, isInsufficientGold } from '@/lib/buyGold';
@@ -67,6 +68,11 @@ export interface AlchemyCraftResult {
   succeeded: number;
   failed: number;
   chance: number;
+  /**
+   * Sequência por unidade, na ordem em que o servidor rolou. É o que o
+   * caldeirão encena um por vez. Ausente = contrato antigo (um bloco só).
+   */
+  units?: { ok: boolean }[];
   xpGained: number;
   levelInfo: ProfessionLevelInfo;
   characterGold: number | null;
@@ -124,7 +130,6 @@ export default function AlchemyDialog({
   const [slots, setSlots] = useState<(string | null)[]>([null, null, null]);
   const [craftQty, setCraftQty] = useState(1);
   const [busy, setBusy] = useState(false);
-  const [phase, setPhase] = useState<CraftPhase>('idle');
   const [chargeId, setChargeId] = useState(0);
   const [result, setResult] = useState<AlchemyCraftResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -166,6 +171,24 @@ export default function AlchemyDialog({
     }
   }, [characterId, fetchInfoOverride]);
 
+  // Encenação do lote: o servidor devolve a sequência por unidade e o
+  // triângulo transmuta UMA POR VEZ. Os ingredientes só saem do triângulo (e o
+  // inventário só recarrega) no FIM — senão o círculo esvazia no meio da
+  // animação. [[useBatchReveal]]
+  // O triângulo só se esvazia quando o servidor REALMENTE consumiu o lote —
+  // um erro (gold recusado, 400) tem de devolver os ingredientes no lugar.
+  const committedRef = useRef(false);
+  const reveal = useBatchReveal({
+    maxTickMs: CHARGE_MS,
+    onFinish: () => {
+      if (committedRef.current) setSlots([null, null, null]);
+      fetchInventory();
+      onChanged?.();
+    },
+  });
+  const phase: CraftPhase =
+    reveal.phase === 'idle' ? 'idle' : reveal.phase === 'working' ? 'charging' : 'done';
+
   // (Re)abrir: estado limpo + dados frescos. Reset SÓ na abertura — os
   // callbacks mudam de identidade quando o pai re-renderiza (ex.: overrides
   // inline) e não podem reiniciar a dialog no meio do uso.
@@ -174,7 +197,7 @@ export default function AlchemyDialog({
     setSlots([null, null, null]);
     setResult(null);
     setError(null);
-    setPhase('idle');
+    reveal.reset();
     setCraftQty(1);
     placedFromLinkRef.current = false;
     fetchInfo();
@@ -245,10 +268,16 @@ export default function AlchemyDialog({
     setCraftQty((q) => Math.min(Math.max(1, q), Math.max(1, maxCraftable)));
   }, [maxCraftable]);
 
-  // Mexer no triângulo descarta o veredito anterior.
-  const clearVerdict = () => {
+  // Mexer no triângulo descarta o veredito anterior. Devolve `false` quando a
+  // interação está BLOQUEADA — durante a canalização/encenação o triângulo é
+  // do lote em curso, não do próximo.
+  const revealBusyRef = useRef(false);
+  revealBusyRef.current = reveal.phase === 'working' || reveal.phase === 'revealing';
+  const clearVerdict = (): boolean => {
+    if (revealBusyRef.current) return false;
     setResult((prev) => (prev ? null : prev));
-    setPhase((p) => (p === 'idle' ? p : 'idle'));
+    if (reveal.phase !== 'idle') reveal.reset();
+    return true;
   };
 
   const placeIngredient = useCallback(
@@ -256,7 +285,7 @@ export default function AlchemyDialog({
       if (available(name) <= 0) return;
       const idx = slots.findIndex((s) => s == null);
       if (idx === -1) return;
-      clearVerdict();
+      if (!clearVerdict()) return;
       setSlots((prev) => prev.map((s, i) => (i === idx ? name : s)));
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -265,13 +294,13 @@ export default function AlchemyDialog({
 
   const removeSlot = (idx: number) => {
     if (busy) return;
-    clearVerdict();
+    if (!clearVerdict()) return;
     setSlots((prev) => prev.map((s, i) => (i === idx ? null : s)));
   };
 
   const loadRecipe = (r: PotionRecipe) => {
     if (!canCraftRecipe(r) || level < getCraftMinLevel(r.rarity)) return;
-    clearVerdict();
+    if (!clearVerdict()) return;
     setSlots(expandRecipe(r));
     setRecipesOpen(false);
     setHover(null);
@@ -299,10 +328,10 @@ export default function AlchemyDialog({
     setResult(null);
     setError(null);
     setChargeId((c) => c + 1);
-    setPhase('charging');
-    // A canalização leva CHARGE_MS; o veredito só é revelado ao final (a
-    // latência do servidor fica escondida na animação, como na referência).
-    const minDelay = new Promise((resolve) => setTimeout(resolve, CHARGE_MS));
+    // A canalização esconde a latência do servidor; depois dela o lote é
+    // revelado UMA POÇÃO POR VEZ.
+    committedRef.current = false;
+    reveal.begin();
 
     try {
       let data: AlchemyCraftResult;
@@ -323,13 +352,13 @@ export default function AlchemyDialog({
         if (!res.ok && isInsufficientGold(json.error)) {
           const needed = parseNeededGold(json.error);
           if (!needed || !(await confirmBuyGold(needed))) {
-            setPhase('idle');
+            reveal.reset();
             setBusy(false);
             return;
           }
           const credited = await buyGoldOnChain({ characterId: characterId!, amountGold: needed });
           if (!credited) {
-            setPhase('idle');
+            reveal.reset();
             setBusy(false);
             return;
           }
@@ -339,38 +368,53 @@ export default function AlchemyDialog({
         }
 
         if (!res.ok) {
-          await minDelay;
           setError(json.error || 'Erro ao transmutar');
-          setPhase('idle');
+          reveal.reset();
           setBusy(false);
           return;
         }
         data = json;
       }
 
-      await minDelay;
+      committedRef.current = true;
       setResult(data);
-      setPhase('done');
-      setSlots([null, null, null]);
       if (data.levelInfo) setLevelInfo(data.levelInfo);
-      fetchInventory();
-      onChanged?.();
+      // Uma unidade por vez: sem a sequência (contrato antigo) encena 1 bloco.
+      reveal.start(data.units?.length ?? 1);
     } catch {
       setError('Erro inesperado ao transmutar');
-      setPhase('idle');
+      reveal.reset();
     }
     setBusy(false);
   };
 
-  // O que o slot central mostra e com que veredito.
+  // Encenação unidade a unidade: o que já foi REVELADO na tela. O agregado do
+  // `result` continua sendo a verdade do que o banco creditou.
+  const revealing = reveal.phase === 'revealing';
+  const revealedUnits = result?.units ? result.units.slice(0, reveal.revealed) : [];
+  const liveSucceeded = revealing
+    ? revealedUnits.filter((u) => u.ok).length
+    : (result?.succeeded ?? 0);
+  /** Últimas reveladas, mais nova em cima (lote grande não vira lista infinita). */
+  const revealTail = revealedUnits.slice(-6).reverse();
+
+  const aggregateVerdict =
+    result && result.failed === 0
+      ? ('success' as const)
+      : result && result.succeeded === 0
+        ? ('fail' as const)
+        : ('mixed' as const);
+
+  // O que o slot central mostra e com que veredito. Durante a encenação o
+  // centro mostra o veredito DA POÇÃO que acabou de sair.
   const verdict =
-    phase === 'done' && result
-      ? result.failed === 0
+    revealing && revealedUnits.length > 0
+      ? revealedUnits[revealedUnits.length - 1].ok
         ? ('success' as const)
-        : result.succeeded === 0
-          ? ('fail' as const)
-          : ('mixed' as const)
-      : null;
+        : ('fail' as const)
+      : reveal.phase === 'done' && result
+        ? aggregateVerdict
+        : null;
   const centerName = result?.outputName ?? matchedRecipe?.outputName ?? null;
   const centerRarity: Rarity = result?.rarity ?? matchedRecipe?.rarity ?? 'COMMON';
   const centerUi = RARITY_UI[centerRarity];
@@ -394,7 +438,7 @@ export default function AlchemyDialog({
           <button
             type="button"
             onClick={() => setCraftQty((q) => Math.max(1, q - 1))}
-            disabled={busy || craftQty <= 1}
+            disabled={busy || revealing || craftQty <= 1}
             className="grid h-7 w-7 place-items-center rounded-[3px] border border-[#46464c] bg-[#232327] text-sm font-bold text-white transition-colors hover:border-[#8a6d3b] disabled:cursor-not-allowed disabled:opacity-30"
           >
             −
@@ -414,7 +458,7 @@ export default function AlchemyDialog({
           <button
             type="button"
             onClick={() => setCraftQty((q) => Math.min(maxCraftable, q + 1))}
-            disabled={busy || craftQty >= maxCraftable}
+            disabled={busy || revealing || craftQty >= maxCraftable}
             className="grid h-7 w-7 place-items-center rounded-[3px] border border-[#46464c] bg-[#232327] text-sm font-bold text-white transition-colors hover:border-[#8a6d3b] disabled:cursor-not-allowed disabled:opacity-30"
           >
             +
@@ -422,7 +466,7 @@ export default function AlchemyDialog({
           <button
             type="button"
             onClick={() => setCraftQty(maxCraftable)}
-            disabled={busy || craftQty === maxCraftable}
+            disabled={busy || revealing || craftQty === maxCraftable}
             className="text-xs font-semibold underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
             style={{ color: GOLD_BRIGHT }}
           >
@@ -441,14 +485,21 @@ export default function AlchemyDialog({
           </div>
         ) : null
       )}
-      <BevelButton
-        onClick={handleTransmute}
-        disabled={!matchedRecipe || !unlocked || maxCraftable < 1 || (!characterId && !attemptOverride)}
-        busy={busy}
-        busyLabel="⚗ Transmutando..."
-      >
-        {craftQty > 1 ? `⚗ Transmutar ×${craftQty}` : '⚗ Transmutar'}
-      </BevelButton>
+      {revealing ? (
+        /* Encenação em curso: quem faz grind não pode ficar refém da animação. */
+        <BevelButton onClick={reveal.skip}>
+          ⏩ Pular ({reveal.revealed}/{reveal.total})
+        </BevelButton>
+      ) : (
+        <BevelButton
+          onClick={handleTransmute}
+          disabled={!matchedRecipe || !unlocked || maxCraftable < 1 || (!characterId && !attemptOverride)}
+          busy={busy}
+          busyLabel="⚗ Transmutando..."
+        >
+          {craftQty > 1 ? `⚗ Transmutar ×${craftQty}` : '⚗ Transmutar'}
+        </BevelButton>
+      )}
       <div className="mt-2 flex items-center justify-between">
         <button
           type="button"
@@ -460,10 +511,10 @@ export default function AlchemyDialog({
         <button
           type="button"
           onClick={() => {
-            clearVerdict();
+            if (!clearVerdict()) return;
             setSlots([null, null, null]);
           }}
-          disabled={busy || (filled.length === 0 && !result)}
+          disabled={busy || revealing || (filled.length === 0 && !result)}
           className="text-xs font-semibold text-[#9a9aa0] transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
         >
           Limpar
@@ -628,12 +679,10 @@ export default function AlchemyDialog({
                 active={centerActive}
                 dashed={!centerActive}
                 verdict={verdict}
-                verdictKey={chargeId}
+                verdictKey={chargeId * 1000 + reveal.tick}
                 glowColor={centerActive ? centerUi.glow : undefined}
                 title={centerName ?? 'Combinação ainda incompleta'}
-                plate={
-                  phase === 'done' && result && result.succeeded > 1 ? `×${result.succeeded}` : null
-                }
+                plate={phase === 'done' && liveSucceeded > 1 ? `×${liveSucceeded}` : null}
               >
                 {phase === 'charging' ? (
                   <span className="animate-ping text-2xl text-white/40">✦</span>
@@ -714,16 +763,17 @@ export default function AlchemyDialog({
         {phase !== 'idle' && (
           <div className="px-5 pb-2">
             <div className="text-center text-sm font-semibold">
-              {phase === 'charging' && (
+              {(reveal.phase === 'working' || revealing) && (
                 <motion.span
                   animate={{ opacity: [0.5, 1, 0.5] }}
                   transition={{ repeat: Infinity, duration: 0.7 }}
                   style={{ color: GOLD_BRIGHT }}
                 >
-                  ⚗ Transmutando...
+                  ⚗ Transmutando
+                  {revealing && reveal.total > 1 ? ` ${reveal.revealed}/${reveal.total}` : '...'}
                 </motion.span>
               )}
-              {phase === 'done' && result && (
+              {reveal.phase === 'done' && result && (
                 <span
                   style={verdict !== 'fail' ? { color: GOLD_BRIGHT } : undefined}
                   className={verdict === 'fail' ? 'text-red-400' : undefined}
@@ -732,7 +782,27 @@ export default function AlchemyDialog({
                 </span>
               )}
             </div>
-            {phase === 'done' && result && (
+
+            {/* A fila saindo do caldeirão — uma linha por poção revelada */}
+            {revealing && (
+              <div className="mx-auto mt-2 w-full max-w-[260px] space-y-1">
+                {revealTail.map((u, i) => (
+                  <motion.div
+                    key={`unit-${reveal.revealed - i}`}
+                    initial={{ opacity: 0, x: -8 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="flex items-center justify-between rounded-[3px] border border-black/50 bg-[#19191c] px-2 py-1 text-xs"
+                  >
+                    <span className="truncate text-[#c9c9ce]">{centerName}</span>
+                    <span className={`font-bold ${u.ok ? 'text-emerald-300' : 'text-red-400'}`}>
+                      {u.ok ? '✓' : '✗'}
+                    </span>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+
+            {reveal.phase === 'done' && result && (
               <motion.div
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}

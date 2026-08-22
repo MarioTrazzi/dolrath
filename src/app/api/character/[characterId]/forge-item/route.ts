@@ -125,6 +125,7 @@ export async function POST(
           failed: 0,
           xpGained: refineXpAndLevel(recipe.rarity).xp * quantity,
           chance: 1,
+          units: Array.from({ length: quantity }, () => ({ ok: true })),
         }
       : rollCraftBatch(recipe.rarity, level, quantity)
 
@@ -309,6 +310,8 @@ export async function POST(
       succeeded: roll.succeeded,
       failed: roll.failed,
       chance: roll.chance,
+      // Sequência por unidade — a bancada encena um por vez. [[useBatchReveal]]
+      units: roll.units,
       xpGained: roll.xpGained,
       levelInfo,
       characterGold: result.characterGold,

@@ -76,6 +76,12 @@ export default function AlchemyDialogMockPage() {
       ...roll,
       xpGained:
         roll.succeeded * getCraftXp(recipe.rarity, true) + roll.failed * getCraftXp(recipe.rarity, false),
+      // A sequência precisa fechar com o agregado forçado, senão a encenação
+      // conta diferente do resumo.
+      units:
+        forced === 'random'
+          ? roll.units
+          : Array.from({ length: quantity }, (_, i) => ({ ok: i < roll.succeeded })),
     };
     // Consome inventário/gold fake (falha também consome).
     for (const ing of recipe.ingredients) {
@@ -94,6 +100,7 @@ export default function AlchemyDialogMockPage() {
       succeeded: roll.succeeded,
       failed: roll.failed,
       chance: getCraftChance(recipe.rarity, info.level),
+      units: roll.units,
       xpGained: roll.xpGained,
       levelInfo: getProfessionLevelInfo(xp + roll.xpGained),
       characterGold: gold - recipe.goldCost * quantity,

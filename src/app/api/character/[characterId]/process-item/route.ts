@@ -305,6 +305,8 @@ export async function POST(
       produced: roll.produced,
       bonus: roll.bonus,
       yieldChance: roll.chance,
+      // Sequência por unidade — a bancada encena um por vez. [[useBatchReveal]]
+      units: roll.units,
       xpGained: roll.xpGained,
       levelInfo,
       characterGold: result.characterGold,

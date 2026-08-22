@@ -113,6 +113,11 @@ export function getCraftXp(rarity: Rarity, success: boolean): number {
   return success ? full : Math.round(full * CRAFT_FAIL_XP_RATIO);
 }
 
+export interface CraftUnitResult {
+  /** Esta unidade saiu (false = falhou e o insumo foi embora). */
+  ok: boolean;
+}
+
 export interface CraftBatchResult {
   attempted: number;
   succeeded: number;
@@ -121,6 +126,12 @@ export interface CraftBatchResult {
   xpGained: number;
   /** Chance usada por unidade (mesma para o lote todo). */
   chance: number;
+  /**
+   * Uma entrada por unidade, NA ORDEM em que foi rolada. É o que a bancada
+   * encena unidade a unidade (o agregado acima continua sendo a verdade do
+   * que o banco creditou). [[useBatchReveal]]
+   */
+  units: CraftUnitResult[];
 }
 
 /**
@@ -136,8 +147,13 @@ export function rollCraftBatch(
 ): CraftBatchResult {
   const attempted = Math.max(1, Math.floor(quantity));
   const chance = getCraftChance(rarity, level);
+  const units: CraftUnitResult[] = [];
   let succeeded = 0;
-  for (let i = 0; i < attempted; i++) if (rng() < chance) succeeded++;
+  for (let i = 0; i < attempted; i++) {
+    const ok = rng() < chance;
+    if (ok) succeeded++;
+    units.push({ ok });
+  }
   const failed = attempted - succeeded;
   return {
     attempted,
@@ -145,5 +161,6 @@ export function rollCraftBatch(
     failed,
     xpGained: succeeded * getCraftXp(rarity, true) + failed * getCraftXp(rarity, false),
     chance,
+    units,
   };
 }

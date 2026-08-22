@@ -179,6 +179,11 @@ export function processingYieldChance(recipe: Pick<ProcessingRecipe, 'noYield'>,
   return Math.min(PROC_YIELD_CAP, PROC_YIELD_PER_LEVEL * (lv - 1));
 }
 
+export interface ProcessingUnitResult {
+  /** Esta unidade saiu dobrada (perk de rendimento da profissão). */
+  bonus: boolean;
+}
+
 export interface ProcessingBatchResult {
   /** Unidades processadas (o que consome insumo e taxa). */
   attempted: number;
@@ -190,6 +195,12 @@ export interface ProcessingBatchResult {
   chance: number;
   /** XP do lote — por TENTATIVA, o extra é brinde e não acelera a profissão. */
   xpGained: number;
+  /**
+   * Uma entrada por unidade, NA ORDEM em que foi rolada. É o que a bancada
+   * encena unidade a unidade (o agregado acima continua sendo a verdade do
+   * que o banco creditou). [[useBatchReveal]]
+   */
+  units: ProcessingUnitResult[];
 }
 
 /**
@@ -207,14 +218,20 @@ export function rollProcessingBatch(
 ): ProcessingBatchResult {
   const attempted = Math.max(1, Math.min(PROCESSING_BATCH_MAX, Math.floor(quantity)));
   const chance = processingYieldChance(recipe, level);
+  const units: ProcessingUnitResult[] = [];
   let bonus = 0;
-  for (let i = 0; i < attempted; i++) if (chance > 0 && rng() < chance) bonus++;
+  for (let i = 0; i < attempted; i++) {
+    const doubled = chance > 0 && rng() < chance;
+    if (doubled) bonus++;
+    units.push({ bonus: doubled });
+  }
   return {
     attempted,
     produced: attempted + bonus,
     bonus,
     chance,
     xpGained: recipe.xp * attempted,
+    units,
   };
 }
 

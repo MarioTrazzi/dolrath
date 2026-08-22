@@ -88,6 +88,7 @@ export default function ProcessingDialogMockPage() {
       produced: roll.produced,
       bonus: roll.bonus,
       yieldChance: roll.chance,
+      units: roll.units,
       xpGained: roll.xpGained,
       levelInfo: getProfessionLevelInfo(xp + roll.xpGained),
       characterGold: gold - recipe.goldCost * quantity,

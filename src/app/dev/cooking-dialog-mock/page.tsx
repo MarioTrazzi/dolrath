@@ -68,6 +68,7 @@ export default function CookingDialogMockPage() {
       succeeded: quantity,
       failed: 0,
       chance: 1,
+      units: Array.from({ length: quantity }, () => ({ ok: true })),
       xpGained,
       levelInfo: getProfessionLevelInfo(xp + xpGained),
       characterGold: gold - recipe.goldCost * quantity,

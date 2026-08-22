@@ -11,6 +11,7 @@
 // minLevel próprio (não pela tabela de raridade).
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useBatchReveal } from '@/hooks/useBatchReveal';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import { buyGoldOnChain, parseNeededGold, isInsufficientGold } from '@/lib/buyGold';
@@ -62,6 +63,11 @@ export interface ProcessingCraftResult {
   bonus?: number;
   /** Chance de rendimento extra usada no lote. */
   yieldChance?: number;
+  /**
+   * Sequência por unidade, na ordem em que o servidor rolou. É o que a bancada
+   * encena um por vez. Ausente = contrato antigo (encena um bloco só).
+   */
+  units?: { bonus: boolean }[];
   xpGained: number;
   levelInfo: ProfessionLevelInfo;
   characterGold: number | null;
@@ -110,7 +116,6 @@ export default function ProcessingDialog({
   const [recipe, setRecipe] = useState<ProcessingRecipe | null>(null);
   const [craftQty, setCraftQty] = useState(1);
   const [busy, setBusy] = useState(false);
-  const [phase, setPhase] = useState<'idle' | 'charging' | 'done'>('idle');
   const [chargeId, setChargeId] = useState(0);
   const [result, setResult] = useState<ProcessingCraftResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -151,13 +156,27 @@ export default function ProcessingDialog({
     }
   }, [characterId, fetchInfoOverride]);
 
+  // Encenação do lote: o servidor devolve a sequência por unidade e a bancada
+  // revela UMA POR VEZ. O inventário/`onChanged` só recarregam no fim — se
+  // recarregassem junto com a resposta, o insumo sumiria da tela no meio da
+  // animação (a armadilha que o FarmBoard resolve com snapshot).
+  const reveal = useBatchReveal({
+    maxTickMs: CHARGE_MS,
+    onFinish: () => {
+      fetchInventory();
+      onChanged?.();
+    },
+  });
+  const phase: 'idle' | 'charging' | 'done' =
+    reveal.phase === 'idle' ? 'idle' : reveal.phase === 'working' ? 'charging' : 'done';
+
   // Reset SÓ na abertura (callbacks mudam de identidade a cada render do pai).
   useEffect(() => {
     if (!open) return;
     setRecipe(null);
     setResult(null);
     setError(null);
-    setPhase('idle');
+    reveal.reset();
     setCraftQty(1);
     pickedFromLinkRef.current = false;
     fetchInfo();
@@ -207,7 +226,7 @@ export default function ProcessingDialog({
   const loadRecipe = (r: ProcessingRecipe) => {
     setRecipe(r);
     setResult(null);
-    setPhase('idle');
+    reveal.reset();
     setBookOpen(false);
   };
 
@@ -232,8 +251,7 @@ export default function ProcessingDialog({
     setResult(null);
     setError(null);
     setChargeId((c) => c + 1);
-    setPhase('charging');
-    const minDelay = new Promise((resolve) => setTimeout(resolve, CHARGE_MS));
+    reveal.begin();
 
     try {
       let data: ProcessingCraftResult;
@@ -254,13 +272,13 @@ export default function ProcessingDialog({
         if (!res.ok && isInsufficientGold(json.error)) {
           const needed = parseNeededGold(json.error);
           if (!needed || !(await confirmBuyGold(needed))) {
-            setPhase('idle');
+            reveal.reset();
             setBusy(false);
             return;
           }
           const credited = await buyGoldOnChain({ characterId: characterId!, amountGold: needed });
           if (!credited) {
-            setPhase('idle');
+            reveal.reset();
             setBusy(false);
             return;
           }
@@ -270,24 +288,21 @@ export default function ProcessingDialog({
         }
 
         if (!res.ok) {
-          await minDelay;
           setError(json.error || 'Erro ao processar');
-          setPhase('idle');
+          reveal.reset();
           setBusy(false);
           return;
         }
         data = json;
       }
 
-      await minDelay;
       setResult(data);
-      setPhase('done');
       if (data.levelInfo) setLevelInfo(data.levelInfo);
-      fetchInventory();
-      onChanged?.();
+      // Uma unidade por vez: sem a sequência (contrato antigo) encena 1 bloco.
+      reveal.start(data.units?.length ?? 1);
     } catch {
       setError('Erro inesperado ao processar');
-      setPhase('idle');
+      reveal.reset();
     }
     setBusy(false);
   };
@@ -310,6 +325,17 @@ export default function ProcessingDialog({
   const producedCount = result ? (result.produced ?? result.succeeded) : 0;
   const bonusCount = result?.bonus ?? 0;
 
+  // Encenação unidade a unidade: o que já foi REVELADO na tela. O agregado
+  // acima continua sendo a verdade do que o banco creditou — no fim os dois
+  // fecham no mesmo número.
+  const revealing = reveal.phase === 'revealing';
+  const revealedUnits = result?.units ? result.units.slice(0, reveal.revealed) : [];
+  const liveProduced = revealing
+    ? revealedUnits.reduce((n, u) => n + (u.bonus ? 2 : 1), 0)
+    : producedCount;
+  // Últimas unidades reveladas, mais nova em cima (lote grande não vira lista infinita).
+  const revealTail = revealedUnits.slice(-6).reverse();
+
   // ⚠️ Rodapé FIXO da casca: quantidade + ação. Fora da área rolável, senão em
   // tela baixa o botão cai abaixo da dobra (a scrollbar é escondida e não há
   // nenhuma pista de que dá pra rolar) — era o bug do "botão sumiu".
@@ -321,7 +347,7 @@ export default function ProcessingDialog({
           <button
             type="button"
             onClick={() => setCraftQty((q) => Math.max(1, q - 1))}
-            disabled={busy || craftQty <= 1}
+            disabled={busy || revealing || craftQty <= 1}
             className="grid h-7 w-7 place-items-center rounded-[3px] border border-[#46464c] bg-[#232327] text-sm font-bold text-white transition-colors hover:border-[#8a6d3b] disabled:cursor-not-allowed disabled:opacity-30"
           >
             −
@@ -335,13 +361,13 @@ export default function ProcessingDialog({
               const v = Math.round(Number(e.target.value));
               setCraftQty(Number.isFinite(v) ? Math.min(maxCraftable, Math.max(1, v)) : 1);
             }}
-            disabled={busy}
+            disabled={busy || revealing}
             className="w-16 rounded-[3px] border border-[#46464c] bg-[#101013] py-1 text-center text-sm text-white"
           />
           <button
             type="button"
             onClick={() => setCraftQty((q) => Math.min(maxCraftable, q + 1))}
-            disabled={busy || craftQty >= maxCraftable}
+            disabled={busy || revealing || craftQty >= maxCraftable}
             className="grid h-7 w-7 place-items-center rounded-[3px] border border-[#46464c] bg-[#232327] text-sm font-bold text-white transition-colors hover:border-[#8a6d3b] disabled:cursor-not-allowed disabled:opacity-30"
           >
             +
@@ -349,7 +375,7 @@ export default function ProcessingDialog({
           <button
             type="button"
             onClick={() => setCraftQty(maxCraftable)}
-            disabled={busy || craftQty === maxCraftable}
+            disabled={busy || revealing || craftQty === maxCraftable}
             className="text-xs font-semibold underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
             style={{ color: GOLD_BRIGHT }}
           >
@@ -377,14 +403,21 @@ export default function ProcessingDialog({
         </div>
       )}
 
-      <BevelButton
-        onClick={handleProcess}
-        disabled={!unlocked || maxCraftable < 1 || (!characterId && !attemptOverride)}
-        busy={busy}
-        busyLabel="⚙ Processando..."
-      >
-        {craftQty > 1 ? `⚙ Processar ×${craftQty}` : '⚙ Processar'}
-      </BevelButton>
+      {revealing ? (
+        /* Encenação em curso: quem faz grind não pode ficar refém da animação. */
+        <BevelButton onClick={reveal.skip}>
+          ⏩ Pular ({reveal.revealed}/{reveal.total})
+        </BevelButton>
+      ) : (
+        <BevelButton
+          onClick={handleProcess}
+          disabled={!unlocked || maxCraftable < 1 || (!characterId && !attemptOverride)}
+          busy={busy}
+          busyLabel="⚙ Processando..."
+        >
+          {craftQty > 1 ? `⚙ Processar ×${craftQty}` : '⚙ Processar'}
+        </BevelButton>
+      )}
       <div className="mt-2 text-center">
         <button
           type="button"
@@ -426,7 +459,7 @@ export default function ProcessingDialog({
             <div className="relative px-5 pb-1 pt-4">
               <GrinderRig
                 phase={phase}
-                chargeId={chargeId}
+                chargeId={chargeId * 1000 + reveal.tick}
                 materials={recipe.inputs.map((m) => ({
                   name: m.name,
                   emoji: processingItemEmoji(m.name),
@@ -436,7 +469,8 @@ export default function ProcessingDialog({
                 outputName={recipe.outputName}
                 outputEmoji={processingItemEmoji(recipe.outputName)}
                 glowColor={centerUi?.glow}
-                plate={phase === 'done' && producedCount > 1 ? `×${producedCount}` : null}
+                working={reveal.phase === 'working' || revealing}
+                plate={phase === 'done' && liveProduced > 1 ? `×${liveProduced}` : null}
                 statusNode={
                   !unlocked ? (
                     <div className="text-center">
@@ -488,20 +522,43 @@ export default function ProcessingDialog({
             {phase !== 'idle' && (
               <div className="px-5 pb-1 pt-2">
                 <div className="text-center text-sm font-semibold">
-                  {phase === 'charging' && (
+                  {(reveal.phase === 'working' || revealing) && (
                     <motion.span
                       animate={{ opacity: [0.5, 1, 0.5] }}
                       transition={{ repeat: Infinity, duration: 0.7 }}
                       style={{ color: PROC_ACCENT_BRIGHT }}
                     >
-                      ⚙ Processando...
+                      ⚙ Processando
+                      {revealing && reveal.total > 1 ? ` ${reveal.revealed}/${reveal.total}` : '...'}
                     </motion.span>
                   )}
-                  {phase === 'done' && result && (
+                  {reveal.phase === 'done' && result && (
                     <span style={{ color: GOLD_BRIGHT }}>✨ PRONTO!</span>
                   )}
                 </div>
-                {phase === 'done' && result && (
+
+                {/* A fila saindo do triturador — uma linha por unidade revelada */}
+                {revealing && (
+                  <div className="mx-auto mt-2 w-full max-w-[260px] space-y-1">
+                    {revealTail.map((u, i) => (
+                      <motion.div
+                        key={`unit-${reveal.revealed - i}`}
+                        initial={{ opacity: 0, x: -8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="flex items-center justify-between rounded-[3px] border border-black/50 bg-[#19191c] px-2 py-1 text-xs"
+                      >
+                        <span className="truncate text-[#c9c9ce]">
+                          {recipe.outputName}
+                        </span>
+                        <span className="font-bold" style={{ color: u.bonus ? GOLD_BRIGHT : '#9a9aa0' }}>
+                          {u.bonus ? '×2 💎' : '×1'}
+                        </span>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+
+                {reveal.phase === 'done' && result && (
                   <motion.div
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}

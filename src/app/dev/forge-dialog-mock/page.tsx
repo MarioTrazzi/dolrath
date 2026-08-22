@@ -83,6 +83,7 @@ export default function ForgeDialogMockPage() {
           failed: 0,
           xpGained: refineXpAndLevel(recipe.rarity).xp * quantity,
           chance: 1,
+          units: Array.from({ length: quantity }, () => ({ ok: true })),
         }
       : rollCraftBatch(recipe.rarity, info.level, quantity);
     if (!refine) {
@@ -96,6 +97,12 @@ export default function ForgeDialogMockPage() {
         ...roll,
         xpGained:
           roll.succeeded * getCraftXp(recipe.rarity, true) + roll.failed * getCraftXp(recipe.rarity, false),
+        // A sequência precisa fechar com o agregado forçado, senão a encenação
+        // conta diferente do resumo.
+        units:
+          forced === 'random'
+            ? roll.units
+            : Array.from({ length: quantity }, (_, i) => ({ ok: i < roll.succeeded })),
       };
     }
     for (const m of recipe.materials) {
@@ -114,6 +121,7 @@ export default function ForgeDialogMockPage() {
       succeeded: roll.succeeded,
       failed: roll.failed,
       chance: roll.chance,
+      units: roll.units,
       xpGained: roll.xpGained,
       levelInfo: getProfessionLevelInfo(xp + roll.xpGained),
       characterGold: gold - recipe.goldCost * quantity,

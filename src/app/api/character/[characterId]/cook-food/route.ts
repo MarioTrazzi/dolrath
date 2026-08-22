@@ -107,6 +107,7 @@ export async function POST(
       failed: 0,
       xpGained: recipe.xp * quantity,
       chance: 1,
+      units: Array.from({ length: quantity }, () => ({ ok: true })),
     }
 
     const result = await prisma.$transaction(async (tx) => {
@@ -241,6 +242,8 @@ export async function POST(
       succeeded: roll.succeeded,
       failed: roll.failed,
       chance: roll.chance,
+      // Sequência por unidade — a bancada encena um por vez. [[useBatchReveal]]
+      units: roll.units,
       xpGained: roll.xpGained,
       levelInfo,
       characterGold: result.characterGold,

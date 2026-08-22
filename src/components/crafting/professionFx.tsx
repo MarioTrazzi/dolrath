@@ -37,6 +37,13 @@ export interface RigMaterial {
 
 interface RigBaseProps {
   phase: CraftPhase;
+  /**
+   * A máquina continua RODANDO embora esta unidade já tenha assentado — é o
+   * lote sendo encenado uma unidade por vez (`useBatchReveal`): a peça cai a
+   * cada tique (`phase='done'` + `chargeId` novo) sem que a bigorna/engrenagem
+   * pare entre uma e outra.
+   */
+  working?: boolean;
   chargeId: number;
   materials: RigMaterial[];
   outputName: string;
@@ -184,6 +191,7 @@ const SPARK_VECTORS: Array<[number, number, number]> = [
 
 export function AnvilRig({
   phase,
+  working,
   chargeId,
   verdict = null,
   materials,
@@ -195,7 +203,7 @@ export function AnvilRig({
   statusNode,
 }: RigBaseProps & { verdict?: SlotVerdict }) {
   const reduced = useReducedMotion();
-  const charging = phase === 'charging';
+  const charging = phase === 'charging' || working === true;
   const xs = xsFor(materials.length);
   const SLOT = 84;
   const PIECE = { x: 160, y: 58 }; // centro da peça sobre a face da bigorna
@@ -573,6 +581,7 @@ export function AnvilRig({
 
 export function StoveRig({
   phase,
+  working,
   chargeId,
   materials,
   outputName,
@@ -583,7 +592,7 @@ export function StoveRig({
   statusNode,
 }: RigBaseProps) {
   const reduced = useReducedMotion();
-  const charging = phase === 'charging';
+  const charging = phase === 'charging' || working === true;
   const done = phase === 'done';
   const xs = xsFor(materials.length);
   const POT = { x: 160, y: 88 };
@@ -936,6 +945,7 @@ export function NoFailSeal() {
 
 export function GrinderRig({
   phase,
+  working,
   chargeId,
   materials,
   outputName,
@@ -946,7 +956,7 @@ export function GrinderRig({
   statusNode,
 }: RigBaseProps) {
   const reduced = useReducedMotion();
-  const charging = phase === 'charging';
+  const charging = phase === 'charging' || working === true;
   const done = phase === 'done';
   const xs = xsFor(materials.length);
   const BOX_H = 268;

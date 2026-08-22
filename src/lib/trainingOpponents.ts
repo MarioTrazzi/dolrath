@@ -26,6 +26,7 @@ export interface TrainingOpponentDef {
   key: string
   name: string
   dungeonLabel: string
+  /** Chave EN (i18n EN-as-key) — a UI passa por t(). */
   difficultyLabel: string
   image: string
   emoji: string
@@ -49,7 +50,7 @@ export const TRAINING_OPPONENTS: TrainingOpponentDef[] = [
     key: 'lobo',
     name: 'Lobo Faminto',
     dungeonLabel: 'Floresta Sombria',
-    difficultyLabel: 'Fácil',
+    difficultyLabel: 'Easy',
     image: '/monsters/lobo-faminto.webp',
     emoji: '🐺',
     combatClass: 'rogue',
@@ -64,7 +65,7 @@ export const TRAINING_OPPONENTS: TrainingOpponentDef[] = [
     key: 'golem',
     name: 'Golem de Pedra',
     dungeonLabel: 'Caverna de Cristal',
-    difficultyLabel: 'Médio',
+    difficultyLabel: 'Medium',
     image: '/monsters/golem-de-pedra.webp',
     emoji: '🗿',
     combatClass: 'warrior',
@@ -79,7 +80,7 @@ export const TRAINING_OPPONENTS: TrainingOpponentDef[] = [
     key: 'crocodilo',
     name: 'Crocodilo Ancião',
     dungeonLabel: 'Pântano Maldito',
-    difficultyLabel: 'Difícil',
+    difficultyLabel: 'Hard',
     image: '/monsters/crocodilo-anciao.webp',
     emoji: '🐊',
     combatClass: 'monk',
@@ -94,7 +95,7 @@ export const TRAINING_OPPONENTS: TrainingOpponentDef[] = [
     key: 'gargula',
     name: 'Gárgula de Obsidiana',
     dungeonLabel: 'Ruínas Arcanas',
-    difficultyLabel: 'Muito difícil',
+    difficultyLabel: 'Very hard',
     image: '/monsters/gargula-de-obsidiana.webp',
     emoji: '🦅',
     combatClass: 'mage',

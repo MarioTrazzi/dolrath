@@ -20,7 +20,8 @@ import { getTrainingOpponent, DEFAULT_TRAINING_OPPONENT_KEY } from '@/lib/traini
 import { DUNGEON_BATTLE_BG } from '@/lib/walkSceneAssets'
 import ImageBackdrop from '@/components/dungeon/ImageBackdrop'
 import type { DungeonId } from '@/lib/dungeonAdventures'
-import { useI18n } from '@/lib/i18n/I18nProvider'
+import { useI18n, useT } from '@/lib/i18n/I18nProvider'
+import { localizeItemName } from '@/lib/i18n/catalog'
 
 const ARENA_BG_POOL = Object.entries(DUNGEON_BATTLE_BG) as [DungeonId, string][]
 
@@ -250,6 +251,8 @@ function consumableIcon(name: string, stats: any): string {
 }
 
 function CombatPageContent() {
+  const t = useT()
+  const { locale } = useI18n()
   const router = useRouter()
   const searchParams = useSearchParams()
   const roomId = searchParams?.get('room') || 'default'
@@ -695,7 +698,7 @@ function CombatPageContent() {
               fetch(`/api/character/${characterId}/detransform`, { method: 'POST' }).catch(() => {})
             }
           } else {
-            throw new Error('Personagem não encontrado')
+            throw new Error(t('Character not found'))
           }
         } catch (error) {
           console.error('Erro ao carregar personagem:', error)
@@ -734,7 +737,7 @@ function CombatPageContent() {
               isAlive: true
             }
           } else {
-            throw new Error('API não disponível')
+            throw new Error(t('API not available'))
           }
         } catch (apiError) {
           playerData = {
@@ -858,7 +861,7 @@ function CombatPageContent() {
           .filter((item: HotbarItem) => item.hpRestore > 0 || item.mpRestore > 0 || item.staminaRestore > 0)
         setConsumables(items)
       } catch (error) {
-        console.error('Erro ao carregar consumíveis:', error)
+        console.error('Failed to load consumables:', error)
       }
     }
     loadConsumables()
@@ -882,7 +885,7 @@ function CombatPageContent() {
       socket.emit('chat_message', {
         playerId: currentPlayer.id,
         roomId,
-        message: `❌ ${item.name} não teria efeito agora!`
+        message: t('❌ {name} would have no effect right now!', { name: localizeItemName(item.name, locale) })
       })
       return
     }
@@ -916,7 +919,7 @@ function CombatPageContent() {
         body: JSON.stringify({ itemId: item.itemId, characterId })
       })
     } catch (error) {
-      console.error('Erro ao consumir item do inventário:', error)
+      console.error('Failed to consume inventory item:', error)
     }
   }
 
@@ -936,7 +939,7 @@ function CombatPageContent() {
       socket.emit('chat_message', {
         playerId: currentPlayer.id,
         roomId,
-        message: `❌ O Especial só pode ser usado transformado!`
+        message: t('❌ The Special can only be used while transformed!')
       })
       return
     }
@@ -949,14 +952,14 @@ function CombatPageContent() {
       if (currentPlayer.stamina < staminaCost) {
         socket.emit('chat_message', {
           playerId: currentPlayer.id, roomId,
-          message: `❌ Stamina insuficiente! (${staminaCost} STA necessária)`
+          message: t('❌ Not enough stamina! ({n} STA required)', { n: staminaCost })
         })
         return
       }
       if (currentPlayer.mp < mpCost) {
         socket.emit('chat_message', {
           playerId: currentPlayer.id, roomId,
-          message: `❌ MP insuficiente para esta ação! (${mpCost} MP necessário)`
+          message: t('❌ Not enough MP for this action! ({n} MP required)', { n: mpCost })
         })
         return
       }
@@ -976,7 +979,7 @@ function CombatPageContent() {
     if (staminaCost > 0 && currentPlayer.stamina < staminaCost) {
       socket.emit('chat_message', {
         playerId: currentPlayer.id, roomId,
-        message: `❌ Stamina insuficiente para esta ação! (${staminaCost} stamina necessária)`
+        message: t('❌ Not enough stamina for this action! ({n} stamina required)', { n: staminaCost })
       })
       return
     }
@@ -994,7 +997,7 @@ function CombatPageContent() {
   const handleSpecialAbility = (abilityId: string) => {
     if (!currentPlayer || !isMyTurn || combatRoom?.phase !== CombatPhase.PLAYER_TURN) return
     if (!currentPlayer.isTransformed) {
-      socket.emit('chat_message', { playerId: currentPlayer.id, roomId, message: '❌ Os especiais só podem ser usados transformado!' })
+      socket.emit('chat_message', { playerId: currentPlayer.id, roomId, message: t('❌ Specials can only be used while transformed!') })
       return
     }
     const cost = SPECIAL_COST[abilityId] || { stamina: 0, mp: 0, cd: 0 }
@@ -1053,7 +1056,7 @@ function CombatPageContent() {
       socket.emit('chat_message', { 
         playerId: currentPlayer.id, 
         roomId, 
-        message: `❌ Stamina insuficiente para ${reaction === 'dodge' ? 'esquivar' : 'defender'}! (${staminaCost} stamina necessária)` 
+        message: t('❌ Not enough stamina to {action}! ({n} stamina required)', { action: reaction === 'dodge' ? t('dodge') : t('defend'), n: staminaCost }) 
       })
       return
     }
@@ -1082,7 +1085,7 @@ function CombatPageContent() {
       socket.emit('chat_message', {
         playerId: currentPlayer.id,
         roomId,
-        message: '🔒 Você já se transformou nesta luta!',
+        message: t('🔒 You have already transformed in this fight!'),
       })
       return
     }
@@ -1102,7 +1105,7 @@ function CombatPageContent() {
         socket.emit('chat_message', {
           playerId: currentPlayer.id,
           roomId,
-          message: `❌ Stamina insuficiente para transformar! (${staminaCost} stamina necessária)`,
+          message: t('❌ Not enough stamina to transform! ({n} stamina required)', { n: staminaCost }),
         })
         return
       }
@@ -1111,7 +1114,7 @@ function CombatPageContent() {
         socket.emit('chat_message', {
           playerId: currentPlayer.id,
           roomId,
-          message: `❌ MP insuficiente para transformar! (${mpCost} MP necessário)`,
+          message: t('❌ Not enough MP to transform! ({n} MP required)', { n: mpCost }),
         })
         return
       }
@@ -1170,7 +1173,7 @@ function CombatPageContent() {
         socket.emit('chat_message', {
           playerId: currentPlayer.id,
           roomId,
-          message: `❌ Transformação falhou: ${error.error || 'erro'}`,
+          message: t('❌ Transformation failed: {error}', { error: error.error || t('error') }),
         })
       }
     } catch (error) {
@@ -1178,7 +1181,7 @@ function CombatPageContent() {
       socket.emit('chat_message', {
         playerId: currentPlayer.id,
         roomId,
-        message: `❌ Erro inesperado na transformação`,
+        message: t('❌ Unexpected error in the transformation'),
       })
     } finally {
       setIsTransforming(false)
@@ -1225,9 +1228,9 @@ function CombatPageContent() {
     const mine = diceResults[currentPlayer.id]
     const theirs = diceResults[opponent.id]
     if (!mine || !theirs) return null
-    if (mine.total === theirs.total) return 'Empate! Decidindo por experiência...'
+    if (mine.total === theirs.total) return t('Tie! Deciding by experience...')
     const winnerName = mine.total > theirs.total ? (currentPlayerDisplay?.name || currentPlayer.name) : opponent.name
-    return `${winnerName} venceu a iniciativa!`
+    return t('{name} won the initiative!', { name: winnerName })
   })()
 
   const closeRoom = () => {
@@ -1329,15 +1332,15 @@ function CombatPageContent() {
   if (isSpectator) {
     statusContent = (
       <div className="text-center space-y-2 px-2">
-        <div className="text-sm text-blue-300 font-bold">👁️ Modo Espectador</div>
-        <div className="text-xs text-white/55">Use o chat para acompanhar a luta.</div>
+        <div className="text-sm text-blue-300 font-bold">{t('👁️ Spectator Mode')}</div>
+        <div className="text-xs text-white/55">{t('Use the chat to follow the fight.')}</div>
         {combatRoom?.phase === CombatPhase.COMBAT_END && (
           <button
             type="button"
             onClick={() => router.push('/combat-lobby')}
             className="mt-1 px-4 py-2 rounded-xl font-bold text-xs text-white bg-gradient-to-r from-red-700 to-red-500"
           >
-            Voltar ao Lobby
+            {t('Back to Lobby')}
           </button>
         )}
       </div>
@@ -1345,14 +1348,14 @@ function CombatPageContent() {
   } else if (isModerator) {
     statusContent = (
       <div className="text-center px-2">
-        <div className="text-sm text-purple-300 font-bold">🛡️ Moderando</div>
-        <div className="text-xs text-white/55">Funcionalidades em desenvolvimento.</div>
+        <div className="text-sm text-purple-300 font-bold">{t('🛡️ Moderating')}</div>
+        <div className="text-xs text-white/55">{t('Features in development.')}</div>
       </div>
     )
   } else if (combatRoom?.phase === CombatPhase.INITIATIVE_ROLL) {
     statusContent = (
       <div className="text-white/60 text-xs sm:text-sm font-bold text-center">
-        🎲 {initiativeWinnerName || 'Rolando iniciativa...'}
+        🎲 {initiativeWinnerName || t('Rolling initiative...')}
       </div>
     )
   } else if (combatRoom?.phase === CombatPhase.COMBAT_END) {
@@ -1361,35 +1364,37 @@ function CombatPageContent() {
     statusContent = (
       <div className="text-center space-y-2 px-2 max-w-sm">
         <div className={`text-base sm:text-lg font-bold ${isWinner ? 'text-emerald-400' : 'text-red-400'}`}>
-          {isWinner ? '🏆 VITÓRIA!' : '💀 DERROTA!'}
+          {isWinner ? t('🏆 VICTORY!') : t('💀 DEFEAT!')}
         </div>
         {isTraining ? (
           <div className="rounded-lg border border-white/15 bg-black/30 p-2 text-[11px] text-white/65">
-            🏟️ Treino concluído — sem XP, gold ou ranking.
-            <span className="block mt-1 text-white/45">Recompensas só em luta ranqueada (Buscar Oponente / sala).</span>
+            {t('🏟️ Training complete — no XP, gold or ranking.')}
+            <span className="block mt-1 text-white/45">{t('Rewards only in a ranked fight (Find Opponent / room).')}</span>
           </div>
         ) : battleReward ? (
           battleReward.failed ? (
             <div className="rounded-lg border border-amber-500/40 bg-amber-900/20 p-2 text-[11px] text-amber-200">
-              ⚠️ As recompensas não puderam ser creditadas. Nada foi perdido.
+              {t('⚠️ The rewards could not be credited. Nothing was lost.')}
             </div>
           ) : battleReward.skipped ? (
             <div className="rounded-lg border border-white/15 bg-black/30 p-2 text-[11px] text-white/60">
               {battleReward.skipped === 'same_user'
-                ? '🤝 Luta entre personagens da mesma conta — sem recompensa.'
-                : '⚡ Sem stamina para pagar a entrada da arena — nada foi cobrado.'}
+                ? t('🤝 Fight between characters of the same account — no reward.')
+                : t('⚡ No stamina to pay the arena entry — nothing was charged.')}
             </div>
           ) : (
             <div className="rounded-lg border border-amber-500/30 bg-amber-900/15 p-2 space-y-1">
-              <div className="text-[10px] font-bold text-amber-300">💰 A BOLSA DA ARENA</div>
+              <div className="text-[10px] font-bold text-amber-300">{t('💰 THE ARENA PURSE')}</div>
               <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-xs font-bold">
                 {battleReward.xpGained > 0 && <span className="text-sky-300">+{battleReward.xpGained} XP</span>}
                 {battleReward.goldGained > 0 && <span className="text-amber-300">+{battleReward.goldGained} 💰</span>}
                 {!!battleReward.staminaCharged && <span className="text-emerald-300">−{battleReward.staminaCharged} ⚡</span>}
                 {battleReward.rankPoints != null && (
                   <span className="text-fuchsia-300">
-                    {battleReward.rankPointsGained ? `+${battleReward.rankPointsGained} pts` : 'pts'}
-                    <span className="text-fuchsia-300/60"> (total {battleReward.rankPoints})</span>
+                    {battleReward.rankPointsGained
+                      ? t('+{n} pts', { n: battleReward.rankPointsGained })
+                      : t('pts')}
+                    <span className="text-fuchsia-300/60">{t(' (total {n})', { n: battleReward.rankPoints ?? 0 })}</span>
                   </span>
                 )}
               </div>
@@ -1397,24 +1402,29 @@ function CombatPageContent() {
                   olhando o placar e não entendia por quê. */}
               {battleReward.rankingSkipped && (
                 <div className="text-[11px] text-white/55">
-                  {battleReward.rankingSkipped === 'bot_opponent' && '🤖 Oponente da casa — não pontua no ranking.'}
-                  {battleReward.rankingSkipped === 'pair_cap' && '🔁 Limite diário de pontos contra este mesmo oponente.'}
-                  {battleReward.rankingSkipped === 'unpaid_entry' && '⚡ Um dos lados entrou sem stamina para a taxa — a luta não pontua.'}
-                  {battleReward.rankingSkipped === 'error' && '⚠️ O ranking não pôde ser atualizado nesta luta.'}
+                  {battleReward.rankingSkipped === 'bot_opponent' && t('🤖 House opponent — does not score in the ranking.')}
+                  {battleReward.rankingSkipped === 'pair_cap' && t('🔁 Daily point cap against this same opponent.')}
+                  {battleReward.rankingSkipped === 'unpaid_entry' && t('⚡ One side entered without stamina for the fee — the fight does not score.')}
+                  {battleReward.rankingSkipped === 'error' && t('⚠️ The ranking could not be updated in this fight.')}
                 </div>
               )}
               {battleReward.leveledUp && (
-                <div className="text-xs font-bold text-emerald-400">🎉 Subiu para o nível {battleReward.newLevel}!</div>
+                <div className="text-xs font-bold text-emerald-400">{t('🎉 You reached level {n}!', { n: battleReward.newLevel ?? 0 })}</div>
               )}
               {!!battleReward.equipmentWear?.some((w) => w.justBroke) && (
                 <div className="text-[11px] text-red-400 font-bold">
-                  💥 Quebrou: {battleReward.equipmentWear.filter((w) => w.justBroke).map((w) => w.name).join(', ')}
+                  {t('💥 Broke: {names}', {
+                    names: battleReward.equipmentWear
+                      .filter((w) => w.justBroke)
+                      .map((w) => localizeItemName(w.name, locale))
+                      .join(', '),
+                  })}
                 </div>
               )}
             </div>
           )
         ) : (
-          <div className="text-[11px] text-white/45 animate-pulse">Contando a bolsa da arena…</div>
+          <div className="text-[11px] text-white/45 animate-pulse">{t('Counting the arena purse…')}</div>
         )}
         <button
           type="button"
@@ -1429,7 +1439,7 @@ function CombatPageContent() {
     statusContent = (
       <div className="flex flex-col items-center gap-2 px-2">
         <div className="text-xs sm:text-sm text-white/60 font-bold text-center">
-          {!opponent ? 'Aguardando oponente...' : 'Preparando para o combate...'}
+          {!opponent ? t('Waiting for opponent...') : t('Preparing for combat...')}
         </div>
         {opponent && (
           <button
@@ -1441,7 +1451,7 @@ function CombatPageContent() {
                 : 'bg-gradient-to-r from-red-700 to-red-500 hover:scale-105'
             }`}
           >
-            {isReady ? '✅ Pronto!' : '🏁 Ficar Pronto'}
+            {isReady ? t('✅ Ready!') : t('🏁 Get Ready')}
           </button>
         )}
       </div>
@@ -1451,10 +1461,10 @@ function CombatPageContent() {
       <div className="flex flex-col items-center gap-1.5">
         <div className="text-white/50 text-xs sm:text-sm font-bold animate-pulse text-center">
           {combatRoom?.phase === CombatPhase.DICE_ROLL
-            ? '🎲 Resolvendo golpe…'
+            ? t('🎲 Resolving blow…')
             : !isMyTurn
               ? '⏳ Turno do oponente...'
-              : '⚔️ Executando ação...'}
+              : t('⚔️ Executing action...')}
         </div>
         {!isSpectator && !isModerator && !isTraining && combatRoom?.isActive && (
           <button
@@ -1487,7 +1497,7 @@ function CombatPageContent() {
             ? {
                 available: true,
                 activeLabel: currentPlayer?.isTransformed
-                  ? (transformCfg?.name || 'Transformado')
+                  ? (transformCfg?.name || t('Transformed'))
                   : null,
                 activeTurnsHint: currentPlayer?.isTransformed
                   ? (currentPlayer.transformationData?.remainingTurns != null
@@ -1497,43 +1507,52 @@ function CombatPageContent() {
                 used: usedTransformThisMatch && !currentPlayer?.isTransformed,
                 disabled: transformDisabled && !currentPlayer?.isTransformed,
                 title: usedTransformThisMatch
-                  ? 'Transformação já usada nesta luta (1× por luta)'
+                  ? t('Transformation already used in this fight (1× per fight)')
                   : isTransforming
-                    ? 'Transformando...'
+                    ? t('Transforming...')
                     : singleTransformForm
-                      ? `${singleTransformForm.cost.mp} MP · ${singleTransformForm.cost.stamina}⚡ · ${singleTransformForm.duration} turnos`
-                      : `${transformForms.length} formas — MP+⚡ · 1× por luta`,
+                      ? t('{mp} MP · {sta}⚡ · {turns} turns', {
+                          mp: singleTransformForm.cost.mp,
+                          sta: singleTransformForm.cost.stamina,
+                          turns: singleTransformForm.duration,
+                        })
+                      : t('{n} forms — MP+⚡ · 1× per fight', { n: transformForms.length }),
                 buttonLabel: usedTransformThisMatch
-                  ? 'Transf. usada'
+                  ? t('Transf. used')
                   : isTransforming
-                    ? 'Transformando...'
-                    : 'Transformar',
+                    ? t('Transforming...')
+                    : t('Transform'),
                 costHint: !usedTransformThisMatch && !isTransforming
                   ? (singleTransformForm
                     ? `${singleTransformForm.cost.mp}MP`
-                    : `${transformForms.length} formas`)
+                    : t('{n} forms', { n: transformForms.length }))
                   : undefined,
                 onClick: () => {
                   if (usedTransformThisMatch || isTransforming) return
                   if (singleTransformForm) handleTransformationChoice(transformForms[0])
                 },
                 forms: transformForms.length > 1
-                  ? transformForms.map(t => {
-                      const cfg = TRANSFORMATION_CONFIG[t]
+                  // `form`, não `t`: `t` é a função de tradução do escopo de cima.
+                  ? transformForms.map(form => {
+                      const cfg = TRANSFORMATION_CONFIG[form]
                       const lockedForm = (currentPlayer?.unlockedTransformation || '') as TransformationType
-                      const formLocked = !!lockedForm && lockedForm !== t
+                      const formLocked = !!lockedForm && lockedForm !== form
                       const resLocked =
                         !currentPlayer ||
                         currentPlayer.mp < cfg.cost.mp ||
                         currentPlayer.stamina < cfg.cost.stamina
                       return {
-                        key: t,
+                        key: form,
                         label: cfg.name,
                         sub: formLocked
-                          ? 'forma da criação'
-                          : `${cfg.cost.mp}MP · ${cfg.cost.stamina}⚡ · ${cfg.duration} turnos`,
+                          ? t('creation form')
+                          : t('{mp} MP · {sta}⚡ · {turns} turns', {
+                              mp: cfg.cost.mp,
+                              sta: cfg.cost.stamina,
+                              turns: cfg.duration,
+                            }),
                         locked: formLocked || resLocked || isTransforming,
-                        onPick: () => handleTransformationChoice(t),
+                        onPick: () => handleTransformationChoice(form),
                       }
                     })
                   : undefined,
@@ -1569,7 +1588,7 @@ function CombatPageContent() {
                 type="button"
                 onClick={closeRoom}
                 className="px-3 py-1.5 rounded-full text-[10px] font-black border bg-white/5 border-white/15 text-white/60 hover:text-white"
-                title="Fechar sala"
+                title={t('Close room')}
               >
                 🚪
               </button>
@@ -1578,7 +1597,7 @@ function CombatPageContent() {
               type="button"
               onClick={() => router.push('/combat-lobby')}
               className="px-2 py-1.5 rounded-full text-white/70 hover:text-white border border-white/15 bg-white/5"
-              title="Voltar ao lobby"
+              title={t('Back to the lobby')}
             >
               <X size={14} />
             </button>
@@ -1608,7 +1627,7 @@ function CombatPageContent() {
                     visible: true,
                     diceType: 20,
                     hasRolled: hasRolledInitiative,
-                    label: '⚡ Iniciativa! Quem tirar mais no d20 começa',
+                    label: t('⚡ Initiative! Highest d20 goes first'),
                     onRoll: rollInitiative,
                     myResult: currentPlayer ? diceResults[currentPlayer.id] : null,
                     waitingForOpponent: opponent ? !diceResults[opponent.id] : false,
@@ -1632,10 +1651,10 @@ function CombatPageContent() {
                       // Auto-roll: sempre rolling. Legado (clique): hasRolledDice.
                       hasRolled: autoAttack ? true : hasRolledDice,
                       label: autoAttack
-                        ? `🎲 Rolando d${sides}…`
+                        ? t('🎲 Rolling d{n}…', { n: sides })
                         : pending.defenseAction === 'exhausted'
-                          ? `😮‍💨 Oponente exausto! Role o d${sides}!`
-                          : `🎲 Role o d${sides}!`,
+                          ? t('😮‍💨 Opponent exhausted! Roll the d{n}!', { n: sides })
+                          : t('🎲 Roll the d{n}!', { n: sides }),
                       onRoll: autoAttack ? () => {} : () => handleRollDice(sides),
                       myResult: attackResult,
                       waitingForOpponent: false,
@@ -1654,7 +1673,7 @@ function CombatPageContent() {
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-black text-white text-lg">🧪 Consumíveis</h3>
+              <h3 className="font-black text-white text-lg">{t('🧪 Consumables')}</h3>
               {currentPlayer && (
                 <div className="flex gap-3 text-xs">
                   <span className="text-emerald-400">❤️ {Math.round(currentPlayer.hp)}/{currentPlayer.maxHp}</span>
@@ -1664,7 +1683,7 @@ function CombatPageContent() {
               )}
             </div>
             {consumables.length === 0 ? (
-              <p className="text-white/50 text-sm text-center py-6">Nenhum consumível restaurador no inventário.</p>
+              <p className="text-white/50 text-sm text-center py-6">{t('No restoring consumable in the inventory.')}</p>
             ) : (
               <div className="space-y-2 max-h-72 overflow-y-auto">
                 {consumables.map(c => {
@@ -1690,7 +1709,7 @@ function CombatPageContent() {
                         </span>
                         <div className="min-w-0">
                           <div className="text-white text-sm font-bold truncate">
-                            {c.name} <span className="text-white/50 font-normal">×{c.quantity}</span>
+                            {localizeItemName(c.name, locale)} <span className="text-white/50 font-normal">×{c.quantity}</span>
                           </div>
                           <div className="text-white/50 text-[11px]">
                             {c.hpRestore > 0 ? `+${c.hpRestore} ❤️` : ''}
@@ -1707,20 +1726,20 @@ function CombatPageContent() {
                         disabled={disabled}
                         className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-black text-white disabled:opacity-40 bg-gradient-to-r from-emerald-700 to-green-600"
                       >
-                        Usar
+                        {t('Use')}
                       </button>
                     </div>
                   )
                 })}
               </div>
             )}
-            <p className="text-white/40 text-[10px] text-center mt-2">Usar um item consome seu turno.</p>
+            <p className="text-white/40 text-[10px] text-center mt-2">{t('Using an item consumes your turn.')}</p>
             <button
               type="button"
               onClick={() => setShowItems(false)}
               className="mt-3 w-full py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm font-bold transition-colors"
             >
-              Fechar
+              {t('Close')}
             </button>
           </div>
         </div>

@@ -23,6 +23,7 @@ import { DUNGEONSMAP_PT } from './dungeonsmap'
 import { FARM_PT } from './farm'
 import { QUESTS_PT } from './quests'
 import { DUNGEON_PT } from './dungeon'
+import { PVP_PT } from './pvp'
 
 export const PT_DICT: Record<string, string> = {
   ...COMMON_PT,
@@ -48,4 +49,5 @@ export const PT_DICT: Record<string, string> = {
   ...FARM_PT,
   ...QUESTS_PT,
   ...DUNGEON_PT,
+  ...PVP_PT,
 }

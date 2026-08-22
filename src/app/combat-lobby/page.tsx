@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
+import { useT, useI18n } from '@/lib/i18n/I18nProvider'
+import { localizeItemName } from '@/lib/i18n/catalog'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { io, Socket } from 'socket.io-client'
@@ -75,6 +77,8 @@ interface Player {
 }
 
 export default function CombatLobbyPage() {
+  const t = useT()
+  const { locale } = useI18n()
   const router = useRouter()
   // Herói ATIVO global (navbar): a arena PvP usa sempre o personagem selecionado.
   const { activeCharacterId } = useActiveCharacter()
@@ -271,7 +275,7 @@ export default function CombatLobbyPage() {
   const createRoom = async () => {
     if (!newRoomName.trim() || !selectedCharacter) return
     if (isPrivateRoom && roomPassword.trim().length < 4) {
-      alert('Sala com senha precisa de pelo menos 4 caracteres.')
+      alert(t('A password-protected room needs at least 4 characters.'))
       return
     }
 
@@ -337,10 +341,10 @@ export default function CombatLobbyPage() {
 
   const estimatedWaitLabel = (elapsedSec: number) => {
     // Banda do matchmaker: ±0 → 15s, ±1 → 30s, ±2 depois — estimativa amigável.
-    if (elapsedSec < 8) return '5–20 s'
-    if (elapsedSec < 20) return '10–30 s'
-    if (elapsedSec < 40) return '20–45 s'
-    return 'até ~1 min'
+    if (elapsedSec < 8) return t('5–20 s')
+    if (elapsedSec < 20) return t('10–30 s')
+    if (elapsedSec < 40) return t('20–45 s')
+    return t('up to ~1 min')
   }
 
   const closeSearchDialog = () => {
@@ -419,8 +423,11 @@ export default function CombatLobbyPage() {
       queueSocketRef.current = null
       setQueueBlocked(
         data.reason === 'gathering'
-          ? '⛏️ Seu herói está coletando. Encerre a coleta antes de entrar na arena.'
-          : `⚡ Cada luta na arena custa ${data.required ?? 0}⚡ e você tem ${data.stamina ?? 0}. Ela volta sozinha (+2 a cada 15 min).`
+          ? t('⛏️ Your hero is gathering. End the gathering before entering the arena.')
+          : t('⚡ Each arena fight costs {required}⚡ and you have {stamina}. It comes back on its own (+2 every 15 min).', {
+              required: data.required ?? 0,
+              stamina: data.stamina ?? 0,
+            })
       )
       setSearchPhase('idle')
       setShowSearchDialog(false)
@@ -462,9 +469,9 @@ export default function CombatLobbyPage() {
 
   const getRoleDescription = (role: RoomRole) => {
     switch (role) {
-      case RoomRole.FIGHTER: return 'Participa do combate (máx. 2)'
-      case RoomRole.SPECTATOR: return 'Assiste ao combate (máx. 8)'
-      case RoomRole.MODERATOR: return 'Controla a sala (máx. 2) - Em breve'
+      case RoomRole.FIGHTER: return t('Fights in the combat (max. 2)')
+      case RoomRole.SPECTATOR: return t('Watches the combat (max. 8)')
+      case RoomRole.MODERATOR: return t('Controls the room (max. 2) - Coming soon')
       default: return ''
     }
   }
@@ -519,10 +526,10 @@ export default function CombatLobbyPage() {
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'waiting': return 'Aguardando'
-      case 'in_progress': return 'Em Progresso'
-      case 'finished': return 'Finalizada'
-      default: return 'Desconhecido'
+      case 'waiting': return t('Waiting')
+      case 'in_progress': return t('In Progress')
+      case 'finished': return t('Finished')
+      default: return t('Unknown')
     }
   }
 
@@ -532,19 +539,19 @@ export default function CombatLobbyPage() {
     
     // Verificar se a data é válida
     if (isNaN(dateObj.getTime())) {
-      return 'Data inválida'
+      return t('Invalid date')
     }
     
     const diffInMinutes = Math.floor((now.getTime() - dateObj.getTime()) / 60000)
     
-    if (diffInMinutes < 1) return 'Agora mesmo'
-    if (diffInMinutes < 60) return `${diffInMinutes}m atrás`
+    if (diffInMinutes < 1) return t('Just now')
+    if (diffInMinutes < 60) return t('{n}m ago', { n: diffInMinutes })
     
     const diffInHours = Math.floor(diffInMinutes / 60)
-    if (diffInHours < 24) return `${diffInHours}h atrás`
+    if (diffInHours < 24) return t('{n}h ago', { n: diffInHours })
     
     const diffInDays = Math.floor(diffInHours / 24)
-    return `${diffInDays}d atrás`
+    return t('{n}d ago', { n: diffInDays })
   }
 
   if (isLoading) {
@@ -568,28 +575,28 @@ export default function CombatLobbyPage() {
         <div className="overflow-hidden rounded-t-[4px] border border-b-0 border-[#46464c] shadow-2xl shadow-black/60" style={{ background: PANEL_BG }}>
           <div className="flex items-center gap-2 px-4 py-2.5" style={{ background: TITLEBAR_BG, borderBottom: '1px solid rgba(0,0,0,0.7)' }}>
             <Sword size={17} style={{ color: GOLD }} />
-            <span className="text-[15px] font-semibold tracking-wide text-[#dcdce0]">Arena de Combate PvP</span>
+            <span className="text-[15px] font-semibold tracking-wide text-[#dcdce0]">{t('PvP Combat Arena')}</span>
           </div>
 
           <div className="flex flex-row flex-wrap items-start justify-between gap-4 p-5">
             <div className="min-w-0">
               <h1 className="text-2xl sm:text-3xl font-black text-[#ece7da]" style={{ letterSpacing: '0.5px' }}>
-                Escolha sua arena
+                {t('Choose your arena')}
               </h1>
-              <p className="text-[#8a8a90] mt-1 text-sm">Entre numa sala existente ou crie a sua própria!</p>
+              <p className="text-[#8a8a90] mt-1 text-sm">{t('Join an existing room or create your own!')}</p>
             </div>
             {/* Personagem ativo (definido na navbar — sem seletor aqui) */}
             {selectedCharacter && (
               <div className="inline-flex flex-col items-start rounded-[3px] border border-[#46464c] bg-[#19191c] px-4 py-2.5">
                 <div className="font-bold text-lg text-[#ece7da]">{selectedCharacter.name}</div>
                 <div className="text-sm text-[#8a8a90]">
-                  Nv.{selectedCharacter.level} • {selectedCharacter.race} {selectedCharacter.class}
+                  {t('Lv.{n}', { n: selectedCharacter.level })} • {selectedCharacter.race} {selectedCharacter.class}
                 </div>
                 <div className="text-sm text-[#c9c9ce] flex items-center gap-3 mt-0.5 tabular-nums">
                   <span>❤️ {selectedCharacter.hp}/{selectedCharacter.maxHp}</span>
                   <span>🔮 {selectedCharacter.mp}/{selectedCharacter.maxMp}</span>
                   {!selectedCharacter.isAlive && (
-                    <span className="text-red-400 font-bold">💀 MORTO</span>
+                    <span className="text-red-400 font-bold">{t('💀 DEAD')}</span>
                   )}
                 </div>
               </div>
@@ -605,9 +612,9 @@ export default function CombatLobbyPage() {
               <div className="flex items-center">
                 <span className="text-xl mr-3">⚠️</span>
                 <div>
-                  <p className="font-bold" style={{ color: '#e09a3a' }}>Nenhum personagem encontrado</p>
+                  <p className="font-bold" style={{ color: '#e09a3a' }}>{t('No character found')}</p>
                   <p className="text-[#8a8a90] text-sm">
-                    Crie um personagem primeiro para poder participar de combates PvP.
+                    {t('Create a character first to take part in PvP combat.')}
                   </p>
                 </div>
               </div>
@@ -618,10 +625,10 @@ export default function CombatLobbyPage() {
           <div className="border-b border-black/60 bg-[#19191c] p-6">
             <h2 className="text-lg font-semibold text-[#dcdce0] mb-3 flex items-center tracking-wide">
               <Search className="mr-2" size={20} style={{ color: GOLD }} />
-              Buscar Oponente
+              {t('Find Opponent')}
             </h2>
             <p className="text-sm text-[#8a8a90] mb-4">
-              Encontra alguém do mesmo nível (fila aleatória). Salas com amigos ficam em Criar Sala / Entrar com ID.
+              {t('Finds someone of the same level (random queue). Rooms with friends live in Create Room / Join with ID.')}
             </p>
             <button
               onClick={startSearchOpponent}
@@ -630,7 +637,7 @@ export default function CombatLobbyPage() {
               style={BEVEL_VARIANTS.gold}
             >
               <Search className="mr-2" size={18} />
-              Buscar Oponente
+              {t('Find Opponent')}
             </button>
             {/* ⚡ Recusa do servidor: melhor dizer o motivo do que deixar o dialog girar. */}
             {queueBlocked && (
@@ -640,14 +647,16 @@ export default function CombatLobbyPage() {
             )}
             {selectedCharacter && (
               <p className="mt-3 text-xs text-[#8a8a90]">
-                ⚡ Stamina: <span className="text-[#dcdce0] font-semibold">{selectedCharacter.stamina}</span>
-                /{selectedCharacter.maxStamina} — cada luta custa{' '}
-                <span className="text-[#dcdce0] font-semibold">{PVP_FIGHT_STAMINA}⚡</span> fixos
-                ({PVP_FIGHTS_PER_DAY} lutas por dia). Dá para{' '}
+                {t('⚡ Stamina: ')}
+                <span className="text-[#dcdce0] font-semibold">{selectedCharacter.stamina}</span>
+                /{selectedCharacter.maxStamina}
+                {t(' — each fight costs ')}
+                <span className="text-[#dcdce0] font-semibold">{t('{n}⚡ flat', { n: PVP_FIGHT_STAMINA })}</span>
+                {t(' ({n} fights per day). Enough for ', { n: PVP_FIGHTS_PER_DAY })}
                 <span className="text-[#dcdce0] font-semibold">
                   {Math.floor(selectedCharacter.stamina / PVP_FIGHT_STAMINA)}
-                </span>{' '}
-                agora.
+                </span>
+                {t(' now.')}
               </p>
             )}
           </div>
@@ -656,18 +665,18 @@ export default function CombatLobbyPage() {
           <div className="border-b border-black/60 bg-[#19191c] p-6">
             <h2 className="text-lg font-semibold text-[#dcdce0] mb-4 flex items-center tracking-wide">
               <Plus className="mr-2" size={20} style={{ color: GOLD }} />
-              Criar Nova Sala
+              {t('Create New Room')}
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
               <div className="lg:col-span-2">
                 <label className="block text-[11px] uppercase tracking-[0.14em] text-[#77777d] mb-2">
-                  Nome da Sala
+                  {t('Room Name')}
                 </label>
                 <input
                   type="text"
                   value={newRoomName}
                   onChange={(e) => setNewRoomName(e.target.value)}
-                  placeholder="Ex: Arena dos Campeões"
+                  placeholder={t('e.g. Arena of Champions')}
                   className="w-full rounded-[3px] border border-[#3c3c41] bg-[#101013] px-4 py-2 text-[#ece7da] outline-none transition-colors focus:border-[#8a6d3b]"
                   maxLength={50}
                 />
@@ -681,14 +690,14 @@ export default function CombatLobbyPage() {
                     onChange={(e) => setIsPrivateRoom(e.target.checked)}
                     className="mr-2 accent-[#c9a25f]"
                   />
-                  Com senha (amigos)
+                  {t('With password (friends)')}
                 </label>
                 {isPrivateRoom && (
                   <input
                     type="text"
                     value={roomPassword}
                     onChange={(e) => setRoomPassword(e.target.value)}
-                    placeholder="Senha (min. 4)"
+                    placeholder={t('Password (min. 4)')}
                     className="w-full rounded-[3px] border border-[#3c3c41] bg-[#101013] px-3 py-2 text-[#ece7da] outline-none focus:border-[#8a6d3b]"
                     maxLength={32}
                   />
@@ -699,14 +708,14 @@ export default function CombatLobbyPage() {
                 disabled={!newRoomName.trim() || isCreatingRoom || !selectedCharacter || !selectedCharacter.isAlive}
                 className={`${BEVEL_COLOR_BTN_CLASS} px-6 py-2 flex items-center justify-center disabled:cursor-not-allowed disabled:opacity-40`}
                 style={BEVEL_VARIANTS.gold}
-                title={!selectedCharacter ? 'Selecione um personagem' : !selectedCharacter.isAlive ? 'Personagem deve estar vivo' : ''}
+                title={!selectedCharacter ? t('Select a character') : !selectedCharacter.isAlive ? t('Character must be alive') : ''}
               >
                 {isCreatingRoom ? (
                   <RefreshCw className="animate-spin" size={20} />
                 ) : (
                   <>
                     <Plus className="mr-2" size={20} />
-                    Criar Sala
+                    {t('Create Room')}
                   </>
                 )}
               </button>
@@ -716,21 +725,21 @@ export default function CombatLobbyPage() {
           {/* Entrar com ID + senha */}
           <div className="border-b border-black/60 bg-[#151518] p-6">
             <h2 className="text-base font-semibold text-[#dcdce0] mb-3 tracking-wide">
-              Entrar com ID da sala
+              {t('Join with room ID')}
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
               <input
                 type="text"
                 value={joinRoomId}
                 onChange={(e) => setJoinRoomId(e.target.value)}
-                placeholder="ID da sala (ex: room_abc123)"
+                placeholder={t('Room ID (e.g. room_abc123)')}
                 className="w-full rounded-[3px] border border-[#3c3c41] bg-[#101013] px-4 py-2 text-[#ece7da] outline-none focus:border-[#8a6d3b]"
               />
               <input
                 type="text"
                 value={joinPassword}
                 onChange={(e) => setJoinPassword(e.target.value)}
-                placeholder="Senha (se houver)"
+                placeholder={t('Password (if any)')}
                 className="w-full rounded-[3px] border border-[#3c3c41] bg-[#101013] px-4 py-2 text-[#ece7da] outline-none focus:border-[#8a6d3b]"
               />
               <button
@@ -738,7 +747,7 @@ export default function CombatLobbyPage() {
                 disabled={!joinRoomId.trim() || !selectedCharacter?.isAlive}
                 className={`${BEVEL_BTN_CLASS} px-4 py-2 disabled:opacity-40`}
               >
-                Entrar
+                {t('Join')}
               </button>
             </div>
           </div>
@@ -748,22 +757,22 @@ export default function CombatLobbyPage() {
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-lg font-semibold text-[#dcdce0] flex items-center tracking-wide">
                 <Users className="mr-2" size={20} style={{ color: GOLD }} />
-                Salas Disponíveis ({rooms.filter(r => r.status === 'waiting').length})
+                {t('Available Rooms ({n})', { n: rooms.filter(r => r.status === 'waiting').length })}
               </h2>
               <button
                 onClick={loadRooms}
                 className={`${BEVEL_BTN_CLASS} px-4 py-2 text-sm flex items-center`}
               >
                 <RefreshCw className="mr-2" size={16} />
-                Atualizar
+                {t('Refresh')}
               </button>
             </div>
 
             {rooms.length === 0 ? (
               <div className="text-center py-12">
                 <div className="text-6xl mb-4">⚔️</div>
-                <h3 className="text-xl font-bold text-[#ece7da] mb-2">Nenhuma sala encontrada</h3>
-                <p className="text-[#8a8a90] mb-6">Seja o primeiro a criar uma arena de combate!</p>
+                <h3 className="text-xl font-bold text-[#ece7da] mb-2">{t('No room found')}</h3>
+                <p className="text-[#8a8a90] mb-6">{t('Be the first to create a combat arena!')}</p>
                 <button
                   onClick={() => {
                     const input = document.querySelector('input[type="text"]') as HTMLInputElement
@@ -796,7 +805,7 @@ export default function CombatLobbyPage() {
                           {room.name}
                         </h3>
                         <p className="text-sm text-[#8a8a90]">
-                          por {room.createdByName}
+                          {t('by {name}', { name: room.createdByName })}
                         </p>
                       </div>
                       <span className={`px-2 py-1 rounded-[3px] text-xs font-bold border ${getStatusColor(room.status)}`}>
@@ -806,7 +815,7 @@ export default function CombatLobbyPage() {
 
                     <div className="space-y-2 mb-4">
                       <div className="flex justify-between text-sm">
-                        <span className="text-[#8a8a90]">Participantes:</span>
+                        <span className="text-[#8a8a90]">{t('Participants:')}</span>
                         <span className="font-bold tabular-nums text-[#ece7da]">
                           {getTotalParticipants(room)}/{getMaxParticipants()}
                         </span>
@@ -814,11 +823,11 @@ export default function CombatLobbyPage() {
                       {room.participants && (
                         <div className="text-xs space-y-1">
                           <div className="flex justify-between">
-                            <span className="text-[#8a8a90]">⚔️ Lutadores:</span>
+                            <span className="text-[#8a8a90]">{t('⚔️ Fighters:')}</span>
                             <span className="tabular-nums text-[#c9c9ce]">{room.participants.fighters.length}/{ROLE_LIMITS[RoomRole.FIGHTER]}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-[#8a8a90]">👁️ Espectadores:</span>
+                            <span className="text-[#8a8a90]">{t('👁️ Spectators:')}</span>
                             <span className="tabular-nums text-[#c9c9ce]">{room.participants.spectators.length}/{ROLE_LIMITS[RoomRole.SPECTATOR]}</span>
                           </div>
                         </div>
@@ -826,7 +835,7 @@ export default function CombatLobbyPage() {
                       <div className="flex justify-between text-sm">
                         <span className="text-[#8a8a90] flex items-center">
                           <Clock className="mr-1" size={12} />
-                          Criada:
+                          {t('Created:')}
                         </span>
                         <span className="text-[#8a8a90]">
                           {formatTimeAgo(room.createdAt)}
@@ -837,7 +846,7 @@ export default function CombatLobbyPage() {
                     {/* Role Selector */}
                     {showRoleSelector === room.id ? (
                       <div className="space-y-2 mb-4 p-3 rounded-[3px] border border-[#8a6d3b]/60 bg-[#19191c]">
-                        <h4 className="text-sm font-bold text-[#dcdce0] text-center">Escolha seu role:</h4>
+                        <h4 className="text-sm font-bold text-[#dcdce0] text-center">{t('Choose your role:')}</h4>
                         <div className="space-y-2">
                           {getAvailableRoles(room).map(role => (
                             <button
@@ -894,27 +903,27 @@ export default function CombatLobbyPage() {
                         }`}
                         title={
                           !selectedCharacter 
-                            ? 'Selecione um personagem' 
-                            : !selectedCharacter.isAlive 
-                            ? 'Personagem deve estar vivo'
+                            ? t('Select a character')
+                            : !selectedCharacter.isAlive
+                            ? t('Character must be alive')
                             : getAvailableRoles(room).length === 0
-                            ? 'Todos os roles estão cheios'
+                            ? t('All roles are full')
                             : ''
                         }
                       >
                         {!selectedCharacter
-                          ? 'Selecione Personagem'
+                          ? t('Select Character')
                           : !selectedCharacter.isAlive
-                          ? 'Personagem Morto'
+                          ? t('Character Dead')
                           : room.status === 'waiting' 
                           ? getAvailableRoles(room).length > 0
                             ? getAvailableRoles(room).length === 1
                               ? `Entrar como ${getRoleDisplayName(getAvailableRoles(room)[0])}`
-                              : 'Escolher Role'
-                            : 'Sala Cheia'
+                              : t('Choose Role')
+                            : t('Room Full')
                           : room.status === 'in_progress'
-                          ? 'Em Combate'
-                          : 'Finalizada'
+                          ? t('In Combat')
+                          : t('Finished')
                         }
                       </button>
                     )}
@@ -929,22 +938,22 @@ export default function CombatLobbyPage() {
             <div className="flex justify-between items-center mb-2">
               <h2 className="text-lg font-semibold text-[#dcdce0] flex items-center tracking-wide">
                 <Shield className="mr-2" size={20} style={{ color: GOLD }} />
-                🏟️ Modo Treino
+                {t('🏟️ Training Mode')}
               </h2>
               <button
                 onClick={() => setShowTrainingPicker(!showTrainingPicker)}
                 disabled={!selectedCharacter || !selectedCharacter.isAlive}
                 className={`${BEVEL_COLOR_BTN_CLASS} px-6 py-2 flex items-center disabled:cursor-not-allowed disabled:opacity-40`}
                 style={BEVEL_VARIANTS.purple}
-                title={!selectedCharacter ? 'Selecione um personagem' : !selectedCharacter.isAlive ? 'Personagem deve estar vivo' : ''}
+                title={!selectedCharacter ? t('Select a character') : !selectedCharacter.isAlive ? t('Character must be alive') : ''}
               >
-                {showTrainingPicker ? 'Fechar' : '🐉 Escolher Monstro'}
+                {showTrainingPicker ? t('Close') : t('🐉 Choose Monster')}
               </button>
             </div>
             <p className="text-sm text-[#8a8a90] mb-4">
-              Treino na mesma arena PvP. O adversário é um <span className="text-[#c9b896]">espelho seu</span> —
-              mesmo nível, mesmos atributos, mesmo equipamento. A dificuldade é o quanto ele te supera,
-              então o desafio vale o mesmo em qualquer ponto da progressão. Sem recompensas.
+              {t('Training in the same PvP arena. The opponent is a ')}
+              <span className="text-[#c9b896]">{t('mirror of you')}</span>
+              {t(' — same level, same attributes, same gear. The difficulty is how much it outmatches you, so the challenge is worth the same at any point of the progression. No rewards.')}
             </p>
 
             {showTrainingPicker && (
@@ -975,19 +984,22 @@ export default function CombatLobbyPage() {
                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-transparent" />
                     <div className="absolute inset-x-0 bottom-0 p-2.5 text-center">
                       <div className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${
-                        m.difficultyLabel === 'Fácil' ? 'text-green-300'
-                        : m.difficultyLabel === 'Médio' ? 'text-yellow-300'
-                        : m.difficultyLabel === 'Difícil' ? 'text-orange-300'
-                        : m.difficultyLabel === 'Muito difícil' ? 'text-red-300'
+                        m.difficultyLabel === 'Easy' ? 'text-green-300'
+                        : m.difficultyLabel === 'Medium' ? 'text-yellow-300'
+                        : m.difficultyLabel === 'Hard' ? 'text-orange-300'
+                        : m.difficultyLabel === 'Very hard' ? 'text-red-300'
                         : 'text-fuchsia-200'
                       }`}>
-                        {m.difficultyLabel}
+                        {t(m.difficultyLabel)}
                       </div>
-                      <div className="font-bold text-[#ece7da] text-sm leading-tight drop-shadow">{m.name}</div>
+                      <div className="font-bold text-[#ece7da] text-sm leading-tight drop-shadow">{localizeItemName(m.name, locale)}</div>
                       {/* O rótulo vira promessa verificável: o mult e a chance saem do
                           training-peer-sim, medidos com o motor de combate real. */}
                       <div className="mt-1 text-[9px] text-[#a8a29a] tabular-nums">
-                        {Math.round(m.difficultyMult * 100)}% do seu poder · vitória {m.winRateLabel}
+                        {t('{pct}% of your power · win rate {rate}', {
+                          pct: Math.round(m.difficultyMult * 100),
+                          rate: m.winRateLabel,
+                        })}
                       </div>
                     </div>
                   </button>
@@ -1062,7 +1074,7 @@ export default function CombatLobbyPage() {
                     <RefreshCw className="animate-spin" size={26} style={{ color: GOLD }} />
                   </div>
                   <p className="text-base font-medium text-[#ece7da]">
-                    Buscando lutador nível ~{selectedCharacter?.level ?? '—'}
+                    {t('Looking for a level ~{n} fighter', { n: selectedCharacter?.level ?? '—' })}
                   </p>
                   <p className="mt-2 text-sm text-[#8a8a90]">
                     Tempo estimado:{' '}
@@ -1071,7 +1083,7 @@ export default function CombatLobbyPage() {
                     </span>
                   </p>
                   <p className="mt-1 text-xs tabular-nums text-[#77777d]">
-                    Esperando há {searchElapsedSec}s
+                    {t('Waiting for {n}s', { n: searchElapsedSec })}
                   </p>
                   <button
                     type="button"
@@ -1095,9 +1107,9 @@ export default function CombatLobbyPage() {
                     {matchedOpponent.name}
                   </p>
                   <p className="mt-1 text-sm tabular-nums" style={{ color: GOLD_BRIGHT }}>
-                    Nível {matchedOpponent.level}
+                    {t('Level {n}', { n: matchedOpponent.level })}
                   </p>
-                  <p className="mt-4 text-xs text-[#8a8a90]">Preparando combate…</p>
+                  <p className="mt-4 text-xs text-[#8a8a90]">{t('Preparing combat…')}</p>
                 </>
               )}
             </div>

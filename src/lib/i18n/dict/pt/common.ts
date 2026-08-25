@@ -71,4 +71,8 @@ export const COMMON_PT: Record<string, string> = {
   'The roll failed': 'A rolagem falhou',
   'Try again': 'Tentar novamente',
   'Back to the home page': 'Voltar para a página inicial',
+
+  // 🌐 Selo de origem do insumo nas bancadas — parte do material está no Baú
+  // Geral, não na mochila do herói (src/lib/materialPool.ts).
+  '{n} of {total} come from the Global Chest': '{n} de {total} vêm do Baú Geral',
 }

@@ -28,26 +28,35 @@ const START_INV: [string, number][] = [
 
 export default function CookingDialogMockPage() {
   const [open, setOpen] = useState(true);
+  // 🌐 Simula parte do insumo guardado no Baú Geral — a bancada consome dos dois
+  // inventários (src/lib/materialPool.ts). Desligar compara com o antes.
+  const [chestSplit, setChestSplit] = useState(true);
   const [level, setLevel] = useState(1);
   const [gold, setGold] = useState(3000);
   const [bonusXp, setBonusXp] = useState(0);
   const invRef = useRef(new Map<string, number>(START_INV));
-  const dialogKey = useMemo(() => `${level}`, [level]);
+  const dialogKey = useMemo(() => `${level}-${chestSplit}`, [level, chestSplit]);
 
   const xp = professionXpForLevel(level) + bonusXp;
 
   const fetchInventoryOverride = async (): Promise<CookingInventoryItem[]> =>
     Array.from(invRef.current.entries())
       .filter(([, q]) => q > 0)
-      .map(([name, quantity], i) => ({
-        id: `mock-${i}`,
-        quantity,
-        item: {
+      .flatMap(([name, quantity], i) => {
+        const item = {
           name,
           type: 'CONSUMABLE',
           stats: { kind: getIngredientByName(name) ? 'ingredient' : 'processed' },
-        },
-      }));
+        };
+        // Um TERÇO da pilha mora no baú: exercita o selo 🌐 e o total somando as
+        // duas origens (o teto do lote tem que enxergar os dois).
+        const inChest = chestSplit ? Math.floor(quantity / 3) : 0;
+        const inBag = quantity - inChest;
+        const rows: CookingInventoryItem[] = [];
+        if (inBag > 0) rows.push({ id: `mock-${i}`, quantity: inBag, source: 'character', item });
+        if (inChest > 0) rows.push({ id: `mock-global-${i}`, quantity: inChest, source: 'global', item });
+        return rows;
+      });
 
   const attemptOverride = async (
     recipeId: string,
@@ -99,6 +108,14 @@ export default function CookingDialogMockPage() {
         <span>
           Gold: <b className="text-amber-300">{gold}</b>
         </span>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={chestSplit}
+            onChange={(e) => setChestSplit(e.target.checked)}
+          />
+          🌐 ⅓ do insumo no Baú Geral
+        </label>
         <button
           onClick={() => setOpen(true)}
           className="rounded border border-amber-500/50 bg-amber-950/40 px-3 py-1 font-semibold"

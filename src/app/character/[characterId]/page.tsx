@@ -1131,6 +1131,9 @@ export default function CharacterDetailsPage() {
             characterId={effectiveCharacterId || ''}
             characterName={character.name}
             characterAccent={visual.borderColor}
+            // Mesmo callback da mochila: as bancadas consomem dos dois
+            // inventários, então o insumo no baú abre a profissão direto.
+            onOpenCraft={(craft, itemName) => setCraftTarget({ craft, itemName })}
           />
         </div>
 

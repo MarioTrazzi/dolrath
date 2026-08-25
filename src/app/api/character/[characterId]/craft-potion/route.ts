@@ -8,7 +8,7 @@ import { getConsumableByName, isIngredientItem, isMaterialItem, isProcessedItem 
 import { POTION_RECIPES, getRecipeById } from '@/lib/alchemy'
 import { addHistoryEntry } from '@/lib/characterHistory'
 import { advanceQuestProgress } from '@/lib/questServer'
-import { assertInventoryRoom } from '@/lib/inventoryMutations'
+import { consumeFromPool, depositCraftOutput, loadMaterialPool, poolCount } from '@/lib/materialPool'
 import { getCraftChance, getCraftMinLevel, rollCraftBatch } from '@/lib/craftingProfession'
 import { getUserAlchemyXp } from '@/lib/craftingServer'
 import { getProfessionLevel, getProfessionLevelInfo } from '@/lib/professionSystem'
@@ -117,57 +117,36 @@ export async function POST(
         throw new Error(`GOLD insuficiente na carteira do personagem: precisa de ${totalGoldCost} 🪙.`)
       }
 
-      // 2. Ingredientes — busca todas as linhas de cada ingrediente do personagem
-      const names = recipe.ingredients.map((i) => i.name)
-      const rows = await tx.characterInventory.findMany({
-        where: {
-          characterId: character.id,
-          item: { name: { in: names }, type: 'CONSUMABLE' },
-        },
-        include: { item: true },
-      })
+      // 2. Ingredientes — POOL: mochila do herói + Baú Geral da conta.
       // Só conta o que é insumo de craft (não poções de mesmo nome). Classifica pelo
       // catálogo para também aceitar registros antigos sem stats.kind. Materiais de
       // forja e PROCESSADOS (Extrato Herbal etc. — destilaria do Processamento) valem
       // quando a receita os pede — o casamento por nome com recipe.ingredients já
       // restringe o resto. [[dolrath-alchemy-crafting]]
-      const ingredientRows = rows.filter(
-        (r) => isIngredientItem(r.item) || isMaterialItem(r.item) || isProcessedItem(r.item)
-      )
-
-      const byName = new Map<string, typeof ingredientRows>()
-      for (const r of ingredientRows) {
-        const arr = byName.get(r.item.name) ?? []
-        arr.push(r)
-        byName.set(r.item.name, arr)
-      }
+      const names = recipe.ingredients.map((i) => i.name)
+      const pool = await loadMaterialPool(tx, {
+        characterId: character.id,
+        userId,
+        names,
+        accept: (item) => isIngredientItem(item) || isMaterialItem(item) || isProcessedItem(item),
+      })
 
       // Confere quantidade de cada ingrediente (×quantity para o lote)
       for (const req of recipe.ingredients) {
         const need = req.quantity * quantity
-        const have = (byName.get(req.name) ?? []).reduce((n, r) => n + r.quantity, 0)
+        const have = poolCount(pool, req.name)
         if (have < need) {
           throw new Error(`Falta ${req.name} (tem ${have}, precisa de ${need}).`)
         }
       }
 
-      // 3. Consome os ingredientes do LOTE INTEIRO (as falhas também consomem)
-      for (const req of recipe.ingredients) {
-        let remaining = req.quantity * quantity
-        for (const r of byName.get(req.name) ?? []) {
-          if (remaining <= 0) break
-          const take = Math.min(r.quantity, remaining)
-          if (r.quantity > take) {
-            await tx.characterInventory.update({
-              where: { id: r.id },
-              data: { quantity: { decrement: take } },
-            })
-          } else {
-            await tx.characterInventory.delete({ where: { id: r.id } })
-          }
-          remaining -= take
-        }
-      }
+      // 3. Consome os ingredientes do LOTE INTEIRO (as falhas também consomem),
+      //    mochila antes do baú.
+      await consumeFromPool(
+        tx,
+        pool,
+        recipe.ingredients.map((i) => ({ name: i.name, quantity: i.quantity * quantity })),
+      )
 
       // 4. Debita o gold e credita o XP de Alquimia no mesmo update
       await tx.character.update({
@@ -178,6 +157,7 @@ export async function POST(
       // 5-6. Produz só as unidades que PASSARAM na rolagem (consumível empilha
       // em enhancementLevel 0 — o lote inteiro entra numa única linha, 1 slot).
       let potionItemId: string | null = null
+      let outputWentTo: 'character' | 'global' = 'character'
       if (roll.succeeded > 0) {
         let potionItem = await tx.item.findFirst({ where: { name: potion.name } })
         if (!potionItem) {
@@ -198,21 +178,15 @@ export async function POST(
           })
         }
 
-        const existing = await tx.characterInventory.findFirst({
-          where: { characterId: character.id, itemId: potionItem.id, enhancementLevel: 0 },
+        // Mochila cheia transborda pro Baú Geral em vez de barrar: o ingrediente
+        // pode ter vindo todo do baú. [[materialPool]]
+        outputWentTo = await depositCraftOutput(tx, {
+          characterId: character.id,
+          userId,
+          itemId: potionItem.id,
+          quantity: roll.succeeded,
+          isEquipment: false,
         })
-        if (existing) {
-          await tx.characterInventory.update({
-            where: { id: existing.id },
-            data: { quantity: { increment: roll.succeeded } },
-          })
-        } else {
-          // Precisa de uma linha nova — barra antes de cobrar gold/ingrediente à toa.
-          await assertInventoryRoom(tx, character.id, 1)
-          await tx.characterInventory.create({
-            data: { characterId: character.id, itemId: potionItem.id, quantity: roll.succeeded },
-          })
-        }
         potionItemId = potionItem.id
       }
 
@@ -220,7 +194,7 @@ export async function POST(
         where: { id: character.id },
         select: { gold: true },
       })
-      return { potionItemId, characterGold: updatedChar?.gold ?? null }
+      return { potionItemId, outputWentTo, characterGold: updatedChar?.gold ?? null }
     })
 
     try {
@@ -247,7 +221,7 @@ export async function POST(
     const levelInfo = getProfessionLevelInfo(xpBefore + roll.xpGained)
 
     const outName = localizeItemName(recipe.outputName, getLocaleFromRequest(request))
-    const message = roll.failed === 0
+    const baseMessage = roll.failed === 0
       ? roll.attempted > 1
         ? t('⚗️ {n}× {name} created successfully!', { n: roll.attempted, name: outName })
         : t('⚗️ {name} created successfully!', { name: outName })
@@ -258,6 +232,12 @@ export async function POST(
         : t('⚗️ {ok} of {total} {name} survived the cauldron.', {
             ok: roll.succeeded, total: roll.attempted, name: outName,
           })
+
+    // Mochila cheia: a poção caiu no Baú Geral. Dizer isso é obrigatório — senão
+    // o jogador acha que o craft sumiu.
+    const message = roll.succeeded > 0 && result.outputWentTo === 'global'
+      ? `${baseMessage} ${t('📦 Your backpack was full — it went to the Global Chest.')}`
+      : baseMessage
 
     return NextResponse.json({
       success: true,
@@ -273,12 +253,13 @@ export async function POST(
       crafted: roll.succeeded,
       outputName: recipe.outputName,
       rarity: recipe.rarity,
+      outputWentTo: result.outputWentTo,
       message,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Erro interno do servidor'
     // Erros de validação (gold/ingrediente/inventário cheio/nível) são 400; o resto 500.
-    const isValidation = /insuficiente|Falta |Inventário cheio|Requer Alquimia/.test(message)
+    const isValidation = /insuficiente|Falta |Inventário cheio|Baú Geral cheio|Requer Alquimia/.test(message)
     console.error('Error crafting potion:', error)
     return NextResponse.json({ error: message }, { status: isValidation ? 400 : 500 })
   }

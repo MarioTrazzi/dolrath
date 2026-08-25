@@ -46,6 +46,12 @@ import { GrinderRig, NoFailSeal, PROC_ACCENT, PROC_ACCENT_BRIGHT } from './profe
 export interface ProcessingInventoryItem {
   id: string;
   quantity: number;
+  /**
+   * De onde a linha veio: mochila do herói ou Baú Geral da conta. A bancada
+   * consome dos dois (src/lib/materialPool.ts) e usa isto só para o selo 🌐 —
+   * ausente nos mocks antigos, que continuam valendo como 'character'.
+   */
+  source?: 'character' | 'global';
   item: { name: string; type: string; stats?: Record<string, any> | null };
 }
 
@@ -135,7 +141,7 @@ export default function ProcessingDialog({
       if (fetchInventoryOverride) {
         setInventory(await fetchInventoryOverride());
       } else {
-        const res = await fetch(`/api/store/inventory?characterId=${characterId}`);
+        const res = await fetch(`/api/store/inventory?characterId=${characterId}&includeGlobal=1`);
         const data = res.ok ? await res.json() : [];
         setInventory(Array.isArray(data) ? data : []);
       }
@@ -198,7 +204,20 @@ export default function ProcessingDialog({
     }
     return map;
   }, [inventory]);
+  // Quanto de cada insumo está no BAÚ e não na mochila — só para o selo 🌐 na
+  // moldura. O total (inputCounts) já soma as duas origens, porque é dos dois
+  // que a rota consome.
+  const globalCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const inv of inventory) {
+      if (inv.item.type === 'CONSUMABLE' && inv.source === 'global') {
+        map.set(inv.item.name, (map.get(inv.item.name) ?? 0) + inv.quantity);
+      }
+    }
+    return map;
+  }, [inventory]);
   const have = useCallback((name: string) => inputCounts.get(name) ?? 0, [inputCounts]);
+  const haveFromGlobal = useCallback((name: string) => globalCounts.get(name) ?? 0, [globalCounts]);
 
   const unlocked = recipe ? level >= recipe.minLevel : true;
 
@@ -468,6 +487,7 @@ export default function ProcessingDialog({
                   name: localizeItemName(m.name, locale),
                   emoji: processingItemEmoji(m.name),
                   have: have(m.name),
+                  fromGlobal: haveFromGlobal(m.name),
                   need: m.quantity * craftQty,
                 }))}
                 outputName={localizeItemName(recipe.outputName, locale)}

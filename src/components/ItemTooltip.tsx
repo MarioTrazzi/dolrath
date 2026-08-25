@@ -236,6 +236,23 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
     background: `linear-gradient(90deg, ${hex}cc, ${hex}77)`,
     boxShadow: `0 4px 20px ${soft}`,
   });
+  // Rótulo e cor do botão de bancada. Extraídos porque agora servem aos DOIS
+  // painéis: a mochila do herói e o Baú Geral. As quatro profissões consomem
+  // dos dois inventários (src/lib/materialPool.ts), então o insumo guardado no
+  // baú abre a bancada direto, sem a viagem de ida e volta pela mochila.
+  const craftStyle = (craft: 'alchemy' | 'forge' | 'process' | 'cook' | null) =>
+    craft === 'alchemy' ? buttonStyle('#10b981', 'rgba(16,185,129,0.35)')
+    : craft === 'forge' ? buttonStyle('#f97316', 'rgba(249,115,22,0.35)')
+    : craft === 'process' ? buttonStyle('#8b5cf6', 'rgba(139,92,246,0.35)')
+    : craft === 'cook' ? buttonStyle('#eab308', 'rgba(234,179,8,0.35)')
+    : buttonStyle('#6b7280', 'rgba(107,114,128,0.35)');
+  const craftLabel = (craft: 'alchemy' | 'forge' | 'process' | 'cook' | null) =>
+    craft === 'alchemy' ? t('⚗️ Alchemy')
+    : craft === 'forge' ? t('⚒️ Forge')
+    : craft === 'process' ? t('⚙️ Process')
+    : craft === 'cook' ? t('🍳 Cook')
+    : t('🧺 No use at any bench');
+
   // Botões em grade 2 colunas → compactos (menos padding/fonte) p/ caber 2 por linha.
   const storeButtonClass =
     'w-full px-2 py-2 rounded-lg font-bold text-xs text-white transition-all hover:scale-[1.03] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap';
@@ -465,30 +482,41 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
                     {quantity > 1 ? t('🌐 Transfer x{n}', { n: quantity }) : t('🌐 Transfer')}
                   </button>
                 );
+                // Bancadas direto do baú: a rota consome dos dois inventários,
+                // então transferir pra mochila antes virou passo desnecessário.
+                if (onOpenCraft && isCraftInput && primaryCraft) {
+                  btns.push(
+                    <button key="craft" onClick={() => handleUseInCraft(primaryCraft)} className={storeButtonClass} style={craftStyle(primaryCraft)}>
+                      {craftLabel(primaryCraft)}
+                    </button>
+                  );
+                }
+                if (showProcessButton) {
+                  btns.push(
+                    <button key="process" onClick={() => handleUseInCraft('process')} className={storeButtonClass} style={craftStyle('process')}>
+                      {craftLabel('process')}
+                    </button>
+                  );
+                }
+                if (showCookButton) {
+                  btns.push(
+                    <button key="cook" onClick={() => handleUseInCraft('cook')} className={storeButtonClass} style={craftStyle('cook')}>
+                      {craftLabel('cook')}
+                    </button>
+                  );
+                }
               } else {
                 const actionStyle =
                   isEnhancementStone ? buttonStyle('#f59e0b', 'rgba(245,158,11,0.35)')
                   : isSeed ? buttonStyle('#84cc16', 'rgba(132,204,22,0.35)')
-                  : isCraftInput ? (
-                      primaryCraft === 'alchemy' ? buttonStyle('#10b981', 'rgba(16,185,129,0.35)')
-                      : primaryCraft === 'forge' ? buttonStyle('#f97316', 'rgba(249,115,22,0.35)')
-                      : primaryCraft === 'process' ? buttonStyle('#8b5cf6', 'rgba(139,92,246,0.35)')
-                      : primaryCraft === 'cook' ? buttonStyle('#eab308', 'rgba(234,179,8,0.35)')
-                      : buttonStyle('#6b7280', 'rgba(107,114,128,0.35)')
-                    )
+                  : isCraftInput ? craftStyle(primaryCraft)
                   : isConsumable ? buttonStyle('#22c55e', 'rgba(34,197,94,0.35)')
                   : isEquipped ? buttonStyle('#ef4444', 'rgba(239,68,68,0.35)')
                   : buttonStyle(visual.accent, visual.accentSoft);
                 const actionLabel =
                   isEnhancementStone ? t('⚒️ Enhance')
                   : isSeed ? t('🌾 Plant')
-                  : isCraftInput ? (
-                      primaryCraft === 'alchemy' ? t('⚗️ Alchemy')
-                      : primaryCraft === 'forge' ? t('⚒️ Forge')
-                      : primaryCraft === 'process' ? t('⚙️ Process')
-                      : primaryCraft === 'cook' ? t('🍳 Cook')
-                      : t('🧺 No use at any bench')
-                    )
+                  : isCraftInput ? craftLabel(primaryCraft)
                   : isConsumable ? t('🧪 Consume')
                   : isEquipped ? t('⚔️ Unequip')
                   : t('🛡️ Equip');
@@ -508,8 +536,8 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
                 // (o primário já aponta p/ forja/alquimia; este abre o processamento).
                 if (showProcessButton) {
                   btns.push(
-                    <button key="process" onClick={() => handleUseInCraft('process')} className={storeButtonClass} style={buttonStyle('#8b5cf6', 'rgba(139,92,246,0.35)')}>
-                      {t('⚙️ Process')}
+                    <button key="process" onClick={() => handleUseInCraft('process')} className={storeButtonClass} style={craftStyle('process')}>
+                      {craftLabel('process')}
                     </button>
                   );
                 }
@@ -518,8 +546,8 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
                 // (Água Pura, Erva, Raiz, Cogumelo, Seiva, Ração...).
                 if (showCookButton) {
                   btns.push(
-                    <button key="cook" onClick={() => handleUseInCraft('cook')} className={storeButtonClass} style={buttonStyle('#eab308', 'rgba(234,179,8,0.35)')}>
-                      {t('🍳 Cook')}
+                    <button key="cook" onClick={() => handleUseInCraft('cook')} className={storeButtonClass} style={craftStyle('cook')}>
+                      {craftLabel('cook')}
                     </button>
                   );
                 }

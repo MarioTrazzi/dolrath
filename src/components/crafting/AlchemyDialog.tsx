@@ -55,6 +55,12 @@ import {
 export interface AlchemyInventoryItem {
   id: string;
   quantity: number;
+  /**
+   * De onde a linha veio: mochila do herói ou Baú Geral da conta. A bancada
+   * consome dos dois (src/lib/materialPool.ts) e usa isto só para o selo 🌐 —
+   * ausente nos mocks antigos, que continuam valendo como 'character'.
+   */
+  source?: 'character' | 'global';
   item: { name: string; type: string; stats?: Record<string, any> | null };
 }
 
@@ -150,7 +156,7 @@ export default function AlchemyDialog({
       if (fetchInventoryOverride) {
         setInventory(await fetchInventoryOverride());
       } else {
-        const res = await fetch(`/api/store/inventory?characterId=${characterId}`);
+        const res = await fetch(`/api/store/inventory?characterId=${characterId}&includeGlobal=1`);
         const data = res.ok ? await res.json() : [];
         setInventory(Array.isArray(data) ? data : []);
       }
@@ -223,6 +229,20 @@ export default function AlchemyDialog({
     }
     return map;
   }, [inventory]);
+
+  // Quanto de cada ingrediente está no BAÚ e não na mochila — só para o selo 🌐
+  // no cartão. O total (ingredientCounts) já soma as duas origens, porque é dos
+  // dois que a rota consome.
+  const globalCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const inv of inventory) {
+      if (inv.source === 'global') {
+        map.set(inv.item.name, (map.get(inv.item.name) ?? 0) + inv.quantity);
+      }
+    }
+    return map;
+  }, [inventory]);
+  const fromGlobal = (name: string) => globalCounts.get(name) ?? 0;
 
   const placedCount = (name: string) => slots.filter((s) => s === name).length;
   const available = (name: string) => (ingredientCounts.get(name) ??  0) - placedCount(name);
@@ -857,6 +877,7 @@ export default function AlchemyDialog({
             <div className="grid grid-cols-5 gap-2 sm:grid-cols-6">
               {palette.map(({ name, info }) => {
                 const left = available(name);
+                const inChest = fromGlobal(name);
                 const ui = RARITY_UI[info!.rarity];
                 return (
                   <button
@@ -864,7 +885,11 @@ export default function AlchemyDialog({
                     type="button"
                     onClick={() => placeIngredient(name)}
                     disabled={busy || left <= 0}
-                    title={t('{name} — {n} available', { name: localizeItemName(name, locale), n: left })}
+                    title={
+                      inChest > 0
+                        ? `${t('{name} — {n} available', { name: localizeItemName(name, locale), n: left })} · ${t('{n} of {total} come from the Global Chest', { n: inChest, total: have(name) })}`
+                        : t('{name} — {n} available', { name: localizeItemName(name, locale), n: left })
+                    }
                     className="relative aspect-square overflow-hidden rounded-[3px] border transition-all hover:border-[#8a6d3b] disabled:cursor-not-allowed disabled:opacity-40"
                     style={{
                       borderColor: '#3c3c41',
@@ -873,6 +898,14 @@ export default function AlchemyDialog({
                     }}
                   >
                     <ItemThumb name={name} emoji={info!.emoji} />
+                    {inChest > 0 && (
+                      <span
+                        className="absolute left-0.5 top-0.5 text-[9px] font-black text-[#7db6e8]"
+                        style={{ textShadow: '0 1px 2px #000' }}
+                      >
+                        🌐
+                      </span>
+                    )}
                     <span
                       className="absolute bottom-0.5 right-0.5 text-[10px] font-black text-white"
                       style={{ textShadow: '0 1px 2px #000' }}

@@ -12,7 +12,7 @@ import {
 import { itemImagePath } from '@/lib/itemCatalog'
 import { addHistoryEntry } from '@/lib/characterHistory'
 import { advanceQuestProgress } from '@/lib/questServer'
-import { assertInventoryRoom } from '@/lib/inventoryMutations'
+import { consumeFromPool, depositCraftOutput, loadMaterialPool, poolCount } from '@/lib/materialPool'
 import { getUserCookXp } from '@/lib/craftingServer'
 import { getProfessionLevel, getProfessionLevelInfo } from '@/lib/professionSystem'
 
@@ -125,50 +125,26 @@ export async function POST(
         throw new Error(`GOLD insuficiente na carteira do personagem: precisa de ${totalGoldCost} 🪙.`)
       }
 
-      // 2. Insumos — linhas CONSUMABLE com o nome exigido (ingredientes têm
-      //    stats.kind='ingredient', processados 'processed', Ração é consumível
-      //    comum — todos CONSUMABLE, então casamos por nome).
+      // 2. Insumos — POOL: mochila do herói + Baú Geral da conta (ingredientes
+      //    têm stats.kind='ingredient', processados 'processed', Ração é
+      //    consumível comum — todos CONSUMABLE, então casamos por nome).
       const names = recipe.inputs.map((m) => m.name)
-      const rows = await tx.characterInventory.findMany({
-        where: {
-          characterId: character.id,
-          item: { name: { in: names }, type: 'CONSUMABLE' },
-        },
-        include: { item: true },
-      })
-
-      const byName = new Map<string, typeof rows>()
-      for (const r of rows) {
-        const arr = byName.get(r.item.name) ?? []
-        arr.push(r)
-        byName.set(r.item.name, arr)
-      }
+      const pool = await loadMaterialPool(tx, { characterId: character.id, userId, names })
 
       for (const req of recipe.inputs) {
         const needed = req.quantity * quantity
-        const have = (byName.get(req.name) ?? []).reduce((n, r) => n + r.quantity, 0)
+        const have = poolCount(pool, req.name)
         if (have < needed) {
           throw new Error(`Falta ${req.name} (tem ${have}, precisa de ${needed}).`)
         }
       }
 
-      // 3. Consome os insumos do lote inteiro.
-      for (const req of recipe.inputs) {
-        let remaining = req.quantity * quantity
-        for (const r of byName.get(req.name) ?? []) {
-          if (remaining <= 0) break
-          const take = Math.min(r.quantity, remaining)
-          if (r.quantity > take) {
-            await tx.characterInventory.update({
-              where: { id: r.id },
-              data: { quantity: { decrement: take } },
-            })
-          } else {
-            await tx.characterInventory.delete({ where: { id: r.id } })
-          }
-          remaining -= take
-        }
-      }
+      // 3. Consome os insumos do lote inteiro, mochila antes do baú.
+      await consumeFromPool(
+        tx,
+        pool,
+        recipe.inputs.map((m) => ({ name: m.name, quantity: m.quantity * quantity })),
+      )
 
       // 4. Debita o gold e credita o XP de Culinária no mesmo update.
       await tx.character.update({
@@ -197,26 +173,21 @@ export async function POST(
           },
         })
       }
-      const existing = await tx.characterInventory.findFirst({
-        where: { characterId: character.id, itemId: item.id, enhancementLevel: 0 },
+      // Mochila cheia transborda pro Baú Geral em vez de barrar: o insumo pode
+      // ter vindo todo do baú. [[materialPool]]
+      const outputWentTo = await depositCraftOutput(tx, {
+        characterId: character.id,
+        userId,
+        itemId: item.id,
+        quantity: roll.succeeded,
+        isEquipment: false,
       })
-      if (existing) {
-        await tx.characterInventory.update({
-          where: { id: existing.id },
-          data: { quantity: { increment: roll.succeeded } },
-        })
-      } else {
-        await assertInventoryRoom(tx, character.id, 1)
-        await tx.characterInventory.create({
-          data: { characterId: character.id, itemId: item.id, quantity: roll.succeeded },
-        })
-      }
 
       const updatedChar = await tx.character.findUnique({
         where: { id: character.id },
         select: { gold: true },
       })
-      return { outputItemId: item.id, characterGold: updatedChar?.gold ?? null }
+      return { outputItemId: item.id, outputWentTo, characterGold: updatedChar?.gold ?? null }
     })
 
     const totalGoldCost = recipe.goldCost * quantity
@@ -241,6 +212,16 @@ export async function POST(
     // levelInfo pós-crédito (a UI anima a barra de XP com isto).
     const levelInfo = getProfessionLevelInfo(xpBefore + roll.xpGained)
 
+    const outName = localizeItemName(recipe.outputName, getLocaleFromRequest(request))
+    const baseMessage = roll.attempted > 1
+      ? t('🍳 {n}× {name} cooked successfully!', { n: roll.attempted, name: outName })
+      : t('🍳 {name} cooked successfully!', { name: outName })
+    // Mochila cheia: o prato caiu no Baú Geral. Dizer isso é obrigatório — senão
+    // o jogador acha que o craft sumiu.
+    const message = result.outputWentTo === 'global'
+      ? `${baseMessage} ${t('📦 Your backpack was full — it went to the Global Chest.')}`
+      : baseMessage
+
     return NextResponse.json({
       success: true,
       attempted: roll.attempted,
@@ -254,18 +235,12 @@ export async function POST(
       characterGold: result.characterGold,
       outputName: recipe.outputName,
       rarity: recipe.rarity,
-      message: roll.attempted > 1
-        ? t('🍳 {n}× {name} cooked successfully!', {
-            n: roll.attempted,
-            name: localizeItemName(recipe.outputName, getLocaleFromRequest(request)),
-          })
-        : t('🍳 {name} cooked successfully!', {
-            name: localizeItemName(recipe.outputName, getLocaleFromRequest(request)),
-          }),
+      outputWentTo: result.outputWentTo,
+      message,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Erro interno do servidor'
-    const isValidation = /insuficiente|Falta |Inventário cheio|Requer Culinária/.test(message)
+    const isValidation = /insuficiente|Falta |Inventário cheio|Baú Geral cheio|Requer Culinária/.test(message)
     console.error('Error cooking food:', error)
     return NextResponse.json({ error: message }, { status: isValidation ? 400 : 500 })
   }

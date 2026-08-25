@@ -20,6 +20,13 @@ interface GlobalChestSectionProps {
   characterName?: string | null
   /** Cor de destaque do painel do herói, usada no diálogo de transferência. */
   characterAccent?: string
+  /**
+   * Abre a bancada da profissão com o insumo já posto — o MESMO callback que a
+   * mochila do herói recebe. As quatro bancadas consomem dos dois inventários
+   * (src/lib/materialPool.ts), então craftar direto do baú não exige mais
+   * arrastar o material pra mochila antes.
+   */
+  onOpenCraft?: (craft: 'alchemy' | 'forge' | 'process' | 'cook', itemName: string) => void
 }
 
 export default function GlobalChestSection({
@@ -27,6 +34,7 @@ export default function GlobalChestSection({
   characterId,
   characterName,
   characterAccent = '#d9a441',
+  onOpenCraft,
 }: GlobalChestSectionProps) {
   const { t } = useI18n()
 
@@ -54,6 +62,7 @@ export default function GlobalChestSection({
         // GOLD mintado via claim (— sem carteira vinculada).
         goldText={chest.onchainGold ?? '—'}
         dragSource="global"
+        onOpenCraft={onOpenCraft}
         onItemDropped={chest.dropToGlobal as any}
       />
 

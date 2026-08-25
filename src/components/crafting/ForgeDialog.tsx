@@ -52,6 +52,12 @@ import { AnvilRig, FORGE_ACCENT, FORGE_ACCENT_BRIGHT } from './professionFx';
 export interface ForgeInventoryItem {
   id: string;
   quantity: number;
+  /**
+   * De onde a linha veio: mochila do herói ou Baú Geral da conta. A bancada
+   * consome dos dois (src/lib/materialPool.ts) e usa isto só para o selo 🌐 —
+   * ausente nos mocks antigos, que continuam valendo como 'character'.
+   */
+  source?: 'character' | 'global';
   item: { name: string; type: string; stats?: Record<string, any> | null };
 }
 
@@ -132,7 +138,7 @@ export default function ForgeDialog({
       if (fetchInventoryOverride) {
         setInventory(await fetchInventoryOverride());
       } else {
-        const res = await fetch(`/api/store/inventory?characterId=${characterId}`);
+        const res = await fetch(`/api/store/inventory?characterId=${characterId}&includeGlobal=1`);
         const data = res.ok ? await res.json() : [];
         setInventory(Array.isArray(data) ? data : []);
       }
@@ -197,7 +203,20 @@ export default function ForgeDialog({
     }
     return map;
   }, [inventory]);
+  // Quanto de cada insumo está no BAÚ e não na mochila — só para o selo 🌐 na
+  // moldura. O total (materialCounts) já soma as duas origens, porque é dos dois
+  // que a rota consome.
+  const globalCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const inv of inventory) {
+      if (inv.item.type === 'CONSUMABLE' && inv.source === 'global') {
+        map.set(inv.item.name, (map.get(inv.item.name) ?? 0) + inv.quantity);
+      }
+    }
+    return map;
+  }, [inventory]);
   const have = useCallback((name: string) => materialCounts.get(name) ?? 0, [materialCounts]);
+  const haveFromGlobal = useCallback((name: string) => globalCounts.get(name) ?? 0, [globalCounts]);
 
   const isRefine = recipe ? isRefineRecipe(recipe) : false;
   const minLevel = recipe
@@ -480,6 +499,7 @@ export default function ForgeDialog({
                   name: localizeItemName(m.name, locale),
                   emoji: forgeMaterialEmoji(m.name),
                   have: have(m.name),
+                  fromGlobal: haveFromGlobal(m.name),
                   need: m.quantity * craftQty,
                 }))}
                 outputName={localizeItemName(recipe.outputName, locale)}

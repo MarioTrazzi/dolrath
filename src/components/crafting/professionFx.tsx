@@ -31,6 +31,13 @@ export interface RigMaterial {
   emoji: string;
   have: number;
   need: number;
+  /**
+   * Quanto do `have` está no Baú Geral, e não na mochila do herói. As bancadas
+   * consomem dos dois (src/lib/materialPool.ts) — o selo 🌐 existe para o
+   * jogador não se assustar com o material sumindo de um lugar que ele não
+   * estava olhando.
+   */
+  fromGlobal?: number;
   /** Override explícito da arte (default: /items/<slug>.webp resolvido pelo nome). */
   image?: string;
 }
@@ -109,7 +116,9 @@ function MaterialFrame({
   shape: 'square' | 'bowl' | 'chamfer';
   pulseColor: string;
 }) {
+  const t = useT();
   const enough = m.have >= m.need;
+  const fromGlobal = m.fromGlobal ?? 0;
   const border = !enough
     ? '#5a2e2e'
     : shape === 'bowl'
@@ -147,6 +156,14 @@ function MaterialFrame({
       >
         {m.have}/{m.need}
       </span>
+      {fromGlobal > 0 && (
+        <span
+          title={t('{n} of {total} come from the Global Chest', { n: fromGlobal, total: m.have })}
+          className="absolute -left-1.5 -top-1.5 z-10 rounded-[2px] border border-black/80 bg-[#0f1620] px-1 text-[9px] font-bold text-[#7db6e8]"
+        >
+          🌐{fromGlobal}
+        </span>
+      )}
       {charging && (
         <motion.div
           animate={{ opacity: [0.15, 0.7, 0.15] }}

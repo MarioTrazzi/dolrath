@@ -12,6 +12,12 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const characterId = searchParams.get('characterId');
+    // 🌐 Opt-in: anexa o Baú Geral da conta ao resultado. As bancadas de
+    // profissão (Forja/Alquimia/Processamento/Culinária) consomem dos DOIS
+    // inventários (src/lib/materialPool.ts), então precisam contar os dois.
+    // É opt-in de propósito: a ficha e a loja leem esta mesma rota para saber
+    // o que está NA MOCHILA, e vazar o baú ali quebraria a contagem de slots.
+    const includeGlobal = searchParams.get('includeGlobal') === '1';
 
     if (characterId) {
       // Get inventory for specific character
@@ -39,7 +45,32 @@ export async function GET(request: Request) {
         },
       });
 
-      return NextResponse.json(inventory);
+      if (!includeGlobal) return NextResponse.json(inventory);
+
+      const globalRows = await prisma.userInventory.findMany({
+        where: { userId: session.user.id, quantity: { gt: 0 } },
+        include: { item: true },
+      });
+
+      // O id vai prefixado: linha do baú não é linha de CharacterInventory, e
+      // mandá-la sem querer para uma ação do personagem acharia nada (ou pior,
+      // outra linha). O `source` é o que a bancada usa para dizer "4 vieram do baú".
+      return NextResponse.json([
+        ...inventory.map((row) => ({ ...row, source: 'character' as const })),
+        ...globalRows.map((row) => ({
+          id: `global:${row.id}`,
+          itemId: row.itemId,
+          characterId: null,
+          quantity: row.quantity,
+          // O Baú Geral é pilha pura: não guarda +N nem desgaste. Os valores
+          // fixos aqui mantêm a forma da linha compatível com a da mochila.
+          enhancementLevel: 0,
+          durability: 100,
+          maxDurability: 100,
+          source: 'global' as const,
+          item: row.item,
+        })),
+      ]);
     } else {
       // Get inventory from all characters (for backward compatibility)
       const characters = await prisma.character.findMany({

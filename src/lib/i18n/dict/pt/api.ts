@@ -36,4 +36,9 @@ export const API_PT: Record<string, string> = {
   '⚙️ {name} processed successfully!': '⚙️ {name} processado com sucesso!',
   '⚙️ {n}× {name} processed successfully!': '⚙️ {n}× {name} processados com sucesso!',
   '⚗️ {name} created successfully!': '⚗️ {name} criada com sucesso!',
+
+  // 🌐 A bancada consome dos DOIS inventários (src/lib/materialPool.ts); quando a
+  // mochila não tem slot, a saída cai no Baú Geral e o jogador precisa saber.
+  '📦 Your backpack was full — it went to the Global Chest.':
+    '📦 Sua mochila estava cheia — foi para o Baú Geral.',
 }

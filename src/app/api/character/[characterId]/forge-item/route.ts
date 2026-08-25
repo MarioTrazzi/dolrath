@@ -8,7 +8,7 @@ import { FORGE_RECIPES, getForgeRecipeById, getForgeOutputCatalogItem } from '@/
 import { itemImagePath } from '@/lib/itemCatalog'
 import { STONE_NAMES, STONE_META } from '@/lib/enhancementSystem'
 import { addHistoryEntry } from '@/lib/characterHistory'
-import { assertInventoryRoom } from '@/lib/inventoryMutations'
+import { consumeFromPool, depositCraftOutput, loadMaterialPool, poolCount } from '@/lib/materialPool'
 import {
   getCraftChance,
   getCraftMinLevel,
@@ -144,50 +144,27 @@ export async function POST(
         throw new Error(`GOLD insuficiente na carteira do personagem: precisa de ${totalGoldCost} 🪙.`)
       }
 
-      // 2. Materiais/pedras de entrada — linhas CONSUMABLE com o nome exigido.
+      // 2. Materiais/pedras de entrada — POOL: mochila do herói + Baú Geral.
       //    (materiais têm stats.kind='material'; pedras têm stats.enhancementStone —
       //    ambos CONSUMABLE, então casamos por nome dentro de CONSUMABLE.)
       const names = recipe.materials.map((m) => m.name)
-      const rows = await tx.characterInventory.findMany({
-        where: {
-          characterId: character.id,
-          item: { name: { in: names }, type: 'CONSUMABLE' },
-        },
-        include: { item: true },
-      })
-
-      const byName = new Map<string, typeof rows>()
-      for (const r of rows) {
-        const arr = byName.get(r.item.name) ?? []
-        arr.push(r)
-        byName.set(r.item.name, arr)
-      }
+      const pool = await loadMaterialPool(tx, { characterId: character.id, userId, names })
 
       for (const req of recipe.materials) {
         const needed = req.quantity * quantity
-        const have = (byName.get(req.name) ?? []).reduce((n, r) => n + r.quantity, 0)
+        const have = poolCount(pool, req.name)
         if (have < needed) {
           throw new Error(`Falta ${req.name} (tem ${have}, precisa de ${needed}).`)
         }
       }
 
-      // 3. Consome os materiais do LOTE INTEIRO (as falhas também consomem).
-      for (const req of recipe.materials) {
-        let remaining = req.quantity * quantity
-        for (const r of byName.get(req.name) ?? []) {
-          if (remaining <= 0) break
-          const take = Math.min(r.quantity, remaining)
-          if (r.quantity > take) {
-            await tx.characterInventory.update({
-              where: { id: r.id },
-              data: { quantity: { decrement: take } },
-            })
-          } else {
-            await tx.characterInventory.delete({ where: { id: r.id } })
-          }
-          remaining -= take
-        }
-      }
+      // 3. Consome os materiais do LOTE INTEIRO (as falhas também consomem),
+      //    mochila antes do baú.
+      await consumeFromPool(
+        tx,
+        pool,
+        recipe.materials.map((m) => ({ name: m.name, quantity: m.quantity * quantity })),
+      )
 
       // 4. Debita o gold e credita o XP de Forja no mesmo update.
       await tx.character.update({
@@ -197,6 +174,7 @@ export async function POST(
 
       // 5. Produz a saída — só para as unidades que PASSARAM na rolagem.
       let outputItemId: string | null = null
+      let outputWentTo: 'character' | 'global' = 'character'
       if (roll.succeeded > 0) {
         if (recipe.kind === 'gear' && catalogItem) {
           // Acha/cria o Item da peça (mesma lógica de addDropToInventoryTx).
@@ -220,13 +198,16 @@ export async function POST(
               },
             })
           }
-          // Equipamento NÃO empilha — cada peça é uma linha (durabilidade cheia por default).
-          await assertInventoryRoom(tx, character.id, roll.succeeded)
-          for (let i = 0; i < roll.succeeded; i++) {
-            await tx.characterInventory.create({
-              data: { characterId: character.id, itemId: item.id, quantity: 1 },
-            })
-          }
+          // Equipamento NÃO empilha — cada peça é uma linha (durabilidade cheia
+          // por default). Mochila cheia transborda pro Baú Geral em vez de barrar:
+          // o material pode ter vindo todo do baú. [[materialPool]]
+          outputWentTo = await depositCraftOutput(tx, {
+            characterId: character.id,
+            userId,
+            itemId: item.id,
+            quantity: roll.succeeded,
+            isEquipment: true,
+          })
           outputItemId = item.id
         } else {
           // Refino: acha/cria a pedra e empilha (consumível).
@@ -251,20 +232,13 @@ export async function POST(
               },
             })
           }
-          const existing = await tx.characterInventory.findFirst({
-            where: { characterId: character.id, itemId: item.id, enhancementLevel: 0 },
+          outputWentTo = await depositCraftOutput(tx, {
+            characterId: character.id,
+            userId,
+            itemId: item.id,
+            quantity: roll.succeeded,
+            isEquipment: false,
           })
-          if (existing) {
-            await tx.characterInventory.update({
-              where: { id: existing.id },
-              data: { quantity: { increment: roll.succeeded } },
-            })
-          } else {
-            await assertInventoryRoom(tx, character.id, 1)
-            await tx.characterInventory.create({
-              data: { characterId: character.id, itemId: item.id, quantity: roll.succeeded },
-            })
-          }
           outputItemId = item.id
         }
       }
@@ -273,7 +247,7 @@ export async function POST(
         where: { id: character.id },
         select: { gold: true },
       })
-      return { outputItemId, characterGold: updatedChar?.gold ?? null }
+      return { outputItemId, outputWentTo, characterGold: updatedChar?.gold ?? null }
     })
 
     const totalGoldCost = recipe.goldCost * quantity
@@ -304,7 +278,7 @@ export async function POST(
     const levelInfo = getProfessionLevelInfo(xpBefore + roll.xpGained)
 
     const outName = localizeItemName(recipe.outputName, getLocaleFromRequest(request))
-    const message = roll.failed === 0
+    const baseMessage = roll.failed === 0
       ? roll.attempted > 1
         ? t('⚒️ {n}× {name} forged successfully!', { n: roll.attempted, name: outName })
         : t('⚒️ {name} forged successfully!', { name: outName })
@@ -315,6 +289,12 @@ export async function POST(
         : t('⚒️ {ok} of {total} {name} survived the forge.', {
             ok: roll.succeeded, total: roll.attempted, name: outName,
           })
+
+    // Mochila cheia: a peça caiu no Baú Geral. Dizer isso é obrigatório — senão
+    // o jogador acha que o craft sumiu.
+    const message = roll.succeeded > 0 && result.outputWentTo === 'global'
+      ? `${baseMessage} ${t('📦 Your backpack was full — it went to the Global Chest.')}`
+      : baseMessage
 
     return NextResponse.json({
       success: true,
@@ -329,11 +309,12 @@ export async function POST(
       characterGold: result.characterGold,
       outputName: recipe.outputName,
       rarity: recipe.rarity,
+      outputWentTo: result.outputWentTo,
       message,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Erro interno do servidor'
-    const isValidation = /insuficiente|Falta |Inventário cheio|Requer Forja/.test(message)
+    const isValidation = /insuficiente|Falta |Inventário cheio|Baú Geral cheio|Requer Forja/.test(message)
     console.error('Error forging item:', error)
     return NextResponse.json({ error: message }, { status: isValidation ? 400 : 500 })
   }

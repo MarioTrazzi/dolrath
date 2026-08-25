@@ -35,6 +35,7 @@ import {
 import type { ProfessionLevelInfo } from '@/lib/professionSystem';
 import { ProfessionBar } from '@/components/gathering/GatheringPanel';
 import { CraftItemThumb as ItemThumb } from '@/components/store/CraftItemThumb';
+import { RecipeInputChips } from '@/components/crafting/RecipeInputs';
 import {
   BdoDialogShell,
   BevelButton,
@@ -706,7 +707,7 @@ export default function ForgeDialog({
                               key={r.id}
                               type="button"
                               onClick={() => loadRecipe(r)}
-                              className={`flex items-center gap-2 rounded-[3px] border p-2 text-left transition-all hover:border-[#c9a25f] ${
+                              className={`flex flex-col items-start gap-1.5 rounded-[3px] border p-2 text-left transition-all hover:border-[#c9a25f] ${
                                 ok ? 'cursor-pointer' : 'opacity-50'
                               }`}
                               style={{
@@ -715,32 +716,35 @@ export default function ForgeDialog({
                                 boxShadow: ok ? `0 0 10px ${ui.glow.replace('0.6', '0.25')}` : undefined,
                               }}
                             >
-                              <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-[3px]">
-                                <ItemThumb name={r.outputName} emoji="⚒️" className="text-2xl" />
+                              <span className="flex w-full items-center gap-2">
+                                <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-[3px]">
+                                  <ItemThumb name={r.outputName} emoji="⚒️" className="text-2xl" />
+                                </span>
+                                <span className="min-w-0">
+                                  <span className={`block truncate text-[11px] font-bold leading-tight ${ui.text}`}>
+                                    {localizeItemName(r.outputName, locale)}
+                                  </span>
+                                  <span
+                                    className={`block text-[10px] leading-tight ${
+                                      !rUnlocked ? 'text-red-400' : ok ? 'text-emerald-300' : 'text-[#77777d]'
+                                    }`}
+                                  >
+                                    {!rUnlocked
+                                      ? t('🔒 Forge lv {n}', { n: rMin })
+                                      : ok
+                                        ? t('✓ materials complete')
+                                        : t('missing materials')}
+                                  </span>
+                                  <span className="block text-[10px] leading-tight text-[#77777d]">
+                                    {isRefineRecipe(r)
+                                      ? t('no fail')
+                                      : rUnlocked
+                                        ? t('{n}% chance', { n: rChance ?? 0 })
+                                        : ''}
+                                  </span>
+                                </span>
                               </span>
-                              <span className="min-w-0">
-                                <span className={`block truncate text-[11px] font-bold leading-tight ${ui.text}`}>
-                                  {localizeItemName(r.outputName, locale)}
-                                </span>
-                                <span
-                                  className={`block text-[10px] leading-tight ${
-                                    !rUnlocked ? 'text-red-400' : ok ? 'text-emerald-300' : 'text-[#77777d]'
-                                  }`}
-                                >
-                                  {!rUnlocked
-                                    ? t('🔒 Forge lv {n}', { n: rMin })
-                                    : ok
-                                      ? t('✓ materials complete')
-                                      : t('missing materials')}
-                                </span>
-                                <span className="block text-[10px] leading-tight text-[#77777d]">
-                                  {isRefineRecipe(r)
-                                    ? t('no fail')
-                                    : rUnlocked
-                                      ? t('{n}% chance', { n: rChance ?? 0 })
-                                      : ''}
-                                </span>
-                              </span>
+                              <RecipeInputChips inputs={r.materials} have={have} size="xs" />
                             </button>
                           );
                         })}

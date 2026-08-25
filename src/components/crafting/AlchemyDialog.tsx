@@ -36,6 +36,7 @@ import { getCraftChance, getCraftMinLevel } from '@/lib/craftingProfession';
 import type { ProfessionLevelInfo } from '@/lib/professionSystem';
 import { ProfessionBar } from '@/components/gathering/GatheringPanel';
 import { CraftItemThumb as ItemThumb } from '@/components/store/CraftItemThumb';
+import { RecipeInputChips } from '@/components/crafting/RecipeInputs';
 import { useT, useI18n } from '@/lib/i18n/I18nProvider';
 import { localizeItemName, localizeRarityLabel } from '@/lib/i18n/catalog';
 import {
@@ -995,7 +996,7 @@ export default function AlchemyDialog({
                                     setHover({ id: r.id, top: rect.top, left });
                                   }}
                                   onMouseLeave={() => setHover((h) => (h?.id === r.id ? null : h))}
-                                  className={`flex items-center gap-2 rounded-[3px] border p-2 text-left transition-all ${
+                                  className={`flex flex-col items-start gap-1.5 rounded-[3px] border p-2 text-left transition-all ${
                                     ok ? 'cursor-pointer hover:border-[#c9a25f]' : 'cursor-not-allowed opacity-45'
                                   }`}
                                   style={{
@@ -1004,25 +1005,28 @@ export default function AlchemyDialog({
                                     boxShadow: ok ? `0 0 10px ${ui.glow.replace('0.6', '0.25')}` : undefined,
                                   }}
                                 >
-                                  <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-[3px]">
-                                    <ItemThumb name={r.outputName} emoji="🧪" className="text-2xl" />
-                                  </span>
-                                  <span className="min-w-0">
-                                    <span className={`block truncate text-[11px] font-bold leading-tight ${ui.text}`}>
-                                      {localizeItemName(r.outputName, locale)}
+                                  <span className="flex w-full items-center gap-2">
+                                    <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-[3px]">
+                                      <ItemThumb name={r.outputName} emoji="🧪" className="text-2xl" />
                                     </span>
-                                    <span
-                                      className={`block text-[10px] leading-tight ${
-                                        !rUnlocked ? 'text-red-400' : ok ? 'text-emerald-300' : 'text-[#77777d]'
-                                      }`}
-                                    >
-                                      {!rUnlocked
-                                        ? t('🔒 lv {n}', { n: rMin })
-                                        : ok
-                                          ? t('✓ ready')
-                                          : t('missing ingredients')}
+                                    <span className="min-w-0">
+                                      <span className={`block truncate text-[11px] font-bold leading-tight ${ui.text}`}>
+                                        {localizeItemName(r.outputName, locale)}
+                                      </span>
+                                      <span
+                                        className={`block text-[10px] leading-tight ${
+                                          !rUnlocked ? 'text-red-400' : ok ? 'text-emerald-300' : 'text-[#77777d]'
+                                        }`}
+                                      >
+                                        {!rUnlocked
+                                          ? t('🔒 lv {n}', { n: rMin })
+                                          : ok
+                                            ? t('✓ ready')
+                                            : t('missing ingredients')}
+                                      </span>
                                     </span>
                                   </span>
+                                  <RecipeInputChips inputs={r.ingredients} have={have} size="xs" />
                                 </button>
                               );
                             })}

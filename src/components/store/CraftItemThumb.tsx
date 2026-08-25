@@ -13,6 +13,7 @@ import {
 import { getItemVisual, getItemTypeLabel } from '@/lib/itemVisuals';
 import { formatItemStats } from '@/lib/itemStats';
 import { whatItemCanProduceSummary } from '@/lib/craftProduces';
+import { MadeWithBlock } from '@/components/crafting/RecipeInputs';
 import { useI18n } from '@/lib/i18n/I18nProvider';
 import { localizeItemName, localizeItemDesc, localizeRarityLabel, localizeItemTypeLabel } from '@/lib/i18n/catalog';
 import type { Locale } from '@/lib/i18n/config';
@@ -126,13 +127,13 @@ export function CraftItemThumb({
     setCoords({ top, left });
   }, [show]);
 
-  const { locale } = useI18n();
+  const { locale, t } = useI18n();
   const displayName = localizeItemName(name, locale);
   const meta = resolveMeta(name, locale);
   const ui = meta ? RARITY_UI[meta.rarity] : null;
   const cardImg = itemImagePath(name);
   const stats = meta?.stats ? formatItemStats(meta.stats, meta.statType) : [];
-  const producesSummary = whatItemCanProduceSummary(name);
+  const producesSummary = whatItemCanProduceSummary(name, t);
   const displayDesc = meta?.description ? localizeItemDesc(name, meta.description, locale) : meta?.description;
 
   return (
@@ -226,6 +227,9 @@ export function CraftItemThumb({
             {producesSummary && (
               <p className="text-[10px] font-semibold text-sky-300 mb-2">{producesSummary}</p>
             )}
+
+            {/* Do que ESTE item é feito — some quando não sai de bancada nenhuma. */}
+            <MadeWithBlock name={name} className="mb-2" />
 
             {meta && meta.value > 0 && (
               <div className="text-xs font-semibold text-amber-400">💰 {meta.value} gold</div>

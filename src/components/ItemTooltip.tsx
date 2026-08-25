@@ -16,6 +16,7 @@ import { cookingRecipesUsingInput } from '@/lib/cooking';
 import { applyEnhancementToStats, getLevelLabel } from '@/lib/enhancementSystem';
 import { diffItemStats, formatItemStats, formatStatValue } from '@/lib/itemStats';
 import { whatItemCanProduceSummary } from '@/lib/craftProduces';
+import { MadeWithBlock } from '@/components/crafting/RecipeInputs';
 import { getSlotTypeFromItemType } from '@/lib/equipmentSlot';
 import ItemCardBackdrop from '@/components/store/ItemCardBackdrop';
 import ItemIcon from '@/components/ItemIcon';
@@ -229,7 +230,7 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
   const showCookButton = !!onOpenCraft && usedInCooking && primaryCraft !== 'cook' && !isEnhancementStone;
   // O que este ingrediente/material ajuda a produzir (receitas do alquimista/ferreiro
   // que o usam como insumo). Vazio para itens que não são insumo de nenhuma receita.
-  const producesSummary = whatItemCanProduceSummary(item.name);
+  const producesSummary = whatItemCanProduceSummary(item.name, t);
 
   // Estilo de botão da loja: gradiente da cor de destaque + sombra.
   const buttonStyle = (hex: string, soft: string) => ({
@@ -465,6 +466,10 @@ export function ItemTooltip({ item, isEquipped, enhancementLevel = 0, durability
             {producesSummary && (
               <p className="text-xs font-semibold text-sky-300 mb-3">{producesSummary}</p>
             )}
+
+            {/* Receita que produz este item — catálogo, não inventário: aparece
+                mesmo sem ter os materiais (é o que diz o que ir caçar). */}
+            <MadeWithBlock name={item.name} className="mb-3" />
 
             <div className="text-base font-semibold text-amber-400 mb-3 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
               💰 {item.goldPrice} gold

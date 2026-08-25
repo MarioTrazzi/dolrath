@@ -20,4 +20,15 @@ export const ITEMTOOLTIP_PT: Record<string, string> = {
   '🌐 To Global': '🌐 Ao Global',
   '🌐 All x{n}': '🌐 Tudo x{n}',
   '🔥 Sell {price}🪙': '🔥 Vender {price}🪙',
+  // Card do item: o que ele ajuda a produzir e de que receita ele sai.
+  'To produce {list}': 'Para produzir {list}',
+  'and': 'e',
+  'weapons': 'armas',
+  'armor': 'armaduras',
+  'enhancement stones': 'pedras de aprimoramento',
+  'potions': 'poções',
+  'processed goods': 'insumos processados',
+  'cooked dishes': 'pratos da culinária',
+  'Made with': 'Feito com',
+  '🍳 Cooking': '🍳 Culinária',
 }

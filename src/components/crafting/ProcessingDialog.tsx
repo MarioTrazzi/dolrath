@@ -30,6 +30,7 @@ import { type Rarity } from '@/lib/itemCatalog';
 import type { ProfessionLevelInfo } from '@/lib/professionSystem';
 import { ProfessionBar } from '@/components/gathering/GatheringPanel';
 import { CraftItemThumb as ItemThumb } from '@/components/store/CraftItemThumb';
+import { RecipeInputChips } from '@/components/crafting/RecipeInputs';
 import { useT, useI18n } from '@/lib/i18n/I18nProvider';
 import { localizeItemName, localizeItemDesc } from '@/lib/i18n/catalog';
 import {
@@ -662,7 +663,7 @@ export default function ProcessingDialog({
                               key={r.id}
                               type="button"
                               onClick={() => loadRecipe(r)}
-                              className={`flex items-center gap-2 rounded-[3px] border p-2 text-left transition-all hover:border-[#c9a25f] ${
+                              className={`flex flex-col items-start gap-1.5 rounded-[3px] border p-2 text-left transition-all hover:border-[#c9a25f] ${
                                 ok ? 'cursor-pointer' : 'opacity-50'
                               }`}
                               style={{
@@ -671,32 +672,35 @@ export default function ProcessingDialog({
                                 boxShadow: ok ? `0 0 10px ${ui.glow.replace('0.6', '0.25')}` : undefined,
                               }}
                             >
-                              <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-[3px]">
-                                <ItemThumb
-                                  name={r.outputName}
-                                  emoji={processingItemEmoji(r.outputName)}
-                                  className="text-2xl"
-                                />
+                              <span className="flex w-full items-center gap-2">
+                                <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-[3px]">
+                                  <ItemThumb
+                                    name={r.outputName}
+                                    emoji={processingItemEmoji(r.outputName)}
+                                    className="text-2xl"
+                                  />
+                                </span>
+                                <span className="min-w-0">
+                                  <span className={`block truncate text-[11px] font-bold leading-tight ${ui.text}`}>
+                                    {localizeItemName(r.outputName, locale)}
+                                  </span>
+                                  <span
+                                    className={`block text-[10px] leading-tight ${
+                                      !rUnlocked ? 'text-red-400' : ok ? 'text-emerald-300' : 'text-[#77777d]'
+                                    }`}
+                                  >
+                                    {!rUnlocked
+                                      ? t('🔒 Proc. lv {n}', { n: r.minLevel })
+                                      : ok
+                                        ? t('✓ all inputs available')
+                                        : t('missing inputs')}
+                                  </span>
+                                  <span className="block text-[10px] leading-tight text-[#77777d]">
+                                    {t('no fail · +{n} XP', { n: r.xp })}
+                                  </span>
+                                </span>
                               </span>
-                              <span className="min-w-0">
-                                <span className={`block truncate text-[11px] font-bold leading-tight ${ui.text}`}>
-                                  {localizeItemName(r.outputName, locale)}
-                                </span>
-                                <span
-                                  className={`block text-[10px] leading-tight ${
-                                    !rUnlocked ? 'text-red-400' : ok ? 'text-emerald-300' : 'text-[#77777d]'
-                                  }`}
-                                >
-                                  {!rUnlocked
-                                    ? t('🔒 Proc. lv {n}', { n: r.minLevel })
-                                    : ok
-                                      ? t('✓ all inputs available')
-                                      : t('missing inputs')}
-                                </span>
-                                <span className="block text-[10px] leading-tight text-[#77777d]">
-                                  {t('no fail · +{n} XP', { n: r.xp })}
-                                </span>
-                              </span>
+                              <RecipeInputChips inputs={r.inputs} have={have} size="xs" />
                             </button>
                           );
                         })}

@@ -37,6 +37,7 @@ import { useI18n } from '@/lib/i18n/I18nProvider';
 import { localizeItemName } from '@/lib/i18n/catalog';
 import { localizeRaceName, localizeClassName } from '@/lib/i18n/gameNames';
 import { localizeTransformationName } from '@/lib/i18n/combatNames';
+import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider';
 
 import { Item } from '@/types/item';
 
@@ -62,6 +63,10 @@ export default function CharacterDetailsPage() {
   const { locale, t } = useI18n();
   const params = useParams();
   const router = useRouter();
+  // Gold da navbar vem do ActiveCharacterProvider: toda ação que mexe no
+  // Character.gold aqui (vender, aprimorar, craftar, expandir slots) precisa
+  // avisá-lo, senão o número na barra fica preso no valor de antes.
+  const { refresh: refreshActiveCharacter } = useActiveCharacter();
   const [character, setCharacter] = useState<Character | null>(null);
   const [effectiveCharacterId, setEffectiveCharacterId] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -316,6 +321,7 @@ export default function CharacterDetailsPage() {
         const data = await inventoryResponse.json();
         setInventory(Array.isArray(data) ? data : (data.items || []));
       }
+      refreshActiveCharacter(); // gold da navbar
     } catch (error) {
       console.error('Error refreshing data:', error);
     }
@@ -495,6 +501,7 @@ export default function CharacterDetailsPage() {
           const inventoryData = await inventoryResponse.json();
           setInventory(Array.isArray(inventoryData) ? inventoryData : (inventoryData.items || []));
         }
+        refreshActiveCharacter(); // gold da navbar
         toast.success(data?.message ?? t('💰 Sold for {total} gold!', { total }));
       } else {
         const error = await response.json().catch(() => ({}));
@@ -558,6 +565,7 @@ export default function CharacterDetailsPage() {
           const refreshedCharacter = await refreshed.json();
           setCharacter(refreshedCharacter);
         }
+        refreshActiveCharacter(); // gold da navbar
       } catch {
         // ignore
       }

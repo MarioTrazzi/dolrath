@@ -5,7 +5,12 @@ import { SELL_FRACTION_CONSUMABLE } from '@/lib/sellPricing'
 import { ConsumableSubtype, ItemType } from '@prisma/client'
 
 // Verificação básica: header X-SEED-SECRET deve corresponder à variável SEED_SECRET
-const SEED_SECRET = process.env.SEED_SECRET || 'dev-secret'
+// Em produção o segredo TEM que vir do ambiente: o fallback 'dev-secret' está no
+// código-fonte, então sem SEED_SECRET configurado qualquer um re-sincronizava o
+// catálogo inteiro (sobrescrevendo ajuste feito à mão no banco). Fora de produção
+// o default continua valendo para o fluxo local.
+const SEED_SECRET =
+  process.env.SEED_SECRET || (process.env.NODE_ENV === 'production' ? null : 'dev-secret')
 
 async function seedItemCatalog() {
   const results = { created: 0, updated: 0, items: [] as string[] }
@@ -206,7 +211,7 @@ export async function POST(request: Request) {
   try {
     // Verificação básica de segurança
     const secret = request.headers.get('x-seed-secret')
-    if (secret !== SEED_SECRET) {
+    if (!SEED_SECRET || secret !== SEED_SECRET) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }

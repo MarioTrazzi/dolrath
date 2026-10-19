@@ -86,20 +86,20 @@ export async function POST(req: Request) {
     }
 
     if (receipt.status !== 1) {
-      // Tx reverted; unlock the pending amount so user can retry.
-      await prisma.user.update({
-        where: { id: session.user.id },
-        data: {
-          goldBalance: { increment: pendingAmount },
-          goldClaimPendingAmount: 0,
-          goldClaimPendingNonce: null,
-          goldClaimPendingDeadline: null,
-          goldClaimPendingCreatedAt: null,
-          goldClaimPendingTxHash: txHash,
-        } as any,
-      })
-
-      return NextResponse.json({ error: 'Claim transaction reverted', txHash }, { status: 400 })
+      // NÃO devolve o valor ao banco aqui. Um tx revertido qualquer (de
+      // qualquer contrato) não prova nada sobre a assinatura do claim — ela
+      // continua resgatável até o deadline. Devolver agora deixava o jogador
+      // mandar um tx falho, recuperar o gold no banco E ainda mintar com a
+      // assinatura. A pendência fica; o claim-intent reaproveita a mesma
+      // assinatura para nova tentativa e só destrava depois do deadline,
+      // conferindo usedNonce on-chain.
+      return NextResponse.json(
+        {
+          error: 'Claim transaction reverted. Your claim is still pending — you can retry it.',
+          txHash,
+        },
+        { status: 400 }
+      )
     }
 
     if (!receipt.to || receipt.to.toLowerCase() !== contractAddress.toLowerCase()) {

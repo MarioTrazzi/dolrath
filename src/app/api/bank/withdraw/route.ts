@@ -25,14 +25,22 @@ export async function POST(req: Request) {
     const result = await prisma.$transaction(async (tx) => {
       const character = await tx.character.findFirst({ where: { id: characterId, userId }, select: { id: true } })
       if (!character) throw new Error('Personagem não encontrado')
-      const user = await tx.user.findUnique({ where: { id: userId }, select: { goldBalance: true } })
-      if (!user || user.goldBalance < value) throw new Error(`Saldo do banco insuficiente (tem ${user?.goldBalance ?? 0} 🪙).`)
+      // Débito condicional: dois saques simultâneos não podem os dois passar no
+      // mesmo saldo lido (o banco ia a negativo e o gold aparecia em dobro).
+      const debit = await tx.user.updateMany({
+        where: { id: userId, goldBalance: { gte: value } },
+        data: { goldBalance: { decrement: value } },
+      })
+      if (debit.count === 0) {
+        const user = await tx.user.findUnique({ where: { id: userId }, select: { goldBalance: true } })
+        throw new Error(`Saldo do banco insuficiente (tem ${user?.goldBalance ?? 0} 🪙).`)
+      }
 
       const [bank, char] = await Promise.all([
-        tx.user.update({ where: { id: userId }, data: { goldBalance: { decrement: value } }, select: { goldBalance: true } }),
+        tx.user.findUnique({ where: { id: userId }, select: { goldBalance: true } }),
         tx.character.update({ where: { id: characterId }, data: { gold: { increment: value } }, select: { gold: true } }),
       ])
-      return { characterGold: char.gold, bankGold: bank.goldBalance }
+      return { characterGold: char.gold, bankGold: bank?.goldBalance ?? 0 }
     })
 
     return NextResponse.json({ success: true, moved: value, ...result, message: `🏦 Sacou ${value} 🪙 do banco.` })

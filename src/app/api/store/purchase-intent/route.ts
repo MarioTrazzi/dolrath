@@ -1,6 +1,7 @@
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { rateLimitAllow, rateLimited429 } from '@/lib/rateLimit'
 import { prisma } from '@/lib/prisma'
+import { isShopItem } from '@/lib/itemCatalog'
 import { NextResponse } from 'next/server'
 import { verifyGoldTransferTx } from '@/lib/goldPayments'
 import { computeItemKey, computePurchaseId, signItemMintRequest } from '@/lib/itemNftSigning'
@@ -41,6 +42,9 @@ export async function POST(req: Request) {
     const item = await prisma.item.findUnique({ where: { id: itemId } })
     if (!item) {
       return NextResponse.json({ error: 'Item not found' }, { status: 404 })
+    }
+    if (!isShopItem(item)) {
+      return NextResponse.json({ error: 'This item is not sold in the shop' }, { status: 400 })
     }
 
     const user = await prisma.user.findUnique({ where: { id: session.user.id } })

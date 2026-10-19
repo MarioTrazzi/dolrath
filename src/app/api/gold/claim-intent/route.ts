@@ -3,7 +3,7 @@ import { ethers } from 'ethers'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { rateLimitAllow, rateLimited429 } from '@/lib/rateLimit'
 import { prisma } from '@/lib/prisma'
-import { getGoldChainId, getGoldContractAddress } from '@/lib/goldOnchain'
+import { getGoldChainId, getGoldContract, getGoldContractAddress } from '@/lib/goldOnchain'
 import { signGoldClaim } from '@/lib/goldSigning'
 
 export const dynamic = 'force-dynamic'
@@ -84,11 +84,28 @@ export async function POST() {
       goldClaimPendingNonce != null &&
       goldClaimPendingDeadline != null
 
-    if (hasPending && goldClaimPendingDeadline!.getTime() <= Date.now()) {
-      await prisma.user.update({
-        where: { id: session.user.id },
+    // Folga sobre o deadline: o contrato compara com block.timestamp, que pode
+    // andar um pouco atrás do relógio do servidor.
+    const PENDING_EXPIRY_GRACE_MS = 2 * 60_000
+    if (hasPending && goldClaimPendingDeadline!.getTime() + PENDING_EXPIRY_GRACE_MS <= Date.now()) {
+      // Antes de devolver o valor ao banco, confere ON-CHAIN se a assinatura
+      // não foi resgatada (claim feito sem passar pelo claim-confirm). Sem isto
+      // o jogador mintava o GOLD e ainda recebia o valor de volta no banco.
+      const alreadyClaimed = (await getGoldContract().usedNonce(
+        walletAddress,
+        BigInt(goldClaimPendingNonce!)
+      )) as boolean
+
+      // Condicional na MESMA pendência lida: dois requests simultâneos viam a
+      // pendência vencida e os dois devolviam o valor ao banco (gold em dobro).
+      await prisma.user.updateMany({
+        where: {
+          id: session.user.id,
+          goldClaimPendingNonce: goldClaimPendingNonce,
+          goldClaimPendingAmount: goldClaimPendingAmount,
+        } as any,
         data: {
-          goldBalance: { increment: goldClaimPendingAmount },
+          ...(alreadyClaimed ? {} : { goldBalance: { increment: goldClaimPendingAmount } }),
           goldClaimPendingAmount: 0,
           goldClaimPendingNonce: null,
           goldClaimPendingDeadline: null,
@@ -156,8 +173,14 @@ export async function POST() {
     const nonce = BigInt(nextNonce)
 
     // Lock the amount off-chain by moving it from goldBalance -> pending.
-    await prisma.user.update({
-      where: { id: session.user.id },
+    // Condicional no nonce/saldo lidos: dois intents simultâneos debitavam o
+    // banco duas vezes para uma única assinatura resgatável.
+    const locked = await prisma.user.updateMany({
+      where: {
+        id: session.user.id,
+        goldClaimNonce: currentNonce,
+        goldBalance: { gte: claimAmount },
+      } as any,
       data: {
         goldBalance: { decrement: claimAmount },
         goldClaimNonce: { increment: 1 },
@@ -168,6 +191,12 @@ export async function POST() {
         goldClaimPendingTxHash: null,
       } as any,
     })
+    if (locked.count === 0) {
+      return NextResponse.json(
+        { error: 'Another claim is already in progress. Try again in a moment.' },
+        { status: 409 }
+      )
+    }
 
     const amountWei = toGoldWei(claimAmount)
     const signed = await signGoldClaim({ to: walletAddress, amountWei, nonce, deadline })

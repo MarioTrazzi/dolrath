@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { assertInventoryRoom } from '@/lib/inventoryMutations'
+import { isShopItem } from '@/lib/itemCatalog'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,6 +32,11 @@ export async function POST(req: Request) {
     ])
     if (!item) return NextResponse.json({ error: 'Item não encontrado' }, { status: 404 })
     if (!character) return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+    // Só o que a vitrine vende. Sem isto qualquer id do catálogo (pedra de
+    // aprimoramento, drop de chefe) saía pelo goldPrice default.
+    if (!isShopItem(item)) {
+      return NextResponse.json({ error: 'Este item não é vendido na loja' }, { status: 400 })
+    }
 
     const unitPrice = Math.max(0, Math.floor(item.goldPrice ?? 0))
     const totalCost = unitPrice * qty
@@ -38,12 +44,15 @@ export async function POST(req: Request) {
     const result = await prisma.$transaction(async (tx) => {
       // Paga com a CARTEIRA DO PERSONAGEM (Character.gold — "dinheiro na mão").
       // Para usar o gold do banco, o jogador saca antes em /inventory. [[bank — Opção B]]
-      const charGold = await tx.character.findUnique({ where: { id: characterId }, select: { gold: true } })
-      if (!charGold || charGold.gold < totalCost) {
+      // Débito condicional e atômico: duas compras simultâneas não podem as
+      // duas passar no saldo lido e deixar a carteira negativa.
+      const debit = await tx.character.updateMany({
+        where: { id: characterId, gold: { gte: totalCost } },
+        data: { gold: { decrement: totalCost } },
+      })
+      if (debit.count === 0) {
         throw new Error(`GOLD insuficiente na carteira do personagem: precisa de ${totalCost} 🪙.`)
       }
-
-      await tx.character.update({ where: { id: characterId }, data: { gold: { decrement: totalCost } } })
 
       const isConsumable = item.type === 'CONSUMABLE'
       if (isConsumable) {

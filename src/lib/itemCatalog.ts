@@ -2135,6 +2135,17 @@ export function canClassEquip(
   return { ok: true };
 }
 
+/**
+ * A peça está à venda na loja? Mesmo critério da vitrine (/api/store/items):
+ * só `stats.source === 'shop'`. As rotas de COMPRA precisam repetir isto —
+ * a vitrine filtrar não impede ninguém de mandar o id de uma pedra de
+ * aprimoramento ou de um drop de chefe direto para o endpoint.
+ */
+export function isShopItem(item: { stats: unknown }): boolean {
+  const stats = (item.stats ?? {}) as Record<string, unknown>;
+  return stats.source === 'shop';
+}
+
 /** Exclusividade de raça + restrição de classe (arma/peso) combinadas. */
 export function canEquip(
   race: string | null | undefined,

@@ -24,13 +24,20 @@ export async function POST(req: Request) {
     const result = await prisma.$transaction(async (tx) => {
       const character = await tx.character.findFirst({ where: { id: characterId, userId }, select: { gold: true } })
       if (!character) throw new Error('Personagem não encontrado')
-      if (character.gold < value) throw new Error(`Saldo do personagem insuficiente (tem ${character.gold} 🪙).`)
+      // Débito condicional: dois depósitos simultâneos liam o MESMO saldo e os
+      // dois passavam — o herói ia a negativo e o banco (claimável on-chain)
+      // recebia em dobro.
+      const debit = await tx.character.updateMany({
+        where: { id: characterId, userId, gold: { gte: value } },
+        data: { gold: { decrement: value } },
+      })
+      if (debit.count === 0) throw new Error(`Saldo do personagem insuficiente (tem ${character.gold} 🪙).`)
 
       const [char, user] = await Promise.all([
-        tx.character.update({ where: { id: characterId }, data: { gold: { decrement: value } }, select: { gold: true } }),
+        tx.character.findUnique({ where: { id: characterId }, select: { gold: true } }),
         tx.user.update({ where: { id: userId }, data: { goldBalance: { increment: value } }, select: { goldBalance: true } }),
       ])
-      return { characterGold: char.gold, bankGold: user.goldBalance }
+      return { characterGold: char?.gold ?? 0, bankGold: user.goldBalance }
     })
 
     return NextResponse.json({ success: true, moved: value, ...result, message: `🏦 Depositou ${value} 🪙 no banco.` })

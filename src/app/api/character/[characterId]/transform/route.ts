@@ -18,6 +18,7 @@ import {
   getRaceTransformations
 } from '@/lib/transformationSystem'
 import { regenAndPersist } from '@/lib/staminaServer'
+import { requireApiActor } from '@/lib/botFleetAuth'
 
 export async function POST(
   req: NextRequest,
@@ -48,8 +49,14 @@ export async function POST(
       }, { status: 400 })
     }
 
-    const character = await prisma.character.findUnique({
-      where: { id: characterId }
+    // 🔒 Só o DONO transforma (e paga MP/stamina). A rota não tinha auth nenhuma:
+    // com o id de qualquer herói (público no ranking/mercado) dava para drenar a
+    // stamina e o MP dele em loop.
+    const resolved = await requireApiActor(req, characterId)
+    if ('error' in resolved) return resolved.error
+
+    const character = await prisma.character.findFirst({
+      where: { id: characterId, userId: resolved.actor.userId }
     })
 
     if (!character) {

@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { revertTransformation } from '@/lib/transformationSystem'
+import { requireApiActor } from '@/lib/botFleetAuth'
 
 export async function POST(
   req: NextRequest,
@@ -18,9 +19,21 @@ export async function POST(
       return NextResponse.json({ error: 'Character ID é obrigatório' }, { status: 400 })
     }
 
+    // 🔒 Dono do herói OU o socket da arena (que limpa a forma ao fim da luta,
+    // servidor-a-servidor, com o mesmo segredo de /api/battle/*). Antes não havia
+    // auth nenhuma.
+    const battleSecret = process.env.BATTLE_REWARDS_SECRET
+    const isService = !!battleSecret && req.headers.get('x-battle-secret') === battleSecret
+    let ownerId: string | null = null
+    if (!isService) {
+      const resolved = await requireApiActor(req, characterId)
+      if ('error' in resolved) return resolved.error
+      ownerId = resolved.actor.userId
+    }
+
     // Buscar personagem
-    const character = await prisma.character.findUnique({
-      where: { id: characterId }
+    const character = await prisma.character.findFirst({
+      where: { id: characterId, ...(ownerId ? { userId: ownerId } : {}) }
     })
 
     if (!character) {

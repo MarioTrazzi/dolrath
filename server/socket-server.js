@@ -2379,7 +2379,8 @@ function regeneratePlayerResources(player, context = 'Activity') {
     const appUrl = (process.env.APP_URL || process.env.NEXTAUTH_URL || 'https://dolrath.vercel.app').replace(/\/$/, '')
     fetch(`${appUrl}/api/character/${player.id}/detransform`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      // Servidor-a-servidor: a rota exige o dono OU este segredo.
+      headers: { 'Content-Type': 'application/json', 'x-battle-secret': process.env.BATTLE_REWARDS_SECRET || '' },
     }).catch((error) => {
       console.error(`❌ Erro ao persistir reset de transformação para ${player.name}:`, error)
     })

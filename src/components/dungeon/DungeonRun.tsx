@@ -246,6 +246,16 @@ const MONSTER_ID = 'dungeon-monster'
 // Atraso (ms) antes de animar um efeito de status (veneno/sangramento/atordoamento)
 // que ocorre JUNTO com um golpe. Precisa ser maior que a investida+impacto mais longos
 // (habilidades como Sopro/Cosmo chegam a ~1680ms) pra aura não engolir a animação do golpe.
+// Última run aberta NESTA aba (sessionStorage é por aba): é a prova, para o
+// /start, de que uma run "viva" é desta aba e não de outra janela.
+const LAST_RUN_KEY = 'dolrath:lastDungeonRunId'
+function readLastRunId(): string | null {
+  try { return sessionStorage.getItem(LAST_RUN_KEY) } catch { return null }
+}
+function writeLastRunId(id: string) {
+  try { sessionStorage.setItem(LAST_RUN_KEY, id) } catch { /* sem storage: segue sem a prova */ }
+}
+
 const STATUS_FX_DELAY = 1700
 
 interface ResolvedEvent {
@@ -1425,7 +1435,10 @@ export default function DungeonRun({
         const res = await fetch('/api/dungeon/run/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ characterId: character.id, dungeonId: dungeon.id, tier }),
+          // previousRunId: a run anterior DESTA aba (sessionStorage é por aba). Se o
+          // /finish dela falhou, o servidor ainda a vê viva e respondia "herói em
+          // outra aba" para a própria aba que a abriu; com o id, ele drena e segue.
+          body: JSON.stringify({ characterId: character.id, dungeonId: dungeon.id, tier, previousRunId: readLastRunId() }),
         })
         const data = await res.json()
         if (!res.ok) {
@@ -1438,6 +1451,7 @@ export default function DungeonRun({
           return
         }
         runIdRef.current = data.runId
+        writeLastRunId(data.runId)
         setRunId(data.runId)
         if (typeof data.stamina === 'number') setStamina(data.stamina)
         // Ponto de partida da previsão de mochila cheia (a escrita real só acontece

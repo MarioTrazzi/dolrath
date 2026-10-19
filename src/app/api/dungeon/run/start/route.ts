@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   const userId = session.user.id
 
   try {
-    const { characterId, dungeonId, tier: rawTier } = await req.json()
+    const { characterId, dungeonId, tier: rawTier, previousRunId } = await req.json()
     if (!characterId || !dungeonId) {
       return NextResponse.json({ error: t('characterId and dungeonId are required') }, { status: 400 })
     }
@@ -94,7 +94,10 @@ export async function POST(req: NextRequest) {
     }
 
     // Runs órfãs (aba caiu) já passaram da janela do lock e são drenadas abaixo.
-    if (existing && isRunLive(existing)) {
+    // A run "viva" é a anterior DESTA aba (o /finish dela falhou ou ainda não
+    // aterrissou): não é outra janela segurando o herói — drena e segue.
+    const ownPreviousRun = !!existing && typeof previousRunId === 'string' && existing.id === previousRunId
+    if (existing && isRunLive(existing) && !ownPreviousRun) {
       const sameHero = existing.characterId === characterId
       return NextResponse.json(
         {

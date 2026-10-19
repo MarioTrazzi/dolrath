@@ -79,4 +79,5 @@ export const MARKET_PT: Record<string, string> = {
   'Loading listings…': 'Carregando listagens…',
   'No characters for sale right now.': 'Nenhum personagem à venda no momento.',
   'No items for sale right now.': 'Nenhum item à venda no momento.',
+  'base value {n} 🪙': 'valor base {n} 🪙',
 }

@@ -11,7 +11,8 @@ import { resolveImageUrl } from '@/lib/imageUrl'
 import { itemImagePath } from '@/lib/itemCatalog'
 import { getItemVisual, getItemTypeLabel } from '@/lib/itemVisuals'
 import { useI18n } from '@/lib/i18n/I18nProvider'
-import { localizeItemTypeLabel } from '@/lib/i18n/catalog'
+import { localizeItemTypeLabel, localizeItemName } from '@/lib/i18n/catalog'
+import { raceLabel, classLabel } from '@/lib/i18n/gameNames'
 
 // Miniatura do item: imagem (Cloudinary/URL), fallback por nome (asset estático), ou emoji/categoria.
 function ItemThumb({ image, name, type, enhancement }: { image?: string | null; name?: string | null; type: string; enhancement?: number }) {
@@ -633,14 +634,14 @@ export default function MarketplacePage() {
         ) : (
           <div className="grid gap-2 sm:grid-cols-2">
             {inventory.map((row) => (
-              <div key={row.id} className="flex items-center gap-2 rounded-[3px] border border-black/60 bg-[#19191c] p-3">
+              <div key={row.id} className="flex flex-wrap items-center gap-2 rounded-[3px] border border-black/60 bg-[#19191c] p-3">
                 <ItemThumb image={row.item.image} name={row.item.name} type={row.item.type} enhancement={row.enhancementLevel} />
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-[8rem]">
                   <div className="font-semibold text-[#ece7da] truncate">
-                    {row.item.name}
+                    {localizeItemName(row.item.name, locale)}
                     {row.enhancementLevel > 0 ? <span className="text-amber-300"> +{row.enhancementLevel}</span> : null}
                   </div>
-                  <div className="text-xs text-[#8a8a90]">valor base {row.item.goldPrice} 🪙</div>
+                  <div className="text-xs text-[#8a8a90]">{t('base value {n} 🪙', { n: row.item.goldPrice })}</div>
                 </div>
                 <input
                   type="number" min={1} placeholder={t('price')}
@@ -676,7 +677,7 @@ export default function MarketplacePage() {
                   <ItemThumb image={l.item?.image} name={l.item?.name} type={l.item?.type ?? ''} enhancement={l.item?.enhancementLevel} />
                   <div className="min-w-0">
                     <div className="font-bold text-[#ece7da] truncate">
-                      {l.item?.name ?? `Token #${l.tokenId}`}
+                      {l.item?.name ? localizeItemName(l.item.name, locale) : `Token #${l.tokenId}`}
                       {l.item?.enhancementLevel ? <span className="text-amber-300"> +{l.item.enhancementLevel}</span> : null}
                     </div>
                     <div className="text-xs text-[#8a8a90]">
@@ -737,11 +738,11 @@ export default function MarketplacePage() {
         ) : (
           <div className="grid gap-2 sm:grid-cols-2">
             {myCharacters.map((c) => (
-              <div key={c.id} className="flex items-center gap-2 rounded-[3px] border border-black/60 bg-[#19191c] p-3">
+              <div key={c.id} className="flex flex-wrap items-center gap-2 rounded-[3px] border border-black/60 bg-[#19191c] p-3">
                 <CharThumb avatar={c.avatar} />
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-[8rem]">
                   <div className="font-semibold text-[#ece7da] truncate">{c.name}</div>
-                  <div className="text-xs text-[#8a8a90] capitalize">{c.race} • {c.class} • Nv.{c.level}</div>
+                  <div className="text-xs text-[#8a8a90] capitalize">{raceLabel(c.race, locale)} • {classLabel(c.class, locale)} • {t('Lv.{n}', { n: c.level })}</div>
                   {!c.nftTokenId ? (
                     <div className="text-[11px] text-amber-300/80">{t('Not an NFT yet — register on-chain before selling')}</div>
                   ) : c.marketListingId ? (
@@ -792,7 +793,7 @@ export default function MarketplacePage() {
                       </div>
                       <div className="text-xs text-[#8a8a90] capitalize">
                         {l.character
-                          ? `${l.character.race} • ${l.character.class} • ${t('Lv.{n}', { n: l.character.level })}`
+                          ? `${raceLabel(l.character.race, locale)} • ${classLabel(l.character.class, locale)} • ${t('Lv.{n}', { n: l.character.level })}`
                           : t('Outside the database')}
                       </div>
                     </div>

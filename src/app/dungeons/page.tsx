@@ -15,6 +15,7 @@ import { GOLD, GOLD_BRIGHT, BORDER_GOLD, PANEL_BG } from '@/components/crafting/
 import { restoreCost, FREE_RESTORE_MAX_LEVEL } from '@/lib/restoreCost'
 import { buyGoldOnChain, isInsufficientGold, parseNeededGold } from '@/lib/buyGold'
 import { confirmBuyGold } from '@/lib/buyGoldPrompt'
+import { raceLabel, classLabel } from '@/lib/i18n/gameNames'
 
 // Numerais dos tiers (1..5 → I..V).
 const ROMAN = ['I', 'II', 'III', 'IV', 'V']
@@ -422,7 +423,7 @@ export default function DungeonsPage() {
                 <span style={{ color: GOLD_BRIGHT }}>
                   ({t('Lv.{n}', { n: selectedCharacter.level })})
                 </span>
-                <span className="text-[#8a8a90] capitalize"> — {selectedCharacter.race} {selectedCharacter.class}</span>
+                <span className="text-[#8a8a90] capitalize"> — {raceLabel(selectedCharacter.race, locale)} {classLabel(selectedCharacter.class, locale)}</span>
               </div>
               {selectedCharacter && (
                 <div
@@ -662,7 +663,9 @@ export default function DungeonsPage() {
                   )}
                 </div>
 
-                <div className="mt-auto flex items-end justify-between gap-2">
+                {/* flex-wrap: no celular os 5 retratos + o botão não cabem numa linha
+                    e o "Entrar" (o CTA da tela) ficava cortado na borda do card. */}
+                <div className="mt-auto flex flex-wrap items-end justify-between gap-2">
                   {/* Bestiário */}
                   <div className="flex items-center gap-1.5">
                     {dungeon.monsters.map(m => (
@@ -699,7 +702,7 @@ export default function DungeonsPage() {
                               })
                           : undefined
                         }
-                        className={`px-5 py-2.5 rounded-[3px] border font-semibold tracking-wide text-sm transition-all ${
+                        className={`ml-auto px-5 py-2.5 rounded-[3px] border font-semibold tracking-wide text-sm transition-all ${
                           enter ? 'hover:brightness-125' : 'opacity-50 cursor-not-allowed'
                         }`}
                         style={{

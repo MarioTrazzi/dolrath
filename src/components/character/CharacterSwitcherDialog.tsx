@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useT } from '@/lib/i18n/I18nProvider'
+import { useT, useI18n } from '@/lib/i18n/I18nProvider'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -11,6 +11,7 @@ import { resolveImageUrl } from '@/lib/imageUrl'
 import { useActiveCharacter, ActiveCharacter } from '@/components/providers/ActiveCharacterProvider'
 import CharacterAlertBadge from '@/components/character/CharacterAlertBadge'
 import { useCharacterNotifications, type CharacterAlerts } from '@/hooks/useCharacterNotifications'
+import { raceLabel, classLabel } from '@/lib/i18n/gameNames'
 
 // 🎴 Diálogo de troca de herói: abre pela foto-avatar na navbar. Mostra todos os
 // personagens lado a lado (rolagem horizontal estilo carrossel) com foto, nível,
@@ -42,6 +43,7 @@ function CharacterCard({
   alerts?: CharacterAlerts | null
   onSelect: () => void
 }) {
+  const { locale } = useI18n()
   const avatarUrl = resolveImageUrl(character.avatar ?? null)
   const dead = character.isAlive === false
   const fs = Number(character.failstacks ?? 0)
@@ -91,7 +93,7 @@ function CharacterCard({
       <div className="mb-2 min-w-0">
         <div className="truncate text-base font-bold text-white">{character.name}</div>
         <div className="truncate text-xs capitalize text-textsec">
-          {character.race} • {character.class}
+          {raceLabel(character.race, locale)} • {classLabel(character.class, locale)}
         </div>
       </div>
 

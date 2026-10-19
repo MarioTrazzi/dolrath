@@ -12,6 +12,7 @@ import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvid
 import { GOLD, GOLD_BRIGHT, PANEL_BG, TITLEBAR_BG, BEVEL_BTN_CLASS, BEVEL_COLOR_BTN_CLASS, BEVEL_VARIANTS } from '@/components/crafting/bdoTheme'
 import { TRAINING_OPPONENTS } from '@/lib/trainingOpponents'
 import { PVP_FIGHT_STAMINA, PVP_FIGHTS_PER_DAY } from '@/lib/pvpRewards'
+import { raceLabel, classLabel } from '@/lib/i18n/gameNames'
 
 function lobbySocketUrl() {
   return process.env.NODE_ENV === 'production'
@@ -590,7 +591,7 @@ export default function CombatLobbyPage() {
               <div className="inline-flex flex-col items-start rounded-[3px] border border-[#46464c] bg-[#19191c] px-4 py-2.5">
                 <div className="font-bold text-lg text-[#ece7da]">{selectedCharacter.name}</div>
                 <div className="text-sm text-[#8a8a90]">
-                  {t('Lv.{n}', { n: selectedCharacter.level })} • {selectedCharacter.race} {selectedCharacter.class}
+                  {t('Lv.{n}', { n: selectedCharacter.level })} • {raceLabel(selectedCharacter.race, locale)} {classLabel(selectedCharacter.class, locale)}
                 </div>
                 <div className="text-sm text-[#c9c9ce] flex items-center gap-3 mt-0.5 tabular-nums">
                   <span>❤️ {selectedCharacter.hp}/{selectedCharacter.maxHp}</span>

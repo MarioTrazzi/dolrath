@@ -182,7 +182,7 @@ export function Navbar() {
           </div>
 
           {/* Navigation Links - Desktop */}
-          <div className="hidden lg:flex items-center gap-1">
+          <div className="hidden xl:flex items-center gap-1">
             {navLinks.map((l) => (
               <Link
                 key={l.href}
@@ -196,7 +196,7 @@ export function Navbar() {
           </div>
 
           {/* Right side - Desktop */}
-          <div className="hidden lg:flex items-center gap-2">
+          <div className="hidden xl:flex items-center gap-2">
             <LanguageToggle />
             {session ? (
               <>
@@ -248,7 +248,7 @@ export function Navbar() {
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             aria-expanded={isMenuOpen}
             aria-label={isMenuOpen ? t('Close menu') : t('Open menu')}
-            className="lg:hidden p-2 rounded-lg text-white hover:bg-white/5 transition-colors"
+            className="xl:hidden p-2 rounded-lg text-white hover:bg-white/5 transition-colors"
           >
             <span className="text-2xl">{isMenuOpen ? '✕' : '☰'}</span>
           </button>
@@ -261,7 +261,7 @@ export function Navbar() {
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
-            className="lg:hidden mt-2 rounded-2xl border border-white/10 bg-secondary/90 backdrop-blur-xl shadow-2xl"
+            className="xl:hidden mt-2 rounded-2xl border border-white/10 bg-secondary/90 backdrop-blur-xl shadow-2xl"
           >
             <div className="px-4 py-4 flex flex-col gap-1">
               {navLinks.map((l) => (

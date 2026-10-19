@@ -66,6 +66,8 @@ export interface DungeonEventDef {
   max: number
   icon: string
   title: string
+  /** Display EN do título (o `title` PT segue sendo a fonte). */
+  titleEn?: string
   description: string
   /** trap: % do HP máximo perdido */
   trapDamagePct?: number
@@ -108,11 +110,14 @@ export interface DungeonDef {
   exploreAction: string
   exploreHint: string
   enterText: string
+  enterTextEn?: string
   monsters: DungeonMonsterDef[]
   boss: DungeonBossDef
   events: DungeonEventDef[]
   /** Frases temáticas quando nada é encontrado */
   ambience: string[]
+  /** Mesmas frases em EN, na MESMA ordem (display; ver pickAmbience). */
+  ambienceEn?: string[]
 }
 
 export const DUNGEONS: Record<DungeonId, DungeonDef> = {
@@ -139,6 +144,7 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     exploreAction: 'Seguir a trilha',
     exploreHint: 'Role o d20 para se embrenhar na mata',
     enterText: 'Você cruza a fronteira das árvores. A luz da lua mal atravessa a copa...',
+    enterTextEn: 'You cross the treeline. Moonlight barely pierces the canopy...',
     monsters: [
       { name: 'Lobo Faminto', nameEn: 'Ravenous Wolf', emoji: '🐺', image: '/monsters/lobo-faminto.webp', baseHp: 42, baseAttack: 9, baseDefense: 3, baseEvade: 0.16 },
       { name: 'Aranha Gigante', nameEn: 'Giant Spider', emoji: '🕷️', image: '/monsters/aranha-gigante.webp', baseHp: 38, baseAttack: 11, baseDefense: 2, baseEvade: 0.12 },
@@ -154,7 +160,7 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
         trapDamagePct: 10,
       },
       {
-        kind: 'monster', min: 3, max: 9, icon: '⚔️', title: 'Emboscada na mata!',
+        kind: 'monster', min: 3, max: 9, icon: '⚔️', title: 'Emboscada na mata!', titleEn: 'Ambush in the woods!',
         description: 'Algo se move entre as árvores... e ataca!',
       },
       {
@@ -183,6 +189,11 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
       'Vagalumes dançam ao redor, mas a trilha segue vazia.',
       'As árvores parecem observar você... mas nada acontece.',
     ],
+    ambienceEn: [
+      'Only the distant call of an owl follows your steps.',
+      'Fireflies dance around you, but the trail stays empty.',
+      'The trees seem to watch you... but nothing happens.',
+    ],
   },
 
   caverna: {
@@ -208,6 +219,7 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     exploreAction: 'Descer pelos túneis',
     exploreHint: 'Role o d20 para explorar as galerias',
     enterText: 'O eco dos seus passos se mistura ao gotejar distante. Cristais iluminam o caminho...',
+    enterTextEn: 'The echo of your steps blends with distant dripping. Crystals light the way...',
     monsters: [
       { name: 'Morcego Sombrio', nameEn: 'Shadow Bat', emoji: '🦇', image: '/monsters/morcego-sombrio.webp', baseHp: 34, baseAttack: 10, baseDefense: 2, baseEvade: 0.18 },
       { name: 'Goblin Minerador', nameEn: 'Miner Goblin', emoji: '👺', image: '/monsters/goblin-minerador.webp', baseHp: 45, baseAttack: 9, baseDefense: 4, baseEvade: 0.10 },
@@ -222,7 +234,7 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
         trapDamagePct: 12,
       },
       {
-        kind: 'monster', min: 4, max: 10, icon: '⚔️', title: 'Olhos no escuro!',
+        kind: 'monster', min: 4, max: 10, icon: '⚔️', title: 'Olhos no escuro!', titleEn: 'Eyes in the dark!',
         description: 'Um brilho se move entre os cristais... não é um cristal.',
       },
       {
@@ -252,6 +264,11 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
       'Cristais pulsam devagar, como um coração adormecido.',
       'Um vento frio sobe das profundezas, mas o caminho está livre.',
     ],
+    ambienceEn: [
+      'Dripping echoes through the tunnels. Nothing but stone and glow.',
+      'Crystals pulse slowly, like a sleeping heart.',
+      'A cold wind rises from the depths, but the way is clear.',
+    ],
   },
 
   pantano: {
@@ -277,6 +294,7 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     exploreAction: 'Atravessar o lamaçal',
     exploreHint: 'Role o d20 para avançar pela névoa',
     enterText: 'A lama engole suas botas. Luzes azuladas piscam na névoa, chamando você...',
+    enterTextEn: 'The mud swallows your boots. Bluish lights flicker in the mist, calling you...',
     monsters: [
       { name: 'Sapo Venenoso', nameEn: 'Venomous Toad', emoji: '🐸', image: '/monsters/sapo-venenoso.webp', baseHp: 36, baseAttack: 12, baseDefense: 2, baseEvade: 0.14 },
       { name: 'Serpente do Lodo', nameEn: 'Mire Serpent', emoji: '🐍', image: '/monsters/serpente-do-lodo.webp', baseHp: 44, baseAttack: 13, baseDefense: 3, baseEvade: 0.13 },
@@ -291,7 +309,7 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
         trapDamagePct: 15,
       },
       {
-        kind: 'monster', min: 5, max: 11, icon: '⚔️', title: 'A lama se move!',
+        kind: 'monster', min: 5, max: 11, icon: '⚔️', title: 'A lama se move!', titleEn: 'The mud moves!',
         description: 'O que parecia um tronco abre os olhos...',
       },
       {
@@ -320,6 +338,11 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
       'A névoa engole todos os sons. Você segue em frente.',
       'Um fogo-fátuo pisca ao longe e desaparece.',
     ],
+    ambienceEn: [
+      'Bubbles pop lazily in the mud. Nothing approaches.',
+      'The mist swallows every sound. You press on.',
+      "A will-o'-the-wisp flickers in the distance and vanishes.",
+    ],
   },
 
   ruinas: {
@@ -345,6 +368,7 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     exploreAction: 'Vasculhar os escombros',
     exploreHint: 'Role o d20 para investigar as ruínas',
     enterText: 'Poeira de séculos cobre o salão. Runas mortas acendem à sua passagem...',
+    enterTextEn: 'The dust of centuries covers the hall. Dead runes flare as you pass...',
     monsters: [
       { name: 'Esqueleto Guerreiro', nameEn: 'Skeleton Warrior', emoji: '💀', image: '/monsters/esqueleto-guerreiro.webp', baseHp: 48, baseAttack: 13, baseDefense: 5, baseEvade: 0.06 },
       { name: 'Espectro Errante', nameEn: 'Wandering Wraith', emoji: '👻', image: '/monsters/espectro-errante.webp', baseHp: 40, baseAttack: 16, baseDefense: 3, baseEvade: 0.18 },
@@ -359,7 +383,7 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
         trapDamagePct: 12,
       },
       {
-        kind: 'monster', min: 4, max: 11, icon: '⚔️', title: 'Os mortos despertam!',
+        kind: 'monster', min: 4, max: 11, icon: '⚔️', title: 'Os mortos despertam!', titleEn: 'The dead awaken!',
         description: 'Ossos raspam na pedra. Algo se levanta das sombras.',
       },
       {
@@ -388,6 +412,11 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
       'Runas piscam fracas no teto, como estrelas morrendo.',
       'O vento atravessa as colunas com um lamento baixo.',
     ],
+    ambienceEn: [
+      'Faceless statues watch over the empty corridor.',
+      'Runes flicker faintly on the ceiling, like dying stars.',
+      'The wind moves through the columns with a low lament.',
+    ],
   },
 }
 
@@ -404,7 +433,10 @@ export const DUNGEON_LIST: DungeonDef[] = [
 
 export interface ScaledMonster {
   id: string
+  /** Nome PT — chave interna (procs, arte, histórico). Não traduzir. */
   name: string
+  /** Display EN (pickName). Sem ele a run inteira mostrava o nome PT no inglês. */
+  nameEn?: string
   emoji: string
   /** Arte do bicho (se houver) — a UI usa como avatar no combate. */
   image?: string
@@ -703,6 +735,8 @@ export function scaleMonster(
   const hp = Math.max(1, Math.floor(anchor.hp * hpMult * rHp * tierPow))
 
   const bossTitle = s.isBoss && 'title' in def ? ` • ${(def as DungeonBossDef).title}` : ''
+  const bossDef = s.isBoss && 'title' in def ? (def as DungeonBossDef) : null
+  const bossTitleEn = bossDef ? ` • ${bossDef.titleEn ?? bossDef.title}` : ''
   // Especial: o boss e as salas PRINCIPAIS mais próximas dele (cresce com a dificuldade);
   // nós menores nunca têm.
   const specialFromTier = dungeon.rooms - (dungeon.difficultyStars - 1)
@@ -717,6 +751,7 @@ export function scaleMonster(
   return {
     id: `${s.isBoss ? 'boss' : 'monster'}-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
     name: s.isBoss ? `👑 ${def.name}${bossTitle}` : def.name,
+    nameEn: s.isBoss ? `👑 ${def.nameEn ?? def.name}${bossTitleEn}` : def.nameEn,
     emoji: def.emoji,
     image: def.image,
     level: monLevel,

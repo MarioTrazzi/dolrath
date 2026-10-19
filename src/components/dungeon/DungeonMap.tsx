@@ -3,6 +3,7 @@
 import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AnimatedDie } from '@/components/battle/AnimatedDice'
+import { useT } from '@/lib/i18n/I18nProvider'
 
 // ============================================================
 // DungeonMap — o que sobrou das peças visuais da tela de
@@ -64,6 +65,7 @@ export function NarrationDialog({
   open: boolean
   onClose: () => void
 }) {
+  const t = useT()
   const [shown, setShown] = React.useState('')
   React.useEffect(() => {
     if (!open) return
@@ -101,7 +103,7 @@ export function NarrationDialog({
               className="inline-flex items-center gap-1.5 mb-1 text-[10px] font-bold uppercase tracking-[0.22em]"
               style={{ color: 'var(--dgn)' }}
             >
-              📜 O Mestre narra
+              {t('📜 The Master narrates')}
             </div>
             <p
               className="text-[14px] sm:text-[15px] leading-snug text-amber-50/90 italic"

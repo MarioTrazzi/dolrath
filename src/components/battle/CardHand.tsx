@@ -24,6 +24,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { BORDER, BORDER_GOLD, GOLD_BRIGHT } from '@/components/crafting/bdoTheme'
+import { useT } from '@/lib/i18n/I18nProvider'
 
 /** Papel da carta — define a cor da moldura (leitura instantânea, sem ler o texto). */
 export type CombatCardTone = 'basic' | 'class' | 'special' | 'buff'
@@ -102,6 +103,7 @@ export default function CardHand({
   className?: string
 }) {
   // Carta com o detalhe aberto (toque longo / hover). null = nenhuma.
+  const t = useT()
   const [detailKey, setDetailKey] = useState<string | null>(null)
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Marca que o toque LONGO já abriu o detalhe: o clique que vem depois não deve jogar.
@@ -139,7 +141,7 @@ export default function CardHand({
           </div>
           <div className="mt-1 flex flex-wrap gap-x-2 text-[10px] text-[#8a8a90]">
             {detail.die != null && <span>🎲 d{detail.die}</span>}
-            <span>{detail.costLabel || 'grátis'}</span>
+            <span>{detail.costLabel || t('free')}</span>
           </div>
           {detail.effectLine && (
             <div className="mt-1.5 text-[10px] leading-snug text-[#c9c9ce]">{detail.effectLine}</div>

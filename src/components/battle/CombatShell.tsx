@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from 'react'
 import CardHand, { type CombatCard } from './CardHand'
+import { useT } from '@/lib/i18n/I18nProvider'
 
 /** Opção no flyout ⚔️ Ataque (host monta label/sub/locked — PvE: MP; PvP: MP+STA). */
 export type CombatAttackOption = {
@@ -84,6 +85,7 @@ export default function CombatShell({
   extraActions,
   className = '',
 }: CombatShellProps) {
+  const t = useT()
   const [showAttackMenu, setShowAttackMenu] = useState(false)
   const [showFormPicker, setShowFormPicker] = useState(false)
 
@@ -164,7 +166,7 @@ export default function CombatShell({
           setShowFormPicker(false)
           onOpenItems()
         }}
-        title="Poções — usar gasta o turno"
+        title={t('Potions — using one costs the turn')}
         className="px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white whitespace-nowrap transition-all shadow-lg bg-gradient-to-r from-emerald-700 to-green-600 hover:scale-105"
       >
         Item
@@ -180,7 +182,7 @@ export default function CombatShell({
       <div className="flex-shrink-0 bg-black/60 border-t border-white/5 px-3 sm:px-6 py-1.5">
         <div className="mx-auto max-w-2xl h-[54px] overflow-y-auto overscroll-contain flex flex-col justify-end gap-0.5 font-mono text-[11px] leading-tight text-white/65">
           {visibleLog.length === 0 ? (
-            <div className="text-white/40">⚔️ O log da luta aparece aqui</div>
+            <div className="text-white/40">{t('⚔️ The fight log shows up here')}</div>
           ) : (
             visibleLog.map((line, i) => (
               <div key={`${logLines.length}-${i}`} className="break-words last:text-white/90">
@@ -236,7 +238,7 @@ export default function CombatShell({
                           opt.onPick()
                         }}
                         disabled={opt.locked}
-                        title={opt.locked ? 'Indisponível — recurso/recarga insuficiente' : undefined}
+                        title={opt.locked ? t('Unavailable — not enough resource / still on cooldown') : undefined}
                         className={`w-full flex items-center justify-between text-left px-3 py-2 rounded-lg transition-colors ${
                           opt.locked ? 'opacity-40 cursor-not-allowed bg-white/5' : 'bg-white/10 hover:bg-white/20'
                         }`}

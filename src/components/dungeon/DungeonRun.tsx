@@ -12,6 +12,13 @@ import DungeonScene from '@/components/dungeon/scene/DungeonScene'
 import { useT, useI18n } from '@/lib/i18n/I18nProvider'
 import { pickName } from '@/lib/i18n/names'
 import { localizeItemName } from '@/lib/i18n/catalog'
+import {
+  localizeAttackKindLabel,
+  localizeClassAttackName,
+  localizeSpecialDesc,
+  localizeSpecialName,
+  localizeTransformationName,
+} from '@/lib/i18n/combatNames'
 import { useIdleScheduler } from '@/hooks/useIdleScheduler'
 import { generateSceneMap } from '@/lib/dungeonScene/generateMap'
 import { dungeonSceneEnabled } from '@/lib/dungeonScene/enabled'
@@ -770,7 +777,7 @@ export default function DungeonRun({
 
   // ---------- Estado geral da run ----------
   const [phase, setPhase] = useState<RunPhase>('explore')
-  const [log, setLog] = useState<string[]>([dungeon.enterText])
+  const [log, setLog] = useState<string[]>([locale === 'en' && dungeon.enterTextEn ? dungeon.enterTextEn : dungeon.enterText])
   const [totals, setTotals] = useState({ gold: 0, xp: 0, kills: 0, items: [] as RunItem[] })
   const totalsRef = useRef(totals)
   totalsRef.current = totals
@@ -912,7 +919,7 @@ export default function DungeonRun({
     () => Array.from(new Set([...Array.from({ length: tokenIdx }, (_, i) => i), ...clearedNodes])),
     [tokenIdx, clearedNodes]
   )
-  const [narration, setNarration] = useState(dungeon.enterText)
+  const [narration, setNarration] = useState(locale === 'en' && dungeon.enterTextEn ? dungeon.enterTextEn : dungeon.enterText)
   // 📜 O Mestre narra virou dialog sob demanda (não mais uma faixa fixa sob o
   // mapa): abre nos "beats" da história e junto de cada rolagem do d20, fecha
   // sozinho depois de dar tempo de ler (typewriter ~24ms/char + folga).
@@ -1626,14 +1633,16 @@ export default function DungeonRun({
     [equipList],
   )
   const specialName = useCallback(
-    (def: SpecialDef) => specialDisplayName(def, weaponType),
-    [weaponType],
+    (def: SpecialDef) => localizeSpecialName(specialDisplayName(def, weaponType), locale),
+    [weaponType, locale],
   )
   // Nome do ATAQUE DE CLASSE (o `weapon`, d8) por classe — Ataque Furtivo/Bola de Fogo/etc.
   const classAtkName = useMemo(
-    () => classAttackDisplayName(character.class, weaponType, classAttackName(character.class)),
-    [character.class, weaponType],
+    () => localizeClassAttackName(classAttackDisplayName(character.class, weaponType, classAttackName(character.class)), locale),
+    [character.class, weaponType, locale],
   )
+  // Rótulo exibido do tipo de ataque (Golpe/Especial) — ATTACKS.label é a fonte PT.
+  const attackLabel = (kind: AttackKind) => localizeAttackKindLabel(ATTACKS[kind].label, locale)
   // Ataque de Classe efetivo (dado/custo já com os ranks II/III comprados).
   const effWeaponDie = unlocks.classAttackDie
   const effWeaponMp = unlocks.classAttackMp
@@ -1666,10 +1675,10 @@ export default function DungeonRun({
 
   const monsterFighter: FighterView | null = useMemo(() => monster ? {
     id: monster.id,
-    name: monster.name,
+    name: pickName(monster, locale),
     level: monster.level,
-    race: dungeon.name,
-    class: monster.isBoss ? 'Boss' : 'Monstro',
+    race: pickName(dungeon, locale),
+    class: monster.isBoss ? 'Boss' : t('Monster'),
     avatar: monster.image ?? null,
     avatarEmoji: monster.emoji,
     hp: monster.hp,
@@ -1679,7 +1688,7 @@ export default function DungeonRun({
     stamina: 0,
     maxStamina: 0,
     isAlive: monster.hp > 0,
-  } : null, [monster, dungeon.name])
+  } : null, [monster, dungeon, locale, t])
 
   // Cards do PACOTE (>1 inimigo) na arena (cascata sobreposta). Cada card mantém a
   // id REAL do monstro (identidade estável → só o morto tomba, sem reaproveitar o
@@ -1688,10 +1697,10 @@ export default function DungeonRun({
     if (!isPack || pack.length === 0) return undefined
     return pack.map(m => ({
       id: m.id,
-      name: m.name,
+      name: pickName(m, locale),
       level: m.level,
-      race: dungeon.name,
-      class: m.isBoss ? 'Boss' : 'Monstro',
+      race: pickName(dungeon, locale),
+      class: m.isBoss ? 'Boss' : t('Monster'),
       avatar: m.image ?? null,
       avatarEmoji: m.emoji,
       hp: m.hp,
@@ -1702,7 +1711,7 @@ export default function DungeonRun({
       maxStamina: 0,
       isAlive: m.hp > 0,
     }))
-  }, [pack, isPack, monster?.id, dungeon.name])
+  }, [pack, isPack, monster?.id, dungeon, locale, t])
 
   // ============================================================
   // EXPLORAÇÃO — mapa de trilha de nós
@@ -1721,10 +1730,11 @@ export default function DungeonRun({
       const group = data.monsters?.length ? data.monsters : [data.monster!]
       const scaled = group[0]
       const many = group.length > 1
+      const evTitle = locale === 'en' && ev.titleEn ? ev.titleEn : ev.title
       pushLog(
         many
-          ? `${ev.icon} ${ev.title} ${group.length} inimigos aparecem!`
-          : `${ev.icon} ${ev.title} ${scaled.emoji} ${scaled.name} apareceu!`
+          ? t('{icon} {title} {n} enemies appear!', { icon: ev.icon, title: evTitle, n: group.length })
+          : t('{icon} {title} {emoji} {name} appeared!', { icon: ev.icon, title: evTitle, emoji: scaled.emoji, name: pickName(scaled, locale) })
       )
       return { def: ev, monster: scaled, monsters: group }
     }
@@ -1743,7 +1753,7 @@ export default function DungeonRun({
     if (loot.fountain) {
       setHp(effMaxHp)
       setMp(character.maxMp)
-      pushFloat('HP/MP cheios! ⛲', '#34d399')
+      pushFloat(t('HP/MP full! ⛲'), '#34d399')
       pushLog(t('⛲ You find a reviving spring — HP and MP restored!'))
       return { def: { kind: 'blessing', min: 0, max: 0, icon: '⛲', title: '', description: '' } }
     }
@@ -1759,12 +1769,15 @@ export default function DungeonRun({
     const tier = roll <= 5 ? 'low' : roll <= 13 ? 'mid' : 'high'
     const icon = hasGear ? '🌟' : anyDrop ? '✨' : '🍃'
     const flavor = !anyDrop
-      ? dungeon.ambience[Math.floor(Math.random() * dungeon.ambience.length)]
+      ? (() => {
+          const i = Math.floor(Math.random() * dungeon.ambience.length)
+          return (locale === 'en' && dungeon.ambienceEn?.[i]) || dungeon.ambience[i]
+        })()
       : tier === 'high'
         ? t('Luck smiles: you rummage around and find something valuable.')
         : tier === 'mid'
           ? t('Among leaves and stones, you gather what you can.')
-          : 'Pouca coisa — mas nada se perde.'
+          : t('Not much — but nothing goes to waste.')
     pushLog(flavor)
     const revealKind: DungeonEventKind = hasGear ? 'item' : anyDrop ? 'gold' : 'nothing'
 
@@ -2166,7 +2179,7 @@ export default function DungeonRun({
       return
     }
     if (mp < cfg.cost.mp) {
-      showBanner('🔮', `MP insuficiente para transformar! (${cfg.cost.mp}🔮)`)
+      showBanner('🔮', t('Not enough MP to transform! ({mp}🔮)', { mp: cfg.cost.mp }))
       return
     }
     setMp(prev => Math.max(0, prev - cfg.cost.mp))
@@ -2203,8 +2216,8 @@ export default function DungeonRun({
     const pfx = combatFxRef.current
     let dot = 0
     const dotLabels: string[] = []
-    if (pfx.poisoned) { dot += pfx.poisonDmg || 4; dotLabels.push('veneno') }
-    if (pfx.bleeding) { dot += Math.max(1, Math.round(effMaxHp * pfx.bleedFrac)); dotLabels.push('sangramento') }
+    if (pfx.poisoned) { dot += pfx.poisonDmg || 4; dotLabels.push(t('poison')) }
+    if (pfx.bleeding) { dot += Math.max(1, Math.round(effMaxHp * pfx.bleedFrac)); dotLabels.push(t('bleeding')) }
     if (dot > 0) {
       // Estimativa só para o texto/log — a atualização REAL de baixo é relativa
       // de propósito: se um item (ex. Elixir Supremo) curou HP no mesmo turno,
@@ -2310,7 +2323,7 @@ export default function DungeonRun({
     }
     const atkMp = kind === 'weapon' ? effWeaponMp : ATTACKS[kind].mp
     if (mp < atkMp) {
-      showBanner('🔵', `MP insuficiente para ${ATTACKS[kind].label}! (${atkMp}🔵)`)
+      showBanner('🔵', t('Not enough MP for {name}! ({mp}🔵)', { name: attackLabel(kind), mp: atkMp }))
       return
     }
     setPendingAttack(kind)
@@ -2442,9 +2455,9 @@ export default function DungeonRun({
     }
     const fx = combatFxRef.current
     const shownName = specialName(def)
-    if ((fx.cd[def.id] || 0) > 0) { showBanner('⏳', `${shownName} em recarga (${fx.cd[def.id]})`); return }
+    if ((fx.cd[def.id] || 0) > 0) { showBanner('⏳', t('{name} on cooldown ({n})', { name: shownName, n: fx.cd[def.id] })); return }
     const mpCost = def.cost.mp || 0
-    if (mp < mpCost) { showBanner('🔵', `MP insuficiente para ${shownName} (${mpCost}🔵)`); return }
+    if (mp < mpCost) { showBanner('🔵', t('Not enough MP for {name}! ({mp}🔵)', { name: shownName, mp: mpCost })); return }
 
     if (def.kind === 'util') {
       setStage('busy'); setPendingAttack(null); setPendingAbility(null); setHasRolled(false)
@@ -2825,7 +2838,7 @@ export default function DungeonRun({
         later(() => {
           setHp(back)
           showBanner('🪶', t('{name}! You are back in the fight with {hp} HP', { name: localizeItemName(reviver.name, locale), hp: back }), 2600)
-          pushLog(`🪶 ${reviver.name} te trouxe de volta (${back} HP)!`)
+          pushLog(t('🪶 {name} brought you back ({hp} HP)!', { name: localizeItemName(reviver.name, locale), hp: back }))
           pushFloat(`+${back} 🪶`, '#fbbf24')
         }, 1000)
         later(() => nextEnemyAttack(), 2400)
@@ -3471,7 +3484,7 @@ export default function DungeonRun({
       <div className="text-[10px] leading-tight text-white/45 max-w-[16rem]">
         {autoFarm
           ? charLevel > FREE_RESTORE_MAX_LEVEL
-            ? 'Refaz a run sozinho e paga a Alquimista para restaurar vida e mana entre elas.'
+            ? t('Redoes the run on its own and pays the Alchemist to restore health and mana between runs.')
             : t('Redoes the run on its own. Restoration is free up to level {n}.', { n: FREE_RESTORE_MAX_LEVEL })
           : t('You redo the run by hand, with the health and mana you have left.')}
       </div>
@@ -3486,7 +3499,7 @@ export default function DungeonRun({
           }`}
         >
           {cantAffordRestore
-            ? `⚗️ Faltam ${nextRestore.cost - (heroGold ?? 0)} 🪙 para a Alquimista restaurar vida e mana (${nextRestore.cost} 🪙). Sem isso o farm para e volta ao mapa.`
+            ? t('⚗️ You are {missing} 🪙 short for the Alchemist to restore health and mana ({cost} 🪙). Without it the farm stops and returns to the map.', { missing: nextRestore.cost - (heroGold ?? 0), cost: nextRestore.cost })
             : t('⚗️ The Alchemist will charge ~{cost} 🪙 for you to start the next run whole.', { cost: nextRestore.cost })}
         </div>
       )}
@@ -3525,7 +3538,7 @@ export default function DungeonRun({
         visible: true,
         diceType: 20,
         hasRolled,
-        label: '⚡ Iniciativa — sorte do combate!',
+        label: t('⚡ Initiative — luck of the fight!'),
         onRoll: handleInitiativeRoll,
         myResult: panelResult,
         waitingForOpponent: false,
@@ -3539,7 +3552,7 @@ export default function DungeonRun({
         visible: true,
         diceType: sides,
         hasRolled,
-        label: `${specialName(pendingAbility)} — role o d${sides}!`,
+        label: t('{label} — roll the d{sides}!', { label: specialName(pendingAbility), sides }),
         onRoll: handleAbilityRoll,
         myResult: panelResult,
         waitingForOpponent: false,
@@ -3548,12 +3561,12 @@ export default function DungeonRun({
     if (stage === 'playerRoll' && pendingAttack) {
       const atk = ATTACKS[pendingAttack]
       const sides = PVE_DIE[pendingAttack]
-      const label = pendingAttack === 'weapon' ? `${atk.icon} ${classAtkName}` : `${atk.icon} ${atk.label}`
+      const label = pendingAttack === 'weapon' ? `${atk.icon} ${classAtkName}` : `${atk.icon} ${attackLabel(pendingAttack)}`
       return {
         visible: true,
         diceType: sides,
         hasRolled,
-        label: `${label} — role o d${sides}!`,
+        label: t('{label} — roll the d{sides}!', { label, sides }),
         onRoll: handlePlayerAttackRoll,
         myResult: panelResult,
         waitingForOpponent: false,
@@ -3561,7 +3574,7 @@ export default function DungeonRun({
     }
     return null
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, stage, hasRolled, panelResult, diceResults, pendingAttack, pendingAbility, classAtkName, specialName, stamina, mp])
+  }, [phase, stage, hasRolled, panelResult, diceResults, pendingAttack, pendingAbility, classAtkName, specialName, stamina, mp, locale])
 
   // Rola o dado sozinho assim que o jogador escolhe um golpe/habilidade — não precisa
   // mais clicar no dado, só no ataque. Vale mesmo fora do piloto automático.
@@ -3969,7 +3982,7 @@ export default function DungeonRun({
               className="w-full py-3 rounded-lg font-black text-white text-sm transition-transform active:scale-[0.98] hover:scale-[1.02]"
               style={{ background: `linear-gradient(90deg, ${dungeon.accent}, ${dungeon.accentSoft})` }}
             >
-              Voltar
+              {t('Back')}
             </button>
           </div>
         </div>
@@ -4051,7 +4064,7 @@ export default function DungeonRun({
               animate={reducedMotionRef.current ? undefined : { opacity: [0.35, 1, 0.35] }}
               transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
             >
-              Algo se move...
+              {t('Something moves...')}
             </motion.span>
           </motion.div>
         )}
@@ -4138,7 +4151,7 @@ export default function DungeonRun({
                 })}
                 <span className={`text-[11px] ml-0.5 ${isBossRoom ? 'animate-pulse' : 'opacity-40'}`}>👑</span>
                 <span className="text-[10px] text-white/60 ml-1.5">
-                  {isBossRoom ? 'Covil do Boss' : tokenIdx === 0 ? 'Entrada' : `Sala ${curTier}/${dungeon.rooms}`}
+                  {isBossRoom ? t("Boss's lair") : tokenIdx === 0 ? t('Entrance') : t('Room {n}/{total}', { n: curTier, total: dungeon.rooms })}
                 </span>
               </div>
             </div>
@@ -4157,7 +4170,7 @@ export default function DungeonRun({
           <div className="flex items-center gap-2.5">
             <div className="text-right text-[10px] text-white/80 leading-tight">
               {/* Ouro: só o farmado NESTA run (deixa claro quanto rendeu a masmorra). */}
-              <div title="Ouro farmado nesta masmorra">💰 {totals.gold}</div>
+              <div title={t('Gold farmed in this dungeon')}>💰 {totals.gold}</div>
               {/* XP: a do personagem (já somada à da run) sobre a do próximo nível —
                   mostra quanto falta p/ subir. Ex.: 1452/3000 XP. */}
               <div title={totals.xp > 0
@@ -4174,7 +4187,7 @@ export default function DungeonRun({
                 className="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-bold transition-colors"
                 title={phase === 'combat' ? t('Abandon the battle and leave (keeps rewards)') : t('Leave the dungeon (keeps rewards)')}
               >
-                🚪 {phase === 'combat' ? 'Fugir' : 'Sair'}
+                🚪 {phase === 'combat' ? t('Flee') : t('Leave')}
               </button>
             )}
           </div>
@@ -4301,7 +4314,7 @@ export default function DungeonRun({
                   <button
                     onClick={() => setBanner(prev => (prev?.key === banner.key ? null : prev))}
                     className="ml-3 text-white/50 hover:text-white text-base leading-none"
-                    aria-label="Fechar aviso"
+                    aria-label={t('Close notice')}
                   >
                     ✕
                   </button>
@@ -4356,12 +4369,12 @@ export default function DungeonRun({
                             </div>
                             <div className="text-textsec text-[11px]">
                               {c.hp > 0 ? `+${c.hp} ❤️` : ''}{c.hp > 0 && c.mp > 0 ? ' • ' : ''}{c.mp > 0 ? `+${c.mp} 🔮` : ''}
-                              {c.cure === 'poison' ? 'Cura veneno' : ''}
-                              {c.cure === 'bleed' ? 'Estanca sangramento' : ''}
-                              {c.atk > 0 ? `+${c.atk} ⚔️ por ${c.buffTurns || 3} turnos` : ''}
-                              {c.def > 0 ? `+${c.def} 🛡️ por ${c.buffTurns || 3} turnos` : ''}
-                              {c.dodge > 0 ? `+${c.dodge}% 💨 por ${c.buffTurns || 3} turnos` : ''}
-                              {c.revive > 0 ? `Revive com ${c.revive}% do HP — age sozinha ao cair` : ''}
+                              {c.cure === 'poison' ? t('Cures poison') : ''}
+                              {c.cure === 'bleed' ? t('Stops bleeding') : ''}
+                              {c.atk > 0 ? t('+{n} ⚔️ for {turns} turns', { n: c.atk, turns: c.buffTurns || 3 }) : ''}
+                              {c.def > 0 ? t('+{n} 🛡️ for {turns} turns', { n: c.def, turns: c.buffTurns || 3 }) : ''}
+                              {c.dodge > 0 ? t('+{n}% 💨 for {turns} turns', { n: c.dodge, turns: c.buffTurns || 3 }) : ''}
+                              {c.revive > 0 ? t('Revives with {n}% HP — triggers on its own when you fall', { n: c.revive }) : ''}
                               {isStamina ? `+${c.stamina} ⚡ stamina` : ''}
                             </div>
                           </div>
@@ -4372,7 +4385,7 @@ export default function DungeonRun({
                           className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-black text-white disabled:opacity-40 transition-transform active:scale-95"
                           style={{ background: 'linear-gradient(90deg,#2ecc71,#16a34a)' }}
                         >
-                          Usar
+                          {t('Use')}
                         </button>
                       </div>
                     )
@@ -4380,13 +4393,13 @@ export default function DungeonRun({
                 </div>
               )}
               {phase === 'combat' && (
-                <p className="text-textsec/70 text-[10px] text-center mt-2">No combate, usar um item consome seu turno.</p>
+                <p className="text-textsec/70 text-[10px] text-center mt-2">{t('In combat, using an item costs your turn.')}</p>
               )}
               <button
                 onClick={() => setShowItems(false)}
                 className="mt-3 w-full py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm font-bold transition-colors"
               >
-                Fechar
+                {t('Close')}
               </button>
             </div>
           </div>
@@ -4418,7 +4431,7 @@ export default function DungeonRun({
               >
                 <div className="text-4xl mb-2">🚪</div>
                 <h3 className="text-xl font-black text-white mb-1">
-                  {phase === 'combat' ? 'Fugir da batalha?' : 'Sair da masmorra?'}
+                  {phase === 'combat' ? t('Flee the battle?') : t('Leave the dungeon?')}
                 </h3>
                 <p className="text-xs text-textsec leading-snug mb-4">
                   {t('The run is paused. Everything you have earned is saved — stamina restores on its own (+2 every 15 idle min).')}
@@ -4442,7 +4455,7 @@ export default function DungeonRun({
                       : t('Loot collected')}
                   </div>
                   {totals.items.length === 0 ? (
-                    <p className="text-textsec/70 text-xs py-2 text-center">Nenhum item coletado ainda.</p>
+                    <p className="text-textsec/70 text-xs py-2 text-center">{t('No items collected yet.')}</p>
                   ) : (
                     <div className="max-h-40 overflow-y-auto space-y-1 pr-1">
                       {(() => {
@@ -4474,7 +4487,7 @@ export default function DungeonRun({
                     onClick={stopAfterThisFight}
                     className="w-full py-3 mb-2 rounded-lg font-bold text-white text-sm bg-amber-600/85 hover:bg-amber-500 border border-amber-300/40 transition-colors active:scale-[0.98]"
                   >
-                    ⏳ Sair ao fim da luta
+                    {t('⏳ Leave when the fight ends')}
                   </button>
                 )}
 
@@ -4483,14 +4496,14 @@ export default function DungeonRun({
                     onClick={cancelStop}
                     className="flex-1 py-3 rounded-lg font-bold text-white text-sm bg-white/10 hover:bg-white/20 border border-white/20 transition-colors active:scale-[0.98]"
                   >
-                    Cancelar
+                    {t('Cancel')}
                   </button>
                   <button
                     onClick={() => { setExitConfirm(false); finishRun(false) }}
                     className="flex-1 py-3 rounded-lg font-black text-white text-sm transition-transform active:scale-[0.98] hover:scale-[1.02]"
                     style={{ background: 'linear-gradient(90deg, #e94560, #b91c1c)', boxShadow: '0 0 20px rgba(233,69,96,0.4)' }}
                   >
-                    🚪 {phase === 'combat' ? 'Fugir agora' : 'Sair'}
+                    🚪 {phase === 'combat' ? t('Flee now') : t('Leave')}
                   </button>
                 </div>
               </motion.div>
@@ -4586,12 +4599,12 @@ export default function DungeonRun({
               {/* selo de progresso */}
               <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 text-[10px] uppercase tracking-[0.2em] text-textsec/70 font-bold pointer-events-none">
                 {atBoss
-                  ? 'Covil do Chefe'
+                  ? t("Boss's lair")
                   : tokenIdx === 0
-                    ? `Entrada • ${dungeon.rooms} salas`
+                    ? t('Entrance • {n} rooms', { n: dungeon.rooms })
                     : atMainNode
-                      ? `⚔️ Sala ${curTier} de ${dungeon.rooms}`
-                      : `A caminho da sala ${curTier} de ${dungeon.rooms}`}
+                      ? t('⚔️ Room {n} of {total}', { n: curTier, total: dungeon.rooms })
+                      : t('On the way to room {n} of {total}', { n: curTier, total: dungeon.rooms })}
               </div>
 
               {/* overlay: dado rolando */}
@@ -4629,7 +4642,7 @@ export default function DungeonRun({
                         <div className="flex items-center gap-2 rounded-xl border border-amber-300/15 bg-amber-500/5 px-3 py-1.5 text-left">
                           <span className="shrink-0 text-base leading-none">{TIPS[tipIdx].icon}</span>
                           <span className="text-[11px] leading-snug text-amber-100/80">
-                            <span className="font-bold text-amber-200/90">Dica: </span>
+                            <span className="font-bold text-amber-200/90">{t('Tip:')} </span>
                             {t(TIPS[tipIdx].text)}
                           </span>
                         </div>
@@ -4663,7 +4676,7 @@ export default function DungeonRun({
                     <button
                       onClick={() => setStopWhenFull(v => !v)}
                       title={stopWhenFull
-                        ? 'Encerrar a run quando a mochila encher — clique para desligar'
+                        ? t('End the run when the backpack fills — click to turn off')
                         : t('The run continues even with a full backpack (the loot is lost) — click to turn the brake on')}
                       className={`shrink-0 w-11 h-11 grid place-items-center rounded-xl border transition-colors active:scale-95 relative ${
                         stopWhenFull
@@ -4705,21 +4718,21 @@ export default function DungeonRun({
                           o passo" em vez de ser o único jeito de andar. */}
                       {exploreRolling || walkBusy
                         ? useScene
-                          ? '🚶 Explorando...'
+                          ? t('🚶 Exploring...')
                           : walkMode === 'scroll'
-                            ? '🌲 Vasculhando...'
+                            ? t('🌲 Searching...')
                             : walkMode === 'approach'
-                              ? '👀 Aproximando...'
+                              ? t('👀 Approaching...')
                               : '...'
                         : useScene && stamina < stepCost(tokenIdx + 1)
-                            ? '😮‍💨 Sem stamina'
+                            ? t('😮‍💨 No stamina')
                             : nextIsBoss
-                              ? '👑 Aproximar-se do covil'
+                              ? t('👑 Approach the lair')
                               : nextMainNode
-                                ? `⚔️ Sala ${trailPoints[tokenIdx + 1]?.tier}`
+                                ? t('⚔️ Room {n}', { n: trailPoints[tokenIdx + 1]?.tier ?? '' })
                                 : useScene
                                   ? t('⏩ Advance now')
-                                  : 'Seguir a trilha'}
+                                  : t('Follow the trail')}
                     </button>
                   </div>
                 </div>
@@ -4777,7 +4790,7 @@ export default function DungeonRun({
           const attackOptions: CombatAttackOption[] = [
             {
               key: 'basic',
-              label: ATTACKS.basic.label,
+              label: attackLabel('basic'),
               locked: mp < ATTACKS.basic.mp,
               sub: t('d{n} • free', { n: PVE_DIE.basic }),
               onPick: () => choosePlayerAttack('basic'),
@@ -4798,7 +4811,7 @@ export default function DungeonRun({
                 key: def.id,
                 label: specialName(def),
                 locked: cd > 0 || mp < mpCost,
-                sub: cd > 0 ? `recarga ${cd}` : `${def.kind === 'dmg' ? `d${def.die ?? 20}·` : ''}${mpCost}MP`,
+                sub: cd > 0 ? t('cooldown {n}', { n: cd }) : `${def.kind === 'dmg' ? `d${def.die ?? 20}·` : ''}${mpCost}MP`,
                 onPick: () => useAbility(def),
               }
             }),
@@ -4810,7 +4823,7 @@ export default function DungeonRun({
             ? [
                 {
                   key: 'basic',
-                  name: ATTACKS.basic.label,
+                  name: attackLabel('basic'),
                   emoji: ATTACKS.basic.icon,
                   tone: 'basic',
                   die: PVE_DIE.basic,
@@ -4827,7 +4840,7 @@ export default function DungeonRun({
                       tone: 'class' as const,
                       die: effWeaponDie,
                       costLabel: `${effWeaponMp}🔵`,
-                      effectLine: 'O ataque de assinatura da sua classe.',
+                      effectLine: t('Your class signature attack.'),
                       locked: mp < effWeaponMp,
                       lockReason: mp < effWeaponMp ? 'MP' : undefined,
                       onPlay: () => choosePlayerAttack('weapon'),
@@ -4845,9 +4858,9 @@ export default function DungeonRun({
                     tone: (def.kind === 'util' ? 'buff' : 'special') as CombatCard['tone'],
                     die: def.kind === 'util' ? undefined : def.die ?? 20,
                     costLabel: `${mpCost}🔵`,
-                    effectLine: def.desc,
+                    effectLine: localizeSpecialDesc(def.desc, locale),
                     locked: cd > 0 || noMp,
-                    lockReason: cd > 0 ? `recarga ${cd}` : noMp ? 'MP' : undefined,
+                    lockReason: cd > 0 ? t('cooldown {n}', { n: cd }) : noMp ? 'MP' : undefined,
                     onPlay: () => useAbility(def),
                   }
                 }),
@@ -4867,32 +4880,32 @@ export default function DungeonRun({
                 transformForms.length > 0
                   ? {
                       available: true,
-                      activeLabel: transform ? activeTransformCfg?.name : null,
-                      activeTurnsHint: transform ? `${transform.turns} turno(s)` : undefined,
+                      activeLabel: transform && activeTransformCfg ? localizeTransformationName(activeTransformCfg.name, locale) : null,
+                      activeTurnsHint: transform ? t('{n} turn(s)', { n: transform.turns }) : undefined,
                       used: transformedThisFight && !transform,
                       disabled: transformDisabled,
                       title: transformedThisFight
                         ? t('Transformation already used in this fight (1× per fight)')
                         : singleForm
-                          ? `${singleForm.cost.mp} MP • ${singleForm.duration} turnos`
+                          ? t('{mp} MP • {n} turns', { mp: singleForm.cost.mp, n: singleForm.duration })
                           : t('{n} forms available', { n: transformForms.length }),
-                      buttonLabel: transformedThisFight ? 'Transf. usada' : 'Transformar',
+                      buttonLabel: transformedThisFight ? t('Transf. used') : t('Transform'),
                       costHint: !transformedThisFight
-                        ? (singleForm ? `${singleForm.cost.mp}MP` : `${transformForms.length} formas`)
+                        ? (singleForm ? `${singleForm.cost.mp}MP` : t('{n} forms', { n: transformForms.length }))
                         : undefined,
                       onClick: () => {
                         if (transformedThisFight) return
                         if (singleForm) activateTransform(transformForms[0])
                       },
                       forms: transformForms.length > 1
-                        ? transformForms.map(t => {
-                            const cfg = TRANSFORMATION_CONFIG[t]
+                        ? transformForms.map(form => {
+                            const cfg = TRANSFORMATION_CONFIG[form]
                             return {
-                              key: t,
-                              label: cfg.name,
-                              sub: `${cfg.cost.mp}🔮 • ${cfg.duration} turnos`,
+                              key: form,
+                              label: localizeTransformationName(cfg.name, locale),
+                              sub: t('{mp}🔮 • {n} turns', { mp: cfg.cost.mp, n: cfg.duration }),
                               locked: mp < cfg.cost.mp,
-                              onPick: () => activateTransform(t),
+                              onPick: () => activateTransform(form),
                             }
                           })
                         : undefined,
@@ -4907,7 +4920,7 @@ export default function DungeonRun({
                     title={t('Retreat safely — you keep the XP and the loot from the enemies already defeated.')}
                     className="px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white whitespace-nowrap transition-all shadow-lg bg-gradient-to-r from-slate-600 to-slate-500 hover:scale-105"
                   >
-                    Recuar
+                    {t('Retreat')}
                   </button>
                 ) : null
               }
@@ -4924,7 +4937,7 @@ export default function DungeonRun({
                           : 'bg-white/5 border-white/15 text-white/60 hover:text-white hover:border-white/30'
                       }`}
                     >
-                      {autoCombat ? '⚡ Auto ON' : '⚡ Auto OFF'}
+                      {autoCombat ? t('⚡ Auto ON') : t('⚡ Auto OFF')}
                     </button>
                     <button
                       type="button"
@@ -4942,7 +4955,7 @@ export default function DungeonRun({
                       type="button"
                       onClick={() => setStopWhenFull(v => !v)}
                       title={stopWhenFull
-                        ? 'Encerrar a run quando a mochila encher — clique para desligar'
+                        ? t('End the run when the backpack fills — click to turn off')
                         : t('The run continues even with a full backpack (the loot is lost) — click to turn the brake on')}
                       className={`px-3 py-1.5 rounded-full text-[10px] font-black border transition-colors ${
                         stopWhenFull
@@ -4962,7 +4975,7 @@ export default function DungeonRun({
                   </div>
                 ) : stage === 'initiative' || stage === 'playerRoll' ? (
                   <div className="text-white/60 text-xs sm:text-sm font-bold">
-                    🎲 {hasRolled ? 'Rolando...' : 'Clique no dado na arena para rolar!'}
+                    🎲 {hasRolled ? t('Rolling...') : t('Click the die in the arena to roll!')}
                   </div>
                 ) : (
                   <div className="text-white/50 text-xs sm:text-sm font-bold animate-pulse">{t('⚔️ Resolving action...')}</div>
@@ -4972,7 +4985,7 @@ export default function DungeonRun({
                 pack.length > 1 && !combatEnded ? (
                   <div className="flex-shrink-0 bg-black/55 border-t border-white/5 px-3 sm:px-6 py-1.5">
                     <div className="mx-auto max-w-2xl flex items-center justify-center gap-2 flex-wrap">
-                      <span className="text-[10px] text-white/45 font-bold mr-0.5">Alvo:</span>
+                      <span className="text-[10px] text-white/45 font-bold mr-0.5">{t('Target:')}</span>
                       {pack.map(mm => {
                         const active = mm.id === monster?.id
                         const canTarget = stage === 'playerSelect' && !active
@@ -4982,7 +4995,7 @@ export default function DungeonRun({
                             type="button"
                             onClick={() => canTarget && setActiveTarget(mm.id)}
                             disabled={!canTarget}
-                            title={canTarget ? `Focar ${mm.name}` : active ? 'Alvo atual' : 'Escolha o alvo no seu turno'}
+                            title={canTarget ? t('Focus {name}', { name: pickName(mm, locale) }) : active ? t('Current target') : t('Pick the target on your turn')}
                             className={`flex items-center gap-1.5 px-2.5 py-1.5 min-h-[36px] rounded-lg border transition-all ${
                               active
                                 ? 'bg-red-600/30 border-red-400/70'
@@ -4995,7 +5008,7 @@ export default function DungeonRun({
                               <MonsterThumb name={mm.name} image={mm.image} emoji={mm.emoji} className="text-base" />
                             </span>
                             <span className="text-[11px] font-bold text-white/80 leading-none">
-                              {active ? '🎯 ' : ''}{mm.name}
+                              {active ? '🎯 ' : ''}{pickName(mm, locale)}
                             </span>
                           </button>
                         )
@@ -5051,7 +5064,7 @@ export default function DungeonRun({
               <div className="grid grid-cols-3 gap-2 mb-4">
                 <div className="bg-white/5 border border-white/15 rounded-xl py-2.5">
                   <div className="text-amber-300 font-black text-lg">{totals.gold}</div>
-                  <div className="text-white/50 text-[10px]">💰 Ouro</div>
+                  <div className="text-white/50 text-[10px]">{t('💰 Gold')}</div>
                 </div>
                 <div className="bg-white/5 border border-white/15 rounded-xl py-2.5">
                   <div className="text-purple-300 font-black text-lg">{totals.xp}</div>

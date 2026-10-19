@@ -61,6 +61,23 @@ export function localizeClassName(classId: string, ptName: string, locale: Local
   return CLASS_EN[classId]?.name ?? ptName
 }
 
+// Nome PT por ID estável — para exibir raça/classe a partir só do id (ex.: o
+// card do lutador na arena, que antes mostrava "humano • warrior" cru).
+const RACE_PT: Record<string, string> = { humano: 'Humano', draconiano: 'Draconiano', metamorfo: 'Metamorfo', elfo: 'Elfo' }
+const CLASS_PT: Record<string, string> = { warrior: 'Guerreiro', rogue: 'Ladino', mage: 'Mago', monk: 'Monge' }
+
+/** Raça para exibição a partir do id; valor desconhecido passa intacto. */
+export function raceLabel(raceId: string | null | undefined, locale: Locale): string {
+  const id = String(raceId ?? '')
+  return locale === 'pt' ? RACE_PT[id] ?? id : RACE_EN[id]?.name ?? id
+}
+
+/** Classe para exibição a partir do id; valor desconhecido passa intacto. */
+export function classLabel(classId: string | null | undefined, locale: Locale): string {
+  const id = String(classId ?? '')
+  return locale === 'pt' ? CLASS_PT[id] ?? id : CLASS_EN[id]?.name ?? id
+}
+
 export function localizeAbility(ptName: string, locale: Locale): string {
   if (locale === 'pt') return ptName
   return ABILITY_EN[ptName] ?? ptName

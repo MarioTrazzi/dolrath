@@ -1,7 +1,8 @@
 'use client'
 
 import React, { useEffect, useRef, useState } from 'react'
-import { useT } from '@/lib/i18n/I18nProvider'
+import { useT, useI18n } from '@/lib/i18n/I18nProvider'
+import { raceLabel, classLabel } from '@/lib/i18n/gameNames'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import ItemIcon from '@/components/ItemIcon'
@@ -459,6 +460,8 @@ function FighterFigure({
   /** Omite o texto HP atual/máx (ex.: 55/55) e engrossa a barra — monstro no mobile. */
   hideHpValue?: boolean
 }) {
+  const t = useT()
+  const { locale } = useI18n()
   const hpPct = fighter.maxHp > 0 ? (fighter.hp / fighter.maxHp) * 100 : 0
   const transformEmoji = fighter.isTransformed && fighter.transformationType
     ? TRANSFORM_EMOJI[fighter.transformationType] || '🌟'
@@ -495,7 +498,7 @@ function FighterFigure({
               {transformEmoji && <span className="mr-1">{transformEmoji}</span>}
               {fighter.name}
             </span>
-            <span className="text-[9px] text-amber-300 font-bold flex-shrink-0 ml-1">Nv.{fighter.level}</span>
+            <span className="text-[9px] text-amber-300 font-bold flex-shrink-0 ml-1">{t('Lv.{n}', { n: fighter.level })}</span>
           </div>
           {!hideBars && (
             <div className="space-y-0.5">
@@ -603,11 +606,11 @@ function FighterFigure({
                 // preserva o Nv.X, senão o nível some primeiro.
                 <span className="flex items-baseline justify-center gap-1 text-[10px] font-bold">
                   <span className="truncate text-white/85">{fighter.name}</span>
-                  <span className="flex-shrink-0 text-amber-300">Nv.{fighter.level}</span>
+                  <span className="flex-shrink-0 text-amber-300">{t('Lv.{n}', { n: fighter.level })}</span>
                 </span>
               ) : (
                 <span className="text-[10px] text-white/85 font-bold truncate block">
-                  {fighter.race} • {fighter.class}
+                  {raceLabel(fighter.race, locale)} • {classLabel(fighter.class, locale)}
                 </span>
               )}
             </div>

@@ -269,4 +269,8 @@ export const DUNGEON_PT: Record<string, string> = {
   'Monster': 'Monstro',
   poison: 'veneno',
   bleeding: 'sangramento',
+  // Golpe do monstro (banner "{name} unleashes a {move}!")
+  Strike: 'Golpe',
+  'Special Strike': 'Golpe Especial',
+  'Heavy Strike': 'Golpe Forte',
 }

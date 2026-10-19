@@ -138,6 +138,30 @@ export const CLASS_ATTACK_NAME_EN: Record<string, string> = {
   'Tiro Certeiro': 'True Shot',
 }
 
+/** Golpe especial dos MONSTROS (combatModel.MONSTER_SPECIAL_EFFECTS[].name). */
+export const MONSTER_SPECIAL_NAME_EN: Record<string, string> = {
+  'Mordida Selvagem': 'Savage Bite',
+  'Presas Envenenadas': 'Venomous Fangs',
+  'Presas Vorazes': 'Ravenous Tusks',
+  'Raízes Rasteiras': 'Creeping Roots',
+  'Abraço da Floresta': "Forest's Embrace",
+  'Mordida Sanguessuga': 'Leeching Bite',
+  'Golpe de Picareta': 'Pickaxe Blow',
+  'Gosma Corrosiva': 'Corrosive Ooze',
+  'Esmagamento Sísmico': 'Seismic Crush',
+  'Estilhaços Cristalinos': 'Crystal Shards',
+  'Cuspe Tóxico': 'Toxic Spit',
+  'Bote Dilacerante': 'Rending Strike',
+  'Feitiço Paralisante': 'Paralysing Hex',
+  'Mandíbula Esmagadora': 'Crushing Jaws',
+  'Hálito Pestilento': 'Pestilent Breath',
+  'Lâmina Enferrujada': 'Rusted Blade',
+  'Toque Gélido': 'Chilling Touch',
+  'Maldição da Podridão': 'Curse of Rot',
+  'Mergulho Devastador': 'Devastating Dive',
+  'Olhar da Morte': 'Gaze of Death',
+}
+
 /** Rótulo do tipo de ataque (combatModel ATTACK_KINDS[].label: Golpe/Ataque de Classe/Especial). */
 export const ATTACK_KIND_LABEL_EN: Record<string, string> = {
   Golpe: 'Strike',
@@ -208,6 +232,7 @@ export const localizeSpecialName = (pt: string, locale: Locale) => lookup(SPECIA
 export const localizeSpecialDesc = (pt: string, locale: Locale) => lookup(SPECIAL_DESC_EN, pt, locale)
 export const localizeDotLabel = (pt: string, locale: Locale) => lookup(DOT_LABEL_EN, pt, locale)
 export const localizeClassAttackName = (pt: string, locale: Locale) => lookup(CLASS_ATTACK_NAME_EN, pt, locale)
+export const localizeMonsterSpecialName = (pt: string, locale: Locale) => lookup(MONSTER_SPECIAL_NAME_EN, pt, locale)
 export const localizeAttackKindLabel = (pt: string, locale: Locale) => lookup(ATTACK_KIND_LABEL_EN, pt, locale)
 export const localizeStatLabel = (pt: string, locale: Locale) => lookup(STAT_LABEL_EN, pt, locale)
 export const localizePathLabel = (pt: string, locale: Locale) => lookup(PATH_LABEL_EN, pt, locale)

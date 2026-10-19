@@ -15,6 +15,7 @@ import { localizeItemName } from '@/lib/i18n/catalog'
 import {
   localizeAttackKindLabel,
   localizeClassAttackName,
+  localizeMonsterSpecialName,
   localizeSpecialDesc,
   localizeSpecialName,
   localizeTransformationName,
@@ -2621,7 +2622,9 @@ export default function DungeonRun({
     const proc = !!special && Math.random() < special.chance
     pendingMonsterEffectRef.current = proc ? special! : null
     // Rótulo do golpe pela ÓTICA do monstro (o ATTACKS.label é o nome dos botões do jogador).
-    const foeLabel = proc ? special!.name : (kind === 'basic' ? 'Golpe' : kind === 'special' ? 'Golpe Especial' : 'Golpe Forte')
+    const foeLabel = proc
+      ? localizeMonsterSpecialName(special!.name, locale)
+      : kind === 'basic' ? t('Strike') : kind === 'special' ? t('Special Strike') : t('Heavy Strike')
     showBanner(
       m.emoji,
       proc

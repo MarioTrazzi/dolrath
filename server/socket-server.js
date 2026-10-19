@@ -960,6 +960,21 @@ httpServer.on('request', (req, res) => {
 const rooms = new Map()
 const playerSockets = new Map()
 
+// 🔗 Qual socket SENTOU como qual lutador. Todo evento de luta traz `playerId` no
+// corpo, e nenhum handler conferia se era o do próprio remetente: um lutador
+// mandava `surrender` com o id do oponente e ganhava a luta (ouro + rating), e um
+// espectador podia jogar pelos dois. Só o join que passou pelo portão de lutador
+// (ingresso/treino/bot do servidor) cria o vínculo. Separado de `playerSockets`,
+// que também guarda espectadores para a limpeza do disconnect.
+const socketFighters = new Map() // socket.id -> Set<playerId>
+function bindFighter(socketId, playerId) {
+  if (!socketFighters.has(socketId)) socketFighters.set(socketId, new Set())
+  socketFighters.get(socketId).add(playerId)
+}
+function ownsFighter(socket, playerId) {
+  return typeof playerId === 'string' && !!socketFighters.get(socket.id)?.has(playerId)
+}
+
 // Enum para fases do combate
 const CombatPhase = {
   WAITING_PLAYERS: 'waiting_players',
@@ -1209,6 +1224,7 @@ io.on('connection', (socket) => {
           return
         }
       }
+      if (fighterJoin) bindFighter(socket.id, player.id)
     }
 
     playerSockets.set(player.id, socket.id)
@@ -1434,6 +1450,7 @@ io.on('connection', (socket) => {
   }
 
   socket.on('toggle_ready', ({ playerId, roomId }) => {
+    if (!ownsFighter(socket, playerId)) return
     const room = rooms.get(roomId)
     if (!room) return
 
@@ -1485,6 +1502,7 @@ io.on('connection', (socket) => {
 
   // Novo evento para rolagem de iniciativa
   socket.on('roll_initiative', ({ playerId, roomId }) => {
+    if (!ownsFighter(socket, playerId)) return
     const room = rooms.get(roomId)
     if (!room || room.phase !== CombatPhase.INITIATIVE_ROLL) return
 
@@ -1591,6 +1609,7 @@ io.on('connection', (socket) => {
 
   // 🐉 HANDLER DE TRANSFORMAÇÃO
   socket.on('transform', ({ playerId, roomId, transformationType }) => {
+    if (!ownsFighter(socket, playerId)) return
     const room = rooms.get(roomId)
     if (!room) return
 
@@ -1747,6 +1766,7 @@ io.on('connection', (socket) => {
     isTransformed, transformationImage, unlockedTransformation,
     transformationData, duration, stats
   }) => {
+    if (!ownsFighter(socket, playerId)) return
     const room = rooms.get(roomId)
     if (!room) return
 
@@ -1795,6 +1815,7 @@ io.on('connection', (socket) => {
 
   // Handler para usar habilidades especiais de transformação
   socket.on('use_special_ability', ({ playerId, roomId, abilityId }) => {
+    if (!ownsFighter(socket, playerId)) return
     const room = rooms.get(roomId)
     if (!room || room.currentTurn !== playerId) return
 
@@ -1837,6 +1858,7 @@ io.on('connection', (socket) => {
   })
 
   socket.on('player_action', ({ playerId, roomId, action, diceType, mpCost, staminaCost }) => {
+    if (!ownsFighter(socket, playerId)) return
     const room = rooms.get(roomId)
     if (!room || room.currentTurn !== playerId) return
 
@@ -1989,6 +2011,7 @@ io.on('connection', (socket) => {
   })
 
   socket.on('roll_dice', ({ playerId, roomId, sides, action }) => {
+    if (!ownsFighter(socket, playerId)) return
     const room = rooms.get(roomId)
     if (!room) return
 
@@ -2021,6 +2044,7 @@ io.on('connection', (socket) => {
 
   // 🧪 Usar consumível da hotbar: aplica efeito, registra no log e consome o turno (regra atual)
   socket.on('use_consumable', ({ playerId, roomId, item }) => {
+    if (!ownsFighter(socket, playerId)) return
     const room = rooms.get(roomId)
     if (!room || !room.isActive || room.phase !== CombatPhase.PLAYER_TURN) return
     if (room.currentTurn !== playerId) return
@@ -2074,6 +2098,7 @@ io.on('connection', (socket) => {
   })
 
   socket.on('chat_message', ({ playerId, roomId, message }) => {
+    if (!ownsFighter(socket, playerId)) return
     const room = rooms.get(roomId)
     if (!room) return
 
@@ -2101,6 +2126,7 @@ io.on('connection', (socket) => {
   // pagar stamina nenhuma, e quem ficou não recebia nada. Cai no mesmo declareWinner das
   // outras vitórias, então as recompensas fluem normalmente.
   socket.on('surrender', ({ playerId, roomId }) => {
+    if (!ownsFighter(socket, playerId)) return
     const room = rooms.get(roomId)
     if (!room) return
     if (room.player1?.id !== playerId && room.player2?.id !== playerId) return
@@ -2116,6 +2142,7 @@ io.on('connection', (socket) => {
   })
 
   socket.on('close_room', ({ playerId, roomId }) => {
+    if (!ownsFighter(socket, playerId)) return
     const room = rooms.get(roomId)
     if (!room || room.creator !== playerId) return
 
@@ -2164,6 +2191,7 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log('Cliente desconectado:', socket.id)
+    socketFighters.delete(socket.id)
 
     // Limpar fila de matchmaking (e o bot prometido a quem estava nela)
     for (const [cid, entry] of matchQueue.entries()) {

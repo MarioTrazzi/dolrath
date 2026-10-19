@@ -388,6 +388,15 @@ function CombatPageContent() {
   }, [combatRoom?.combatLog, chatOpen])
 
   useEffect(() => {
+    // 🔁 Re-entrada após reconexão do socket.io (id de socket NOVO). Sem refazer o
+    // join, o servidor via o lutador como caído — corria a carência e era derrota —
+    // e as ações do socket novo não são aceitas (o vínculo é por socket).
+    let rejoin: (() => void) | null = null
+    // Só o RE-connect refaz o join: o primeiro connect já é coberto pelo emit
+    // inicial (o socket.io bufferiza até conectar) e um join dobrado duplicaria
+    // o espectador na sala.
+    let connectedOnce = socket.connected
+
     const initializeCombat = async () => {
       let playerData: Player
 
@@ -400,6 +409,8 @@ function CombatPageContent() {
       socket.on('connect', () => {
         console.log('✅ Conectado ao servidor WebSocket')
         setConnectionStatus('connected')
+        if (connectedOnce) rejoin?.()
+        connectedOnce = true
       })
 
       socket.on('disconnect', () => {
@@ -772,31 +783,36 @@ function CombatPageContent() {
 
       // 🎟️ Ingresso da arena: prova ao socket que este herói é nosso. Buscado a cada
       // join (vale 15 min), então reconectar no meio de uma luta longa também passa.
-      let ticket: string | null = null
-      if (characterId && userRole === 'fighter') {
-        try {
-          const res = await fetch('/api/battle/ticket', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ characterId: playerData.id }),
-          })
-          if (res.ok) ticket = (await res.json())?.ticket ?? null
-        } catch {
-          // Sem ingresso o socket recusa com BAD_TICKET — tratado em onJoinError.
+      const joinPlayer = playerData
+      const emitJoin = async () => {
+        let ticket: string | null = null
+        if (characterId && userRole === 'fighter') {
+          try {
+            const res = await fetch('/api/battle/ticket', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ characterId: joinPlayer.id }),
+            })
+            if (res.ok) ticket = (await res.json())?.ticket ?? null
+          } catch {
+            // Sem ingresso o socket recusa com BAD_TICKET — tratado em onJoinError.
+          }
         }
-      }
 
-      // Entrar na sala via Socket.IO com role
-      socket.emit('join_room', {
-        roomId,
-        player: playerData,
-        isCreator: isRoomCreator,
-        role: userRole,
-        training: isTraining,
-        monster: trainingMonster,
-        password: roomPassword || null,
-        ticket,
-      })
+        // Entrar na sala via Socket.IO com role
+        socket.emit('join_room', {
+          roomId,
+          player: joinPlayer,
+          isCreator: isRoomCreator,
+          role: userRole,
+          training: isTraining,
+          monster: trainingMonster,
+          password: roomPassword || null,
+          ticket,
+        })
+      }
+      await emitJoin()
+      rejoin = () => { void emitJoin() }
     }
 
     const onJoinError = (err: { error?: string; code?: string }) => {

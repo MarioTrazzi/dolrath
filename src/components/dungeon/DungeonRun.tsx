@@ -1579,7 +1579,10 @@ export default function DungeonRun({
   const gear = useMemo(() => equipmentPower(equipList), [equipList])
   const gearTier = useMemo(
     () => deriveGearTier((equipList || []).filter((e: any) => !isBroken(e)).map((e: any) => ({
-      rarity: e?.item?.rarity ?? e?.rarity,
+      // A raridade mora em item.stats.rarity (o Item do Prisma não tem coluna
+      // rarity). Lendo só item.rarity, TODA peça entrava como COMMON no gearTier —
+      // um set lendário +10 valia o mesmo que um comum +10.
+      rarity: e?.item?.rarity ?? e?.item?.stats?.rarity ?? e?.rarity,
       enhancementLevel: e?.enhancementLevel,
     }))),
     [equipList]

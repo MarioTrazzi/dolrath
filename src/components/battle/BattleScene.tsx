@@ -811,7 +811,7 @@ export default function BattleScene({
           later(() => setDodgingId(null), 500)
           setDodgeFxId(defId)
           later(() => setDodgeFxId(null), 600)
-          pushText(defId, 'ESQUIVOU!', 'text-cyan-300', true)
+          pushText(defId, t('DODGED!'), 'text-cyan-300', true)
         }
       }, 280)
     } else if (event.kind === 'item') {

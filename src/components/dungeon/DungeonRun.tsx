@@ -1616,7 +1616,7 @@ export default function DungeonRun({
   // aos olhos do jogador. Abre a run nova dizendo quanto custou entrar inteiro.
   useEffect(() => {
     if (!runReady || !restorePaid || restorePaid <= 0) return
-    pushLog(`⚗️ A Alquimista restaurou sua vida e mana por ${restorePaid} 🪙 antes desta run.`)
+    pushLog(t('⚗️ The Alchemist restored your health and mana for {cost} 🪙 before this run.', { cost: restorePaid }))
     showBanner('⚗️', t('Paid restoration: {gold} 🪙', { gold: restorePaid }), 2600)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runReady])
@@ -2197,7 +2197,7 @@ export default function DungeonRun({
     // Explosão de energia na cor da forma sobre o card do jogador (a arena lê o
     // transformationType do FighterView, que já terá virado no próximo render).
     later(() => pushBattleEvent({ kind: 'transform', actorId: character.id }), 50)
-    showBanner('✨', `${cfg.name} ativada! (${cfg.duration} turnos)`, 2800)
+    showBanner('✨', t('{name} activated! ({n} turns)', { name: localizeTransformationName(cfg.name, locale), n: cfg.duration }), 2800)
     pushLog(t('✨ You took on the {name}!', { name: cfg.name }))
   }
 
@@ -2869,7 +2869,7 @@ export default function DungeonRun({
         setCombatFx(prev => ({ ...prev, poisoned: true, poisonDmg: proc.poisonDmg ?? 4 }))
         later(() => pushBattleEvent({ kind: 'status', actorId: character.id, action: 'poison' }), STATUS_FX_DELAY)
         pushLog(t('☠️ {name} poisoned you! You lose {dmg} HP per turn until you use an Antidote.', { name: pickName(proc, locale), dmg: proc.poisonDmg ?? 4 }))
-        showBanner('☠️', 'Envenenado!')
+        showBanner('☠️', t('Poisoned!'))
       } else if (proc.effect === 'bleed' && !dfx.bleeding) {
         setCombatFx(prev => ({ ...prev, bleeding: true, bleedFrac: proc.bleedFrac ?? 0.04 }))
         later(() => pushBattleEvent({ kind: 'status', actorId: character.id, action: 'bleed' }), STATUS_FX_DELAY)
@@ -2879,7 +2879,7 @@ export default function DungeonRun({
         later(() => pushBattleEvent({ kind: 'status', actorId: character.id, action: 'stun' }), STATUS_FX_DELAY)
         pushLog(t('💫 {name} stunned you! You lose the next turn.', { name: pickName(proc, locale) }))
       } else if (proc.effect === 'damage') {
-        pushLog(`💥 ${proc.name}! Um golpe brutal.`)
+        pushLog(t('💥 {name}! A brutal blow.', { name: localizeMonsterSpecialName(proc.name, locale) }))
       }
     }
     // Próximo inimigo da fila ataca; se acabou a fila, volta ao jogador.

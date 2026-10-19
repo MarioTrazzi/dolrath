@@ -279,4 +279,5 @@ export const DUNGEON_PT: Record<string, string> = {
   '⚗️ The Alchemist restored your health and mana for {cost} 🪙 before this run.':
     '⚗️ A Alquimista restaurou sua vida e mana por {cost} 🪙 antes desta run.',
   '{name} activated! ({n} turns)': '{name} ativada! ({n} turnos)',
+  ' 🔧 (repairs {name})': ' 🔧 (repara {name})',
 }

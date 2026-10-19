@@ -407,6 +407,9 @@ interface RunItem {
   name: string
   emoji: string
   label: string
+  /** Raridade do drop (para o brilho no resumo) e se ele é "de destaque". */
+  rarity?: string
+  highlight?: boolean
 }
 
 // Mesma linguagem visual de raridade usada na landing (DolrathLanding.tsx RARITY_FRAME),
@@ -1534,14 +1537,18 @@ export default function DungeonRun({
       const maintTag = d.reason === 'spare'
         ? t(' 🔧 (replacement)')
         : d.reason === 'maintenance' && d.forItem
-        ? ` 🔧 (repara ${d.forItem})`
+        ? t(' 🔧 (repairs {name})', { name: localizeItemName(d.forItem, locale) })
         : ''
-      const label = (d.enhancement ? `${d.name} +${d.enhancement}` : d.name) + maintTag
+      const shown = localizeItemName(d.name, locale)
+      const label = (d.enhancement ? `${shown} +${d.enhancement}` : shown) + maintTag
       if (skippedNames.has(d.name)) {
         pushLog(t('🚫 Inventory full — {label} was lost!', { label }))
         continue
       }
-      setTotals(prev => ({ ...prev, items: [...prev.items, { name: d.name, emoji: d.emoji, label }] }))
+      setTotals(prev => ({
+        ...prev,
+        items: [...prev.items, { name: d.name, emoji: d.emoji, label, rarity: d.rarity, highlight: isHighlightDrop(d) }],
+      }))
       pushLog(`${dicePrefix}${d.emoji} ${label}`)
       // Raro+/pedra: pisca o ícone na tela — o resto cai na bag sem aviso nenhum.
       if (isHighlightDrop(d)) pushItemFloat(d.name, d.emoji, d.rarity)
@@ -5104,17 +5111,27 @@ export default function DungeonRun({
                   {(() => {
                     // Agrupa por item (como no inventário): 1 slot por tipo + badge de quantidade,
                     // em vez de 1 chip por drop — evita estourar o card com pickups repetidos.
-                    const agg = new Map<string, { name: string; emoji: string; label: string; qty: number }>()
+                    const agg = new Map<string, RunItem & { qty: number }>()
                     for (const it of totals.items) {
                       const cur = agg.get(it.label)
                       if (cur) cur.qty += 1
                       else agg.set(it.label, { ...it, qty: 1 })
                     }
-                    return Array.from(agg.values()).map((it, i) => (
+                    // ✨ Raro+/pedra vêm PRIMEIRO e brilham na cor da raridade (backlog
+                    // 1.2): o drop raro do chefe não pode passar batido no resumo.
+                    const list = Array.from(agg.values()).sort((a, b) => Number(!!b.highlight) - Number(!!a.highlight))
+                    return list.map((it, i) => {
+                      const tone = it.highlight
+                        ? LOOT_RARITY_RING[String(it.rarity ?? 'RARE').toUpperCase()] ?? LOOT_RARITY_RING.RARE
+                        : null
+                      return (
                       <div
                         key={`${it.label}-${i}`}
                         title={it.qty > 1 ? `${it.label} ×${it.qty}` : it.label}
-                        className="relative shrink-0 w-9 h-9 rounded-lg bg-white/5 border border-white/15 grid place-items-center"
+                        className={`relative shrink-0 w-9 h-9 rounded-lg grid place-items-center ${
+                          tone ? `border-2 ${tone.ring} bg-white/10 animate-pulse` : 'bg-white/5 border border-white/15'
+                        }`}
+                        style={tone ? { boxShadow: `0 0 14px ${tone.glow}` } : undefined}
                       >
                         <ItemThumb name={it.name} emoji={it.emoji} className="text-lg" />
                         {it.qty > 1 && (
@@ -5123,7 +5140,8 @@ export default function DungeonRun({
                           </span>
                         )}
                       </div>
-                    ))
+                      )
+                    })
                   })()}
                 </div>
               )}

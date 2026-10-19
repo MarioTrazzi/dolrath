@@ -1054,7 +1054,9 @@ export default function DungeonRun({
   const [panelResult, setPanelResult] = useState<DiceResult | null>(null)
   const [hasRolled, setHasRolled] = useState(false)
   const [diceResults, setDiceResults] = useState<Record<string, DiceResult | undefined>>({})
-  const [battleEvent, setBattleEvent] = useState<BattleEvent | null>(null)
+  // Fila curta (não um slot): dois eventos no mesmo render animam os dois — ver
+  // BattleScene `events`. Só os últimos 12 importam (ids crescentes).
+  const [battleEvents, setBattleEvents] = useState<BattleEvent[]>([])
   const [combatEnded, setCombatEnded] = useState(false)
   const [winnerId, setWinnerId] = useState<string | null>(null)
   // RUN SEMPRE AUTOMÁTICA na EXPLORAÇÃO: o piloto anda, coleta e confirma sozinho.
@@ -1386,7 +1388,8 @@ export default function DungeonRun({
 
   const pushBattleEvent = useCallback((data: Omit<BattleEvent, 'id'>) => {
     battleEventCounter.current += 1
-    setBattleEvent({ ...data, id: battleEventCounter.current })
+    const ev = { ...data, id: battleEventCounter.current }
+    setBattleEvents(prev => [...prev.slice(-11), ev])
   }, [])
 
   /**
@@ -2117,7 +2120,7 @@ export default function DungeonRun({
     setHasRolled(false)
     setPendingAttack(null)
     setCurrentTurnId(null)
-    setBattleEvent(null)
+    setBattleEvents([])
     // Transformação reinicia a cada combate (e libera o uso único da luta)
     setTransform(null)
     setTransformCd(0)
@@ -5036,7 +5039,7 @@ export default function DungeonRun({
                 currentTurnId={currentTurnId}
                 winnerId={winnerId}
                 combatEnded={combatEnded}
-                event={battleEvent}
+                events={battleEvents}
                 dicePanel={dicePanel}
                 fighterDice={diceResults}
                 backdrop={null}

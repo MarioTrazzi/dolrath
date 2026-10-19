@@ -125,6 +125,14 @@ interface BattleSceneProps {
   winnerId?: string | null
   combatEnded?: boolean
   event?: BattleEvent | null
+  /**
+   * Fila de eventos (ids crescentes). Com ela TODO evento novo anima, mesmo
+   * quando dois chegam no mesmo render — com o slot único (`event`) o primeiro
+   * era sobrescrito antes de animar (o golpe sumia quando o alvo tinha
+   * veneno/sangramento e o status chegava junto). Quando presente, `event` é
+   * ignorado.
+   */
+  events?: BattleEvent[] | null
   dicePanel?: DicePanelInfo | null
   className?: string
   /** Cenário customizado (ex.: fundo temático de masmorra). Substitui o céu noturno
@@ -674,6 +682,7 @@ export default function BattleScene({
   winnerId,
   combatEnded,
   event,
+  events,
   dicePanel,
   className = '',
   backdrop,
@@ -743,17 +752,9 @@ export default function BattleScene({
     later(() => setAuraFx(prev => (prev?.key === key ? null : prev)), AURA_MS[kind])
   }
 
-  // Coreografia dos eventos de batalha
-  useEffect(() => {
-    if (!event) return
-    if (event.id === lastEventId.current) {
-      // Dois pushBattleEvent com o mesmo id = 2º nunca anima. Não devia acontecer
-      // (contador monotônico), mas se acontecer isso explica um "dano sem efeito".
-      console.warn('[BattleScene] evento repetido descartado (id duplicado)', event)
-      return
-    }
-    lastEventId.current = event.id
-
+  // Coreografia de UM evento de batalha. Os `return` abaixo descartam só este
+  // evento (id não reconhecido etc.), nunca a fila.
+  const playEvent = (event: BattleEvent) => {
     if (event.kind === 'resolve') {
       const atkId = event.attackerId
       const defId = event.defenderId
@@ -851,8 +852,35 @@ export default function BattleScene({
       }
       showAura(id, kind)
     }
+  }
+
+  // Slot único (PvP): anima o evento quando o id muda.
+  useEffect(() => {
+    if (events || !event) return
+    if (event.id === lastEventId.current) {
+      // Dois pushBattleEvent com o mesmo id = 2º nunca anima. Não devia acontecer
+      // (contador monotônico), mas se acontecer isso explica um "dano sem efeito".
+      console.warn('[BattleScene] evento repetido descartado (id duplicado)', event)
+      return
+    }
+    lastEventId.current = event.id
+    playEvent(event)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [event?.id])
+
+  // Fila (masmorra): anima TODOS os eventos novos, em ordem — o golpe e o
+  // status que chegam no mesmo render coexistem (impacto e aura são estados
+  // separados), em vez de o segundo engolir o primeiro.
+  const lastQueuedId = events && events.length > 0 ? events[events.length - 1].id : 0
+  useEffect(() => {
+    if (!events) return
+    const fresh = events.filter(e => e.id > lastEventId.current).sort((a, b) => a.id - b.id)
+    for (const e of fresh) {
+      lastEventId.current = e.id
+      playEvent(e)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastQueuedId])
 
   // Limpar timeouts ao desmontar
   useEffect(() => () => { timeouts.current.forEach(clearTimeout) }, [])

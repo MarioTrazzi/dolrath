@@ -41,4 +41,19 @@ export const API_PT: Record<string, string> = {
   // mochila não tem slot, a saída cai no Baú Geral e o jogador precisa saber.
   '📦 Your backpack was full — it went to the Global Chest.':
     '📦 Sua mochila estava cheia — foi para o Baú Geral.',
+
+  // 💰 Venda ao ferreiro, consumo e transferência (rotas de inventário).
+  'inventoryId is required': 'inventoryId é obrigatório',
+  'itemId is required': 'itemId é obrigatório',
+  'Item not found in the Global Chest': 'Item não encontrado no Baú Geral',
+  'Item not found in inventory': 'Item não encontrado no inventário',
+  'That item is no longer available in that quantity.': 'Esse item não está mais disponível nessa quantidade.',
+  'Daily gold cap reached — the blacksmith is not buying anymore today. Come back tomorrow.':
+    'Teto diário de gold atingido — o ferreiro não compra mais hoje. Volte amanhã.',
+  '💰 Sold {qty}x {name} for {gold} gold!': '💰 Vendeu {qty}x {name} por {gold} gold!',
+  'This piece is being listed on the market. Wait a few minutes.':
+    'Esta peça está sendo listada no mercado. Aguarde alguns minutos.',
+  'You do not have this item': 'Você não possui este item',
+  'This item is not a consumable': 'Este item não é consumível',
+  'Failed to use consumable': 'Falha ao usar consumível',
 }

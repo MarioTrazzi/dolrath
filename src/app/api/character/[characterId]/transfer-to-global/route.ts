@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
+import { takeFromCharacterInventory, InventoryQuantityError } from '@/lib/inventoryMutations';
 
 export async function POST(
   req: NextRequest,
@@ -15,7 +16,11 @@ export async function POST(
   const userId = session.user.id;
 
   try {
-    const { itemId, quantity = 1 } = await req.json();
+    const body = await req.json();
+    const itemId = body?.itemId;
+    // Saneado: antes o `quantity` cru ia direto pro decrement, e um valor
+    // negativo AUMENTAVA a pilha do personagem (−5 ⇒ +5 itens do nada).
+    const quantity = Math.max(1, Math.floor(Number(body?.quantity ?? 1) || 1));
 
     if (!itemId) {
       return NextResponse.json(
@@ -65,6 +70,16 @@ export async function POST(
       );
     }
 
+    // Anti-duplicação: peça travada por um lazy-mint em andamento não sai da
+    // mochila (mesma regra da venda ao ferreiro).
+    const lockedAt = (characterInventoryItem as any).listingLockedAt as Date | null;
+    if (lockedAt && Date.now() - new Date(lockedAt).getTime() < 20 * 60_000) {
+      return NextResponse.json(
+        { error: 'This piece is being listed on the market. Wait a few minutes.' },
+        { status: 409 }
+      );
+    }
+
     // ⚠️ Não existe checagem de "item equipado" aqui de propósito: equipar move a
     // peça para CharacterEquipment e a REMOVE do inventário. Toda linha em
     // CharacterInventory está, por definição, desequipada — checar por itemId
@@ -72,27 +87,9 @@ export async function POST(
 
     // Start transaction to transfer items back to global inventory
     const result = await prisma.$transaction(async (tx) => {
-      // Remove item from character inventory
-      if (characterInventoryItem.quantity === quantity) {
-        // Delete the record if transferring all items
-        await tx.characterInventory.delete({
-          where: {
-            id: characterInventoryItem.id,
-          },
-        });
-      } else {
-        // Decrease quantity
-        await tx.characterInventory.update({
-          where: {
-            id: characterInventoryItem.id,
-          },
-          data: {
-            quantity: {
-              decrement: quantity,
-            },
-          },
-        });
-      }
+      // Remove item from character inventory — atômico: duas transferências
+      // simultâneas da mesma pilha não podem as duas passar (duplicava item).
+      await takeFromCharacterInventory(tx, characterInventoryItem.id, quantity);
 
       // Check if user already has this item in global inventory
       const existingUserItem = await tx.userInventory.findFirst({
@@ -134,6 +131,12 @@ export async function POST(
 
     return NextResponse.json(result);
   } catch (error) {
+    if (error instanceof InventoryQuantityError) {
+      return NextResponse.json(
+        { error: 'Not enough items in character inventory' },
+        { status: 409 }
+      );
+    }
     console.error('Error transferring item to global inventory:', error);
     return NextResponse.json(
       { error: 'Failed to transfer item to global inventory' },

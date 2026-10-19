@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
+import { takeFromUserInventory, InventoryQuantityError } from '@/lib/inventoryMutations';
 
 export async function POST(
   req: NextRequest,
@@ -89,15 +90,9 @@ export async function POST(
 
     // Start transaction to transfer items
     const result = await prisma.$transaction(async (tx) => {
-      // Remove item from user inventory
-      if (userInventoryItem.quantity === qty) {
-        await tx.userInventory.delete({ where: { id: userInventoryItem.id } });
-      } else {
-        await tx.userInventory.update({
-          where: { id: userInventoryItem.id },
-          data: { quantity: { decrement: qty } },
-        });
-      }
+      // Remove item from user inventory — atômico: duas transferências
+      // simultâneas da mesma pilha não podem as duas passar (duplicava item).
+      await takeFromUserInventory(tx, userInventoryItem.id, qty);
 
       if (isConsumable) {
         // Consumível: empilha numa única linha.
@@ -127,6 +122,12 @@ export async function POST(
 
     return NextResponse.json(result);
   } catch (error) {
+    if (error instanceof InventoryQuantityError) {
+      return NextResponse.json(
+        { error: 'Not enough items in user inventory' },
+        { status: 409 }
+      );
+    }
     console.error('Error transferring item:', error);
     return NextResponse.json(
       { error: 'Failed to transfer item' },

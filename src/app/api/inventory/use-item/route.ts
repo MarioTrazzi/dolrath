@@ -4,7 +4,11 @@ import { NextResponse } from 'next/server'
 import { regenAndPersist } from '@/lib/staminaServer'
 import { activateFoodBuff, foodBuffLabel, parseFoodBuffSpec } from '@/lib/foodBuff'
 import { serializeBigInt } from '@/lib/serializeBigInt'
-import { removeOneFromInventory } from '@/lib/inventoryMutations'
+import {
+  takeFromCharacterInventory,
+  takeFromUserInventory,
+  InventoryQuantityError,
+} from '@/lib/inventoryMutations'
 
 export async function POST(req: Request) {
   const session = await auth()
@@ -22,6 +26,20 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { error: 'Item ID and Character ID are required' },
         { status: 400 }
+      )
+    }
+
+    // O personagem TEM que ser do usuário. Antes esta checagem vinha depois e
+    // por id puro: qualquer conta podia beber as poções da mochila de um herói
+    // alheio (o fallback abaixo busca no inventário do characterId recebido).
+    const character = await prisma.character.findFirst({
+      where: { id: characterId, userId }
+    })
+
+    if (!character) {
+      return NextResponse.json(
+        { error: 'Personagem não encontrado' },
+        { status: 404 }
       )
     }
 
@@ -78,18 +96,6 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { error: 'Este item não pode ser usado' },
         { status: 400 }
-      )
-    }
-
-    // Buscar o personagem
-    const character = await prisma.character.findUnique({
-      where: { id: characterId }
-    })
-
-    if (!character) {
-      return NextResponse.json(
-        { error: 'Personagem não encontrado' },
-        { status: 404 }
       )
     }
 
@@ -187,15 +193,12 @@ export async function POST(req: Request) {
       // uma linha fantasma — ela continuava aparecendo no inventário, ocupava
       // slot, e nenhuma ação (usar, transferir, mandar pro Baú Geral) a aceitava,
       // porque todas filtram quantity > 0.
+      // Atômica (takeFrom*): dois cliques rápidos não aplicam o efeito duas
+      // vezes pagando uma unidade só.
       if (isFromCharacterInventory) {
-        await removeOneFromInventory(tx, itemToUse.id)
-      } else if (itemToUse.quantity > 1) {
-        await tx.userInventory.update({
-          where: { id: itemToUse.id },
-          data: { quantity: { decrement: 1 } }
-        })
+        await takeFromCharacterInventory(tx, itemToUse.id, 1)
       } else {
-        await tx.userInventory.delete({ where: { id: itemToUse.id } })
+        await takeFromUserInventory(tx, itemToUse.id, 1)
       }
 
       // Aplicar efeitos no personagem
@@ -218,6 +221,9 @@ export async function POST(req: Request) {
     })
 
   } catch (error) {
+    if (error instanceof InventoryQuantityError) {
+      return NextResponse.json({ error: 'Você não possui este item' }, { status: 409 })
+    }
     console.error('Error using item:', error)
     return NextResponse.json(
       { error: 'Failed to use item' },

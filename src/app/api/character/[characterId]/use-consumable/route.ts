@@ -1,14 +1,17 @@
 import { requireApiActor } from '@/lib/botFleetAuth'
 import { prisma } from '@/lib/prisma'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { takeFromCharacterInventory, InventoryQuantityError } from '@/lib/inventoryMutations'
+import { getTFromRequest } from '@/lib/i18n/server'
 
 // Dá baixa em 1 consumível do inventário do personagem (sem alterar HP/MP/stamina
 // no banco — o efeito é aplicado localmente na run da masmorra). Devolve os stats
 // do item para o cliente aplicar o efeito.
 export async function POST(
-  req: Request,
+  req: NextRequest,
   context: { params: { characterId: string } }
 ) {
+  const t = getTFromRequest(req)
   const { characterId } = context.params
   const resolved = await requireApiActor(req, characterId)
   if ('error' in resolved) return resolved.error
@@ -17,7 +20,7 @@ export async function POST(
   try {
     const { itemId } = await req.json()
     if (!itemId) {
-      return NextResponse.json({ error: 'itemId é obrigatório' }, { status: 400 })
+      return NextResponse.json({ error: t('itemId is required') }, { status: 400 })
     }
 
     // Garante que o personagem pertence ao usuário.
@@ -26,7 +29,7 @@ export async function POST(
       select: { id: true },
     })
     if (!character) {
-      return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+      return NextResponse.json({ error: t('Character not found') }, { status: 404 })
     }
 
     const inv = await prisma.characterInventory.findFirst({
@@ -34,19 +37,21 @@ export async function POST(
       include: { item: true },
     })
     if (!inv) {
-      return NextResponse.json({ error: 'Você não possui este item' }, { status: 404 })
+      return NextResponse.json({ error: t('You do not have this item') }, { status: 404 })
     }
     if (inv.item.type !== 'CONSUMABLE') {
-      return NextResponse.json({ error: 'Este item não é consumível' }, { status: 400 })
+      return NextResponse.json({ error: t('This item is not a consumable') }, { status: 400 })
     }
 
-    if (inv.quantity > 1) {
-      await prisma.characterInventory.update({
-        where: { id: inv.id },
-        data: { quantity: { decrement: 1 } },
-      })
-    } else {
-      await prisma.characterInventory.delete({ where: { id: inv.id } })
+    // Atômico: dois toques rápidos na mesma poção não podem aplicar o efeito
+    // duas vezes pagando uma unidade só.
+    try {
+      await prisma.$transaction((tx) => takeFromCharacterInventory(tx, inv.id, 1))
+    } catch (err) {
+      if (err instanceof InventoryQuantityError) {
+        return NextResponse.json({ error: t('You do not have this item') }, { status: 409 })
+      }
+      throw err
     }
 
     return NextResponse.json({
@@ -61,6 +66,6 @@ export async function POST(
     })
   } catch (error) {
     console.error('Error using consumable:', error)
-    return NextResponse.json({ error: 'Falha ao usar consumível' }, { status: 500 })
+    return NextResponse.json({ error: t('Failed to use consumable') }, { status: 500 })
   }
 }

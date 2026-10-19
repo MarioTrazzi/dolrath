@@ -87,6 +87,57 @@ export async function assertInventoryRoom(
 }
 
 /**
+ * A linha não tinha mais a quantidade pedida quando a transação chegou nela —
+ * outro request (aba duplicada, clique duplo) consumiu antes. As rotas pegam
+ * isso e respondem 409 em vez de 500.
+ */
+export class InventoryQuantityError extends Error {
+  constructor() {
+    super('INVENTORY_QUANTITY_CHANGED')
+    this.name = 'InventoryQuantityError'
+  }
+}
+
+/**
+ * Tira `qty` unidades de uma linha de CharacterInventory de forma ATÔMICA.
+ *
+ * O padrão antigo (ler a linha fora da transação, depois `decrement` ou
+ * `delete` conforme a quantidade lida) deixava dois requests simultâneos
+ * venderem/consumirem a mesma pilha: ambos liam 5, ambos decrementavam 3, a
+ * linha ia a −1 e o gold/efeito era entregue duas vezes. Aqui o UPDATE só
+ * acontece se ainda houver `qty` na linha (o Postgres reavalia o WHERE depois
+ * de pegar o lock), e a linha que zera é apagada no mesmo passo.
+ */
+export async function takeFromCharacterInventory(
+  tx: Prisma.TransactionClient,
+  inventoryRowId: string,
+  qty: number,
+) {
+  const n = Math.max(1, Math.floor(qty))
+  const { count } = await tx.characterInventory.updateMany({
+    where: { id: inventoryRowId, quantity: { gte: n } },
+    data: { quantity: { decrement: n } },
+  })
+  if (count === 0) throw new InventoryQuantityError()
+  await tx.characterInventory.deleteMany({ where: { id: inventoryRowId, quantity: { lte: 0 } } })
+}
+
+/** Mesmo contrato de `takeFromCharacterInventory`, para o Baú Geral (UserInventory). */
+export async function takeFromUserInventory(
+  tx: Prisma.TransactionClient,
+  inventoryRowId: string,
+  qty: number,
+) {
+  const n = Math.max(1, Math.floor(qty))
+  const { count } = await tx.userInventory.updateMany({
+    where: { id: inventoryRowId, quantity: { gte: n } },
+    data: { quantity: { decrement: n } },
+  })
+  if (count === 0) throw new InventoryQuantityError()
+  await tx.userInventory.deleteMany({ where: { id: inventoryRowId, quantity: { lte: 0 } } })
+}
+
+/**
  * Remove uma unidade de uma linha do inventário. Se a linha tiver quantity > 1,
  * apenas decrementa; caso contrário, apaga a linha. Relê dentro da transação
  * para evitar quantidade obsoleta.

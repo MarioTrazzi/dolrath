@@ -149,9 +149,15 @@ export async function spendFarmActionStaminaTx(
   if (!c || c.stamina < cost) {
     throw new Error(`Stamina insuficiente (a ação custa ${cost}).`)
   }
-  await tx.character.update({
-    where: { id: characterId },
+  // Condicional: duas ações de fazenda simultâneas (colher + poço) liam a mesma
+  // stamina e as duas passavam.
+  const spent = await tx.character.updateMany({
+    where: { id: characterId, stamina: { gte: cost } },
     data: { stamina: { decrement: cost }, staminaUpdatedAt: new Date() },
   })
-  return c.stamina - cost
+  if (spent.count === 0) {
+    throw new Error(`Stamina insuficiente (a ação custa ${cost}).`)
+  }
+  const after = await tx.character.findUnique({ where: { id: characterId }, select: { stamina: true } })
+  return after?.stamina ?? Math.max(0, c.stamina - cost)
 }

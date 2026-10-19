@@ -91,13 +91,18 @@ export async function POST(
         if (!fresh || fresh.gold < goldCost) {
           throw new Error(`GOLD insuficiente na mão (precisa de ${goldCost}).`);
         }
-        return tx.character.update({
-          where: { id: params.characterId },
+        // Condicional: o saldo lido pode estar velho (duas abas expandindo).
+        const debit = await tx.character.updateMany({
+          where: { id: params.characterId, gold: { gte: goldCost } },
           data: {
             gold: { decrement: goldCost },
             inventorySlots: { increment: slots },
           },
         });
+        if (debit.count === 0) {
+          throw new Error(`GOLD insuficiente na mão (precisa de ${goldCost}).`);
+        }
+        return tx.character.findUniqueOrThrow({ where: { id: params.characterId } });
       });
 
       try {

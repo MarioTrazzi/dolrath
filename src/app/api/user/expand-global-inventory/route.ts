@@ -74,12 +74,19 @@ export async function POST(req: NextRequest) {
         if (!fresh || fresh.goldBalance < goldCost) {
           throw new Error(`GOLD insuficiente no banco (precisa de ${goldCost}).`);
         }
-        return tx.user.update({
-          where: { id: session.user!.id },
+        // Condicional: o saldo lido pode estar velho (duas abas expandindo).
+        const debit = await tx.user.updateMany({
+          where: { id: session.user!.id, goldBalance: { gte: goldCost } },
           data: {
             goldBalance: { decrement: goldCost },
             globalInventorySlots: { increment: slots },
           },
+        });
+        if (debit.count === 0) {
+          throw new Error(`GOLD insuficiente no banco (precisa de ${goldCost}).`);
+        }
+        return tx.user.findUniqueOrThrow({
+          where: { id: session.user!.id },
           select: { globalInventorySlots: true, goldBalance: true },
         });
       });

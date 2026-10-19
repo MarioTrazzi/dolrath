@@ -7,6 +7,7 @@ import { computeItemKey, computePurchaseId } from '@/lib/itemNftSigning'
 import { verifyItemMintTx } from '@/lib/itemNftVerify'
 import { getGoldContractAddress, getGoldProvider } from '@/lib/goldOnchain'
 import { getItemMarketChainId } from '@/lib/itemMarketOnchain'
+import { getT } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,6 +24,7 @@ function lazyMintPaymentMarker(inventoryId: string): string {
 // CharacterInventory (o item deixa de existir off-chain) e registra o ItemNft.
 // Garante o invariante: um item é DB OU NFT, nunca os dois (sem duplicação).
 export async function POST(req: Request) {
+  const t = getT()
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -34,7 +36,7 @@ export async function POST(req: Request) {
     const body = await req.json()
     const inventoryId = String(body?.inventoryId || '').trim()
     mintTxHash = String(body?.mintTxHash || '').trim()
-    if (!inventoryId) return NextResponse.json({ error: 'inventoryId é obrigatório' }, { status: 400 })
+    if (!inventoryId) return NextResponse.json({ error: t('inventoryId is required') }, { status: 400 })
     if (!mintTxHash || !isHex32Bytes(mintTxHash)) {
       return NextResponse.json({ error: 'Invalid mintTxHash' }, { status: 400 })
     }
@@ -60,7 +62,7 @@ export async function POST(req: Request) {
       include: { item: true },
     })
     if (!inv) {
-      return NextResponse.json({ error: 'Item de inventário não encontrado (ou já cunhado)' }, { status: 404 })
+      return NextResponse.json({ error: t('Inventory item not found (or already minted)') }, { status: 404 })
     }
 
     const provider = getGoldProvider()

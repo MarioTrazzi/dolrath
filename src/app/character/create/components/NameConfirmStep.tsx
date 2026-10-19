@@ -291,7 +291,8 @@ export function NameConfirmStep() {
       } catch (e: any) {
         const msg = String(e?.message || e || '');
         // If the user already paid/minted, try to recover the existing character instead of getting stuck.
-        if (msg.includes('Pagamento já utilizado')) {
+        // PT ou EN: a rota responde no idioma de quem pediu.
+        if (msg.includes('Pagamento já utilizado') || msg.includes('Payment already used')) {
           const recoveredId = await recoverExistingCharacterId({
             creationTxHash: creationPaymentTxHash,
             nftMintTxHash: mintTxHashForRecovery || undefined,

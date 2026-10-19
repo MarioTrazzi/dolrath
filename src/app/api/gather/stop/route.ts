@@ -3,6 +3,7 @@ import { requireApiActor } from '@/lib/botFleetAuth'
 import { prisma } from '@/lib/prisma'
 import { collectGatheringSession, findOpenGatheringSession, syncGatheringSession } from '@/lib/gatheringServer'
 import { getProfessionLevelInfo } from '@/lib/professionSystem'
+import { getT } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,6 +17,7 @@ export const dynamic = 'force-dynamic'
 //   ciclo vindo (sessão 'exhausted'), não há o que esperar: encerra na hora.
 // - 'cancel': desiste do encerramento agendado, a coleta segue normal.
 export async function POST(req: Request) {
+  const t = getT()
   const resolved = await requireApiActor(req)
   if ('error' in resolved) return resolved.error
   const userId = resolved.actor.userId
@@ -23,16 +25,16 @@ export async function POST(req: Request) {
   try {
     const { characterId, mode } = await req.json()
     if (!characterId) {
-      return NextResponse.json({ error: 'characterId é obrigatório' }, { status: 400 })
+      return NextResponse.json({ error: t('characterId is required') }, { status: 400 })
     }
     const character = await prisma.character.findFirst({ where: { id: characterId, userId }, select: { id: true } })
     if (!character) {
-      return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+      return NextResponse.json({ error: t('Character not found') }, { status: 404 })
     }
 
     const open = await findOpenGatheringSession(characterId)
     if (!open) {
-      return NextResponse.json({ error: 'Nenhuma sessão de coleta em aberto' }, { status: 404 })
+      return NextResponse.json({ error: t('No open gathering session') }, { status: 404 })
     }
 
     if (mode === 'cancel') {

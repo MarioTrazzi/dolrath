@@ -7,6 +7,7 @@ import {
 } from '@/lib/itemMarketOnchain'
 import { verifyListingPurchasedTx } from '@/lib/itemMarketVerify'
 import { NextResponse } from 'next/server'
+import { getT } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,6 +36,7 @@ function readString(body: any, key: string): string {
  * cuja confirmação falhou (ou que recebeu a NFT por fora) reivindica a posse.
  */
 export async function POST(req: Request) {
+  const t = getT()
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -99,7 +101,7 @@ export async function POST(req: Request) {
     try {
       tokenId = evt ? evt.tokenId : BigInt(tokenIdStr)
     } catch {
-      return NextResponse.json({ error: 'tokenId inválido' }, { status: 400 })
+      return NextResponse.json({ error: t('Invalid tokenId') }, { status: 400 })
     }
 
     // 🔒 Autoridade: quem detém a NFT AGORA é o dono.
@@ -136,7 +138,7 @@ export async function POST(req: Request) {
 
     if (!existing) {
       return NextResponse.json(
-        { error: 'Item NFT não encontrado no banco (tokenId/contract/chainId)' },
+        { error: t('Item NFT not found in the database (tokenId/contract/chainId)') },
         { status: 404 }
       )
     }

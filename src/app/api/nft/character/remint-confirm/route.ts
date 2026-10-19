@@ -3,6 +3,7 @@ import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { verifyCharacterNftMintTx } from '@/lib/characterNftVerify'
 import { getCharacterNftChainId } from '@/lib/characterNftOnchain'
+import { getT } from '@/lib/i18n/server'
 
 function serializeBigIntForJson<T>(value: T): T {
   return JSON.parse(
@@ -11,6 +12,7 @@ function serializeBigIntForJson<T>(value: T): T {
 }
 
 export async function POST(req: Request) {
+  const t = getT()
   try {
     const session = await auth()
     if (!session?.user?.id) {
@@ -54,7 +56,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true, character: serializeBigIntForJson(updated) })
   } catch (err) {
     if ((err as any)?.code === 'P2002') {
-      return NextResponse.json({ error: 'Essa transação já foi usada para vincular outro personagem' }, { status: 409 })
+      return NextResponse.json({ error: t('This transaction was already used to link another character') }, { status: 409 })
     }
     const message = err instanceof Error ? err.message : 'Internal server error'
     return NextResponse.json({ error: message }, { status: 500 })

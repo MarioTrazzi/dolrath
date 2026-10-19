@@ -1,15 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { getCharacterHistory } from '@/lib/characterHistory';
+import { getT } from '@/lib/i18n/server'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { characterId: string } }
 ) {
+  const t = getT()
   try {
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Não autenticado' }, { status: 401 });
+      return NextResponse.json({ error: t('Not authenticated') }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);

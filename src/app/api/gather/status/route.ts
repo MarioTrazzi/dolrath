@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { findOpenGatheringSession, syncGatheringSession } from '@/lib/gatheringServer'
 import { getProfessionLevelInfo } from '@/lib/professionSystem'
 import { GATHER_TICK_SECONDS, GATHER_TICK_STAMINA } from '@/lib/gathering'
+import { getT } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,6 +13,7 @@ export const dynamic = 'force-dynamic'
 // rendimento em pendingYield) e devolve o retrato atual. Idempotente — chamar
 // duas vezes seguidas não rende nada a mais.
 export async function GET(req: Request) {
+  const t = getT()
   const resolved = await requireApiActor(req)
   if ('error' in resolved) return resolved.error
   const userId = resolved.actor.userId
@@ -20,7 +22,7 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url)
     const characterId = searchParams.get('characterId')
     if (!characterId) {
-      return NextResponse.json({ error: 'characterId é obrigatório' }, { status: 400 })
+      return NextResponse.json({ error: t('characterId is required') }, { status: 400 })
     }
 
     const character = await prisma.character.findFirst({
@@ -28,7 +30,7 @@ export async function GET(req: Request) {
       select: { id: true, stamina: true, maxStamina: true, gatherXp: true },
     })
     if (!character) {
-      return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+      return NextResponse.json({ error: t('Character not found') }, { status: 404 })
     }
 
     const open = await findOpenGatheringSession(characterId)

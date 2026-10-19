@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { verifyGoldTransferTx } from '@/lib/goldPayments';
+import { getT } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +25,7 @@ function jsonSafe<T>(value: T): any {
 // duplo). O valor creditado é o ACTUAL transferido on-chain, nunca o que o
 // cliente diz — impossível super-creditar.
 export async function POST(req: NextRequest) {
+  const t = getT()
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -38,12 +40,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid txHash' }, { status: 400 });
     }
     if (!characterId || typeof characterId !== 'string') {
-      return NextResponse.json({ error: 'characterId é obrigatório' }, { status: 400 });
+      return NextResponse.json({ error: t('characterId is required') }, { status: 400 });
     }
 
     const character = await prisma.character.findFirst({ where: { id: characterId, userId } });
     if (!character) {
-      return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 });
+      return NextResponse.json({ error: t('Character not found') }, { status: 404 });
     }
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -70,7 +72,7 @@ export async function POST(req: NextRequest) {
     const already = await prisma.goldTopup.findUnique({ where: { txHash: txHashStr } });
     if (already) {
       return NextResponse.json(
-        { error: 'Esta transação já foi creditada.', alreadyCredited: true },
+        { error: t('This transaction was already credited.'), alreadyCredited: true },
         { status: 409 }
       );
     }
@@ -92,7 +94,7 @@ export async function POST(req: NextRequest) {
     // Credita o valor REAL transferido (piso em gold inteiro). goldBalance/Character.gold são Int.
     const amount = Math.floor(Number(verified.formatted));
     if (!Number.isFinite(amount) || amount < 1) {
-      return NextResponse.json({ error: 'Valor transferido inválido' }, { status: 400 });
+      return NextResponse.json({ error: t('Invalid transferred amount') }, { status: 400 });
     }
 
     // Dedup + crédito atômico: cria o registro (txHash único) ANTES de creditar.
@@ -115,7 +117,7 @@ export async function POST(req: NextRequest) {
     } catch (e: any) {
       if (e?.code === 'P2002') {
         return NextResponse.json(
-          { error: 'Esta transação já foi creditada.', alreadyCredited: true },
+          { error: t('This transaction was already credited.'), alreadyCredited: true },
           { status: 409 }
         );
       }

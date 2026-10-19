@@ -6,6 +6,7 @@ import { Contract, parseUnits } from 'ethers'
 import { computeItemKey, computePurchaseId, signItemMintRequest } from '@/lib/itemNftSigning'
 import { getGoldContractAddress, getGoldProvider } from '@/lib/goldOnchain'
 import { getItemMarketChainId, getItemMarketContractAddress } from '@/lib/itemMarketOnchain'
+import { getT } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,6 +23,7 @@ function lazyMintPaymentMarker(inventoryId: string): string {
 // A taxa do jogador é o GAS (mint + approve + createListing) — sem pagamento de
 // GOLD ao tesouro. O item só "vira NFT" quando há motivo (vender).
 export async function POST(req: Request) {
+  const t = getT()
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -36,7 +38,7 @@ export async function POST(req: Request) {
   try {
     const { inventoryId } = await req.json()
     if (!inventoryId) {
-      return NextResponse.json({ error: 'inventoryId é obrigatório' }, { status: 400 })
+      return NextResponse.json({ error: t('inventoryId is required') }, { status: 400 })
     }
 
     const user = await prisma.user.findUnique({ where: { id: userId } })
@@ -52,10 +54,10 @@ export async function POST(req: Request) {
       include: { item: true },
     })
     if (!inv) {
-      return NextResponse.json({ error: 'Item de inventário não encontrado' }, { status: 404 })
+      return NextResponse.json({ error: t('Inventory item not found') }, { status: 404 })
     }
     if (inv.item.type === 'CONSUMABLE') {
-      return NextResponse.json({ error: 'Consumíveis não podem ser listados como NFT.' }, { status: 400 })
+      return NextResponse.json({ error: t('Consumables cannot be listed as NFTs.') }, { status: 400 })
     }
 
     // Trava temporária: impede vender/relistar a mesma peça enquanto um mint
@@ -63,7 +65,7 @@ export async function POST(req: Request) {
     const LOCK_MINUTES = 20
     const lockedAt = (inv as any).listingLockedAt as Date | null
     if (lockedAt && Date.now() - new Date(lockedAt).getTime() < LOCK_MINUTES * 60_000) {
-      return NextResponse.json({ error: 'Esta peça já está em processo de listagem. Aguarde alguns minutos.' }, { status: 409 })
+      return NextResponse.json({ error: t('This piece is already being listed. Wait a few minutes.') }, { status: 409 })
     }
     await prisma.characterInventory.update({ where: { id: inv.id }, data: { listingLockedAt: new Date() } })
 

@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { addHistoryEntry } from '@/lib/characterHistory'
 import { restoreCost, FREE_RESTORE_MAX_LEVEL } from '@/lib/restoreCost'
 import { localizeServerError } from '@/lib/i18n/serverErrors'
-import { getLocaleFromRequest } from '@/lib/i18n/server'
+import { getLocaleFromRequest, getT } from '@/lib/i18n/server'
 
 // ⚗️ Restauração de HP/MP na Alquimista.
 //
@@ -23,6 +23,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { characterId: string } }
 ) {
+  const t = getT()
   try {
     const resolved = await requireApiActor(request, params.characterId)
     if ('error' in resolved) return resolved.error
@@ -33,7 +34,7 @@ export async function GET(
       select: CHAR_SELECT,
     })
     if (!character) {
-      return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+      return NextResponse.json({ error: t('Character not found') }, { status: 404 })
     }
 
     const { cost, free, alreadyFull } = restoreCost(character)
@@ -59,6 +60,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { characterId: string } }
 ) {
+  const t = getT()
   try {
     const resolved = await requireApiActor(request, params.characterId)
     if ('error' in resolved) return resolved.error
@@ -69,7 +71,7 @@ export async function POST(
       select: { id: true },
     })
     if (!owned) {
-      return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+      return NextResponse.json({ error: t('Character not found') }, { status: 404 })
     }
 
     const result = await prisma.$transaction(async (tx) => {

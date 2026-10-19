@@ -2,11 +2,13 @@ import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { regenAndPersist } from '@/lib/staminaServer'
+import { getT } from '@/lib/i18n/server'
 
 export async function POST(
   req: Request,
   context: { params: { characterId: string } }
 ) {
+  const t = getT()
   const session = await auth()
 
   if (!session?.user?.id) {
@@ -42,7 +44,7 @@ export async function POST(
 
     if (!character) {
       return NextResponse.json(
-        { error: 'Personagem não encontrado' },
+        { error: t('Character not found') },
         { status: 404 }
       )
     }
@@ -54,7 +56,7 @@ export async function POST(
     if (liveStamina < staminaCost) {
       return NextResponse.json(
         {
-          error: 'Stamina insuficiente',
+          error: t('Not enough stamina'),
           current: liveStamina,
           required: staminaCost,
           maxStamina: character.maxStamina

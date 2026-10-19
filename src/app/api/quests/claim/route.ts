@@ -6,6 +6,7 @@ import { addDropToInventoryTx } from '@/lib/dungeonRunServer'
 import { addHistoryEntry } from '@/lib/characterHistory'
 import { getQuestById } from '@/lib/questCatalog'
 import { periodKeyFor } from '@/lib/questServer'
+import { getT } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,6 +22,7 @@ class ClaimError extends Error {
 // teto diário de ouro da masmorra (emissão limitada por design: 1×/período) —
 // auditada em goldGranted/xpGranted na própria linha de progresso.
 export async function POST(req: Request) {
+  const t = getT()
   const resolved = await requireApiActor(req)
   if ('error' in resolved) return resolved.error
   const userId = resolved.actor.userId
@@ -28,13 +30,13 @@ export async function POST(req: Request) {
   try {
     const { characterId, questId } = await req.json()
     if (!characterId || !questId) {
-      return NextResponse.json({ error: 'characterId e questId são obrigatórios' }, { status: 400 })
+      return NextResponse.json({ error: t('characterId and questId are required') }, { status: 400 })
     }
     const def = getQuestById(questId)
-    if (!def) return NextResponse.json({ error: 'Missão desconhecida' }, { status: 404 })
+    if (!def) return NextResponse.json({ error: t('Unknown quest') }, { status: 404 })
 
     const character = await prisma.character.findFirst({ where: { id: characterId, userId } })
-    if (!character) return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+    if (!character) return NextResponse.json({ error: t('Character not found') }, { status: 404 })
 
     const periodKey = periodKeyFor(def.kind)
     const gold = Math.max(0, Math.floor(def.rewards.gold ?? 0))

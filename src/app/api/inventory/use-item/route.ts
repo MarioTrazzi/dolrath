@@ -9,8 +9,10 @@ import {
   takeFromUserInventory,
   InventoryQuantityError,
 } from '@/lib/inventoryMutations'
+import { getT } from '@/lib/i18n/server'
 
 export async function POST(req: Request) {
+  const t = getT()
   const session = await auth()
 
   if (!session?.user?.id) {
@@ -38,7 +40,7 @@ export async function POST(req: Request) {
 
     if (!character) {
       return NextResponse.json(
-        { error: 'Personagem não encontrado' },
+        { error: t('Character not found') },
         { status: 404 }
       )
     }
@@ -86,7 +88,7 @@ export async function POST(req: Request) {
 
     if (!itemToUse) {
       return NextResponse.json(
-        { error: 'Você não possui este item' },
+        { error: t('You do not have this item') },
         { status: 404 }
       )
     }
@@ -94,7 +96,7 @@ export async function POST(req: Request) {
     // Verificar se o item é consumível
     if (itemToUse.item.type !== 'CONSUMABLE') {
       return NextResponse.json(
-        { error: 'Este item não pode ser usado' },
+        { error: t('This item cannot be used') },
         { status: 400 }
       )
     }
@@ -182,7 +184,7 @@ export async function POST(req: Request) {
 
       default:
         return NextResponse.json(
-          { error: 'Efeito do item não implementado' },
+          { error: t('Item effect not implemented') },
           { status: 400 }
         )
     }
@@ -222,7 +224,7 @@ export async function POST(req: Request) {
 
   } catch (error) {
     if (error instanceof InventoryQuantityError) {
-      return NextResponse.json({ error: 'Você não possui este item' }, { status: 409 })
+      return NextResponse.json({ error: t('You do not have this item') }, { status: 409 })
     }
     console.error('Error using item:', error)
     return NextResponse.json(

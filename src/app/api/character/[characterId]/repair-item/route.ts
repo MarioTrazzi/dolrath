@@ -12,7 +12,7 @@ import {
 } from '@/lib/repairPricing'
 import { getCatalogItemByName, getForgeMaterialByName } from '@/lib/itemCatalog'
 import { localizeServerError } from '@/lib/i18n/serverErrors'
-import { getLocaleFromRequest } from '@/lib/i18n/server'
+import { getLocaleFromRequest, getT } from '@/lib/i18n/server'
 import { takeFromCharacterInventory, InventoryQuantityError, listingUnlockedWhere } from '@/lib/inventoryMutations'
 import { catalogNameEn } from '@/lib/i18n/catalog'
 
@@ -42,6 +42,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { characterId: string } }
 ) {
+  const t = getT()
   try {
     const session = await auth()
     if (!session?.user?.id) {
@@ -54,14 +55,14 @@ export async function POST(
     const mode: 'single' | 'full' = body?.mode === 'full' ? 'full' : 'single'
     const buyMissing: boolean = body?.buyMissing === true
     if (!inventoryId && !equipmentId) {
-      return NextResponse.json({ error: 'inventoryId ou equipmentId é obrigatório' }, { status: 400 })
+      return NextResponse.json({ error: t('inventoryId or equipmentId is required') }, { status: 400 })
     }
 
     const character = await prisma.character.findFirst({
       where: { id: params.characterId, userId: session.user.id },
     })
     if (!character) {
-      return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+      return NextResponse.json({ error: t('Character not found') }, { status: 404 })
     }
 
     // Tudo dentro da transação: alvo, material e gold são lidos e gravados no

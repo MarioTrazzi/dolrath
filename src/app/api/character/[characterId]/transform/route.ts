@@ -19,11 +19,13 @@ import {
 } from '@/lib/transformationSystem'
 import { regenAndPersist } from '@/lib/staminaServer'
 import { requireApiActor } from '@/lib/botFleetAuth'
+import { getT } from '@/lib/i18n/server'
 
 export async function POST(
   req: NextRequest,
   { params }: { params: { characterId: string } }
 ) {
+  const t = getT()
   try {
     const { characterId } = params
     const { transformationType, arena } = await req.json()
@@ -35,16 +37,16 @@ export async function POST(
     const isArena = arena === true
 
     if (!characterId) {
-      return NextResponse.json({ error: 'Character ID é obrigatório' }, { status: 400 })
+      return NextResponse.json({ error: t('Character ID is required') }, { status: 400 })
     }
 
     if (!transformationType) {
-      return NextResponse.json({ error: 'Tipo de transformação é obrigatório' }, { status: 400 })
+      return NextResponse.json({ error: t('Transformation type is required') }, { status: 400 })
     }
 
     if (!Object.keys(TRANSFORMATION_CONFIG).includes(transformationType)) {
       return NextResponse.json({
-        error: 'Tipo de transformação inválido',
+        error: t('Invalid transformation type'),
         validTypes: Object.keys(TRANSFORMATION_CONFIG)
       }, { status: 400 })
     }
@@ -60,7 +62,7 @@ export async function POST(
     })
 
     if (!character) {
-      return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+      return NextResponse.json({ error: t('Character not found') }, { status: 404 })
     }
 
     character.stamina = (await regenAndPersist(character)).stamina
@@ -68,19 +70,19 @@ export async function POST(
     const type = transformationType as TransformationType
     const allowed = getRaceTransformations(character.race)
     if (allowed.length === 0) {
-      return NextResponse.json({ error: 'Sua raça não possui habilidade de transformação', canTransform: false }, { status: 400 })
+      return NextResponse.json({ error: t('Your race has no transformation ability'), canTransform: false }, { status: 400 })
     }
     if (!allowed.includes(type)) {
-      return NextResponse.json({ error: 'Sua raça não pode assumir essa forma', canTransform: false }, { status: 400 })
+      return NextResponse.json({ error: t('Your race cannot take this form'), canTransform: false }, { status: 400 })
     }
     const unlocked = (character.unlockedTransformation || '') as TransformationType
     if (allowed.length > 1 && unlocked && unlocked !== type) {
-      return NextResponse.json({ error: 'Você só pode assumir a forma escolhida na criação', canTransform: false }, { status: 400 })
+      return NextResponse.json({ error: t('You can only take the form chosen at creation'), canTransform: false }, { status: 400 })
     }
 
     const config = TRANSFORMATION_CONFIG[type]
     if (!config) {
-      return NextResponse.json({ error: 'Tipo de transformação inválido' }, { status: 400 })
+      return NextResponse.json({ error: t('Invalid transformation type') }, { status: 400 })
     }
 
     if (!isArena && character.mp < config.cost.mp) {
@@ -162,6 +164,7 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { characterId: string } }
 ) {
+  const t = getT()
   try {
     const { characterId } = params
 
@@ -170,7 +173,7 @@ export async function GET(
     })
 
     if (!character) {
-      return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+      return NextResponse.json({ error: t('Character not found') }, { status: 404 })
     }
 
     const availableTransformations = getRaceTransformations(character.race)

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getCharacterNftOwner } from '@/lib/characterMarketOnchain'
 import { verifyCharacterListingCancelledTx } from '@/lib/characterMarketVerify'
 import { NextResponse } from 'next/server'
+import { getT } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,6 +16,7 @@ function isHex32Bytes(txHash: string): boolean {
 // resolve pela chain — se a NFT voltou para a carteira do dono, a listagem
 // acabou, não importa como. Assim uma limpeza nunca fica presa a uma tx perdida.
 export async function POST(req: Request) {
+  const t = getT()
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -27,7 +29,7 @@ export async function POST(req: Request) {
     const txHash = (typeof body?.txHash === 'string' ? body.txHash : '').trim()
 
     if (!characterId) {
-      return NextResponse.json({ error: 'characterId é obrigatório' }, { status: 400 })
+      return NextResponse.json({ error: t('characterId is required') }, { status: 400 })
     }
     if (txHash && !isHex32Bytes(txHash)) {
       return NextResponse.json({ error: 'Invalid txHash' }, { status: 400 })
@@ -41,7 +43,7 @@ export async function POST(req: Request) {
 
     const character = await prisma.character.findFirst({ where: { id: characterId, userId } })
     if (!character) {
-      return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+      return NextResponse.json({ error: t('Character not found') }, { status: 404 })
     }
 
     if (txHash) {
@@ -57,7 +59,7 @@ export async function POST(req: Request) {
       const owner = await getCharacterNftOwner(character.nftTokenId)
       if (owner.toLowerCase() !== walletAddress.toLowerCase()) {
         return NextResponse.json(
-          { error: 'A NFT ainda não voltou para a sua carteira — a listagem segue ativa.', onchainOwner: owner },
+          { error: t('The NFT has not come back to your wallet yet — the listing is still active.'), onchainOwner: owner },
           { status: 409 }
         )
       }

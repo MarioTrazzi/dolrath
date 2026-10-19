@@ -9,6 +9,7 @@ import {
   enrollCharacter,
   getSeasonPot,
 } from '@/lib/seasonPool'
+import { getT } from '@/lib/i18n/server'
 
 function isHex32Bytes(txHash: string): boolean {
   return /^0x[0-9a-fA-F]{64}$/.test(txHash)
@@ -19,6 +20,7 @@ function isHex32Bytes(txHash: string): boolean {
  * quais heróis do jogador já estão dentro.
  */
 export async function GET() {
+  const t = getT()
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -77,6 +79,7 @@ export async function GET() {
  * `DOL_TOKEN_ADDRESS` guarda o token de PAGAMENTO (USDC), não o DOL.
  */
 export async function POST(request: NextRequest) {
+  const t = getT()
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -99,7 +102,7 @@ export async function POST(request: NextRequest) {
     const txHash = typeof body.txHash === 'string' ? body.txHash.trim() : ''
 
     if (!characterId) {
-      return NextResponse.json({ error: 'characterId obrigatório' }, { status: 400 })
+      return NextResponse.json({ error: t('characterId is required') }, { status: 400 })
     }
 
     const treasuryAddress = (process.env.DOL_TREASURY_ADDRESS || '').trim()
@@ -119,7 +122,7 @@ export async function POST(request: NextRequest) {
     ])
 
     if (!character || character.userId !== session.user.id) {
-      return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+      return NextResponse.json({ error: t('Character not found') }, { status: 404 })
     }
     if (!user?.walletAddress) {
       return NextResponse.json({ error: 'Conta sem carteira vinculada' }, { status: 400 })
@@ -143,7 +146,7 @@ export async function POST(request: NextRequest) {
     if (!txHash) {
       return NextResponse.json(
         {
-          error: 'Pagamento necessário para inscrever o herói',
+          error: t('Payment required to enroll the hero'),
           requiresPayment: true,
           amountDol: SEASON_ENTRY_DOL,
           treasuryAddress,
@@ -154,7 +157,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!isHex32Bytes(txHash)) {
-      return NextResponse.json({ error: 'txHash inválido' }, { status: 400 })
+      return NextResponse.json({ error: t('Invalid txHash') }, { status: 400 })
     }
 
     await verifyDolTransferTx({

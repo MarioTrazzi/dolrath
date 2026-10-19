@@ -25,6 +25,7 @@ import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { generateTransformationImage, TransformationGenError } from '@/lib/transformationImageGen'
 import { consumeAiGenPayment, releaseAiGenPayment, AiGenPaymentError } from '@/lib/aiGenPayment'
 import { rateLimitAllow, rateLimited429 } from '@/lib/rateLimit'
+import { getT } from '@/lib/i18n/server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -40,6 +41,7 @@ type Body = {
 }
 
 export async function POST(req: Request) {
+  const t = getT()
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -49,17 +51,17 @@ export async function POST(req: Request) {
   try {
     body = (await req.json()) as Body
   } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 })
+    return NextResponse.json({ error: t('Invalid JSON') }, { status: 400 })
   }
 
   const baseImage = String(body?.baseImage || '').trim()
   const transformationType = String(body?.transformationType || '').trim()
 
   if (!baseImage) {
-    return NextResponse.json({ error: 'baseImage é obrigatório' }, { status: 400 })
+    return NextResponse.json({ error: t('baseImage is required') }, { status: 400 })
   }
   if (!transformationType) {
-    return NextResponse.json({ error: 'transformationType é obrigatório' }, { status: 400 })
+    return NextResponse.json({ error: t('transformationType is required') }, { status: 400 })
   }
 
   // 💸 Arte da forma sem regen = caminho GRÁTIS (criação). Teto por conta para
@@ -75,7 +77,7 @@ export async function POST(req: Request) {
     if (body?.regen) {
       const walletAddress = (session.user.walletAddress || '').trim()
       if (!walletAddress) {
-        return NextResponse.json({ error: 'Carteira não vinculada' }, { status: 403 })
+        return NextResponse.json({ error: t('Wallet not linked') }, { status: 403 })
       }
       await consumeAiGenPayment({
         userId: session.user.id,

@@ -16,6 +16,7 @@ import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { getRaceTransformations, TransformationType } from '@/lib/transformationSystem'
 import { generateTransformationImage, TransformationGenError } from '@/lib/transformationImageGen'
+import { getT } from '@/lib/i18n/server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -25,6 +26,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { characterId: string } }
 ) {
+  const t = getT()
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -32,14 +34,14 @@ export async function POST(
 
   const { characterId } = params
   if (!characterId) {
-    return NextResponse.json({ error: 'Character ID é obrigatório' }, { status: 400 })
+    return NextResponse.json({ error: t('Character ID is required') }, { status: 400 })
   }
 
   const body = (await req.json().catch(() => ({}))) as { transformationType?: string }
 
   const character = await prisma.character.findUnique({ where: { id: characterId } })
   if (!character) {
-    return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+    return NextResponse.json({ error: t('Character not found') }, { status: 404 })
   }
   if (character.userId !== session.user.id) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -48,7 +50,7 @@ export async function POST(
   const raceForms = getRaceTransformations(character.race)
   if (raceForms.length === 0) {
     return NextResponse.json(
-      { error: 'Esta raça não possui transformação' },
+      { error: t('This race has no transformation') },
       { status: 400 }
     )
   }
@@ -64,7 +66,7 @@ export async function POST(
   if (!transformationType) {
     return NextResponse.json(
       {
-        error: 'Escolha uma forma de transformação',
+        error: t('Choose a transformation form'),
         availableForms: raceForms,
       },
       { status: 400 }
@@ -88,7 +90,7 @@ export async function POST(
   const baseImage = character.avatar
   if (!baseImage) {
     return NextResponse.json(
-      { error: 'Personagem não tem imagem base (avatar) para gerar a transformação' },
+      { error: t('Character has no base image (avatar) to generate the transformation') },
       { status: 400 }
     )
   }

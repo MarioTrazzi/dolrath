@@ -9,6 +9,7 @@ import { mergePromptWithClaude, mergeEditPromptWithClaude } from '@/lib/anthropi
 import { openaiImageEdit, ImageEditError } from '@/lib/openaiImageEdit';
 import { consumeAiGenPayment, releaseAiGenPayment, AiGenPaymentError } from '@/lib/aiGenPayment';
 import { rateLimitAllow, rateLimited429 } from '@/lib/rateLimit';
+import { getT } from '@/lib/i18n/server'
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -41,6 +42,7 @@ const clampInt = (value: unknown, min: number, max: number, fallback: number) =>
 };
 
 export async function POST(req: Request) {
+  const t = getT()
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
@@ -58,7 +60,7 @@ export async function POST(req: Request) {
   try {
     body = (await req.json()) as Body;
   } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
+    return NextResponse.json({ error: t('Invalid JSON') }, { status: 400 });
   }
 
   // Paid re-generation: edits the CURRENT portrait (image-to-image) applying
@@ -67,11 +69,11 @@ export async function POST(req: Request) {
   if (body?.edit) {
     const baseImage = String(body?.baseImage || '').trim();
     if (!baseImage) {
-      return NextResponse.json({ error: 'baseImage é obrigatório para regerar' }, { status: 400 });
+      return NextResponse.json({ error: t('baseImage is required to regenerate') }, { status: 400 });
     }
     const walletAddress = (session.user.walletAddress || '').trim();
     if (!walletAddress) {
-      return NextResponse.json({ error: 'Carteira não vinculada' }, { status: 403 });
+      return NextResponse.json({ error: t('Wallet not linked') }, { status: 403 });
     }
 
     const modification = String(body?.modification || '').trim();
@@ -152,7 +154,7 @@ export async function POST(req: Request) {
   }
 
   if (!prompt) {
-    return NextResponse.json({ error: 'Prompt obrigatório' }, { status: 400 });
+    return NextResponse.json({ error: t('Prompt is required') }, { status: 400 });
   }
 
   // 💸 Caminho GRÁTIS (sem pagamento de DOL): cada chamada custa Claude + OpenAI

@@ -8,6 +8,7 @@ import {
   getCharacterMarketPayTokenContract,
 } from '@/lib/characterMarketOnchain'
 import { getCharacterNftContractAddress } from '@/lib/characterNftOnchain'
+import { getT } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,6 +19,7 @@ export const dynamic = 'force-dynamic'
 // approve + createListing(tokenId, priceDol). A garantia final fica no
 // purchase-confirm, que sempre devolve qualquer item remanescente ao vendedor.
 export async function POST(req: Request) {
+  const t = getT()
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -27,7 +29,7 @@ export async function POST(req: Request) {
   try {
     const { characterId } = await req.json()
     if (!characterId) {
-      return NextResponse.json({ error: 'characterId é obrigatório' }, { status: 400 })
+      return NextResponse.json({ error: t('characterId is required') }, { status: 400 })
     }
 
     const user = await prisma.user.findUnique({ where: { id: userId } })
@@ -40,11 +42,11 @@ export async function POST(req: Request) {
       where: { id: characterId, userId },
     })
     if (!character) {
-      return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+      return NextResponse.json({ error: t('Character not found') }, { status: 404 })
     }
     if (character.nftTokenId == null) {
       return NextResponse.json(
-        { error: 'Este personagem ainda não é uma NFT. Registre o personagem on-chain antes de vender.', requiresMint: true },
+        { error: t('This character is not an NFT yet. Register the character on-chain before selling.'), requiresMint: true },
         { status: 409 }
       )
     }
@@ -52,7 +54,7 @@ export async function POST(req: Request) {
     if (character.marketListingId != null) {
       return NextResponse.json(
         {
-          error: 'Este personagem já está listado no mercado. Cancele a listagem atual antes de criar outra.',
+          error: t('This character is already listed on the market. Cancel the current listing before creating another.'),
           alreadyListed: true,
           listingId: character.marketListingId.toString(),
         },

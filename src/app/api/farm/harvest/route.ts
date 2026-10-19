@@ -12,7 +12,7 @@ import { addDropToInventoryTx } from '@/lib/dungeonRunServer'
 import { addHistoryEntry } from '@/lib/characterHistory'
 import { advanceQuestProgress } from '@/lib/questServer'
 import { localizeServerError } from '@/lib/i18n/serverErrors'
-import { getLocaleFromRequest } from '@/lib/i18n/server'
+import { getLocaleFromRequest, getT } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,6 +30,7 @@ interface HarvestItemResult {
 // inventário lotar no meio, para ali (nada é perdido — libere espaço e colha
 // de novo).
 export async function POST(req: NextRequest) {
+  const t = getT()
   const resolved = await requireApiActor(req)
   if ('error' in resolved) return resolved.error
   const userId = resolved.actor.userId
@@ -37,13 +38,13 @@ export async function POST(req: NextRequest) {
   try {
     const { characterId, slotIndex } = await req.json()
     if (!characterId) {
-      return NextResponse.json({ error: 'characterId é obrigatório' }, { status: 400 })
+      return NextResponse.json({ error: t('characterId is required') }, { status: 400 })
     }
     const isPen = Number(slotIndex) === PEN_SLOT_INDEX
 
     const rawCharacter = await prisma.character.findFirst({ where: { id: characterId, userId } })
     if (!rawCharacter) {
-      return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+      return NextResponse.json({ error: t('Character not found') }, { status: 404 })
     }
     const character = await regenAndPersist(rawCharacter)
     const farmLevel = getProfessionLevel(await getUserFarmXp(userId))

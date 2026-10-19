@@ -2,6 +2,7 @@ import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { verifyCharacterListedTx } from '@/lib/characterMarketVerify'
 import { NextResponse } from 'next/server'
+import { getT } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,6 +15,7 @@ function isHex32Bytes(txHash: string): boolean {
 // continuam sendo decididos na chain —, mas é o que permite à UI mostrar
 // "à venda", oferecer o cancelamento certo e barrar uma segunda listagem.
 export async function POST(req: Request) {
+  const t = getT()
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -26,7 +28,7 @@ export async function POST(req: Request) {
     const txHash = (typeof body?.txHash === 'string' ? body.txHash : '').trim()
 
     if (!characterId) {
-      return NextResponse.json({ error: 'characterId é obrigatório' }, { status: 400 })
+      return NextResponse.json({ error: t('characterId is required') }, { status: 400 })
     }
     if (!txHash || !isHex32Bytes(txHash)) {
       return NextResponse.json({ error: 'Invalid txHash' }, { status: 400 })
@@ -40,7 +42,7 @@ export async function POST(req: Request) {
 
     const character = await prisma.character.findFirst({ where: { id: characterId, userId } })
     if (!character) {
-      return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+      return NextResponse.json({ error: t('Character not found') }, { status: 404 })
     }
     if (character.nftTokenId == null) {
       return NextResponse.json({ error: 'Personagem sem NFT' }, { status: 409 })

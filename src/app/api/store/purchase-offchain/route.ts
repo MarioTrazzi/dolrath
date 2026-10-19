@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { assertInventoryRoom } from '@/lib/inventoryMutations'
 import { isShopItem } from '@/lib/itemCatalog'
 import { localizeServerError } from '@/lib/i18n/serverErrors'
-import { getLocaleFromRequest } from '@/lib/i18n/server'
+import { getLocaleFromRequest, getT } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,6 +15,7 @@ export const dynamic = 'force-dynamic'
 // depois, ao listar no marketplace (lazy mint). Preço é servidor-autoritativo
 // (item.goldPrice do catálogo); o cliente nunca envia o valor.
 export async function POST(req: NextRequest) {
+  const t = getT()
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -24,7 +25,7 @@ export async function POST(req: NextRequest) {
   try {
     const { itemId, characterId, quantity } = await req.json()
     if (!itemId || !characterId) {
-      return NextResponse.json({ error: 'itemId e characterId são obrigatórios' }, { status: 400 })
+      return NextResponse.json({ error: t('itemId and characterId are required') }, { status: 400 })
     }
     const qty = Math.max(1, Math.min(99, Math.floor(Number(quantity) || 1)))
 
@@ -32,12 +33,12 @@ export async function POST(req: NextRequest) {
       prisma.item.findUnique({ where: { id: itemId } }),
       prisma.character.findFirst({ where: { id: characterId, userId } }),
     ])
-    if (!item) return NextResponse.json({ error: 'Item não encontrado' }, { status: 404 })
-    if (!character) return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+    if (!item) return NextResponse.json({ error: t('Item not found') }, { status: 404 })
+    if (!character) return NextResponse.json({ error: t('Character not found') }, { status: 404 })
     // Só o que a vitrine vende. Sem isto qualquer id do catálogo (pedra de
     // aprimoramento, drop de chefe) saía pelo goldPrice default.
     if (!isShopItem(item)) {
-      return NextResponse.json({ error: 'Este item não é vendido na loja' }, { status: 400 })
+      return NextResponse.json({ error: t('This item is not sold in the shop') }, { status: 400 })
     }
 
     const unitPrice = Math.max(0, Math.floor(item.goldPrice ?? 0))

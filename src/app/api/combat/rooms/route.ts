@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getT } from '@/lib/i18n/server'
 
 // Store in-memory (lobby metadata). Senha autoritativa no join do socket.
 type StoredRoom = {
@@ -19,6 +20,7 @@ type StoredRoom = {
 let rooms: StoredRoom[] = []
 
 export async function GET(request: NextRequest) {
+  const t = getT()
   try {
     const oneHourAgo = new Date(Date.now() - 3600000)
     rooms = rooms.filter(
@@ -37,13 +39,14 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const t = getT()
   try {
     const body = await request.json()
     const { name, isPrivate, createdBy, createdByName, password } = body
 
     if (!name || !createdBy || !createdByName) {
       return NextResponse.json(
-        { error: 'Dados obrigatórios não fornecidos' },
+        { error: t('Required data not provided') },
         { status: 400 }
       )
     }
@@ -96,12 +99,13 @@ export async function POST(request: NextRequest) {
 
 /** Valida senha de sala (opcional — socket é a autoridade no join). */
 export async function PATCH(request: NextRequest) {
+  const t = getT()
   try {
     const body = await request.json()
     const { roomId, password } = body
     const room = rooms.find((r) => r.id === roomId)
     if (!room) {
-      return NextResponse.json({ error: 'Sala não encontrada' }, { status: 404 })
+      return NextResponse.json({ error: t('Room not found') }, { status: 404 })
     }
     if (!room.hasPassword) {
       return NextResponse.json({ ok: true })

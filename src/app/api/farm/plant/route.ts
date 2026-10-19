@@ -6,7 +6,7 @@ import { getCropById, cropPlantXp } from '@/lib/farming'
 import { farmPlotCount, getProfessionLevel } from '@/lib/professionSystem'
 import { isSeedItem } from '@/lib/itemCatalog'
 import { localizeServerError } from '@/lib/i18n/serverErrors'
-import { getLocaleFromRequest } from '@/lib/i18n/server'
+import { getLocaleFromRequest, getT } from '@/lib/i18n/server'
 import { takeFromCharacterInventory, InventoryQuantityError } from '@/lib/inventoryMutations'
 
 export const dynamic = 'force-dynamic'
@@ -15,6 +15,7 @@ export const dynamic = 'force-dynamic'
 // semente do inventário do personagem ativo e credita um XP pequeno a ele —
 // plantar NÃO custa stamina (o custo mora na colheita: 1⚡ por canteiro).
 export async function POST(req: NextRequest) {
+  const t = getT()
   const resolved = await requireApiActor(req)
   if ('error' in resolved) return resolved.error
   const userId = resolved.actor.userId
@@ -23,17 +24,17 @@ export async function POST(req: NextRequest) {
     const { characterId, slotIndex, cropId } = await req.json()
     const slot = Number(slotIndex)
     if (!characterId || !Number.isInteger(slot) || !cropId) {
-      return NextResponse.json({ error: 'characterId, slotIndex e cropId são obrigatórios' }, { status: 400 })
+      return NextResponse.json({ error: t('characterId, slotIndex and cropId are required') }, { status: 400 })
     }
 
     const crop = getCropById(String(cropId))
     if (!crop) {
-      return NextResponse.json({ error: 'Cultivo inválido' }, { status: 400 })
+      return NextResponse.json({ error: t('Invalid crop') }, { status: 400 })
     }
 
     const character = await prisma.character.findFirst({ where: { id: characterId, userId } })
     if (!character) {
-      return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+      return NextResponse.json({ error: t('Character not found') }, { status: 404 })
     }
 
     const unlocked = farmPlotCount(getProfessionLevel(await getUserFarmXp(userId)))

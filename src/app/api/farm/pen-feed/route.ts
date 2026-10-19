@@ -7,7 +7,7 @@ import { PEN, PEN_SLOT_INDEX } from '@/lib/farming'
 import { getUserFarmXp } from '@/lib/farmServer'
 import { getProfessionLevel, FARM_PEN_MIN_LEVEL } from '@/lib/professionSystem'
 import { localizeServerError } from '@/lib/i18n/serverErrors'
-import { getLocaleFromRequest } from '@/lib/i18n/server'
+import { getLocaleFromRequest, getT } from '@/lib/i18n/server'
 import { takeFromCharacterInventory, InventoryQuantityError } from '@/lib/inventoryMutations'
 
 export const dynamic = 'force-dynamic'
@@ -15,6 +15,7 @@ export const dynamic = 'force-dynamic'
 // 🐄 Alimenta o cercado com 1 Ração e inicia o ciclo de produção de Couro
 // (colhe em /api/farm/harvest com slotIndex 101 quando o ciclo terminar).
 export async function POST(req: NextRequest) {
+  const t = getT()
   const resolved = await requireApiActor(req)
   if ('error' in resolved) return resolved.error
   const userId = resolved.actor.userId
@@ -22,12 +23,12 @@ export async function POST(req: NextRequest) {
   try {
     const { characterId } = await req.json()
     if (!characterId) {
-      return NextResponse.json({ error: 'characterId é obrigatório' }, { status: 400 })
+      return NextResponse.json({ error: t('characterId is required') }, { status: 400 })
     }
 
     const rawCharacter = await prisma.character.findFirst({ where: { id: characterId, userId } })
     if (!rawCharacter) {
-      return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+      return NextResponse.json({ error: t('Character not found') }, { status: 404 })
     }
     const character = await regenAndPersist(rawCharacter)
 

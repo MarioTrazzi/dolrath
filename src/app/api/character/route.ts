@@ -10,6 +10,7 @@ import { rollCreationStatsFromPaymentProof } from '@/lib/characterCreationRoll'
 import { getRaceTransformations } from '@/lib/transformationSystem'
 import { SKILL_TREE_VERSION } from '@/lib/skillTree'
 import { computeDerivedStats } from '@/lib/combatFormulas'
+import { getT } from '@/lib/i18n/server'
 
 function serializeBigIntForJson<T>(value: T): T {
   return JSON.parse(
@@ -18,6 +19,7 @@ function serializeBigIntForJson<T>(value: T): T {
 }
 
 export async function POST(req: Request) {
+  const t = getT()
   const session = await auth()
 
   if (!session?.user?.id) {
@@ -417,7 +419,7 @@ export async function POST(req: Request) {
         // ignore and fall back to the generic message
       }
 
-      return NextResponse.json({ error: 'Pagamento já utilizado para criar outro personagem' }, { status: 409 })
+      return NextResponse.json({ error: t('Payment already used to create another character') }, { status: 409 })
     }
     console.error('Error creating character:', error)
     let errorMessage = 'Error creating character'
@@ -429,6 +431,7 @@ export async function POST(req: Request) {
 }
 
 export async function GET(req: Request) {
+  const t = getT()
   const session = await auth()
 
   if (!session?.user?.id) {

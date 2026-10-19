@@ -8,6 +8,7 @@ import { getProfessionLevel } from '@/lib/professionSystem'
 import { findOpenGatheringSession, getGatherGearBonus } from '@/lib/gatheringServer'
 import { TOOL_CATALOG } from '@/lib/itemCatalog'
 import { freeInventorySlots } from '@/lib/inventoryMutations'
+import { getT } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,6 +18,7 @@ export const dynamic = 'force-dynamic'
 // (é o objetivo: os reservas trabalham enquanto o principal batalha) — mas o
 // mesmo herói não pode coletar e estar em masmorra ao mesmo tempo.
 export async function POST(req: Request) {
+  const t = getT()
   const resolved = await requireApiActor(req)
   if ('error' in resolved) return resolved.error
   const userId = resolved.actor.userId
@@ -24,20 +26,20 @@ export async function POST(req: Request) {
   try {
     const { characterId, fieldId } = await req.json()
     if (!characterId || !fieldId) {
-      return NextResponse.json({ error: 'characterId e fieldId são obrigatórios' }, { status: 400 })
+      return NextResponse.json({ error: t('characterId and fieldId are required') }, { status: 400 })
     }
 
     const field = getGatherField(String(fieldId))
     if (!field) {
-      return NextResponse.json({ error: 'Campo de coleta inválido' }, { status: 400 })
+      return NextResponse.json({ error: t('Invalid gathering field') }, { status: 400 })
     }
 
     const rawCharacter = await prisma.character.findFirst({ where: { id: characterId, userId } })
     if (!rawCharacter) {
-      return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+      return NextResponse.json({ error: t('Character not found') }, { status: 404 })
     }
     if (!rawCharacter.isAlive) {
-      return NextResponse.json({ error: 'Herói caído não pode coletar. Reviva-o antes.' }, { status: 400 })
+      return NextResponse.json({ error: t('A fallen hero cannot gather. Revive them first.') }, { status: 400 })
     }
 
     // Regen pendente entra ANTES de abrir a sessão (depois dela ativa, o regen
@@ -105,7 +107,7 @@ export async function POST(req: Request) {
     })
     if (run && isRunLive(run)) {
       return NextResponse.json(
-        { error: 'Este herói está em uma masmorra. Saia da run antes de coletar.', code: 'HERO_IN_USE' },
+        { error: t('This hero is in a dungeon. Leave the run before gathering.'), code: 'HERO_IN_USE' },
         { status: 409 }
       )
     }

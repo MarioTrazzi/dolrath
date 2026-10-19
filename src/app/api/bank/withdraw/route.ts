@@ -2,7 +2,7 @@ import { NextResponse, NextRequest } from 'next/server'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { localizeServerError } from '@/lib/i18n/serverErrors'
-import { getLocaleFromRequest } from '@/lib/i18n/server'
+import { getLocaleFromRequest, getT } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,6 +10,7 @@ export const dynamic = 'force-dynamic'
 // personagem (Character.gold), habilitando-o a comprar no ferreiro/alquimista.
 // Qualquer personagem da conta pode sacar do banco compartilhado.
 export async function POST(req: NextRequest) {
+  const t = getT()
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -19,9 +20,9 @@ export async function POST(req: NextRequest) {
   try {
     const { characterId, amount } = await req.json()
     const value = Math.floor(Number(amount))
-    if (!characterId) return NextResponse.json({ error: 'characterId é obrigatório' }, { status: 400 })
+    if (!characterId) return NextResponse.json({ error: t('characterId is required') }, { status: 400 })
     if (!Number.isFinite(value) || value <= 0) {
-      return NextResponse.json({ error: 'Quantia inválida' }, { status: 400 })
+      return NextResponse.json({ error: t('Invalid amount') }, { status: 400 })
     }
 
     const result = await prisma.$transaction(async (tx) => {

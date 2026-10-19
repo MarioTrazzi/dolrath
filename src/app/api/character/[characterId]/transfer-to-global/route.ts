@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { takeFromCharacterInventory, InventoryQuantityError } from '@/lib/inventoryMutations';
+import { getT } from '@/lib/i18n/server'
 
 export async function POST(
   req: NextRequest,
   { params }: { params: { characterId: string } }
 ) {
+  const t = getT()
   const session = await auth();
 
   if (!session || !session.user?.id) {
@@ -65,7 +67,7 @@ export async function POST(
 
     if (characterInventoryItem.durability < characterInventoryItem.maxDurability) {
       return NextResponse.json(
-        { error: 'Item desgastado não pode ir ao Baú Geral. Repare-o no ferreiro antes de transferir.' },
+        { error: t('A worn item cannot go to the Global Chest. Repair it at the blacksmith before transferring.') },
         { status: 400 }
       );
     }

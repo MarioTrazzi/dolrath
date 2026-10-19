@@ -3,8 +3,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { materialSystem } from '@/lib/materialSystem'
 import { MATERIALS, getMaterialById } from '@/lib/dungeonData'
+import { getT } from '@/lib/i18n/server'
 
 export async function GET(request: NextRequest) {
+  const t = getT()
   try {
     const searchParams = request.nextUrl.searchParams
     const characterId = searchParams.get('characterId')
@@ -12,7 +14,7 @@ export async function GET(request: NextRequest) {
     
     if (!characterId) {
       return NextResponse.json(
-        { error: 'CharacterId é obrigatório' },
+        { error: t('CharacterId is required') },
         { status: 400 }
       )
     }
@@ -34,7 +36,7 @@ export async function GET(request: NextRequest) {
         // Obter receitas de crafting disponíveis
         // Precisamos de dados do personagem para isso
         return NextResponse.json({
-          error: 'Dados do personagem necessários para receitas'
+          error: t('Character data is required for recipes')
         }, { status: 400 })
         
       case 'transactions':
@@ -69,12 +71,13 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const t = getT()
   try {
     const { action, characterId, characterData, ...data } = await request.json()
     
     if (!characterId) {
       return NextResponse.json(
-        { error: 'CharacterId é obrigatório' },
+        { error: t('CharacterId is required') },
         { status: 400 }
       )
     }
@@ -86,7 +89,7 @@ export async function POST(request: NextRequest) {
         
         if (!recipeId || typeof characterTokens !== 'number') {
           return NextResponse.json(
-            { error: 'RecipeId e characterTokens são obrigatórios' },
+            { error: t('RecipeId and characterTokens are required') },
             { status: 400 }
           )
         }
@@ -124,7 +127,7 @@ export async function POST(request: NextRequest) {
         
         if (!buyOffers || !Array.isArray(buyOffers) || typeof tokens !== 'number') {
           return NextResponse.json(
-            { error: 'buyOffers e characterTokens são obrigatórios' },
+            { error: t('buyOffers and characterTokens are required') },
             { status: 400 }
           )
         }
@@ -141,7 +144,7 @@ export async function POST(request: NextRequest) {
         } else {
           return NextResponse.json({
             success: false,
-            message: 'Tokens insuficientes para comprar os materiais'
+            message: t('Not enough tokens to buy the materials')
           })
         }
         
@@ -149,7 +152,7 @@ export async function POST(request: NextRequest) {
         // Obter receitas disponíveis para o personagem
         if (!characterData) {
           return NextResponse.json(
-            { error: 'CharacterData é obrigatório para obter receitas' },
+            { error: t('CharacterData is required to get recipes') },
             { status: 400 }
           )
         }
@@ -170,7 +173,7 @@ export async function POST(request: NextRequest) {
         
       default:
         return NextResponse.json(
-          { error: 'Ação não reconhecida' },
+          { error: t('Unrecognized action') },
           { status: 400 }
         )
     }

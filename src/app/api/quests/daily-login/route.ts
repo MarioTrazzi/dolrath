@@ -3,6 +3,7 @@ import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { dailyLoginGold } from '@/lib/questCatalog'
 import { utcDayKey } from '@/lib/questServer'
+import { getT } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,6 +12,7 @@ export const dynamic = 'force-dynamic'
 // o unique (userId, dayKey) transforma corrida/reenvio em P2002 → 409 deduped
 // (mesmo padrão de idempotência do PvP). Streak = streak de ontem + 1.
 export async function POST() {
+  const t = getT()
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -38,7 +40,7 @@ export async function POST() {
     return NextResponse.json(result)
   } catch (error: unknown) {
     if (typeof error === 'object' && error !== null && (error as { code?: string }).code === 'P2002') {
-      return NextResponse.json({ error: 'Recompensa de hoje já resgatada.', deduped: true }, { status: 409 })
+      return NextResponse.json({ error: t('Today\'s reward was already claimed.'), deduped: true }, { status: 409 })
     }
     console.error('Error claiming daily login:', error)
     return NextResponse.json({ error: 'Failed to claim daily login' }, { status: 500 })

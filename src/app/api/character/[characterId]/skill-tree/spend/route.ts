@@ -9,6 +9,7 @@ import {
   getSkillTree,
   getSkillTreeState,
 } from '@/lib/skillTree';
+import { getT } from '@/lib/i18n/server'
 
 function serializeBigIntForJson<T>(value: T): T {
   return JSON.parse(
@@ -23,6 +24,7 @@ function serializeBigIntForJson<T>(value: T): T {
  * Nó de stat aplica o MESMO recálculo do distribute-points (attributeRecalc.ts).
  */
 export async function POST(request: NextRequest, { params }: { params: { characterId: string } }) {
+  const t = getT()
   const session = await auth();
 
   if (!session?.user?.id) {
@@ -32,7 +34,7 @@ export async function POST(request: NextRequest, { params }: { params: { charact
   try {
     const { nodeId } = await request.json();
     if (!nodeId || typeof nodeId !== 'string') {
-      return NextResponse.json({ error: 'nodeId inválido' }, { status: 400 });
+      return NextResponse.json({ error: t('Invalid nodeId') }, { status: 400 });
     }
 
     // Toda a validação + escrita roda numa transação Serializable: sem isto, dois

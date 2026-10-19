@@ -5,11 +5,13 @@ import { EquipmentSlotType } from '@prisma/client'
 import { recordEquipmentChange } from '@/lib/characterHistory'
 import { canEquip, ItemTypeStr, RaceId } from '@/lib/itemCatalog'
 import { restoreItemToInventory, removeOneFromInventory } from '@/lib/inventoryMutations'
+import { getT } from '@/lib/i18n/server'
 
 export async function POST(
   request: NextRequest,
   { params }: { params: { characterId: string } }
 ) {
+  const t = getT()
   console.log("=== EQUIP API WORKING ===");
   console.log("Character ID:", params.characterId);
   
@@ -74,7 +76,7 @@ export async function POST(
     // equipada (senão sairia do inventário e ainda viraria NFT). Trava expira só.
     const lockedAt = (characterInventoryItem as any).listingLockedAt as Date | null
     if (lockedAt && Date.now() - new Date(lockedAt).getTime() < 20 * 60_000) {
-      return NextResponse.json({ error: 'Esta peça está sendo listada no mercado. Aguarde alguns minutos.' }, { status: 409 });
+      return NextResponse.json({ error: t('This piece is being listed on the market. Wait a few minutes.') }, { status: 409 });
     }
 
     // Verificar se o personagem tem nível suficiente para equipar o item

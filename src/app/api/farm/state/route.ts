@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { regenAndPersist } from '@/lib/staminaServer'
 import { getFarmState, getUserFarmXp } from '@/lib/farmServer'
 import { freeInventorySlots } from '@/lib/inventoryMutations'
+import { getT } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,6 +14,7 @@ export const dynamic = 'force-dynamic'
 // Tudo computado lazy dos timestamps — esta rota não muda nada além de criar
 // o poço na primeira visita e aplicar o regen passivo de stamina.
 export async function GET(req: Request) {
+  const t = getT()
   const resolved = await requireApiActor(req)
   if ('error' in resolved) return resolved.error
   const userId = resolved.actor.userId
@@ -21,12 +23,12 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url)
     const characterId = searchParams.get('characterId')
     if (!characterId) {
-      return NextResponse.json({ error: 'characterId é obrigatório' }, { status: 400 })
+      return NextResponse.json({ error: t('characterId is required') }, { status: 400 })
     }
 
     const rawCharacter = await prisma.character.findFirst({ where: { id: characterId, userId } })
     if (!rawCharacter) {
-      return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+      return NextResponse.json({ error: t('Character not found') }, { status: 404 })
     }
     const character = await regenAndPersist(rawCharacter)
 

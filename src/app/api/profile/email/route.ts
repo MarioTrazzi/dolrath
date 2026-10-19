@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
+import { getT } from '@/lib/i18n/server'
 
 const bodySchema = z.object({
   email: z.string().email('Email inválido'),
@@ -10,6 +11,7 @@ const bodySchema = z.object({
 // Optional profile completion for wallet users: add an email later
 // (newsletter / account recovery). Requires an authenticated session.
 export async function POST(req: Request) {
+  const t = getT()
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -34,7 +36,7 @@ export async function POST(req: Request) {
   } catch (error: any) {
     if (error?.code === 'P2002') {
       return NextResponse.json(
-        { error: 'Este email já está em uso por outra conta' },
+        { error: t('This email is already used by another account') },
         { status: 409 }
       )
     }

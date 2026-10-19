@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 import { recordAttributeDistribution } from '@/lib/characterHistory';
 import { buildAttributeUpdate } from '@/lib/attributeRecalc';
+import { getT } from '@/lib/i18n/server'
 
 function serializeBigIntForJson<T>(value: T): T {
   return JSON.parse(
@@ -11,6 +12,7 @@ function serializeBigIntForJson<T>(value: T): T {
 }
 
 export async function POST(request: NextRequest, { params }: { params: { characterId: string } }) {
+  const t = getT()
   const session = await auth();
 
   if (!session?.user?.id) {
@@ -53,7 +55,7 @@ export async function POST(request: NextRequest, { params }: { params: { charact
     const totalPointsToSpend = addStr + addAgi + addInt + addDef;
 
     if (totalPointsToSpend <= 0) {
-      return NextResponse.json({ error: 'Você precisa distribuir pelo menos 1 ponto.' }, { status: 400 });
+      return NextResponse.json({ error: t('You need to distribute at least 1 point.') }, { status: 400 });
     }
     
     // Verificar se o personagem tem pontos suficientes
@@ -84,7 +86,7 @@ export async function POST(request: NextRequest, { params }: { params: { charact
     });
     if (claimed.count === 0) {
       return NextResponse.json(
-        { error: 'Os pontos mudaram enquanto você distribuía — recarregue e tente de novo.' },
+        { error: t('Your points changed while you were distributing — reload and try again.') },
         { status: 409 }
       );
     }
@@ -108,7 +110,7 @@ export async function POST(request: NextRequest, { params }: { params: { charact
     return NextResponse.json({
       success: true,
       character: serializeBigIntForJson(updatedCharacter),
-      message: 'Pontos distribuídos com sucesso!'
+      message: t('Points distributed successfully!')
     });
   } catch (error) {
     console.error('Error distributing points:', error);

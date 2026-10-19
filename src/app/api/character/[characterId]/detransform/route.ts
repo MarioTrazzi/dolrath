@@ -7,16 +7,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { revertTransformation } from '@/lib/transformationSystem'
 import { requireApiActor } from '@/lib/botFleetAuth'
+import { getT } from '@/lib/i18n/server'
 
 export async function POST(
   req: NextRequest,
   { params }: { params: { characterId: string } }
 ) {
+  const t = getT()
   try {
     const { characterId } = params
 
     if (!characterId) {
-      return NextResponse.json({ error: 'Character ID é obrigatório' }, { status: 400 })
+      return NextResponse.json({ error: t('Character ID is required') }, { status: 400 })
     }
 
     // 🔒 Dono do herói OU o socket da arena (que limpa a forma ao fim da luta,
@@ -37,13 +39,13 @@ export async function POST(
     })
 
     if (!character) {
-      return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+      return NextResponse.json({ error: t('Character not found') }, { status: 404 })
     }
 
     // Verificar se está transformado
     if (!character.isTransformed) {
       return NextResponse.json({ 
-        error: 'Personagem não está transformado',
+        error: t('Character is not transformed'),
         isTransformed: false 
       }, { status: 400 })
     }
@@ -63,7 +65,7 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      message: '🔄 Transformação revertida com sucesso!',
+      message: t('🔄 Transformation reverted successfully!'),
       character: {
         id: updatedCharacter.id,
         name: updatedCharacter.name,

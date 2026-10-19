@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, NextRequest } from 'next/server'
 import { requireApiActor } from '@/lib/botFleetAuth'
 import { prisma } from '@/lib/prisma'
 import { regenAndPersist } from '@/lib/staminaServer'
@@ -11,6 +11,8 @@ import { getProfessionLevel, getProfessionLevelInfo } from '@/lib/professionSyst
 import { addDropToInventoryTx } from '@/lib/dungeonRunServer'
 import { addHistoryEntry } from '@/lib/characterHistory'
 import { advanceQuestProgress } from '@/lib/questServer'
+import { localizeServerError } from '@/lib/i18n/serverErrors'
+import { getLocaleFromRequest } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,7 +29,7 @@ interface HarvestItemResult {
 // Se a stamina não cobre todos, colhe o que der (o resto fica plantado); se o
 // inventário lotar no meio, para ali (nada é perdido — libere espaço e colha
 // de novo).
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   const resolved = await requireApiActor(req)
   if ('error' in resolved) return resolved.error
   const userId = resolved.actor.userId
@@ -190,6 +192,6 @@ export async function POST(req: Request) {
     const message = error instanceof Error ? error.message : 'Erro interno do servidor'
     const isValidation = /insuficiente|Nada plantado|Nenhum canteiro|crescendo|ciclo|cheio|inválido/i.test(message)
     if (!isValidation) console.error('Error harvesting:', error)
-    return NextResponse.json({ error: message }, { status: isValidation ? 400 : 500 })
+    return NextResponse.json({ error: localizeServerError(message, getLocaleFromRequest(req)) }, { status: isValidation ? 400 : 500 })
   }
 }

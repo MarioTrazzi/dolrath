@@ -1,17 +1,19 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, NextRequest } from 'next/server'
 import { requireApiActor } from '@/lib/botFleetAuth'
 import { prisma } from '@/lib/prisma'
 import { getUserFarmXp } from '@/lib/farmServer'
 import { getCropById, cropPlantXp } from '@/lib/farming'
 import { farmPlotCount, getProfessionLevel } from '@/lib/professionSystem'
 import { isSeedItem } from '@/lib/itemCatalog'
+import { localizeServerError } from '@/lib/i18n/serverErrors'
+import { getLocaleFromRequest } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
 // 🌾 Planta uma semente num canteiro vazio da fazenda da CONTA. Consome 1
 // semente do inventário do personagem ativo e credita um XP pequeno a ele —
 // plantar NÃO custa stamina (o custo mora na colheita: 1⚡ por canteiro).
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   const resolved = await requireApiActor(req)
   if ('error' in resolved) return resolved.error
   const userId = resolved.actor.userId
@@ -90,6 +92,6 @@ export async function POST(req: Request) {
     const message = error instanceof Error ? error.message : 'Erro interno do servidor'
     const isValidation = /insuficiente|não tem|já está|bloqueado/i.test(message)
     if (!isValidation) console.error('Error planting crop:', error)
-    return NextResponse.json({ error: message }, { status: isValidation ? 400 : 500 })
+    return NextResponse.json({ error: localizeServerError(message, getLocaleFromRequest(req)) }, { status: isValidation ? 400 : 500 })
   }
 }

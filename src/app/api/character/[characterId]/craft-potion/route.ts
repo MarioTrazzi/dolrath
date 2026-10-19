@@ -12,6 +12,7 @@ import { consumeFromPool, depositCraftOutput, loadMaterialPool, poolCount } from
 import { getCraftChance, getCraftMinLevel, rollCraftBatch } from '@/lib/craftingProfession'
 import { getUserAlchemyXp } from '@/lib/craftingServer'
 import { getProfessionLevel, getProfessionLevelInfo } from '@/lib/professionSystem'
+import { localizeServerError } from '@/lib/i18n/serverErrors'
 
 // ⚗️ Profissão de ALQUIMIA — crafta poções no Triângulo de Transmutação.
 // Consome os ingredientes + taxa em gold (carteira do personagem) para TODAS
@@ -261,6 +262,6 @@ export async function POST(
     // Erros de validação (gold/ingrediente/inventário cheio/nível) são 400; o resto 500.
     const isValidation = /insuficiente|Falta |Inventário cheio|Baú Geral cheio|Requer Alquimia/.test(message)
     console.error('Error crafting potion:', error)
-    return NextResponse.json({ error: message }, { status: isValidation ? 400 : 500 })
+    return NextResponse.json({ error: localizeServerError(message, getLocaleFromRequest(request)) }, { status: isValidation ? 400 : 500 })
   }
 }

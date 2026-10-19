@@ -1,8 +1,10 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, NextRequest } from 'next/server'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { assertInventoryRoom } from '@/lib/inventoryMutations'
 import { isShopItem } from '@/lib/itemCatalog'
+import { localizeServerError } from '@/lib/i18n/serverErrors'
+import { getLocaleFromRequest } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,7 +14,7 @@ export const dynamic = 'force-dynamic'
 // faucet enche, ANTES do claim — menos gold vira token. A NFT só é cunhada
 // depois, ao listar no marketplace (lazy mint). Preço é servidor-autoritativo
 // (item.goldPrice do catálogo); o cliente nunca envia o valor.
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -89,6 +91,6 @@ export async function POST(req: Request) {
     const message = error instanceof Error ? error.message : 'Falha na compra'
     const status = message.includes('insuficiente') || message.includes('Inventário cheio') ? 400 : 500
     if (status === 500) console.error('Error in off-chain purchase:', error)
-    return NextResponse.json({ error: message }, { status })
+    return NextResponse.json({ error: localizeServerError(message, getLocaleFromRequest(req)) }, { status })
   }
 }

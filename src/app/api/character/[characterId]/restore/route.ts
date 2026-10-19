@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
 import { addHistoryEntry } from '@/lib/characterHistory'
 import { restoreCost, FREE_RESTORE_MAX_LEVEL } from '@/lib/restoreCost'
+import { localizeServerError } from '@/lib/i18n/serverErrors'
+import { getLocaleFromRequest } from '@/lib/i18n/server'
 
 // ⚗️ Restauração de HP/MP na Alquimista.
 //
@@ -136,6 +138,6 @@ export async function POST(
     const message = error instanceof Error ? error.message : 'Erro interno do servidor'
     const isValidation = /insuficiente|não encontrado/.test(message)
     console.error('Error restoring character:', error)
-    return NextResponse.json({ error: message }, { status: isValidation ? 400 : 500 })
+    return NextResponse.json({ error: localizeServerError(message, getLocaleFromRequest(request)) }, { status: isValidation ? 400 : 500 })
   }
 }

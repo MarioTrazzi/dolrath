@@ -1864,7 +1864,7 @@ export default function DungeonRun({
       // status 0 = falha de rede, ou runId que nunca chegou (nada a avisar aqui:
       // o /start já reclama por conta própria).
       if (outcome.status === 0 && !runIdRef.current) return
-      if (outcome.status === 400) showBanner('😮‍💨', `${outcome.data?.error || 'Stamina insuficiente'} — ela volta +2 a cada 15 min ocioso`)
+      if (outcome.status === 400) showBanner('😮‍💨', t('{msg} — it comes back +2 every 15 idle min', { msg: outcome.data?.error || t('Not enough stamina') }))
       else if (outcome.status === 0) showBanner('⚠️', t('No connection to the server'))
       else showBanner('⚠️', outcome.data?.error || t('Failed to advance'))
       return
@@ -2016,7 +2016,7 @@ export default function DungeonRun({
       if (data?.resolved) pendingResolveRef.current = null
       if (!res.ok) {
         setExploreRolling(false)
-        if (res.status === 400) showBanner('😮‍💨', `${data?.error || 'Stamina insuficiente'} — ela volta +2 a cada 15 min ocioso`)
+        if (res.status === 400) showBanner('😮‍💨', t('{msg} — it comes back +2 every 15 idle min', { msg: data?.error || t('Not enough stamina') }))
         else showBanner('⚠️', data?.error || t('Failed to advance'))
         return
       }
@@ -3110,12 +3110,12 @@ export default function DungeonRun({
         // Mesmo formato de `lib/buyGold` ("…insuficiente… precisa de N 🪙"), lido
         // aqui na mão: aquele módulo arrasta a ethers inteira para o bundle da run.
         const msg = String(data?.error ?? '')
-        const noGold = /insuficiente/i.test(msg) && /precisa de/i.test(msg)
-        const needed = Number(msg.match(/precisa de\s+(\d+)/i)?.[1] ?? 0)
+        const noGold = /insuficiente|not enough gold/i.test(msg) && /precisa de|you need/i.test(msg)
+        const needed = Number(msg.match(/(?:precisa de|you need)\s+(\d+)/i)?.[1] ?? 0)
         return { ok: false, cost: 0, noGold, needed: noGold && needed > 0 ? needed : undefined }
       }
       if (data?.restored && data.cost > 0) {
-        pushLog(`⚗️ A Alquimista restaurou sua vida e mana por ${data.cost} 🪙.`)
+        pushLog(t('⚗️ The Alchemist restored your health and mana for {cost} 🪙.', { cost: data.cost }))
       } else if (data?.restored) {
         pushLog(t('⚗️ The Alchemist restored your health and mana — free up to level {n}.', { n: FREE_RESTORE_MAX_LEVEL }))
       }

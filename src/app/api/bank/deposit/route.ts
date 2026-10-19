@@ -1,12 +1,14 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, NextRequest } from 'next/server'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
+import { localizeServerError } from '@/lib/i18n/serverErrors'
+import { getLocaleFromRequest } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
 // 🏦 DEPOSITAR: move GOLD da carteira do personagem (Character.gold) para o
 // BANCO (User.goldBalance). Só o que está no banco pode dar claim on-chain.
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -45,6 +47,6 @@ export async function POST(req: Request) {
     const message = error instanceof Error ? error.message : 'Falha ao depositar'
     const status = /insuficiente|não encontrado/.test(message) ? 400 : 500
     if (status === 500) console.error('Error in bank deposit:', error)
-    return NextResponse.json({ error: message }, { status })
+    return NextResponse.json({ error: localizeServerError(message, getLocaleFromRequest(req)) }, { status })
   }
 }

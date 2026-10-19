@@ -18,6 +18,7 @@ import { advanceQuestProgress } from '@/lib/questServer'
 import { consumeFromPool, depositCraftOutput, loadMaterialPool, poolCount } from '@/lib/materialPool'
 import { getUserProcessXp } from '@/lib/craftingServer'
 import { getProfessionLevel, getProfessionLevelInfo } from '@/lib/professionSystem'
+import { localizeServerError } from '@/lib/i18n/serverErrors'
 
 // ⚙️ Profissão de PROCESSAMENTO — beneficia matéria-prima crua em insumo
 // processado (Barras/Tecidos/Extratos + Ração/Bandagem) e refina estilhaços
@@ -305,6 +306,6 @@ export async function POST(
     const message = error instanceof Error ? error.message : 'Erro interno do servidor'
     const isValidation = /insuficiente|Falta |Inventário cheio|Baú Geral cheio|Requer Processamento/.test(message)
     console.error('Error processing item:', error)
-    return NextResponse.json({ error: message }, { status: isValidation ? 400 : 500 })
+    return NextResponse.json({ error: localizeServerError(message, getLocaleFromRequest(request)) }, { status: isValidation ? 400 : 500 })
   }
 }

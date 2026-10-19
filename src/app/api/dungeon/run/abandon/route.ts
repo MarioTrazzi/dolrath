@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, NextRequest } from 'next/server'
 import { requireApiActor } from '@/lib/botFleetAuth'
 import { prisma } from '@/lib/prisma'
 import { flushRunRewards, flushStaleRuns } from '@/lib/dungeonRunServer'
+import { getTFromRequest } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,7 +11,8 @@ export const dynamic = 'force-dynamic'
 // ser DRENADO antes, senão sair por este caminho jogaria a run fora.
 // (A saída normal do jogador passa por /finish; isto cobre bots e sobras.)
 // Aceita sessão humana ou frota (x-bot-secret) para bots abandonarem e irem ao PvP.
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const t = getTFromRequest(req)
   const resolved = await requireApiActor(req)
   if ('error' in resolved) return resolved.error
   const userId = resolved.actor.userId
@@ -48,12 +50,12 @@ export async function POST(req: Request) {
         where: { id: characterId, userId },
         select: { id: true },
       })
-      if (!owned) return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+      if (!owned) return NextResponse.json({ error: t('Character not found') }, { status: 404 })
       await flushStaleRuns({ userId, characterId })
       return NextResponse.json({ success: true })
     }
 
-    return NextResponse.json({ error: 'runId ou characterId é obrigatório' }, { status: 400 })
+    return NextResponse.json({ error: t('runId or characterId is required') }, { status: 400 })
   } catch (error) {
     console.error('Error abandoning dungeon run:', error)
     return NextResponse.json({ error: 'Failed to abandon run' }, { status: 500 })

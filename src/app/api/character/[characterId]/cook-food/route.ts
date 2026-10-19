@@ -15,6 +15,7 @@ import { advanceQuestProgress } from '@/lib/questServer'
 import { consumeFromPool, depositCraftOutput, loadMaterialPool, poolCount } from '@/lib/materialPool'
 import { getUserCookXp } from '@/lib/craftingServer'
 import { getProfessionLevel, getProfessionLevelInfo } from '@/lib/professionSystem'
+import { localizeServerError } from '@/lib/i18n/serverErrors'
 
 // 🍳 Profissão de CULINÁRIA — cozinha insumos da fazenda/coleta/moagem em
 // pratos do FOOD_CATALOG (buff de atributo por tempo real; motor em
@@ -242,6 +243,6 @@ export async function POST(
     const message = error instanceof Error ? error.message : 'Erro interno do servidor'
     const isValidation = /insuficiente|Falta |Inventário cheio|Baú Geral cheio|Requer Culinária/.test(message)
     console.error('Error cooking food:', error)
-    return NextResponse.json({ error: message }, { status: isValidation ? 400 : 500 })
+    return NextResponse.json({ error: localizeServerError(message, getLocaleFromRequest(request)) }, { status: isValidation ? 400 : 500 })
   }
 }

@@ -3,6 +3,8 @@ import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { recordInventoryExpansion } from '@/lib/characterHistory';
 import { verifyGoldTransferTx } from '@/lib/goldPayments';
+import { localizeServerError } from '@/lib/i18n/serverErrors'
+import { getLocaleFromRequest } from '@/lib/i18n/server'
 
 function isHex32Bytes(txHash: string): boolean {
   return /^0x[0-9a-fA-F]{64}$/.test(txHash)
@@ -165,7 +167,7 @@ export async function POST(
       });
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Invalid payment'
-      return NextResponse.json(jsonSafe({ error: message }), { status: 400 })
+      return NextResponse.json(jsonSafe({ error: localizeServerError(message, getLocaleFromRequest(req)) }), { status: 400 })
     }
 
     // Usar uma transação para garantir atomicidade
@@ -203,6 +205,6 @@ export async function POST(
   } catch (error) {
     console.error('Error expanding inventory slots:', error);
     const message = error instanceof Error ? error.message : 'Failed to expand inventory slots'
-    return NextResponse.json(jsonSafe({ error: message }), { status: 500 })
+    return NextResponse.json(jsonSafe({ error: localizeServerError(message, getLocaleFromRequest(req)) }), { status: 500 })
   }
 }

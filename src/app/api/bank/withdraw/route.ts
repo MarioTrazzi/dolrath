@@ -1,13 +1,15 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, NextRequest } from 'next/server'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
+import { localizeServerError } from '@/lib/i18n/serverErrors'
+import { getLocaleFromRequest } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
 // 🏦 SACAR: move GOLD do BANCO (User.goldBalance) para a carteira de um
 // personagem (Character.gold), habilitando-o a comprar no ferreiro/alquimista.
 // Qualquer personagem da conta pode sacar do banco compartilhado.
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -48,6 +50,6 @@ export async function POST(req: Request) {
     const message = error instanceof Error ? error.message : 'Falha ao sacar'
     const status = /insuficiente|não encontrado/.test(message) ? 400 : 500
     if (status === 500) console.error('Error in bank withdraw:', error)
-    return NextResponse.json({ error: message }, { status })
+    return NextResponse.json({ error: localizeServerError(message, getLocaleFromRequest(req)) }, { status })
   }
 }

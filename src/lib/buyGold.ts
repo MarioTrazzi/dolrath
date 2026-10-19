@@ -17,7 +17,9 @@ import { getPolygonFeeOverrides } from '@/lib/gasFees';
 // Extrai o total de GOLD necessário de uma mensagem de erro do servidor no
 // formato "…precisa de N 🪙." (loja/forja/alquimia). Retorna null se não casar.
 export function parseNeededGold(errorMsg: unknown): number | null {
-  const m = String(errorMsg ?? '').match(/precisa de\s+([\d.,]+)/i);
+  // PT ("precisa de N") ou EN ("you need N") — o servidor traduz na borda
+  // (lib/i18n/serverErrors) conforme o idioma de quem pediu.
+  const m = String(errorMsg ?? '').match(/(?:precisa de|you need)\s+([\d.,]+)/i);
   if (!m) return null;
   const n = Math.ceil(Number(m[1].replace(/[.,]/g, '')));
   return Number.isFinite(n) && n > 0 ? n : null;
@@ -25,7 +27,8 @@ export function parseNeededGold(errorMsg: unknown): number | null {
 
 // Indica se um erro do servidor é "GOLD insuficiente na mão" (loja/forja/alquimia).
 export function isInsufficientGold(errorMsg: unknown): boolean {
-  return /insuficiente/i.test(String(errorMsg ?? '')) && /precisa de/i.test(String(errorMsg ?? ''));
+  const msg = String(errorMsg ?? '');
+  return /insuficiente|not enough gold/i.test(msg) && /precisa de|you need/i.test(msg);
 }
 
 // Transfere `totalCostGold` de GOLD para a tesouraria. Retorna o txHash, ou null.

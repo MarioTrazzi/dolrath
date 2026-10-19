@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, NextRequest } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
@@ -22,6 +22,7 @@ import { planDungeonRun } from '@/lib/dungeonRunPlan'
 import { regenAndPersist } from '@/lib/staminaServer'
 import type { DungeonDef, LootDrop } from '@/lib/dungeonAdventures'
 import type { GearWearSnapshot } from '@/lib/maintenanceLoot'
+import { getTFromRequest } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,7 +40,8 @@ export const dynamic = 'force-dynamic'
 //
 // Idempotente: com `pending` setado e sem `resolve`, reenvia o combate sem cobrar
 // stamina nem rolar de novo.
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const t = getTFromRequest(req)
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -48,7 +50,7 @@ export async function POST(req: Request) {
 
   try {
     const { runId, resolve } = await req.json()
-    if (!runId) return NextResponse.json({ error: 'runId é obrigatório' }, { status: 400 })
+    if (!runId) return NextResponse.json({ error: t('runId is required') }, { status: 400 })
 
     // Run + personagem numa leitura só. Eram duas idas sequenciais ao Postgres —
     // e esta rota está no caminho crítico da chegada ao nó, onde cada round-trip
@@ -73,16 +75,16 @@ export async function POST(req: Request) {
         },
       },
     })
-    if (!run) return NextResponse.json({ error: 'Run não encontrada' }, { status: 404 })
+    if (!run) return NextResponse.json({ error: t('Run not found') }, { status: 404 })
     if (run.status !== 'active') {
-      return NextResponse.json({ error: 'Run não está ativa', status: run.status }, { status: 409 })
+      return NextResponse.json({ error: t('Run is not active'), status: run.status }, { status: 409 })
     }
 
     const dungeon = getDungeon(run.dungeonId)
-    if (!dungeon) return NextResponse.json({ error: 'Masmorra inválida' }, { status: 500 })
+    if (!dungeon) return NextResponse.json({ error: t('Invalid dungeon') }, { status: 500 })
 
     const character = run.character
-    if (!character) return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+    if (!character) return NextResponse.json({ error: t('Character not found') }, { status: 404 })
     const charForRun: CharacterForRun = {
       id: character.id,
       level: character.level,
@@ -138,7 +140,7 @@ export async function POST(req: Request) {
     const trail = buildTrail(dungeon)
     const nextIdx = cursor + 1
     if (nextIdx >= trail.length) {
-      return NextResponse.json({ error: 'Run já concluída' }, { status: 409 })
+      return NextResponse.json({ error: t('Run already completed') }, { status: 409 })
     }
     const node = trail[nextIdx]
 
@@ -161,7 +163,7 @@ export async function POST(req: Request) {
         })
       }
       return NextResponse.json(
-        { error: 'Stamina insuficiente', current: liveStamina, required: cost, resolved: pendingCleared },
+        { error: t('Not enough stamina'), current: liveStamina, required: cost, resolved: pendingCleared },
         { status: 400 }
       )
     }
@@ -206,7 +208,7 @@ export async function POST(req: Request) {
     // espólio e é dono dos stats.
     const planned = planDungeonRun(dungeon, run.id).get(nextIdx)
     if (!planned) {
-      return NextResponse.json({ error: 'Nó fora da planta da run' }, { status: 500 })
+      return NextResponse.json({ error: t('Node outside the run plan') }, { status: 500 })
     }
     const resolved = resolveExploreNode(dungeon, charForRun, node, nextIdx, run.tier, planned)
 
@@ -260,7 +262,7 @@ export async function POST(req: Request) {
     })
   } catch (error) {
     console.error('Error stepping dungeon run:', error)
-    return NextResponse.json({ error: 'Failed to step dungeon run' }, { status: 500 })
+    return NextResponse.json({ error: t('Failed to advance') }, { status: 500 })
   }
 }
 

@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, NextRequest } from 'next/server'
 import { requireApiActor } from '@/lib/botFleetAuth'
 import { prisma } from '@/lib/prisma'
 import { regenAndPersist } from '@/lib/staminaServer'
@@ -18,6 +18,8 @@ import {
 import { getProfessionLevel, getProfessionLevelInfo } from '@/lib/professionSystem'
 import { addDropToInventoryTx } from '@/lib/dungeonRunServer'
 import { addHistoryEntry } from '@/lib/characterHistory'
+import { localizeServerError } from '@/lib/i18n/serverErrors'
+import { getLocaleFromRequest } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,7 +33,7 @@ export type WellPullResult = { qty: number; bonuses: WellBonusLoot[] }
 // (`results[]`) para o dialog encenar um por vez, no molde da colheita em
 // lote. Chance independente de Estilhaço e Pedra Negra por balde, conforme o
 // nível de Fazenda da conta.
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   const resolved = await requireApiActor(req)
   if ('error' in resolved) return resolved.error
   const userId = resolved.actor.userId
@@ -181,6 +183,6 @@ export async function POST(req: Request) {
     const message = error instanceof Error ? error.message : 'Erro interno do servidor'
     const isValidation = /insuficiente|não acumulou|cheio/i.test(message)
     if (!isValidation) console.error('Error collecting well:', error)
-    return NextResponse.json({ error: message }, { status: isValidation ? 400 : 500 })
+    return NextResponse.json({ error: localizeServerError(message, getLocaleFromRequest(req)) }, { status: isValidation ? 400 : 500 })
   }
 }

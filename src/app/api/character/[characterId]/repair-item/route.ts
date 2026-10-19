@@ -11,6 +11,8 @@ import {
   repairPlan, isPurchasableSource, resolveRepairSource, canBuyCopyOf, type RepairSource,
 } from '@/lib/repairPricing'
 import { getCatalogItemByName, getForgeMaterialByName } from '@/lib/itemCatalog'
+import { localizeServerError } from '@/lib/i18n/serverErrors'
+import { getLocaleFromRequest } from '@/lib/i18n/server'
 
 // Reparo de alto nível: peça RARA/ÉPICA/LENDÁRIA repara com Estilhaço de Memória
 // (só de chefe) QUANDO não há cópia lisa na bolsa — a regra mora em
@@ -269,7 +271,7 @@ export async function POST(
     })
   } catch (error) {
     if (error instanceof RepairError) {
-      return NextResponse.json({ error: error.message }, { status: error.status })
+      return NextResponse.json({ error: localizeServerError(error.message, getLocaleFromRequest(request)) }, { status: error.status })
     }
     console.error('Error repairing item:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

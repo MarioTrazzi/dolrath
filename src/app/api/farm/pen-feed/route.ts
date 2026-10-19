@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, NextRequest } from 'next/server'
 import { requireApiActor } from '@/lib/botFleetAuth'
 import { prisma } from '@/lib/prisma'
 import { regenAndPersist } from '@/lib/staminaServer'
@@ -6,12 +6,14 @@ import { spendFarmActionStaminaTx } from '@/lib/farmServer'
 import { PEN, PEN_SLOT_INDEX } from '@/lib/farming'
 import { getUserFarmXp } from '@/lib/farmServer'
 import { getProfessionLevel, FARM_PEN_MIN_LEVEL } from '@/lib/professionSystem'
+import { localizeServerError } from '@/lib/i18n/serverErrors'
+import { getLocaleFromRequest } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
 // 🐄 Alimenta o cercado com 1 Ração e inicia o ciclo de produção de Couro
 // (colhe em /api/farm/harvest com slotIndex 101 quando o ciclo terminar).
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   const resolved = await requireApiActor(req)
   if ('error' in resolved) return resolved.error
   const userId = resolved.actor.userId
@@ -82,6 +84,6 @@ export async function POST(req: Request) {
     const message = error instanceof Error ? error.message : 'Erro interno do servidor'
     const isValidation = /insuficiente|não tem|já está/i.test(message)
     if (!isValidation) console.error('Error feeding pen:', error)
-    return NextResponse.json({ error: message }, { status: isValidation ? 400 : 500 })
+    return NextResponse.json({ error: localizeServerError(message, getLocaleFromRequest(req)) }, { status: isValidation ? 400 : 500 })
   }
 }

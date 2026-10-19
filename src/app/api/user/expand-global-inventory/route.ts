@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { verifyGoldTransferTx } from '@/lib/goldPayments';
+import { localizeServerError } from '@/lib/i18n/serverErrors'
+import { getLocaleFromRequest } from '@/lib/i18n/server'
 
 function isHex32Bytes(txHash: string): boolean {
   return /^0x[0-9a-fA-F]{64}$/.test(txHash)
@@ -129,7 +131,7 @@ export async function POST(req: NextRequest) {
       });
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Invalid payment'
-      return NextResponse.json(jsonSafe({ error: message }), { status: 400 })
+      return NextResponse.json(jsonSafe({ error: localizeServerError(message, getLocaleFromRequest(req)) }), { status: 400 })
     }
 
     const updated = await prisma.user.update({
@@ -148,6 +150,6 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error('Error expanding global inventory slots:', error);
     const message = error instanceof Error ? error.message : 'Failed to expand global inventory slots'
-    return NextResponse.json(jsonSafe({ error: message }), { status: 500 })
+    return NextResponse.json(jsonSafe({ error: localizeServerError(message, getLocaleFromRequest(req)) }), { status: 500 })
   }
 }

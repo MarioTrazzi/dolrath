@@ -1,16 +1,18 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, NextRequest } from 'next/server'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { buildTrail, getDungeon, isRunLive, flushStaleRuns } from '@/lib/dungeonRunServer'
 import { clampDungeonTier } from '@/lib/dungeonAdventures'
 import { regenAndPersist } from '@/lib/staminaServer'
+import { getTFromRequest } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
 // Abre uma sessão de masmorra SERVIDOR-AUTORITATIVA. Valida posse + gating de
 // nível e cria o registro DungeonRun (cursor 0). A partir daqui, todo gold/xp/
 // loot é creditado pelo servidor em /step e /combat — nunca pelo cliente.
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const t = getTFromRequest(req)
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -20,13 +22,13 @@ export async function POST(req: Request) {
   try {
     const { characterId, dungeonId, tier: rawTier } = await req.json()
     if (!characterId || !dungeonId) {
-      return NextResponse.json({ error: 'characterId e dungeonId são obrigatórios' }, { status: 400 })
+      return NextResponse.json({ error: t('characterId and dungeonId are required') }, { status: 400 })
     }
     const tier = clampDungeonTier(rawTier)
 
     const dungeon = getDungeon(String(dungeonId))
     if (!dungeon) {
-      return NextResponse.json({ error: 'Masmorra inválida' }, { status: 400 })
+      return NextResponse.json({ error: t('Invalid dungeon') }, { status: 400 })
     }
 
     // ⚡ Uma onda só: estas quatro leituras não dependem umas das outras, e em fila
@@ -49,7 +51,7 @@ export async function POST(req: Request) {
       }),
     ])
     if (!rawCharacter) {
-      return NextResponse.json({ error: 'Personagem não encontrado' }, { status: 404 })
+      return NextResponse.json({ error: t('Character not found') }, { status: 404 })
     }
     // Stamina viva ao abrir a sessão (regen passivo aplicado e persistido). Já
     // devolve a sessão de coleta ativa, se houver — antes essa mesma linha era
@@ -65,7 +67,7 @@ export async function POST(req: Request) {
     const maxTier = progress?.maxTier ?? 1
     if (tier > maxTier) {
       return NextResponse.json(
-        { error: `Tier ${tier} ainda não desbloqueado (máximo: ${maxTier}). Vença o boss no tier ${maxTier} para liberar o próximo.`, maxTier },
+        { error: t('Tier {tier} is not unlocked yet (max: {max}). Beat the boss on tier {max} to unlock the next one.', { tier, max: maxTier }), maxTier },
         { status: 403 }
       )
     }
@@ -83,7 +85,7 @@ export async function POST(req: Request) {
     if (gathering) {
       return NextResponse.json(
         {
-          error: 'Este herói está numa sessão de coleta. Encerre a coleta antes de entrar na masmorra.',
+          error: t('This hero is in a gathering session. End the gathering before entering the dungeon.'),
           code: 'HERO_GATHERING',
           fieldId: gathering.fieldId,
         },
@@ -97,8 +99,8 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error: sameHero
-            ? 'Este herói já está em uma masmorra em outra aba ou janela. Saia da outra sessão para liberá-lo.'
-            : `${existing.character.name} já está em uma masmorra em outra aba ou janela. Saia daquela sessão antes de entrar com outro herói.`,
+            ? t('This hero is already in a dungeon in another tab or window. Leave the other session to free them.')
+            : t('{name} is already in a dungeon in another tab or window. Leave that session before entering with another hero.', { name: existing.character.name }),
           code: 'HERO_IN_USE',
           dungeonId: existing.dungeonId,
           characterId: existing.characterId,
@@ -141,6 +143,6 @@ export async function POST(req: Request) {
     })
   } catch (error) {
     console.error('Error starting dungeon run:', error)
-    return NextResponse.json({ error: 'Failed to start dungeon run' }, { status: 500 })
+    return NextResponse.json({ error: t('Failed to start dungeon run') }, { status: 500 })
   }
 }

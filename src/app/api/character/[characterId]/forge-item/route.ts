@@ -19,6 +19,7 @@ import {
 import { getUserForgeXp } from '@/lib/craftingServer'
 import { advanceQuestProgress } from '@/lib/questServer'
 import { getProfessionLevel, getProfessionLevelInfo } from '@/lib/professionSystem'
+import { localizeServerError } from '@/lib/i18n/serverErrors'
 
 // ⚒️ Profissão de FORJA — crafta equipamento OU refina pedra concentrada.
 // Consome materiais/pedras do inventário + taxa em gold (carteira do personagem)
@@ -316,6 +317,6 @@ export async function POST(
     const message = error instanceof Error ? error.message : 'Erro interno do servidor'
     const isValidation = /insuficiente|Falta |Inventário cheio|Baú Geral cheio|Requer Forja/.test(message)
     console.error('Error forging item:', error)
-    return NextResponse.json({ error: message }, { status: isValidation ? 400 : 500 })
+    return NextResponse.json({ error: localizeServerError(message, getLocaleFromRequest(request)) }, { status: isValidation ? 400 : 500 })
   }
 }

@@ -1016,7 +1016,7 @@ export default function CombatLobbyPage() {
                 className={`${BEVEL_BTN_CLASS} px-6 py-2 flex items-center`}
               >
                 <X className="mr-2" size={16} />
-                Voltar ao Dashboard
+                {t('Back to Dashboard')}
               </button>
             </div>
           </div>

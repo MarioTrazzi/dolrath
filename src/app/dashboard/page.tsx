@@ -32,6 +32,7 @@ import { ensureTargetNetwork } from '@/lib/chainConfig';
 import { useI18n } from '@/lib/i18n/I18nProvider';
 import { localizeItemName } from '@/lib/i18n/catalog';
 import { localizeRaceName, localizeClassName } from '@/lib/i18n/gameNames';
+import { SHOW_DEV_TOOLS } from '@/lib/adminAuth'
 // ...existing code...
 // ...existing code...
 
@@ -896,7 +897,8 @@ export default function DashboardPage() {
                         >
                           {t('View Full Sheet')}
                         </button>
-                        {/* Botões de teste para XP */}
+                        {/* Botões de teste para XP — só fora de produção (ou com o flag). */}
+                        {SHOW_DEV_TOOLS && (
                         <div className="flex gap-1.5">
                           {[50, 200, 1000].map((xp) => (
                             <button
@@ -908,6 +910,7 @@ export default function DashboardPage() {
                             </button>
                           ))}
                         </div>
+                        )}
                       </div>
 
                       {/* XP Progress Bar */}

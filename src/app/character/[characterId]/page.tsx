@@ -40,6 +40,7 @@ import { localizeTransformationName } from '@/lib/i18n/combatNames';
 import { useActiveCharacter } from '@/components/providers/ActiveCharacterProvider';
 
 import { Item } from '@/types/item';
+import { SHOW_DEV_TOOLS } from '@/lib/adminAuth'
 
 // Paleta chumbo + ouro envelhecido — a mesma da EnhancementDialog, para que a
 // ficha inteira leia como um conjunto de janelas do mesmo jogo.
@@ -721,7 +722,8 @@ export default function CharacterDetailsPage() {
                 </div>
               </div>
 
-              {/* Botões de teste XP - removível em produção */}
+              {/* Botões de teste XP — só fora de produção (ou com o flag de dev tools). */}
+              {SHOW_DEV_TOOLS && (
               <div className="flex shrink-0 flex-row gap-2 sm:flex-col">
                 <button
                   onClick={() => handleAddXp(100)}
@@ -736,6 +738,7 @@ export default function CharacterDetailsPage() {
                   {t('+1000 XP (Level Up)')}
                 </button>
               </div>
+              )}
             </div>
           </div>
 

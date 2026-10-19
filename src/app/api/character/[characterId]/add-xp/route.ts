@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 import { addExperienceToCharacter } from '@/lib/characterLevelSystem';
 import { recordXpGained } from '@/lib/characterHistory';
+import { devToolsAllowed } from '@/lib/adminAuth';
 
 function serializeBigIntForJson<T>(value: T): T {
   return JSON.parse(
@@ -17,10 +18,17 @@ export async function POST(request: NextRequest, { params }: { params: { charact
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  // 🛡️ Ferramenta de TESTE: XP arbitrário vindo do cliente. Aberta a todo mundo
+  // em produção ela era nível máximo grátis ({ xp: 999999999 }) — e nível pesa
+  // no PvP, na escala de recompensa da masmorra e no ranking.
+  if (!devToolsAllowed(session.user.id)) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+
   try {
     const { xp } = await request.json();
     
-    if (!xp || typeof xp !== 'number' || xp <= 0) {
+    if (!xp || typeof xp !== 'number' || !Number.isFinite(xp) || xp <= 0 || xp > 100_000) {
       return NextResponse.json({ error: 'Invalid XP amount' }, { status: 400 });
     }
 

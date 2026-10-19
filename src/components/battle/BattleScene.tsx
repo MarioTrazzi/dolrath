@@ -1125,7 +1125,10 @@ export default function BattleScene({
                     key={f.id}
                     className={`relative transition-[filter] duration-300 ${i === 0 ? '' : '-mt-14 sm:-mt-20'}`}
                     style={{
-                      transform: `translateX(${i % 2 === 0 ? -4 : 16}px)`,
+                      // Mesmo zigue-zague de antes (ímpar 20px à direita do par), só que
+                      // ancorado para DENTRO: com +16px o card do meio vazava da tela no
+                      // celular (pr-2 = 8px de folga).
+                      transform: `translateX(${i % 2 === 0 ? -24 : -4}px)`,
                       // Cascata ESTRITA: z só pela posição (topo atrás, base à frente). NÃO
                       // trazemos o focado pra frente — senão ele cobriria o HP do vizinho.
                       // O foco é marcado só pelo BRILHO (os outros ficam escurecidos).

@@ -87,6 +87,21 @@ export async function assertInventoryRoom(
 }
 
 /**
+ * 🪙 Janela da trava de listagem (marketplace/list-intent): enquanto um lazy-mint
+ * está em voo a peça não pode sair da mochila por NENHUM caminho — senão o
+ * jogador fica com a NFT e com o item (ou com o que o item virou). O voucher de
+ * mint vence em 15 min, então 20 min cobre o mint inteiro.
+ */
+export const LISTING_LOCK_MS = 20 * 60_000
+
+/** Filtro Prisma: linhas SEM trava de listagem viva. */
+export function listingUnlockedWhere(now = Date.now()) {
+  return {
+    OR: [{ listingLockedAt: null }, { listingLockedAt: { lt: new Date(now - LISTING_LOCK_MS) } }],
+  }
+}
+
+/**
  * A linha não tinha mais a quantidade pedida quando a transação chegou nela —
  * outro request (aba duplicada, clique duplo) consumiu antes. As rotas pegam
  * isso e respondem 409 em vez de 500.
@@ -115,7 +130,8 @@ export async function takeFromCharacterInventory(
 ) {
   const n = Math.max(1, Math.floor(qty))
   const { count } = await tx.characterInventory.updateMany({
-    where: { id: inventoryRowId, quantity: { gte: n } },
+    // Peça travada por um mint em andamento também conta como indisponível.
+    where: { id: inventoryRowId, quantity: { gte: n }, ...listingUnlockedWhere() },
     data: { quantity: { decrement: n } },
   })
   if (count === 0) throw new InventoryQuantityError()

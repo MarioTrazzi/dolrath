@@ -69,6 +69,22 @@ const RULES: Rule[] = [
     re: /^Stamina insuficiente \(a ação custa (\d+)\)\.$/,
     en: (m) => `Not enough stamina (this action costs ${m[1]}).`,
   },
+  { re: /^O material mudou enquanto você reparava — tente de novo\.$/, en: () => 'The material changed while you were repairing — try again.' },
+  // 🔧 Bancada de reparo
+  { re: /^Item não encontrado$/, en: () => 'Item not found' },
+  { re: /^O item já está com durabilidade máxima$/, en: () => 'The item is already at full durability' },
+  {
+    re: /^É necessário (.+) \(Coleta — Vale dos Minérios\) para reparar (.+)\.$/,
+    en: (m, l) => `You need ${localizeItemName(m[1], l)} (Gathering — Ore Valley) to repair ${localizeItemName(m[2], l)}.`,
+  },
+  {
+    re: /^É necessário um (.+) \(de chefe de masmorra\) para reparar (.+)\.$/,
+    en: (m, l) => `You need a ${localizeItemName(m[1], l)} (from a dungeon boss) to repair ${localizeItemName(m[2], l)}.`,
+  },
+  {
+    re: /^É necessária uma cópia de (.+) para reparar\.$/,
+    en: (m, l) => `You need a copy of ${localizeItemName(m[1], l)} to repair it.`,
+  },
   // 🌾 Fazenda (plant/harvest/pen-feed/well-collect)
   { re: /^Nenhum canteiro pronto para colher\.$/, en: () => 'No plot is ready to harvest.' },
   { re: /^O poço ainda não acumulou água\.$/, en: () => 'The well has not gathered any water yet.' },

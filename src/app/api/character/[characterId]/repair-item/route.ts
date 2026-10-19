@@ -13,6 +13,8 @@ import {
 import { getCatalogItemByName, getForgeMaterialByName } from '@/lib/itemCatalog'
 import { localizeServerError } from '@/lib/i18n/serverErrors'
 import { getLocaleFromRequest } from '@/lib/i18n/server'
+import { takeFromCharacterInventory, InventoryQuantityError, listingUnlockedWhere } from '@/lib/inventoryMutations'
+import { catalogNameEn } from '@/lib/i18n/catalog'
 
 // Reparo de alto nível: peça RARA/ÉPICA/LENDÁRIA repara com Estilhaço de Memória
 // (só de chefe) QUANDO não há cópia lisa na bolsa — a regra mora em
@@ -102,6 +104,8 @@ export async function POST(
               itemId: target.itemId,
               enhancementLevel: 0,
               quantity: { gte: 1 },
+              // Cópia travada por um mint em andamento não serve de material.
+              ...listingUnlockedWhere(),
               // Reparando uma linha do inventário, ela mesma não serve de cópia.
               ...(inventoryId ? { id: { not: target.id } } : {}),
             },
@@ -195,22 +199,30 @@ export async function POST(
       for (const s of sources) {
         if (remaining <= 0) break
         const take = Math.min(s.quantity, remaining)
-        if (s.quantity > take) {
-          await tx.characterInventory.update({
-            where: { id: s.id },
-            data: { quantity: { decrement: take } },
-          })
-        } else {
-          await tx.characterInventory.delete({ where: { id: s.id } })
+        // Atômico: a quantidade lida pode estar velha (duas abas reparando).
+        try {
+          await takeFromCharacterInventory(tx, s.id, take)
+        } catch (err) {
+          if (err instanceof InventoryQuantityError) {
+            throw new RepairError('O material mudou enquanto você reparava — tente de novo.', 409)
+          }
+          throw err
         }
         remaining -= take
       }
 
       if (plan.totalGold > 0) {
-        await tx.character.update({
-          where: { id: params.characterId },
+        // Débito condicional: o saldo lido acima pode ter mudado.
+        const debit = await tx.character.updateMany({
+          where: { id: params.characterId, gold: { gte: plan.totalGold } },
           data: { gold: { decrement: plan.totalGold } },
         })
+        if (debit.count === 0) {
+          throw new RepairError(
+            `GOLD insuficiente na carteira do personagem: precisa de ${plan.totalGold} 🪙.`,
+            400
+          )
+        }
       }
 
       const newDurability = target.durability + plan.durabilityGained
@@ -245,6 +257,14 @@ export async function POST(
     // "3 cópias (2 compradas)" — deixa claro o que saiu da bolsa e o que foi comprado.
     const unitsText = `${plan.unitsUsed} ${unitLabel}${plural}${plan.unitsBought > 0 ? ` (${plan.unitsBought} comprada${plan.unitsBought > 1 ? 's' : ''})` : ''}`
     const goldText = plan.totalGold > 0 ? ` + ${plan.totalGold} gold` : ''
+    // Mesmo texto para o jogador EN (a mensagem acima segue PT para o histórico
+    // legado e para o jogador PT).
+    const locale = getLocaleFromRequest(request)
+    const unitLabelEn =
+      source === 'DUST' ? catalogNameEn(ACCESSORY_REPAIR_DUST_NAME) : source === 'SHARD' ? catalogNameEn(MEMORY_SHARD_NAME) : 'copy'
+    const unitsTextEn = source === 'COPY'
+      ? `${plan.unitsUsed} ${plan.unitsUsed > 1 ? 'copies' : 'copy'}${plan.unitsBought > 0 ? ` (${plan.unitsBought} bought)` : ''}`
+      : `${plan.unitsUsed}× ${unitLabelEn}${plan.unitsBought > 0 ? ` (${plan.unitsBought} bought)` : ''}`
 
     try {
       await addHistoryEntry({
@@ -267,7 +287,9 @@ export async function POST(
       copiesRemaining: outcome.unitsRemaining,
       goldSpent: plan.totalGold,
       fullyRepaired: outcome.newDurability >= outcome.maxDurability,
-      message: `🔧 Item reparado! Durabilidade: ${outcome.newDurability}/${outcome.maxDurability} (${unitsText}${goldText})`,
+      message: locale === 'en'
+        ? `🔧 Item repaired! Durability: ${outcome.newDurability}/${outcome.maxDurability} (${unitsTextEn}${goldText})`
+        : `🔧 Item reparado! Durabilidade: ${outcome.newDurability}/${outcome.maxDurability} (${unitsText}${goldText})`,
     })
   } catch (error) {
     if (error instanceof RepairError) {

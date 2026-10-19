@@ -14,7 +14,7 @@ import {
   getBaseChance,
   rollEnhancement,
 } from '@/lib/enhancementSystem'
-import { takeFromCharacterInventory, InventoryQuantityError } from '@/lib/inventoryMutations'
+import { takeFromCharacterInventory, InventoryQuantityError, LISTING_LOCK_MS, listingUnlockedWhere } from '@/lib/inventoryMutations'
 import { getTFromRequest, getLocaleFromRequest } from '@/lib/i18n/server'
 import { localizeItemName, catalogNameEn } from '@/lib/i18n/catalog'
 
@@ -93,6 +93,7 @@ async function findMaterialRow(
       enhancementLevel: 0,
       quantity: { gte: 1 },
       id: { not: inventoryItem.id },
+      ...listingUnlockedWhere(),
     },
   })
 }
@@ -192,6 +193,13 @@ export async function POST(
     const targetLevel = getNextLevel(category, inventoryItem.enhancementLevel)
     if (targetLevel === null) {
       return NextResponse.json({ error: t('The item is already at the maximum level') }, { status: 400 })
+    }
+
+    // 🪙 Peça com mint em andamento não muda (falha pode destruí-la ou consumir a
+    // própria pilha): ficaria a NFT e o item. Mesma trava da venda/equipar.
+    const lockedAt = (inventoryItem as any).listingLockedAt as Date | null
+    if (lockedAt && Date.now() - new Date(lockedAt).getTime() < LISTING_LOCK_MS) {
+      return NextResponse.json({ error: t('This piece is being listed on the market. Wait a few minutes.') }, { status: 409 })
     }
 
     // Durabilidade precisa cobrir o custo de uma falha (exceto níveis seguros)

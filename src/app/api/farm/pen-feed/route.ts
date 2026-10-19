@@ -8,6 +8,7 @@ import { getUserFarmXp } from '@/lib/farmServer'
 import { getProfessionLevel, FARM_PEN_MIN_LEVEL } from '@/lib/professionSystem'
 import { localizeServerError } from '@/lib/i18n/serverErrors'
 import { getLocaleFromRequest } from '@/lib/i18n/server'
+import { takeFromCharacterInventory, InventoryQuantityError } from '@/lib/inventoryMutations'
 
 export const dynamic = 'force-dynamic'
 
@@ -56,10 +57,13 @@ export async function POST(req: NextRequest) {
       if (!feedRow) {
         throw new Error(`Você não tem ${PEN.feedName}. Crafte na Bancada de Alquimia (2 Trigo + 1 Água Pura).`)
       }
-      if (feedRow.quantity > 1) {
-        await tx.characterInventory.update({ where: { id: feedRow.id }, data: { quantity: { decrement: 1 } } })
-      } else {
-        await tx.characterInventory.delete({ where: { id: feedRow.id } })
+      // Atômico: a quantidade lida pode estar velha (dois plantios simultâneos
+      // gastavam a mesma semente). Quem perde a corrida vê o "você não tem".
+      try {
+        await takeFromCharacterInventory(tx, feedRow.id, 1)
+      } catch (err) {
+        if (err instanceof InventoryQuantityError) throw new Error(`Você não tem ${PEN.feedName}. Crafte na Bancada de Alquimia (2 Trigo + 1 Água Pura).`)
+        throw err
       }
 
       const stamina = await spendFarmActionStaminaTx(tx, characterId)

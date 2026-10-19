@@ -69,6 +69,21 @@ const RULES: Rule[] = [
     re: /^Stamina insuficiente \(a ação custa (\d+)\)\.$/,
     en: (m) => `Not enough stamina (this action costs ${m[1]}).`,
   },
+  // 🌾 Fazenda (plant/harvest/pen-feed/well-collect)
+  { re: /^Nenhum canteiro pronto para colher\.$/, en: () => 'No plot is ready to harvest.' },
+  { re: /^O poço ainda não acumulou água\.$/, en: () => 'The well has not gathered any water yet.' },
+  { re: /^Nada plantado aqui\.$/, en: () => 'Nothing planted here.' },
+  { re: /^Os animais ainda estão no ciclo\. Volte mais tarde\.$/, en: () => 'The animals are still in their cycle. Come back later.' },
+  { re: /^O cercado já está num ciclo\. Colha o couro quando terminar\.$/, en: () => 'The pen is already in a cycle. Collect the leather when it finishes.' },
+  { re: /^Este canteiro já está plantado\.$/, en: () => 'This plot is already planted.' },
+  {
+    re: /^Você não tem (.+)\. Crafte na Bancada de Alquimia \(2 Trigo \+ 1 Água Pura\)\.$/,
+    en: (m, l) => `You don't have ${localizeItemName(m[1], l)}. Craft it at the Alchemy bench (2 Wheat + 1 Pure Water).`,
+  },
+  {
+    re: /^Você não tem (.+)\. Sementes caem coletando nos Campos de Ervas\.$/,
+    en: (m, l) => `You don't have ${localizeItemName(m[1], l)}. Seeds drop while gathering in the Herb Fields.`,
+  },
 ]
 
 export function localizeServerError(message: string, locale: Locale): string {

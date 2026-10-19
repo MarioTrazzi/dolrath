@@ -7,6 +7,7 @@ import { farmPlotCount, getProfessionLevel } from '@/lib/professionSystem'
 import { isSeedItem } from '@/lib/itemCatalog'
 import { localizeServerError } from '@/lib/i18n/serverErrors'
 import { getLocaleFromRequest } from '@/lib/i18n/server'
+import { takeFromCharacterInventory, InventoryQuantityError } from '@/lib/inventoryMutations'
 
 export const dynamic = 'force-dynamic'
 
@@ -59,10 +60,13 @@ export async function POST(req: NextRequest) {
       if (!seedRow) {
         throw new Error(`Você não tem ${crop.seedName}. Sementes caem coletando nos Campos de Ervas.`)
       }
-      if (seedRow.quantity > 1) {
-        await tx.characterInventory.update({ where: { id: seedRow.id }, data: { quantity: { decrement: 1 } } })
-      } else {
-        await tx.characterInventory.delete({ where: { id: seedRow.id } })
+      // Atômico: a quantidade lida pode estar velha (dois plantios simultâneos
+      // gastavam a mesma semente). Quem perde a corrida vê o "você não tem".
+      try {
+        await takeFromCharacterInventory(tx, seedRow.id, 1)
+      } catch (err) {
+        if (err instanceof InventoryQuantityError) throw new Error(`Você não tem ${crop.seedName}. Sementes caem coletando nos Campos de Ervas.`)
+        throw err
       }
 
       await tx.character.update({

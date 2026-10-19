@@ -70,7 +70,13 @@ export async function POST(req: NextRequest) {
           data: { farmXp: { increment: PEN.farmXp } },
           select: { farmXp: true },
         })
-        await tx.farmPlot.update({ where: { id: pen.id }, data: { cropId: null, plantedAt: null, state: 'empty' } })
+        // Condicional no plantio LIDO: duas colheitas simultâneas liam o mesmo
+        // cercado pronto e as duas entregavam. A segunda agora desfaz tudo.
+        const claimedPen = await tx.farmPlot.updateMany({
+          where: { id: pen.id, plantedAt: pen.plantedAt },
+          data: { cropId: null, plantedAt: null, state: 'empty' },
+        })
+        if (claimedPen.count === 0) throw new Error('Nada plantado aqui.')
         return {
           results: [{ outputName: PEN.outputName, qty: PEN.yield }] as HarvestItemResult[],
           xpGained: PEN.farmXp,
@@ -135,10 +141,13 @@ export async function POST(req: NextRequest) {
 
         results.push({ outputName: crop.outputName, qty, stoneName })
 
-        await tx.farmPlot.update({
-          where: { id: plot.id },
+        // Condicional no plantio LIDO (ver o cercado acima): se outra colheita
+        // simultânea já levou este canteiro, a transação inteira é desfeita.
+        const claimed = await tx.farmPlot.updateMany({
+          where: { id: plot.id, plantedAt: plot.plantedAt },
           data: { cropId: null, plantedAt: null, state: 'empty' },
         })
+        if (claimed.count === 0) throw new Error('Nenhum canteiro pronto para colher.')
         harvested++
       }
 

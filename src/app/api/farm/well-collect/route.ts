@@ -131,7 +131,13 @@ export async function POST(req: NextRequest) {
       const nextAnchor = new Date(
         now.getTime() - (pending - collected) * WELL.intervalSeconds * 1000,
       )
-      await tx.farmPlot.update({ where: { id: well.id }, data: { plantedAt: nextAnchor } })
+      // Condicional na âncora LIDA: dois baldes simultâneos puxavam a mesma água
+      // e os dois entregavam. Quem chega depois desfaz a transação inteira.
+      const claimed = await tx.farmPlot.updateMany({
+        where: { id: well.id, plantedAt: well.plantedAt },
+        data: { plantedAt: nextAnchor },
+      })
+      if (claimed.count === 0) throw new Error('O poço ainda não acumulou água.')
 
       const pendingLeft = Math.max(0, pending - collected)
 

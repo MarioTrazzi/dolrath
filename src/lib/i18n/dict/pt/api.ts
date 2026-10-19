@@ -78,4 +78,16 @@ export const API_PT: Record<string, string> = {
   '{name} is already in a dungeon in another tab or window. Leave that session before entering with another hero.': '{name} já está em uma masmorra em outra aba ou janela. Saia daquela sessão antes de entrar com outro herói.',
   '{msg} — it comes back +2 every 15 idle min': '{msg} — ela volta +2 a cada 15 min ocioso',
   '⚗️ The Alchemist restored your health and mana for {cost} 🪙.': '⚗️ A Alquimista restaurou sua vida e mana por {cost} 🪙.',
+
+  // ⚒️ Aprimoramento (enhance-item)
+  'This item cannot be enhanced': 'Este item não pode ser aprimorado',
+  'The item is already at the maximum level': 'O item já está no nível máximo',
+  'Not enough durability. Repair the item before enhancing.': 'Durabilidade insuficiente. Repare o item antes de aprimorar.',
+  'Not enough material: you need {name}.': 'Material insuficiente: é necessário {name}.',
+  'The item changed while you were enhancing — check it and try again.': 'O item mudou enquanto você aprimorava — confira e tente de novo.',
+  'a copy of {name}': 'uma cópia de {name}',
+  '✨ Success! {name}': '✨ Sucesso! {name}',
+  '💔 {name} was destroyed attempting {level}...': '💔 {name} foi destruído na tentativa de {level}...',
+  '❌ Failed! The item dropped back to {name}.': '❌ Falhou! O item regrediu para {name}.',
+  '❌ Failed! {name} lost {n} durability.': '❌ Falhou! {name} perdeu {n} de durabilidade.',
 }

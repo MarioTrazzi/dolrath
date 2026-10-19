@@ -14,21 +14,28 @@ import {
   getBaseChance,
   rollEnhancement,
 } from '@/lib/enhancementSystem'
+import { takeFromCharacterInventory, InventoryQuantityError } from '@/lib/inventoryMutations'
+import { getTFromRequest, getLocaleFromRequest } from '@/lib/i18n/server'
+import { localizeItemName, catalogNameEn } from '@/lib/i18n/catalog'
+
+// O estado lido antes da transação (failstacks, item, material) mudou — outra
+// tentativa do mesmo herói passou na frente. Vira 409 ("tente de novo").
+class EnhanceConflictError extends Error {}
 
 async function loadContext(characterId: string, userId: string, inventoryId: string) {
   const character = await prisma.character.findFirst({
     where: { id: characterId, userId },
   })
-  if (!character) return { error: 'Personagem não encontrado', status: 404 as const }
+  if (!character) return { error: 'Character not found', status: 404 as const }
 
   const inventoryItem = await prisma.characterInventory.findFirst({
     where: { id: inventoryId, characterId },
     include: { item: true },
   })
-  if (!inventoryItem) return { error: 'Item não encontrado no inventário', status: 404 as const }
+  if (!inventoryItem) return { error: 'Item not found in inventory', status: 404 as const }
 
   const category = getGearCategory(inventoryItem.item.type)
-  if (!category) return { error: 'Este item não pode ser aprimorado', status: 400 as const }
+  if (!category) return { error: 'This item cannot be enhanced', status: 400 as const }
 
   return { character, inventoryItem, category }
 }
@@ -94,6 +101,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { characterId: string } }
 ) {
+  const t = getTFromRequest(request)
   try {
     const session = await auth()
     if (!session?.user?.id) {
@@ -102,12 +110,12 @@ export async function GET(
 
     const inventoryId = request.nextUrl.searchParams.get('inventoryId')
     if (!inventoryId) {
-      return NextResponse.json({ error: 'inventoryId é obrigatório' }, { status: 400 })
+      return NextResponse.json({ error: t('inventoryId is required') }, { status: 400 })
     }
 
     const ctx = await loadContext(params.characterId, session.user.id, inventoryId)
     if ('error' in ctx) {
-      return NextResponse.json({ error: ctx.error }, { status: ctx.status })
+      return NextResponse.json({ error: t(String(ctx.error)) }, { status: ctx.status })
     }
     const { character, inventoryItem, category } = ctx
 
@@ -154,7 +162,7 @@ export async function GET(
     })
   } catch (error) {
     console.error('Error fetching enhancement info:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ error: t('Internal server error') }, { status: 500 })
   }
 }
 
@@ -162,6 +170,8 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { characterId: string } }
 ) {
+  const t = getTFromRequest(request)
+  const locale = getLocaleFromRequest(request)
   try {
     const session = await auth()
     if (!session?.user?.id) {
@@ -170,18 +180,18 @@ export async function POST(
 
     const { inventoryId } = await request.json()
     if (!inventoryId) {
-      return NextResponse.json({ error: 'inventoryId é obrigatório' }, { status: 400 })
+      return NextResponse.json({ error: t('inventoryId is required') }, { status: 400 })
     }
 
     const ctx = await loadContext(params.characterId, session.user.id, inventoryId)
     if ('error' in ctx) {
-      return NextResponse.json({ error: ctx.error }, { status: ctx.status })
+      return NextResponse.json({ error: t(String(ctx.error)) }, { status: ctx.status })
     }
     const { character, inventoryItem, category } = ctx
 
     const targetLevel = getNextLevel(category, inventoryItem.enhancementLevel)
     if (targetLevel === null) {
-      return NextResponse.json({ error: 'O item já está no nível máximo' }, { status: 400 })
+      return NextResponse.json({ error: t('The item is already at the maximum level') }, { status: 400 })
     }
 
     // Durabilidade precisa cobrir o custo de uma falha (exceto níveis seguros)
@@ -189,7 +199,7 @@ export async function POST(
     const isSafe = getBaseChance(category, targetLevel) >= 1
     if (!isSafe && category !== 'ACCESSORY' && inventoryItem.durability < durabilityCost) {
       return NextResponse.json(
-        { error: 'Durabilidade insuficiente. Repare o item antes de aprimorar.' },
+        { error: t('Not enough durability. Repair the item before enhancing.') },
         { status: 400 }
       )
     }
@@ -197,25 +207,41 @@ export async function POST(
     const material = getRequiredMaterial(category, targetLevel, inventoryItem.item.type)
     const materialRow = await findMaterialRow(params.characterId, inventoryItem, material)
     if (!materialRow) {
-      const name = material.kind === 'STONE' ? material.name : `uma cópia de ${inventoryItem.item.name}`
-      return NextResponse.json({ error: `Material insuficiente: é necessário ${name}.` }, { status: 400 })
+      const name = material.kind === 'STONE'
+        ? localizeItemName(material.name, locale)
+        : t('a copy of {name}', { name: localizeItemName(inventoryItem.item.name, locale) })
+      return NextResponse.json({ error: t('Not enough material: you need {name}.', { name }) }, { status: 400 })
     }
 
     const outcome = rollEnhancement(category, inventoryItem.enhancementLevel, character.failstacks)
     if (!outcome) {
-      return NextResponse.json({ error: 'O item já está no nível máximo' }, { status: 400 })
+      return NextResponse.json({ error: t('The item is already at the maximum level') }, { status: 400 })
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Consumir o material (pedra ou cópia do acessório)
-      if (materialRow.quantity > 1) {
-        await tx.characterInventory.update({
-          where: { id: materialRow.id },
-          data: { quantity: { decrement: 1 } },
-        })
-      } else {
-        await tx.characterInventory.delete({ where: { id: materialRow.id } })
+      // 0. 🔒 Uma tentativa por herói de cada vez. O sorteio acima usou failstacks,
+      // nível e pilha de material lidos FORA da transação: tentativas simultâneas
+      // rolavam todas com a mesma pedra (a pilha ia a negativo — N tentativas por
+      // 2 pedras) e somavam failstack de graça. A trava na linha do personagem
+      // serializa as tentativas; quem esperou confere se nada mudou.
+      await tx.$queryRaw`SELECT id FROM "Character" WHERE id = ${params.characterId} FOR UPDATE`
+      const [freshChar, freshItem, freshMaterial] = await Promise.all([
+        tx.character.findUnique({ where: { id: params.characterId }, select: { failstacks: true } }),
+        tx.characterInventory.findUnique({ where: { id: inventoryItem.id } }),
+        tx.characterInventory.findUnique({ where: { id: materialRow.id } }),
+      ])
+      if (
+        !freshChar || freshChar.failstacks !== character.failstacks ||
+        !freshItem || freshItem.quantity !== inventoryItem.quantity ||
+        freshItem.enhancementLevel !== inventoryItem.enhancementLevel ||
+        freshItem.durability !== inventoryItem.durability ||
+        !freshMaterial || freshMaterial.quantity !== materialRow.quantity
+      ) {
+        throw new EnhanceConflictError()
       }
+
+      // 1. Consumir o material (pedra ou cópia do acessório)
+      await takeFromCharacterInventory(tx, materialRow.id, 1)
 
       // A linha do item pode ter sido alterada (material vindo da mesma pilha)
       const consumedFromSelf = materialRow.id === inventoryItem.id
@@ -330,21 +356,21 @@ export async function POST(
         await addHistoryEntry({
           characterId: params.characterId,
           activityType: 'ITEM_ENHANCED',
-          description: `⚒️ ${getDisplayName(itemName, outcome.resultLevel)} — aprimoramento bem-sucedido! (${(outcome.chance * 100).toFixed(1)}%)`,
+          description: `⚒️ ${getDisplayName(catalogNameEn(itemName), outcome.resultLevel)} — enhancement succeeded! (${(outcome.chance * 100).toFixed(1)}%)`,
           itemId: inventoryItem.itemId,
         })
       } else if (outcome.destroyed) {
         await addHistoryEntry({
           characterId: params.characterId,
           activityType: 'ITEM_DESTROYED',
-          description: `💔 ${itemName} foi destruído ao falhar o aprimoramento para ${getLevelLabel(outcome.targetLevel)}.`,
+          description: `💔 ${catalogNameEn(itemName)} was destroyed failing the enhancement to ${getLevelLabel(outcome.targetLevel)}.`,
           itemId: inventoryItem.itemId,
         })
       } else {
         await addHistoryEntry({
           characterId: params.characterId,
           activityType: 'ENHANCEMENT_FAILED',
-          description: `⚒️ Falha ao aprimorar ${getDisplayName(itemName, inventoryItem.enhancementLevel)} para ${getLevelLabel(outcome.targetLevel)}.`,
+          description: `⚒️ Failed to enhance ${getDisplayName(catalogNameEn(itemName), inventoryItem.enhancementLevel)} to ${getLevelLabel(outcome.targetLevel)}.`,
           itemId: inventoryItem.itemId,
         })
       }
@@ -352,13 +378,14 @@ export async function POST(
       console.error('Erro ao registrar histórico de aprimoramento:', historyError)
     }
 
+    const shownName = localizeItemName(itemName, locale)
     const message = outcome.success
-      ? `✨ Sucesso! ${getDisplayName(itemName, outcome.resultLevel)}`
+      ? t('✨ Success! {name}', { name: getDisplayName(shownName, outcome.resultLevel) })
       : outcome.destroyed
-        ? `💔 ${itemName} foi destruído na tentativa de ${getLevelLabel(outcome.targetLevel)}...`
+        ? t('💔 {name} was destroyed attempting {level}...', { name: shownName, level: getLevelLabel(outcome.targetLevel) })
         : outcome.downgraded
-          ? `❌ Falhou! O item regrediu para ${getDisplayName(itemName, result.finalLevel)}.`
-          : `❌ Falhou! ${itemName} perdeu ${outcome.durabilityLoss} de durabilidade.`
+          ? t('❌ Failed! The item dropped back to {name}.', { name: getDisplayName(shownName, result.finalLevel) })
+          : t('❌ Failed! {name} lost {n} durability.', { name: shownName, n: outcome.durabilityLoss })
 
     return NextResponse.json({
       success: outcome.success,
@@ -372,7 +399,13 @@ export async function POST(
       message,
     })
   } catch (error) {
+    if (error instanceof EnhanceConflictError || error instanceof InventoryQuantityError) {
+      return NextResponse.json(
+        { error: t('The item changed while you were enhancing — check it and try again.') },
+        { status: 409 }
+      )
+    }
     console.error('Error enhancing item:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ error: t('Internal server error') }, { status: 500 })
   }
 }

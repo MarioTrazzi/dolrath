@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { takeFromUserInventory, InventoryQuantityError } from '@/lib/inventoryMutations';
+import { getT } from '@/lib/i18n/server'
 
 export async function POST(
   req: NextRequest,
   { params }: { params: { characterId: string } }
 ) {
+  const t = getT()
   const session = await auth();
 
   if (!session || !session.user?.id) {
@@ -84,7 +86,7 @@ export async function POST(
     if (currentInventoryCount + slotsNeeded > character.inventorySlots) {
       const free = Math.max(0, character.inventorySlots - currentInventoryCount);
       return NextResponse.json({
-        error: `Inventário cheio! Precisa de ${slotsNeeded} slot(s) livre(s), mas só há ${free}. Expanda seus slots ou mova itens para o inventário global.`
+        error: t('Inventory full! You need {need} free slot(s), but only {free} are free. Expand your slots or move items to the global inventory.', { need: slotsNeeded, free })
       }, { status: 400 });
     }
 

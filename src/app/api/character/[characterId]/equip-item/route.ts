@@ -82,7 +82,7 @@ export async function POST(
     // Verificar se o personagem tem nível suficiente para equipar o item
     if (character.level < characterInventoryItem.item.level) {
       return NextResponse.json({
-        error: `Level insuficiente. Você precisa ser nível ${characterInventoryItem.item.level} para equipar este item.`
+        error: t('Level too low. You need to be level {n} to equip this item.', { n: characterInventoryItem.item.level })
       }, { status: 400 });
     }
 

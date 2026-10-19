@@ -110,7 +110,7 @@ export async function POST(req: Request) {
       onchainOwner = await getItemNftOwner(tokenId)
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Falha ao ler o dono on-chain'
-      return NextResponse.json({ error: `Não foi possível confirmar a posse on-chain: ${message}` }, { status: 502 })
+      return NextResponse.json({ error: t('Could not confirm on-chain ownership: {msg}', { msg: message }) }, { status: 502 })
     }
 
     if (onchainOwner.toLowerCase() !== walletAddress.toLowerCase()) {

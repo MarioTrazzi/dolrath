@@ -62,7 +62,7 @@ export async function POST(request: NextRequest, { params }: { params: { charact
     const availablePoints = character.availablePoints || 0;
     if (totalPointsToSpend > availablePoints) {
       return NextResponse.json({ 
-        error: `Pontos insuficientes! Você tem ${availablePoints} pontos, mas está tentando gastar ${totalPointsToSpend}.` 
+        error: t('Not enough points! You have {have}, but are trying to spend {spend}.', { have: availablePoints, spend: totalPointsToSpend }) 
       }, { status: 400 });
     }
 

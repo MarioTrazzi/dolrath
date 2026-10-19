@@ -8,7 +8,8 @@ import { getProfessionLevel } from '@/lib/professionSystem'
 import { findOpenGatheringSession, getGatherGearBonus } from '@/lib/gatheringServer'
 import { TOOL_CATALOG } from '@/lib/itemCatalog'
 import { freeInventorySlots } from '@/lib/inventoryMutations'
-import { getT } from '@/lib/i18n/server'
+import { getT, getLocale } from '@/lib/i18n/server'
+import { localizeItemName } from '@/lib/i18n/catalog'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,7 +48,7 @@ export async function POST(req: Request) {
     const character = await regenAndPersist(rawCharacter)
     if (character.stamina < GATHER_TICK_STAMINA) {
       return NextResponse.json(
-        { error: `Stamina insuficiente para coletar (precisa de ${GATHER_TICK_STAMINA}).` },
+        { error: t('Not enough stamina to gather (you need {n}).', { n: GATHER_TICK_STAMINA }) },
         { status: 400 }
       )
     }
@@ -58,7 +59,7 @@ export async function POST(req: Request) {
     if (getProfessionLevel(character.gatherXp) < required) {
       return NextResponse.json(
         {
-          error: `${field.name} requer Coleta Nv.${required}. Suba o nível deste herói coletando nos campos já abertos.`,
+          error: t('{field} requires Gathering Lv.{n}. Level this hero up by gathering in the fields already open.', { field: localizeItemName(field.name, getLocale()), n: required }),
           code: 'FIELD_LOCKED',
           requiredLevel: required,
         },
@@ -91,8 +92,8 @@ export async function POST(req: Request) {
         return NextResponse.json(
           {
             error: gear.tool?.broken
-              ? `Sua ${toolName} está quebrada. Repare-a com uma cópia craftada na forja.`
-              : `Equipe uma ${toolName} (craftada na Mesa de Forja) para coletar em ${field.name}.`,
+              ? t('Your {tool} is broken. Repair it with a copy crafted at the forge.', { tool: localizeItemName(toolName, getLocale()) })
+              : t('Equip a {tool} (crafted at the Forge bench) to gather in {field}.', { tool: localizeItemName(toolName, getLocale()), field: localizeItemName(field.name, getLocale()) }),
             code: 'TOOL_REQUIRED',
           },
           { status: 400 }

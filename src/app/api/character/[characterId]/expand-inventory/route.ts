@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { recordInventoryExpansion } from '@/lib/characterHistory';
 import { verifyGoldTransferTx } from '@/lib/goldPayments';
 import { localizeServerError } from '@/lib/i18n/serverErrors'
-import { getLocaleFromRequest } from '@/lib/i18n/server'
+import { getLocaleFromRequest, getT } from '@/lib/i18n/server'
 
 function isHex32Bytes(txHash: string): boolean {
   return /^0x[0-9a-fA-F]{64}$/.test(txHash)
@@ -20,6 +20,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { characterId: string } }
 ) {
+  const t = getT()
   const session = await auth();
 
   if (!session || !session.user?.id) {
@@ -73,7 +74,7 @@ export async function POST(
       if (character.gold < goldCost) {
         return NextResponse.json(
           {
-            error: `GOLD insuficiente na mão (tem ${character.gold}, precisa de ${goldCost}). Compre on-chain.`,
+            error: t('Not enough GOLD on hand (you have {have}, you need {need}). Buy on-chain.', { have: character.gold, need: goldCost }),
             requiresPayment: true,
             amountGold: goldCostHuman,
             characterGold: character.gold,

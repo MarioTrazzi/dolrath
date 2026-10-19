@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     // O cercado destrava pelo nível da fazenda da CONTA (soma do farmXp).
     if (getProfessionLevel(await getUserFarmXp(userId)) < FARM_PEN_MIN_LEVEL) {
       return NextResponse.json(
-        { error: `O cercado destrava no nível ${FARM_PEN_MIN_LEVEL} de Fazenda.` },
+        { error: t('The pen unlocks at Farming level {n}.', { n: FARM_PEN_MIN_LEVEL }) },
         { status: 403 }
       )
     }

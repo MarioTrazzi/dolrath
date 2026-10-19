@@ -3,7 +3,7 @@ import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { verifyGoldTransferTx } from '@/lib/goldPayments';
 import { localizeServerError } from '@/lib/i18n/serverErrors'
-import { getLocaleFromRequest } from '@/lib/i18n/server'
+import { getLocaleFromRequest, getT } from '@/lib/i18n/server'
 
 function isHex32Bytes(txHash: string): boolean {
   return /^0x[0-9a-fA-F]{64}$/.test(txHash)
@@ -18,6 +18,7 @@ function jsonSafe<T>(value: T): any {
 // 🌐 Expande o Baú Geral da conta (User.globalInventorySlots). Mesmo modelo do
 // expand-inventory do personagem: pagamento on-chain em GOLD para a treasury.
 export async function POST(req: NextRequest) {
+  const t = getT()
   const session = await auth();
 
   if (!session || !session.user?.id) {
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest) {
       if (user.goldBalance < goldCost) {
         return NextResponse.json(
           {
-            error: `GOLD insuficiente no banco (tem ${user.goldBalance}, precisa de ${goldCost}). Compre on-chain.`,
+            error: t('Not enough GOLD in the bank (you have {have}, you need {need}). Buy on-chain.', { have: user.goldBalance, need: goldCost }),
             requiresPayment: true,
             amountGold: goldCostHuman,
             bankGold: user.goldBalance,

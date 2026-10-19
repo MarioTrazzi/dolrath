@@ -4,7 +4,8 @@ import { prisma } from '@/lib/prisma'
 import { assertInventoryRoom } from '@/lib/inventoryMutations'
 import { isShopItem } from '@/lib/itemCatalog'
 import { localizeServerError } from '@/lib/i18n/serverErrors'
-import { getLocaleFromRequest, getT } from '@/lib/i18n/server'
+import { getLocaleFromRequest, getT, getLocale } from '@/lib/i18n/server'
+import { localizeItemName } from '@/lib/i18n/catalog'
 
 export const dynamic = 'force-dynamic'
 
@@ -86,7 +87,7 @@ export async function POST(req: NextRequest) {
       added: qty,
       cost: totalCost,
       characterGold: result.characterGold,
-      message: `🛒 Comprou ${qty}× ${item.name} por ${totalCost} GOLD.`,
+      message: t('🛒 Bought {qty}× {name} for {cost} GOLD.', { qty, name: localizeItemName(item.name, getLocale()), cost: totalCost }),
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Falha na compra'

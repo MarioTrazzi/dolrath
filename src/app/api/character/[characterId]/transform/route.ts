@@ -19,7 +19,8 @@ import {
 } from '@/lib/transformationSystem'
 import { regenAndPersist } from '@/lib/staminaServer'
 import { requireApiActor } from '@/lib/botFleetAuth'
-import { getT } from '@/lib/i18n/server'
+import { getT, getLocale } from '@/lib/i18n/server'
+import { localizeTransformationName } from '@/lib/i18n/combatNames'
 
 export async function POST(
   req: NextRequest,
@@ -87,13 +88,13 @@ export async function POST(
 
     if (!isArena && character.mp < config.cost.mp) {
       return NextResponse.json({
-        error: `MP insuficiente: precisa de ${config.cost.mp}, tem ${character.mp}`,
+        error: t('Not enough MP: you need {need}, you have {have}', { need: config.cost.mp, have: character.mp }),
         canTransform: false,
       }, { status: 400 })
     }
     if (!isArena && character.stamina < config.cost.stamina) {
       return NextResponse.json({
-        error: `Stamina insuficiente: precisa de ${config.cost.stamina}, tem ${character.stamina}`,
+        error: t('Not enough stamina: you need {need}, you have {have}', { need: config.cost.stamina, have: character.stamina }),
         canTransform: false,
       }, { status: 400 })
     }
@@ -122,7 +123,7 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      message: `🎯 Transformação em ${config.name} ativada!`,
+      message: t('🎯 Transformation into {name} activated!', { name: localizeTransformationName(config.name, getLocale()) }),
       character: {
         id: updatedCharacter.id,
         name: updatedCharacter.name,

@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
       return { characterGold: char?.gold ?? 0, bankGold: user.goldBalance }
     })
 
-    return NextResponse.json({ success: true, moved: value, ...result, message: `🏦 Depositou ${value} 🪙 no banco.` })
+    return NextResponse.json({ success: true, moved: value, ...result, message: t('🏦 Deposited {n} 🪙 in the bank.', { n: value }) })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Falha ao depositar'
     const status = /insuficiente|não encontrado/.test(message) ? 400 : 500

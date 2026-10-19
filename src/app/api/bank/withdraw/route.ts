@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
       return { characterGold: char.gold, bankGold: bank?.goldBalance ?? 0 }
     })
 
-    return NextResponse.json({ success: true, moved: value, ...result, message: `🏦 Sacou ${value} 🪙 do banco.` })
+    return NextResponse.json({ success: true, moved: value, ...result, message: t('🏦 Withdrew {n} 🪙 from the bank.', { n: value }) })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Falha ao sacar'
     const status = /insuficiente|não encontrado/.test(message) ? 400 : 500

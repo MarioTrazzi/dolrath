@@ -75,7 +75,7 @@ const RULES: Rule[] = [
   { re: /^O item já está com durabilidade máxima$/, en: () => 'The item is already at full durability' },
   {
     re: /^É necessário (.+) \(Coleta — Vale dos Minérios\) para reparar (.+)\.$/,
-    en: (m, l) => `You need ${localizeItemName(m[1], l)} (Gathering — Ore Valley) to repair ${localizeItemName(m[2], l)}.`,
+    en: (m, l) => `You need ${localizeItemName(m[1], l)} (Gathering — Ore Vale) to repair ${localizeItemName(m[2], l)}.`,
   },
   {
     re: /^É necessário um (.+) \(de chefe de masmorra\) para reparar (.+)\.$/,

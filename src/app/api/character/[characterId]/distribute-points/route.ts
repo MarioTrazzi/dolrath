@@ -73,14 +73,22 @@ export async function POST(request: NextRequest, { params }: { params: { charact
       return NextResponse.json({ error: 'Invalid character race or class' }, { status: 400 });
     }
 
-    // Atualizar personagem no banco
-    const updatedCharacter = await prisma.character.update({
-      where: { id: characterId },
+    // Atualizar personagem no banco — condicional nos pontos LIDOS: dois POSTs
+    // simultâneos gastavam os mesmos 5 pontos e o herói ganhava 10 de atributo.
+    const claimed = await prisma.character.updateMany({
+      where: { id: characterId, availablePoints: character.availablePoints },
       data: {
         ...recalc.data,
         availablePoints: availablePoints - totalPointsToSpend,
       }
     });
+    if (claimed.count === 0) {
+      return NextResponse.json(
+        { error: 'Os pontos mudaram enquanto você distribuía — recarregue e tente de novo.' },
+        { status: 409 }
+      );
+    }
+    const updatedCharacter = await prisma.character.findUniqueOrThrow({ where: { id: characterId } });
 
     // Log para debug
     const { finals, data } = recalc;

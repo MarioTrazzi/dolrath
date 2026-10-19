@@ -57,7 +57,20 @@ export async function POST(request: NextRequest) {
 
         const character = await prisma.character.findUnique({
           where: { id },
-          select: { id: true, level: true, stamina: true, maxStamina: true, staminaUpdatedAt: true },
+          select: {
+            id: true, level: true, stamina: true, maxStamina: true, staminaUpdatedAt: true,
+            // 🔒 Ficha de combate AUTORITATIVA. O socket montava os levers (poder,
+            // armadura, HP) com classe/gear/atributos/árvore vindos do PAYLOAD DO
+            // CLIENTE — um cliente modificado se declarava lendário +20 numa sala
+            // ranqueada. Agora o socket refaz a conta com isto antes da luta começar.
+            class: true, maxHp: true, attributes: true, baseStats: true, skillTree: true,
+            equipment: {
+              select: {
+                slot: true, enhancementLevel: true, durability: true, maxDurability: true,
+                item: { select: { name: true, type: true, stats: true } },
+              },
+            },
+          },
         })
         if (!character) return null
 
@@ -76,6 +89,18 @@ export async function POST(request: NextRequest) {
           // menos (o pool é a soma). O socket recusa a entrada.
           gathering: !!live.gathering,
           virtual: false as const,
+          // Mesmas derivações que o cliente da arena faz a partir de /api/character/[id]
+          // (combat/page.tsx) — só que lidas do banco, não do payload.
+          sheet: {
+            class: character.class,
+            level: character.level,
+            maxHp: character.maxHp,
+            maxMp: Number((character.baseStats as any)?.maxMp) || 50,
+            attributes: character.attributes ?? null,
+            baseStats: character.baseStats ?? null,
+            skillTree: character.skillTree ?? null,
+            equipment: character.equipment,
+          },
         }
       })
     )

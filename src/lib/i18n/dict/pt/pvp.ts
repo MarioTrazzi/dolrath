@@ -184,4 +184,6 @@ export const PVP_PT: Record<string, string> = {
   '{mp} MP · {sta}⚡ · {turns} turns': '{mp} MP · {sta}⚡ · {turns} turnos',
   '{n} forms': '{n} formas',
   'Loading combat...': 'Carregando combate...',
+  'Your combat session expired. Reload the page to join the fight.':
+    'Sua sessão de combate expirou. Recarregue a página para entrar na luta.',
 }

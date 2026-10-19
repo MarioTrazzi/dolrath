@@ -122,7 +122,7 @@ function buildPlayerPayload(char, userId) {
 }
 
 /** AI de combate — mesmo fluxo do training-bot (ready → iniciativa → atacar no turno). */
-function playMatch(socketUrl, roomId, player, userId) {
+function playMatch(socketUrl, roomId, player, userId, ticket = null) {
   return new Promise((resolve) => {
     const socket = io(socketUrl, { transports: ['websocket', 'polling'], reconnection: false })
     let finished = false
@@ -163,6 +163,7 @@ function playMatch(socketUrl, roomId, player, userId) {
         isCreator: false,
         role: 'fighter',
         training: false,
+        ticket,
       })
     })
 
@@ -276,7 +277,10 @@ function queueForMatch(socketUrl, bot, player) {
       clearTimeout(timeout)
       logEvent('match_found', { characterId: bot.characterId, roomId: data.roomId })
       socket.disconnect()
-      const result = await playMatch(socketUrl, data.roomId, player, bot.userId)
+      // 🎟️ O socket só aceita lutador com ingresso do dono (/api/battle/ticket).
+      const ticketRes = await api('POST', '/api/battle/ticket', bot.characterId, { characterId: bot.characterId })
+      const ticket = ticketRes.ok ? ticketRes.json?.ticket ?? null : null
+      const result = await playMatch(socketUrl, data.roomId, player, bot.userId, ticket)
       resolve(result)
     })
 

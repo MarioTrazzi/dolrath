@@ -10,6 +10,7 @@ const { spawnTrainingBot, MONSTERS, DEFAULT_TRAINING_OPPONENT_KEY } = require('.
 // ⚔️ Oponente de PvP: se a fila não achar humano em PVP_BOT_FILL_MS, o servidor cria
 // um oponente espelho e joga o jogador direto numa sala com ele.
 const { buildQueuePersona, refinePersonaFor, buildBotPlayer, spawnPvpBot } = require('./pvp-bot')
+const { verifySocketTicket } = require('./socketTicket')
 
 // ⚔️ MODELO DE COMBATE ENXUTO (fonte da verdade): poder × sorte × (1−DR), mitigação
 // proporcional, levers por classe (poder/armadura/hp/evasão) escalados por nível+gear.
@@ -135,7 +136,9 @@ function derivePlayerLevers(player, gearTierOverride) {
   const cls = normalizeClass(player.class)
   const level = Math.max(1, Number(player.level) || 1)
   const equipped = Array.isArray(player.equipment)
-    ? player.equipment.map((e) => ({ rarity: e?.item?.rarity ?? e?.rarity, enhancementLevel: e?.enhancementLevel }))
+    // Raridade mora em item.stats.rarity (o Item do Prisma não tem coluna rarity);
+    // lendo só item.rarity toda peça virava COMMON no gearTier.
+    ? player.equipment.map((e) => ({ rarity: e?.item?.rarity ?? e?.item?.stats?.rarity ?? e?.rarity, enhancementLevel: e?.enhancementLevel }))
     : []
   const gearTier = gearTierOverride != null ? gearTierOverride : CM.deriveGearTier(equipped)
   const attrs = readAttrs(player)
@@ -230,6 +233,77 @@ function fightHpPool(player, maxHpPct) {
   const gearHp = sumEquipmentHp(player.equipment)
   const pct = Number(maxHpPct) || 0
   return Math.max(1, Math.round((sheet + gearHp) * (1 + pct)))
+}
+
+/**
+ * Monta o lutador para a luta: levers (poder/armadura/esquiva), pool de HP/MP, forma
+ * zerada e stamina da luta cheia. Roda no join (com o payload) e DE NOVO quando a ficha
+ * autoritativa chega do banco (verifyFighterState) — por isso é idempotente sobre a base
+ * da ficha (sheetMaxHp/sheetMaxMp).
+ */
+function setupFighterForFight(room, player) {
+  const training = room.isTraining === true
+  const mirrorTier = training && player.trainingTargetGearTier != null
+    ? Math.max(0, Math.min(1, Number(player.trainingTargetGearTier) || 0))
+    : undefined
+  // 🤖 Oponente de PvP: o bot não tem peças, então herda o gearTier do humano. O
+  // valor NÃO vem do payload — é o tier que o servidor calculou para o jogador desta
+  // sala, e só se aplica ao id que o próprio servidor gerou (room.botFighterId). Um
+  // cliente que se anuncie como `bot_…` cai fora do `if` e luta com tier 0.
+  const botTier = player.id === room.botFighterId && room.botMirrorTier != null
+    ? Math.max(0, Math.min(1, Number(room.botMirrorTier) || 0))
+    : undefined
+  const { levers, cls, gearTier } = derivePlayerLevers(player, mirrorTier ?? botTier)
+  const trainMult = training ? (Number(player.trainingLeverMult) || 1) : 1
+  // Escala SIMÉTRICA (power/armor/hp/K juntos), igual à transformação: é o que faz o
+  // multiplicador significar a mesma dificuldade em qualquer ponto da progressão.
+  const finalLevers = trainMult !== 1 ? CM.transformLevers(levers, trainMult) : levers
+  // Levers = ofensa/defesa/esquiva. HP da barra = ficha+gear (igual PvE).
+  // Em treino o peer ainda escala power/armor/K pelo difficultyMult, mas o pool
+  // de vida espelha o humano × mult (não levers.hp — isso gerava 36/29).
+  player.levers = finalLevers
+  player.baseLevers = finalLevers // guardado p/ reverter o buff de transformação
+  player.combatClass = cls
+  player.gearTier = gearTier
+  // Toda luta começa SEM forma — a forma é só da sessão (sync_transformation).
+  // Nunca herdar isTransformed do payload/DB (bug: entrava já transformado).
+  player.isTransformed = false
+  player.transformationType = null
+  if (player.transformationData && typeof player.transformationData === 'object') {
+    player.transformationData = {
+      ...player.transformationData,
+      remainingTurns: 0,
+      cooldownTurns: 0,
+    }
+  }
+  // 🌳 Vitalidade/Reservas Arcanas (maxHpPct/maxMpPct): passivas permanentes da árvore.
+  const joinUnlocks = getUnlocksFor(player)
+  // Base da FICHA guardada uma vez: esta função roda de novo quando a ficha
+  // autoritativa chega do banco (verifyFighterState) e não pode somar o gear/
+  // passivas sobre um maxHp que já é o pool da luta.
+  if (player.sheetMaxHp == null) player.sheetMaxHp = player.maxHp
+  if (player.sheetMaxMp == null) player.sheetMaxMp = player.maxMp
+  const mirrorHp = Number(player.trainingMirrorMaxHp)
+  if (training && Number.isFinite(mirrorHp) && mirrorHp > 0) {
+    player.maxHp = Math.max(1, Math.round(mirrorHp * (trainMult || 1)))
+  } else {
+    // Ajuste de classe só-PvP entra AQUI, onde a barra nasce (levers.hp não é lido).
+    player.maxHp = Math.max(1, Math.round(fightHpPool({ ...player, maxHp: player.sheetMaxHp }, joinUnlocks.passives.maxHpPct) * pvpClassHpMult(cls, player.level)))
+  }
+  player.hp = player.maxHp
+  player.initialHp = player.maxHp
+  // ⚡ Toda luta começa com a barra de stamina CHEIA — ela é da luta, não da
+  // carteira (ver resetFightStamina). O `maxStamina` do payload é do CLIENTE e vale
+  // de placeholder até `verifyFighterState` trazer o do banco, que reenche a barra.
+  resetFightStamina(player)
+  // O portão da carteira (tem a taxa fixa da luta?) espera essa mesma verificação:
+  // `toggle_ready` fica travado enquanto `staminaVerified` for false. Bots do
+  // servidor (treino e oponente da fila) não têm carteira e já nascem verificados.
+  player.staminaVerified = isServerBotId(room, player.id) || String(player.id).startsWith('bot_')
+  player.staminaBlocked = null
+  player.walletStamina = null
+  player.maxMp = Math.round((Number(player.sheetMaxMp) || 0) * (1 + (joinUnlocks.passives.maxMpPct || 0)))
+  player.mp = player.maxMp
 }
 
 // Configuração de porta - Railway usa PORT, Heroku também
@@ -623,6 +697,29 @@ async function verifyFighterState(roomId, playerId) {
       // barra da luta: a barra nasce cheia e é da luta (ver resetFightStamina). Antes,
       // `player.stamina = state.stamina` fazia quem chegava com o saldo raspando lutar
       // com meia barra de stamina — punição dupla, e invisível.
+      // 🔒 Ficha AUTORITATIVA: classe, nível, atributos, árvore e gear do BANCO
+      // substituem o que o cliente mandou, e o lutador é remontado com eles. Só antes
+      // da luta e fora do treino (lá o payload espelhado é o próprio objetivo).
+      if (state.sheet && !room.isActive && !room.isTraining) {
+        const sh = state.sheet
+        player.class = sh.class
+        player.level = sh.level
+        player.attributes = sh.attributes
+        player.baseStats = sh.baseStats
+        player.skillTree = sh.skillTree
+        player.equipment = Array.isArray(sh.equipment) ? sh.equipment : []
+        player.sheetMaxHp = Number(sh.maxHp) || player.sheetMaxHp
+        player.sheetMaxMp = Number(sh.maxMp) || player.sheetMaxMp
+        setupFighterForFight(room, player)
+        // O oponente-bot espelha o gearTier do humano: acompanha a ficha real.
+        if (room.botFighterId) {
+          room.botMirrorTier = player.gearTier
+          const bot = room.player1?.id === room.botFighterId ? room.player1
+            : room.player2?.id === room.botFighterId ? room.player2 : null
+          if (bot) setupFighterForFight(room, bot)
+        }
+      }
+
       const fee = Number(data.entryStamina ?? data.minEntryStamina) || 0
       player.walletStamina = state.stamina
       player.maxStamina = state.maxStamina
@@ -1082,9 +1179,38 @@ io.on('connection', (socket) => {
     }
   })
 
-  socket.on('join_room', ({ roomId, player, isCreator, role = RoomRole.FIGHTER, training = false, monster = 'goblin', password = null }) => {
+  socket.on('join_room', ({ roomId, player, isCreator, role = RoomRole.FIGHTER, training = false, monster = 'goblin', password = null, ticket = null }) => {
+    if (!player || typeof player.id !== 'string') return
     console.log(`Jogador ${player.name} entrando na sala ${roomId} como ${role}${training ? ` (treino vs ${monster})` : ''}`)
-    
+
+    // 🎟️ Lutador de sala com recompensa precisa provar que é DONO do herói (ingresso
+    // assinado por /api/battle/ticket). Sem isto qualquer um sentava como o herói de
+    // outra conta — inclusive "reconectando" no assento dele — e perdia de propósito.
+    // Ficam de fora: espectador, sala de treino (sem recompensa) e os bots que o
+    // PRÓPRIO servidor cria (o id do oponente da fila e os monstros do treino).
+    {
+      const existing = rooms.get(roomId)
+      const seatTaken = !!existing && existing.participants.fighters.some((f) => f.id === player.id)
+      const fighterJoin = role === RoomRole.FIGHTER || seatTaken
+      const trainingRoom = existing ? existing.isTraining === true : (training === true && !!isCreator)
+      const serverBot = !!existing && (
+        player.id === existing.botFighterId ||
+        (existing.isTraining === true && String(player.id).startsWith('monster_'))
+      )
+      if (fighterJoin && !trainingRoom && !serverBot) {
+        const check = verifySocketTicket(ticket, player.id)
+        if (!check.ok) {
+          console.log(`⛔ [${roomId}] ingresso recusado para ${player.id}: ${check.reason}`)
+          socket.emit('join_room_error', {
+            error: 'Sua sessão de combate expirou. Recarregue a página para entrar na luta.',
+            code: 'BAD_TICKET',
+            availableRoles: existing ? getAvailableRoles(existing) : undefined,
+          })
+          return
+        }
+      }
+    }
+
     playerSockets.set(player.id, socket.id)
     
     let room = rooms.get(roomId)
@@ -1190,65 +1316,7 @@ io.on('connection', (socket) => {
       // não há recompensa a capturar. Sem este gate, um cliente modificado mandava
       // `trainingLeverMult: 5` numa sala ranqueada e ficava 5× mais forte (confirmado em
       // QA: pow 716 vs 143) — direto em ouro e em pontos que pagam DOL no top 10.
-      const training = room.isTraining === true
-      const mirrorTier = training && player.trainingTargetGearTier != null
-        ? Math.max(0, Math.min(1, Number(player.trainingTargetGearTier) || 0))
-        : undefined
-      // 🤖 Oponente de PvP: o bot não tem peças, então herda o gearTier do humano. O
-      // valor NÃO vem do payload — é o tier que o servidor calculou para o jogador desta
-      // sala, e só se aplica ao id que o próprio servidor gerou (room.botFighterId). Um
-      // cliente que se anuncie como `bot_…` cai fora do `if` e luta com tier 0.
-      const botTier = player.id === room.botFighterId && room.botMirrorTier != null
-        ? Math.max(0, Math.min(1, Number(room.botMirrorTier) || 0))
-        : undefined
-      const { levers, cls, gearTier } = derivePlayerLevers(player, mirrorTier ?? botTier)
-      const trainMult = training ? (Number(player.trainingLeverMult) || 1) : 1
-      // Escala SIMÉTRICA (power/armor/hp/K juntos), igual à transformação: é o que faz o
-      // multiplicador significar a mesma dificuldade em qualquer ponto da progressão.
-      const finalLevers = trainMult !== 1 ? CM.transformLevers(levers, trainMult) : levers
-      // Levers = ofensa/defesa/esquiva. HP da barra = ficha+gear (igual PvE).
-      // Em treino o peer ainda escala power/armor/K pelo difficultyMult, mas o pool
-      // de vida espelha o humano × mult (não levers.hp — isso gerava 36/29).
-      player.levers = finalLevers
-      player.baseLevers = finalLevers // guardado p/ reverter o buff de transformação
-      player.combatClass = cls
-      player.gearTier = gearTier
-      // Toda luta começa SEM forma — a forma é só da sessão (sync_transformation).
-      // Nunca herdar isTransformed do payload/DB (bug: entrava já transformado).
-      player.isTransformed = false
-      player.transformationType = null
-      if (player.transformationData && typeof player.transformationData === 'object') {
-        player.transformationData = {
-          ...player.transformationData,
-          remainingTurns: 0,
-          cooldownTurns: 0,
-        }
-      }
-      // 🌳 Vitalidade/Reservas Arcanas (maxHpPct/maxMpPct): passivas permanentes da árvore.
-      const joinUnlocks = getUnlocksFor(player)
-      const mirrorHp = Number(player.trainingMirrorMaxHp)
-      if (training && Number.isFinite(mirrorHp) && mirrorHp > 0) {
-        player.maxHp = Math.max(1, Math.round(mirrorHp * (trainMult || 1)))
-      } else {
-        // Ajuste de classe só-PvP entra AQUI, onde a barra nasce (levers.hp não é lido).
-        player.maxHp = Math.max(1, Math.round(fightHpPool(player, joinUnlocks.passives.maxHpPct) * pvpClassHpMult(cls, player.level)))
-      }
-      player.hp = player.maxHp
-      player.initialHp = player.maxHp
-      // ⚡ Toda luta começa com a barra de stamina CHEIA — ela é da luta, não da
-      // carteira (ver resetFightStamina). O `maxStamina` do payload é do CLIENTE e vale
-      // de placeholder até `verifyFighterState` trazer o do banco, que reenche a barra.
-      resetFightStamina(player)
-      // O portão da carteira (tem a taxa fixa da luta?) espera essa mesma verificação:
-      // `toggle_ready` fica travado enquanto `staminaVerified` for false. Bots do
-      // servidor (treino e oponente da fila) não têm carteira e já nascem verificados.
-      player.staminaVerified = isServerBotId(room, player.id) || String(player.id).startsWith('bot_')
-      player.staminaBlocked = null
-      player.walletStamina = null
-      if (joinUnlocks.passives.maxMpPct) {
-        player.maxMp = Math.round((player.maxMp || 0) * (1 + joinUnlocks.passives.maxMpPct))
-        player.mp = player.maxMp
-      }
+      setupFighterForFight(room, player)
 
       // Criador retornando (refresh/remontagem): remover a entrada antiga para não ocupar a vaga do oponente
       if (isCreator && room.player1 && room.player1.id !== player.id) {

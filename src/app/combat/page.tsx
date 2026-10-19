@@ -769,7 +769,23 @@ function CombatPageContent() {
       }
       
       setCurrentPlayer(playerData)
-      
+
+      // 🎟️ Ingresso da arena: prova ao socket que este herói é nosso. Buscado a cada
+      // join (vale 15 min), então reconectar no meio de uma luta longa também passa.
+      let ticket: string | null = null
+      if (characterId && userRole === 'fighter') {
+        try {
+          const res = await fetch('/api/battle/ticket', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ characterId: playerData.id }),
+          })
+          if (res.ok) ticket = (await res.json())?.ticket ?? null
+        } catch {
+          // Sem ingresso o socket recusa com BAD_TICKET — tratado em onJoinError.
+        }
+      }
+
       // Entrar na sala via Socket.IO com role
       socket.emit('join_room', {
         roomId,
@@ -779,10 +795,16 @@ function CombatPageContent() {
         training: isTraining,
         monster: trainingMonster,
         password: roomPassword || null,
+        ticket,
       })
     }
 
     const onJoinError = (err: { error?: string; code?: string }) => {
+      if (err?.code === 'BAD_TICKET') {
+        alert(t('Your combat session expired. Reload the page to join the fight.'))
+        router.push('/combat-lobby')
+        return
+      }
       if (err?.code === 'BAD_PASSWORD') {
         const entered = typeof window !== 'undefined'
           ? window.prompt('Esta sala exige senha. Digite a senha:') || ''

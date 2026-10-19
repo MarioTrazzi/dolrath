@@ -40,7 +40,7 @@ function BeastThumb({ name, image, emoji }: { name: string; image?: string; emoj
 export default function DungeonsPage() {
   const t = useT()
   const { locale } = useI18n()
-  const { data: session } = useSession()
+  const { data: session, status: sessionStatus } = useSession()
   const router = useRouter()
   // Herói ATIVO global (navbar): a masmorra usa sempre o personagem selecionado.
   // `refresh` recarrega /api/character/me — usado ao voltar de uma run para
@@ -82,6 +82,9 @@ export default function DungeonsPage() {
   const [gatheringWarning, setGatheringWarning] = useState<string | null>(null)
 
   useEffect(() => {
+    // Enquanto o SessionProvider ainda carrega, `session` é undefined — mandar
+    // pro login aqui chutava pra fora quem dava F5 ou abria /dungeons direto.
+    if (sessionStatus === 'loading') return
     if (!session) {
       router.push('/auth/login')
       return
@@ -149,7 +152,7 @@ export default function DungeonsPage() {
     }
 
     fetchCharacters()
-  }, [session, router])
+  }, [session, sessionStatus, router])
 
   // Mantém o personagem do contexto (navbar) como o selecionado da masmorra.
   useEffect(() => {

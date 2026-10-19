@@ -140,7 +140,7 @@ async function getSigner(expectedChainId: number) {
 
 export default function MarketplacePage() {
   const { t, locale } = useI18n()
-  const { data: session } = useSession()
+  const { data: session, status: sessionStatus } = useSession()
   const [config, setConfig] = useState<MarketConfig | null>(null)
   const [listings, setListings] = useState<Listing[]>([])
   const [loadingList, setLoadingList] = useState(true)
@@ -551,6 +551,11 @@ export default function MarketplacePage() {
     } finally {
       setBusy(false)
     }
+  }
+
+  // Sem isto o "faça login" piscava a cada F5 enquanto a sessão carregava.
+  if (sessionStatus === 'loading') {
+    return <div className="max-w-5xl mx-auto p-8 text-center text-[#8a8a90]">{t('Loading...')}</div>
   }
 
   if (!session) {

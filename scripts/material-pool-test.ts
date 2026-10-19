@@ -29,6 +29,19 @@ function makeTx(opts: {
       if (w.item?.type && r.item.type !== w.item.type) return false
       return true
     })
+  // updateMany/deleteMany do take atômico (inventoryMutations.takeFrom*):
+  // decremento condicionado a `quantity >= n` e limpeza da linha que zerou.
+  const condDec = (rows: Row[]) => async ({ where, data }: any) => {
+    const r = rows.find((x) => x.id === where.id)
+    if (!r || (where.quantity?.gte !== undefined && r.quantity < where.quantity.gte)) return { count: 0 }
+    r.quantity -= data.quantity.decrement
+    return { count: 1 }
+  }
+  const delZero = (rows: Row[]) => async ({ where }: any) => {
+    const i = rows.findIndex((x) => x.id === where.id && x.quantity <= 0)
+    if (i >= 0) rows.splice(i, 1)
+    return { count: i >= 0 ? 1 : 0 }
+  }
   return {
     _char: char, _glob: glob,
     characterInventory: {
@@ -41,6 +54,8 @@ function makeTx(opts: {
         if (data.quantity?.increment) r.quantity += data.quantity.increment
       },
       delete: async ({ where }: any) => { char.splice(char.findIndex((x) => x.id === where.id), 1) },
+      updateMany: condDec(char),
+      deleteMany: delZero(char),
       create: async ({ data }: any) => {
         const r = { id: `c${++seq}`, itemId: data.itemId, quantity: data.quantity, enhancementLevel: 0, item: { name: data.itemId, type: 'CONSUMABLE' } }
         char.push(r); return r
@@ -56,6 +71,8 @@ function makeTx(opts: {
         if (data.quantity?.decrement) r.quantity -= data.quantity.decrement
       },
       delete: async ({ where }: any) => { glob.splice(glob.findIndex((x) => x.id === where.id), 1) },
+      updateMany: condDec(glob),
+      deleteMany: delZero(glob),
       upsert: async ({ where, create, update }: any) => {
         const r = glob.find((x) => x.itemId === where.userId_itemId.itemId)
         if (r) r.quantity += update.quantity.increment
@@ -171,6 +188,23 @@ async function main() {
     await depositCraftOutput(tx, { characterId: 'ch', userId: 'u', itemId: 'out', quantity: 1, isEquipment: false })
   } catch (e: any) { threw = e.message }
   ok('estourou com mensagem de validação', /Baú Geral cheio/.test(threw), `msg: "${threw}"`)
+
+  // ---- 11. Duas bancadas com o MESMO pool lido (corrida) ----
+  // O pool é lido antes da escrita. Antes, a segunda bancada decrementava às
+  // cegas: a pilha ia a negativo e o lote saía em dobro. Agora o take é
+  // condicional e quem chega depois estoura com "Falta …".
+  console.log('\n11. Duas bancadas, mesmo pool velho → a segunda falha')
+  tx = makeTx({
+    char: [{ id: 'c1', itemId: 'i1', quantity: 3, enhancementLevel: 0, item: item('Ferro') }],
+    global: [], inventorySlots: 25, globalSlots: 50,
+  })
+  const poolA = await loadMaterialPool(tx, { characterId: 'ch', userId: 'u', names: ['Ferro'] })
+  const poolB = await loadMaterialPool(tx, { characterId: 'ch', userId: 'u', names: ['Ferro'] })
+  await consumeFromPool(tx, poolA, [{ name: 'Ferro', quantity: 3 }])
+  let raceErr = ''
+  try { await consumeFromPool(tx, poolB, [{ name: 'Ferro', quantity: 3 }]) } catch (e: any) { raceErr = e.message }
+  ok('segunda bancada recusada', /Falta Ferro/.test(raceErr), `msg: "${raceErr}"`)
+  ok('pilha não foi a negativo (linha apagada)', tx._char.length === 0, JSON.stringify(tx._char))
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} ${pass} passaram, ${fail} falharam`)
   process.exit(fail === 0 ? 0 : 1)

@@ -94,14 +94,20 @@ export async function POST(
         )
       }
 
-      await tx.character.update({
-        where: { id: character.id },
+      // Condicional no saldo (o lido acima pode ter ficado velho).
+      const restored = await tx.character.updateMany({
+        where: { id: character.id, ...(cost > 0 ? { gold: { gte: cost } } : {}) },
         data: {
           hp: character.maxHp,
           mp: character.maxMp,
           ...(cost > 0 ? { gold: { decrement: cost } } : {}),
         },
       })
+      if (restored.count === 0) {
+        throw new Error(
+          `GOLD insuficiente na carteira do personagem: precisa de ${cost} 🪙 para a restauração.`
+        )
+      }
 
       return {
         restored: true,

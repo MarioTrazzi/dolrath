@@ -148,10 +148,15 @@ export async function POST(
       )
 
       // 4. Debita o gold e credita o XP de Culinária no mesmo update.
-      await tx.character.update({
-        where: { id: character.id },
+      // Condicional no saldo: a leitura do passo 1 pode ter ficado velha (duas
+      // bancadas abertas) e a carteira ia a negativo.
+      const debited = await tx.character.updateMany({
+        where: { id: character.id, gold: { gte: totalGoldCost } },
         data: { gold: { decrement: totalGoldCost }, cookXp: { increment: roll.xpGained } },
       })
+      if (debited.count === 0) {
+        throw new Error(`GOLD insuficiente na carteira do personagem: precisa de ${totalGoldCost} 🪙.`)
+      }
 
       // 5. Produz o prato (acha/cria o Item on-demand e EMPILHA — comida agrupa).
       let item = await tx.item.findFirst({ where: { name: recipe.outputName } })

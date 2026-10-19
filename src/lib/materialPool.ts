@@ -1,5 +1,10 @@
 import { Prisma } from '@prisma/client'
-import { assertInventoryRoom } from './inventoryMutations'
+import {
+  assertInventoryRoom,
+  takeFromCharacterInventory,
+  takeFromUserInventory,
+  InventoryQuantityError,
+} from './inventoryMutations'
 
 /**
  * 🌐⚒️ POOL DE INSUMOS — mochila do herói + Baú Geral da conta.
@@ -135,26 +140,21 @@ export async function consumeFromPool(
       // insumo duas vezes, a segunda passada tem que ver o saldo já gasto — hoje
       // nenhuma das 84 receitas repete nome, e é assim que continua inofensivo.
       row.quantity -= take
-      if (row.quantity > 0) {
+      // Condicional (takeFrom*): o pool foi lido antes e duas bancadas abertas
+      // gastavam o MESMO insumo — a pilha ia a negativo e o lote saía em dobro.
+      // A linha que zera é apagada no mesmo passo (sem fantasma de quantity 0).
+      // [[dolrath-inventory-ghost-rows]]
+      try {
         if (row.source === 'character') {
-          await tx.characterInventory.update({
-            where: { id: row.id },
-            data: { quantity: { decrement: take } },
-          })
+          await takeFromCharacterInventory(tx, row.id, take)
         } else {
-          await tx.userInventory.update({
-            where: { id: row.id },
-            data: { quantity: { decrement: take } },
-          })
+          await takeFromUserInventory(tx, row.id, take)
         }
-      } else {
-        // Zerou: APAGA a linha. Linha de quantity 0 é fantasma — aparece no baú
-        // mas nenhuma ação a aceita. [[dolrath-inventory-ghost-rows]]
-        if (row.source === 'character') {
-          await tx.characterInventory.delete({ where: { id: row.id } })
-        } else {
-          await tx.userInventory.delete({ where: { id: row.id } })
+      } catch (err) {
+        if (err instanceof InventoryQuantityError) {
+          throw new Error(`Falta ${need.name} para completar o lote.`)
         }
+        throw err
       }
       remaining -= take
     }

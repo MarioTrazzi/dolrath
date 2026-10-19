@@ -24,6 +24,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { generateTransformationImage, TransformationGenError } from '@/lib/transformationImageGen'
 import { consumeAiGenPayment, releaseAiGenPayment, AiGenPaymentError } from '@/lib/aiGenPayment'
+import { rateLimitAllow, rateLimited429 } from '@/lib/rateLimit'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -59,6 +60,12 @@ export async function POST(req: Request) {
   }
   if (!transformationType) {
     return NextResponse.json({ error: 'transformationType é obrigatório' }, { status: 400 })
+  }
+
+  // 💸 Arte da forma sem regen = caminho GRÁTIS (criação). Teto por conta para
+  // um loop logado não queimar crédito de imagem (ver ai/character-image).
+  if (!body?.regen && !rateLimitAllow(`ai-transformation-image:${session.user.id}`, { windowMs: 60 * 60_000, max: 12 })) {
+    return rateLimited429(600)
   }
 
   const paymentTxHash = String(body?.paymentTxHash || '')

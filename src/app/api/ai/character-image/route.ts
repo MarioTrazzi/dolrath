@@ -8,6 +8,7 @@ import {
 import { mergePromptWithClaude, mergeEditPromptWithClaude } from '@/lib/anthropicPromptMerge';
 import { openaiImageEdit, ImageEditError } from '@/lib/openaiImageEdit';
 import { consumeAiGenPayment, releaseAiGenPayment, AiGenPaymentError } from '@/lib/aiGenPayment';
+import { rateLimitAllow, rateLimited429 } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -154,8 +155,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Prompt obrigatório' }, { status: 400 });
   }
 
+  // 💸 Caminho GRÁTIS (sem pagamento de DOL): cada chamada custa Claude + OpenAI
+  // para nós. A tela de criação pede 1 imagem; sem teto, um script logado gerava
+  // em loop. Teto por conta (por instância — ver lib/rateLimit) e 1 imagem só.
+  if (!rateLimitAllow(`ai-character-image:${session.user.id}`, { windowMs: 60 * 60_000, max: 8 })) {
+    return rateLimited429(600);
+  }
+
   // A criação gera UMA imagem (a NFT); ajustes extras são regerações pagas.
-  const numImages = clampInt(body?.numImages, 1, 4, 1);
+  const numImages = clampInt(body?.numImages, 1, 1, 1);
 
   const model = (process.env.OPENAI_IMAGE_MODEL || 'dall-e-3').trim();
   const size = (process.env.OPENAI_IMAGE_SIZE || '1024x1024').trim();

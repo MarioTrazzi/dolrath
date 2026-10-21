@@ -8,7 +8,7 @@ import { creditCappedSaleGoldTx } from '@/lib/dungeonRunServer'
 import { takeFromCharacterInventory, InventoryQuantityError } from '@/lib/inventoryMutations'
 import { getTFromRequest, getLocaleFromRequest } from '@/lib/i18n/server'
 import { localizeItemName, catalogNameEn } from '@/lib/i18n/catalog'
-import { stillListingLocked } from '@/lib/listingLock'
+import { listingLockErrorKey, stillListingLocked } from '@/lib/listingLock'
 
 // Vende um item do inventário do personagem para o ferreiro. Preço por TIPO
 // (sellPricing: consumível 25%, insumo/equipamento 50%) e o gold creditado entra
@@ -49,8 +49,9 @@ export async function POST(
 
     // Anti-duplicação: peça travada por um lazy-mint em andamento não pode ser
     // vendida ao ferreiro (senão o jogador ganharia gold E a NFT). A trava expira só.
-    if (await stillListingLocked(inventoryItem)) {
-      return NextResponse.json({ error: t('This piece is being listed on the market. Wait a few minutes.') }, { status: 409 })
+    const listingLock = await stillListingLocked(inventoryItem)
+    if (listingLock) {
+      return NextResponse.json({ error: t(listingLockErrorKey(listingLock)) }, { status: 409 })
     }
 
     const qty = Math.max(1, Math.min(inventoryItem.quantity, requestedQty || 1))

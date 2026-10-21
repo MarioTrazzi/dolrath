@@ -17,7 +17,7 @@ import {
 import { takeFromCharacterInventory, InventoryQuantityError, LISTING_LOCK_MS, listingUnlockedWhere } from '@/lib/inventoryMutations'
 import { getTFromRequest, getLocaleFromRequest } from '@/lib/i18n/server'
 import { localizeItemName, catalogNameEn } from '@/lib/i18n/catalog'
-import { stillListingLocked } from '@/lib/listingLock'
+import { listingLockErrorKey, stillListingLocked } from '@/lib/listingLock'
 
 // O estado lido antes da transação (failstacks, item, material) mudou — outra
 // tentativa do mesmo herói passou na frente. Vira 409 ("tente de novo").
@@ -198,8 +198,9 @@ export async function POST(
 
     // 🪙 Peça com mint em andamento não muda (falha pode destruí-la ou consumir a
     // própria pilha): ficaria a NFT e o item. Mesma trava da venda/equipar.
-    if (await stillListingLocked(inventoryItem)) {
-      return NextResponse.json({ error: t('This piece is being listed on the market. Wait a few minutes.') }, { status: 409 })
+    const listingLock = await stillListingLocked(inventoryItem)
+    if (listingLock) {
+      return NextResponse.json({ error: t(listingLockErrorKey(listingLock)) }, { status: 409 })
     }
 
     // Durabilidade precisa cobrir o custo de uma falha (exceto níveis seguros)

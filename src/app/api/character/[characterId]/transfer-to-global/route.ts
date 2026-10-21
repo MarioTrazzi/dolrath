@@ -3,7 +3,7 @@ import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { takeFromCharacterInventory, InventoryQuantityError } from '@/lib/inventoryMutations';
 import { getT } from '@/lib/i18n/server'
-import { stillListingLocked } from '@/lib/listingLock'
+import { listingLockErrorKey, stillListingLocked } from '@/lib/listingLock'
 
 export async function POST(
   req: NextRequest,
@@ -75,9 +75,10 @@ export async function POST(
 
     // Anti-duplicação: peça travada por um lazy-mint em andamento não sai da
     // mochila (mesma regra da venda ao ferreiro).
-    if (await stillListingLocked(characterInventoryItem)) {
+    const listingLock = await stillListingLocked(characterInventoryItem)
+    if (listingLock) {
       return NextResponse.json(
-        { error: 'This piece is being listed on the market. Wait a few minutes.' },
+        { error: t(listingLockErrorKey(listingLock)) },
         { status: 409 }
       );
     }

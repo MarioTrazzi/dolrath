@@ -187,20 +187,28 @@ export async function resolveStaleListingLocks(characterId: string, now = Date.n
 }
 
 /**
- * Para as rotas que usam uma peça (vender, aprimorar, mandar ao Baú, equipar):
- * a linha ainda está presa a uma listagem? Antes de recusar, tenta resolver —
- * um voucher vencido sem uso solta a peça na hora, sem esperar.
+ * Para as rotas que usam uma peça (vender, aprimorar, mandar ao Baú): a linha
+ * ainda está presa a uma listagem? Antes de recusar, tenta resolver — um
+ * voucher vencido sem uso solta a peça na hora. null = livre.
  */
 export async function stillListingLocked(row: {
   id: string
   listingLockedAt?: Date | null
   listingPurchaseId?: string | null
-}): Promise<boolean> {
-  if (!isListingLocked(row)) return false
-  if (!row.listingPurchaseId) return true
+}): Promise<null | 'pending' | 'minted'> {
+  if (!isListingLocked(row)) return null
+  if (!row.listingPurchaseId) return 'pending'
   const state = await resolveListingLock(row.id).catch((e) => {
     console.error('[listingLock] resolve failed', row.id, e)
     return 'pending' as const
   })
-  return state !== 'released' && state !== 'unlocked'
+  if (state === 'released' || state === 'unlocked') return null
+  return state
+}
+
+/** Mensagem (chave i18n) para a peça presa: em listagem ou já virou NFT. */
+export function listingLockErrorKey(state: 'pending' | 'minted'): string {
+  return state === 'minted'
+    ? 'This piece was already minted as an NFT.'
+    : 'This piece is being listed on the market. Wait a few minutes.'
 }

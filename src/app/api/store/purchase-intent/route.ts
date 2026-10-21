@@ -7,6 +7,7 @@ import { verifyGoldTransferTx } from '@/lib/goldPayments'
 import { computeItemKey, computePurchaseId, signItemMintRequest } from '@/lib/itemNftSigning'
 import { Contract, parseUnits } from 'ethers'
 import { getGoldProvider, getGoldContractAddress } from '@/lib/goldOnchain'
+import { consumePayment, PaymentAlreadyUsedError } from '@/lib/consumedPayments'
 
 const ERC20_DECIMALS_ABI = ['function decimals() view returns (uint8)'] as const
 
@@ -82,6 +83,23 @@ export async function POST(req: Request) {
       minAmountHuman: String(item.goldPrice),
       tokenAddress: goldContractAddress,
     })
+
+    // 🧾 Uma tx paga UM item: o purchaseId muda com o itemId, então sem isto o
+    // mesmo pagamento assinava um voucher de mint para cada item da loja.
+    // Reapresentar o MESMO item segue funcionando (voucher idêntico).
+    try {
+      await consumePayment(prisma, {
+        txHash: paymentTxHash,
+        purpose: `store:${itemId}`,
+        userId: session.user.id,
+        allowSamePurpose: true,
+      })
+    } catch (e) {
+      if (e instanceof PaymentAlreadyUsedError) {
+        return NextResponse.json({ error: 'This payment was already used.' }, { status: 409 })
+      }
+      throw e
+    }
 
     // Compute exact paidGold in base units (match decimals).
     const provider = getGoldProvider()

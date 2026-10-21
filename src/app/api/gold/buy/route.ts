@@ -3,6 +3,7 @@ import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { verifyGoldTransferTx } from '@/lib/goldPayments';
 import { getT } from '@/lib/i18n/server'
+import { consumePayment, PaymentAlreadyUsedError } from '@/lib/consumedPayments';
 
 export const dynamic = 'force-dynamic';
 
@@ -101,6 +102,8 @@ export async function POST(req: NextRequest) {
     // Uma corrida com o mesmo txHash aborta no unique e nada é creditado.
     try {
       const updated = await prisma.$transaction(async (tx) => {
+        // 🧾 Livro único: a tx de uma expansão/loja não vira gold de novo aqui.
+        await consumePayment(tx, { txHash: txHashStr, purpose: 'gold_topup', userId });
         await tx.goldTopup.create({
           data: { txHash: txHashStr, userId, characterId, amount },
         });
@@ -115,7 +118,7 @@ export async function POST(req: NextRequest) {
         jsonSafe({ credited: amount, characterGold: updated.gold })
       );
     } catch (e: any) {
-      if (e?.code === 'P2002') {
+      if (e?.code === 'P2002' || e instanceof PaymentAlreadyUsedError) {
         return NextResponse.json(
           { error: t('This transaction was already credited.'), alreadyCredited: true },
           { status: 409 }

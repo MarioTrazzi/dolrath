@@ -11,6 +11,7 @@ import { getRaceTransformations } from '@/lib/transformationSystem'
 import { SKILL_TREE_VERSION } from '@/lib/skillTree'
 import { computeDerivedStats } from '@/lib/combatFormulas'
 import { getT } from '@/lib/i18n/server'
+import { consumePayment, PaymentAlreadyUsedError } from '@/lib/consumedPayments'
 
 function serializeBigIntForJson<T>(value: T): T {
   return JSON.parse(
@@ -310,63 +311,69 @@ export async function POST(req: Request) {
     const transformationImagesValue =
       Object.keys(transformationImagesMap).length > 0 ? transformationImagesMap : null
 
-    const character = await prisma.character.create({
-      data: {
-        name,
-        race,
-        class: class_,
-        avatar: avatarUrl,
-        unlockedTransformation: lockedForm,
-        transformationImage: transformationImageUrl,
-        transformationImages: transformationImagesValue ?? undefined,
-        level: 1,
-        experience: 0,
-        // Stats calculados baseados na distribuição + bônus raciais/classe
-        hp: baseHp,
-        maxHp: baseHp,
-        mp: baseMp,
-        maxMp: baseMp,
-        stamina: baseStamina,
-        maxStamina: baseStamina,
-        baseStats: baseStats,
-        // 🌳 Já nasce com a Árvore de Habilidades inicializada (vazia). Sem isto o
-        // personagem seria "legado" (skillTree null) e cairia no painel de atributos
-        // antigo em vez da árvore. Os 18 pontos de criação já entraram nos atributos;
-        // nasce com 1 ponto livre para gastar na árvore (level-ups somam mais).
-        availablePoints: 1,
-        skillTree: { version: SKILL_TREE_VERSION, purchased: [] },
-        attributes: {
-          ...attributes,
-          // Adicionar informações de transformação para raças que podem
-          isTransformed: false,
-          transformationType: null,
-          transformationData: null,
+    // 🧾 O pagamento de criação vale UM personagem para sempre: o creationTxHash
+    // único da linha some quando o personagem é apagado, e a mesma tx criava
+    // outro (reroll de graça). O livro único sobrevive à exclusão.
+    const character = await prisma.$transaction(async (tx) => {
+      await consumePayment(tx, { txHash: creationTxHashStr, purpose: 'character_create', userId: session.user!.id })
+      return tx.character.create({
+        data: {
+          name,
+          race,
+          class: class_,
+          avatar: avatarUrl,
+          unlockedTransformation: lockedForm,
+          transformationImage: transformationImageUrl,
+          transformationImages: transformationImagesValue ?? undefined,
+          level: 1,
+          experience: 0,
+          // Stats calculados baseados na distribuição + bônus raciais/classe
+          hp: baseHp,
+          maxHp: baseHp,
+          mp: baseMp,
+          maxMp: baseMp,
+          stamina: baseStamina,
+          maxStamina: baseStamina,
+          baseStats: baseStats,
+          // 🌳 Já nasce com a Árvore de Habilidades inicializada (vazia). Sem isto o
+          // personagem seria "legado" (skillTree null) e cairia no painel de atributos
+          // antigo em vez da árvore. Os 18 pontos de criação já entraram nos atributos;
+          // nasce com 1 ponto livre para gastar na árvore (level-ups somam mais).
+          availablePoints: 1,
+          skillTree: { version: SKILL_TREE_VERSION, purchased: [] },
+          attributes: {
+            ...attributes,
+            // Adicionar informações de transformação para raças que podem
+            isTransformed: false,
+            transformationType: null,
+            transformationData: null,
           
-          // Dados das habilidades para referência
-          raceAbilities: raceData.abilities,
-          classAbilities: classData.abilities,
+            // Dados das habilidades para referência
+            raceAbilities: raceData.abilities,
+            classAbilities: classData.abilities,
           
-          // Strength/Agility/Intelligence/Defense finais para o novo sistema
-          strength: finalStr,
-          agility: finalAgi, 
-          intelligence: finalInt,
-          defense: finalDef
-        },
-        gold: 0,
-        creationTxHash: creationTxHashStr,
-        creationPaidAt: new Date(),
-        nftChainId: nftVerified ? nftChainId : null,
-        nftContract: nftVerified ? nftVerified.contractAddress : null,
-        nftTokenId: nftVerified ? nftVerified.tokenId : null,
-        nftTokenUri: nftVerified ? nftVerified.tokenURI : null,
-        nftMintTxHash: nftVerified ? nftMintTxHashStr : null,
-        nftMintedAt: nftVerified ? new Date() : null,
-        user: {
-          connect: {
-            id: session.user.id,
+            // Strength/Agility/Intelligence/Defense finais para o novo sistema
+            strength: finalStr,
+            agility: finalAgi, 
+            intelligence: finalInt,
+            defense: finalDef
+          },
+          gold: 0,
+          creationTxHash: creationTxHashStr,
+          creationPaidAt: new Date(),
+          nftChainId: nftVerified ? nftChainId : null,
+          nftContract: nftVerified ? nftVerified.contractAddress : null,
+          nftTokenId: nftVerified ? nftVerified.tokenId : null,
+          nftTokenUri: nftVerified ? nftVerified.tokenURI : null,
+          nftMintTxHash: nftVerified ? nftMintTxHashStr : null,
+          nftMintedAt: nftVerified ? new Date() : null,
+          user: {
+            connect: {
+              id: session.user.id,
+            },
           },
         },
-      },
+      })
     })
 
     // Log de criação para debug
@@ -391,7 +398,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json(serializeBigIntForJson(character))
   } catch (error) {
-    if ((error as any)?.code === 'P2002') {
+    if ((error as any)?.code === 'P2002' || error instanceof PaymentAlreadyUsedError) {
       // Most common scenario: character was created, but the client failed after (e.g. BigInt JSON serialization).
       // If the tx hashes belong to the current user, return the existing character so the client can proceed.
       try {

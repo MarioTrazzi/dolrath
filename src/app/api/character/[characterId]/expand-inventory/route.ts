@@ -3,6 +3,7 @@ import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { recordInventoryExpansion } from '@/lib/characterHistory';
 import { verifyGoldTransferTx } from '@/lib/goldPayments';
+import { consumePayment, PaymentAlreadyUsedError } from '@/lib/consumedPayments';
 import { localizeServerError } from '@/lib/i18n/serverErrors'
 import { getLocaleFromRequest, getT } from '@/lib/i18n/server'
 
@@ -177,21 +178,22 @@ export async function POST(
     }
 
     // Usar uma transação para garantir atomicidade
-    const result = await prisma.$transaction(async (tx) => {
-      // Atualizar slots do personagem
-      const updatedCharacter = await tx.character.update({
-        where: {
-          id: params.characterId,
-        },
-        data: {
-          inventorySlots: {
-            increment: slots,
-          },
-        },
+    let result
+    try {
+      result = await prisma.$transaction(async (tx) => {
+        // 🧾 O pagamento vale UMA expansão: sem isto a mesma tx rendia slots para sempre.
+        await consumePayment(tx, { txHash: txHashStr, purpose: 'expand_inventory', userId: session.user!.id });
+        return tx.character.update({
+          where: { id: params.characterId },
+          data: { inventorySlots: { increment: slots } },
+        });
       });
-
-      return updatedCharacter;
-    });
+    } catch (e) {
+      if (e instanceof PaymentAlreadyUsedError) {
+        return NextResponse.json({ error: t('This payment was already used.') }, { status: 409 });
+      }
+      throw e;
+    }
 
     // Registrar no histórico
     try {

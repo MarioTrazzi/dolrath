@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { verifyGoldTransferTx } from '@/lib/goldPayments';
+import { consumePayment, PaymentAlreadyUsedError } from '@/lib/consumedPayments';
 import { localizeServerError } from '@/lib/i18n/serverErrors'
 import { getLocaleFromRequest, getT } from '@/lib/i18n/server'
 
@@ -142,11 +143,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(jsonSafe({ error: localizeServerError(message, getLocaleFromRequest(req)) }), { status: 400 })
     }
 
-    const updated = await prisma.user.update({
-      where: { id: session.user.id },
-      data: { globalInventorySlots: { increment: slots } },
-      select: { globalInventorySlots: true },
-    });
+    let updated
+    try {
+      updated = await prisma.$transaction(async (tx) => {
+        // 🧾 O pagamento vale UMA expansão: sem isto a mesma tx rendia slots para sempre.
+        await consumePayment(tx, { txHash: txHashStr, purpose: 'expand_global', userId: session.user!.id });
+        return tx.user.update({
+          where: { id: session.user!.id },
+          data: { globalInventorySlots: { increment: slots } },
+          select: { globalInventorySlots: true },
+        });
+      });
+    } catch (e) {
+      if (e instanceof PaymentAlreadyUsedError) {
+        return NextResponse.json({ error: t('This payment was already used.') }, { status: 409 });
+      }
+      throw e;
+    }
 
     return NextResponse.json(
       jsonSafe({

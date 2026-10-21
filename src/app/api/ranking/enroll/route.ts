@@ -10,6 +10,7 @@ import {
   getSeasonPot,
 } from '@/lib/seasonPool'
 import { getT } from '@/lib/i18n/server'
+import { consumePayment, PaymentAlreadyUsedError } from '@/lib/consumedPayments'
 
 function isHex32Bytes(txHash: string): boolean {
   return /^0x[0-9a-fA-F]{64}$/.test(txHash)
@@ -166,6 +167,17 @@ export async function POST(request: NextRequest) {
       expectedTo: treasuryAddress,
       minAmountHuman: String(SEASON_ENTRY_DOL),
     })
+
+    // 🧾 Livro único: a mesma tx não paga inscrição E outra coisa (criação,
+    // geração por IA…). Reapresentar a própria inscrição segue idempotente.
+    try {
+      await consumePayment(prisma, { txHash, purpose: 'season_enroll', userId: session.user.id, allowSamePurpose: true })
+    } catch (e) {
+      if (e instanceof PaymentAlreadyUsedError) {
+        return NextResponse.json({ error: t('This payment was already used.') }, { status: 409 })
+      }
+      throw e
+    }
 
     const { alreadyEnrolled } = await enrollCharacter({
       seasonId: season.id,

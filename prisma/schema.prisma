@@ -556,6 +556,21 @@ model WaitlistEntry {
   createdAt DateTime @default(now())
 }
 
+// 🧾 Livro ÚNICO de pagamentos on-chain já consumidos, por TODAS as rotas que
+// aceitam uma transferência para a tesouraria (expansões, compra de gold, loja,
+// criação de personagem, regeração por IA, inscrição). Cada rota tinha (ou não)
+// a própria deduplicação: uma mesma tx valia em várias rotas, e as expansões
+// nem guardavam o hash — um pagamento rendia slots sem limite. txHash em
+// minúsculas; `purpose` diz quem consumiu (o mesmo propósito pode reapresentar).
+model ConsumedPayment {
+  txHash    String   @id
+  purpose   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
 model GoldTopup {
   id          String   @id @default(cuid())
   txHash      String   @unique

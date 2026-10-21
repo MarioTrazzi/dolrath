@@ -9,6 +9,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { verifyDolTransferTx } from '@/lib/dolPayments';
+import { consumePayment, PaymentAlreadyUsedError, releasePayment } from '@/lib/consumedPayments';
 
 export class AiGenPaymentError extends Error {}
 
@@ -44,11 +45,18 @@ export async function consumeAiGenPayment(params: {
   });
 
   try {
-    await prisma.aiGenPayment.create({
-      data: { txHash, userId: params.userId, purpose: params.purpose, amountDol },
+    await prisma.$transaction(async (tx) => {
+      // 🧾 Livro único: a tx de criação de personagem/inscrição não paga geração.
+      await consumePayment(tx, { txHash, purpose: 'ai_gen', userId: params.userId });
+      await tx.aiGenPayment.create({
+        data: { txHash, userId: params.userId, purpose: params.purpose, amountDol },
+      });
     });
   } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+    if (
+      err instanceof PaymentAlreadyUsedError ||
+      (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002')
+    ) {
       throw new AiGenPaymentError('Esta transação já foi usada para pagar outra geração.');
     }
     throw err;
@@ -63,4 +71,5 @@ export async function releaseAiGenPayment(txHash: string): Promise<void> {
   } catch {
     // Já liberado ou nunca registrado — nada a fazer.
   }
+  await releasePayment(txHash).catch(() => {});
 }

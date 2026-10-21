@@ -7,6 +7,8 @@ import { Prisma } from '@prisma/client'
 import { Contract, parseUnits } from 'ethers'
 import { getGoldContractAddress, getGoldProvider } from '@/lib/goldOnchain'
 
+class ConfirmMismatchError extends Error {}
+
 const ERC20_DECIMALS_ABI = ['function decimals() view returns (uint8)'] as const
 
 function isHex32Bytes(txHash: string): boolean {
@@ -78,29 +80,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid ITEM_NFT_CHAIN_ID' }, { status: 500 })
     }
 
-    const syncInventoryForItem = async (tx: any) => {
-      const existingInv = await tx.userInventory.findFirst({
-        where: { userId: session.user.id, itemId },
-      })
-
-      if (!existingInv) {
-        return tx.userInventory.create({
-          data: { userId: session.user.id, itemId, quantity: 1 },
-          include: { item: true },
-        })
-      }
-
-      if (existingInv.quantity <= 0) {
-        return tx.userInventory.update({
-          where: { id: existingInv.id },
-          data: { quantity: 1 },
-          include: { item: true },
-        })
-      }
-
-      return tx.userInventory.findUnique({ where: { id: existingInv.id }, include: { item: true } })
-    }
-
     let result: any
     try {
       result = await prisma.$transaction(async (tx) => {
@@ -119,10 +98,14 @@ export async function POST(req: Request) {
           }))
 
         if (existingNft) {
-          if (existingNft.userId !== session.user.id) {
-            await (tx as any).itemNft.update({ where: { id: existingNft.id }, data: { userId: session.user.id } })
-          }
-          const inv = await syncInventoryForItem(tx)
+          // Já registrada: NÃO mexe em nada. Antes este ramo devolvia a posse da
+          // NFT a quem confirmasse (retomava NFT vendida no mercado) e recriava
+          // o item na mochila se ele tivesse sido vendido — gold infinito.
+          if (existingNft.itemId !== itemId) throw new ConfirmMismatchError()
+          const inv = await tx.userInventory.findFirst({
+            where: { userId: session.user.id, itemId },
+            include: { item: true },
+          })
           return { inv, nft: existingNft, alreadySynced: true }
         }
 
@@ -175,7 +158,11 @@ export async function POST(req: Request) {
             },
           }))
 
-        const inv = await syncInventoryForItem(tx)
+        if (existingNft && existingNft.itemId !== itemId) throw new ConfirmMismatchError()
+        const inv = await tx.userInventory.findFirst({
+          where: { userId: session.user.id, itemId },
+          include: { item: true },
+        })
         return { inv, nft: existingNft, alreadySynced: true }
       })
     }
@@ -187,6 +174,9 @@ export async function POST(req: Request) {
       alreadySynced: Boolean(result.alreadySynced),
     })
   } catch (e) {
+    if (e instanceof ConfirmMismatchError) {
+      return NextResponse.json({ error: 'This payment belongs to another item.' }, { status: 409 })
+    }
     const message = e instanceof Error ? e.message : 'Failed to confirm purchase'
     return NextResponse.json({ error: message }, { status: 500 })
   }

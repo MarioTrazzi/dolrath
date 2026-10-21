@@ -180,6 +180,10 @@ export async function POST() {
         id: session.user.id,
         goldClaimNonce: currentNonce,
         goldBalance: { gte: claimAmount },
+        // A assinatura vai para ESTA carteira; o vínculo tem que ser o mesmo no
+        // banco (o wallet/link não troca de carteira com claim pendente — é o
+        // que mantém o usedNonce(carteira atual) apontando para o destinatário).
+        walletAddress: { equals: walletAddress, mode: 'insensitive' },
       } as any,
       data: {
         goldBalance: { decrement: claimAmount },

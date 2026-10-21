@@ -67,8 +67,12 @@ export async function POST(req: Request) {
   }
 
   try {
-    await prisma.user.update({
-      where: { id: user.id },
+    // 🔒 Sem claim de GOLD pendente: a assinatura pendente é da carteira ATUAL,
+    // e a checagem de "já resgatou?" (usedNonce) lê a carteira vinculada. Trocar
+    // de carteira no meio fazia o claim já resgatado parecer não resgatado e o
+    // valor voltava ao banco — GOLD em dobro.
+    const linked = await prisma.user.updateMany({
+      where: { id: user.id, goldClaimPendingAmount: 0 },
       data: {
         walletAddress,
         walletLinkedAt: new Date(),
@@ -76,6 +80,12 @@ export async function POST(req: Request) {
         walletLinkNonceExpiresAt: null,
       },
     })
+    if (linked.count === 0) {
+      return NextResponse.json(
+        { error: 'A GOLD claim is still pending. Finish it (or wait for it to expire and reopen the claim) before changing wallets.' },
+        { status: 409 }
+      )
+    }
   } catch (error: any) {
     // Unique violation (wallet already linked to someone else)
     if (error?.code === 'P2002') {

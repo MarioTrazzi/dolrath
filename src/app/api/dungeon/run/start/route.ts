@@ -119,17 +119,38 @@ export async function POST(req: NextRequest) {
     // que ele chega ao jogador. Só roda quando existe run órfã de verdade.
     if (existing) await flushStaleRuns({ userId })
 
-    const run = await prisma.dungeonRun.create({
-      data: {
-        userId,
-        characterId,
-        dungeonId: dungeon.id,
-        tier,
-        nodeCount: trail.length,
-        cursor: 0,
-        status: 'active',
-      },
+    // 🔒 Checagem + criação serializadas por CONTA: duas entradas simultâneas
+    // (duplo clique, duas abas) passavam ambas pela leitura de `existing` lá em
+    // cima e abriam duas runs ativas. Sob a trava, quem chega depois vê a run
+    // que o primeiro acabou de criar e recebe o mesmo 409 de "herói em uso".
+    const run = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'runstart:' + userId}))`
+      const raced = await tx.dungeonRun.findFirst({ where: { userId, status: 'active' }, select: { id: true } })
+      if (raced) return null
+      return tx.dungeonRun.create({
+        data: {
+          userId,
+          characterId,
+          dungeonId: dungeon.id,
+          tier,
+          nodeCount: trail.length,
+          cursor: 0,
+          status: 'active',
+        },
+      })
     })
+    if (!run) {
+      return NextResponse.json(
+        {
+          error: t('This hero is already in a dungeon in another tab or window. Leave the other session to free them.'),
+          code: 'HERO_IN_USE',
+          dungeonId: dungeon.id,
+          characterId,
+          characterName: rawCharacter.name,
+        },
+        { status: 409 }
+      )
+    }
 
     return NextResponse.json({
       runId: run.id,

@@ -400,9 +400,20 @@ export async function collectGatheringSession(
   session: GatheringSession,
   mode: 'collect' | 'stop',
 ): Promise<CollectResult & { closed: boolean }> {
-  const pending = readPending(session)
-
   return prisma.$transaction(async (tx) => {
+    // 🔒 Trava a sessão e RELÊ o pendente: o `session` recebido foi lido fora
+    // daqui, e dois collect/stop paralelos depositavam o mesmo pendingYield
+    // (o update no fim não tinha condição). Com a linha travada, o segundo
+    // espera o primeiro e enxerga o pendente já zerado / a sessão fechada.
+    await tx.$queryRaw`SELECT id FROM "GatheringSession" WHERE id = ${session.id} FOR UPDATE`
+    const fresh = await tx.gatheringSession.findUnique({ where: { id: session.id } })
+    if (!fresh || (fresh.status !== 'active' && fresh.status !== 'exhausted')) {
+      const c = await tx.character.findUnique({ where: { id: session.characterId }, select: { gatherXp: true } })
+      return { deposited: [], skipped: [], xpGained: 0, gatherXp: c?.gatherXp ?? 0, closed: true }
+    }
+    session = fresh
+    const pending = readPending(fresh)
+
     const { deposited, skipped } = await depositPendingItems(tx, session.characterId, pending.drops)
 
     const xpGained = pending.xp

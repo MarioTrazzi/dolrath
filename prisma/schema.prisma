@@ -602,6 +602,10 @@ model PvpSeason {
   // PvP roda e paga ouro/XP mas NÃO pontua | ended | paid
   status    String   @default("active")
   paidAt    DateTime?
+  // Quando a sobra da temporada foi creditada no cofre de torneios. Marca de
+  // idempotência: rodar o snapshot de novo (rota admin, cron sobreposto) não
+  // credita o cofre duas vezes.
+  vaultCreditedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

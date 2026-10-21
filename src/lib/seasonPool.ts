@@ -279,9 +279,12 @@ export async function grantGraceEntries(opts: {
 }
 
 /** Manda DOL não distribuído para o cofre que financia os torneios. */
-export async function creditTournamentVault(amountDol: number): Promise<void> {
+export async function creditTournamentVault(
+  amountDol: number,
+  db: Pick<typeof prisma, 'prizeVault'> = prisma,
+): Promise<void> {
   if (amountDol <= 0) return
-  await prisma.prizeVault.upsert({
+  await db.prizeVault.upsert({
     where: { kind: TOURNAMENT_VAULT },
     create: { kind: TOURNAMENT_VAULT, balanceDol: round2(amountDol) },
     update: { balanceDol: { increment: round2(amountDol) } },

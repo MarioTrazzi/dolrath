@@ -42,13 +42,17 @@ export async function GET(request: NextRequest) {
     })
 
     for (const season of expired) {
-      const snapshot = await snapshotSeasonPayouts(season)
       const offseasonEnd = new Date(season.endsAt.getTime() + OFFSEASON_DAYS * 86_400_000)
 
-      await prisma.pvpSeason.update({
-        where: { id: season.id },
+      // A virada é REIVINDICADA antes de tudo: dois crons sobrepostos liam a
+      // mesma temporada vencida e ambos faziam snapshot, agenda e cortesias.
+      const claimed = await prisma.pvpSeason.updateMany({
+        where: { id: season.id, status: 'active' },
         data: { status: 'offseason', endsAt: offseasonEnd },
       })
+      if (claimed.count !== 1) continue
+
+      const snapshot = await snapshotSeasonPayouts(season)
 
       const upcoming = await ensureUpcomingSeason({ id: season.id, endsAt: offseasonEnd })
       const granted = await grantGraceEntries({
@@ -70,8 +74,11 @@ export async function GET(request: NextRequest) {
     })
 
     for (const season of closing) {
-      await prisma.pvpSeason.update({ where: { id: season.id }, data: { status: 'ended' } })
-      actions.push(`${season.name}: encerrada`)
+      const closed = await prisma.pvpSeason.updateMany({
+        where: { id: season.id, status: 'offseason' },
+        data: { status: 'ended' },
+      })
+      if (closed.count === 1) actions.push(`${season.name}: encerrada`)
     }
 
     return NextResponse.json({ success: true, ranAt: now.toISOString(), actions })

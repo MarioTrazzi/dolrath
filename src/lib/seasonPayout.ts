@@ -71,7 +71,16 @@ export async function snapshotSeasonPayouts(season: PvpSeason): Promise<SeasonSn
   // converte o excedente em torneios menores e mais frequentes.
   const potTotal = round2(season.potDol + season.fundedDol)
   const toVault = round2(potTotal - distributed)
-  await creditTournamentVault(toVault)
+  // Uma vez por temporada: a marca e o crédito vão juntos, e só quem vira a
+  // marca de null credita. Antes cada reexecução (rota admin repetida, dois
+  // crons sobrepostos) somava a sobra no cofre de novo.
+  await prisma.$transaction(async (tx) => {
+    const marked = await tx.pvpSeason.updateMany({
+      where: { id: season.id, vaultCreditedAt: null },
+      data: { vaultCreditedAt: new Date() },
+    })
+    if (marked.count === 1) await creditTournamentVault(toVault, tx)
+  })
 
   return {
     seasonId: season.id,

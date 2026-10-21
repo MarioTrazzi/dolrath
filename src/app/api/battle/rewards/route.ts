@@ -289,11 +289,18 @@ export async function POST(request: NextRequest) {
     // Débito propriamente dito, sobre o saldo já lido acima.
     const chargeStamina = async (char: typeof winnerRow, live: number, amount: number): Promise<number> => {
       if (!char || amount <= 0) return 0
-      await prisma.character.update({
-        where: { id: char.id },
-        data: { stamina: Math.max(0, live - amount), staminaUpdatedAt: new Date() },
+      // Débito RELATIVO sobre a coluna (o regen de `live` já foi persistido pelo
+      // regenAndPersist): o valor absoluto `live - amount` apagava um gasto feito
+      // no meio do caminho (passo de masmorra, tique de coleta) — stamina grátis.
+      const paid = await prisma.character.updateMany({
+        where: { id: char.id, stamina: { gte: amount } },
+        data: { stamina: { decrement: amount }, staminaUpdatedAt: new Date() },
       })
-      return amount
+      if (paid.count === 1) return amount
+      // Gastou a stamina em outro lugar entre a leitura e aqui: zera o que sobrou
+      // (a luta já foi decidida como paga; não vira luta de graça).
+      await prisma.character.update({ where: { id: char.id }, data: { stamina: 0, staminaUpdatedAt: new Date() } })
+      return Math.min(amount, Math.max(0, live))
     }
 
     const startOfDay = new Date()

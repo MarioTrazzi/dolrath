@@ -129,62 +129,8 @@ export async function GET(
   }
 }
 
-export async function PUT(
-  req: Request,
-  { params }: { params: { characterId: string } }
-) {
-  const resolved = await requireApiActor(req, params.characterId)
-  if ('error' in resolved) return resolved.error
-  const userId = resolved.actor.userId
-
-  const characterId = params.characterId
-
-  try {
-    const body = await req.json()
-    const { hp, isAlive, deathTimestamp } = body
-
-    // Verificar se o personagem existe e pertence ao usuário
-    const character = await prisma.character.findUnique({
-      where: { id: characterId },
-    })
-
-    if (!character) {
-      return NextResponse.json({ error: 'Character not found' }, { status: 404 })
-    }
-
-    if (character.userId !== userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Atualizar o personagem
-    const updatedCharacter = await prisma.character.update({
-      where: { id: characterId },
-      data: {
-        ...(hp !== undefined && { hp }),
-        ...(isAlive !== undefined && { isAlive }),
-        ...(deathTimestamp !== undefined && { 
-          deathTimestamp: deathTimestamp ? new Date(deathTimestamp) : null 
-        }),
-      },
-    })
-
-    console.log('✅ Personagem atualizado:', {
-      id: updatedCharacter.id,
-      name: updatedCharacter.name,
-      hp: updatedCharacter.hp,
-      isAlive: updatedCharacter.isAlive,
-      deathTimestamp: updatedCharacter.deathTimestamp
-    })
-
-    return NextResponse.json({ success: true, character: serializeBigInt(updatedCharacter) })
-  } catch (error) {
-    console.error('Error updating character:', error)
-    return NextResponse.json(
-      { error: 'Failed to update character' },
-      { status: 500 }
-    )
-  }
-}
+// PUT (hp/isAlive/deathTimestamp vindos do cliente) removido: nenhuma tela o
+// chamava e ele permitia cura e ressurreição grátis, pulando o /restore pago.
 
 export async function DELETE(
   req: Request,

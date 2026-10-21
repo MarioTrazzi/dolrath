@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getLevelInfo } from '@/lib/experienceSystem';
 import { computeDerivedStats } from '@/lib/combatFormulas';
@@ -83,26 +84,37 @@ export function buildXpUpdate(character: XpCharacterRow, xpToAdd: number) {
 }
 
 /**
+ * Aplica XP DENTRO de uma transação: trava a linha do personagem e calcula a
+ * partir dela. `buildXpUpdate` grava valores ABSOLUTOS (experience, pontos,
+ * baseStats), então calcular sobre uma leitura feita fora da transação deixava
+ * dois ganhos simultâneos apagarem um ao outro — e um resgate de missão que
+ * subisse de nível devolvia os pontos que o jogador acabara de gastar na árvore.
+ * `extraData` viaja no mesmo update (ex.: gold da missão).
+ */
+export async function applyXpTx(
+  tx: Prisma.TransactionClient,
+  characterId: string,
+  xpToAdd: number,
+  extraData: Prisma.CharacterUpdateInput = {},
+) {
+  await tx.$queryRaw`SELECT id FROM "Character" WHERE id = ${characterId} FOR UPDATE`;
+  const character = await tx.character.findUnique({ where: { id: characterId } });
+  if (!character) throw new Error('Character not found');
+  const built = buildXpUpdate(character, xpToAdd);
+  const updated = await tx.character.update({
+    where: { id: characterId },
+    data: { ...built.updateData, ...extraData },
+  });
+  return { ...built, character: updated, previousLevel: character.level };
+}
+
+/**
  * Adiciona experiência a um personagem e faz level up automático se necessário
  */
 export async function addExperienceToCharacter(characterId: string, xpToAdd: number) {
   try {
-    // Buscar o personagem atual
-    const character = await prisma.character.findUnique({
-      where: { id: characterId },
-    });
-
-    if (!character) {
-      throw new Error('Character not found');
-    }
-
-    const { updateData, leveledUp, levelsGained, newLevelInfo } = buildXpUpdate(character, xpToAdd);
-
-    // Atualizar o personagem no banco
-    const updatedCharacter = await prisma.character.update({
-      where: { id: characterId },
-      data: updateData,
-    });
+    const { leveledUp, levelsGained, newLevelInfo, character: updatedCharacter } =
+      await prisma.$transaction((tx) => applyXpTx(tx, characterId, xpToAdd));
 
     return {
       character: updatedCharacter,

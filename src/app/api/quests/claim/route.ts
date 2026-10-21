@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireApiActor } from '@/lib/botFleetAuth'
 import { prisma } from '@/lib/prisma'
-import { buildXpUpdate } from '@/lib/characterLevelSystem'
+import { applyXpTx } from '@/lib/characterLevelSystem'
 import { addDropToInventoryTx } from '@/lib/dungeonRunServer'
 import { addHistoryEntry } from '@/lib/characterHistory'
 import { getQuestById } from '@/lib/questCatalog'
@@ -41,11 +41,7 @@ export async function POST(req: Request) {
     const periodKey = periodKeyFor(def.kind)
     const gold = Math.max(0, Math.floor(def.rewards.gold ?? 0))
     const xpReward = Math.max(0, Math.floor(def.rewards.xp ?? 0))
-    // XP + level-up calculados fora e aplicados no mesmo update do gold, como na
-    // rota de combate da masmorra.
-    const xp = buildXpUpdate(character, xpReward)
-
-    await prisma.$transaction(async (tx) => {
+    const xp = await prisma.$transaction(async (tx) => {
       // Gate de idempotência PRIMEIRO: só resgata quem está completo e não resgatado.
       // Reenvio/corrida perde aqui (count 0) — nenhum crédito duplo possível.
       const marked = await tx.questProgress.updateMany({
@@ -63,13 +59,9 @@ export async function POST(req: Request) {
         }
       }
 
-      await tx.character.update({
-        where: { id: characterId },
-        data: {
-          ...xp.updateData,
-          ...(gold > 0 ? { gold: { increment: gold } } : {}),
-        },
-      })
+      // XP + level-up calculados sobre a linha TRAVADA (applyXpTx) e aplicados
+      // no mesmo update do gold.
+      return applyXpTx(tx, characterId, xpReward, gold > 0 ? { gold: { increment: gold } } : {})
     })
 
     addHistoryEntry({

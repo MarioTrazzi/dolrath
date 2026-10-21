@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
         where: { id: runId, userId, status: 'active' },
         select: {
           id: true, userId: true, characterId: true, dungeonId: true,
-          tier: true, cursor: true, pending: true, accrued: true,
+          tier: true, cursor: true, pending: true, accrued: true, updatedAt: true,
         },
       })
       if (run) {

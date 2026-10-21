@@ -28,7 +28,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Reescreve um valor existente (no-op) só para forçar o @updatedAt a avançar.
-    await prisma.dungeonRun.update({ where: { id: run.id }, data: { cursor: run.cursor } })
+    // Condicional: um heartbeat atrasado não pode tocar a run que o /finish
+    // acabou de fechar (o updatedAt dela é a hora do crédito no teto diário).
+    await prisma.dungeonRun.updateMany({ where: { id: run.id, status: 'active' }, data: { cursor: run.cursor } })
     return NextResponse.json({ active: true })
   } catch (error) {
     console.error('Error on dungeon run heartbeat:', error)

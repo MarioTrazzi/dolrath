@@ -19,7 +19,7 @@ import {
   PVP_RANK_LOSS_POINTS,
   PVP_RANK_WIN_POINTS,
 } from '@/lib/pvpRewards'
-import { dailyGoldRemainingTx, applyGearWearTx } from '@/lib/dungeonRunServer'
+import { dailyGoldRemainingTx, applyGearWearTx, lockGoldCapTx } from '@/lib/dungeonRunServer'
 import { wearForPvpFight } from '@/lib/durability'
 import { applyGlobalMatchRating } from '@/lib/pvpGlobalRanking'
 import { advanceQuestProgress } from '@/lib/questServer'
@@ -357,6 +357,8 @@ export async function POST(request: NextRequest) {
     // crédito e o registro no ledger PvpMatch — duas lutas simultâneas do mesmo dono
     // não estouram mais o cap, e o valor pago fica auditável na própria luta.
     const { winnerGold, loserGold } = await prisma.$transaction(async (tx) => {
+      // Trava do teto dos DOIS donos (ordem fixa) antes de ler o que resta.
+      await lockGoldCapTx(tx, [winner.userId, loser.userId])
       const [wRemain, lRemain] = await Promise.all([
         winner.userId ? dailyGoldRemainingTx(tx, winner.userId) : Promise.resolve(0),
         loser.userId ? dailyGoldRemainingTx(tx, loser.userId) : Promise.resolve(0),

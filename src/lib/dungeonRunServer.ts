@@ -12,6 +12,7 @@ import type { Prisma } from '@prisma/client'
 import { ItemType, ConsumableSubtype, Prisma as PrismaNs } from '@prisma/client'
 import { prisma } from './prisma'
 import { buildXpUpdate } from './characterLevelSystem'
+import { computeStaminaRegen } from './staminaSystem'
 import { wearFor } from './durability'
 import {
   DUNGEONS,
@@ -378,10 +379,28 @@ export async function pvpGoldEmittedTodayTx(tx: Prisma.TransactionClient, userId
   return (asWinner._sum?.winnerGold ?? 0) + (asLoser._sum?.loserGold ?? 0)
 }
 
+/**
+ * 🔒 Serializa os créditos com teto de UM usuário: trava consultiva da transação
+ * (solta no COMMIT/ROLLBACK). Sem ela, N créditos paralelos (finish + vendas +
+ * arena) liam o MESMO "quanto resta hoje" e cada um creditava até o teto
+ * inteiro. Toda transação que credita com teto chama isto ANTES de travar
+ * qualquer linha — ordem única de travas, sem deadlock com as vendas. Vários
+ * usuários (arena: vencedor + perdedor) travam em ordem fixa pelo mesmo motivo.
+ */
+export async function lockGoldCapTx(tx: Prisma.TransactionClient, userIds: (string | null | undefined)[]): Promise<void> {
+  const ids = Array.from(new Set(userIds.filter((u): u is string => !!u))).sort()
+  for (const id of ids) {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'goldcap:' + id}))`
+  }
+}
+
 async function goldEmittedToday(tx: Prisma.TransactionClient, userId: string): Promise<number> {
   const gte = startOfUtcDay()
   const [runs, sales, pvp] = await Promise.all([
-    tx.dungeonRun.aggregate({ _sum: { goldEarned: true }, where: { userId, createdAt: { gte } } }),
+    // Pela hora do CRÉDITO (updatedAt: o flush grava goldEarned e a run não é
+    // mais tocada depois de fechada), não pela criação — uma run aberta antes
+    // da meia-noite e fechada depois caía no dia anterior e escapava do teto.
+    tx.dungeonRun.aggregate({ _sum: { goldEarned: true }, where: { userId, updatedAt: { gte } } }),
     tx.goldSale.aggregate({ _sum: { amount: true }, where: { userId, createdAt: { gte } } }),
     pvpGoldEmittedTodayTx(tx, userId),
   ])
@@ -408,6 +427,7 @@ async function creditCappedGoldTx(
 ): Promise<number> {
   const want = Math.max(0, Math.floor(amount))
   if (want <= 0) return 0
+  await lockGoldCapTx(tx, [userId])
   const creditedToday = await goldEmittedToday(tx, userId)
   const remaining = Math.max(0, dungeonDailyGoldCap() - creditedToday)
   const give = Math.min(want, remaining)
@@ -429,6 +449,7 @@ export async function creditCappedSaleGoldTx(
 ): Promise<number> {
   const want = Math.max(0, Math.floor(amount))
   if (want <= 0) return 0
+  await lockGoldCapTx(tx, [userId])
   const creditedToday = await goldEmittedToday(tx, userId)
   const remaining = Math.max(0, dungeonDailyGoldCap() - creditedToday)
   const give = Math.min(want, remaining)
@@ -948,6 +969,9 @@ export type RunEndReason = 'boss' | 'retreat' | 'lose'
 
 /** Sinaliza que outra requisição fechou a run primeiro (rollback + 409). */
 class RunAlreadyClosedError extends Error {}
+/** A run ainda está ativa mas mudou desde a leitura (um /step absorveu um nó,
+ *  heartbeat…): o flush relê e tenta de novo, senão creditaria a foto velha. */
+class RunChangedError extends Error {}
 
 export interface RunFlushGrant {
   gold: number
@@ -977,9 +1001,29 @@ interface FlushableRun {
   cursor: number
   pending: unknown
   accrued: unknown
+  /** Quando presente, o fechamento exige que a run não tenha mudado desde a leitura. */
+  updatedAt?: Date
 }
 
-export async function flushRunRewards(
+type FlushOpts = Parameters<typeof flushRunRewardsOnce>[1]
+
+export async function flushRunRewards(run: FlushableRun, opts: FlushOpts): Promise<RunFlushGrant | null> {
+  let current: FlushableRun = run
+  for (let attempt = 0; ; attempt++) {
+    try {
+      // Última tentativa sem a checagem de updatedAt: garante progresso mesmo
+      // com heartbeats batendo no meio (o pior caso volta a ser a foto lida).
+      return await flushRunRewardsOnce(attempt >= 2 ? { ...current, updatedAt: undefined } : current, opts)
+    } catch (err) {
+      if (!(err instanceof RunChangedError)) throw err
+      const fresh = await prisma.dungeonRun.findUnique({ where: { id: run.id } })
+      if (!fresh || fresh.status !== 'active') return null
+      current = fresh
+    }
+  }
+}
+
+async function flushRunRewardsOnce(
   run: FlushableRun,
   opts: {
     reason: RunEndReason
@@ -1084,8 +1128,6 @@ export async function flushRunRewards(
   const weaponWear = wearFor('WEAPON', normalKills, false, lv) + wearFor('WEAPON', accrued.bossKills, true, lv)
   const gearWear = wearFor('ARMOR', normalKills, false, lv) + wearFor('ARMOR', accrued.bossKills, true, lv)
 
-  const xp = buildXpUpdate(character, accrued.xp)
-
   // ❤️ HP/MP de saída: converte a fração reportada pelo cliente no valor absoluto
   // da coluna. Clamp em [0,1] — o cliente é a autoridade do combate (mesmo modelo
   // do resto da run), mas não pode inventar um pool acima do teto.
@@ -1095,21 +1137,13 @@ export async function flushRunRewards(
     typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : null
   const hpPct = clamp01(opts.hpPct)
   const mpPct = clamp01(opts.mpPct)
-  // Subiu de nível na run? A cura do level up (buildXpUpdate) VENCE: recompensa
-  // clássica de RPG, e os pontos que a destravam são limitados pelo próprio
-  // nível — não dá para farmar cura de graça por aí.
-  const poolUpdate = xp.leveledUp ? {} : {
-    ...(hpPct !== null ? { hp: Math.max(1, Math.round(character.maxHp * hpPct)) } : {}),
-    ...(mpPct !== null ? { mp: Math.max(0, Math.round(character.maxMp * mpPct)) } : {}),
-  }
 
   // ⏱️ TUDO o que dá para ler/resolver ANTES fica fora da transação. A transação
   // interativa do Prisma tem timeout (P2028) e um rollback aqui significa perder
   // a run inteira do jogador — ela precisa conter só as ESCRITAS.
   const t0 = Date.now()
-  const [catalog, remaining, equipped, live] = await Promise.all([
+  const [catalog, equipped, live] = await Promise.all([
     prepareDropItems(accrued.drops),
-    dailyGoldRemainingTx(prisma, run.userId),
     weaponWear > 0 || gearWear > 0
       ? prisma.characterEquipment.findMany({
           where: { characterId: character.id },
@@ -1124,13 +1158,8 @@ export async function flushRunRewards(
       ? import('./staminaServer').then(m => m.regenAndPersist(character, { deferWrite: true }))
       : Promise.resolve(null),
   ])
-  const gold = Math.min(Math.max(0, Math.floor(accrued.gold)), remaining)
-
-  // Valor ABSOLUTO (não `increment`) porque precisa do teto; a âncora vai junto,
-  // como no /step — o regen até agora já está dentro de `live`, nada se perde.
-  const staminaUpdate = live
-    ? { stamina: Math.min(character.maxStamina, live.stamina + staminaRefund), staminaUpdatedAt: new Date() }
-    : null
+  // Coleta ativa: a stamina da coluna já é a viva (os tiques gravam direto).
+  const gatheringLive = live?.gathering?.status === 'active'
 
   // Relatório de desgaste (só texto para o cliente); a escrita é o applyGearWearTx.
   const equipmentWear: RunFlushGrant['equipmentWear'] = []
@@ -1154,11 +1183,48 @@ export async function flushRunRewards(
     const granted = await prisma.$transaction(async (tx) => {
       // Fecha a run PRIMEIRO e de forma condicional: se outra requisição já
       // fechou, `count` vem 0 e o throw desfaz tudo (nada é creditado duas vezes).
+      // 🔒 Teto diário: trava do usuário ANTES de qualquer linha (ver lockGoldCapTx).
+      await lockGoldCapTx(tx, [run.userId])
       const claimed = await tx.dungeonRun.updateMany({
-        where: { id: run.id, status: 'active' },
+        where: { id: run.id, status: 'active', ...(run.updatedAt ? { updatedAt: run.updatedAt } : {}) },
         data: { status, pending: PrismaNs.DbNull, accrued: PrismaNs.DbNull },
       })
-      if (claimed.count !== 1) throw new RunAlreadyClosedError()
+      if (claimed.count !== 1) {
+        if (run.updatedAt) {
+          const still = await tx.dungeonRun.findUnique({ where: { id: run.id }, select: { status: true } })
+          if (still?.status === 'active') throw new RunChangedError()
+        }
+        throw new RunAlreadyClosedError()
+      }
+
+      // Personagem RELIDO com a linha travada: XP, pontos e stamina são
+      // gravados como valores absolutos, e a foto lida lá em cima podia estar
+      // velha (missão resgatada, pontos gastos na árvore, tique de coleta) —
+      // gravar por cima devolvia pontos gastos ou apagava XP/stamina alheios.
+      await tx.$queryRaw`SELECT id FROM "Character" WHERE id = ${character.id} FOR UPDATE`
+      const fresh = await tx.character.findUniqueOrThrow({
+        where: { id: character.id },
+        select: {
+          level: true, experience: true, availablePoints: true, baseStats: true,
+          maxHp: true, maxMp: true, stamina: true, maxStamina: true, staminaUpdatedAt: true,
+        },
+      })
+      const xp = buildXpUpdate(fresh, accrued.xp)
+      // Subiu de nível na run? A cura do level up (buildXpUpdate) VENCE: recompensa
+      // clássica de RPG, e os pontos que a destravam são limitados pelo próprio
+      // nível — não dá para farmar cura de graça por aí.
+      const poolUpdate = xp.leveledUp ? {} : {
+        ...(hpPct !== null ? { hp: Math.max(1, Math.round(fresh.maxHp * hpPct)) } : {}),
+        ...(mpPct !== null ? { mp: Math.max(0, Math.round(fresh.maxMp * mpPct)) } : {}),
+      }
+      const remaining = await dailyGoldRemainingTx(tx, run.userId)
+      const gold = Math.min(Math.max(0, Math.floor(accrued.gold)), remaining)
+      // Valor ABSOLUTO (não `increment`) porque precisa do teto; a âncora vai junto,
+      // como no /step. A base é a stamina VIVA da linha travada.
+      const liveNow = gatheringLive ? fresh.stamina : computeStaminaRegen(fresh).stamina
+      const staminaUpdate = staminaRefund > 0
+        ? { stamina: Math.min(fresh.maxStamina, liveNow + staminaRefund), staminaUpdatedAt: new Date() }
+        : null
 
       const skippedDrops = await creditDropsBatchTx(tx, character.id, accrued.drops, catalog)
 
@@ -1204,7 +1270,7 @@ export async function flushRunRewards(
         kills: accrued.kills,
         bossDefeated,
         leveledUp: xp.leveledUp,
-        newLevel: xp.leveledUp ? xp.newLevelInfo.level : character.level,
+        newLevel: xp.leveledUp ? xp.newLevelInfo.level : fresh.level,
         equipmentWear,
         ...(staminaUpdate ? { stamina: staminaUpdate.stamina } : {}),
       }
@@ -1219,7 +1285,7 @@ export async function flushRunRewards(
     // Medição no log: `drops` e `ms` são o sinal que teria pego o P2028 antes do
     // jogador reclamar. Aparece no `vercel logs -q "[finish]"`.
     console.log(
-      `[finish] run=${run.id} drops=${accrued.drops.length} gold=${gold} xp=${accrued.xp} prep=${tPrep}ms tx=${Date.now() - t0 - tPrep}ms`
+      `[finish] run=${run.id} drops=${accrued.drops.length} gold=${granted.gold} xp=${accrued.xp} prep=${tPrep}ms tx=${Date.now() - t0 - tPrep}ms`
     )
 
     // 🗺️ Missões: pós-commit e fire-and-forget (fail-soft, nunca afeta a rota).
@@ -1229,8 +1295,8 @@ export async function flushRunRewards(
     if (bossDefeated) {
       advanceQuestProgress(character.id, { type: 'dungeon_boss_kill', amount: 1 }).catch(() => {})
     }
-    if (xp.leveledUp) {
-      advanceQuestProgress(character.id, { type: 'level_reach', value: xp.newLevelInfo.level }).catch(() => {})
+    if (granted.leveledUp) {
+      advanceQuestProgress(character.id, { type: 'level_reach', value: granted.newLevel }).catch(() => {})
     }
 
     return granted
@@ -1250,7 +1316,7 @@ export async function flushStaleRuns(where: { userId: string; characterId?: stri
     where: { ...where, status: 'active' },
     select: {
       id: true, userId: true, characterId: true, dungeonId: true,
-      tier: true, cursor: true, pending: true, accrued: true,
+      tier: true, cursor: true, pending: true, accrued: true, updatedAt: true,
     },
   })
   // Runs cujo flush LANÇOU: o espólio continua no banco e não pode ser apagado.

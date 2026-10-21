@@ -17,6 +17,7 @@ import { prisma } from '@/lib/prisma'
 import { getRaceTransformations, TransformationType } from '@/lib/transformationSystem'
 import { generateTransformationImage, TransformationGenError } from '@/lib/transformationImageGen'
 import { getT } from '@/lib/i18n/server'
+import { rateLimitAllow, rateLimited429 } from '@/lib/rateLimit'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -73,18 +74,35 @@ export async function POST(
     )
   }
 
-  // Idempotência: imagem já existe para a forma travada e não foi pedida outra forma.
-  if (
-    character.transformationImage &&
-    character.unlockedTransformation === transformationType &&
-    (!requested || requested === transformationType)
-  ) {
+  // Idempotência POR FORMA: cada forma é gerada uma vez só. Antes a checagem
+  // olhava só a forma travada — alternar lobo/urso/lobo… gerava uma imagem nova
+  // (paga para nós) a cada chamada, de graça para o jogador, contornando a
+  // regeração paga (/api/ai/transformation-image).
+  const imagesByForm = ((character.transformationImages && typeof character.transformationImages === 'object')
+    ? character.transformationImages
+    : {}) as Record<string, string>
+  const existingForForm =
+    imagesByForm[transformationType] ||
+    (character.unlockedTransformation === transformationType ? character.transformationImage : null)
+  if (existingForForm) {
+    // Trocar para uma forma que já tem arte só aponta para ela — sem gerar.
+    if (character.unlockedTransformation !== transformationType || character.transformationImage !== existingForForm) {
+      await prisma.character.update({
+        where: { id: characterId },
+        data: { unlockedTransformation: transformationType, transformationImage: existingForForm },
+      })
+    }
     return NextResponse.json({
       success: true,
       alreadyExisted: true,
       transformationType,
-      transformationImage: character.transformationImage,
+      transformationImage: existingForForm,
     })
+  }
+
+  // Geração de verdade custa dinheiro: teto por usuário.
+  if (!rateLimitAllow(`gen-transformation:${session.user.id}`, { windowMs: 60 * 60_000, max: 6 })) {
+    return rateLimited429()
   }
 
   const baseImage = character.avatar
@@ -107,6 +125,7 @@ export async function POST(
       data: {
         unlockedTransformation: transformationType,
         transformationImage: image,
+        transformationImages: { ...imagesByForm, [transformationType]: image },
       },
       select: { id: true, unlockedTransformation: true, transformationImage: true },
     })

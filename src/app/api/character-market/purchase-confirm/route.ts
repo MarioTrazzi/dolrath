@@ -16,6 +16,8 @@ function jsonSafe<T>(value: T): any {
   return JSON.parse(JSON.stringify(value, (_key, v) => (typeof v === 'bigint' ? v.toString() : v)))
 }
 
+class AlreadyTransferredError extends Error {}
+
 function readString(body: any, key: string): string {
   return (typeof body?.[key] === 'string' ? body[key] : '').trim()
 }
@@ -155,9 +157,21 @@ export async function POST(req: Request) {
     }
 
     const sellerUserId = character.userId
-    const goldReturned = Math.max(0, character.gold)
 
     const result = await prisma.$transaction(async (tx) => {
+      // 🔒 Primeira escrita: a TROCA DE DONO condicionada ao dono que lemos. Só
+      // um request leva — sem isto N confirmações paralelas (o modo resgate não
+      // tem txHash para deduplicar) devolviam o gold e os itens do personagem
+      // ao vendedor N vezes. A linha fica travada por nós até o COMMIT, então o
+      // gold relido abaixo é o valor final.
+      const claimed = await tx.character.updateMany({
+        where: { id: character.id, userId: sellerUserId },
+        data: { userId: buyerUserId, marketListingId: null, marketListedAt: null },
+      })
+      if (claimed.count !== 1) throw new AlreadyTransferredError()
+      const fresh = await tx.character.findUnique({ where: { id: character.id }, select: { gold: true } })
+      const goldReturned = Math.max(0, fresh?.gold ?? 0)
+
       // Rede de segurança: o personagem é vendido VAZIO. Qualquer item que
       // tenha sobrado (equipado ou no inventário) volta ao inventário global DO
       // VENDEDOR — o comprador recebe a NFT pura.
@@ -208,12 +222,7 @@ export async function POST(req: Request) {
 
       const updated = await tx.character.update({
         where: { id: character.id },
-        data: {
-          userId: buyerUserId,
-          gold: 0,
-          marketListingId: null,
-          marketListedAt: null,
-        },
+        data: { gold: 0 },
       })
 
       // Dedup + auditoria. O `txHash` é único: uma corrida entre duas
@@ -233,7 +242,7 @@ export async function POST(req: Request) {
         })
       }
 
-      return updated
+      return { updated, goldReturned }
     })
 
     return NextResponse.json(
@@ -248,11 +257,15 @@ export async function POST(req: Request) {
               buyer: evt.buyer,
             }
           : { tokenId: tokenId.toString(), claimedFromChain: true },
-        goldReturnedToSeller: goldReturned,
-        character: { id: result.id, name: result.name },
+        goldReturnedToSeller: result.goldReturned,
+        character: { id: result.updated.id, name: result.updated.name },
       })
     )
   } catch (e) {
+    if (e instanceof AlreadyTransferredError) {
+      // Outra confirmação simultânea já trocou o dono.
+      return NextResponse.json({ error: t('This character was already transferred. Refresh the page.') }, { status: 409 })
+    }
     const message = e instanceof Error ? e.message : 'Failed to confirm character purchase'
     return NextResponse.json({ error: message }, { status: 500 })
   }

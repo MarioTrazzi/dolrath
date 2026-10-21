@@ -53,3 +53,14 @@ export function getCharacterNftProvider(): JsonRpcProvider {
 
   return new JsonRpcProvider(req)
 }
+
+/** O personagem já aponta para um token do contrato ATUAL (ou está listado)? */
+export function hasLiveCharacterToken(
+  character: { nftTokenId: bigint | null; nftContract: string | null; marketListingId?: unknown },
+  contractAddress = getCharacterNftContractAddress(),
+): boolean {
+  if (character.marketListingId != null) return true
+  if (character.nftTokenId == null) return false
+  // Token de um contrato antigo não conta: é exatamente o caso de re-mint.
+  return !character.nftContract || !contractAddress || character.nftContract.toLowerCase() === contractAddress.toLowerCase()
+}

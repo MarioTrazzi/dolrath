@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { verifyCharacterNftMintTx } from '@/lib/characterNftVerify'
-import { getCharacterNftChainId } from '@/lib/characterNftOnchain'
+import { getCharacterNftChainId, getCharacterNftContractAddress, hasLiveCharacterToken } from '@/lib/characterNftOnchain'
 import { getT } from '@/lib/i18n/server'
 
 function serializeBigIntForJson<T>(value: T): T {
@@ -36,13 +36,28 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Character not found or unauthorized' }, { status: 404 })
     }
 
+    const currentContract = getCharacterNftContractAddress()
+    if (hasLiveCharacterToken(character, currentContract)) {
+      return NextResponse.json({ error: 'This character already has an NFT' }, { status: 409 })
+    }
+
     const verified = await verifyCharacterNftMintTx({
       txHash: mintTxHash,
       expectedTo: to,
     })
 
-    const updated = await prisma.character.update({
-      where: { id: character.id },
+    // Condicional: o personagem ainda não pode ter ganho token vivo nem listagem
+    // entre a checagem acima e aqui (dois confirms paralelos, ou um list-confirm).
+    const claimed = await prisma.character.updateMany({
+      where: {
+        id: character.id,
+        userId: session.user.id,
+        marketListingId: null,
+        OR: [
+          { nftTokenId: null },
+          { NOT: { nftContract: { equals: currentContract, mode: 'insensitive' } } },
+        ],
+      },
       data: {
         nftChainId: getCharacterNftChainId(),
         nftContract: verified.contractAddress,
@@ -52,6 +67,10 @@ export async function POST(req: Request) {
         nftMintedAt: new Date(),
       },
     })
+    if (claimed.count !== 1) {
+      return NextResponse.json({ error: 'This character already has an NFT' }, { status: 409 })
+    }
+    const updated = await prisma.character.findUnique({ where: { id: character.id } })
 
     return NextResponse.json({ success: true, character: serializeBigIntForJson(updated) })
   } catch (err) {

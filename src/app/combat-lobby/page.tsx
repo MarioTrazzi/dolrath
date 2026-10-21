@@ -384,13 +384,27 @@ export default function CombatLobbyPage() {
     })
     queueSocketRef.current = sock
 
-    sock.on('connect', () => {
+    sock.on('connect', async () => {
+      // 🎟️ A fila exige o ingresso do dono do herói (o mesmo da sala de luta).
+      let ticket: string | null = null
+      try {
+        const res = await fetch('/api/battle/ticket', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ characterId: selectedCharacter.id }),
+        })
+        if (res.ok) ticket = (await res.json())?.ticket ?? null
+      } catch {
+        /* sem ingresso o servidor recusa e o diálogo mostra o cancelamento */
+      }
+      if (queueSocketRef.current !== sock) return
       sock.emit('queue_join', {
         characterId: selectedCharacter.id,
         userId: (selectedCharacter as any).userId || null,
         level: selectedCharacter.level,
         name: selectedCharacter.name,
         isBot: false,
+        ticket,
       })
     })
 
@@ -418,12 +432,15 @@ export default function CombatLobbyPage() {
     // ⚡ O servidor pode RECUSAR a entrada na fila (stamina abaixo do mínimo, ou herói
     // coletando). Sem este handler o dialog girava para sempre — a página não ouvia
     // `queue_status` em nenhum momento.
-    sock.on('queue_status', (data: { status: string; reason?: string; stamina?: number; required?: number }) => {
-      if (data?.status !== 'blocked') return
+    sock.on('queue_status', (data: { status: string; reason?: string; code?: string; stamina?: number; required?: number }) => {
+      const badTicket = data?.status === 'cancelled' && data.code === 'BAD_TICKET'
+      if (data?.status !== 'blocked' && !badTicket) return
       sock.disconnect()
       queueSocketRef.current = null
       setQueueBlocked(
-        data.reason === 'gathering'
+        badTicket
+          ? t('Your combat session expired. Reload the page to join the fight.')
+          : data.reason === 'gathering'
           ? t('⛏️ Your hero is gathering. End the gathering before entering the arena.')
           : t('⚡ Each arena fight costs {required}⚡ and you have {stamina}. It comes back on its own (+2 every 15 min).', {
               required: data.required ?? 0,

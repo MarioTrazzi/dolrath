@@ -64,6 +64,7 @@ export async function POST(request: NextRequest) {
             // CLIENTE — um cliente modificado se declarava lendário +20 numa sala
             // ranqueada. Agora o socket refaz a conta com isto antes da luta começar.
             class: true, maxHp: true, attributes: true, baseStats: true, skillTree: true,
+            race: true, unlockedTransformation: true,
             equipment: {
               select: {
                 slot: true, enhancementLevel: true, durability: true, maxDurability: true,
@@ -93,6 +94,10 @@ export async function POST(request: NextRequest) {
           // (combat/page.tsx) — só que lidas do banco, não do payload.
           sheet: {
             class: character.class,
+            // Raça e forma travada: o socket valida a transformação da arena com
+            // elas (não com o payload do cliente).
+            race: character.race,
+            unlockedTransformation: character.unlockedTransformation ?? null,
             level: character.level,
             maxHp: character.maxHp,
             maxMp: Number((character.baseStats as any)?.maxMp) || 50,

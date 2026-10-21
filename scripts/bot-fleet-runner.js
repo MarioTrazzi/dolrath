@@ -263,13 +263,16 @@ function queueForMatch(socketUrl, bot, player) {
       resolve(null)
     }, QUEUE_WAIT_MS)
 
-    socket.on('connect', () => {
+    socket.on('connect', async () => {
+      // 🎟️ A fila também exige o ingresso do dono.
+      const ticketRes = await api('POST', '/api/battle/ticket', bot.characterId, { characterId: bot.characterId })
       socket.emit('queue_join', {
         characterId: bot.characterId,
         userId: bot.userId,
         level: player.level || 1,
         name: player.name,
         isBot: true,
+        ticket: ticketRes.ok ? ticketRes.json?.ticket ?? null : null,
       })
     })
 

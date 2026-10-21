@@ -56,6 +56,10 @@ function spawnBotFighter({
   maxLifeMs = 30 * 60 * 1000,
   soloGraceMs = 8000,
   onEnd,
+  // Segredo por sala que o servidor gerou para ESTE bot: é o que o deixa sentar
+  // sem ingresso. Sem ele, qualquer cliente que lesse o id do bot no
+  // room_updated sentava no lugar dele e se rendia.
+  joinSecret = null,
 }) {
   const weightsBase = { ...(attackWeights || { light_attack: 1, heavy_attack: 1 }) }
 
@@ -188,7 +192,7 @@ function spawnBotFighter({
 
   socket.on('connect', () => {
     log(`entrando${joinNote ? ` (${joinNote})` : ''}`)
-    socket.emit('join_room', { roomId, player, isCreator: false, role: 'fighter' })
+    socket.emit('join_room', { roomId, player, isCreator: false, role: 'fighter', botSecret: joinSecret })
   })
 
   socket.on('connect_error', (err) => {

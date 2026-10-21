@@ -187,7 +187,7 @@ function buildBotPlayer(persona) {
  * Sobe o oponente na sala. O caller (socket-server) já registrou `room.botFighterId`
  * com o id devolvido aqui — é o que autoriza o espelho de gearTier no join.
  */
-function spawnPvpBot({ roomId, port, persona, botPlayer, onEnd }) {
+function spawnPvpBot({ roomId, port, persona, botPlayer, onEnd, joinSecret }) {
   const player = botPlayer || buildBotPlayer(persona)
   const { shutdown } = spawnBotFighter({
     roomId,
@@ -200,6 +200,7 @@ function spawnPvpBot({ roomId, port, persona, botPlayer, onEnd }) {
     // ordens de join; a carência evita que ele desista achando que está sozinho.
     soloGraceMs: 12000,
     onEnd,
+    joinSecret,
   })
   return { botId: player.id, shutdown }
 }

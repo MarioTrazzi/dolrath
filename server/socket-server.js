@@ -11,6 +11,7 @@ const { spawnTrainingBot, MONSTERS, DEFAULT_TRAINING_OPPONENT_KEY } = require('.
 // um oponente espelho e joga o jogador direto numa sala com ele.
 const { buildQueuePersona, refinePersonaFor, buildBotPlayer, spawnPvpBot } = require('./pvp-bot')
 const { verifySocketTicket } = require('./socketTicket')
+const { randomBytes, timingSafeEqual } = require('crypto')
 
 // ⚔️ MODELO DE COMBATE ENXUTO (fonte da verdade): poder × sorte × (1−DR), mitigação
 // proporcional, levers por classe (poder/armadura/hp/evasão) escalados por nível+gear.
@@ -269,6 +270,7 @@ function setupFighterForFight(room, player) {
   // Nunca herdar isTransformed do payload/DB (bug: entrava já transformado).
   player.isTransformed = false
   player.transformationType = null
+  player.transformUsedThisFight = false
   if (player.transformationData && typeof player.transformationData === 'object') {
     player.transformationData = {
       ...player.transformationData,
@@ -313,6 +315,24 @@ const PORT = process.env.PORT || 3001
 // (nome em MAIÚSCULA: é o identificador usado em getConfig/handler — antes
 //  era `transformationConfigs`, que deixava TRANSFORMATION_CONFIG undefined
 //  e quebrava QUALQUER transformação no PvP com ReferenceError.)
+// 🐉 Transformação da ARENA (sync_transformation): espelho de
+// src/lib/transformationSystem.ts (RACE_TRANSFORMATIONS + cost + duration).
+const ARENA_RACE_FORMS = {
+  draconiano: ['dragon'],
+  metamorfo: ['wolf', 'bear', 'eagle'],
+  humano: ['seventh_sense'],
+  elfo: ['celestial'],
+}
+const ARENA_FORM_COST = {
+  dragon: { mp: 20, stamina: 40 },
+  wolf: { mp: 20, stamina: 30 },
+  bear: { mp: 20, stamina: 40 },
+  eagle: { mp: 20, stamina: 30 },
+  seventh_sense: { mp: 20, stamina: 35 },
+  celestial: { mp: 20, stamina: 30 },
+}
+const ARENA_FORM_DURATION = 5
+
 const TRANSFORMATION_CONFIG = {
   // DRACONIANOS - Tank supremo com poder devastador
   dragon: {
@@ -703,6 +723,8 @@ async function verifyFighterState(roomId, playerId) {
       if (state.sheet && !room.isActive && !room.isTraining) {
         const sh = state.sheet
         player.class = sh.class
+        if (sh.race) player.race = sh.race
+        if ('unlockedTransformation' in sh) player.unlockedTransformation = sh.unlockedTransformation || null
         player.level = sh.level
         player.attributes = sh.attributes
         player.baseStats = sh.baseStats
@@ -958,6 +980,10 @@ httpServer.on('request', (req, res) => {
 
 // Armazenar salas em memória
 const rooms = new Map()
+// `${socket.id}::${playerId}` → { socketId, playerId }. Chaveado pelo SOCKET, não
+// pelo id do herói: com a chave só pelo herói, um espectador que entrasse com o id
+// de outro jogador sobrescrevia a entrada da vítima, e o disconnect DELE marcava a
+// vítima como caída — 30s depois, derrota por abandono numa luta que ela jogava.
 const playerSockets = new Map()
 
 // 🔗 Qual socket SENTOU como qual lutador. Todo evento de luta traz `playerId` no
@@ -967,6 +993,39 @@ const playerSockets = new Map()
 // (ingresso/treino/bot do servidor) cria o vínculo. Separado de `playerSockets`,
 // que também guarda espectadores para a limpeza do disconnect.
 const socketFighters = new Map() // socket.id -> Set<playerId>
+
+// 📜 Log da sala com teto: a sala inteira é reenviada em todo room_updated, então
+// um log sem limite crescia a cada golpe/mensagem (e a memória do processo junto).
+// O push sobrescrito corta as entradas mais antigas; o JSON de um array ignora a
+// propriedade extra, então o cliente recebe um array comum.
+const COMBAT_LOG_MAX = 150
+function cappedLog() {
+  const log = []
+  Object.defineProperty(log, 'push', {
+    enumerable: false,
+    value(...items) {
+      const n = Array.prototype.push.apply(this, items)
+      if (this.length > COMBAT_LOG_MAX) this.splice(0, this.length - COMBAT_LOG_MAX)
+      return n
+    },
+  })
+  return log
+}
+const CHAT_MAX_CHARS = 200
+const CHAT_MIN_INTERVAL_MS = 500
+const chatLastAt = new Map() // socket.id -> último chat
+
+// roomId -> segredo do bot da fila daquela sala (nunca vai para o cliente).
+const botJoinSecrets = new Map()
+
+/** O join traz o segredo que o servidor deu ao bot desta sala? */
+function botSecretMatches(room, secret) {
+  const expected = room && botJoinSecrets.get(room.id)
+  if (!expected || typeof secret !== 'string') return false
+  const a = Buffer.from(expected)
+  const b = Buffer.from(secret)
+  return a.length === b.length && timingSafeEqual(a, b)
+}
 function bindFighter(socketId, playerId) {
   if (!socketFighters.has(socketId)) socketFighters.set(socketId, new Set())
   socketFighters.get(socketId).add(playerId)
@@ -1079,9 +1138,10 @@ const PVP_BOT_FILL_MS = Math.max(2000, Number(process.env.PVP_BOT_FILL_MS) || 10
 const pendingBotFills = new Map() // roomId -> { characterId, persona, expiresAt }
 const PENDING_FILL_TTL_MS = 60000
 
-function cancelBotFillFor(characterId) {
+function cancelBotFillFor(characterId, socketId = null) {
   for (const [roomId, fill] of pendingBotFills) {
-    if (fill.characterId === characterId) pendingBotFills.delete(roomId)
+    // Com socketId: só quem entrou na fila cancela o bot prometido a ele.
+    if (fill.characterId === characterId && (!socketId || fill.socketId === socketId)) pendingBotFills.delete(roomId)
   }
 }
 
@@ -1093,6 +1153,7 @@ function startBotFill(entry) {
   matchQueue.delete(entry.characterId)
   pendingBotFills.set(roomId, {
     characterId: entry.characterId,
+    socketId: entry.socketId,
     persona,
     expiresAt: Date.now() + PENDING_FILL_TTL_MS,
   })
@@ -1134,14 +1195,46 @@ setInterval(() => {
   sweepBotFills()
 }, 1000)
 
+// 🧹 Sala sem NINGUÉM conectado e sem luta valendo some depois de um tempo. Quando
+// os dois caíam no meio da luta, o abandono resolvia a luta mas nenhum disconnect
+// posterior chegava ao teardown — a sala e o log ficavam na memória para sempre.
+const EMPTY_ROOM_TTL_MS = 2 * 60_000
+setInterval(() => {
+  const now = Date.now()
+  for (const [roomId, room] of rooms) {
+    const sockets = io.sockets.adapter.rooms.get(roomId)
+    if ((sockets && sockets.size > 0) || isFightLive(room)) {
+      room.emptySince = null
+      continue
+    }
+    if (!room.emptySince) { room.emptySince = now; continue }
+    if (now - room.emptySince < EMPTY_ROOM_TTL_MS) continue
+    clearBotTurnTimer(roomId)
+    clearTurnIdleTimer(roomId)
+    rooms.delete(roomId)
+    botJoinSecrets.delete(roomId)
+    console.log(`🧹 [${roomId}] sala vazia removida`)
+  }
+}, 30_000)
+
 io.on('connection', (socket) => {
   console.log('Cliente conectado:', socket.id)
 
-  socket.on('queue_join', async ({ characterId, userId, level, name, isBot }) => {
-    if (!characterId) {
+  socket.on('queue_join', async ({ characterId, userId, level, name, isBot, ticket = null }) => {
+    if (!characterId || typeof characterId !== 'string') {
       socket.emit('queue_status', { status: 'cancelled', error: 'characterId obrigatório' })
       return
     }
+
+    // 🎟️ Fila também exige o ingresso do DONO do herói. Sem isto qualquer um punha
+    // o herói de outra conta na fila (roubando o match_found dele) ou tirava da fila
+    // com queue_leave — e um userId falso furava o "mesma conta não se enfrenta".
+    const check = verifySocketTicket(ticket, characterId)
+    if (!check.ok) {
+      socket.emit('queue_status', { status: 'cancelled', error: 'BAD_TICKET', code: 'BAD_TICKET' })
+      return
+    }
+    if (check.userId) userId = check.userId
 
     // ⚡ PORTÃO DA FILA: sem a taxa fixa da luta no bolso não se entra. Quem entrasse
     // esgotado travava uma luta inteira, desgastava o equipamento e saía sem nada — a
@@ -1186,15 +1279,16 @@ io.on('connection', (socket) => {
   socket.on('queue_leave', ({ characterId }) => {
     if (!characterId) return
     // Cancela também um bot já prometido: quem fecha o dialog antes de entrar na sala
-    // não deve deixar um oponente órfão esperando.
-    cancelBotFillFor(characterId)
-    if (matchQueue.has(characterId)) {
+    // não deve deixar um oponente órfão esperando. Só o socket que entrou na fila
+    // cancela (antes qualquer um tirava o herói alheio da fila pelo id).
+    cancelBotFillFor(characterId, socket.id)
+    if (matchQueue.get(characterId)?.socketId === socket.id) {
       matchQueue.delete(characterId)
       socket.emit('queue_status', { status: 'cancelled' })
     }
   })
 
-  socket.on('join_room', ({ roomId, player, isCreator, role = RoomRole.FIGHTER, training = false, monster = 'goblin', password = null, ticket = null }) => {
+  socket.on('join_room', ({ roomId, player, isCreator, role = RoomRole.FIGHTER, training = false, monster = 'goblin', password = null, ticket = null, botSecret = null }) => {
     if (!player || typeof player.id !== 'string') return
     console.log(`Jogador ${player.name} entrando na sala ${roomId} como ${role}${training ? ` (treino vs ${monster})` : ''}`)
 
@@ -1209,9 +1303,14 @@ io.on('connection', (socket) => {
       const fighterJoin = role === RoomRole.FIGHTER || seatTaken
       const trainingRoom = existing ? existing.isTraining === true : (training === true && !!isCreator)
       const serverBot = !!existing && (
-        player.id === existing.botFighterId ||
+        (player.id === existing.botFighterId && botSecretMatches(existing, botSecret)) ||
         (existing.isTraining === true && String(player.id).startsWith('monster_'))
       )
+      // O id do bot é público (room_updated): sem o segredo, ninguém senta nele.
+      if (existing && player.id === existing.botFighterId && !serverBot) {
+        socket.emit('join_room_error', { error: 'Assento reservado.', code: 'BAD_TICKET' })
+        return
+      }
       if (fighterJoin && !trainingRoom && !serverBot) {
         const check = verifySocketTicket(ticket, player.id)
         if (!check.ok) {
@@ -1227,7 +1326,7 @@ io.on('connection', (socket) => {
       if (fighterJoin) bindFighter(socket.id, player.id)
     }
 
-    playerSockets.set(player.id, socket.id)
+    playerSockets.set(`${socket.id}::${player.id}`, { socketId: socket.id, playerId: player.id })
     
     let room = rooms.get(roomId)
     if (!room) {
@@ -1245,7 +1344,7 @@ io.on('connection', (socket) => {
         player2: null,
         currentTurn: null,
         phase: CombatPhase.WAITING_PLAYERS,
-        combatLog: [],
+        combatLog: cappedLog(),
         isActive: false,
         pendingAction: null,
         reactionPhase: false,
@@ -1259,7 +1358,8 @@ io.on('connection', (socket) => {
       rooms.set(roomId, room)
     } else {
       // Criador pode atrasar o bind da senha se o socket room nasceu sem ela
-      if (isCreator && password && String(password).trim() && !room.password) {
+      if (isCreator && (!room.creator || room.creator === player.id) && !isFightLive(room) &&
+          password && String(password).trim() && !room.password) {
         room.password = String(password).trim().slice(0, 32)
       }
       if (room.password) {
@@ -1307,11 +1407,18 @@ io.on('connection', (socket) => {
       return
     }
 
+    // 👑 `isCreator` vem do cliente: só vale para quem REALMENTE criou a sala (ou
+    // numa sala ainda sem criador) e nunca com a luta valendo. Antes qualquer um
+    // mandava isCreator:true numa sala listada em /api/combat/rooms, furava o
+    // limite de lutadores e tomava o assento do player1 no meio da luta — com HP
+    // cheio contra um oponente já ferido.
+    const creatorJoin = !!isCreator && (!room.creator || room.creator === player.id) && !isFightLive(room)
+
     // Verificar se o role solicitado tem vagas disponíveis
     const currentCount = room.participants[role + 's'] ? room.participants[role + 's'].length : 0
     const maxCount = ROLE_LIMITS[role]
     
-    if (currentCount >= maxCount && !isCreator) {
+    if (currentCount >= maxCount && !creatorJoin) {
       socket.emit('join_room_error', { 
         error: `Role ${role} está cheio (${currentCount}/${maxCount})`,
         availableRoles: getAvailableRoles(room)
@@ -1335,15 +1442,15 @@ io.on('connection', (socket) => {
       setupFighterForFight(room, player)
 
       // Criador retornando (refresh/remontagem): remover a entrada antiga para não ocupar a vaga do oponente
-      if (isCreator && room.player1 && room.player1.id !== player.id) {
+      if (creatorJoin && room.player1 && room.player1.id !== player.id) {
         room.participants.fighters = room.participants.fighters.filter(f => f.id !== room.player1.id)
       }
       room.participants.fighters.push(participantData)
 
       // Manter compatibilidade: atualizar player1/player2
-      if (!room.player1 || isCreator) {
+      if (!room.player1 || creatorJoin) {
         room.player1 = player
-        if (isCreator) {
+        if (creatorJoin) {
           room.creator = player.id
         }
       } else if (!room.player2 && room.participants.fighters.length <= 2) {
@@ -1371,12 +1478,12 @@ io.on('connection', (socket) => {
     }
 
     // Definir criador se for o primeiro participante
-    if (isCreator) {
+    if (creatorJoin) {
       room.creator = player.id
     }
 
     // 🐉 MODO TREINO: spawnar o monstro como oponente (bot interno)
-    if (training && isCreator && role === RoomRole.FIGHTER && !room.botSpawned) {
+    if (training && creatorJoin && role === RoomRole.FIGHTER && !room.botSpawned) {
       room.isTraining = true
       room.botSpawned = true
       const monsterKey = MONSTERS[monster] ? monster : DEFAULT_TRAINING_OPPONENT_KEY
@@ -1413,11 +1520,14 @@ io.on('connection', (socket) => {
       const persona = refinePersonaFor(pendingFill.persona, player)
       const botPlayer = buildBotPlayer(persona)
       room.botFighterId = botPlayer.id
+      // Fora do objeto da sala de propósito: a sala inteira vai para os clientes
+      // em todo room_updated.
+      botJoinSecrets.set(roomId, randomBytes(16).toString('hex'))
       room.botMirrorTier = player.gearTier
       console.log(`🤖 [pvp-bot:${roomId}] espelhando ${player.name} (nv${player.level}, tier ${Number(player.gearTier).toFixed(2)}) → ${persona.name} ${persona.class}`)
       setTimeout(() => {
         if (!rooms.has(roomId)) return
-        spawnPvpBot({ roomId, port: PORT, persona, botPlayer })
+        spawnPvpBot({ roomId, port: PORT, persona, botPlayer, joinSecret: botJoinSecrets.get(roomId) })
       }, 1000)
     }
 
@@ -1775,11 +1885,35 @@ io.on('connection', (socket) => {
       : null
     if (!player) return
 
-    player.isTransformed = !!isTransformed
-    player.transformationType = transformationType || null
-    player.transformationImage = transformationImage || null
-    player.unlockedTransformation = unlockedTransformation || null
-    if (transformationData) player.transformationData = transformationData
+    // 🔒 A forma, a duração e o custo são do SERVIDOR. Antes tudo vinha do payload:
+    // transformationData.remainingTurns: 1e9 deixava o buff a luta inteira,
+    // originalStats inventado era "restaurado" no fim da forma (força e HP máximo à
+    // escolha), e quem pulava a rota REST transformava de graça e sem limite.
+    if (isTransformed) {
+      const form = String(transformationType || '')
+      const allowed = ARENA_RACE_FORMS[String(player.race || '').toLowerCase()] || []
+      const cost = ARENA_FORM_COST[form]
+      const multiForm = allowed.length > 1
+      const lockedOut = multiForm && player.unlockedTransformation && player.unlockedTransformation !== form
+      if (!cost || !allowed.includes(form) || lockedOut) return
+      if (player.isTransformed || player.transformUsedThisFight) return
+      if (player.transformationData?.cooldownTurns > 0) return
+      if ((player.mp ?? 0) < cost.mp || (player.stamina ?? 0) < cost.stamina) return
+      player.mp -= cost.mp
+      player.stamina -= cost.stamina
+      player.transformUsedThisFight = true
+      player.isTransformed = true
+      player.transformationType = form
+      player.transformationData = {
+        remainingTurns: ARENA_FORM_DURATION + (getUnlocksFor(player).passives.transformExtraTurns || 0),
+        cooldownTurns: 0,
+      }
+    } else {
+      // Desfazer só prejudica quem pede: segue o pedido, sem herdar dados do cliente.
+      player.isTransformed = false
+      player.transformationType = null
+    }
+    player.transformationImage = typeof transformationImage === 'string' ? transformationImage.slice(0, 2048) : null
 
     // Recursos da luta (MP/STA). NUNCA aceitar hp/maxHp/maxMp da API REST aqui —
     // applyTransformation persiste o pool do personagem no banco, que não é o pool
@@ -2105,10 +2239,18 @@ io.on('connection', (socket) => {
     const player = room.player1?.id === playerId ? room.player1 : room.player2
     if (!player) return
 
+    // Texto curto e com ritmo: a sala inteira (log incluso) vai a cada room_updated,
+    // e mensagens de ~1 MB em laço derrubavam o processo por falta de memória.
+    const text = String(message ?? '').slice(0, CHAT_MAX_CHARS).trim()
+    if (!text) return
+    const now = Date.now()
+    if (now - (chatLastAt.get(socket.id) || 0) < CHAT_MIN_INTERVAL_MS) return
+    chatLastAt.set(socket.id, now)
+
     room.combatLog.push({
       type: 'chat',
       player: player.name,
-      message: message,
+      message: text,
       timestamp: new Date()
     })
 
@@ -2174,6 +2316,7 @@ io.on('connection', (socket) => {
 
     io.to(roomId).emit('room_closed')
     rooms.delete(roomId)
+    botJoinSecrets.delete(roomId)
     clearBotTurnTimer(roomId)
     clearRoomGraceTimers(roomId)
 
@@ -2191,6 +2334,9 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log('Cliente desconectado:', socket.id)
+    chatLastAt.delete(socket.id)
+    // Só os lutadores que ESTE socket sentou (portão do join) contam como caídos.
+    const boundFighters = socketFighters.get(socket.id) || new Set()
     socketFighters.delete(socket.id)
 
     // Limpar fila de matchmaking (e o bot prometido a quem estava nela)
@@ -2202,15 +2348,18 @@ io.on('connection', (socket) => {
     }
     
     // 💚 REGENERAÇÃO AUTOMÁTICA - Se jogador sair de combate
-    playerSockets.forEach((socketId, playerId) => {
-      if (socketId === socket.id) {
+    playerSockets.forEach((entry, entryKey) => {
+      if (entry.socketId === socket.id) {
+        const playerId = entry.playerId
         // Encontrar a sala do jogador e remover das participações
         rooms.forEach((room, roomId) => {
           let playerFound = false
           let wasLastPlayer = false
           
-          // Verificar e remover de fighters
-          const fighterIndex = room.participants.fighters.findIndex(p => p.id === playerId)
+          // Verificar e remover de fighters — só se este socket sentou como ele.
+          const fighterIndex = boundFighters.has(playerId)
+            ? room.participants.fighters.findIndex(p => p.id === playerId)
+            : -1
 
           // ⏳ CAIU NO MEIO DE UMA LUTA VALENDO: não remover ninguém ainda.
           //
@@ -2319,6 +2468,7 @@ io.on('connection', (socket) => {
             
             // Remover sala da memória
             rooms.delete(roomId)
+            botJoinSecrets.delete(roomId)
             clearBotTurnTimer(roomId)
             clearRoomGraceTimers(roomId)
 
@@ -2343,7 +2493,7 @@ io.on('connection', (socket) => {
           }
         })
         
-        playerSockets.delete(playerId)
+        playerSockets.delete(entryKey)
       }
     })
   })
@@ -2385,6 +2535,8 @@ function regeneratePlayerResources(player, context = 'Activity') {
       console.error(`❌ Erro ao persistir reset de transformação para ${player.name}:`, error)
     })
   }
+
+  player.transformUsedThisFight = false
 
   // A barra de stamina é DA LUTA: encher aqui é o que faz a REVANCHE na mesma sala
   // começar em pé de igualdade com uma luta recém-criada (a taxa da carteira é cobrada

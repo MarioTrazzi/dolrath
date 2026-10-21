@@ -54,6 +54,7 @@ export const API_PT: Record<string, string> = {
   'This piece is being listed on the market. Wait a few minutes.':
     'Esta peça está sendo listada no mercado. Aguarde alguns minutos.',
   'You do not have this item': 'Você não possui este item',
+  'This item does not fit that slot.': 'Este item não cabe nesse espaço.',
   'This item is not a consumable': 'Este item não é consumível',
   'Failed to use consumable': 'Falha ao usar consumível',
 

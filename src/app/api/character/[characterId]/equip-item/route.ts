@@ -4,7 +4,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { EquipmentSlotType } from '@prisma/client'
 import { recordEquipmentChange } from '@/lib/characterHistory'
 import { canEquip, ItemTypeStr, RaceId } from '@/lib/itemCatalog'
-import { restoreItemToInventory, removeOneFromInventory } from '@/lib/inventoryMutations'
+import {
+  restoreItemToInventory,
+  takeFromCharacterInventory,
+  InventoryQuantityError,
+  listingUnlockedWhere,
+} from '@/lib/inventoryMutations'
+import { isSlotValidForItemType } from '@/lib/equipmentSlot'
 import { getT } from '@/lib/i18n/server'
 
 export async function POST(
@@ -57,6 +63,8 @@ export async function POST(
       where: {
         characterId: params.characterId,
         itemId: itemId,
+        // Cópia travada por um lazy-mint não serve; se houver outra livre, é ela.
+        ...listingUnlockedWhere(),
       },
       include: {
         item: true,
@@ -68,15 +76,20 @@ export async function POST(
     });
 
     if (!characterInventoryItem) {
+      // Todas as cópias travadas por uma listagem em andamento?
+      const locked = await prisma.characterInventory.findFirst({
+        where: { characterId: params.characterId, itemId },
+        select: { id: true },
+      });
+      if (locked) {
+        return NextResponse.json({ error: t('This piece is being listed on the market. Wait a few minutes.') }, { status: 409 });
+      }
       console.log('Item not found in character inventory');
       return NextResponse.json({ error: 'Item not found in character inventory' }, { status: 404 });
     }
 
-    // Anti-duplicação: peça travada por um lazy-mint em andamento não pode ser
-    // equipada (senão sairia do inventário e ainda viraria NFT). Trava expira só.
-    const lockedAt = (characterInventoryItem as any).listingLockedAt as Date | null
-    if (lockedAt && Date.now() - new Date(lockedAt).getTime() < 20 * 60_000) {
-      return NextResponse.json({ error: t('This piece is being listed on the market. Wait a few minutes.') }, { status: 409 });
+    if (!isSlotValidForItemType(slotType, characterInventoryItem.item.type)) {
+      return NextResponse.json({ error: t('This item does not fit that slot.') }, { status: 400 });
     }
 
     // Verificar se o personagem tem nível suficiente para equipar o item
@@ -126,6 +139,13 @@ export async function POST(
     // Tudo que muda estado roda em transação: devolve item trocado ao inventário,
     // remove o item equipado do inventário e cria o registro de equipamento.
     const newEquipment = await prisma.$transaction(async (tx) => {
+      // O item equipado sai do inventário PRIMEIRO, de forma atômica: dois
+      // equips simultâneos da mesma unidade não podem ambos passar (antes o
+      // perdedor achava a linha já apagada, seguia em frente e o item ficava
+      // equipado E de volta na mochila). Também recusa se a listagem travou a
+      // linha depois da leitura acima.
+      await takeFromCharacterInventory(tx, characterInventoryItem.id, 1);
+
       // Item atualmente equipado no slot final (se houver) volta para o inventário.
       const existingEquipment = await tx.characterEquipment.findFirst({
         where: { characterId: params.characterId, slot: finalSlotType },
@@ -167,9 +187,6 @@ export async function POST(
         console.log(`Mutex hands: unequipped ${row.itemId} back to inventory`);
       }
 
-      // O item equipado sai do inventário.
-      await removeOneFromInventory(tx, characterInventoryItem.id);
-
       // Cria o equipamento com o aprimoramento E a durabilidade da instância escolhida.
       return tx.characterEquipment.create({
         data: {
@@ -204,6 +221,9 @@ export async function POST(
       equipment: newEquipment
     });
   } catch (error) {
+    if (error instanceof InventoryQuantityError) {
+      return NextResponse.json({ error: t('That item is no longer available in that quantity.') }, { status: 409 });
+    }
     console.error("Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

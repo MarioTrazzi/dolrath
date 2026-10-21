@@ -53,3 +53,27 @@ export function getSlotTypeFromItemType(itemType: string): EquipmentSlotType {
       return 'WEAPON';
   }
 }
+
+/** Mesma tabela do drag-and-drop (EquipmentSlot.tsx#canEquipInSlot). */
+const SLOT_ITEM_TYPES: Record<EquipmentSlotType, readonly string[]> = {
+  WEAPON: ['SWORD', 'AXE', 'DAGGER', 'STAFF', 'BOW', 'GAUNTLET',
+    'PICKAXE', 'HERB_SICKLE', 'LOGGING_AXE', 'FISHING_ROD', 'HUNTING_KNIFE'],
+  ARMOR: ['LIGHT_ARMOR', 'MEDIUM_ARMOR', 'HEAVY_ARMOR', 'GATHER_GARB'],
+  // Secundária: escudo (guerreiro), orbe (mago), adaga de parada (ladino), talismã (monge).
+  SHIELD: ['SHIELD', 'ORB', 'PARRY_DAGGER', 'TALISMAN'],
+  BELT: ['BELT'],
+  HELMET: ['LIGHT_HELMET', 'MEDIUM_HELMET', 'HEAVY_HELMET'],
+  BOOTS: ['LIGHT_BOOTS', 'MEDIUM_BOOTS', 'HEAVY_BOOTS'],
+  GLOVES: ['LIGHT_GLOVES', 'MEDIUM_GLOVES', 'HEAVY_GLOVES'],
+  NECKLACE: ['NECKLACE'],
+  RING_1: ['RING'],
+  RING_2: ['RING'],
+}
+
+/** Validação do SERVIDOR: o slot pedido aceita este tipo de item? Sem isto o
+ *  equip-item aceitava qualquer slot que o cliente mandasse (material na mão,
+ *  duas armas em WEAPON + SHIELD etc.). */
+export function isSlotValidForItemType(slot: string, itemType: string): slot is EquipmentSlotType {
+  const allowed = (SLOT_ITEM_TYPES as Record<string, readonly string[] | undefined>)[slot]
+  return !!allowed && allowed.includes(itemType)
+}

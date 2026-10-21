@@ -152,25 +152,3 @@ export async function takeFromUserInventory(
   if (count === 0) throw new InventoryQuantityError()
   await tx.userInventory.deleteMany({ where: { id: inventoryRowId, quantity: { lte: 0 } } })
 }
-
-/**
- * Remove uma unidade de uma linha do inventário. Se a linha tiver quantity > 1,
- * apenas decrementa; caso contrário, apaga a linha. Relê dentro da transação
- * para evitar quantidade obsoleta.
- */
-export async function removeOneFromInventory(
-  tx: Prisma.TransactionClient,
-  inventoryRowId: string,
-) {
-  const row = await tx.characterInventory.findUnique({ where: { id: inventoryRowId } })
-  if (!row) return
-
-  if (row.quantity > 1) {
-    await tx.characterInventory.update({
-      where: { id: inventoryRowId },
-      data: { quantity: { decrement: 1 } },
-    })
-  } else {
-    await tx.characterInventory.delete({ where: { id: inventoryRowId } })
-  }
-}

@@ -11,6 +11,7 @@ import {
   listingUnlockedWhere,
 } from '@/lib/inventoryMutations'
 import { isSlotValidForItemType } from '@/lib/equipmentSlot'
+import { resolveStaleListingLocks } from '@/lib/listingLock'
 import { getT } from '@/lib/i18n/server'
 
 export async function POST(
@@ -56,6 +57,9 @@ export async function POST(
       console.log('Character not found or not owned by user');
       return NextResponse.json({ error: 'Character not found' }, { status: 404 });
     }
+
+    // Listagem abandonada com voucher vencido solta a peça antes da busca.
+    await resolveStaleListingLocks(params.characterId).catch(() => {});
 
     // Verificar se o personagem possui o item no inventário
     // (se houver instâncias aprimoradas, equipa a de maior nível)

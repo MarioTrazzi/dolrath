@@ -94,11 +94,29 @@ export async function assertInventoryRoom(
  */
 export const LISTING_LOCK_MS = 20 * 60_000
 
-/** Filtro Prisma: linhas SEM trava de listagem viva. */
+/**
+ * Filtro Prisma: linhas SEM trava de listagem viva. Trava com voucher gravado
+ * (`listingPurchaseId`) NÃO expira por tempo — o mint pode ter acontecido e só
+ * o contrato sabe; quem solta é o resolveListingLock (src/lib/listingLock.ts).
+ * A expiração por tempo vale só para travas antigas, sem voucher gravado.
+ */
 export function listingUnlockedWhere(now = Date.now()) {
   return {
-    OR: [{ listingLockedAt: null }, { listingLockedAt: { lt: new Date(now - LISTING_LOCK_MS) } }],
+    OR: [
+      { listingLockedAt: null },
+      { listingLockedAt: { lt: new Date(now - LISTING_LOCK_MS) }, listingPurchaseId: null },
+    ],
   }
+}
+
+/** Mesma regra do `listingUnlockedWhere`, para uma linha já lida. */
+export function isListingLocked(
+  row: { listingLockedAt?: Date | null; listingPurchaseId?: string | null },
+  now = Date.now(),
+): boolean {
+  if (!row.listingLockedAt) return false
+  if (row.listingPurchaseId) return true
+  return now - new Date(row.listingLockedAt).getTime() < LISTING_LOCK_MS
 }
 
 /**

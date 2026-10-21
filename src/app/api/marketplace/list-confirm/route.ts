@@ -8,6 +8,7 @@ import { verifyItemMintTx } from '@/lib/itemNftVerify'
 import { getGoldContractAddress, getGoldProvider } from '@/lib/goldOnchain'
 import { getItemMarketChainId } from '@/lib/itemMarketOnchain'
 import { getT } from '@/lib/i18n/server'
+import { burnListedUnitTx, lazyMintMarker, ListingAlreadyResolvedError } from '@/lib/listingLock'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,7 +17,7 @@ const ERC20_DECIMALS_ABI = ['function decimals() view returns (uint8)'] as const
 function isHex32Bytes(txHash: string): boolean {
   return /^0x[0-9a-fA-F]{64}$/.test(txHash)
 }
-function lazyMintPaymentMarker(inventoryId: string): string {
+function legacyLazyMintMarker(inventoryId: string): string {
   return `lazymint:${inventoryId}`
 }
 
@@ -70,8 +71,11 @@ export async function POST(req: Request) {
     const decimals = Number(await gold.decimals())
     const expectedMinPaidGold = parseUnits(String(inv.item.goldPrice ?? 0), decimals)
 
-    const purchaseId = computePurchaseId({
-      paymentTxHash: lazyMintPaymentMarker(inv.id),
+    // O voucher em voo fica gravado na linha (list-intent). Travas antigas, de
+    // antes disso, usavam o id derivado da linha + carteira.
+    const storedPurchaseId = inv.listingPurchaseId
+    const purchaseId = storedPurchaseId ?? computePurchaseId({
+      paymentTxHash: legacyLazyMintMarker(inv.id),
       itemId: inv.itemId,
       to: walletAddress,
     })
@@ -86,12 +90,9 @@ export async function POST(req: Request) {
     })
 
     const result = await prisma.$transaction(async (tx) => {
-      // Queima a linha off-chain (ou decrementa se empilhada).
-      if (inv.quantity > 1) {
-        await tx.characterInventory.update({ where: { id: inv.id }, data: { quantity: { decrement: 1 } } })
-      } else {
-        await tx.characterInventory.delete({ where: { id: inv.id } })
-      }
+      // Queima UMA unidade e solta a trava — condicionado ao voucher ainda ser o
+      // da linha (o resolvedor de travas pode ter fechado esta conta antes).
+      await burnListedUnitTx(tx, inv.id, storedPurchaseId)
 
       const nft = await tx.itemNft.create({
         data: {
@@ -103,7 +104,7 @@ export async function POST(req: Request) {
           paidGoldWei: verified.paidGold.toString(),
           enhancementLevel: inv.enhancementLevel,
           mintSource: 'lazy',
-          purchaseTxHash: lazyMintPaymentMarker(inv.id),
+          purchaseTxHash: storedPurchaseId ? lazyMintMarker(storedPurchaseId) : legacyLazyMintMarker(inv.id),
           mintTxHash,
         },
       })
@@ -116,6 +117,13 @@ export async function POST(req: Request) {
       paidGoldWei: result.paidGoldWei,
     })
   } catch (e) {
+    // O resolvedor de travas (ou outro confirm) já queimou a unidade e
+    // registrou a NFT deste voucher.
+    if (e instanceof ListingAlreadyResolvedError) {
+      const existing = mintTxHash ? await prisma.itemNft.findUnique({ where: { mintTxHash } }) : null
+      if (existing) return NextResponse.json({ tokenId: existing.tokenId.toString(), alreadySynced: true })
+      return NextResponse.json({ error: 'This listing was already resolved. Refresh the page.' }, { status: 409 })
+    }
     // Retry concorrente: outro confirm já gravou o NFT (unique) — reconcilia.
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
       const existing = mintTxHash ? await prisma.itemNft.findUnique({ where: { mintTxHash } }) : null

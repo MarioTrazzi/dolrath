@@ -7,15 +7,13 @@ import { computeItemKey, computePurchaseId, signItemMintRequest } from '@/lib/it
 import { getGoldContractAddress, getGoldProvider } from '@/lib/goldOnchain'
 import { getItemMarketChainId, getItemMarketContractAddress } from '@/lib/itemMarketOnchain'
 import { getT } from '@/lib/i18n/server'
+import { randomUUID } from 'node:crypto'
+import { isListingLocked, listingUnlockedWhere } from '@/lib/inventoryMutations'
+import { LAZY_MINT_VOUCHER_MS, resolveListingLock } from '@/lib/listingLock'
 
 export const dynamic = 'force-dynamic'
 
 const ERC20_DECIMALS_ABI = ['function decimals() view returns (uint8)'] as const
-
-// Identificador único de mint por LINHA de inventário (evita replay/duplo mint).
-function lazyMintPaymentMarker(inventoryId: string): string {
-  return `lazymint:${inventoryId}`
-}
 
 // 🪙 LAZY-MINT (passo 1/2): assina o voucher para cunhar como NFT um item GANHO
 // (CharacterInventory, sem NFT). O cliente usa o voucher em itemNft.mintWithSig,
@@ -60,14 +58,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: t('Consumables cannot be listed as NFTs.') }, { status: 400 })
     }
 
-    // Trava temporária: impede vender/relistar a mesma peça enquanto um mint
-    // está em andamento (anti-duplicação). Expira sozinha após LOCK_MINUTES.
-    const LOCK_MINUTES = 20
-    const lockedAt = (inv as any).listingLockedAt as Date | null
-    if (lockedAt && Date.now() - new Date(lockedAt).getTime() < LOCK_MINUTES * 60_000) {
-      return NextResponse.json({ error: t('This piece is already being listed. Wait a few minutes.') }, { status: 409 })
+    // Já travada por um voucher anterior? Pergunta ao contrato antes de decidir
+    // (pode ter sido mintada e nunca confirmada, ou o voucher venceu sem uso).
+    if (isListingLocked(inv)) {
+      const state = await resolveListingLock(inv.id)
+      if (state === 'pending') {
+        return NextResponse.json({ error: t('This piece is already being listed. Wait a few minutes.') }, { status: 409 })
+      }
+      if (state === 'minted') {
+        return NextResponse.json({ error: t('This piece was already minted as an NFT.') }, { status: 409 })
+      }
     }
-    await prisma.characterInventory.update({ where: { id: inv.id }, data: { listingLockedAt: new Date() } })
 
     const goldContractAddress = getGoldContractAddress()
     if (!goldContractAddress) {
@@ -88,9 +89,12 @@ export async function POST(req: Request) {
     const decimals = Number(await gold.decimals())
     const paidGold = parseUnits(String(inv.item.goldPrice ?? 0), decimals)
 
-    // purchaseId único por linha de inventário (anti-replay no contrato).
+    // purchaseId ÚNICO POR VOUCHER (anti-replay no contrato). Era por linha +
+    // carteira: a 2ª unidade de uma pilha nunca conseguia ser mintada (o
+    // contrato recusava o id repetido) e trocar de carteira gerava um id novo
+    // para a MESMA peça.
     const purchaseId = computePurchaseId({
-      paymentTxHash: lazyMintPaymentMarker(inv.id),
+      paymentTxHash: `lazymint:${inv.id}:${randomUUID()}`,
       itemId: inv.itemId,
       to: walletAddress,
     })
@@ -101,7 +105,20 @@ export async function POST(req: Request) {
     // imagem e aprimoramento atuais. Requer ITEM_NFT_BASE_URI setado no contrato.
     const tokenURI = ''
 
-    const deadline = BigInt(Math.floor(Date.now() / 1000) + 15 * 60)
+    // 🔒 Trava + voucher gravados de forma ATÔMICA (antes eram leitura e escrita
+    // separadas: dois intents simultâneos saíam com dois vouchers). Enquanto o
+    // purchaseId estiver na linha, ela não sai da mochila por nenhum caminho —
+    // e a trava só cai quando o contrato disser o desfecho (listingLock.ts).
+    const lockedAtMs = Date.now()
+    const locked = await prisma.characterInventory.updateMany({
+      where: { id: inv.id, ...listingUnlockedWhere(lockedAtMs) },
+      data: { listingLockedAt: new Date(lockedAtMs), listingPurchaseId: purchaseId },
+    })
+    if (locked.count !== 1) {
+      return NextResponse.json({ error: t('This piece is already being listed. Wait a few minutes.') }, { status: 409 })
+    }
+
+    const deadline = BigInt(Math.floor(lockedAtMs / 1000) + Math.floor(LAZY_MINT_VOUCHER_MS / 1000))
     const signed = await signItemMintRequest({ to: walletAddress, purchaseId, itemKey, paidGold, tokenURI, deadline })
 
     return NextResponse.json({

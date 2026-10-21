@@ -353,6 +353,11 @@ model CharacterInventory {
   // que a peça seja vendida/consumida entre o voucher e o mint (duplicação).
   // Expira sozinha após alguns minutos se a listagem não completar.
   listingLockedAt  DateTime?
+  // purchaseId (bytes32 hex) do voucher de lazy-mint em voo. Com ele presente a
+  // trava NÃO expira por tempo: só é solta depois de o servidor perguntar ao
+  // contrato (usedPurchaseId) — voucher usado queima a linha e registra a NFT;
+  // voucher vencido sem uso destrava. Ver src/lib/listingLock.ts.
+  listingPurchaseId String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 

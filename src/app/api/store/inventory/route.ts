@@ -1,6 +1,7 @@
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { NextResponse } from 'next/server';
+import { resolveStaleListingLocks } from '@/lib/listingLock';
 
 export async function GET(request: Request) {
   const session = await auth();
@@ -31,6 +32,10 @@ export async function GET(request: Request) {
       if (!character) {
         return NextResponse.json({ error: 'Character not found' }, { status: 404 });
       }
+
+      // 🪙 Listagens abandonadas (voucher vencido) se resolvem ao abrir a mochila:
+      // a peça volta a ser usável, ou vira a NFT que já foi mintada.
+      await resolveStaleListingLocks(characterId).catch(() => {});
 
       const inventory = await prisma.characterInventory.findMany({
         where: {

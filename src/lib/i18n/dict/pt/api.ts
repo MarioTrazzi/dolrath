@@ -54,6 +54,7 @@ export const API_PT: Record<string, string> = {
   'This piece is being listed on the market. Wait a few minutes.':
     'Esta peça está sendo listada no mercado. Aguarde alguns minutos.',
   'You do not have this item': 'Você não possui este item',
+  'This piece was already minted as an NFT.': 'Esta peça já foi cunhada como NFT.',
   'This payment was already used.': 'Este pagamento já foi usado.',
   'This character was already transferred. Refresh the page.': 'Este personagem já foi transferido. Atualize a página.',
   'This item does not fit that slot.': 'Este item não cabe nesse espaço.',
